@@ -106,6 +106,21 @@ internal static partial class EngineRuntimeChecks
             ("neutral buff omissions reach real player effects", NeutralBuffOmissionsReachRealPlayerEffects),
             ("small generated buffs reach real item/player hooks", SmallGeneratedBuffsReachRealHooks),
             ("item impact sprite uses real detached sprite renderer", ItemImpactSpriteUsesDetachedRenderer),
+            ("held presentation matches engine geometry", HeldPresentationGeometryMatchesEngine),
+            ("inventory/world draw preserves geometry and tint", GeneratedItemDrawPreservesEngineGeometryAndTint),
+            ("runtime sprite cache premultiplies decoded pixels once", RuntimeSpriteCachePremultipliesDecodedPixelsOnce),
+            ("equipment overlay uses player draw contract", EquipmentOverlayUsesPlayerDrawContract),
+            ("equipment overlay respects vanity and slot visibility", EquipmentOverlayUsesVanityAndSlotVisibility),
+            ("item VFX respects selectors and budgets", ItemVfxParticleSelectorsAndBudgets),
+            ("item VFX sound preserves authored phase", ItemVfxSoundPreservesAuthoredPhase),
+            ("item VFX rejects inactive remote source", ItemVfxRemoteRejectsInactiveSource),
+            ("item VFX preserves world-clock cadence", ItemVfxPeriodicUsesWorldClockAndIgnoresProjectileStartTick),
+            ("active VFX primitives use pixel units", ActiveVfxPrimitiveGeometryUsesPixelUnits),
+            ("active VFX respects authored blend", ActiveVfxBlendHonorsAuthoredMode),
+            ("active VFX sprite trail matches body pose", ActiveVfxSpriteTrailMatchesBodyPose),
+            ("runtime geometry uses world pixels and forward axis", RuntimeGeometryUsesWorldPixelsAndForwardAxis),
+            ("active VFX none particle stays silent", ActiveVfxNoneParticleDoesNotEmitDust),
+            ("active VFX history uses valid samples", ActiveVfxHistoryUsesValidSamples),
         };
         int failed = 0;
         foreach (var (name, check) in checks)

@@ -363,12 +363,13 @@ internal static partial class EngineRuntimeChecks
                 foreach (float multiplier in new[] { 1f, 0f, 0.5f, 2f })
                 foreach (var cap in new[] { (Tick: 32, Total: 1000), (Tick: 3, Total: 1000), (Tick: 32, Total: 3), (Tick: 0, Total: 0) })
                 {
-                    // Item path has no existing manifest budget consumer; do not imply otherwise.
+                    // Item tick-budget/lifetime semantics have a separate dedicated check.
                     if (route.StartsWith("item") && cap != (32, 1000)) continue;
                     string label = route + " multiplier=" + multiplier + " cap=" + cap;
                     try
                     {
                         detached.OnWorldUnload();
+                        InfiniItemVfxRuntime.ClearUseEventCaches();
                         Terraria.Main.dust = new Dust[priorDust.Length];
                         for (int i = 0; i < Terraria.Main.dust.Length; i++) Terraria.Main.dust[i] = new Dust { dustIndex = i };
                         Dust.dCount = 0f;
@@ -381,7 +382,7 @@ internal static partial class EngineRuntimeChecks
                         string eventName = route is "item_periodic" or "projectile_tick" ? RuntimeEventKind.Periodic : RuntimeEventKind.OnUse;
                         var particle = new VfxSlotSpec {
                             Id = "particles_probe", EntityId = entityId, Event = eventName,
-                            RendererKind = "impactRing", Density = 1f, RepeatEvery = 1,
+                            RendererKind = "impactRing", ParticleSystemId = "dust", Density = 1f, RepeatEvery = 1,
                         };
                         var light = LightManifest(entityId, eventName).Slots[0];
                         data.VfxManifest = new VfxManifestSpec { Slots = new[] { particle, light } };
@@ -419,6 +420,7 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 detached.OnWorldUnload();
+                InfiniItemVfxRuntime.ClearUseEventCaches();
                 Terraria.Main.dust = priorDust;
                 Terraria.Main.gameMenu = menu;
                 WorldGen.gen = gen;

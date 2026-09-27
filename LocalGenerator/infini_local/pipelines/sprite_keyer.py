@@ -48,6 +48,9 @@ def chroma_like_rgb(rgb: tuple[int, int, int], *, tolerance: int | None = None, 
     if color_distance((r, g, b), target) <= tol:
         return True
 
+    # These spill heuristics describe magenta, not all configured key colors.
+    if target != (255, 0, 255):
+        return False
     rb_min = min(r, b)
     rb_max = max(r, b)
     green_gap = rb_min - g
@@ -133,6 +136,8 @@ def is_neutral_or_white_foreground_rgb(rgb: tuple[int, int, int]) -> bool:
     return False
 
 def is_dark_key_residue_rgb(rgb: tuple[int, int, int]) -> bool:
+    if chroma_rgb() != (255, 0, 255):
+        return False
     r, g, b = [max(0, min(255, int(v))) for v in rgb]
     if is_neutral_or_white_foreground_rgb((r, g, b)):
         return False
@@ -195,7 +200,7 @@ def estimate_sprite_key_profile(img: Any) -> dict[str, Any]:
     # pink/magenta canvas (for example around #ca048c). If the border is strongly
     # uniform and saturated, use that sampled border as the key instead of assuming
     # the configured pure magenta. This is still a technical background pass, not art judging.
-    if border:
+    if border and configured == (255, 0, 255):
         buckets: dict[tuple[int, int, int], int] = {}
         for r, g, b in border:
             bucket = (int(round(r / 8) * 8), int(round(g / 8) * 8), int(round(b / 8) * 8))
@@ -251,6 +256,10 @@ def floodfill_keylike_background(img: Any, *, tolerance: int = 76, key_profile: 
         r, g, b, a = px[x, y]
         if a <= 0:
             return True
+        # An explicitly configured neutral key (not arbitrary white foreground)
+        # must be selectable from the border. Keep interior-hole protection intact.
+        if (r, g, b) == key == chroma_rgb():
+            return True
         return magic_wand_bg_candidate_rgb((int(r), int(g), int(b)), key, tol, include_residue=include_residue)
 
     seeds: list[tuple[int, int]] = []
@@ -282,7 +291,7 @@ def floodfill_keylike_background(img: Any, *, tolerance: int = 76, key_profile: 
             nr, ng, nb, na = px[nx, ny]
             if na > 0:
                 n_rgb = (int(nr), int(ng), int(nb))
-                if is_neutral_or_white_foreground_rgb(n_rgb):
+                if is_neutral_or_white_foreground_rgb(n_rgb) and not n_rgb == key == chroma_rgb():
                     continue
                 # If the neighbor is not confidently key-like and there is a hard edge,
                 # stop like Quick Selection would stop on an object edge.

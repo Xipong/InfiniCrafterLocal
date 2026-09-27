@@ -56,6 +56,14 @@ internal static partial class EngineRuntimeChecks
             var begun = typeof(SpriteBatch).GetField("beginCalled", instance)!;
             var queued = typeof(SpriteBatch).GetField("numSprites", instance)!;
             var drains = new List<int>();
+            Color? expectedVertexColor = null;
+            void CheckVertexColors(object value)
+            {
+                if (value is Color color) { Equal(expectedVertexColor!.Value, color, "detached blend reaches real FNA vertex color"); return; }
+                foreach (var field in value.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                    if (field.FieldType == typeof(Color) || (field.FieldType.IsValueType && !field.FieldType.IsPrimitive && !field.FieldType.IsEnum))
+                        CheckVertexColors(field.GetValue(value)!);
+            }
             Action<SpriteBatch> flush = self => {
                 Equal(true, ReferenceEquals(batch, self), "isolated batch at GPU boundary");
                 Equal(false, (bool)begun.GetValue(self)!, "real End closes item sprite batch");
@@ -63,6 +71,11 @@ internal static partial class EngineRuntimeChecks
                 var drawnTextures = (Array)typeof(SpriteBatch).GetField("textureInfo", instance)!.GetValue(self)!;
                 for (int i = 0; i < count; i++)
                     Equal(true, ReferenceEquals(texture, drawnTextures.GetValue(i)), "real FNA queue contains dedicated impact texture");
+                if (expectedVertexColor.HasValue)
+                {
+                    var vertices = (Array)typeof(SpriteBatch).GetField("vertexInfo", instance)!.GetValue(self)!;
+                    for (int i = 0; i < count; i++) CheckVertexColors(vertices.GetValue(i)!);
+                }
                 drains.Add(count);
                 queued.SetValue(self, 0);
             };
@@ -213,6 +226,24 @@ internal static partial class EngineRuntimeChecks
                 system.OnWorldUnload(); clock.SetValue(null, 121u);
                 InfiniItemVfxRuntime.OnPeriodic(player, data, entity.Id);
                 Equal(0, emissions.Count, "ineligible periodic cadence emits nothing");
+
+                // Same impact helper serves item, active-projectile and detached events.
+                // Observe the actual detached FNA color at emission and mid-lifetime.
+                foreach (string blend in new[] { "alpha", "additive" })
+                {
+                    system.OnWorldUnload(); clock.SetValue(null, 200u);
+                    slot.Event = RuntimeEventKind.OnUse; slot.Blend = blend;
+                    Emit();
+                    Color baseColor = Color.OrangeRed;
+                    if (blend == "additive") baseColor.A = 0;
+                    foreach (uint age in new uint[] { 0, 3 })
+                    {
+                        clock.SetValue(null, 200u + age);
+                        expectedVertexColor = baseColor * (slot.Alpha * (1f - age / (float)slot.Duration));
+                        Equal("1,0", Draw(), "detached authored blend draws at age " + age);
+                    }
+                    expectedVertexColor = null;
+                }
             }
             finally
             {

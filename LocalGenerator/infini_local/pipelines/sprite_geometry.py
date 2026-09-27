@@ -127,8 +127,8 @@ def sprite_bbox_stats(img: Any, role: str = "item", target_size: int | None = No
         "effect_fill": (max(effect_w, effect_h) / max(1, max(w, h))),
         "core_area_ratio": (core_w * core_h) / max(1, w * h),
         "effect_area_ratio": (effect_w * effect_h) / max(1, w * h),
-        "core_center_norm": tuple(v / max(1, max(w, h)) for v in bbox_center(core_bbox)),
-        "effect_center_norm": tuple(v / max(1, max(w, h)) for v in bbox_center(effect_bbox)),
+        "core_center_norm": tuple(v / max(1, dimension) for v, dimension in zip(bbox_center(core_bbox), (w, h))),
+        "effect_center_norm": tuple(v / max(1, dimension) for v, dimension in zip(bbox_center(effect_bbox), (w, h))),
     }
 
 __all__ = [

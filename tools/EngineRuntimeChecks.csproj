@@ -19,6 +19,12 @@
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
+    <Compile Include="EngineRuntimeChecks.HeldPresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.ItemDraw.cs" />
+    <Compile Include="EngineRuntimeChecks.SpriteAlpha.cs" />
+    <Compile Include="EngineRuntimeChecks.EquipPresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.VfxEventConsistency.cs" />
+    <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />
     <Compile Include="EngineRuntimeChecks.Whip.cs" />

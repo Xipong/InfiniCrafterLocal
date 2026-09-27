@@ -10,6 +10,7 @@ import re
 from typing import Any, Mapping
 
 from infini_local.pipelines import pipeline_visual_config as visual_config
+from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas
 
 
 def asset_negative_prompt(role: str = "item") -> str:
@@ -18,11 +19,6 @@ def asset_negative_prompt(role: str = "item") -> str:
         f"scene, environment, character, enemy, UI, text, watermark, multiple unrelated objects, "
         f"blur, antialiasing, photorealism; draw only the {role_name} sprite"
     )
-
-
-def chroma_rgb() -> tuple[int, int, int]:
-    name = str(getattr(visual_config, "BG_COLOR", "magenta") or "magenta").lower()
-    return {"green": (0, 255, 0), "blue": (0, 0, 255), "cyan": (0, 255, 255)}.get(name, (255, 0, 255))
 
 
 def chroma_name() -> str:
@@ -49,12 +45,22 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
     return {
         "schema": "infini.sprite-contract.runtime-entity.v1",
         "role": role_token,
-        "targetSizePx": max(8, min(256, int(target_size or 32))),
-        "background": chroma_name(),
+        "targetSizePx": final_sprite_canvas(target_size),
+        "background": chroma_name() if uses_key_background() else "transparent",
         "singleSubject": True,
         "transparentAfterPostprocess": True,
         "noPlaceholder": True,
     }
+
+
+def visual_background_transport_rule() -> str:
+    final = "Every baked_sprite and equipOverlay final PNG requires a transparent background, not an opaque background. "
+    if uses_key_background():
+        return final + (
+            f"The local sprite_keyer creates final transparency from a raw image on a solid {chroma_name()} key background. "
+            "Author item/entity/overlay prompts for that raw image background, not raw transparency; preserve all authored foreground colors."
+        )
+    return final + "Local background removal is disabled; request a transparent background in the raw image, not a solid key."
 
 
 def role_contract_prompt_clause(role: str, canvas: int) -> str:
@@ -67,9 +73,11 @@ def role_contract_prompt_clause(role: str, canvas: int) -> str:
     else:
         subject = str(role).removeprefix("entity:").replace("_", " ")
         placement = f"single centered {subject} sprite"
+    canvas = final_sprite_canvas(canvas)
+    background = f"solid {chroma_name()} key background" if uses_key_background() else "transparent background"
     return (
-        f"{placement}, {int(canvas)}x{int(canvas)} pixel-art canvas, crisp hard pixels, "
-        f"solid {chroma_name()} key background, no scene, no text, no extra entities"
+        f"{placement}, {canvas}x{canvas} pixel-art canvas, crisp hard pixels, "
+        f"{background}, no scene, no text, no extra entities"
     )
 
 
@@ -98,4 +106,5 @@ __all__ = [
     "asset_negative_prompt", "chroma_rgb", "chroma_name", "image_backend_is_zimage",
     "zimage_positive_only_enabled", "compact_visual_words", "sprite_contract_for",
     "role_contract_prompt_clause", "normalize_asset_prompt", "effective_projectile_canvas",
+    "visual_background_transport_rule",
 ]

@@ -4,6 +4,7 @@ using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using System;
 using System.IO;
+using System.Collections.Generic;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
@@ -16,7 +17,34 @@ public static class InfiniItemVfxRuntime
     private const byte PacketVersion = 2;
     private static readonly ulong[] LastEventTick = new ulong[Main.maxPlayers];
 
-    public static void ClearUseEventCaches() => Array.Clear(LastEventTick);
+    // Item bodies have no canonical activation/lifetime boundary. Only keep
+    // tick-local particle counts; a persistent total would silence held/equipped
+    // items forever while rejected attempts keep the detached ledger alive.
+    private static readonly Dictionary<string, int> ParticlesThisTick = new(StringComparer.Ordinal);
+    private static ulong ParticleTick;
+
+    public static void ClearUseEventCaches()
+    {
+        Array.Clear(LastEventTick);
+        ParticlesThisTick.Clear();
+        ParticleTick = 0;
+    }
+
+    private static bool TrySpendItemParticle(string sourceKey, VfxQualityBudgetSpec budget)
+    {
+        ulong now = Main.GameUpdateCount;
+        if (ParticleTick != now)
+        {
+            ParticleTick = now;
+            ParticlesThisTick.Clear();
+        }
+        // Preserve explicit silence, but do not invent a positive-total lifetime.
+        if (budget.MaxParticlesPerTick <= 0 || budget.MaxParticlesTotal <= 0) return false;
+        ParticlesThisTick.TryGetValue(sourceKey, out int spent);
+        if (spent >= budget.MaxParticlesPerTick) return false;
+        ParticlesThisTick[sourceKey] = spent + 1;
+        return true;
+    }
 
     public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName)
     {
@@ -75,10 +103,21 @@ public static class InfiniItemVfxRuntime
             Player remote = Main.player[playerId];
             GeneratedItemData? data = remote?.HeldItem?.ModItem is GeneratedItem held && string.Equals(held.Data.Id, remoteItemId, StringComparison.Ordinal) ? held.Data : null;
             if (data is null && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.TryGet(remoteItemId, out GeneratedItemData registered) == true) data = registered;
-            if (remote is not null && data is not null) EmitLocal(remote, data, remoteEntityId, remoteEvent);
+            if (remote?.active == true && data is not null) EmitLocal(remote, data, remoteEntityId, remoteEvent);
         }
         catch { }
     }
+
+    // Same exact authored particle-system mapping as projectile event emission.
+    // Keep item density/velocity/color presentation unchanged.
+    private static int ItemDustId(VfxSlotSpec slot) => slot.ParticleSystemId switch
+    {
+        "pl:smoke" => DustID.Smoke,
+        "pl:shard" => DustID.Glass,
+        "pl:spark" => DustID.Electric,
+        "pl:glow" => DustID.TintableDustLighted,
+        _ => DustID.GemDiamond,
+    };
 
     private static bool HasExactSlot(GeneratedItemData data, string entityId, string eventName)
     {
@@ -94,14 +133,17 @@ public static class InfiniItemVfxRuntime
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             int repeat = slot.RepeatEvery > 0 ? slot.RepeatEvery : 10;
+            // The wire contract defines StartTick for projectile age only.
+            // Item periodic cadence uses the world clock, not an invented item age.
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
             Color color = RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White);
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
+            // Share this tick's allowance across events, slots and periodic presentation.
+            string sourceKey = $"item:{player.whoAmI}:{data.Id}:{entityId}";
             if (kind == InfiniVfxRendererKind.ImpactSprite)
             {
                 // Concurrent events/slots from this owner's item share one draw
                 // allowance, including sprites that outlive the use/contact hook.
-                string sourceKey = $"item:{player.whoAmI}:{data.Id}:{entityId}";
                 InfiniVfxRuntime.EmitImpactSprite(data, entityId, player.Center, player.velocity,
                     slot, data.VfxManifest, sourceKey);
                 continue;
@@ -113,13 +155,15 @@ public static class InfiniItemVfxRuntime
                     Lighting.AddLight(player.Center, color.ToVector3() * strength);
                 continue;
             }
-            if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(SoundID.Item1 with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f) }, player.Center); continue; }
+            if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(SoundID.Item1 with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, player.Center); continue; }
+            if (slot.ParticleSystemId is "none") continue;
             int count = InfiniVfxClientOptions.ScaleParticleCount(Math.Clamp(1 + (int)MathF.Round(slot.Density * 7f), 1, 8));
             for (int i = 0; i < count; i++)
             {
+                if (!TrySpendItemParticle(sourceKey, data.VfxManifest.Budget)) break;
                 Vector2 velocity = Main.rand.NextVector2Circular(1f + slot.Spread, 1f + slot.Spread);
-                Dust dust = Dust.NewDustPerfect(player.Center, DustID.GemDiamond, velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
-                dust.noGravity = true;
+                Dust dust = Dust.NewDustPerfect(player.Center, ItemDustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
+                dust.noGravity = slot.ParticleSystemId is not "pl:smoke";
             }
         }
     }

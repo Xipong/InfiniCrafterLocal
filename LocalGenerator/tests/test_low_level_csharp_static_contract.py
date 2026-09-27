@@ -92,7 +92,9 @@ def test_vfx_texture_role_reaches_runtime_sprite_cache_and_sprite_renderers() ->
     visuals = _read("Content/Projectiles/GeneratedProjectile.Visuals.cs")
     model = _read("Common/Models/VfxManifestSpec.cs")
     assert "ResolveTexturePath(GeneratedItemData data, string entityId, string textureRole)" in runtime
-    assert "InfiniCrafterLocalMod.Sprites.TryGet(texturePath, out float localForwardRadians)" in runtime
+    # Pose parity is exercised by ActiveVfxSpriteTrailMatchesBodyPose against
+    # real FNA vertices; this static gate checks only authored texture routing.
+    assert "InfiniCrafterLocalMod.Sprites.TryGet(texturePath)" in runtime
     assert "entity.VisualRole" in runtime
     assert "DrawSpriteTrail" in runtime
     assert "InfiniDetachedVfxSystem.Enqueue" in runtime

@@ -143,18 +143,29 @@ internal static partial class EngineRuntimeChecks
             generated.Data.ApplyToItem(item);
             var collect = typeof(GeneratedEquipOverlayDrawLayerBase).GetMethod("CollectVisibleOverlays", BindingFlags.Static | BindingFlags.NonPublic)!;
             int Count() => ((System.Collections.IList)collect.Invoke(null, new object[] { player })!).Count;
-            for (int slot = 3; slot < 10; slot++)
+            int mode = Terraria.Main.GameMode;
+            bool extraAccessory = player.extraAccessory;
+            try
             {
-                player.armor[slot] = item;
-                Equal(1, Count(), $"visible accessory slot {slot}");
-                player.hideVisibleAccessory[slot] = true;
-                Equal(0, Count(), $"hidden accessory slot {slot}");
-                player.hideVisibleAccessory[slot] = false;
-                player.hideVisibleAccessory[(slot + 1) % 10] = true;
-                Equal(1, Count(), $"unrelated hide flag must not hide slot {slot}");
-                Array.Clear(player.hideVisibleAccessory);
-                player.armor[slot] = new Item();
+                // This check isolates hide-flag indexing across all seven usable
+                // slots. Locked-slot behavior has its own real-engine control.
+                Terraria.Main.GameMode = 2;
+                player.extraAccessory = true;
+                for (int slot = 3; slot < 10; slot++)
+                {
+                    Equal(true, player.IsItemSlotUnlockedAndUsable(slot), $"fixture unlocks slot {slot}");
+                    player.armor[slot] = item;
+                    Equal(1, Count(), $"visible accessory slot {slot}");
+                    player.hideVisibleAccessory[slot] = true;
+                    Equal(0, Count(), $"hidden accessory slot {slot}");
+                    player.hideVisibleAccessory[slot] = false;
+                    player.hideVisibleAccessory[(slot + 1) % 10] = true;
+                    Equal(1, Count(), $"unrelated hide flag must not hide slot {slot}");
+                    Array.Clear(player.hideVisibleAccessory);
+                    player.armor[slot] = new Item();
+                }
             }
+            finally { Terraria.Main.GameMode = mode; player.extraAccessory = extraAccessory; }
         });
     }
 

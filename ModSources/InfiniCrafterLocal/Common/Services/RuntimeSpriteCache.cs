@@ -162,7 +162,17 @@ public sealed class RuntimeSpriteCache : IDisposable
                     return null;
                 }
 
-                localForwardRadians = MeasureLocalForwardRadians(tex);
+                try
+                {
+                    localForwardRadians = PrepareTextureAndMeasureLocalForwardRadians(tex);
+                }
+                catch
+                {
+                    // A failed conversion/upload must not publish a straight-alpha
+                    // texture or leak the newly decoded GPU resource.
+                    try { tex.Dispose(); } catch { }
+                    throw;
+                }
                 _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter);
                 _loadSuccessCount++;
                 TrimTextureCacheIfNeeded(limits.MaxCachedTextures);
@@ -184,15 +194,30 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
     }
 
-    private static float MeasureLocalForwardRadians(Texture2D texture)
+    private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture)
+    {
+        int width = texture.Width;
+        int height = texture.Height;
+        var pixels = new Color[checked(width * height)];
+        texture.GetData(pixels);
+        // Installed FNA Texture2D.FromStream uploads straight RGBA. Match ReLogic
+        // PngReader.PreMultiplyAlpha (tML 29bf9785f5f4de8cd305be002c4cc48aa1177b20):
+        // integer channel * alpha / 255, preserving alpha exactly. Convert only on
+        // cache insertion, never on hits or on disk; reuse the existing PCA buffer.
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            Color color = pixels[i];
+            pixels[i] = new Color(color.R * color.A / 255, color.G * color.A / 255, color.B * color.A / 255, color.A);
+        }
+        texture.SetData(pixels);
+        return MeasureLocalForwardRadians(pixels, width, height);
+    }
+
+    private static float MeasureLocalForwardRadians(Color[] pixels, int width, int height)
     {
         try
         {
-            int width = texture.Width;
-            int height = texture.Height;
             if (width <= 0 || height <= 0) return 0f;
-            var pixels = new Color[checked(width * height)];
-            texture.GetData(pixels);
 
             int count = 0;
             double sumX = 0.0;

@@ -53,6 +53,8 @@ from infini_local.pipelines.sprite_keyer import (
 )
 from infini_local.pipelines.sprite_contracts import (
     chroma_rgb,
+    chroma_name,
+    final_sprite_canvas,
     image_backend_is_zimage,
     role_contract_prompt_clause,
     sprite_background_positive_clause,
@@ -331,7 +333,7 @@ def prepare_sprite_master(img: Any, sprite_id: str, target_size: int, role: str 
     from this master, not from an already degraded tiny sprite.
     """
     img = img.convert("RGBA")
-    final_size = max(16, min(96, int(target_size or 32)))
+    final_size = final_sprite_canvas(target_size)
     spec_final = sprite_contract_for(role, final_size)
     effect_bbox = alpha_bbox_threshold(img, 1)
     core_bbox = alpha_bbox_threshold(img, int(spec_final.get("coreAlphaThreshold") or 1)) or effect_bbox
@@ -388,7 +390,7 @@ def prepare_sprite_master(img: Any, sprite_id: str, target_size: int, role: str 
     return scrub_transparent_rgb(master)
 
 def bake_sprite_from_master(master: Any, target_size: int, role: str = "item") -> Any:
-    final_size = max(16, min(96, int(target_size or 32)))
+    final_size = final_sprite_canvas(target_size)
     master = scrub_transparent_rgb(master.convert("RGBA"))
     if master.size != (final_size, final_size):
         resample = sprite_resample_filter("final")
@@ -510,12 +512,13 @@ def canonicalize_projectile_forward_axis(img: Any, role: str = "projectile") -> 
 
 
 def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
+    target_size = final_sprite_canvas(target_size)
     img = img.convert("RGBA")
     spec = sprite_contract_for(role, target_size)
     effect_bbox = alpha_bbox_threshold(img, 1)
     core_bbox = alpha_bbox_threshold(img, int(spec.get("coreAlphaThreshold") or 1)) or effect_bbox
     if effect_bbox is None and core_bbox is None:
-        final_size = max(16, min(96, int(target_size or 32)))
+        final_size = final_sprite_canvas(target_size)
         return Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
     crop_bbox = bbox_union(effect_bbox, core_bbox)
     crop_bbox = bbox_expand(crop_bbox, max(int(SPRITE_PADDING), int(spec.get("cropPadPx") or 0)), img.size)
@@ -536,7 +539,7 @@ def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
     new_w = max(1, int(round(crop_w * scale)))
     new_h = max(1, int(round(crop_h * scale)))
     resized = resize_rgba_premultiplied(img, (new_w, new_h), sprite_resample_filter("fit"))
-    final_size = max(16, min(96, int(target_size or 32)))
+    final_size = final_sprite_canvas(target_size)
     canvas = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
     x = (final_size - new_w) // 2
     y = (final_size - new_h) // 2
@@ -773,10 +776,10 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("core_silhouette_too_large", "shrink the subject slightly so a thin safety border remains"),
         ("effect_extent_too_large", "keep glows or residue tighter to the subject"),
         ("object_touches_edges", "do not touch the image edges; leave a thin border"),
-        ("magenta_key_background_left", "keep the magenta key as a perfectly flat background and do not paint the key color into the object"),
-        ("almost_no_transparency_after_bg_removal", "keep the background perfectly flat magenta with a cleanly separated object"),
+        ("magenta_key_background_left", f"keep the {chroma_name()} perfectly flat and do not paint the key color into the object"),
+        ("almost_no_transparency_after_bg_removal", f"keep the {chroma_name()} with a cleanly separated object"),
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
-        ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the magenta key"),
+        ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the configured key"),
         ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
         ("projectile_forward_axis_misaligned", "use canonical local +X: leading tip/nose screen-right and tail/trail screen-left; runtime rotates this axis to world velocity"),
     ]
@@ -798,7 +801,7 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
             f"Revision {attempt}: preserve the same exact {role} subject, quantity, action, state, materials, and colors.",
             f"Composition correction: keep the authored {role} components within the sprite bounds and make their physical arrangement clearer.",
             str(contract),
-            "Background correction: use a flat #ff00ff magenta chroma-key background.",
+            f"Background correction: {bg}.",
             ("Technical correction: " + notes) if notes else "",
         ]
         return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200))
@@ -832,6 +835,7 @@ def postprocess_sprite(
     """
     if Image is None:
         raise RuntimeError("Pillow is required for sprite postprocess/validation")
+    target_size = final_sprite_canvas(target_size)
     try:
         raw = Image.open(path).convert("RGBA")
         save_stage(raw, sprite_id, "00_raw")

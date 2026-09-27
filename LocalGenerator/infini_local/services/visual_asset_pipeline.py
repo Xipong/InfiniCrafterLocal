@@ -382,8 +382,8 @@ def generate_procedural_asset(
     image_draw_cls: Any,
 ) -> str:
     role = str(role or "projectile").lower()
-    canvas = int(canvas_size or 32)
-    canvas = max(16, min(96, canvas))
+    from infini_local.pipelines.sprite_contracts import final_sprite_canvas
+    canvas = final_sprite_canvas(canvas_size)
     sprite_dir.mkdir(parents=True, exist_ok=True)
     seed = f"{data.get('id') or data.get('name') or 'item'}:{role}:{variant}"
     color = _stable_rgb(seed)

@@ -153,20 +153,22 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         float baseScale = held is not null && !held.IsAir ? player.GetAdjustedItemScale(held) : 1f;
         bool heldHasGeneratedData = held is not null && !held.IsAir && TryGetGeneratedHeldData(held, out var heldGiForScale) && heldGiForScale?.Data is not null;
         float registryScale = data?.Gameplay?.ItemScale ?? 1f;
-        float payloadScale = heldHasGeneratedData ? 1f : Math.Clamp(registryScale <= 0f ? 1f : registryScale, 0.55f, 1.55f);
-        float drawScale = Math.Clamp(baseScale * payloadScale, 0.45f, 1.85f);
+        // Match GeneratedItem.ModifyItemScale for a registry-only definition. Do not
+        // cap the adjusted result: prefix/player/global hooks already own that scale.
+        float payloadScale = heldHasGeneratedData ? 1f : Math.Clamp(registryScale, 0.25f, 4f);
+        float drawScale = baseScale * payloadScale;
         Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
-        Vector2 itemLocation = payload is not null ? PayloadItemLocation(payload) : drawInfo.ItemLocation;
-        Vector2 position = (itemLocation.LengthSquared() > 4f ? itemLocation : player.itemLocation) - Main.screenPosition + holdOffset;
-        if (position.LengthSquared() < 4f)
-            position = player.MountedCenter - Main.screenPosition + new Vector2(drawDirection * 8f, -4f * drawGravDir) + holdOffset;
+        // ItemLocation is already the draw-set pose (not necessarily player.itemLocation).
+        // World zero and screen zero are valid coordinates, never missing-pose sentinels.
+        Vector2 itemLocation = PayloadItemLocation(payload) ?? drawInfo.ItemLocation;
+        Vector2 position = itemLocation - Main.screenPosition + holdOffset;
         position += RoleForwardOffset(role, drawDirection, drawGravDir, 0);
         position = new Vector2((int)position.X, (int)position.Y);
 
+        // Vanilla DrawPlayer_27_HeldItem consumes itemRotation verbatim; gravity
+        // is already represented in the engine pose and the sprite effects above.
         float rotation = payload is not null ? payload.ItemRotation : player.itemRotation;
-        if (drawGravDir == -1f)
-            rotation *= -1f;
 
         Color lightColor = Lighting.GetColor((int)(player.Center.X / 16f), (int)(player.Center.Y / 16f));
         Color tint = held is not null && !held.IsAir ? held.GetAlpha(lightColor) : lightColor;
@@ -363,11 +365,11 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         return GeneratedHeldRenderRole.Generic;
     }
 
-    private static Vector2 PayloadItemLocation(HeldItemPresentationPayload? payload)
+    private static Vector2? PayloadItemLocation(HeldItemPresentationPayload? payload)
     {
-        if (payload is null) return Vector2.Zero;
-        if (float.IsNaN(payload.ItemLocationX) || float.IsNaN(payload.ItemLocationY)) return Vector2.Zero;
-        if (Math.Abs(payload.ItemLocationX) > 2_000_000f || Math.Abs(payload.ItemLocationY) > 2_000_000f) return Vector2.Zero;
+        if (payload is null) return null;
+        if (!float.IsFinite(payload.ItemLocationX) || !float.IsFinite(payload.ItemLocationY)) return null;
+        if (Math.Abs(payload.ItemLocationX) > 2_000_000f || Math.Abs(payload.ItemLocationY) > 2_000_000f) return null;
         return new Vector2(payload.ItemLocationX, payload.ItemLocationY);
     }
 

@@ -49,10 +49,15 @@ public sealed partial class GeneratedProjectile
         Texture2D pixel = TextureAssets.MagicPixel.Value;
         Color color = RuntimeColorPolicy.Resolve(_entity!.Light.Color, Projectile.GetAlpha(lightColor));
         Vector2 center = Projectile.Center - Main.screenPosition;
-        Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection).RotatedBy(Projectile.rotation - Projectile.velocity.SafeNormalize(_initialDirection).ToRotation());
+        // AI adds a quarter-turn for native vertical sprites. A horizontal
+        // primitive uses the motion axis directly; retain explicit rotating
+        // movement's pose rather than re-aiming a spinning body by velocity.
+        Vector2 direction = _entity.Movement.Code is 14 or 16 or 17 or 18
+            ? Projectile.rotation.ToRotationVector2()
+            : Projectile.velocity.SafeNormalize(_initialDirection);
         float length = Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
         float width = Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f);
         Vector2 delta = direction.SafeNormalize(Vector2.UnitX) * length;
-        Main.spriteBatch.Draw(pixel, center - delta * 0.5f, null, color, delta.ToRotation(), Vector2.Zero, new Vector2(delta.Length(), width), SpriteEffects.None, 0f);
+        InfiniVfxRuntime.DrawLine(pixel, center - delta * 0.5f, center + delta * 0.5f, color, width);
     }
 }

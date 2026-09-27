@@ -57,13 +57,8 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
         if (entries.Count == 0)
             return;
 
-        Vector2 bodyCenter = new(
-            (int)(drawInfo.Position.X + player.width * 0.5f),
-            (int)(drawInfo.Position.Y + player.height * 0.5f));
-        bodyCenter -= Main.screenPosition;
         float grav = player.gravDir < 0f ? -1f : 1f;
         SpriteEffects effects = drawInfo.playerEffect;
-        Color lightColor = Lighting.GetColor((int)(player.Center.X / 16f), (int)(player.Center.Y / 16f));
 
         int accessoryCount = 0;
         foreach (OverlayEntry entry in entries)
@@ -89,17 +84,32 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             Vector2 offset;
             float targetPixels;
             int shader;
+            Color lightColor;
+            Vector2 partPosition;
+            Vector2 pivot;
+            Rectangle frame;
+            float rotation;
             switch (entry.Slot)
             {
                 case "head":
                     offset = new Vector2(0f, -19f * grav);
                     targetPixels = 25f;
                     shader = drawInfo.cHead;
+                    lightColor = drawInfo.colorArmorHead;
+                    partPosition = player.headPosition + drawInfo.helmetOffset;
+                    pivot = drawInfo.headVect;
+                    frame = player.bodyFrame;
+                    rotation = player.headRotation;
                     break;
                 case "legs":
                     offset = new Vector2(0f, 14f * grav);
                     targetPixels = 27f;
                     shader = drawInfo.cLegs;
+                    lightColor = drawInfo.colorArmorLegs;
+                    partPosition = player.legPosition + drawInfo.legsOffset;
+                    pivot = drawInfo.legVect;
+                    frame = player.legFrame;
+                    rotation = player.legRotation;
                     break;
                 case "accessory":
                     float angle = MathHelper.PiOver2 + accessoryOrdinal * MathHelper.TwoPi / Math.Max(1, accessoryCount);
@@ -109,20 +119,39 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                     int dyeIndex = entry.AccessoryIndex + 3;
                     shader = player.dye is not null && dyeIndex >= 0 && dyeIndex < player.dye.Length
                         ? player.dye[dyeIndex].dye
-                        : drawInfo.cBody;
+                        : 0;
+                    lightColor = drawInfo.colorArmorBody;
+                    partPosition = player.bodyPosition;
+                    pivot = drawInfo.bodyVect;
+                    frame = player.bodyFrame;
+                    rotation = player.bodyRotation;
                     accessoryOrdinal++;
                     break;
                 default:
                     offset = new Vector2(0f, -2f * grav);
                     targetPixels = 31f;
                     shader = drawInfo.cBody;
+                    lightColor = drawInfo.colorArmorBody;
+                    partPosition = player.bodyPosition;
+                    pivot = drawInfo.bodyVect;
+                    frame = player.bodyFrame;
+                    rotation = player.bodyRotation;
                     break;
             }
 
-            float scale = Math.Clamp(targetPixels / Math.Max(texture.Width, texture.Height), 0.18f, 1.25f);
-            Vector2 position = bodyCenter + offset.RotatedBy(player.fullRotation);
+            // Keep the existing single-PNG badge offsets/orbit and size policy, not
+            // an armor atlas. Attach that badge to the same local pivot as vanilla
+            // head/torso/legs. PlayerDrawLayers.TransformDrawData owns full rotation.
+            // tML v2026.06.3.6 (29bf9785): PlayerDrawLayers + PlayerDrawSet.
+            Vector2 frameTop = new(
+                (int)(drawInfo.Position.X - Main.screenPosition.X - frame.Width / 2 + player.width / 2),
+                (int)(drawInfo.Position.Y - Main.screenPosition.Y + player.height - frame.Height + 4f));
+            Vector2 badgeCenter = new Vector2(frame.Width * 0.5f, frame.Height - 4f - player.height * 0.5f) + offset;
+            Vector2 position = frameTop + partPosition + pivot + (badgeCenter - pivot).RotatedBy(rotation);
+            // A minimum scale defeats the target-pixel bound for high-res PNGs.
+            float scale = Math.Min(targetPixels / Math.Max(texture.Width, texture.Height), 1.25f);
             Vector2 origin = new(texture.Width * 0.5f, texture.Height * 0.5f);
-            DrawData draw = new(texture, position, null, lightColor, player.fullRotation, origin, scale, effects, 0)
+            DrawData draw = new(texture, position, null, lightColor, rotation, origin, scale, effects, 0)
             {
                 shader = shader,
             };
@@ -139,9 +168,16 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
         for (int armorPart = 0; armorPart < 3; armorPart++)
         {
             int vanityIndex = armorPart + 10;
-            int sourceIndex = vanityIndex < player.armor.Length && !player.armor[vanityIndex].IsAir
-                ? vanityIndex
-                : armorPart;
+            Item? vanity = vanityIndex < player.armor.Length ? player.armor[vanityIndex] : null;
+            // Player.PlayerFrame replaces armor only for a matching equip slot,
+            // not merely because the social inventory cell contains an item.
+            bool replacesArmor = vanity is not null && (armorPart switch
+            {
+                0 => vanity.headSlot >= 0,
+                1 => vanity.bodySlot >= 0,
+                _ => vanity.legSlot >= 0,
+            });
+            int sourceIndex = replacesArmor ? vanityIndex : armorPart;
             TryAdd(player.armor, sourceIndex, entries, armorPart switch
             {
                 0 => "head",
@@ -153,14 +189,17 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
         for (int accessoryIndex = 0; accessoryIndex < 7; accessoryIndex++)
         {
             int normalIndex = accessoryIndex + 3;
-            if (player.hideVisibleAccessory is { Length: > 0 }
+            if (!player.IsItemSlotUnlockedAndUsable(normalIndex))
+                continue;
+            int vanityIndex = accessoryIndex + 13;
+            bool hasVanity = vanityIndex < player.armor.Length && player.armor[vanityIndex] is { IsAir: false };
+            // Vanilla applies hideVisibleAccessory only to functional slots;
+            // social accessories are evaluated separately and remain visible.
+            if (!hasVanity && player.hideVisibleAccessory is { Length: > 0 }
                 && normalIndex < player.hideVisibleAccessory.Length
                 && player.hideVisibleAccessory[normalIndex])
                 continue;
-            int vanityIndex = accessoryIndex + 13;
-            int sourceIndex = vanityIndex < player.armor.Length && !player.armor[vanityIndex].IsAir
-                ? vanityIndex
-                : normalIndex;
+            int sourceIndex = hasVanity ? vanityIndex : normalIndex;
             TryAdd(player.armor, sourceIndex, entries, "accessory", accessoryIndex);
         }
         return entries;

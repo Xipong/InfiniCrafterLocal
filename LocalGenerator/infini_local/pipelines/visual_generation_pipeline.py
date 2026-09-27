@@ -32,6 +32,7 @@ from infini_local.pipelines.llm_transport import (
 from infini_local.pipelines.pipeline_visual_config import VISUAL_DIRECTOR_LLM
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
+from infini_local.pipelines.visual_prompt_contracts import visual_background_transport_rule
 from infini_local.pipelines.visual_asset_modes import (
     VISUAL_ASSET_MODES,
     visual_asset_mode_catalog,
@@ -828,6 +829,7 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
+                visual_background_transport_rule(),
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
                 "preserve valid literal parent composition and accepted runtime entity set",
                 "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
@@ -867,7 +869,7 @@ def _request_visual_kit(
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
                 "baked_sprite requires a real generated PNG; no placeholder",
-                "item.prompt and every baked_sprite entity prompt must require a transparent background; never request a solid, black, white or otherwise opaque background",
+                visual_background_transport_rule(),
                 "never author impact sprite prompts here; VFX owns them only when it selects rendererKind=impactSprite",
                 "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",

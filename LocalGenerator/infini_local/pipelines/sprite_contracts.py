@@ -3,16 +3,14 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.pipeline_visual_config import (
-    BG_COLOR,
-    BG_REMOVE_MODE,
     CHILD_ICON_TARGET_FILL,
     FIELD_ICON_TARGET_FILL,
     IMAGE_BACKEND,
     IMPACT_ICON_TARGET_FILL,
     ITEM_ICON_TARGET_FILL,
     PROJECTILE_ICON_TARGET_FILL,
-    REMOVE_BG,
     SDCPP_MODEL,
     SDCPP_SERVER_COMMAND_TEMPLATE,
     SDCPP_SERVER_EXTRA_ARGS,
@@ -28,15 +26,17 @@ from infini_local.pipelines.pipeline_visual_config import (
 
 
 def chroma_rgb() -> tuple[int, int, int]:
-    if BG_COLOR in {"green", "lime", "greenscreen"}:
-        return (0, 255, 0)
-    if BG_COLOR in {"blue"}:
-        return (0, 0, 255)
-    if BG_COLOR in {"white"}:
-        return (255, 255, 255)
-    if BG_COLOR in {"black"}:
-        return (0, 0, 0)
-    return (255, 0, 255)
+    # Exact supported aliases only; a typo must never choose a different key.
+    colors = {
+        "magenta": (255, 0, 255),
+        "green": (0, 255, 0), "lime": (0, 255, 0), "greenscreen": (0, 255, 0),
+        "blue": (0, 0, 255), "cyan": (0, 255, 255),
+        "white": (255, 255, 255), "black": (0, 0, 0),
+    }
+    name = str(visual_config.BG_COLOR).strip().lower()
+    if name not in colors:
+        raise ValueError(f"Invalid INFINI_BG_COLOR {visual_config.BG_COLOR!r}; supported: {', '.join(colors)}")
+    return colors[name]
 
 
 def chroma_name() -> str:
@@ -52,13 +52,17 @@ def chroma_name() -> str:
     return f"pure flat background color rgb({r},{g},{b})"
 
 
+def uses_key_background() -> bool:
+    """Match apply_background_removal: legacy enabled modes use sprite_keyer."""
+    mode = (visual_config.BG_REMOVE_MODE or "sprite_keyer").strip().lower().replace("-", "_")
+    return bool(visual_config.REMOVE_BG) and mode not in {"", "none", "off"}
+
+
 def sprite_background_positive_clause() -> str:
-    # Prefer a magenta key over requesting alpha/transparency. Local postprocess owns alpha.
-    if REMOVE_BG and BG_REMOVE_MODE in {"chroma", "floodfill"}:
-        return f"on a perfectly solid untextured {chroma_name()}, object fully separated from background, no floor, no cast shadow, no gradient"
-    if REMOVE_BG and BG_REMOVE_MODE == "rembg":
-        return "on a plain solid magenta key background (#ff00ff), no scene, no floor, no cast shadow"
-    return "on a perfectly solid untextured pure flat magenta background (#ff00ff), object fully separated from background, no floor, no cast shadow, no gradient"
+    if not uses_key_background():
+        return "on a transparent background, no scene, no floor, no cast shadow"
+    # The supported local keyer owns alpha, including legacy mode aliases.
+    return f"on a perfectly solid untextured {chroma_name()}, object fully separated from background, no floor, no cast shadow, no gradient"
 
 
 def image_backend_is_zimage() -> bool:
@@ -78,9 +82,19 @@ def image_backend_is_zimage() -> bool:
     return "z-image" in hay or "zimage" in hay
 
 
+def final_sprite_canvas(target_size: int) -> int:
+    """Final PNG bounds (geometry measurements may use larger raw/master images)."""
+    size = int(target_size)
+    if size != target_size or not 16 <= size <= 128:
+        raise ValueError(f"Unsupported final sprite canvas {target_size!r}; expected integer 16..128")
+    return size
+
+
 def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
+    # Also used to measure high-resolution raw/master images. Final PNG bounds
+    # belong to final_sprite_canvas, not to this dimension-relative geometry table.
     role = (role or "item").lower()
-    size = max(16, min(96, int(target_size or 32)))
+    size = max(16, int(target_size or 32))
     table: dict[str, dict[str, Any]] = {
         "item": {
             "targetFill": ITEM_ICON_TARGET_FILL,
@@ -174,4 +188,6 @@ __all__ = [
     "role_contract_prompt_clause",
     "sprite_background_positive_clause",
     "sprite_contract_for",
+    "final_sprite_canvas",
+    "uses_key_background",
 ]

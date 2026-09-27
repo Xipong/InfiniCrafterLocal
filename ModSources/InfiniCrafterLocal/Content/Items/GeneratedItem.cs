@@ -599,7 +599,13 @@ public partial class GeneratedItem : ModItem
         Rectangle source = texture.Bounds;
         Vector2 drawOrigin = source.Size() / 2f;
         float fit = Math.Min(1f, Math.Max(frame.Width, frame.Height) / Math.Max(1f, Math.Max(texture.Width, texture.Height)));
-        spriteBatch.Draw(texture, position + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY), source, drawColor, 0f, drawOrigin, scale * fit * data.Visual.InventoryScale, SpriteEffects.None, 0f);
+        Vector2 drawPosition = position + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
+        float finalScale = scale * fit * data.Visual.InventoryScale;
+        spriteBatch.Draw(texture, drawPosition, source, drawColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
+        // Returning false suppresses both vanilla passes. Preserve ItemSlot's optional
+        // Item.color overlay using the already-resolved caller color (not GetAlpha again).
+        if (Item.color != Color.Transparent)
+            spriteBatch.Draw(texture, drawPosition, source, itemColor, 0f, drawOrigin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 
@@ -614,6 +620,10 @@ public partial class GeneratedItem : ModItem
         float finalScale = scale * data.Visual.WorldScale;
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);
+        // Match Main.DrawItem's separate Item.color pass; alphaColor already includes
+        // the caller's alpha/shimmer treatment and must not be multiplied again.
+        if (Item.color != Color.Transparent)
+            spriteBatch.Draw(texture, drawPosition, source, Item.GetColor(lightColor), rotation, origin, finalScale, SpriteEffects.None, 0f);
         return false;
     }
 }

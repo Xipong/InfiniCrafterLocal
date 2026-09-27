@@ -30,12 +30,14 @@ public sealed class InfiniVfxState
     public string SourceKey = "";
     public Dictionary<InfiniVfxSlotEmissionKey, ulong> LastSlotEmission { get; } = new();
     public Vector2[] CenterHistory = Array.Empty<Vector2>();
+    public int HistoryCount;
 
     public void Push(Vector2 center)
     {
-        if (CenterHistory.Length != 20) CenterHistory = new Vector2[20];
+        if (CenterHistory.Length != 20) { CenterHistory = new Vector2[20]; HistoryCount = 0; }
         for (int i = CenterHistory.Length - 1; i > 0; i--) CenterHistory[i] = CenterHistory[i - 1];
         CenterHistory[0] = center;
+        HistoryCount = Math.Min(HistoryCount + 1, CenterHistory.Length);
     }
 }
 
@@ -112,16 +114,16 @@ public static class InfiniVfxRuntime
             bool over = slot.Layer == "AfterProjectiles";
             if (pass == InfiniVfxDrawPass.UnderProjectile && over) continue;
             if (pass == InfiniVfxDrawPass.OverProjectile && !over) continue;
-            Color color = PresentationColor(manifest, lightColor) * slot.Alpha;
+            Color color = ApplyBlend(PresentationColor(manifest, lightColor) * slot.Alpha, slot.Blend);
             switch (VfxRendererRegistry.Resolve(slot))
             {
                 case InfiniVfxRendererKind.ProjectileAfterimage:
                 case InfiniVfxRendererKind.SpriteStampTrail:
                 case InfiniVfxRendererKind.ActorAfterimage:
                     string texturePath = ResolveTexturePath(data, entityId, slot.TextureRole);
-                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(texturePath, out float localForwardRadians);
+                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(texturePath);
                     if (texture is not null)
-                        DrawSpriteTrail(texture, projectile, manifest, ref state, color, slot.Scale, localForwardRadians);
+                        DrawSpriteTrail(texture, projectile, manifest, ref state, color, slot.Scale);
                     break;
                 case InfiniVfxRendererKind.HistoryRibbon:
                 case InfiniVfxRendererKind.TipTrail:
@@ -139,6 +141,14 @@ public static class InfiniVfxRuntime
                     break;
             }
         }
+    }
+
+    // AlphaBlend uses One / InverseSourceAlpha. Zero alpha therefore preserves
+    // destination RGB while retaining the already opacity-scaled source RGB.
+    internal static Color ApplyBlend(Color color, string blend)
+    {
+        if (blend == "additive") color.A = 0;
+        return color;
     }
 
     internal static string ResolveTexturePath(GeneratedItemData data, string entityId, string textureRole)
@@ -221,6 +231,9 @@ public static class InfiniVfxRuntime
             EmitImpactSprite(data, entityId, center, inheritedVelocity, slot, manifest, sourceKey);
             return;
         }
+        // An explicit absence of particles is not a request for diamond dust.
+        // Keep sprite/light/sound execution above independent of this selector.
+        if (slot.ParticleSystemId == "none") return;
         int count = kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ChildMotes
             ? Math.Clamp(2 + (int)MathF.Round(slot.Density * 8f), 2, 10)
             : 1;
@@ -249,7 +262,7 @@ public static class InfiniVfxRuntime
         InfiniDetachedVfxSystem.Enqueue(
             sourceKey, texturePath, slot.Layer, center,
             inheritedVelocity.LengthSquared() > 0.01f ? inheritedVelocity.ToRotation() : 0f,
-            slot.Scale, slot.Alpha, PresentationColor(manifest, Color.White),
+            slot.Scale, slot.Alpha, ApplyBlend(PresentationColor(manifest, Color.White), slot.Blend),
             slot.Duration, manifest.Budget.MaxDrawCalls);
     }
 
@@ -286,36 +299,38 @@ public static class InfiniVfxRuntime
         state.DrawCallsThisFrame += cost; return true;
     }
 
-    private static void DrawSpriteTrail(Texture2D texture, Projectile projectile, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale, float localForwardRadians)
+    private static void DrawSpriteTrail(Texture2D texture, Projectile projectile, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale)
     {
-        float rotation = projectile.velocity.LengthSquared() > 0.01f
-            ? projectile.velocity.ToRotation() - localForwardRadians
-            : projectile.rotation - MathHelper.PiOver2 - localForwardRadians;
+        // Match the live sprite consumer, including authored spinning motion.
+        // Re-aiming only the afterimage by velocity produces a different pose.
+        float rotation = projectile.rotation;
         Vector2 origin = new(texture.Width * 0.5f, texture.Height * 0.5f);
-        for (int i = 2; i < state.CenterHistory.Length; i += 3)
+        for (int i = 2; i < state.HistoryCount; i += 3)
         {
             Vector2 center = state.CenterHistory[i];
-            if (center == Vector2.Zero || !SpendDraw(manifest, ref state, 1)) continue;
+            if (!SpendDraw(manifest, ref state, 1)) break;
             float fade = 1f - i / (float)state.CenterHistory.Length;
             Main.spriteBatch.Draw(
                 texture,
-                center - Main.screenPosition,
+                center - Main.screenPosition + new Vector2(0f, projectile.gfxOffY),
                 null,
                 color * fade,
                 rotation,
                 origin,
                 Math.Max(0.05f, projectile.scale * scale),
-                SpriteEffects.None,
+                projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
                 0f);
         }
     }
 
     private static void DrawTrail(Texture2D pixel, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float width)
     {
-        for (int i = 1; i < state.CenterHistory.Length; i++)
+        for (int i = 1; i < state.HistoryCount; i++)
         {
             Vector2 a = state.CenterHistory[i - 1]; Vector2 b = state.CenterHistory[i];
-            if (a == Vector2.Zero || b == Vector2.Zero || !SpendDraw(manifest, ref state, 1)) continue;
+            // Repeated stationary samples queue no quad and must not starve later segments.
+            if (Vector2.DistanceSquared(a, b) <= 0.01f) continue;
+            if (!SpendDraw(manifest, ref state, 1)) break;
             DrawLine(pixel, a - Main.screenPosition, b - Main.screenPosition, color * (1f - i / (float)state.CenterHistory.Length), width);
         }
     }
@@ -328,10 +343,14 @@ public static class InfiniVfxRuntime
             DrawLine(pixel, center - Vector2.UnitY * radius, center + Vector2.UnitY * radius, color, 2f);
     }
 
-    private static void DrawLine(Texture2D pixel, Vector2 start, Vector2 end, Color color, float width)
+    internal static void DrawLine(Texture2D pixel, Vector2 start, Vector2 end, Color color, float width)
     {
         Vector2 delta = end - start;
         if (delta.LengthSquared() <= 0.01f) return;
-        Main.spriteBatch.Draw(pixel, start, null, color, delta.ToRotation(), Vector2.Zero, new Vector2(delta.Length(), Math.Max(1f, width)), SpriteEffects.None, 0f);
+        // SpriteBatch scale is per source texel, not a destination pixel size.
+        // Center the width on the segment so reversing it preserves its footprint.
+        Main.spriteBatch.Draw(pixel, start, null, color, delta.ToRotation(),
+            new Vector2(0f, pixel.Height * 0.5f),
+            new Vector2(delta.Length() / pixel.Width, Math.Max(1f, width) / pixel.Height), SpriteEffects.None, 0f);
     }
 }
