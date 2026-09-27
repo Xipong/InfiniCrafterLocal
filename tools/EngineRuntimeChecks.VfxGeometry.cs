@@ -178,10 +178,12 @@ internal static partial class EngineRuntimeChecks
             {
                 Terraria.GameContent.TextureAssets.MagicPixel = asset;
                 foreach (Vector2 direction in new[] { Vector2.UnitX, Vector2.UnitY, -Vector2.UnitX })
+                foreach (int movement in new[] { 0, 18, 14, 16, 17 })
                 {
                     var projectile = new Projectile { Center = new Vector2(100, 120), velocity = direction, rotation = direction.ToRotation() + MathHelper.PiOver2, scale = 1f };
                     var generated = Attach(projectile);
                     var entity = Entity(); entity.Visual.AssetMode = "runtime_geometry";
+                    entity.Movement.Code = movement;
                     entity.Hitbox.WidthPx = 30; entity.Hitbox.HeightPx = 20;
                     generated.Configure(new GeneratedItemData(), entity, 0, 8, direction);
                     var draw = generated.GetType().GetMethod("DrawRuntimeGeometry", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -191,7 +193,10 @@ internal static partial class EngineRuntimeChecks
                     Vector3[] points = positions(index);
                     AssertVfxNear(projectile.Center - Terraria.Main.screenPosition, VfxVertexCenter(points), "runtime body is centered, independent of source dimensions");
                     Vector2 edge = new(points[1].X - points[0].X, points[1].Y - points[0].Y);
-                    AssertVfxNear(direction * 30f, edge, "primitive forward axis does not inherit sprite quarter-turn");
+                    // Whip sets a native-sprite quarter turn too (Executors.Whip).
+                    // Only actual rotating motion 14/16/17 owns a distinct rotation.
+                    Vector2 expected = movement is 14 or 16 or 17 ? projectile.rotation.ToRotationVector2() : direction;
+                    AssertVfxNear(expected * 30f, edge, "primitive forward/spin axis for movement " + movement);
                 }
             }
             finally { Terraria.GameContent.TextureAssets.MagicPixel = oldPixel; }

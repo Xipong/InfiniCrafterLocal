@@ -52,7 +52,8 @@ public sealed partial class GeneratedProjectile
         // AI adds a quarter-turn for native vertical sprites. A horizontal
         // primitive uses the motion axis directly; retain explicit rotating
         // movement's pose rather than re-aiming a spinning body by velocity.
-        Vector2 direction = _entity.Movement.Code is 14 or 16 or 17 or 18
+        // Whip also adds the native-sprite quarter-turn; it is not spinning motion.
+        Vector2 direction = _entity.Movement.Code is 14 or 16 or 17
             ? Projectile.rotation.ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);
         float length = Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
