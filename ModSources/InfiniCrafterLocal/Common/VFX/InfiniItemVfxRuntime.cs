@@ -97,6 +97,15 @@ public static class InfiniItemVfxRuntime
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
             Color color = RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White);
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
+            if (kind == InfiniVfxRendererKind.ImpactSprite)
+            {
+                // Concurrent events/slots from this owner's item share one draw
+                // allowance, including sprites that outlive the use/contact hook.
+                string sourceKey = $"item:{player.whoAmI}:{data.Id}:{entityId}";
+                InfiniVfxRuntime.EmitImpactSprite(data, entityId, player.Center, player.velocity,
+                    slot, data.VfxManifest, sourceKey);
+                continue;
+            }
             if (kind == InfiniVfxRendererKind.LightCue)
             {
                 float strength = Math.Clamp(slot.Scale * 0.2f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;

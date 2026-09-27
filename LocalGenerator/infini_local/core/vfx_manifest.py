@@ -342,8 +342,10 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             if entity_id in impact_sprite_entities:
                 errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
             impact_sprite_entities.add(entity_id)
-        elif sprite_prompt or sprite_negative:
-            errors.append({"path": path + ".spritePrompt", "message": "sprite prompts are owned only by impactSprite slots and must be empty otherwise"})
+        else:
+            for field, value in (("spritePrompt", sprite_prompt), ("spriteNegativePrompt", sprite_negative)):
+                if value:
+                    errors.append({"path": f"{path}.{field}", "message": "sprite prompts are owned only by impactSprite slots and must be empty otherwise"})
         clean["spritePrompt"] = sprite_prompt
         clean["spriteNegativePrompt"] = sprite_negative
         for renderer in ("soundCue", "lightCue"):

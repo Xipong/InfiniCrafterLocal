@@ -17,6 +17,8 @@
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
+    <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
+    <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />
     <Compile Include="EngineRuntimeChecks.Whip.cs" />

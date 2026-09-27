@@ -104,6 +104,8 @@ internal static partial class EngineRuntimeChecks
             ("applied trace observes projection without changing definition", AppliedTraceObservesProjectionWithoutChangingDefinition),
             ("neutral item omissions preserve exact Item projection", NeutralItemOmissionsPreserveProjection),
             ("neutral buff omissions reach real player effects", NeutralBuffOmissionsReachRealPlayerEffects),
+            ("small generated buffs reach real item/player hooks", SmallGeneratedBuffsReachRealHooks),
+            ("item impact sprite uses real detached sprite renderer", ItemImpactSpriteUsesDetachedRenderer),
         };
         int failed = 0;
         foreach (var (name, check) in checks)

@@ -46,6 +46,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "binding_dependency",
     "capability_event_incompatible",
     "child_depth_budget",
+    "consumer_representability",
     "dual_use_placeable_input_contract",
     "duplicate_exclusive_input",
     "duplicate_id",
@@ -644,6 +645,13 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 exclusive_components[group_key] = (index, call_id)
 
         for param_name, param_spec in cap.params.items():
+            if param_name in params:
+                consumer_error = param_spec.consumer_value_error(params[param_name])
+                if consumer_error is not None:
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{index}].params.{param_name}", "consumer_representability", consumer_error,
+                        ("author a non-neutral value representable by the declared consumer or exact neutral",),
+                    ))
             ref = param_spec.reference
             if ref is None or param_name not in params:
                 continue

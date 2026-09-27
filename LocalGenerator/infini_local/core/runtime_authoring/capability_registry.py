@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import math
+import struct
 from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
@@ -297,6 +299,28 @@ class ParamSpec:
     runtime_maximum: float | int | None = None
     neutral: Any = None
     execution_phase: str = ""
+    consumer_storage: str = ""
+
+    def consumer_constraint(self) -> dict[str, Any]:
+        return {"storage": self.consumer_storage, "neutral": self.neutral,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."}
+
+    def consumer_value_error(self, value: Any) -> str | None:
+        """Check declared consumer storage without modifying the authored value."""
+        if not self.consumer_storage:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "expected a finite number for float32 consumer storage"
+        try:
+            stored = struct.unpack("!f", struct.pack("!f", value))[0]
+        except (OverflowError, struct.error):
+            return "value is not finite in float32 consumer storage"
+        if not math.isfinite(stored):
+            return "value is not finite in float32 consumer storage"
+        if value != self.neutral and stored == self.neutral:
+            return f"non-neutral value collapses to neutral {self.neutral} in float32 consumer storage"
+        return None
 
     def to_wire(self, value: Any) -> Any:
         # Declared unit conversion, not a choice of mechanic or a numeric clamp.
@@ -339,6 +363,8 @@ class ParamSpec:
             out["default"] = self.default
         if self.neutral is not None:
             out["x-infini-neutral"] = self.neutral
+        if self.consumer_storage:
+            out["x-infini-consumerConstraint"] = self.consumer_constraint()
         return out
 
 
@@ -442,6 +468,8 @@ class CapabilitySpec:
                 row["default"] = spec.default
             if spec.neutral is not None:
                 row["neutral"] = spec.neutral
+            if spec.consumer_storage:
+                row["consumerConstraint"] = spec.consumer_constraint()
             params[name] = row
         card: dict[str, Any] = {
             "fn": self.name,
@@ -546,6 +574,7 @@ def _p(
     runtime_maximum: float | int | None = None,
     neutral: Any = None,
     execution_phase: str = "",
+    consumer_storage: str = "",
 ) -> ParamSpec:
     return ParamSpec(
         kind=kind,
@@ -568,6 +597,7 @@ def _p(
         runtime_maximum=runtime_maximum,
         neutral=neutral,
         execution_phase=execution_phase,
+        consumer_storage=consumer_storage,
     )
 
 
@@ -881,12 +911,12 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "durationTicks": _p("integer", "Duration", minimum=1, maximum=21600, units="ticks"),
-            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1),
-            "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
+            "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
-            "moveSpeedBonusFactor": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0),
-            "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0),
+            "moveSpeedBonusFactor": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0, consumer_storage="float32"),
+            "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"),
             "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
             "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
         },

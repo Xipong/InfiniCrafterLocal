@@ -586,6 +586,40 @@ def strict_author_shape_report(value: Any) -> dict[str, Any]:
     return {"schema": "infini.author-item-shape-report.v1", "ok": not errors, "errors": errors}
 
 
+def _repair_structure_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Project value constraints away, retaining the canonical wire structure.
+
+    String consts identify registered variants; numeric/boolean consts constrain
+    values within a variant. Their types remain mandatory even before freezing.
+    Conditional requirements are checked on the final merged authored document.
+    """
+    out = copy.deepcopy(dict(schema))
+    for key in ("minimum", "maximum", "multipleOf", "if", "then", "else"):
+        out.pop(key, None)
+    constant = out.get("const")
+    if isinstance(constant, (int, float, bool)):
+        out.pop("const")
+        out["type"] = "boolean" if isinstance(constant, bool) else ("integer" if isinstance(constant, int) else "number")
+    if out.get("type") in {"integer", "number", "boolean"}:
+        out.pop("enum", None)
+    for key in ("properties", "$defs", "definitions"):
+        if isinstance(out.get(key), dict):
+            out[key] = {name: _repair_structure_schema(child) for name, child in out[key].items()}
+    for key in ("items", "additionalProperties"):
+        if isinstance(out.get(key), dict):
+            out[key] = _repair_structure_schema(out[key])
+    for key in ("oneOf", "anyOf", "allOf"):
+        if isinstance(out.get(key), list):
+            out[key] = [_repair_structure_schema(child) for child in out[key]]
+    return out
+
+
+def strict_repair_structure_report(value: Any) -> dict[str, Any]:
+    """Pre-filter check only; never substitute for strict merged validation."""
+    errors = strict_schema_errors(value, _repair_structure_schema(author_item_repair_schema()))
+    return {"schema": "infini.author-item-repair-structure-report.v1", "ok": not errors, "errors": errors}
+
+
 def strict_repair_shape_report(value: Any) -> dict[str, Any]:
     errors = strict_schema_errors(value, author_item_repair_schema())
     return {"schema": "infini.author-item-repair-shape-report.v1", "ok": not errors, "errors": errors}
@@ -690,5 +724,6 @@ __all__ = [
     "primary_entity_repair_transaction",
     "strict_author_shape_report",
     "strict_repair_shape_report",
+    "strict_repair_structure_report",
     "strict_schema_errors",
 ]

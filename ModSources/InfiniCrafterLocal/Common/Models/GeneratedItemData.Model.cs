@@ -205,8 +205,8 @@ public sealed class GeneratedBuffSpec
     public int LifeRegen { get; set; } = 0;
 
     public bool HasAnyEffect => DurationTicks > 0 && (
-        Math.Abs(MiningSpeedMultiplier - 1f) > 0.001f || EmitLightStrength > 0f || OreSenseEnabled ||
-        Math.Abs(MovementSpeed) > 0.001f || Math.Abs(JumpBoost) > 0.001f || ManaRegen != 0 || LifeRegen != 0);
+        MiningSpeedMultiplier != 1f || EmitLightStrength > 0f || OreSenseEnabled ||
+        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0);
 
     public void Normalize()
     {

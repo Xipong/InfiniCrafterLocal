@@ -181,17 +181,30 @@ def declared_global_inputs_for(lowerer_id: str) -> tuple[str, ...]:
 _MISSING = object()
 
 
+def _receipt_path_segments(path: str) -> list[str | int] | None:
+    """Parse receipt grammar; unrepresentable numeric indices are malformed."""
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d+\])*", path):
+        return None
+    try:
+        return [int(segment[1:-1]) if segment.startswith("[") else segment
+                for segment in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path)]
+    except ValueError:
+        # Python bounds decimal conversion. Report bad input, never truncate it
+        # or change the process-wide integer conversion limit.
+        return None
+
+
 def _final_value(document: Mapping[str, Any], path: str) -> Any:
     """Read a compiler receipt path without evaluating arbitrary expressions."""
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d+\])*", path):
+    segments = _receipt_path_segments(path)
+    if segments is None:
         return _MISSING
     value: Any = document
-    for segment in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path):
-        if segment.startswith("["):
-            index = int(segment[1:-1])
-            if not isinstance(value, list) or index >= len(value):
+    for segment in segments:
+        if isinstance(segment, int):
+            if not isinstance(value, list) or segment >= len(value):
                 return _MISSING
-            value = value[index]
+            value = value[segment]
         else:
             if not isinstance(value, Mapping) or segment not in value:
                 return _MISSING
@@ -200,14 +213,47 @@ def _final_value(document: Mapping[str, Any], path: str) -> Any:
 
 
 def audit_compiler_receipts(
-    receipts: Iterable[Mapping[str, Any]], *, authored_document: Mapping[str, Any] | None = None,
+    receipts: Iterable[Any], *, authored_document: Mapping[str, Any] | None = None,
     final_document: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     program = authored_document.get("runtimeProgram") if authored_document is not None else None
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
     violations: list[dict[str, Any]] = []
-    receipt_rows = tuple(receipts)
+    receipt_rows: list[Mapping[str, Any]] = []
+    for receipt_index, receipt in enumerate(receipts):
+        row_path = f"$.runtimeContract.finalWireReceipts[{receipt_index}]"
+        malformed: list[str] = []
+        if not isinstance(receipt, Mapping):
+            malformed.append("")
+        else:
+            required = {"finalPath", "status"}
+            required.update({"authoredPaths"} if receipt.get("lowererId") else {"fn", "callId", "authoredPath"})
+            for key in ("fn", "lowererId", "callId", "finalPath", "authoredPath", "status"):
+                if key in receipt or key in required:
+                    if not isinstance(receipt.get(key), str) or not receipt[key]:
+                        malformed.append(key)
+            if "authoredPaths" in receipt or "authoredPaths" in required:
+                paths = receipt.get("authoredPaths")
+                if not isinstance(paths, list) or not all(isinstance(p, str) and p for p in paths):
+                    malformed.append("authoredPaths")
+            if "value" not in receipt:
+                malformed.append("value")
+            for key in ("finalPath", "authoredPath", "authoredPaths"):
+                paths = receipt.get(key)
+                paths = paths if key == "authoredPaths" else [paths]
+                if isinstance(paths, list):
+                    for index, path in enumerate(paths):
+                        if isinstance(path, str) and _receipt_path_segments(path) is None:
+                            malformed.append(f"{key}[{index}]" if key == "authoredPaths" else key)
+        if malformed:
+            violations.extend({"receiptIndex": receipt_index,
+                               "path": row_path + (f".{key}" if key else ""),
+                               "reason": "malformed compiler receipt row or field"}
+                              for key in malformed)
+            continue
+        # Only structurally valid rows can participate in source coverage.
+        receipt_rows.append(receipt)
     delivered_equipment: dict[str, int] = {}
     for receipt in receipt_rows:
         fn = str(receipt.get("fn") or "")

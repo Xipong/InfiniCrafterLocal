@@ -99,6 +99,46 @@ def _positive_integer_effect(value: Any, path: str, errors: list[dict[str, Any]]
     return value > 0
 
 
+def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]]) -> None:
+    """Check every present leaf; absent legacy leaves retain C# DTO defaults."""
+    specs = CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params
+    _reject_unknown(wire, frozenset(spec.wire_name or name for name, spec in specs.items()),
+                    "$.gameplay.generatedBuff", errors)
+    light = wire.get("emitLightStrength", 0)
+    no_light = type(light) in (int, float) and light <= 0
+    for name, spec in specs.items():
+        key = spec.wire_name or name
+        # GeneratedBuffSpec defaults color to empty, valid only without light.
+        if key not in wire and not (key == "lightColorName" and not no_light):
+            continue
+        value = wire.get(key, "")
+        valid = False
+        if spec.wire_boolean_true_value is not None:
+            valid = type(value) is int and value in (0, spec.wire_boolean_true_value)
+        elif spec.kind == "string":
+            valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
+        else:
+            integer_wire = spec.kind == "integer" or spec.wire_multiplier != 1
+            typed = type(value) is int if integer_wire else type(value) in (int, float)
+            if typed:
+                try:
+                    authored = value * spec.wire_divisor / spec.wire_multiplier
+                    # Zero duration is the inactive DTO state, not an active
+                    # authored buff. Other bounds/conversions are registry-owned.
+                    minimum = 0 if key == "durationTicks" else spec.minimum
+                    valid = (isfinite(authored)
+                             and (minimum is None or authored >= minimum)
+                             and (spec.maximum is None or authored <= spec.maximum)
+                             and (spec.multiple_of is None or authored % spec.multiple_of == 0)
+                             and spec.consumer_value_error(authored) is None)
+                except OverflowError:
+                    valid = False
+        if not valid:
+            errors.append({"path": f"$.gameplay.generatedBuff.{key}",
+                           "code": "invalid_generated_buff_field",
+                           "message": "Value must match the declared generated-buff wire type and domain without coercion."})
+
+
 def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
     """Project typed wire stats back to the canonical Author-side effect predicate."""
     params: dict[str, Any] = {}
@@ -434,6 +474,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     armor = data.get("armor") if isinstance(data.get("armor"), Mapping) else {}
     generated_buff_raw = gameplay.get("generatedBuff")
     generated_buff = generated_buff_raw if isinstance(generated_buff_raw, Mapping) else {}
+    if "generatedBuff" in gameplay and not isinstance(generated_buff_raw, Mapping):
+        errors.append({"path": "$.gameplay.generatedBuff", "code": "required_object",
+                       "message": "Generated buff must be an object."})
+    _validate_generated_buff(generated_buff, errors)
     # Validate every field before boolean composition; short-circuiting must not
     # hide malformed values behind an otherwise valid healing effect.
     heals_life = _positive_integer_effect(gameplay.get("healLife", 0), "$.gameplay.healLife", errors)

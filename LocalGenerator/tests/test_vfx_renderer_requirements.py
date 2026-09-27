@@ -137,3 +137,42 @@ def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
     assert next(replies, None) is None
     assert "vfxManifest" not in data
     assert data["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
+
+
+@pytest.mark.parametrize("renderer,channel", [("lightCue", "light"), ("soundCue", "sound")])
+@pytest.mark.parametrize("broken_fields", [
+    ("spritePrompt",), ("spriteNegativePrompt",), ("spritePrompt", "spriteNegativePrompt"),
+])
+def test_non_sprite_prompt_errors_grant_exact_leaves_and_repair_at_public_boundary(renderer, channel, broken_fields):
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    raw = _vfx_output(data)
+    slot = raw["slots"][0]
+    slot.update(rendererKind=renderer, channel=channel, lane="cue")
+    for field in broken_fields:
+        slot[field] = "unrelated opaque sprite description"
+    before = copy.deepcopy(raw)
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {f"$.slots[0].{field}" for field in broken_fields}
+    candidate = copy.deepcopy(slot)
+    for field in broken_fields:
+        candidate[field] = ""
+    candidate["scale"] = 2.75  # Still frozen; fixing a prompt cannot redesign scale.
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate],
+             "effectMagnitude": None, "visualBudgetClass": None, "motif": None,
+             "slotIdsDelete": [], "slotIndicesDelete": [], "note": "remove non-sprite prompts"}
+    replies = iter([raw, patch])
+    packets = []
+
+    def respond(*_args, **kwargs):
+        if kwargs.get("messages"):
+            packets.append(json.loads(kwargs["messages"][1]["content"]))
+        return next(replies)
+
+    result = vfx.attach_hybrid_vfx_manifest(data, "non_sprite_prompts", llm_director=respond)
+    assert packets[0]["repairScope"]["fieldPermissions"]["slots"] == [
+        {"slotId": "slot_0", "paths": sorted(broken_fields)},
+    ]
+    assert result["vfxManifest"]["slots"][0]["scale"] == slot["scale"]
+    assert result["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
+    assert next(replies, None) is None
+    assert raw == before

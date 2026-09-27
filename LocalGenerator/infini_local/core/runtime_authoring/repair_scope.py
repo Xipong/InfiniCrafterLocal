@@ -42,6 +42,7 @@ from infini_local.core.runtime_authoring.program_schema import (
     binding_schema,
     primary_entity_repair_transaction,
     strict_repair_shape_report,
+    strict_repair_structure_report,
 )
 from infini_local.core.runtime_authoring.validator import (
     VALIDATION_ERROR_CODES,
@@ -62,6 +63,7 @@ _NODE_PATH_RE = re.compile(
 # Repair policy must fail tests instead of silently falling back to a full-item
 # retry or an empty patch.
 REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
+    "consumer_representability": {"strategy": "patch_exact_param", "llmRepairable": True, "allowNodeDelete": False},
     "ambiguous_global_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
     "capability_event_incompatible": {"strategy": "patch_exact_event", "llmRepairable": True, "allowNodeDelete": False},
@@ -1187,6 +1189,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if node_id:
                 if code in dependency_only_codes:
                     context[node_namespace].add(node_id)
+                    # A dependency diagnostic may identify a broken reference
+                    # leaf on an otherwise frozen binding. Admit that row, not
+                    # its siblings; the exact permission still governs merge.
+                    if (
+                        code == "missing_binding_dependency"
+                        and node_namespace == "bindings"
+                        and path == f"$.runtimeProgram.bindings[{node_index}].usePolicy.action.placementCallId"
+                    ):
+                        mark(node_namespace, node_id)
                 else:
                     mark(
                         node_namespace,
@@ -1287,8 +1298,24 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             mark("calls", node_id, can_delete=True)
             cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
             if cap is not None:
-                for param_name in cap.params:
+                causal_params: set[str] = set()
+                for requirement in cap.requirements:
+                    if requirement.kind == "at_least_one_param_nonzero":
+                        causal_params.update(requirement.nonzero_params)
+                    elif requirement.kind == "non_neutral_param":
+                        causal_params.update(
+                            name for name, spec in cap.params.items()
+                            if spec.neutral is not None
+                        )
+                for param_name in causal_params:
                     grant("calls", node_id, f"params.{param_name}")
+                for requirement in cap.requirements:
+                    if (
+                        requirement.kind == "positive_param_requires_param"
+                        and causal_params.intersection(requirement.nonzero_params)
+                        and requirement.param not in _mapping(node_row.get("params"))
+                    ):
+                        grant("calls", node_id, f"params.{requirement.param}")
         elif code == "duplicate_exclusive_input":
             # Exact validator reports normally include both conflicting ids,
             # but transport/debug fixtures may only preserve the failing path.
@@ -1678,6 +1705,23 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 for capability_requirement in capability.requirements:
                     if capability_requirement.kind == "binding_action_reference":
                         required_target = requirement_target_id(capability_requirement.target)
+                        reference_bindings = [
+                            row for row in rows["bindings"]
+                            if action_kind(row) in capability_requirement.any_of
+                            and binding_target_id(row) == required_target
+                        ]
+                        if reference_bindings:
+                            # Reuse the authored action root with its exact broken
+                            # call reference; adding a second root is not necessary.
+                            for binding in reference_bindings:
+                                fixed = copy.deepcopy(binding)
+                                fixed.pop("id", None)
+                                fixed["usePolicy"]["action"]["placementCallId"] = node_id
+                                existing_binding_choices.append({
+                                    "bindingId": str(binding.get("id") or ""),
+                                    "allowed": [fixed],
+                                })
+                            continue
                         occupied = {
                             str(row.get("input") or "") for row in rows["bindings"]
                         }
@@ -2631,14 +2675,16 @@ def filter_repair_patch_scope(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Freeze accepted values and retain only useful in-scope repair changes.
 
-    A provider response is fatal only when its strict patch shape is invalid.
+    Validate patch structure before filtering and merged values strictly after it.
     Attempts to rewrite valid values, independent nodes, or unrequested new
-    nodes are ignored and audited.  A missing key is accepted only when the
+    nodes are ignored and audited, including wrong numeric ranges or conditional
+    values in frozen leaves. Malformed types, union shapes and unknown keys are
+    rejected before filtering. A missing key is accepted only when the
     validator reported that exact path; optional unrequested design fields stay
     absent even if the model includes them in a complete-node response.
     """
 
-    shape = strict_repair_shape_report(patch)
+    shape = strict_repair_structure_report(patch)
     if not shape.get("ok"):
         return _empty_filtered_patch("invalid repair patch"), {
             "schema": RUNTIME_REPAIR_FILTER_REPORT_SCHEMA,
@@ -2776,11 +2822,35 @@ def filter_repair_patch_scope(
                             filtered[upsert_key].append(replacement)
                             accepted.append(path)
                         continue
+                row_permissions = set(permissions.get(row_id, ()))
                 if namespace == "calls":
                     original_params_raw = original.get("params")
                     candidate_params_raw = candidate.get("params")
                     original_params: Mapping[str, Any] = original_params_raw if isinstance(original_params_raw, Mapping) else {}
                     candidate_params: Mapping[str, Any] = candidate_params_raw if isinstance(candidate_params_raw, Mapping) else {}
+                    cap = CAPABILITY_REGISTRY.get(str(original.get("fn") or ""))
+                    inert_repair = any(
+                        requirement.get("code") == "inert_component"
+                        and row_id in requirement.get("affectedIds", [])
+                        for requirement in _values(scope.get("repairRequirements"))
+                        if isinstance(requirement, Mapping)
+                    )
+                    if cap is not None and inert_repair:
+                        effective_params = dict(original_params)
+                        effective_params.update({
+                            key: value for key, value in candidate_params.items()
+                            if f"params.{key}" in row_permissions
+                        })
+                        for requirement in cap.requirements:
+                            if (requirement.kind == "positive_param_requires_param"
+                                    and requirement.param not in original_params
+                                    and not any(
+                                        isinstance(effective_params.get(key), (int, float))
+                                        and not isinstance(effective_params.get(key), bool)
+                                        and effective_params[key] > 0
+                                        for key in requirement.nonzero_params
+                                    )):
+                                row_permissions.discard(f"params.{requirement.param}")
                     for pair in sorted(allowed_param_deletes):
                         call_id, key = pair
                         if call_id != row_id or key not in original_params or key in candidate_params or pair in accepted_param_deletes:
@@ -2791,7 +2861,7 @@ def filter_repair_patch_scope(
                 merged, row_ignored, row_accepted = merge_frozen_subtree(
                     original,
                     candidate,
-                    mutable_paths=permissions.get(row_id, ()),
+                    mutable_paths=row_permissions,
                     audit_path=path,
                     # A broken component may be returned as a complete object,
                     # but only exact validator-reported leaves may change or be

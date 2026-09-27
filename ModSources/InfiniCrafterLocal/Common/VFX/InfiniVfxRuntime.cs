@@ -218,19 +218,7 @@ public static class InfiniVfxRuntime
         }
         if (kind == InfiniVfxRendererKind.ImpactSprite)
         {
-            string texturePath = ResolveTexturePath(data, entityId, slot.TextureRole);
-            if (string.IsNullOrWhiteSpace(texturePath)) return;
-            InfiniDetachedVfxSystem.Enqueue(
-                sourceKey,
-                texturePath,
-                slot.Layer,
-                center,
-                inheritedVelocity.LengthSquared() > 0.01f ? inheritedVelocity.ToRotation() : 0f,
-                slot.Scale,
-                slot.Alpha,
-                color,
-                slot.Duration,
-                manifest.Budget.MaxDrawCalls);
+            EmitImpactSprite(data, entityId, center, inheritedVelocity, slot, manifest, sourceKey);
             return;
         }
         int count = kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ChildMotes
@@ -249,6 +237,20 @@ public static class InfiniVfxRuntime
             Dust dust = Dust.NewDustPerfect(center, DustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
             dust.noGravity = slot.ParticleSystemId is not "pl:smoke";
         }
+    }
+
+    // Shared by projectile and item event producers. Missing assets stay silent;
+    // an authored sprite must never be replaced by an unrelated particle effect.
+    internal static void EmitImpactSprite(GeneratedItemData data, string entityId, Vector2 center,
+        Vector2 inheritedVelocity, VfxSlotSpec slot, VfxManifestSpec manifest, string sourceKey)
+    {
+        string texturePath = ResolveTexturePath(data, entityId, slot.TextureRole);
+        if (string.IsNullOrWhiteSpace(texturePath)) return;
+        InfiniDetachedVfxSystem.Enqueue(
+            sourceKey, texturePath, slot.Layer, center,
+            inheritedVelocity.LengthSquared() > 0.01f ? inheritedVelocity.ToRotation() : 0f,
+            slot.Scale, slot.Alpha, PresentationColor(manifest, Color.White),
+            slot.Duration, manifest.Budget.MaxDrawCalls);
     }
 
     private static int DustId(VfxSlotSpec slot) => slot.ParticleSystemId switch

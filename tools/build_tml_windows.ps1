@@ -17,8 +17,8 @@ Set-Location $Root
 #   2  = environment / script error (dotnet missing, no csproj, etc.)
 #   77 = SKIP: build environment is intentionally incomplete
 #        (classic tModLoader.targets missing, or SDK external mod DLL refs missing).
-#        CI should treat this as a soft-pass. If dotnet actually starts and fails,
-#        the real dotnet/parser exit code is returned instead.
+#        CI reports this as notRun, not a successful build. Downstream failures
+#        preserve their exit code except reserved 77, which is mapped to failure 1.
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     Write-Host "[FAIL] dotnet not found in PATH"
@@ -118,10 +118,13 @@ $ParseCode = $LASTEXITCODE
 
 if ($BuildCode -ne 0) {
     Write-Host "[FAIL] dotnet build exited with code $BuildCode"
+    # 77 belongs exclusively to the preflight checks, not downstream tools.
+    if ($BuildCode -eq 77) { exit 1 }
     exit $BuildCode
 }
 if ($ParseCode -ne 0) {
     Write-Host "[FAIL] build log parser found errors (code $ParseCode)"
+    if ($ParseCode -eq 77) { exit 1 }
     exit $ParseCode
 }
 Write-Host "[ok] dotnet build succeeded and log parser found no errors"

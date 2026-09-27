@@ -1519,7 +1519,13 @@
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 1,
-                        "x-infini-neutral": 1
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       },
                       "lightStrength": {
                         "type": "number",
@@ -1528,7 +1534,13 @@
                         "description": "Client light RGB coefficient multiplying selected light color; not tile radius",
                         "x-infini-units": "engine units: RGB coefficient",
                         "x-infini-semanticType": "unitless_scalar",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       },
                       "lightColor": {
                         "type": "string",
@@ -1563,7 +1575,13 @@
                         "x-infini-units": "engine units: additive moveSpeed factor",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 0,
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       },
                       "jumpSpeedBonusPxPerTick": {
                         "type": "number",
@@ -1573,7 +1591,13 @@
                         "x-infini-units": "pixels/world tick",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 0,
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       },
                       "manaRegenBonusPoints": {
                         "type": "integer",

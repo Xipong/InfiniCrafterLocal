@@ -16,6 +16,9 @@ from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
+    _authored_const_matches,
+    _schema_const_paths,
+    strict_schema_errors,
 )
 
 
@@ -129,6 +132,22 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
     }
 
 
+def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) -> str:
+    if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
+        return ""
+    return (
+        " JSON Schema nullable transport: only when the supplied response schema requires an otherwise "
+        "optional object property and explicitly allows null, emit null to represent omission. "
+        "This is transport encoding, not an authored value or permission to default invalid values. "
+        "In a full Author object omission has only its declared contract meaning; in a Repair patch "
+        "omission means no change and preserves frozen values and accepted absences. "
+        "Never use this rule for unknown keys, required non-null fields, or array elements. "
+        "For Gameplay Repair, the required realizationReplacement must remain a complete non-null report. "
+        "If no JSON Schema is supplied (json_object/off), omit optional fields instead; explicit null "
+        "is not an omission alias."
+    )
+
+
 def _provider_strict_projection(schema: Any) -> Any:
     """Make optional object properties required+nullable for strict providers.
 
@@ -221,20 +240,89 @@ def author_item_provider_targeted_repair_delta_schema(*_: Any, **__: Any) -> dic
     return author_item_provider_repair_response_schema()
 
 
-def _strip_nulls(value: Any) -> Any:
-    if isinstance(value, list):
-        return [_strip_nulls(child) for child in value if child is not None]
+def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: Mapping[str, Any]) -> Any:
+    """Invert only declared optional-property wrappers, never authored containers.
+
+    Union selection uses the schema owner's literal discriminators, not validation
+    success: an unrelated invalid value must remain available to Repair unchanged.
+    Ambiguous/unknown variants are copied intact for the canonical validator.
+    """
+    for union in ("oneOf", "anyOf"):
+        branches = local.get(union)
+        sent_branches = provider.get(union)
+        if isinstance(branches, list):
+            if not isinstance(sent_branches, list) or len(branches) != len(sent_branches):
+                return copy.deepcopy(value)
+            candidates = []
+            for index, branch in enumerate(branches):
+                constants = _schema_const_paths(branch)
+                matches = (
+                    all(_authored_const_matches(value, path, expected) for path, expected in constants.items())
+                    if constants else not strict_schema_errors(value, branch)
+                )
+                if matches:
+                    candidates.append(index)
+            if len(candidates) != 1:
+                return copy.deepcopy(value)
+            index = candidates[0]
+            return _project_nullable_transport(value, branches[index], sent_branches[index])
     if isinstance(value, dict):
-        return {key: _strip_nulls(child) for key, child in value.items() if child is not None}
-    return value
+        local_props = local.get("properties") or {}
+        sent_props = provider.get("properties") or {}
+        required = local.get("required") or []
+        out = {}
+        for key, child in value.items():
+            child_local = local_props.get(key)
+            child_sent = sent_props.get(key)
+            if not isinstance(child_local, Mapping) or not isinstance(child_sent, Mapping):
+                out[key] = copy.deepcopy(child)
+                continue
+            wrapper = child_sent.get("anyOf")
+            nullable_optional = (
+                key not in required
+                and key in (provider.get("required") or [])
+                and isinstance(wrapper, list) and len(wrapper) == 2
+                and wrapper[1] == {"type": "null"}
+                and wrapper[0] == _provider_strict_projection(child_local)
+            )
+            if nullable_optional and isinstance(wrapper, list):
+                if child is None:
+                    continue
+                child_sent = wrapper[0]
+            out[key] = _project_nullable_transport(child, child_local, child_sent)
+        return out
+    if isinstance(value, list):
+        local_items, sent_items = local.get("items"), provider.get("items")
+        if isinstance(local_items, Mapping) and isinstance(sent_items, Mapping):
+            return [_project_nullable_transport(child, local_items, sent_items) for child in value]
+    return copy.deepcopy(value)
 
 
-def project_provider_nullable_optionals_to_local(value: Any, *_: Any, **__: Any) -> Any:
-    return _strip_nulls(copy.deepcopy(value))
+def project_provider_nullable_optionals_to_local(
+    value: Any,
+    local_schema: Mapping[str, Any] | None = None,
+    *,
+    response_format: Mapping[str, Any] | None = None,
+) -> Any:
+    # No schema transport means null is an authored value, not omission.
+    if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
+        return copy.deepcopy(value)
+    envelope = response_format.get("json_schema")
+    provider = envelope.get("schema") if isinstance(envelope, Mapping) else None
+    if not isinstance(provider, Mapping):
+        return copy.deepcopy(value)
+    local = local_schema if local_schema is not None else author_item_repair_response_schema()
+    return _project_nullable_transport(value, local, provider)
 
 
-def project_provider_author_item_to_local(value: Any, *_: Any, **__: Any) -> Any:
-    return project_provider_nullable_optionals_to_local(value)
+def project_provider_author_item_to_local(
+    value: Any, *, response_format: Mapping[str, Any] | None = None,
+) -> Any:
+    if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
+        return copy.deepcopy(value)
+    return project_provider_nullable_optionals_to_local(
+        value, author_item_response_schema(), response_format=response_format,
+    )
 
 
 def normalize_author_item_targeted_repair_delta_text_limits(value: Any) -> Any:

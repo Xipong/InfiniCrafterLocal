@@ -360,7 +360,7 @@ public sealed partial class InfiniCraftPlayer
     {
         if (_generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
-        if (_generatedMiningSpeedMultiplier > 0.001f && Math.Abs(_generatedMiningSpeedMultiplier - 1f) > 0.001f)
+        if (_generatedMiningSpeedMultiplier != 1f)
             Player.pickSpeed /= Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
         if (_generatedMovementSpeed != 0f)
             Player.moveSpeed += _generatedMovementSpeed;

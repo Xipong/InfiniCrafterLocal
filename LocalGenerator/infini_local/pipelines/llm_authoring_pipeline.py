@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
+    strict_repair_structure_report,
 )
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
@@ -41,9 +42,10 @@ from infini_local.pipelines.author_item_contract import (
     author_item_provider_response_schema,
     author_item_prompt_shape_card,
     author_item_repair_prompt_shape_card,
+    provider_nullable_transport_rule,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
-    strict_author_item_repair_report,
+    strict_author_item_repair_report as strict_author_item_repair_report,
 )
 from infini_local.pipelines.llm_authoring_prompt import (
     build_llm_author_payload,
@@ -98,8 +100,22 @@ def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
     return accounting
 
 
-def _prepare_parsed_author_item(parsed: Mapping[str, Any]) -> dict[str, Any]:
-    canonical = project_provider_author_item_to_local(dict(parsed))
+def _effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Use actual transport metadata when a provider relaxed the requested schema."""
+    response_format = request.get("response_format")
+    debug = raw.get("_debug")
+    if isinstance(debug, Mapping):
+        if debug.get("strictSchemaDowngraded") or debug.get("responseFormatUsed") is False:
+            return None
+        if "responseFormatType" in debug and debug["responseFormatType"] != "json_schema":
+            return None
+    return response_format if isinstance(response_format, Mapping) else None
+
+
+def _prepare_parsed_author_item(
+    parsed: Mapping[str, Any], *, response_format: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    canonical = project_provider_author_item_to_local(dict(parsed), response_format=response_format)
     if not isinstance(canonical, dict):
         raise PlannerUnavailable("Gameplay Author returned a non-object after provider projection")
     return copy.deepcopy(canonical)
@@ -145,6 +161,8 @@ def build_initial_author_request(
         ),
     }
     request = apply_llm_common_options(request, model_name=selected_model)
+    system += provider_nullable_transport_rule(request.get("response_format"))
+    request["messages"][0]["content"] = system
     request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
     request = with_prompt_cache_prefix(
         request, message_index=1, prefix_chars=json_prefix_chars(payload, _AUTHOR_CACHE_PREFIX_KEYS),
@@ -158,6 +176,7 @@ def _repair_malformed_author_json(
     parse_error: BaseException,
     original_recipe_context: str,
     model_name: str,
+    source_response_format: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Spend the one Gameplay Repair call on syntax-only Author recovery."""
 
@@ -201,6 +220,7 @@ def _repair_malformed_author_json(
             auto_preference="json_schema",
         ),
     }, model_name=model_name)
+    messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
     request = apply_minimum_reasoning_effort(request, model_name=model_name, minimum="medium")
     request = with_prompt_cache_prefix(
         request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _FORMAT_REPAIR_CACHE_PREFIX_KEYS),
@@ -224,9 +244,11 @@ def _repair_malformed_author_json(
         recovered = recover_object_with_syntax_only_repairs(malformed_raw_text)
         if recovered is None:
             raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
-        if _prepare_parsed_author_item(recovered) != _prepare_parsed_author_item(parsed):
+        original = _prepare_parsed_author_item(recovered, response_format=source_response_format)
+        repaired = _prepare_parsed_author_item(parsed, response_format=_effective_response_format(request, raw))
+        if original != repaired:
             raise PlannerUnavailable("Gameplay format Repair changed recoverable authored fields")
-        return _prepare_parsed_author_item(parsed), content
+        return repaired, content
     except PlannerUnavailable:
         raise
     except Exception as exc:
@@ -278,13 +300,14 @@ def try_llm_plan(
             parsed = parse_first_valid_llm_json(content)
             if not isinstance(parsed, dict):
                 raise TypeError("Gameplay Author returned non-object JSON")
-            item = _prepare_parsed_author_item(parsed)
+            item = _prepare_parsed_author_item(parsed, response_format=_effective_response_format(request, raw))
         except (ValueError, TypeError, json.JSONDecodeError) as parse_error:
             item, format_repair_content = _repair_malformed_author_json(
                 malformed_raw_text=str(content),
                 parse_error=parse_error,
                 original_recipe_context=user_content,
                 model_name=model_name,
+                source_response_format=_effective_response_format(request, raw),
             )
             format_repaired = True
         item.setdefault("id", "g_" + stable_hash(key, format_repair_content or content, length=16))
@@ -488,6 +511,7 @@ def repair_author_item_after_failure(
             auto_preference="json_schema",
         ),
     }, model_name=model_name)
+    messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
     request = with_prompt_cache_prefix(
         request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _REPAIR_CACHE_PREFIX_KEYS),
     )
@@ -514,10 +538,12 @@ def repair_author_item_after_failure(
             response=content,
         )
         parsed = parse_first_valid_llm_json(content)
-        patch = project_provider_nullable_optionals_to_local(parsed)
+        patch = project_provider_nullable_optionals_to_local(
+            parsed, response_format=_effective_response_format(request, raw),
+        )
         if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
             raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")
-        report = strict_author_item_repair_report(patch)
+        report = strict_repair_structure_report(patch)
         if not report.get("ok"):
             raise PlannerUnavailable("Gameplay Repair patch shape rejected: " + bounded_json_dumps(report, max_chars=6000))
         filtered_patch, filter_report = filter_repair_patch_scope(current, patch, scope)
@@ -535,7 +561,7 @@ def repair_author_item_after_failure(
                 + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in validation.get("errors", [])[:12]),
                 author_repair_targets=copy.deepcopy(validation.get("errors") or []),
             )
-        repaired.setdefault("debug", {})["gameplayRepairRawPatch"] = copy.deepcopy(patch)
+        repaired.setdefault("debug", {})["gameplayRepairRawPatch"] = copy.deepcopy(parsed)
         repaired["debug"]["gameplayRepairPatch"] = copy.deepcopy(filtered_patch)
         repaired["debug"]["gameplayRepairFilterAudit"] = copy.deepcopy(filter_report)
         repaired["debug"]["gameplayRepairScope"] = copy.deepcopy(scope)

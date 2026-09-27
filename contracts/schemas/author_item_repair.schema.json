@@ -1436,6 +1436,12 @@
                     "maximum": 8,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "pixels/world tick"
@@ -1474,6 +1480,12 @@
                     "maximum": 1.5,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: RGB coefficient"
@@ -1494,6 +1506,12 @@
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
                     "x-infini-neutral": 1,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: pickSpeed divisor"
@@ -1504,6 +1522,12 @@
                     "maximum": 2,
                     "minimum": -0.5,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: additive moveSpeed factor"
