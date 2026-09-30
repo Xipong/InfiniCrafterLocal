@@ -34,7 +34,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_dependency_alternatives,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
-from infini_local.core.repair_merge import merge_frozen_subtree
+from infini_local.core.repair_merge import json_path_child, json_path_relative, merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     PRIMARY_ENTITY_SELECTION_FIELD,
@@ -1175,11 +1175,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     # Provider union validation emits a generic shape_one_of at
                     # the row root together with a precise descendant error.
                     # The generic wrapper must not unfreeze the whole row.
-                    has_precise_descendant = any(other.startswith(root_prefix + ".") for other in error_paths_all)
+                    has_precise_descendant = any(json_path_relative(other, root_prefix) for other in error_paths_all)
                     if code.startswith("shape_") and not (code == "shape_one_of" and has_precise_descendant):
                         grant(node_namespace, node_id, "")
-                elif path.startswith(root_prefix + "."):
-                    relative = path[len(root_prefix) + 1:]
+                elif (relative := json_path_relative(path, root_prefix)) is not None:
                     if not (relative == "params" and code in {"empty_component", "inert_component"}):
                         grant(node_namespace, node_id, relative)
             dependency_only_codes = {
@@ -1255,8 +1254,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 param_match = re.search(r"\.params\.([A-Za-z0-9_]+)$", path)
                 if param_match:
                     param_name = param_match.group(1)
-                    if code == "shape_additional_property":
-                        deletable_call_param_keys.add((node_id, param_name))
                     if code == "hybrid_placeable_max_stack" and param_name == "maxStack":
                         # The durable-hybrid invariant authorizes exactly this leaf so
                         # Repair can set configure_item_stats.maxStack to 1.
@@ -1267,15 +1264,17 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         call_event_change_ids.add(node_id)
                     if cap is not None and param_name in cap.params and cap.params[param_name].reference is not None:
                         call_reference_param_changes.add(f"{node_id}:{param_name}")
-                property_match = re.fullmatch(
-                    rf"\$\.runtimeProgram\.calls\[{node_index}\]\.([A-Za-z0-9_]+)",
-                    path,
-                )
-                if property_match and code == "shape_additional_property":
-                    deletable_call_property_keys.add((node_id, property_match.group(1)))
+                if code == "shape_additional_property":
+                    call_prefix = f"$.runtimeProgram.calls[{node_index}]"
+                    for key in node_row:
+                        if path == json_path_child(call_prefix, key):
+                            deletable_call_property_keys.add((node_id, key))
+                    for key in _mapping(node_row.get("params")):
+                        if path == json_path_child(call_prefix + ".params", key):
+                            deletable_call_param_keys.add((node_id, key))
         # Metadata is a separate bounded subtree.
         for field in ("name", "category", "concept"):
-            if path.startswith(f"$.{field}"):
+            if json_path_relative(path, f"$.{field}") is not None:
                 metadata_fields.add(field)
 
         if code == "unknown_registry_requirement":
@@ -2640,10 +2639,9 @@ def _metadata_permission_paths(scope: Mapping[str, Any], field: str) -> tuple[st
     paths: set[str] = set()
     for raw in scope.get("errorPaths") or []:
         path = str(raw or "")
-        if path == prefix:
-            paths.add("")
-        elif path.startswith(prefix + "."):
-            paths.add(path[len(prefix) + 1:])
+        relative = json_path_relative(path, prefix)
+        if relative is not None:
+            paths.add(relative)
     return tuple(sorted(paths))
 
 
@@ -2664,8 +2662,9 @@ def _metadata_deletion_paths(scope: Mapping[str, Any], field: str) -> tuple[str,
         if str(requirement.get("code") or "") != "shape_additional_property":
             continue
         path = str(requirement.get("errorPath") or "")
-        if path.startswith(prefix + "."):
-            paths.add(path[len(prefix) + 1:])
+        relative = json_path_relative(path, prefix)
+        if relative:
+            paths.add(relative)
     return tuple(sorted(paths))
 
 def filter_repair_patch_scope(
@@ -2857,7 +2856,7 @@ def filter_repair_patch_scope(
                             continue
                         filtered["callParamKeysDelete"].append({"callId": call_id, "key": key})
                         accepted_param_deletes.add(pair)
-                        accepted.append(f"{path}.params.{key}")
+                        accepted.append(json_path_child(path + ".params", key))
                 merged, row_ignored, row_accepted = merge_frozen_subtree(
                     original,
                     candidate,

@@ -140,8 +140,8 @@
   "errors": [],
   "frozenCallsites": {
     "badCallsites": [],
-    "calls": 7,
-    "explicitFalse": 7,
+    "calls": 8,
+    "explicitFalse": 8,
     "ok": true
   },
   "frozenMerge": {

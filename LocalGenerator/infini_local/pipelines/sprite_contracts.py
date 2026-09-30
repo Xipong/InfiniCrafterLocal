@@ -92,7 +92,7 @@ def final_sprite_canvas(target_size: int) -> int:
 
 def sprite_uses_soft_alpha(role: str) -> bool:
     """Exact processing roles only; entity identity never selects alpha policy."""
-    return str(role).strip().lower() in {"impact", "field", "effect", "runtime:field"}
+    return str(role).strip().lower() in {"impact", "field", "effect", "runtime:field", "vfx_cutout", "vfx_strip"}
 
 
 def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
@@ -167,6 +167,19 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptFillWords": "the field mark should span most of the canvas along its width or height while staying fully inside the frame",
             "promptPoseWords": "single field effect only",
         },
+    }
+    table["vfx_cutout"] = {
+        "targetFill": 0.82, "minFill": 0.10, "maxFill": 0.98,
+        "coreAlphaThreshold": 1, "marginPx": 1 if size <= 32 else 2,
+        "cropPadPx": 1, "maxEdgeTouch": 0.18,
+        "promptFillWords": "keep one isolated texture ingredient inside its independent canvas",
+        "promptPoseWords": "preserve the authored ingredient orientation and soft edges; no item or weapon body",
+    }
+    table["vfx_strip"] = {
+        **table["vfx_cutout"], "targetFill": 1.0, "minFill": 0.0, "maxFill": 1.0,
+        "marginPx": 0, "cropPadPx": 0, "maxEdgeTouch": 1.0,
+        "promptFillWords": "preserve the full authored frame and UV placement; the long axis may reach the frame edges",
+        "promptPoseWords": "one VFX texture ingredient, no atlas; no rotation, crop, recentering or silhouette refit",
     }
     # Runtime bodies retain their authored orientation. In particular do not route
     # runtime:projectile through the legacy +X projectile contract/canonicalizer.

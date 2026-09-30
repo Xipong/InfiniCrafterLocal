@@ -104,6 +104,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
         lock (_lock)
         {
+            string? key = null;
             try
             {
                 path = Environment.ExpandEnvironmentVariables(path).Trim();
@@ -112,7 +113,11 @@ public sealed class RuntimeSpriteCache : IDisposable
                     _missCount++;
                     return null;
                 }
-                string key = Path.GetFullPath(path);
+                // This is the same declared asset, not another texture source.
+                // An existing local shadow cannot outrank a lifecycle-certified
+                // canonical byte owner. Without that proof retain legacy/local behavior.
+                string? certified = InfiniCrafterLocalMod.AssetSync?.ResolveCertifiedLocalPath(path);
+                key = Path.GetFullPath(certified ?? path);
                 if (!File.Exists(key))
                 {
                     string? synced = global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
@@ -182,13 +187,9 @@ public sealed class RuntimeSpriteCache : IDisposable
             {
                 _missCount++;
                 _failedLoadCount++;
-                try
-                {
-                    string bad = Environment.ExpandEnvironmentVariables(path ?? "");
-                    if (!string.IsNullOrWhiteSpace(bad))
-                        RememberMissingOrBad(bad);
-                }
-                catch { }
+                // Selection may replace a healthy local alias with its certified owner.
+                // Backoff and lifecycle invalidation must address that exact same key.
+                if (key is not null) RememberMissingOrBad(key);
                 return null;
             }
         }

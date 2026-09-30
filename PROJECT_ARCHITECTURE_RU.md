@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.242 — целевая архитектура
+# InfiniCrafterLocal v0.4.245 — целевая архитектура
 
 ## Суть
 
@@ -17,7 +17,9 @@ Canonical equipment/event primitive registry дополнительно поро
 
 1. **Gameplay Author** — авторит `runtimeProgram`.
 2. **Visual Director** — оформляет inventory item и ровно те runtime entities, которые приняты gameplay validator.
-3. **VFX Director** — привязывает finite effects к существующим `entityId + event`.
+3. **VFX Director** — привязывает finite effects к существующим `entityId + event`, получает принятую механику read-only и явно заказывает самостоятельные image ingredients для новых визуальных элементов.
+
+После трёх текстовых стадий существующий image pass выполняет принятые body/impact/VFX-запросы. Общие ссылки на один VFX asset ID дают одну image job. Новый контракт `spriteElement` / `texturedPath` расширяет тот же manifest, не вводит weapon presets, shader/code generation или отдельную VM; подробности и границы проверки — [`docs/VFX_MATERIAL_ELEMENTS_RU.md`](docs/VFX_MATERIAL_ELEMENTS_RU.md).
 
 Gameplay/Visual/VFX Repair вызываются только после фактического отказа валидатора своей стадии. Успешный путь: `1 + 1 + 1`, repairs `0`. Repair не пересобирает полный stage output: deterministic scope передаёт модели invalid fragments, exact missing dependencies, минимальный blocker capability subset и валидный read-only context. Существующие корректные значения frozen; из полного возвращённого узла применяются только exact broken/missing leaves. Scope-escape игнорируется с audit, а не отменяет полезное исправление.
 

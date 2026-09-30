@@ -65,7 +65,9 @@ def test_renderer_channel_lane_domain_matches_existing_runtime_invariants():
     schema = vfx.vfx_director_schema(data)["properties"]["slots"]["items"]
     raw = _vfx_output(data)
     slot = raw["slots"][0]
-    for renderer, channel, lane in product(surface["rendererKind"], surface["channel"], surface["lane"]):
+    # New payload-bearing branches have their own neutral-common-field and applicability matrix.
+    legacy_renderers = [kind for kind in surface["rendererKind"] if kind not in {"spriteElement", "texturedPath"}]
+    for renderer, channel, lane in product(legacy_renderers, surface["channel"], surface["lane"]):
         slot.update(rendererKind=renderer, channel=channel, lane=lane,
                     textureRole="impact" if renderer == "impactSprite" else "entity",
                     spritePrompt="one transparent impact sprite" if renderer == "impactSprite" else "")

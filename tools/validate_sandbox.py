@@ -26,6 +26,7 @@ FULL_SUITE_MODULES = {
     "pydantic_core": "pydantic_core",
     "Pillow": "PIL",
     "Hypothesis": "hypothesis",
+    "jsonschema": "jsonschema",
 }
 STATIC_COMMANDS = (
     ("config_registry", ("tools/config_registry.py", "--check")),

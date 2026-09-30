@@ -12,10 +12,48 @@ cancelling an otherwise useful repair.
 """
 
 import copy
+import json
+import re
 from typing import Any, Iterable, Mapping
 
 
 MISSING = object()
+
+
+def json_path_child(path: str, key: str | int) -> str:
+    """Append one exact JSON member/index; preserve ordinary dot paths.
+
+    Punctuation and empty member names use JSON-quoted brackets so a literal
+    ``element.widthPx`` can never alias the two nested members with those names.
+    Diagnostics, permissions and merge audit paths share this addressing owner.
+    """
+    if isinstance(key, int):
+        return f"{path}[{key}]"
+    if re.fullmatch(r"[A-Za-z0-9_]+", key):
+        return f"{path}.{key}" if path else key
+    return f"{path}[{json.dumps(key)}]"
+
+
+def json_path_relative(path: str, prefix: str) -> str | None:
+    """Return an exact descendant path, not a textual member-name prefix."""
+    if path == prefix:
+        return ""
+    if path.startswith(prefix + "."):
+        return path[len(prefix) + 1:]
+    if path.startswith(prefix + "["):
+        return path[len(prefix):]
+    return None
+
+
+def json_values_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool/int/float equality aliases."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, Mapping):
+        return left.keys() == right.keys() and all(json_values_equal(value, right[key]) for key, value in left.items())
+    if isinstance(left, list):
+        return len(left) == len(right) and all(json_values_equal(a, b) for a, b in zip(left, right))
+    return left == right
 
 
 def _normalize_paths(paths: Iterable[Any]) -> tuple[str, ...]:
@@ -26,9 +64,8 @@ def _path_intersects(path: str, permissions: tuple[str, ...]) -> bool:
     if "" in permissions:
         return True
     return any(
-        permission == path
-        or permission.startswith(path + ".")
-        or path.startswith(permission + ".")
+        json_path_relative(permission, path) is not None
+        or json_path_relative(path, permission) is not None
         for permission in permissions
         if permission
     )
@@ -37,7 +74,7 @@ def _path_intersects(path: str, permissions: tuple[str, ...]) -> bool:
 def _leaf_allowed(path: str, permissions: tuple[str, ...]) -> bool:
     if "" in permissions:
         return True
-    return any(path == permission or path.startswith(permission + ".") for permission in permissions if permission)
+    return any(json_path_relative(path, permission) is not None for permission in permissions if permission)
 
 
 def _ignored_row(path: str, requested: Any, preserved: Any, reason: str) -> dict[str, Any]:
@@ -60,12 +97,13 @@ def merge_frozen_subtree(
 ) -> tuple[Any, list[dict[str, Any]], list[str]]:
     """Merge ``candidate`` into ``original`` without rewriting valid values.
 
-    ``mutable_paths`` are dot-separated paths relative to the node root.  A path
+    ``mutable_paths`` are JSON paths relative to the node root (ordinary dots,
+    JSON-quoted brackets for literal punctuation/empty keys). A path
     grants replacement for that leaf or whole subtree. Existing values outside
     those paths stay frozen. ``allow_additions`` exists only for callers whose
     deterministic scope explicitly permits arbitrary completion; Gameplay,
     Visual and VFX Repair pass ``False`` and accept only exact missing paths.
-    ``delete_paths`` are dot-separated paths relative to the node root whose
+    ``delete_paths`` use the same addressing, relative to the node root, for
     existing keys are deterministically invalid (exact validator error paths):
     when ``candidate`` omits such a key, the merged result drops it instead of
     preserving the broken value. Keys still present in ``candidate`` keep the
@@ -90,16 +128,16 @@ def merge_frozen_subtree(
             ignored.append(_ignored_row(absolute, new, None, "addition_not_permitted"))
             return MISSING
 
-        if old == new:
+        if json_values_equal(old, new):
             return copy.deepcopy(old)
 
         if isinstance(old, Mapping) and isinstance(new, Mapping):
             out = copy.deepcopy(dict(old))
             for key, value in new.items():
-                child_rel = f"{relative}.{key}" if relative else str(key)
-                child_abs = f"{absolute}.{key}"
+                child_rel = json_path_child(relative, str(key))
+                child_abs = json_path_child(absolute, str(key))
                 previous = old.get(key, MISSING)
-                if previous is not MISSING and previous == value:
+                if previous is not MISSING and json_values_equal(previous, value):
                     continue
                 if previous is MISSING:
                     merged = visit(MISSING, value, child_rel, child_abs)
@@ -117,10 +155,10 @@ def merge_frozen_subtree(
                 else:
                     ignored.append(_ignored_row(child_abs, value, previous, "frozen_valid_value"))
             for key in list(out.keys()):
-                child_rel = f"{relative}.{key}" if relative else str(key)
+                child_rel = json_path_child(relative, str(key))
                 if key not in new and _leaf_allowed(child_rel, deletions):
                     del out[key]
-                    accepted.append(f"{absolute}.{key}")
+                    accepted.append(json_path_child(absolute, str(key)))
             return out
 
         if _leaf_allowed(relative, permissions):
@@ -138,4 +176,4 @@ def merge_frozen_subtree(
     return merged, ignored, accepted
 
 
-__all__ = ["merge_frozen_subtree"]
+__all__ = ["json_path_child", "json_path_relative", "json_values_equal", "merge_frozen_subtree"]

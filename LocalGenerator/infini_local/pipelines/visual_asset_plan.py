@@ -7,6 +7,8 @@ weapon families or mutates gameplay topology.
 """
 
 import copy
+import hashlib
+import json
 from typing import Any, Mapping
 
 from infini_local.pipelines.visual_asset_modes import VISUAL_ASSET_MODES
@@ -131,10 +133,29 @@ def _canvas_for(entity: Mapping[str, Any], data: Mapping[str, Any]) -> int:
     return 128
 
 
+def vfx_asset_job_id(data: Mapping[str, Any], asset: Mapping[str, Any]) -> str:
+    """Reserved intermediate identity; never expose an authored ID as a filename."""
+    manifest = data.get("vfxManifest")
+    recipe_id = manifest.get("recipeId") if isinstance(manifest, Mapping) and "recipeId" in manifest else data.get("id")
+    identity = [recipe_id, *[asset[field] for field in ("id", "prompt", "negativePrompt", "canvasSize", "layout")]]
+    wire = json.dumps(identity, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
+    return "infini_vfx_job_" + hashlib.sha256(wire).hexdigest()
+
+
 def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     plan: list[dict[str, Any]] = []
     raw_manifest = data.get("vfxManifest")
     manifest: Mapping[str, Any] = raw_manifest if isinstance(raw_manifest, Mapping) else {}
+    if "assets" in manifest or any(
+        isinstance(row, Mapping) and (
+            not isinstance(row.get("rendererKind"), str)
+            or row["rendererKind"] in {"spriteElement", "texturedPath"}
+        ) for row in manifest.get("slots") or []
+    ):
+        from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+        report = validate_vfx_manifest_wire(data)
+        if not report["ok"]:
+            raise ValueError("Invalid VFX asset request wire: " + json.dumps(report["errors"], ensure_ascii=False))
     impact_slots = {
         str(slot.get("entityId") or ""): slot
         for slot in manifest.get("slots") or []
@@ -224,6 +245,26 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
             "path": str(item_visual.get("equipOverlayPath") or ""),
             "url": str(item_visual.get("equipOverlayUrl") or ""),
             "technicalScore": float(item_visual.get("equipOverlayTechnicalScore") or 0.0),
+        })
+    for asset in manifest.get("assets") or []:
+        asset_id = asset["id"]
+        layout = asset["layout"]
+        plan.append({
+            "role": "vfx:" + asset_id,
+            "vfxAssetId": asset_id,
+            "assetId": vfx_asset_job_id(data, asset),
+            "assetMode": "baked_sprite",
+            "runtimeGateReason": "authored_vfx_texture_ingredient",
+            "prompt": asset["prompt"],
+            "negativePrompt": asset["negativePrompt"],
+            "canvas": asset["canvasSize"],
+            "layout": layout,
+            "processingRole": "vfx_" + layout,
+            "required": True,
+            "status": str(asset.get("spriteStatus") or "pending"),
+            "path": str(asset.get("spritePath") or ""),
+            "url": str(asset.get("spriteUrl") or ""),
+            "technicalScore": float(asset.get("spriteTechnicalScore") or 0.0),
         })
     return copy.deepcopy(plan)
 

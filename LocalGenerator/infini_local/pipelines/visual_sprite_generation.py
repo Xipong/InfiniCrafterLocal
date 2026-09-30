@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import tempfile
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -304,6 +308,8 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
     filter, and center it back on the target canvas. Fatal alpha/key failures are not
     repaired here.
     """
+    if role == "vfx_strip":
+        return ""
     reasons = _validation_reasons(validation)
     if not any("silhouette_too_small" in r or "core_silhouette_too_small" in r or "effect_silhouette_too_small" in r for r in reasons):
         return ""
@@ -347,13 +353,33 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
     except (OSError, ValueError, TypeError, AttributeError):
         return ""
 
-def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "") -> tuple[str, str, float, str]:
+def _publish_vfx_png(data: dict[str, Any], asset_id: str, path: str) -> str:
+    """Immutable ASCII publication identity, not an integrity/descriptor owner."""
+    manifest = data["vfxManifest"]
+    recipe_id = manifest["recipeId"] if "recipeId" in manifest else data["id"]
+    raw = Path(path).read_bytes()
+    identity = json.dumps([recipe_id, asset_id], ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
+    name = "infini_vfx_png_" + hashlib.sha256(identity + b"\0" + raw).hexdigest() + ".png"
+    destination = SPRITE_DIR / name
+    fd, temporary = tempfile.mkstemp(prefix="." + name + ".", suffix=".part", dir=SPRITE_DIR)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return str(destination)
+
+
+def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "", processing_role: str = "") -> tuple[str, str, float, str]:
     """Generate one role-separated visual asset with retry-on-technical-fail.
 
     v0.3.9: no fake best-of-N judging by default. We generate one image, run local
     alpha/crop/fit validation, and retry only when the PNG is technically broken.
     """
-    contract_role = "impact" if role.startswith("impact_") else role
+    contract_role = processing_role or ("impact" if role.startswith("impact_") else role)
     base_prompt = normalize_asset_prompt(data, contract_role, prompt, canvas)
     negative = str(negative or "")
     data.setdefault("debug", {})[f"{role}FinalPrompt"] = truncate_prompt_at_boundary(base_prompt, 1800)
@@ -372,8 +398,18 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     last_score = 0.0
     last_validation: dict[str, Any] | None = None
     topology, part_count_min, part_count_max = _authored_sprite_topology(data, "entity:" + entity_id if entity_id else role)
+    # The stable plan ID is request identity, not ownership of mutable files.
+    # A private invocation namespace covers raw, postprocess and refit writes
+    # through publication, without expanding the backend gate or changing seeds.
+    invocation_nonce = uuid.uuid4().hex if contract_role in {"vfx_cutout", "vfx_strip"} else ""
     for attempt in range(max_attempts):
-        attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
+        if invocation_nonce:
+            # Include the retry in the digest: adapters truncate stems to 80 chars,
+            # so a suffix appended to the 78-char job digest aliases later retries.
+            identity = f"{asset_id}\0{invocation_nonce}\0{attempt}".encode("utf-8")
+            attempt_id = "infini_vfx_job_" + hashlib.sha256(identity).hexdigest()
+        else:
+            attempt_id = asset_id if attempt == 0 else f"{asset_id}_retry{attempt}"
         attempt_prompt = base_prompt if attempt == 0 else build_retry_prompt_from_validation(base_prompt, last_validation or {}, contract_role, attempt, canvas)
         data.setdefault("debug", {})[f"{role}FinalPrompt"] = attempt_prompt
         data["debug"][f"{role}FinalPromptAttempt"] = attempt
@@ -399,15 +435,17 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
                 best, attempt_id, canvas, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
             )
             validation = validate_processed_sprite(
-                final_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                final_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max,
+                **({"expected_canvas": canvas} if contract_role in {"vfx_cutout", "vfx_strip"} else {}),
             )
             refit_path = ""
             refit_validation: dict[str, Any] | None = None
-            if not validation.get("ok") and not sprite_validation_fatal(validation):
+            if contract_role != "vfx_strip" and not validation.get("ok") and not sprite_validation_fatal(validation):
                 refit_path = refit_processed_sprite_to_contract(final_path, attempt_id, canvas, contract_role, validation)
                 if refit_path:
                     refit_validation = validate_processed_sprite(
-                        refit_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max
+                        refit_path, contract_role, topology=topology, part_count_min=part_count_min, part_count_max=part_count_max,
+                        **({"expected_canvas": canvas} if contract_role in {"vfx_cutout", "vfx_strip"} else {}),
                     )
                     if refit_validation.get("ok"):
                         data.setdefault("debug", {})[f"{role}SpriteRefit"] = json.dumps({
@@ -428,7 +466,13 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             last_score = technical_score
             last_validation = validation if isinstance(validation, dict) else None
             if validation.get("ok") or not sprite_validation_fatal(validation):
-                if attempt != 0:
+                if contract_role in {"vfx_cutout", "vfx_strip"} and sprite_status_from_raw_path(best, IMAGE_BACKEND) not in {"generated", "generated_warn_invalid"}:
+                    attempt_row["status"] = "rejected_non_authored_fallback"
+                    last_score = 0.0
+                    continue
+                if contract_role in {"vfx_cutout", "vfx_strip"}:
+                    final_path = _publish_vfx_png(data, role.removeprefix("vfx:"), final_path)
+                elif attempt != 0:
                     canonical = SPRITE_DIR / f"{asset_id}.png"
                     try:
                         import shutil
@@ -470,7 +514,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
         except Exception:
             reasons = []
         fatal = sprite_validation_fatal(last_validation)
-        if not fatal and Path(last_path).exists():
+        if contract_role not in {"vfx_cutout", "vfx_strip"} and not fatal and Path(last_path).exists():
             data.setdefault("debug", {})[f"{role}InvalidGeneratedUsedAsWarn"] = json.dumps({
                 "path": str(Path(last_path).resolve()),
                 "reasons": reasons,
@@ -485,7 +529,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             except Exception:
                 pass
             return str(Path(last_path).resolve()), f"/sprite/{Path(last_path).name}", round(last_score, 3), "generated_warn_invalid"
-    if IMAGE_BACKEND != "openai_codex" and VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
+    if contract_role not in {"vfx_cutout", "vfx_strip"} and IMAGE_BACKEND != "openai_codex" and VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         try:
             fallback = visual_asset_pipeline.generate_procedural_asset(data, role, variant=0, canvas_size=canvas, sprite_dir=SPRITE_DIR, image_cls=Image, image_draw_cls=ImageDraw)
             final = postprocess_sprite(
@@ -496,7 +540,7 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
             log_event("warn", f"{role} sprite procedural fallback failed", {"error": repr(e)})
     trace_event("error", f"IMAGE:{role}", "sprite generation failed completely", {"assetId": asset_id, "role": role, "backend": IMAGE_BACKEND, "attempts": attempts})
     log_event("warn", f"{role} sprite generation failed completely", {"role": role, "backend": IMAGE_BACKEND, "strictAiAuthorship": VISUAL_STRICT_AI_AUTHORSHIP})
-    return "", "", round(last_score, 3), "failed"
+    return "", "", 0.0 if contract_role in {"vfx_cutout", "vfx_strip"} else round(last_score, 3), "failed"
 
 def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
@@ -510,6 +554,9 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     image is keyed by a stable runtime entity ID and an explicit Visual Director
     ``assetMode``.
     """
+    # Validate declared requests/references before any image job, including item.
+    # Rebuild the ordinary plan after item hydration to retain legacy projections.
+    build_visual_asset_plan(data)
     data = maybe_generate_sprite(data)
     visual = data.setdefault("visual", {})
     item_path = str(visual.get("spritePath") or "")
@@ -529,6 +576,15 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(slot, dict):
             continue
         role = str(slot.get("role") or "")
+        if role.startswith("vfx:"):
+            asset = next(row for row in data["vfxManifest"]["assets"] if row["id"] == slot["vfxAssetId"])
+            path, url, score, status = generate_visual_asset(
+                data, role, slot["prompt"], slot["negativePrompt"], slot["assetId"], slot["canvas"],
+                processing_role=slot["processingRole"],
+            )
+            asset.update(spritePath=path, spriteUrl=url, spriteStatus=status, spriteTechnicalScore=score)
+            slot.update(path=path, url=url, status=status, technicalScore=score)
+            continue
         if role == "equip_overlay":
             prompt = str(slot.get("prompt") or visual.get("equipOverlayPrompt") or "")
             canvas = int(slot.get("canvas") or 48)

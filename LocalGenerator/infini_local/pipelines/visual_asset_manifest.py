@@ -42,7 +42,10 @@ def _asset_descriptor(value: Any, required: bool = False) -> dict[str, Any] | No
 
 def sprite_contract_for_asset(data: dict[str, Any], asset: dict[str, Any]) -> dict[str, Any]:
     del data
-    return sprite_contract_for(str(asset.get("role") or "asset"), int(asset.get("canvas") or 32))
+    contract = sprite_contract_for(str(asset.get("processingRole") or asset.get("role") or "asset"), int(asset.get("canvas") or 32))
+    if "layout" in asset:
+        contract.update(layout=asset["layout"], preserveFullFrame=asset["layout"] == "strip", alphaMode="soft")
+    return contract
 
 
 def _compact_text(value: Any, limit: int = 360) -> str:
@@ -70,6 +73,9 @@ def _asset_manifest_entry(data: dict[str, Any], asset: dict[str, Any]) -> dict[s
         "entityKind": asset.get("entityKind"),
         "visualRole": asset.get("visualRole"),
         "assetId": asset.get("assetId"),
+        "vfxAssetId": asset.get("vfxAssetId"),
+        "layout": asset.get("layout"),
+        "processingRole": asset.get("processingRole"),
         "canvas": int(asset.get("canvas") or 32),
         "required": bool(asset.get("required")),
         "status": asset.get("status"),

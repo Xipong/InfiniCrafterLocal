@@ -453,11 +453,13 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.dedServ = false;
             Terraria.Main.gamePaused = false;
             Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            InfiniItemVfxRuntime.ClearUseEventCaches();
             check(config, lights);
         }
         finally
         {
             active.SetValue(null, previousEngine);
+            InfiniItemVfxRuntime.ClearUseEventCaches();
             instance.SetValue(null, previousConfig);
             Terraria.Main.dedServ = previousServer;
             Terraria.Main.gamePaused = previousPaused;
@@ -504,6 +506,57 @@ internal static partial class EngineRuntimeChecks
         Equal(position, (Point)positionField.GetValue(lights[0])!, label + " unchanged location");
     }
 
+    // Real legacy queue/budget consumers in MP-client mode; no Draw or new emission at expiry.
+    private static void DetachedVfxClientCleanupDoesNotRequireDraw()
+    {
+        var type = typeof(InfiniDetachedVfxSystem);
+        var clock = typeof(Terraria.Main).GetField("_gameUpdateCount", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object? previousClock = clock.GetValue(null);
+        bool previousServer = Terraria.Main.dedServ;
+        int previousMode = Terraria.Main.netMode;
+        var system = new InfiniDetachedVfxSystem();
+        var emissions = (IList)type.GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var budgets = (IDictionary)type.GetField("ParticleBudgetsBySource", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var draws = (IDictionary)type.GetField("DrawCallsBySource", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var spendDraw = type.GetMethod("SpendDraw", BindingFlags.Static | BindingFlags.NonPublic)!;
+        void Enqueue() => InfiniDetachedVfxSystem.Enqueue("client", "not_loaded.png", "BeforeProjectiles",
+            Vector2.One, 0f, 1f, 1f, Color.White, 3, 1);
+        try
+        {
+            system.OnWorldUnload();
+            Terraria.Main.dedServ = false; Terraria.Main.netMode = Terraria.ID.NetmodeID.MultiplayerClient;
+            clock.SetValue(null, 100u); Enqueue();
+            Equal(true, InfiniDetachedVfxSystem.TrySpendDetachedParticle("client", 1, 2), "legacy client particle budget is populated");
+            Equal(true, (bool)spendDraw.Invoke(null, new[] { emissions[0] })!, "legacy draw budget is populated");
+            system.PostUpdateEverything(); system.PostUpdateEverything();
+            Equal(1, emissions.Count, "same-tick client cleanup preserves live snapshot");
+            Equal(false, InfiniDetachedVfxSystem.TrySpendDetachedParticle("client", 1, 2), "cleanup does not replenish same-tick particles");
+            Equal(false, (bool)spendDraw.Invoke(null, new[] { emissions[0] })!, "cleanup does not replenish draw allowance");
+            clock.SetValue(null, 103u); system.PostUpdateEverything();
+            Equal(0, emissions.Count, "MP client expires legacy queue without Draw or enqueue");
+            Equal(1, budgets.Count, "snapshot expiry does not retire unexpired source budget");
+            clock.SetValue(null, 101u + (uint)InfiniCrafterLocal.Common.InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
+            system.PostUpdateEverything();
+            Equal(0, budgets.Count, "MP client expires inactive legacy budget without Draw or emission");
+            Enqueue();
+            Equal(true, InfiniDetachedVfxSystem.TrySpendDetachedParticle("client", 1, 2), "new legacy source allowance after retention");
+            Terraria.Main.dedServ = true; Terraria.Main.netMode = Terraria.ID.NetmodeID.Server;
+            clock.SetValue(null, 102u + 2u * (uint)InfiniCrafterLocal.Common.InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
+            system.PostUpdateEverything(); Enqueue();
+            Equal(1, emissions.Count, "dedicated server neither prunes nor enqueues presentation");
+            Equal(1, budgets.Count, "dedicated-server update leaves presentation budgets untouched");
+            system.OnWorldUnload();
+            Equal(0, emissions.Count, "unload clears legacy queue even on dedicated server");
+            Equal(0, budgets.Count, "unload clears legacy particle budgets");
+            Equal(0, draws.Count, "unload clears legacy draw budgets");
+        }
+        finally
+        {
+            system.OnWorldUnload(); clock.SetValue(null, previousClock);
+            Terraria.Main.dedServ = previousServer; Terraria.Main.netMode = previousMode;
+        }
+    }
+
     private static void DetachedVfxStateIsBoundedAndCleared()
     {
         var type = typeof(InfiniDetachedVfxSystem);
@@ -538,7 +591,7 @@ internal static partial class EngineRuntimeChecks
             Equal(true, InfiniDetachedVfxSystem.TrySpendDetachedParticle("a", 2, 3), "new tick restores tick allowance");
             Equal(false, InfiniDetachedVfxSystem.TrySpendDetachedParticle("a", 2, 3), "total cap survives tick change");
             clock.SetValue(null, 105u + (uint)InfiniCrafterLocal.Common.InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
-            system.PostUpdateWorld();
+            system.PostUpdateEverything();
             Equal(0, budgets.Count, "inactive particle budgets expire");
             InfiniDetachedVfxSystem.TrySpendDetachedParticle("fresh", 2, 3);
             system.OnWorldUnload();
@@ -569,6 +622,8 @@ internal static partial class EngineRuntimeChecks
             {
                 foreach (int seed in new[] { 0, 1, -1, int.MaxValue, int.MinValue })
                 {
+                    // Each seed is an independent run of the same source with a rewound clock.
+                    InfiniItemVfxRuntime.ClearUseEventCaches();
                     manifest.Slots[0].SlotSeed = seed;
                     manifest.Slots[0].RepeatEvery = 7;
                     string json = manifest.ToJson();
@@ -597,7 +652,12 @@ internal static partial class EngineRuntimeChecks
             var data = GeneratedItemData.Placeholder();
             string entityId = data.RuntimeProgram.ItemEntityId;
             data.VfxManifest = LightManifest(entityId, RuntimeEventKind.Periodic);
-            AssertLightMultiplier(config, lights, () => InfiniItemVfxRuntime.OnPeriodic(player, data, entityId), "item periodic");
+            AssertLightMultiplier(config, lights, () => {
+                // Compare independent quality settings, not repeated visits to one slot/tick.
+                // Same-tick suppression is exercised by ItemPeriodicPresentationHasOneWorldTickOwner.
+                InfiniItemVfxRuntime.ClearUseEventCaches();
+                InfiniItemVfxRuntime.OnPeriodic(player, data, entityId);
+            }, "item periodic");
             data.VfxManifest.Slots[0].Event = RuntimeEventKind.OnUse;
             AssertLightMultiplier(config, lights, () => InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entityId, RuntimeEventKind.OnUse), "item use");
 

@@ -48,6 +48,7 @@ public partial class GeneratedItem : ModItem
         var clone = (GeneratedItem)base.Clone(newEntity);
         try { clone.Data = GeneratedItemData.FromJson((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()) ?? GeneratedItemData.Placeholder(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
+        clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
         return clone;
     }
@@ -57,6 +58,7 @@ public partial class GeneratedItem : ModItem
     private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
         _itemEventBudget = new RuntimeSpawnBudget(0);
+        if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
         Data = data ?? GeneratedItemData.Placeholder();
         try { Data.ApplyToItem(Item); }
         catch (Exception ex)
@@ -103,9 +105,11 @@ public partial class GeneratedItem : ModItem
 
     public override void NetSend(BinaryWriter writer)
     {
-        writer.Write(GeneratedItemNetPayloadVersion);
+        bool materialTransport=HasMaterialTransportIdentity;
+        writer.Write(materialTransport?6:GeneratedItemNetPayloadVersion);
         try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
         catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
+        if(materialTransport)writer.Write(PresentationToken);
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -113,14 +117,17 @@ public partial class GeneratedItem : ModItem
         try
         {
             int version = reader.ReadInt32();
-            if (version != GeneratedItemNetPayloadVersion)
+            if (version != GeneratedItemNetPayloadVersion && version!=6)
                 throw new InvalidDataException($"Unsupported generated item payload {version}");
             GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
+            long token=version==6?reader.ReadInt64():0;
+            if(version==6&&token==0)throw new InvalidDataException("missing generated item presentation generation");
             GeneratedItemData resolved = reference;
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
             if (!string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
                 resolved = canonical;
             SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
+            ApplyPresentationToken(token);
             EnsureRuntimeHydration();
         }
         catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
@@ -505,7 +512,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
         ApplyEquipmentEffects(player, Data.Accessory);
-        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
+        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
 
     public override void UpdateEquip(Player player)
@@ -514,7 +521,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
         ApplyEquipmentEffects(player, Data.Armor);
-        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId);
+        InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
 
     private static void ApplyEquipmentEffects(Player player, AccessorySpec a)

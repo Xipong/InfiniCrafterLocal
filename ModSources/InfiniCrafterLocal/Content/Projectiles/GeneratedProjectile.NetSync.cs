@@ -13,8 +13,8 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private const byte RuntimeNetVersion = 1;
-    private const byte VfxEventNetVersion = 3;
+    private const byte RuntimeNetVersion = 2;
+    private const byte VfxEventNetVersion = 5;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
 
@@ -27,7 +27,12 @@ public sealed partial class GeneratedProjectile
         string EventName,
         Vector2 Center,
         Vector2 Velocity,
-        InfiniVfxProjectileSnapshot Snapshot);
+        InfiniVfxProjectileSnapshot Snapshot)
+    {
+        public ulong Occurrence { get; init; }
+        public byte Origin { get; init; } // 0 server producer, 1 owner-hit producer
+    }
+    private static readonly VfxOrderedPeerStream VfxEventStream = new();
 
     public override void SendExtraAI(BinaryWriter writer)
     {
@@ -46,6 +51,7 @@ public sealed partial class GeneratedProjectile
         writer.Write(_chargeTicks);
         writer.Write(_controllerTimer);
         writer.Write(_lastTarget);
+        writer.Write(VfxSourceToken());
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
@@ -69,6 +75,13 @@ public sealed partial class GeneratedProjectile
             _chargeTicks = Math.Max(0, reader.ReadInt32());
             _controllerTimer = Math.Max(0, reader.ReadInt32());
             _lastTarget = reader.ReadInt32();
+            long sourceToken=reader.ReadInt64();
+            if(sourceToken==0)throw new InvalidDataException("missing VFX source generation");
+            if(_vfxSourceToken!=sourceToken){
+                _presentationGeneration=new object();_presentationRetired=false;
+                _vfxState=new InfiniVfxState {SourceKey=$"net:{Projectile.owner}:{sourceToken}:{_generatedItemId}:{_entityId}"};
+            }
+            _vfxSourceToken=sourceToken;
             _preserveSyncedStateOnHydrate = true;
             _configured = false;
             TryHydrate();
@@ -102,19 +115,26 @@ public sealed partial class GeneratedProjectile
             || !HasExactVfxSlot(_data, _entity.Id, eventName)
             || global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance is null)
             return;
-        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent);
-        WriteVfxEventPayload(packet, new VfxEventPayload(
-            Projectile.owner,
-            Projectile.identity,
-            VfxSourceToken(),
-            _data.Id,
-            _entity.Id,
-            eventName,
-            center,
-            Projectile.velocity,
-            InfiniVfxProjectileSnapshot.Capture(Projectile, _data, _entity.Id)));
-        packet.Send(-1, Projectile.owner);
+        var payload=CaptureVfxPayload(eventName,center,0);
+        if(!payload.Snapshot.IsValid||!float.IsFinite(center.X)||!float.IsFinite(center.Y)||!float.IsFinite(payload.Velocity.X)||!float.IsFinite(payload.Velocity.Y))return;
+        var packet=InfiniCrafterLocalMod.Instance.GetPacket();packet.Write(InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent);
+        WriteVfxEventPayload(packet,payload);packet.Send(-1, Projectile.owner);
+    }
+
+    private VfxEventPayload CaptureVfxPayload(string eventName,Vector2 point,byte origin)
+        =>new(Projectile.owner,Projectile.identity,VfxSourceToken(),_data!.Id,_entity!.Id,eventName,point,Projectile.velocity,
+            InfiniVfxProjectileSnapshot.Capture(Projectile,_data,_entity.Id)){Occurrence=origin==0?VfxEventStream.NewRelayOccurrence():VfxEventStream.NewOwnerOccurrence(),Origin=origin};
+    private static void SendVfxPayload(VfxEventPayload payload,int to,int ignore)
+    {
+        if(InfiniCrafterLocalMod.Instance is null||!payload.Snapshot.IsValid||!float.IsFinite(payload.Center.X)||!float.IsFinite(payload.Center.Y)||!float.IsFinite(payload.Velocity.X)||!float.IsFinite(payload.Velocity.Y))return;
+        var packet=InfiniCrafterLocalMod.Instance.GetPacket();packet.Write(InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent);
+        WriteVfxEventPayload(packet,payload);packet.Send(to,ignore);
+    }
+    private void SendOwnerHitVfxEvent(string eventName,Vector2 point)
+    {
+        if(Main.netMode!=NetmodeID.MultiplayerClient||Projectile.owner!=Main.myPlayer||_data is null||_entity is null
+            ||eventName is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)||!HasExactVfxSlot(_data,_entity.Id,eventName))return;
+        SendVfxPayload(CaptureVfxPayload(eventName,point,1),-1,-1);
     }
 
     private static void WriteVfxEventPayload(BinaryWriter writer, VfxEventPayload payload)
@@ -139,6 +159,10 @@ public sealed partial class GeneratedProjectile
         writer.Write(snapshot.Pose.Rotation); writer.Write(snapshot.Pose.Scale);
         writer.Write((byte)(snapshot.Pose.Effects == Microsoft.Xna.Framework.Graphics.SpriteEffects.FlipHorizontally ? 1 : 0));
         writer.Write(snapshot.Pose.GfxOffY);
+        writer.Write((byte)(snapshot.MaterialTip.HasValue?1:0));
+        if(snapshot.MaterialTip is {} tip){writer.Write(tip.X);writer.Write(tip.Y);}
+        writer.Write(snapshot.MaterialVelocity.X);writer.Write(snapshot.MaterialVelocity.Y);
+        writer.Write(payload.Occurrence==0?1UL:payload.Occurrence);writer.Write(payload.Origin);
     }
 
     private static InfiniVfxProjectileSnapshot ReadVfxPresentationSnapshot(BinaryReader reader)
@@ -153,8 +177,11 @@ public sealed partial class GeneratedProjectile
         byte flip = reader.ReadByte();
         if (flip > 1) throw new InvalidDataException("invalid VFX sprite flip");
         float gfxOffY = reader.ReadSingle();
-        return new(center, tip, forward, owner, new(rotation, scale,
-            flip == 1 ? Microsoft.Xna.Framework.Graphics.SpriteEffects.FlipHorizontally : Microsoft.Xna.Framework.Graphics.SpriteEffects.None, gfxOffY));
+        byte hasMaterialTip=reader.ReadByte();if(hasMaterialTip>1)throw new InvalidDataException("invalid material tip presence");
+        Vector2? materialTip=hasMaterialTip==1?new Vector2(reader.ReadSingle(),reader.ReadSingle()):null;
+        Vector2 materialVelocity=new(reader.ReadSingle(),reader.ReadSingle());
+        return new InfiniVfxProjectileSnapshot(center, tip, forward, owner, new(rotation, scale,
+            flip == 1 ? Microsoft.Xna.Framework.Graphics.SpriteEffects.FlipHorizontally : Microsoft.Xna.Framework.Graphics.SpriteEffects.None, gfxOffY)){MaterialTip=materialTip,MaterialVelocity=materialVelocity};
     }
 
     private static VfxEventPayload ReadVfxEventPayload(BinaryReader reader)
@@ -170,10 +197,10 @@ public sealed partial class GeneratedProjectile
             (reader.ReadString() ?? "").Trim().ToLowerInvariant(),
             new Vector2(reader.ReadSingle(), reader.ReadSingle()),
             new Vector2(reader.ReadSingle(), reader.ReadSingle()),
-            ReadVfxPresentationSnapshot(reader));
+            ReadVfxPresentationSnapshot(reader)){Occurrence=reader.ReadUInt64(),Origin=reader.ReadByte()};
         if (payload.Owner < 0
             || payload.Owner >= Main.maxPlayers
-            || payload.SourceToken == 0
+            || payload.SourceToken == 0 || payload.Occurrence==0 || payload.Origin>1
             || payload.ItemId.Length > 96
             || payload.EntityId.Length > 48
             || payload.EventName.Length > 24
@@ -182,20 +209,42 @@ public sealed partial class GeneratedProjectile
             || !float.IsFinite(payload.Center.Y)
             || !float.IsFinite(payload.Velocity.X)
             || !float.IsFinite(payload.Velocity.Y)
-            || !payload.Snapshot.IsValid)
+            || !payload.Snapshot.IsValid
+            || !float.IsFinite(payload.Snapshot.MaterialVelocity.X) || !float.IsFinite(payload.Snapshot.MaterialVelocity.Y))
             throw new InvalidDataException("invalid generated projectile VFX event payload");
         return payload;
     }
 
+    private static bool AcceptVfxOccurrence(VfxEventPayload payload)
+        => Main.netMode==NetmodeID.Server
+            ? VfxEventStream.AcceptOwner(payload.Owner,payload.Occurrence)
+            : VfxEventStream.AcceptRelay(payload.Occurrence);
+    private static GeneratedProjectile? FindVfxPeerSource(VfxEventPayload payload,bool activeOnly)
+    {
+        foreach(var projectile in Main.projectile)if(projectile is not null&&(!activeOnly||projectile.active)&&projectile.owner==payload.Owner&&projectile.identity==payload.Identity
+            &&projectile.ModProjectile is GeneratedProjectile generated&&generated._vfxSourceToken==payload.SourceToken&&generated.Matches(payload.ItemId,payload.EntityId))return generated;
+        return null;
+    }
     public static void HandleVfxEventSyncPacket(BinaryReader reader, int whoAmI)
     {
-        if (reader is null || Main.netMode != NetmodeID.MultiplayerClient)
+        if (reader is null || (Main.netMode != NetmodeID.MultiplayerClient && Main.netMode != NetmodeID.Server))
             return;
         VfxEventPayload payload;
         try { payload = ReadVfxEventPayload(reader); }
         catch { return; }
-        if (payload.Owner == Main.myPlayer)
-            return;
+        if(Main.netMode==NetmodeID.Server) {
+            if(payload.Origin!=1||whoAmI!=payload.Owner||payload.EventName is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                ||Main.player[payload.Owner] is not {active:true})return;
+            var source=FindVfxPeerSource(payload,true);
+            if(source is null||source._data is null||source._entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(source._data)
+                ||!HasExactVfxSlot(source._data,payload.EntityId,payload.EventName))return;
+            try{RuntimeEventKind.ValidateProducer(source._entity,payload.EventName,false,false);}catch{return;}
+            if(!AcceptVfxOccurrence(payload))return;
+            // Same vanilla-equivalent owner hit trust as the actual hook. This
+            // admits presentation facts only; no collision/damage/gameplay replay.
+            SendVfxPayload(payload with { Occurrence=VfxEventStream.NewRelayOccurrence() },-1,payload.Owner);return;
+        }
+        if (payload.Owner == Main.myPlayer) return;
 
         GeneratedItemRegistryService? registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
         if (registry is null
@@ -205,7 +254,9 @@ public sealed partial class GeneratedProjectile
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(payload.EntityId);
         if (entity is null || !HasExactVfxSlot(data, entity.Id, payload.EventName))
             return;
-        string sourceKey = $"net:{payload.Owner}:{payload.SourceToken}:{payload.ItemId}:{payload.EntityId}";
+        if(!AcceptVfxOccurrence(payload))return;
+        var live=FindVfxPeerSource(payload,true);
+        string sourceKey = live?._vfxState.SourceKey is {Length:>0} key ? key : $"net:{payload.Owner}:{payload.SourceToken}:{payload.ItemId}:{payload.EntityId}";
         InfiniVfxRuntime.OnDetachedEvent(
             data,
             entity.Id,
@@ -214,7 +265,7 @@ public sealed partial class GeneratedProjectile
             payload.Center,
             payload.Velocity,
             sourceKey,
-            payload.Snapshot);
+            payload.Snapshot,live is null?null:VfxSourceBinding.Capture(live.Projectile),payload.Occurrence);
     }
 
     private static bool HasExactVfxSlot(GeneratedItemData data, string entityId, string eventName)
@@ -228,6 +279,7 @@ public sealed partial class GeneratedProjectile
 
     public static void ClearVfxEventSyncCaches()
     {
+        VfxEventStream.Clear();
         _nextVfxSourceToken = 0;
     }
 }

@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.242
+# InfiniCrafterLocal v0.4.245
 
 InfiniCrafterLocal генерирует предмет Terraria из двух parent items. Gameplay Author за один LLM-вызов составляет bounded low-level `runtimeProgram`; Python проверяет и компилирует точные entities/components/events; C# tModLoader исполняет только typed v5 DTO.
 
@@ -9,15 +9,21 @@ parents
 → Gameplay Author: entities + inputs + capabilities + events
 → deterministic validation/technical compile
 → Visual Director: exact entity roles/assets
-→ VFX Director: exact entity/event slots
+→ VFX Director: exact entity/event slots + explicit effect-image ingredients
+→ image generation: accepted body/impact/VFX asset requests
 → strict world storage
 → C# bounded runtime
 ```
 
 Код не выбирает weapon family и не выводит gameplay из name/tooltip/category/prose. Старые `AttackSpec`, `runtimeFamily`, whole-weapon macros, schema/cache migration и fallback удалены.
 
+## Поставка 0.4.245
+
+Поставка 0.4.245 обновляет **мод и LocalGenerator вместе**; модели, личная конфигурация, cache и внешние `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Упаковка кандидата и чтение его `.tmod` не равны final acceptance: native/review и публикацией владеет родительская проверка, а игровой multiplayer, live LLM/image campaign и художественное качество отдельно не заявлены. Старые корректные рецепты не перерисовываются автоматически. VFX Director/условный Repair сохраняют бюджет ответа 8000 по умолчанию и приоритет явной настройки пользователя.
+
 ## Документы
 
+- `docs/VFX_MATERIAL_ELEMENTS_RU.md` — индивидуальные VFX-ассеты, spriteElement/texturedPath, механический read-only context; исправленные item-periodic budgets, nonowner lifecycle, ordered replay, unresolved Item forwarding, точная readiness, conflict-safe PNG byte authority, O(1) descriptor-reference lookup и backoff по selected canonical key;
 - `AGENTS.md` — hard rules;
 - `PROJECT_ARCHITECTURE_RU.md` / `PROJECT_MAP_RU.md` — архитектура и карта;
 - `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated inventory 52 capabilities;

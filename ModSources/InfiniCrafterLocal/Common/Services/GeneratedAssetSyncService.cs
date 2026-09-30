@@ -37,7 +37,11 @@ internal sealed class GeneratedAssetWireDescriptor
     public string FileName { get; init; } = "";
     public int Length { get; init; }
     public string Sha256 { get; init; } = "";
-    internal string SourcePath { get; init; } = "";
+    internal string SourcePath { get; set; } = "";
+    // Technical proof lives on its existing descriptor, not a second file-key cache.
+    // It is never serialized as wire data.
+    // Published only after full PNG/length/SHA validation at an asset lifecycle boundary.
+    internal (string Path, long Length, long WriteTicks)? CertifiedLocal { get; set; }
 }
 
 /// <summary>
@@ -120,6 +124,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private readonly Dictionary<string, int> _serverAssetRequestTicks = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, GeneratedAssetWireDescriptor>> _remoteDescriptorsByItem = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, GeneratedAssetWireDescriptor>> _serverDescriptorsByItem = new(StringComparer.Ordinal);
+    // Derived lookup only: integrity proof remains on the existing descriptor.
+    // Conflicting declared byte identities have no entry, even if one is certified.
+    private readonly Dictionary<string, GeneratedAssetWireDescriptor> _certifiedDescriptorsByFile = new(StringComparer.OrdinalIgnoreCase);
     private int _cacheHitCount;
     private int _cacheMissCount;
     private int _retryCount;
@@ -150,6 +157,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _serverAssetRequestTicks.Clear();
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
+            _certifiedDescriptorsByFile.Clear();
         }
     }
 
@@ -159,6 +167,65 @@ public sealed class GeneratedAssetSyncService : IDisposable
         if (string.IsNullOrWhiteSpace(file)) return null;
         string local = Path.Combine(CacheRoot, file);
         return File.Exists(local) ? local : null;
+    }
+
+    internal string? ResolveCertifiedLocalPath(string? originalPath)
+    {
+        string file = FileNameFromPath(originalPath);
+        if (string.IsNullOrWhiteSpace(file)) return null;
+        lock (_lock)
+        {
+            if (_disposed) return null;
+            if (!_certifiedDescriptorsByFile.TryGetValue(file, out var descriptor) || descriptor.CertifiedLocal is not { } proof)
+                return null;
+            try
+            {
+                var info = new FileInfo(proof.Path);
+                // No PNG decode or hashing in Draw. A changed cache file loses
+                // authority until the existing lifecycle validator certifies it again.
+                if (info.Exists && info.Length == descriptor.Length && info.Length == proof.Length
+                    && info.LastWriteTimeUtc.Ticks == proof.WriteTicks) return proof.Path;
+            }
+            catch { }
+            descriptor.CertifiedLocal = null;
+            _certifiedDescriptorsByFile.Remove(file);
+        }
+        return null;
+    }
+
+    // Called under _lock at descriptor/file lifecycle boundaries, never per Draw.
+    private void RebindCertifiedLocalAsset(string file)
+    {
+        _certifiedDescriptorsByFile.Remove(file);
+        GeneratedAssetWireDescriptor? identity = null, certified = null;
+        foreach (var map in _remoteDescriptorsByItem.Values)
+        {
+            if (!map.TryGetValue(file, out var descriptor)) continue;
+            if (identity is not null && (identity.Length != descriptor.Length
+                || !string.Equals(identity.Sha256, descriptor.Sha256, StringComparison.OrdinalIgnoreCase)))
+                return; // A filename is not a global byte identity while owners conflict.
+            identity = descriptor;
+            if (descriptor.CertifiedLocal is not null) certified = descriptor;
+        }
+        if (certified is not null) _certifiedDescriptorsByFile[file] = certified;
+    }
+
+    private void InvalidateCertifiedLocalAsset(string file)
+    {
+        _certifiedDescriptorsByFile.Remove(file);
+        foreach (var map in _remoteDescriptorsByItem.Values)
+            if (map.TryGetValue(file, out var descriptor)) descriptor.CertifiedLocal = null;
+    }
+
+    private void CertifyLocalAsset(string file, string local, int length, string sha256)
+    {
+        var info = new FileInfo(local);
+        if (!info.Exists || info.Length != length) return;
+        foreach (var map in _remoteDescriptorsByItem.Values)
+            if (map.TryGetValue(file, out var descriptor) && descriptor.Length == length
+                && string.Equals(descriptor.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
+                descriptor.CertifiedLocal = (local, info.Length, info.LastWriteTimeUtc.Ticks);
+        RebindCertifiedLocalAsset(file);
     }
 
     public void EnsureAssetsForData(GeneratedItemData? data)
@@ -178,8 +245,17 @@ public sealed class GeneratedAssetSyncService : IDisposable
         foreach (string file in files)
         {
             string local = Path.Combine(CacheRoot, file);
-            GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(itemId, file);
-            bool valid = IsValidCachedAsset(local, descriptor);
+            bool valid;
+            lock (_lock)
+            {
+                GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(itemId, file);
+                valid = IsValidCachedAsset(local, descriptor);
+                if (descriptor is not null)
+                {
+                    if (valid) CertifyLocalAsset(file, local, descriptor.Length, descriptor.Sha256);
+                    else InvalidateCertifiedLocalAsset(file);
+                }
+            }
             if (valid && !forceRetry)
             {
                 lock (_lock) _cacheHitCount++;
@@ -265,7 +341,23 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 Sha256 = descriptor.Sha256.ToLowerInvariant(),
             };
         }
-        lock (_lock) _remoteDescriptorsByItem[itemId] = map;
+        lock (_lock)
+        {
+            if (_disposed) return;
+            var affectedFiles = new HashSet<string>(map.Keys, StringComparer.OrdinalIgnoreCase);
+            if (_remoteDescriptorsByItem.TryGetValue(itemId, out var replaced)) affectedFiles.UnionWith(replaced.Keys);
+            foreach (var descriptor in map.Values)
+            {
+                // Repeated manifests do not discard an equal certified byte identity;
+                // changed hash/length cannot inherit another descriptor's proof.
+                foreach (var prior in _remoteDescriptorsByItem.Values)
+                    if (prior.TryGetValue(descriptor.FileName, out var old) && old.Length == descriptor.Length
+                        && string.Equals(old.Sha256, descriptor.Sha256, StringComparison.OrdinalIgnoreCase))
+                        descriptor.CertifiedLocal ??= old.CertifiedLocal;
+            }
+            _remoteDescriptorsByItem[itemId] = map;
+            foreach (string file in affectedFiles) RebindCertifiedLocalAsset(file);
+        }
     }
 
     internal GeneratedAssetWireDescriptor[] BuildServerAssetDescriptors(GeneratedItemData data)
@@ -962,7 +1054,16 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 if (_disposed) return;
                 Directory.CreateDirectory(CacheRoot);
                 File.WriteAllBytes(partPath, bytes);
+                InvalidateCertifiedLocalAsset(file);
                 File.Move(partPath, local, overwrite: true);
+                if (!string.IsNullOrWhiteSpace(itemId))
+                {
+                    if (!_remoteDescriptorsByItem.TryGetValue(itemId, out var map))
+                        _remoteDescriptorsByItem[itemId] = map = new(StringComparer.OrdinalIgnoreCase);
+                    if (!map.ContainsKey(file)) map[file] = new GeneratedAssetWireDescriptor
+                        { FileName = file, Length = bytes.Length, Sha256 = expectedHash.ToLowerInvariant() };
+                }
+                CertifyLocalAsset(file, local, bytes.Length, expectedHash);
                 foreach (string key in _pendingPacketAssets.Where(x =>
                     string.Equals(x.Value.ItemId, itemId, StringComparison.Ordinal)
                     && string.Equals(x.Value.FileName, file, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key).ToArray())
@@ -1044,6 +1145,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private static IEnumerable<string> RuntimeAssetPaths(GeneratedItemData data)
     {
+        foreach (VfxAssetSpec asset in data.VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>())
+            yield return asset.SpritePath;
         yield return data.Visual?.SpritePath ?? "";
         yield return data.Visual?.EquipOverlayPath ?? "";
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)

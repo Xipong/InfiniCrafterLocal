@@ -1,4 +1,4 @@
-# LocalGenerator 0.4.242 — project map
+# LocalGenerator 0.4.245 — project map
 
 ```text
 infini_local/core/runtime_authoring/

@@ -5,6 +5,7 @@ import math
 import re
 from typing import Any, Iterable, Mapping
 
+from infini_local.core.repair_merge import json_path_child
 from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
@@ -363,6 +364,14 @@ def author_item_repair_schema() -> dict[str, Any]:
     }
 
 
+def _is_finite_number(value: int | float) -> bool:
+    """Refuse JSON integers outside the runtime float domain without raising."""
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _type_matches(value: Any, expected: str) -> bool:
     if expected == "object":
         return isinstance(value, dict)
@@ -375,7 +384,7 @@ def _type_matches(value: Any, expected: str) -> bool:
     if expected == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if expected == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and _is_finite_number(value)
     if expected == "null":
         return value is None
     return False
@@ -497,7 +506,10 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                                                  for other in other_keys)]
                             if candidates and not any(_authored_const_matches(value, key, paths[key])
                                                       for paths in candidates):
-                                add("one_of", path + "".join(f".{part}" for part in key))
+                                error_path = path
+                                for part in key:
+                                    error_path = json_path_child(error_path, part)
+                                add("one_of", error_path)
                                 break
         return errors[:limit]
 
@@ -522,14 +534,15 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
             add("pattern", path, schema["pattern"], value)
 
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        if not math.isfinite(float(value)):
+        finite = _is_finite_number(value)
+        if not finite:
             add("finite", path, "finite number", value)
         if schema.get("minimum") is not None and value < schema["minimum"]:
             add("minimum", path, schema["minimum"], value)
         if schema.get("maximum") is not None and value > schema["maximum"]:
             add("maximum", path, schema["maximum"], value)
         step = schema.get("multipleOf")
-        if isinstance(step, (int, float)) and step > 0 and math.isfinite(float(value)):
+        if isinstance(step, (int, float)) and step > 0 and finite:
             # The only authored fractional step is an exact binary half; check
             # the quotient without rounding or approximating engine quantities.
             if value % step != 0:
@@ -543,7 +556,7 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
         item_schema = schema.get("items")
         if isinstance(item_schema, Mapping):
             for index, child in enumerate(value):
-                errors.extend(strict_schema_errors(child, item_schema, path=f"{path}[{index}]", root=root_schema, limit=max(0, limit - len(errors))))
+                errors.extend(strict_schema_errors(child, item_schema, path=json_path_child(path, index), root=root_schema, limit=max(0, limit - len(errors))))
                 if len(errors) >= limit:
                     break
 
@@ -559,15 +572,15 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
         required: list[Any] = raw_required if isinstance(raw_required, list) else []
         for key in required:
             if key not in value:
-                add("required", f"{path}.{key}")
+                add("required", json_path_child(path, key))
         if schema.get("additionalProperties") is False:
             for key in value:
                 if key not in properties:
-                    add("additional_property", f"{path}.{key}")
+                    add("additional_property", json_path_child(path, str(key)))
         for key, child in value.items():
             child_schema = properties.get(key)
             if isinstance(child_schema, Mapping):
-                errors.extend(strict_schema_errors(child, child_schema, path=f"{path}.{key}", root=root_schema, limit=max(0, limit - len(errors))))
+                errors.extend(strict_schema_errors(child, child_schema, path=json_path_child(path, str(key)), root=root_schema, limit=max(0, limit - len(errors))))
                 if len(errors) >= limit:
                     break
     return errors[:limit]

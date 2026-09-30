@@ -141,12 +141,12 @@ def test_visual_repair_deletes_exact_unknown_item_property() -> None:
     }
     errors = [
         {
-            "path": "$.item.:palette",
+            "path": '$.item[":palette"]',
             "code": "schema_additional_property",
             "message": "additional property ':palette' is not allowed",
         },
         {
-            "path": "$.entities[0].:scale",
+            "path": '$.entities[0][":scale"]',
             "code": "schema_additional_property",
             "message": "additional property ':scale' is not allowed",
         },

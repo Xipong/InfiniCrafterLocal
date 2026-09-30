@@ -29,6 +29,9 @@ public sealed class VfxManifestSpec
     [JsonRequired] public VfxMotifSpec Motif { get; set; } = new();
     public VfxQualityBudgetSpec Budget { get; set; } = new();
     [JsonRequired] public VfxSlotSpec[] Slots { get; set; } = Array.Empty<VfxSlotSpec>();
+    private VfxAssetSpec[]? _assets;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxAssetSpec[]? Assets { get => _assets; set => _assets = value ?? throw new InvalidDataException("VFX assets cannot be null"); }
     public string OverlayPolicy { get; set; } = "LocalOnly";
     public VfxDebugSpec Debug { get; set; } = new();
 
@@ -102,16 +105,32 @@ public sealed class VfxManifestSpec
         if (Slots is null) throw new InvalidDataException("VFX slots are required");
         if (Slots.Length > 12)
             throw new InvalidDataException("VFX slot count exceeds 12");
+        var declaredAssets = new HashSet<string>(StringComparer.Ordinal);
+        if (Assets is not null) {
+            if (Assets.Length > 4) throw new InvalidDataException("VFX asset count exceeds 4");
+            foreach (var asset in Assets) {
+                if (asset is null) throw new InvalidDataException("null VFX asset");
+                asset.Validate();
+                if (!declaredAssets.Add(asset.Id)) throw new InvalidDataException("duplicate VFX asset id");
+            }
+        }
+        var usedAssets = new HashSet<string>(StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var impactEntityIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (VfxSlotSpec? slot in Slots)
         {
             if (slot is null) throw new InvalidDataException("VFX manifest contains null slot");
             slot.NormalizeAndValidate();
+            var texture = slot.Element?.Texture ?? slot.Path?.Texture;
+            if (texture?.Source == "asset") {
+                if (!declaredAssets.Contains(texture.AssetId)) throw new InvalidDataException("dangling VFX asset reference");
+                usedAssets.Add(texture.AssetId);
+            }
             if (!ids.Add(slot.Id)) throw new InvalidDataException($"duplicate VFX slot id '{slot.Id}'");
             if (slot.RendererKind == "impactSprite" && !impactEntityIds.Add(slot.EntityId))
                 throw new InvalidDataException($"duplicate impactSprite entity '{slot.EntityId}'");
         }
+        if (!declaredAssets.SetEquals(usedAssets)) throw new InvalidDataException("unused VFX asset request");
     }
 
     private static string Safe(string? value, int max)
@@ -211,6 +230,13 @@ public sealed class VfxSlotSpec
     public int BakedCommandCount { get; set; }
     public VfxBakedCommandSpec[] BakedCommands { get; set; } = Array.Empty<VfxBakedCommandSpec>();
 
+    private VfxSpriteElementSpec? _element;
+    private VfxTexturedPathSpec? _path;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxSpriteElementSpec? Element { get => _element; set => _element = value ?? throw new InvalidDataException("element cannot be null"); }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxTexturedPathSpec? Path { get => _path; set => _path = value ?? throw new InvalidDataException("path cannot be null"); }
+
     public void Normalize() => NormalizeAndValidate();
     public void NormalizeAndValidate()
     {
@@ -222,6 +248,22 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        bool materialBranch = rendererKind is InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath;
+        if (rendererKind == InfiniVfxRendererKind.SpriteElement) {
+            if (Element is null || Path is not null) throw new InvalidDataException("spriteElement requires only element payload");
+            Element.Validate(this);
+        } else if (rendererKind == InfiniVfxRendererKind.TexturedPath) {
+            if (Path is null || Element is not null) throw new InvalidDataException("texturedPath requires only path payload");
+            Path.Validate(this);
+        } else if (Element is not null || Path is not null) throw new InvalidDataException("foreign VFX material payload");
+        if (materialBranch) {
+            if (Backend != (Element is not null ? "Sprite" : "Primitive") || Scale != 1 || Density != 0 || Spread != 0 || Jitter != 0
+                || FadeIn != 0 || FadeOut != 0 || SignatureWeight != 0 || VisualCost != 0 || BudgetWeight != 1
+                || EmissionMode != "none" || ParticleRole != "none" || ParticleSystemId != "none" || TextureRole != "none"
+                || Channel is "light" or "sound" || Lane == "cue") throw new InvalidDataException("new material branch requires neutral unconsumed common controls");
+            VfxMaterialValidation.Range(Alpha, 0, 1, "alpha");
+            if (Duration is < 3 or > 120 || StartTick is < 0 or > 120 || RepeatEvery is < 0 or > 120) throw new InvalidDataException("invalid VFX material timing");
+        }
         Backend = ExactEnumText(Backend, "backend", "Auto", "Realtime", "Primitive", "Sprite", "Particle");
         TextureRole = ExactEnumText(TextureRole, "textureRole", "item", "entity", "projectile", "field", "impact", "none");
         if (rendererKind == InfiniVfxRendererKind.ImpactSprite && TextureRole != "impact")

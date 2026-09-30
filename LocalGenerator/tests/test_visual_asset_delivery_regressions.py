@@ -5,12 +5,22 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
 from infini_local.core.vfx_manifest import _hydrate_vfx_asset_prompts
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
+
+
+@pytest.fixture(autouse=True)
+def isolated_serving_roots(monkeypatch, tmp_path):
+    # Temporary PNGs must belong to the real filename-serving owner, not bypass
+    # delivery's canonical root resolution via an arbitrary existing local path.
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
 
 
 def _equipment_data() -> dict:
@@ -211,19 +221,25 @@ def test_delivery_asset_roster_is_bounded_by_count_and_total_bytes(tmp_path: Pat
     many: list[Path] = []
     for index in range(33):
         path = tmp_path / f"asset-{index}.png"
-        path.write_bytes(b"x")
+        write_no_image_fixture_png(path)
         many.append(path)
     assert {problem["code"] for problem in visual_delivery_gate._asset_roster_problems(many)} == {
         "asset_roster_file_limit_exceeded"
     }
+    assert visual_delivery_gate._asset_roster_problems(many[:32]) == []
 
     large: list[Path] = []
-    for index in range(2):
+    from PIL import Image
+    from PIL.PngImagePlugin import PngInfo
+    for index in range(3):
         path = tmp_path / f"large-{index}.png"
-        with path.open("wb") as stream:
-            stream.truncate(9 * 1024 * 1024)
+        write_no_image_fixture_png(path)
+        info = PngInfo()
+        info.add_text("offline_padding", "x" * (6 * 1024 * 1024))
+        with Image.open(path) as image:
+            image.save(path, pnginfo=info)
         large.append(path)
-    assert "asset_roster_byte_limit_exceeded" in {
+    assert {"asset_roster_byte_limit_exceeded"} == {
         problem["code"] for problem in visual_delivery_gate._asset_roster_problems(large)
     }
 

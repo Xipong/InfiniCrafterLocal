@@ -11,13 +11,15 @@ import copy
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import re
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_stage_messages import stage_chat_message
-from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
+from infini_local.core.repair_merge import json_path_relative, json_values_equal, merge_frozen_subtree
+from infini_local.core.runtime_authoring import ENTITY_KIND_REGISTRY, runtime_event_inventory, runtime_visual_roles, strict_schema_errors
+from infini_local.core.vfx_material_contract import ASSET_ID_PATTERN, MATERIAL_RENDERERS, NEUTRAL_FIELDS, asset_schema, element_schema, material_slot_clauses, material_texture_clauses, path_schema, runtime_asset_schema
 from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_MAX_SLOTS,
     VFX_LLM_DIRECTOR_MAX_TOKENS,
@@ -45,7 +47,7 @@ _RENDERERS = (
     "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
     "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
     "actorAfterimage", "impactRing", "impactSprite", "childMotes",
-    "lightCue", "soundCue",
+    "lightCue", "soundCue", *MATERIAL_RENDERERS,
 )
 SPRITE_TEXTURE_RENDERERS = frozenset({
     "projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite",
@@ -56,6 +58,8 @@ _RENDERER_REQUIREMENTS = {
     "lightCue": {"channel": "light", "lane": "cue"},
     "soundCue": {"channel": "sound", "lane": "cue"},
     "impactSprite": {"textureRole": "impact"},
+    "spriteElement": {**NEUTRAL_FIELDS, "backend": "Sprite"},
+    "texturedPath": {**NEUTRAL_FIELDS, "backend": "Primitive", "repeatEvery": 0, "duration": 3},
 }
 _RENDERER_SEMANTICS = {
     "projectileAfterimage": "Periodic projectile: textured history samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
@@ -73,6 +77,8 @@ _RENDERER_SEMANTICS = {
     "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
     "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
     "soundCue": "SoundID.Item1 at the resolved anchor; alpha controls volume. No sound-library/name classifier.",
+    "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
+    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
@@ -95,8 +101,8 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "chaos": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
     "scale": "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. Sprite trail scale=max(0.05, projectile.scale*scale); projectile event afterimage scale=clamp(projectile.scale,0.1,8)*scale; directional item/impact sprite scale clamps to 0.05..8. Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. Dust size clamp(scale,0.2,3). Not a universal pixel size.",
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
-    "duration": "World ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade.",
-    "alpha": "Engine units: Draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity.",
+    "duration": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
+    "alpha": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
     "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
     "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
@@ -104,8 +110,8 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "budgetWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
     "signatureWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
     "visualCost": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
-    "startTick": "Projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick.",
-    "repeatEvery": "World ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration.",
+    "startTick": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick. spriteElement: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. texturedPath: projectile age gate for live sampling.",
+    "repeatEvery": "Legacy world ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath: neutral=0; no repeated detached path emission.",
 }
 
 
@@ -125,10 +131,16 @@ def _seed(*parts: Any) -> int:
     return int.from_bytes(digest[:4], "little") & 0x7FFFFFFF
 
 
+def _rows(source: Mapping[str, Any], key: str) -> list[Any]:
+    value = source.get(key)
+    return value if isinstance(value, list) else []
+
+
 def _allowed_pairs(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for row in runtime_event_inventory(data):
+    inventory: list[Any] = runtime_event_inventory(data)
+    for row in inventory:
         if not isinstance(row, Mapping):
             continue
         pair = (str(row.get("entityId") or ""), str(row.get("event") or ""))
@@ -137,6 +149,41 @@ def _allowed_pairs(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         seen.add(pair)
         rows.append({"entityId": pair[0], "event": pair[1]})
     return sorted(rows, key=lambda row: (row["entityId"], row["event"]))
+
+
+def _textured_path_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    runtime = data.get("runtimeProgram")
+    entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
+    rows: list[dict[str, Any]] = []
+    for entity in entities or []:
+        if not isinstance(entity, Mapping) or not isinstance(entity.get("id"), str) or not isinstance(entity.get("kind"), str):
+            continue
+        kind = ENTITY_KIND_REGISTRY.get(entity["kind"])
+        if kind is None or not kind.projectile:
+            continue
+        sources = ["anchorHistory"]
+        controller, movement = entity.get("controller"), entity.get("movement")
+        if isinstance(controller, Mapping) and controller.get("code") == 1:
+            if controller.get("name") == "channel_beam" and type(controller["code"]) is int:
+                sources.append("beam")  # Colliding gives ChannelBeam precedence over movement.
+        elif isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash" and type(movement.get("code")) is int and movement["code"] == 18:
+            sources.append("whip")
+        rows.append({"entityId": entity["id"], "sources": sources})
+    return rows
+
+
+def _entity_texture_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    runtime = data.get("runtimeProgram")
+    raw_entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
+    entities = raw_entities if isinstance(raw_entities, list) else []
+    rows: list[dict[str, Any]] = []
+    for entity in entities:
+        if not isinstance(entity, Mapping) or not isinstance(entity.get("id"), str):
+            continue
+        visual = entity.get("visual")
+        mode = visual.get("assetMode") if isinstance(visual, Mapping) else None
+        rows.append({"entityId": entity["id"], "assetMode": mode, "sources": ["item", "impact", "asset", *(["entity"] if mode in ("baked_sprite", "reuse_item_icon") else [])]})
+    return rows
 
 
 def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -165,6 +212,14 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
             "signatureWeight": [0.0, 1.0], "visualCost": [0.0, 1.0],
             "startTick": [0, 120], "repeatEvery": [0, 120],
         },
+        "texturedPathSources": _textured_path_sources(data),
+        "textureDependencyTuples": {
+            "item": "existing accepted item image; assetId empty",
+            "entity": "same exact entity baked_sprite/reuse_item_icon image; assetId empty; no_asset/runtime_geometry forbidden",
+            "impact": "same-entity impactSprite slot must produce the dedicated impact image; assetId empty",
+            "asset": "exact declared VFX asset ID; no compensating artwork for a bad reference",
+        },
+        "entityTextureSources": _entity_texture_sources(data),
         "maxSlots": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS))),
         "runtimePairs": _allowed_pairs(data),
         "runtimeVisualRoles": runtime_visual_roles(data),
@@ -185,7 +240,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     pairs = _allowed_pairs(data)
     entity_ids = sorted({row["entityId"] for row in pairs})
     events = sorted({row["event"] for row in pairs})
-    slot = {
+    slot: dict[str, Any] = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
@@ -195,8 +250,8 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
                 "type": "string", "enum": list(_RENDERERS),
                 "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
             },
-            "backend": {"type": "string", "enum": list(_BACKENDS), "description": "Retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient; this field does not select another runtime engine."},
-            "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
+            "backend": {"type": "string", "enum": list(_BACKENDS), "description": "Legacy retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient for legacy renderers. spriteElement requires Sprite; texturedPath requires Primitive, both use owned stock FNA paths."},
+            "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES), "description": "Legacy image selector. spriteElement and texturedPath require none here and consume only their explicit nested texture selector and textureDependencyTuples."},
             "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
             "anchor": {"type": "string", "enum": list(_ANCHORS), "description": "Primitive/cue/event placement: self/field=bound entity center; owner=active owner center; tip/tipHistory=projectile geometric tip (item uses engine itemLocation); velocity=center with motion axis; hitPoint=captured event point, NPC center for item hit/crit. Item hitPoint without a captured point is silent. Projectile event anchors and sprite pose are frozen at emission and carried through the relay, including after source removal; unavailable owner is silent. History renderers use their named center/tip histories instead of relocating the path."},
             "channel": {"type": "string", "enum": list(_CHANNELS)},
@@ -220,6 +275,8 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "repeatEvery": {"type": "integer", "minimum": 0, "maximum": 120},
             "spritePrompt": {"type": "string", "maxLength": 1400, "description": _impact_sprite_background_rule()},
             "spriteNegativePrompt": {"type": "string", "maxLength": 700},
+            "element": element_schema(),
+            "path": path_schema(),
         },
         "required": [
             "id", "entityId", "event", "rendererKind", "backend", "textureRole",
@@ -236,7 +293,12 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         }
         for renderer, required in _RENDERER_REQUIREMENTS.items()
     ]
-    schema = {
+    runtime = data.get("runtimeProgram")
+    entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
+    item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
+    slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, list(_CHANNELS), _textured_path_sources(data)))
+    slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data)))
+    schema: dict[str, Any] = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "schema": {"const": VFX_DIRECTOR_SCHEMA},
@@ -255,6 +317,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
                 "required": ["element", "shapeLanguage", "motionLanguage", "paletteRole", "rhythm", "chaos"],
             },
             "slots": {"type": "array", "items": slot, "minItems": 0, "maxItems": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS)))},
+            "assets": {"type": "array", "items": asset_schema(), "maxItems": 4, "description": "Optional independent VFX ingredients, declared once and reused by exact ID. Absence requests none; null invalid. Every new request must be used. Image pipeline alone writes execution metadata."},
         },
         "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slots"],
     }
@@ -272,10 +335,85 @@ def _number(value: Any, low: float, high: float, path: str, errors: list[dict[st
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         errors.append({"path": path, "message": "number required"})
         return int(low) if integer else low
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except OverflowError:
+        errors.append({"path": path, "message": "finite number required"})
+        return int(low) if integer else low
+    if not math.isfinite(numeric):
+        errors.append({"path": path, "message": "finite number required"})
+        return int(low) if integer else low
     if numeric < low or numeric > high:
         errors.append({"path": path, "message": f"must be within [{low}, {high}]"})
     return int(value) if integer else numeric
+
+
+def _asset_reference_errors(raw: Mapping[str, Any], *, require_used: bool = True) -> list[dict[str, Any]]:
+    errors: list[dict[str, Any]] = []
+    assets = _rows(raw, "assets")
+    known: set[str] = set()
+    for index, row in enumerate(assets):
+        if not isinstance(row, Mapping):
+            continue
+        asset_id = row.get("id")
+        if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None:
+            continue  # Schema owns type/format errors, before lookup or hashing.
+        if asset_id in known:
+            errors.append({"path": f"$.assets[{index}].id", "message": "duplicate asset id"})
+        known.add(asset_id)
+    used: set[str] = set()
+    dangling = False
+    for index, slot in enumerate(_rows(raw, "slots")):
+        if not isinstance(slot, Mapping) or slot.get("rendererKind") not in MATERIAL_RENDERERS:
+            continue
+        payload_name = "element" if slot.get("rendererKind") == "spriteElement" else "path"
+        payload = slot.get(payload_name)
+        texture = payload.get("texture") if isinstance(payload, Mapping) else None
+        if not isinstance(texture, Mapping) or texture.get("source") != "asset":
+            continue
+        asset_id = texture.get("assetId")
+        if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
+            dangling = True
+            errors.append({"path": f"$.slots[{index}].{payload_name}.texture.assetId", "message": "exact declared VFX asset id required; repair the reference, never create compensating artwork"})
+        else:
+            used.add(asset_id)
+    # A broken reference is not permission to delete/redesign its valid request.
+    if require_used and not dangling:
+        for index, row in enumerate(assets):
+            if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in known - used:
+                errors.append({"path": f"$.assets[{index}].id", "message": "unused new asset request"})
+    return errors
+
+
+def _impact_reference_errors(raw: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_slots = raw.get("slots")
+    slots = raw_slots if isinstance(raw_slots, list) else []
+    producers = {slot["entityId"] for slot in slots if isinstance(slot, Mapping) and slot.get("rendererKind") == "impactSprite" and isinstance(slot.get("entityId"), str)}
+    errors: list[dict[str, Any]] = []
+    for index, slot in enumerate(slots):
+        if not isinstance(slot, Mapping) or slot.get("rendererKind") not in MATERIAL_RENDERERS:
+            continue
+        name = "element" if slot.get("rendererKind") == "spriteElement" else "path"
+        payload = slot.get(name)
+        texture = payload.get("texture") if isinstance(payload, Mapping) else None
+        if isinstance(texture, Mapping) and texture.get("source") == "impact" and isinstance(slot.get("entityId"), str) and slot["entityId"] not in producers:
+            errors.append({"path": f"$.slots[{index}].{name}.texture.source", "message": "impact texture requires a same-entity impactSprite image producer"})
+    return errors
+
+
+def _material_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
+    element = slot.get("element")
+    if slot.get("rendererKind") != "spriteElement" or not isinstance(element, Mapping):
+        return []
+    minimum, maximum = element.get("speedMinPxPerTick"), element.get("speedMaxPxPerTick")
+    properties = element_schema()["properties"]
+    # A scalar failure is not permission to redesign its valid sibling. Only
+    # compare operands that independently satisfy the canonical type/range gate.
+    if (isinstance(minimum, (int, float)) and isinstance(maximum, (int, float))
+            and not strict_schema_errors(minimum, properties["speedMinPxPerTick"])
+            and not strict_schema_errors(maximum, properties["speedMaxPxPerTick"]) and maximum < minimum):
+        return [{"path": path + ".element.speedMaxPxPerTick", "message": "must be >= speedMinPxPerTick"}]
+    return []
 
 
 def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str, Any]:
@@ -379,6 +517,11 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
                     errors.append({"path": f"{path}.{field}", "message": "sprite prompts are owned only by impactSprite slots and must be empty otherwise"})
         clean["spritePrompt"] = sprite_prompt
         clean["spriteNegativePrompt"] = sprite_negative
+        if "element" in slot:
+            clean["element"] = copy.deepcopy(slot["element"])
+        if "path" in slot:
+            clean["path"] = copy.deepcopy(slot["path"])
+        errors.extend(_material_slot_errors(slot, path))
         for renderer in ("soundCue", "lightCue"):
             required = _RENDERER_REQUIREMENTS[renderer]
             if clean["rendererKind"] == renderer and any(clean[field] != value for field, value in required.items()):
@@ -395,6 +538,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
                 "path": f"$.slots[{index}].textureRole",
                 "message": "sprite renderer using impact texture requires an impactSprite slot for the same entity",
             })
+    errors.extend(_asset_reference_errors({**raw, "slots": slots}))
+    errors.extend(_impact_reference_errors({**raw, "slots": slots}))
     return {
         "ok": not errors,
         "errors": errors,
@@ -408,8 +553,79 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
                 "chaos": float(motif_chaos),
             },
             "slots": normalized_slots,
+            **({"assets": copy.deepcopy(raw["assets"])} if "assets" in raw else {}),
         },
     }
+
+
+def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
+    """Shared persisted-recipe shape gate; image delivery separately owns readiness.
+
+    Reuse Director's additive branch definitions, never strip/coerce authored
+    controls or hydrate an image here. Legacy records retain their old admission;
+    collection IDs/pairs are checked before lookup across both renderer domains.
+    """
+    if not isinstance(data, Mapping) or not isinstance(data.get("vfxManifest"), Mapping):
+        return {"ok": False, "errors": [{"path": "$.vfxManifest", "message": "object required"}]}
+    manifest = data["vfxManifest"]
+    errors: list[dict[str, Any]] = []
+    if manifest.get("schema") != VFX_MANIFEST_SCHEMA:
+        errors.append({"path": "$.vfxManifest.schema", "message": f"expected {VFX_MANIFEST_SCHEMA}"})
+    raw_slots = manifest.get("slots")
+    if not isinstance(raw_slots, list):
+        errors.append({"path": "$.vfxManifest.slots", "message": "array required"})
+    slots = raw_slots if isinstance(raw_slots, list) else []
+    # Runtime carries technical fields instead of Director-only image captions.
+    slots_schema = _director_schema(data)["properties"]["slots"]
+    if len(slots) > slots_schema["maxItems"]:
+        errors.append({"path": "$.vfxManifest.slots", "message": f"at most {slots_schema['maxItems']} slots"})
+    slot_schema = slots_schema["items"]
+    for field in ("spritePrompt", "spriteNegativePrompt"):
+        slot_schema["properties"].pop(field)
+        slot_schema["required"].remove(field)
+    slot_schema["properties"].update({
+        **{field: {"type": "string"} for field in ("eventGroup", "stage", "source", "bakedClipId", "bakedClipHash", "effectName")},
+        "slotSeed": {"type": "integer"}, "bakedCommandCount": {"type": "integer", "minimum": 0},
+        "bakedCommands": {"type": "array", "maxItems": 0},
+    })
+    if "assets" in manifest:
+        asset_list_schema = {"type": "array", "maxItems": 4, "items": runtime_asset_schema()}
+        for error in strict_schema_errors(manifest["assets"], asset_list_schema, path="$.vfxManifest.assets"):
+            errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
+    allowed = {(row["entityId"], row["event"]) for row in _allowed_pairs(data)}
+    seen: set[str] = set()
+    for index, slot in enumerate(slots):
+        path = f"$.vfxManifest.slots[{index}]"
+        if not isinstance(slot, Mapping):
+            errors.append({"path": path, "message": "object required"})
+            continue
+        slot_id, entity_id, event = slot.get("id"), slot.get("entityId"), slot.get("event")
+        if not isinstance(slot_id, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", slot_id) is None:
+            errors.append({"path": path + ".id", "message": "exact lowercase runtime id required"})
+        elif slot_id in seen:
+            errors.append({"path": path + ".id", "message": "duplicate id"})
+        else:
+            seen.add(slot_id)
+        if not isinstance(entity_id, str):
+            errors.append({"path": path + ".entityId", "message": "string required"})
+        if not isinstance(event, str):
+            errors.append({"path": path + ".event", "message": "string required"})
+        if isinstance(entity_id, str) and isinstance(event, str) and (entity_id, event) not in allowed:
+            errors.append({"path": path, "message": "entity/event pair absent from runtimeProgram"})
+        renderer = slot.get("rendererKind")
+        if not isinstance(renderer, str) or renderer not in _RENDERERS:
+            errors.append({"path": path + ".rendererKind", "message": "unsupported renderer"})
+        if renderer in MATERIAL_RENDERERS:
+            for error in strict_schema_errors(slot, slot_schema, path=path):
+                errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
+            errors.extend(_material_slot_errors(slot, path))
+        else:
+            for field in ("element", "path"):
+                if field in slot:
+                    errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
+    for error in [*_asset_reference_errors({**manifest, "slots": slots}, require_used=False), *_impact_reference_errors({**manifest, "slots": slots})]:
+        errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
+    return {"ok": not errors, "errors": errors}
 
 
 def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, parent_b: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -439,6 +655,11 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "generatedParentSummary": copy.deepcopy(dict(summary_raw)) if isinstance(summary_raw, Mapping) else {},
         }
 
+    runtime = data.get("runtimeProgram")
+    mechanics = copy.deepcopy(dict(runtime)) if isinstance(runtime, Mapping) else {}
+    for entity in mechanics.get("entities") or []:
+        if isinstance(entity, dict):
+            entity.pop("visual", None)
     packet = {
         "schema": "infini.vfx-director-input.runtime-events.v1",
         "item": {
@@ -449,18 +670,22 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         },
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
+        "acceptedRuntimeProgramReadOnly": mechanics,
         "runtimeSurface": vfx_director_surface(data),
         "outputSchema": _director_schema(data),
         "rules": [
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
-            "Choose forms from runtimeSurface.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
+            "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
+            "Legacy forms: choose from runtimeSurface.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeSurface; each selected rendererKind also requires the exact companion fields in rendererRequirements (encoded in the slot schema).",
             "projectileAfterimage, spriteStampTrail, and actorAfterimage consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match. impactSprite instead consumes its dedicated impact texture.",
-            "Sprite renderers require a non-none textureRole. Primitive and particle renderers do not consume a gameplay PNG.",
+            "Legacy Sprite renderers require a non-none textureRole. Legacy primitive and particle renderers do not consume a gameplay PNG.",
+            "spriteElement and texturedPath use only their explicit nested texture and textureDependencyTuples; textureRole=none is neutral, not a request to suppress the selected image. Respect their own timing, opacity profiles, neutral companions and read-only geometry sources in rendererSemantics and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
             "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt describes one dedicated impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
             _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",
+            "assets is optional: request at most four isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture or path.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
             "Return only one JSON object matching outputSchema.",
         ],
     }
@@ -471,32 +696,29 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
 
 
 def _vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
-    full = _director_schema(data)
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "schema": {"const": VFX_REPAIR_PATCH_SCHEMA},
-            "effectMagnitude": {"anyOf": [full["properties"]["effectMagnitude"], {"type": "null"}]},
-            "visualBudgetClass": {"anyOf": [full["properties"]["visualBudgetClass"], {"type": "null"}]},
-            "motif": {"anyOf": [full["properties"]["motif"], {"type": "null"}]},
-            "slotsUpsert": {"type": "array", "items": full["properties"]["slots"]["items"], "maxItems": full["properties"]["slots"]["maxItems"]},
-            "slotIdsDelete": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "maxItems": full["properties"]["slots"]["maxItems"]},
-            "slotIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, full["properties"]["slots"]["maxItems"] * 2)}, "maxItems": max(1, full["properties"]["slots"]["maxItems"] * 2)},
-            "note": {"type": "string", "minLength": 1, "maxLength": 500},
-        },
-        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "note"],
-    }
+    return _vfx_repair_schema_from_packet({"outputSchema": _director_schema(data)})
 
 
 def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str, Any]:
     source = raw if isinstance(raw, Mapping) else {}
-    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    slots = _rows(source, "slots")
     mutable_globals: set[str] = set()
     global_paths: dict[str, set[str]] = {}
     mutable_slot_ids: set[str] = set()
     slot_paths: dict[str, set[str]] = {}
+    slot_deletions: dict[str, set[str]] = {}
     delete_indices: set[int] = set()
+    assets = _rows(source, "assets")
+    asset_paths: dict[str, set[str]] = {}
+    asset_deletions: dict[str, set[str]] = {}
+    duplicate_asset_indices = {
+        int(match.group(1)) for error in errors
+        if "duplicate asset id" in str(error.get("message") or "")
+        and (match := re.match(r"^\$\.assets\[(\d+)\]\.id$", str(error.get("path") or "")))
+    }
+    delete_asset_ids: set[str] = set()
+    delete_asset_indices: set[int] = set()
+    allow_create_assets = not isinstance(raw, Mapping)
     allow_create_slots = not isinstance(raw, Mapping)
     whole_response = not isinstance(raw, Mapping)
 
@@ -512,23 +734,25 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
     for error in errors:
         path = str(error.get("path") or "$")
         message = str(error.get("message") or "")
+        exact_delete = message.startswith("schema additional_property:") or message == "schema enum: expected []"
         if path == "$":
             whole_response = True
         for field in ("effectMagnitude", "visualBudgetClass", "motif"):
             prefix = f"$.{field}"
-            if path == prefix:
-                grant_global(field, "")
-            elif path.startswith(prefix + "."):
-                grant_global(field, path[len(prefix) + 1:])
-        match = re.match(r"^\$\.slots\[(\d+)\](?:\.(.*))?$", path)
-        if match:
+            relative = json_path_relative(path, prefix)
+            if relative is not None:
+                grant_global(field, relative)
+        match = re.match(r"^\$\.slots\[(\d+)\]", path)
+        relative = json_path_relative(path, match.group(0)) if match else None
+        if match and relative is not None:
             index = int(match.group(1))
-            relative = str(match.group(2) or "")
             if 0 <= index < len(slots) and isinstance(slots[index], Mapping):
                 slot_id = str(slots[index].get("id") or "")
                 if slot_id:
                     if relative:
                         grant_slot(slot_id, relative)
+                        if exact_delete:
+                            slot_deletions.setdefault(slot_id, set()).add(relative)
                     elif "entity/event pair" in message:
                         # Root-level semantic error, but only the exact pair is
                         # broken. Keep timing, style and already-valid cue data
@@ -555,10 +779,38 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
                         grant_slot(str(row.get("id") or ""), "")
                     else:
                         delete_indices.add(index)
+        asset_match = re.match(r"^\$\.assets\[(\d+)\]", path)
+        relative = json_path_relative(path, asset_match.group(0)) if asset_match else None
+        if asset_match and relative is not None:
+            index = int(asset_match.group(1))
+            row = assets[index] if 0 <= index < len(assets) else None
+            asset_id = row.get("id") if isinstance(row, Mapping) else None
+            if index in duplicate_asset_indices:
+                delete_asset_indices.add(index)
+            elif "unused new asset request" in message and isinstance(asset_id, str):
+                delete_asset_ids.add(asset_id)
+            elif isinstance(asset_id, str) and re.fullmatch(ASSET_ID_PATTERN, asset_id) is not None:
+                asset_paths.setdefault(asset_id, set()).add(relative)
+                if exact_delete:
+                    asset_deletions.setdefault(asset_id, set()).add(relative)
+            else:
+                delete_asset_indices.add(index)
+        if path == "$.assets":
+            if not isinstance(source.get("assets"), list):
+                allow_create_assets = True
+            elif len(assets) > 4:
+                delete_asset_indices.update(range(4, len(assets)))
     if whole_response:
         for field in ("effectMagnitude", "visualBudgetClass", "motif"):
             grant_global(field, "")
         allow_create_slots = True
+        allow_create_assets = True
+        for index, row in enumerate(assets):
+            asset_id = row.get("id") if isinstance(row, Mapping) else None
+            if isinstance(asset_id, str) and re.fullmatch(ASSET_ID_PATTERN, asset_id) is not None:
+                asset_paths.setdefault(asset_id, set()).add("")
+            else:
+                delete_asset_indices.add(index)
         for index, row in enumerate(slots):
             if isinstance(row, Mapping) and str(row.get("id") or ""):
                 grant_slot(str(row.get("id") or ""), "")
@@ -568,12 +820,17 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
         "schema": "infini.vfx-repair-scope.v3",
         "mutableGlobals": sorted(mutable_globals),
         "mutableSlotIds": sorted(mutable_slot_ids),
-        "deletableSlotIds": sorted(mutable_slot_ids),
+        "deletableSlotIds": sorted(slot_id for slot_id in mutable_slot_ids if "" in slot_paths[slot_id]),
         "deletableSlotIndices": sorted(delete_indices),
         "allowCreateSlots": allow_create_slots,
+        "mutableAssetIds": sorted(asset_paths),
+        "deletableAssetIds": sorted(delete_asset_ids),
+        "deletableAssetIndices": sorted(delete_asset_indices),
+        "allowCreateAssets": allow_create_assets,
         "fieldPermissions": {
             "globals": {field: sorted(paths) for field, paths in sorted(global_paths.items())},
-            "slots": [{"slotId": slot_id, "paths": sorted(paths)} for slot_id, paths in sorted(slot_paths.items())],
+            "slots": [{"slotId": slot_id, "paths": sorted(paths), **({"deletePaths": sorted(slot_deletions[slot_id])} if slot_id in slot_deletions else {})} for slot_id, paths in sorted(slot_paths.items())],
+            "assets": [{"assetId": asset_id, "paths": sorted(paths), **({"deletePaths": sorted(asset_deletions[asset_id])} if asset_id in asset_deletions else {})} for asset_id, paths in sorted(asset_paths.items())],
         },
         "errorPaths": [str(row.get("path") or "$") for row in errors],
     }
@@ -583,22 +840,36 @@ def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
     source = raw if isinstance(raw, Mapping) else {}
     mutable_globals = set(str(value) for value in scope.get("mutableGlobals") or [])
     mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
-    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    slots = _rows(source, "slots")
+    mutable_asset_ids = set(scope.get("mutableAssetIds") or [])
+    assets = _rows(source, "assets")
     return {
         "malformedRawText": raw.raw_text[:12000] if isinstance(raw, MalformedVfxDirectorOutput) else "",
         "broken": {
             "globals": {field: copy.deepcopy(source.get(field)) for field in mutable_globals},
             "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") in mutable_slot_ids],
+            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in mutable_asset_ids],
         },
         "validReadOnly": {
             "globals": {field: copy.deepcopy(source.get(field)) for field in ("effectMagnitude", "visualBudgetClass", "motif") if field not in mutable_globals},
             "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") not in mutable_slot_ids],
+            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] not in mutable_asset_ids],
         },
     }
 
 
 def _vfx_filter_ignored(path: str, requested: Any, preserved: Any, reason: str) -> dict[str, Any]:
     return {"path": path, "reason": reason, "requested": copy.deepcopy(requested), "preserved": copy.deepcopy(preserved)}
+
+
+def _vfx_repair_structure(schema: Mapping[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(dict(schema))
+    out.pop("allOf", None)
+    if isinstance(out.get("properties"), dict):
+        out["properties"] = {name: _vfx_repair_structure(child) for name, child in out["properties"].items()}
+    if isinstance(out.get("items"), Mapping):
+        out["items"] = _vfx_repair_structure(out["items"])
+    return out
 
 
 def _filter_vfx_repair_patch(
@@ -614,7 +885,7 @@ def _filter_vfx_repair_patch(
     # filtering, an unrelated rewrite may contradict a valid frozen companion;
     # it must be ignored, not cancel an otherwise useful repair. Keep structural
     # validation here and the full renderer/schema gate after the merge.
-    shape_schema["properties"]["slotsUpsert"]["items"].pop("allOf", None)
+    shape_schema["properties"]["slotsUpsert"]["items"] = _vfx_repair_structure(shape_schema["properties"]["slotsUpsert"]["items"])
     schema_errors = strict_schema_errors(patch, shape_schema)
     patch_mapping: Mapping[str, Any] = patch if isinstance(patch, Mapping) else {}
     if isinstance(patch, MalformedVfxDirectorOutput):
@@ -624,7 +895,7 @@ def _filter_vfx_repair_patch(
             "expected": "strict VFX Repair JSON object",
             "actual": patch.error,
         })
-    filtered = {
+    filtered: dict[str, Any] = {
         "schema": VFX_REPAIR_PATCH_SCHEMA,
         "effectMagnitude": None,
         "visualBudgetClass": None,
@@ -632,6 +903,9 @@ def _filter_vfx_repair_patch(
         "slotsUpsert": [],
         "slotIdsDelete": [],
         "slotIndicesDelete": [],
+        "assetsUpsert": [],
+        "assetIdsDelete": [],
+        "assetIndicesDelete": [],
         "note": str(patch_mapping.get("note") or "deterministically filtered VFX Repair"),
     }
     if schema_errors:
@@ -650,6 +924,7 @@ def _filter_vfx_repair_patch(
         str(row.get("slotId") or ""): tuple(str(value) for value in row.get("paths") or [])
         for row in permission_root.get("slots") or [] if isinstance(row, Mapping)
     }
+    slot_delete_permissions = {str(row.get("slotId") or ""): tuple(row.get("deletePaths") or []) for row in permission_root.get("slots") or [] if isinstance(row, Mapping)}
     ignored: list[dict[str, Any]] = []
     accepted: list[str] = []
 
@@ -673,7 +948,7 @@ def _filter_vfx_repair_patch(
             filtered[field] = copy.deepcopy(candidate)
             accepted.append(path)
 
-    slots = source.get("slots") if isinstance(source.get("slots"), list) else []
+    slots = _rows(source, "slots")
     for index, slot_id in enumerate(patch_mapping.get("slotIdsDelete") or []):
         path = f"$.slotIdsDelete[{index}]"
         if str(slot_id) in deletable_slot_ids:
@@ -698,15 +973,16 @@ def _filter_vfx_repair_patch(
         original = by_id.get(slot_id)
         if original is not None:
             if slot_id not in mutable_slot_ids:
-                if dict(candidate) != dict(original):
+                if not json_values_equal(dict(candidate), dict(original)):
                     ignored.append(_vfx_filter_ignored(path, candidate, original, "independent_valid_slot_frozen"))
                 continue
             merged, row_ignored, row_accepted = merge_frozen_subtree(
                 original, candidate, mutable_paths=slot_permissions.get(slot_id, ()), audit_path=path, allow_additions=False,
+                delete_paths=slot_delete_permissions.get(slot_id, ()),
             )
             ignored.extend(row_ignored)
             accepted.extend(row_accepted)
-            if merged != original:
+            if not json_values_equal(merged, original):
                 filtered["slotsUpsert"].append(merged)
             continue
         if scope.get("allowCreateSlots"):
@@ -715,6 +991,51 @@ def _filter_vfx_repair_patch(
         else:
             ignored.append(_vfx_filter_ignored(path, candidate, None, "new_slot_not_required"))
 
+    asset_permissions = {
+        row["assetId"]: tuple(row.get("paths") or [])
+        for row in permission_root.get("assets") or [] if isinstance(row, Mapping)
+    }
+    asset_delete_permissions = {row["assetId"]: tuple(row.get("deletePaths") or []) for row in permission_root.get("assets") or [] if isinstance(row, Mapping)}
+    raw_assets = source.get("assets")
+    assets = raw_assets if isinstance(raw_assets, list) else []
+    # First occurrence owns ID-based leaf edits; later duplicates are index-only deletions.
+    asset_by_id = {row["id"]: row for row in reversed(assets) if isinstance(row, Mapping) and isinstance(row.get("id"), str)}
+    if "assets" in source and not isinstance(raw_assets, list) and scope.get("allowCreateAssets") and "assetsUpsert" in patch_mapping:
+        accepted.append("$.assets")  # Explicit empty correction, never omission/default insertion.
+    for index, asset_id in enumerate(patch_mapping.get("assetIdsDelete") or []):
+        path = f"$.assetIdsDelete[{index}]"
+        if asset_id in (scope.get("deletableAssetIds") or []):
+            filtered["assetIdsDelete"].append(asset_id)
+            accepted.append(path)
+        else:
+            ignored.append(_vfx_filter_ignored(path, asset_id, asset_id, "valid_asset_delete_ignored"))
+    for index, source_index in enumerate(patch_mapping.get("assetIndicesDelete") or []):
+        path = f"$.assetIndicesDelete[{index}]"
+        if source_index in (scope.get("deletableAssetIndices") or []):
+            filtered["assetIndicesDelete"].append(source_index)
+            accepted.append(path)
+        else:
+            ignored.append(_vfx_filter_ignored(path, source_index, assets[source_index] if source_index < len(assets) else None, "valid_asset_index_delete_ignored"))
+    for index, candidate in enumerate(patch_mapping.get("assetsUpsert") or []):
+        asset_id = candidate["id"]
+        path = f"$.assetsUpsert[{index}]"
+        original = asset_by_id.get(asset_id)
+        if original is not None:
+            if asset_id not in asset_permissions:
+                if not json_values_equal(candidate, original):
+                    ignored.append(_vfx_filter_ignored(path, candidate, original, "independent_valid_asset_frozen"))
+                continue
+            permissions = asset_permissions[asset_id]
+            merged, row_ignored, row_accepted = merge_frozen_subtree(original, candidate, mutable_paths=permissions, audit_path=path, allow_additions=False, delete_paths=asset_delete_permissions.get(asset_id, ()))
+            ignored.extend(row_ignored)
+            accepted.extend(row_accepted)
+            if not json_values_equal(merged, original):
+                filtered["assetsUpsert"].append(merged)
+        elif scope.get("allowCreateAssets"):
+            filtered["assetsUpsert"].append(copy.deepcopy(candidate))
+            accepted.append(path)
+        else:
+            ignored.append(_vfx_filter_ignored(path, candidate, None, "new_asset_not_required"))
     return filtered, {
         "schema": "infini.vfx-repair-filter-report.v1",
         "ok": True,
@@ -743,18 +1064,36 @@ def _apply_vfx_repair_patch(
     for field in ("effectMagnitude", "visualBudgetClass", "motif"):
         if filtered.get(field) is not None:
             out[field] = copy.deepcopy(filtered[field])
-    slots = list(out.get("slots") or []) if isinstance(out.get("slots"), list) else []
-    slots = [row for index, row in enumerate(slots) if index not in set(filtered.get("slotIndicesDelete") or [])]
-    doomed = set(str(value) for value in filtered.get("slotIdsDelete") or [])
-    slots = [row for row in slots if not isinstance(row, Mapping) or str(row.get("id") or "") not in doomed]
-    by_id = {str(row.get("id") or ""): copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")}
-    order = [str(row.get("id") or "") for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")]
-    for row in filtered.get("slotsUpsert") or []:
-        slot_id = str(row.get("id") or "")
-        if slot_id not in by_id:
-            order.append(slot_id)
-        by_id[slot_id] = copy.deepcopy(row)
-    out["slots"] = [by_id[slot_id] for slot_id in order if slot_id in by_id]
+    if any(filtered.get(key) for key in ("slotsUpsert", "slotIdsDelete", "slotIndicesDelete")):
+        slots = _rows(out, "slots")
+        doomed_indices = set(filtered["slotIndicesDelete"])
+        doomed_ids = set(filtered["slotIdsDelete"])
+        slots = [row for index, row in enumerate(slots) if index not in doomed_indices
+                 and not (isinstance(row, Mapping) and str(row.get("id") or "") in doomed_ids)]
+        # Keep every untouched row (including invalid/idless rows) in its original
+        # position. Omission/empty edits are no-ops, never implicit normalization.
+        for row in filtered["slotsUpsert"]:
+            slot_id = str(row.get("id") or "")
+            index = next((i for i, old in enumerate(slots)
+                          if isinstance(old, Mapping) and str(old.get("id") or "") == slot_id), None)
+            if index is None:
+                slots.append(copy.deepcopy(row))
+            else:
+                slots[index] = copy.deepcopy(row)
+        out["slots"] = slots
+    if any(filtered.get(key) for key in ("assetsUpsert", "assetIdsDelete", "assetIndicesDelete")) or "$.assets" in audit["acceptedPaths"]:
+        raw_assets = out.get("assets")
+        assets = raw_assets if isinstance(raw_assets, list) else []
+        doomed_ids = set(filtered["assetIdsDelete"])
+        doomed_indices = set(filtered["assetIndicesDelete"])
+        assets = [row for index, row in enumerate(assets) if index not in doomed_indices and not (isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in doomed_ids)]
+        for row in filtered["assetsUpsert"]:
+            index = next((i for i, old in enumerate(assets) if isinstance(old, Mapping) and old.get("id") == row["id"]), None)
+            if index is None:
+                assets.append(copy.deepcopy(row))
+            else:
+                assets[index] = copy.deepcopy(row)
+        out["assets"] = assets
     return (out, audit) if return_audit else out
 
 
@@ -787,6 +1126,7 @@ def _request(
             "task": "Patch only exact invalid VFX fields/slots.",
             "item": copy.deepcopy(packet.get("item") or {}),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
+            "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
             "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
             "exactErrors": copy.deepcopy(repair_errors[:24]),
             "repairScope": copy.deepcopy(dict(repair_scope or {})),
@@ -797,6 +1137,8 @@ def _request(
             "rules": [
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
                 "already-valid fields and independent slots are frozen; extra rewrites are ignored",
+                "Only exact validator-diagnosed foreign/additional leaves listed in deletePaths may be deleted by omission from an upsert; all other omissions are no-change. Delete duplicate asset rows only by diagnosed original assetIndicesDelete, never by a shared asset ID.",
+                "schema and note are required; omit unchanged edit fields as no-ops, including assetsUpsert/assetIdsDelete/assetIndicesDelete. Present arrays may not be null. Valid asset prompts, layout, canvas, references and optional absence are frozen. Repair a bad reference only; never create compensating artwork.",
                 "bind only exact runtime entityId+event pairs",
                 "presentation only; gameplay is immutable",
             ],
@@ -836,9 +1178,12 @@ def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
             "slotsUpsert": {"type": "array", "items": copy.deepcopy(full["properties"]["slots"]["items"]), "maxItems": full["properties"]["slots"]["maxItems"]},
             "slotIdsDelete": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "maxItems": full["properties"]["slots"]["maxItems"]},
             "slotIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, full["properties"]["slots"]["maxItems"] * 2)}, "maxItems": max(1, full["properties"]["slots"]["maxItems"] * 2)},
+            "assetsUpsert": {"type": "array", "items": copy.deepcopy(full["properties"]["assets"]["items"]), "maxItems": 4},
+            "assetIdsDelete": {"type": "array", "items": copy.deepcopy(full["properties"]["assets"]["items"]["properties"]["id"]), "maxItems": 4},
+            "assetIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 8}, "maxItems": 8},
             "note": {"type": "string", "minLength": 1, "maxLength": 500},
         },
-        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "note"],
+        "required": ["schema", "note"],
     }
 
 
@@ -847,7 +1192,7 @@ def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], reci
     budget_class = str(authored["visualBudgetClass"])
     slots: list[dict[str, Any]] = []
     for source in authored["slots"]:
-        slot = dict(source)
+        slot = copy.deepcopy(dict(source))
         # Director-only captions are consumed into RuntimeEntityVisualSpec below;
         # VfxSlotSpec is a fail-closed runtime DTO and must not carry them.
         slot.pop("spritePrompt", None)
@@ -882,6 +1227,7 @@ def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], reci
             "enablePersistentSmoke": budget_class in {"large", "signature"},
         },
         "slots": slots,
+        **({"assets": [{**copy.deepcopy(row), "spritePath": "", "spriteUrl": "", "spriteStatus": "pending", "spriteTechnicalScore": 0.0} for row in authored["assets"]]} if "assets" in authored else {}),
         "overlayPolicy": "LocalOnly",
         "debug": {
             "pattern": "runtime_entity_events", "roles": [str(row.get("visualRole") or "") for row in runtime_visual_roles(data)],
@@ -991,5 +1337,5 @@ __all__ = [
     "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "MalformedVfxDirectorOutput", "attach_hybrid_vfx_manifest",
     "VFX_PROMPT_STATIC_KEYS", "VFX_REPAIR_PROMPT_STATIC_KEYS",
     "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
-    "vfx_repair_schema",
+    "vfx_repair_schema", "validate_vfx_manifest_wire",
 ]

@@ -20,7 +20,7 @@ namespace InfiniCrafterLocal.Common.Players;
 /// </summary>
 public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
 {
-    private readonly record struct OverlayEntry(GeneratedItemData Data, string Slot, int AccessoryIndex);
+    private readonly record struct OverlayEntry(GeneratedItemData Data, string Slot, int AccessoryIndex, Item SourceItem);
     private const int EquipCatchupRetryTicks = 90;
     private static readonly object EquipCatchupLock = new();
     private static readonly Dictionary<string, int> EquipCatchupTicks = new(StringComparer.Ordinal);
@@ -38,7 +38,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
         if (player is null || !player.active || player.dead)
             return;
         foreach (OverlayEntry entry in CollectVisibleOverlays(player))
-            InfiniItemVfxRuntime.OnVisibleEquipment(player, entry.Data);
+            InfiniItemVfxRuntime.OnVisibleEquipment(player, entry.Data,entry.SourceItem);
     }
 
     public override bool GetDefaultVisibility(PlayerDrawSet drawInfo)
@@ -228,7 +228,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             ? data.Accessory?.Enabled == true
             : data.Armor?.Enabled == true && string.Equals(data.Armor.Slot, slot, StringComparison.Ordinal);
         if (roleMatches)
-            entries.Add(new OverlayEntry(data, slot, accessoryIndex));
+            entries.Add(new OverlayEntry(data, slot, accessoryIndex,item));
     }
 
     private static GeneratedItemData ResolveEquipPresentationData(GeneratedItemData compact)

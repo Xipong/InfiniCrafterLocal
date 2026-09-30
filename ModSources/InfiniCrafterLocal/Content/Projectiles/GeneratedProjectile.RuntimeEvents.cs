@@ -49,14 +49,19 @@ public sealed partial class GeneratedProjectile
             BroadcastAuthoritativeVfxEvent(eventName, center);
             return;
         }
-        InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center);
+        // Nonowner element events have one producer: the validated server relay.
+        // Keep local legacy callbacks and live path registration independent.
+        InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center,
+            includeMaterialElements: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
+        SendOwnerHitVfxEvent(eventName,center);
     }
 
     private void RunPeriodicActions()
     {
         if (_data is null || _entity is null) return;
         int dueActions = 0;
-        bool emitted = false;
+        // Periodic VFX is owned by OnTick/Draw and each VFX slot cadence,
+        // not by the independent gameplay action periods below.
         foreach (RuntimeEventActionSpec action in _entity.ActionsFor(RuntimeEventKind.Periodic))
         {
             int period = AuthoredTicksToProjectileUpdates(Math.Max(6, action.PeriodTicks));
@@ -83,10 +88,7 @@ public sealed partial class GeneratedProjectile
             }
             else
                 RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
-            emitted = true;
         }
-        if (emitted)
-            EmitAndSyncVfxEvent(RuntimeEventKind.Periodic, Projectile.Center);
     }
 
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
@@ -188,5 +190,6 @@ public sealed partial class GeneratedProjectile
         }
         RunRuntimeEvent(RuntimeEventKind.OnKill, null, Projectile.damage);
         EmitAndSyncVfxEvent(RuntimeEventKind.OnKill, Projectile.Center);
+        _presentationRetired=true;
     }
 }

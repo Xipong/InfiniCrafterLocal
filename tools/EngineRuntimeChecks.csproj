@@ -26,6 +26,8 @@
     <Compile Include="EngineRuntimeChecks.EquipPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.VfxEventConsistency.cs" />
     <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
+    <Compile Include="EngineRuntimeChecks.MaterialElements.cs" />
+    <Compile Include="EngineRuntimeChecks.MaterialReview.cs" />
     <Compile Include="EngineRuntimeChecks.VfxShapes.cs" />
     <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />
     <Compile Include="EngineRuntimeChecks.BodyGeometry.cs" />
@@ -37,6 +39,7 @@
     <Compile Include="EngineRuntimeChecks.BudgetPeer.cs" />
     <Compile Include="EngineRuntimeChecks.RootSpawn.cs" />
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
+    <Compile Include="EngineRuntimeChecks.AssetIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />

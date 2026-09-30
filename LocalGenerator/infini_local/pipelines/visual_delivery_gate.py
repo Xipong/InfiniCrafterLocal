@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
-from infini_local.core.vfx_manifest import SPRITE_TEXTURE_RENDERERS
+from infini_local.core.vfx_manifest import SPRITE_TEXTURE_RENDERERS, validate_vfx_manifest_wire
 from infini_local.pipelines.pipeline_visual_config import (
     IMAGE_BACKEND,
     IMAGE_BACKEND_CONFIG_ERROR,
@@ -19,8 +19,10 @@ from infini_local.pipelines.pipeline_visual_config import (
     ZIMAGE_PROMPT_CONTRACT,
 )
 from infini_local.pipelines.visual_prompt_contracts import image_backend_is_zimage
+from infini_local.pipelines.sprite_postprocess import validate_processed_sprite, sprite_validation_fatal
 from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
 from infini_local.services import asset_sync_service
+from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES
 
 
 MAX_DELIVERABLE_ASSET_FILES = 32
@@ -45,22 +47,16 @@ def _item_sprite_status_is_usable(status: Any) -> bool:
 
 
 def _resolved_asset_path(path_value: Any) -> Path | None:
-    text = str(path_value or "").strip()
-    if not text:
+    # Readiness is for the filename transfer contract, not arbitrary local files.
+    # Project stale Windows paths/URLs just as /get_asset does, then validate the
+    # exact root-local file chosen by that existing serving owner (including its
+    # root precedence). A local shadow must never supply different ready bytes.
+    name = asset_sync_service.asset_filename_from_path(path_value)
+    if not name or Path(name).suffix.lower() != ".png":
         return None
-    try:
-        path = Path(text)
-        if path.exists() and path.is_file():
-            return path
-        name = asset_sync_service.asset_filename_from_path(text)
-        if not name:
-            return None
-        found = asset_sync_service.find_asset_file(name, sprite_dir=SPRITE_DIR, world_recipes_dir=WORLD_RECIPES_DIR)
-        if not found or not found.exists() or not found.is_file():
-            return None
-        return found
-    except Exception:
-        return None
+    return asset_sync_service.find_asset_file(
+        name, sprite_dir=SPRITE_DIR, world_recipes_dir=WORLD_RECIPES_DIR,
+    )
 
 
 def _asset_path_exists(path_value: Any) -> bool:
@@ -70,18 +66,60 @@ def _asset_path_exists(path_value: Any) -> bool:
     return path.suffix.lower() == ".png" and asset_sync_service.is_complete_png_file(path)
 
 
-def _asset_roster_problems(paths: list[Path]) -> list[dict[str, Any]]:
-    unique = {str(path.resolve()): path for path in paths}
+def _asset_roster_problems(paths: list[Any]) -> list[dict[str, Any]]:
+    """Validate every nonempty canonical DTO path, not only resolved files.
+
+    Filename projection and root precedence are the existing HTTP sync owner's.
+    Inactive overlay/body/impact paths remain in that owner's transfer roster.
+    They therefore need the same envelope and transfer bounds as active images.
+    """
+    unique: dict[str, Path | None] = {}
+    sizes: dict[str, int] = {}
     problems: list[dict[str, Any]] = []
+    checked: set[Path] = set()
+    for value in paths:
+        if value is None or value == "":
+            continue
+        name = asset_sync_service.asset_filename_from_path(value)
+        detail = {"path": str(value), "file": name}
+        if not name or Path(name).suffix.lower() != ".png":
+            problems.append({"code": "asset_roster_invalid_filename", **detail,
+                             "message": "Every nonempty runtime asset path requires a safe PNG transfer basename."})
+            continue
+        key = name.casefold()
+        path = _resolved_asset_path(value)
+        unique.setdefault(key, None)
+        if path is None:
+            problems.append({"code": "asset_roster_file_missing", **detail,
+                             "message": f"Runtime PNG {name!r} is not available from the canonical serving roots."})
+            continue
+        previous = unique.get(key)
+        if previous is not None and previous.resolve() != path.resolve():
+            problems.append({"code": "asset_roster_filename_collision", **detail,
+                             "message": f"Distinct local assets alias the network PNG filename {key!r}."})
+        unique[key] = path
+        if path in checked:
+            continue
+        checked.add(path)
+        try:
+            size = path.stat().st_size
+        except OSError:
+            problems.append({"code": "asset_roster_file_missing", **detail,
+                             "message": f"Runtime PNG {name!r} is no longer available."})
+            continue
+        sizes[key] = size
+        if size > MAX_ASSET_RESPONSE_BYTES:
+            problems.append({"code": "asset_roster_file_byte_limit_exceeded", **detail,
+                             "message": f"Runtime PNG {name!r} is {size} bytes; maximum is {MAX_ASSET_RESPONSE_BYTES}."})
+        elif not asset_sync_service.is_complete_png_file(path):
+            problems.append({"code": "asset_roster_invalid_png", **detail,
+                             "message": f"Runtime PNG {name!r} is not a complete PNG."})
     if len(unique) > MAX_DELIVERABLE_ASSET_FILES:
         problems.append({
             "code": "asset_roster_file_limit_exceeded",
             "message": f"Generated asset roster has {len(unique)} files; maximum is {MAX_DELIVERABLE_ASSET_FILES}.",
         })
-    try:
-        total_bytes = sum(path.stat().st_size for path in unique.values())
-    except OSError:
-        total_bytes = MAX_DELIVERABLE_ASSET_BYTES + 1
+    total_bytes = sum(sizes.values())
     if total_bytes > MAX_DELIVERABLE_ASSET_BYTES:
         problems.append({
             "code": "asset_roster_byte_limit_exceeded",
@@ -96,14 +134,25 @@ def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _impact_entity_ids(data: dict[str, Any]) -> set[str]:
-    manifest = data.get("vfxManifest") if isinstance(data.get("vfxManifest"), dict) else {}
-    return {
+    raw_manifest = data.get("vfxManifest")
+    manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
+    required = {
         str(slot.get("entityId") or "").strip()
         for slot in manifest.get("slots") or []
         if isinstance(slot, dict)
         and str(slot.get("rendererKind") or "") in SPRITE_TEXTURE_RENDERERS
         and str(slot.get("textureRole") or "").strip().lower() == "impact"
-    } - {""}
+    }
+    for slot in manifest.get("slots") or []:
+        # A refused wire record may still be inspected for legacy diagnostic
+        # dependencies. Do not hash hostile JSON values after its canonical gate.
+        if not isinstance(slot, dict) or slot.get("rendererKind") not in ("spriteElement", "texturedPath"):
+            continue
+        payload = slot.get("element" if slot["rendererKind"] == "spriteElement" else "path")
+        texture = payload.get("texture") if isinstance(payload, dict) else None
+        if isinstance(texture, dict) and texture.get("source") == "impact":
+            required.add(str(slot.get("entityId") or ""))
+    return required - {""}
 
 
 def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool = True) -> dict[str, Any]:
@@ -111,6 +160,9 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
     visual: dict[str, Any] = raw_visual if isinstance(raw_visual, dict) else {}
     problems: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    vfx_report = validate_vfx_manifest_wire(data) if "vfxManifest" in data else {"ok": True, "errors": []}
+    if not vfx_report["ok"]:
+        problems.append({"code": "vfx_manifest_invalid", "message": "VFX wire shape/references are invalid.", "errors": vfx_report["errors"]})
     if check_backend_config and IMAGE_BACKEND_CONFIG_ERROR:
         problems.append({"code": "image_backend_configuration_invalid", "message": IMAGE_BACKEND_CONFIG_ERROR})
     if check_backend_config and IMAGE_BACKEND == "procedural" and (VISUAL_STRICT_AI_AUTHORSHIP or not VISUAL_ALLOW_PROCEDURAL_FALLBACK):
@@ -217,8 +269,63 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
             "technicalScore": entity_visual.get("impactSpriteTechnicalScore"),
         })
 
-    roster_paths = [resolved for slot in slots if (resolved := _resolved_asset_path(slot.get("path"))) is not None]
-    problems.extend(_asset_roster_problems(roster_paths))
+    raw_manifest = data.get("vfxManifest")
+    manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
+    # The canonical validator owns producer applicability. This projection only
+    # requires the selected producer's actual ready PNG, even if inventory images
+    # are optional by policy or the wire record is still pending.
+    slots_by_role = {row["role"]: row for row in slots}
+    for slot in (manifest.get("slots") or []) if vfx_report["ok"] else []:
+        if slot.get("rendererKind") not in {"spriteElement", "texturedPath"}:
+            continue
+        payload = slot["element" if slot["rendererKind"] == "spriteElement" else "path"]
+        source = payload["texture"]["source"]
+        if source == "asset":
+            continue  # Every declared ingredient has its own strict gate below.
+        entity_id = slot["entityId"]
+        is_item = entities_by_id.get(entity_id, {}).get("kind") == "item_body"
+        role = "item" if source == "item" or (source == "entity" and is_item) else source + ":" + entity_id
+        producer = slots_by_role.get(role)
+        ready = bool(producer and producer["usable"] and producer["status"].strip().lower() in {
+            "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation",
+        })
+        if producer is not None:
+            producer["required"] = True
+            producer["usable"] = ready
+        if not ready:
+            problems.append({
+                "code": "required_vfx_texture_not_ready", "slotId": slot["id"], "role": role,
+                "message": f"VFX slot {slot['id']!r} requires its selected {source} producer's ready PNG.",
+            })
+    occupied_names = {asset_sync_service.asset_filename_from_path(path).casefold()
+                      for path in asset_sync_service.runtime_asset_paths(data, include_vfx_assets=False) if path}
+    for asset in (manifest.get("assets") or []) if vfx_report["ok"] else []:
+        path = str(asset.get("spritePath") or "")
+        name = asset_sync_service.asset_filename_from_path(path).casefold()
+        if name and name in occupied_names:
+            problems.append({"code": "asset_roster_filename_collision", "assetId": asset["id"],
+                             "message": f"Requested VFX ingredient {asset['id']!r} aliases another asset's PNG filename."})
+        occupied_names.add(name)
+        status = str(asset.get("spriteStatus") or "")
+        resolved = _resolved_asset_path(path)
+        complete = _asset_path_exists(path)
+        validation = validate_processed_sprite(
+            str(resolved), "vfx_" + asset["layout"], expected_canvas=asset["canvasSize"],
+        ) if complete else {"ok": False, "reasons": ["invalid_png_envelope"]}
+        usable = complete and status in {"generated", "generated_warn_invalid"} and not sprite_validation_fatal(validation)
+        if not usable:
+            problems.append({
+                "code": "required_vfx_sprite_missing_or_invalid", "assetId": asset["id"],
+                "message": f"Requested VFX ingredient {asset['id']!r} requires its exact canvas and a usable alpha PNG.",
+                "status": status, "path": path, "validation": validation,
+            })
+        slots.append({
+            "role": "vfx:" + asset["id"], "vfxAssetId": asset["id"], "assetMode": "baked_sprite",
+            "layout": asset["layout"], "canvas": asset["canvasSize"], "required": True,
+            "status": status, "path": path, "exists": resolved is not None, "completePng": complete,
+            "usable": usable, "technicalScore": asset.get("spriteTechnicalScore"), "validation": validation,
+        })
+    problems.extend(_asset_roster_problems(asset_sync_service.runtime_asset_paths(data)))
 
     return {
         "ok": not problems,

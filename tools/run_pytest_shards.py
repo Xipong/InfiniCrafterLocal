@@ -31,6 +31,7 @@ FULL_TEST_MODULES = {
     "pydantic_core": "pydantic_core",
     "Pillow": "PIL",
     "Hypothesis": "hypothesis",
+    "jsonschema": "jsonschema",
 }
 
 # These tests invoke subprocesses, temporary servers, runtime smoke paths, or

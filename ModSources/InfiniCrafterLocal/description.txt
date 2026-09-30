@@ -1,2 +1,2 @@
-InfiniCrafterLocal 0.4.242 — procedural VFX, explicit visual metadata and collision-matched presentation.
+InfiniCrafterLocal 0.4.245 — individual VFX textures, independent sprite profiles, generation-fenced attachments and collision-matched textured paths.
 Local infinite-crafting prototype for tModLoader. Gameplay Author composes a bounded low-level runtimeProgram from explicit entities, inputs, capabilities and events; Visual and VFX stages decorate only accepted runtime entities/events. C# executes strict v5 typed data without weapon-family routing or prose-derived gameplay.

@@ -232,6 +232,11 @@ public sealed partial class GeneratedItemData
             entity.Visual.SpritePath = FileNameOnly(entity.Visual.SpritePath);
             entity.Visual.ImpactSpritePath = FileNameOnly(entity.Visual.ImpactSpritePath);
         }
+        foreach (VfxAssetSpec asset in clone.VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>()) {
+            asset.Prompt = "";
+            asset.NegativePrompt = "";
+            asset.SpritePath = FileNameOnly(asset.SpritePath);
+        }
         clone.VfxManifest.Debug = new VfxDebugSpec();
         clone.VfxManifest.InspirationNames = Array.Empty<string>();
         foreach (VfxSlotSpec slot in clone.VfxManifest.Slots)

@@ -66,7 +66,7 @@ def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path:
     assert report["coverage"] == "portable-static"
     assert report["releaseReady"] is False
     assert report["fullSuiteAvailable"] is False
-    assert {"pytest", "pydantic", "pydantic_core", "Pillow", "Hypothesis"}.issubset(
+    assert {"pytest", "pydantic", "pydantic_core", "Pillow", "Hypothesis", "jsonschema"}.issubset(
         report["missingFullSuiteDependencies"]
     )
     assert not report["failed"]
@@ -157,6 +157,17 @@ def _contract_check_runtime_selftest_checker_matches_the_csharp_emitter(tmp_path
     assert rejected.returncode == 1, rejected.stdout
 
 
+def _contract_check_standard_schema_dependency_blocks_full_suite(monkeypatch) -> None:
+    spec = importlib.util.spec_from_file_location("pytest_shards_dependency_probe", PYTEST_RUNNER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    real_find_spec = importlib.util.find_spec
+    with monkeypatch.context() as scoped:
+        scoped.setattr(importlib.util, "find_spec", lambda name: None if name == "jsonschema" else real_find_spec(name))
+        assert module.missing_full_test_dependencies() == ["jsonschema"]
+
+
 # One collected item per contract module; individual checks keep source order and tracebacks.
 def test_release_hygiene_tool_contract_module_contract(request):
     from contract_checks import run_contract_checks
@@ -170,6 +181,7 @@ def test_release_hygiene_tool_contract_module_contract(request):
             '_contract_check_dependency_free_sandbox_gate_is_honest_and_bounded',
             '_contract_check_release_report_rejects_an_incomplete_roster',
             '_contract_check_runtime_selftest_checker_matches_the_csharp_emitter',
+            '_contract_check_standard_schema_dependency_blocks_full_suite',
         ),
         require_all=True,
     )

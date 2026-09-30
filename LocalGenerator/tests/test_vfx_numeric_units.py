@@ -97,8 +97,9 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
     assert repair_slot == original_slot == standalone_repair["properties"]["slotsUpsert"]["items"]
     assert repair["properties"]["motif"]["anyOf"][0] == normal["properties"]["motif"]
     assert repair["properties"]["effectMagnitude"]["anyOf"][0] == normal["properties"]["effectMagnitude"]
-    assert set(original_slot["properties"]) == set(original_slot["required"])
-    assert set(normal["properties"]) == set(normal["required"])
+    # Additive payloads/asset requests are conditionally required, never legacy defaults.
+    assert set(original_slot["properties"]) - {"element", "path"} == set(original_slot["required"])
+    assert set(normal["properties"]) - {"assets"} == set(normal["required"])
     assert packet["runtimeSurface"]["numericRanges"] == {
         "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],
         "density": [0.0, 1.0], "duration": [3, 120], "alpha": [0.0, 1.0],
@@ -108,7 +109,7 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
         "startTick": [0, 120], "repeatEvery": [0, 120],
     }
     pair = packet["runtimeSurface"]["runtimePairs"][0]
-    slot = {key: (schema["enum"][0] if "enum" in schema else "") for key, schema in original_slot["properties"].items()}
+    slot = {key: (schema["enum"][0] if "enum" in schema else "") for key, schema in original_slot["properties"].items() if key in original_slot["required"]}
     slot.update({
         "id": "numeric_witness", **pair, "rendererKind": "impactRing",
         "scale": 2.75, "density": 0.36, "duration": 41, "alpha": 0.64,

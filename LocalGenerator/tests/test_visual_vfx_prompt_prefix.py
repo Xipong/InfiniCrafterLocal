@@ -132,12 +132,12 @@ def test_vfx_packet_static_keys_precede_runtime_specific_content(repair: bool) -
             assert payload["repairScope"] == {"fieldPermissions": {"slots": []}}
             assert payload["exactErrors"] == [{"path": "$", "message": "malformed_json"}]
             assert payload["outputSchema"] == vfx._vfx_repair_schema_from_packet(packet)
-            assert set(payload) == {"task", "rules", "item", "acceptedVisualKitReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
+            assert set(payload) == {"task", "rules", "item", "acceptedVisualKitReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
             keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS
         else:
             payload = packet
             keys = vfx.VFX_PROMPT_STATIC_KEYS
-            assert set(payload) == {"schema", "rules", "item", "parents", "acceptedVisualKit", "runtimeSurface", "outputSchema"}
+            assert set(payload) == {"schema", "rules", "item", "parents", "acceptedVisualKit", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"}
             assert payload["parents"][0]["name"] == f"parent {kind}"
             assert payload["acceptedVisualKit"] == data["visualKit"]
             assert payload["runtimeSurface"] == vfx.vfx_director_surface(data)

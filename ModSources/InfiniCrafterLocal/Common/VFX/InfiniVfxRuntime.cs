@@ -58,6 +58,16 @@ internal readonly record struct InfiniVfxSpritePose(float Rotation, float Scale,
 internal readonly record struct InfiniVfxProjectileSnapshot(
     Vector2 Center, Vector2 Tip, Vector2 Forward, Vector2? OwnerCenter, InfiniVfxSpritePose Pose)
 {
+    internal Vector2? MaterialTip { get; init; }
+    // New owned-element units are pixels per world tick. Preserve the raw
+    // engine velocity in the legacy event payload; copy this technical value
+    // before retirement so remote/delayed effects never need a source lookup.
+    internal Vector2 MaterialVelocity { get; init; }
+    internal bool TryMaterialAnchor(string anchor,Vector2 point,out Vector2 result)
+    {
+        if(anchor is "tip" or "tipHistory" && MaterialTip is {} tip){result=tip;return true;}
+        return TryAnchor(anchor,point,out result);
+    }
     internal static InfiniVfxProjectileSnapshot Capture(Projectile projectile, GeneratedItemData data, string entityId)
     {
         Vector2? ownerCenter = projectile.owner >= 0 && projectile.owner < Main.player.Length
@@ -65,12 +75,16 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
         return new(projectile.Center, InfiniVfxRuntime.ForwardTip(projectile, data, entityId),
             InfiniVfxRuntime.ForwardAxis(projectile, data, entityId), ownerCenter,
             new(projectile.rotation, Math.Clamp(projectile.scale, 0.1f, 8f),
-                projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None, projectile.gfxOffY));
+                projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None, projectile.gfxOffY)) {
+            MaterialTip=projectile.ModProjectile is Content.Projectiles.GeneratedProjectile generated
+                &&(generated.TryCapturePresentationGeometry("beam",out var points)||generated.TryCapturePresentationGeometry("whip",out points))?points[^1]:null,
+            MaterialVelocity=projectile.velocity*projectile.MaxUpdates
+        };
     }
 
     internal bool IsValid => Finite(Center) && Finite(Tip) && Finite(Forward)
         && Math.Abs(Forward.LengthSquared() - 1f) < 0.001f
-        && (!OwnerCenter.HasValue || Finite(OwnerCenter.Value))
+        && (!OwnerCenter.HasValue || Finite(OwnerCenter.Value)) && (!MaterialTip.HasValue || Finite(MaterialTip.Value))
         && float.IsFinite(Pose.Rotation) && float.IsFinite(Pose.Scale) && Pose.Scale is >= 0.1f and <= 8f
         && float.IsFinite(Pose.GfxOffY) && Pose.Effects is SpriteEffects.None or SpriteEffects.FlipHorizontally;
 
@@ -103,9 +117,12 @@ public static class InfiniVfxRuntime
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return;
         BeginPresentationTick(projectile, data, entityId, ref state);
+        InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
+        InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
         if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
+            if (slot.Element is not null || slot.Path is not null) continue;
             if (!Matches(slot, entityId, RuntimeEventKind.Periodic) || !Cadence(slot, state.Tick)) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             if (!TryMarkSlotEmission(projectile, entityId, RuntimeEventKind.Periodic, slot, ref state)) continue;
@@ -113,18 +130,30 @@ public static class InfiniVfxRuntime
         }
     }
 
-    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center)
+    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center,ulong occurrence=0,bool includeMaterialElements=true)
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return false;
         BeginPresentationTick(projectile, data, entityId, ref state);
         if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
         InfiniVfxProjectileSnapshot snapshot = InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId);
         if (!snapshot.IsValid) return false;
+        if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (!Matches(slot, entityId, eventName)) continue;
             if (!snapshot.TryAnchor(slot.Anchor, center, out Vector2 anchor)) continue;
+            if(slot.Path is not null) {
+                InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
+                continue;
+            }
+            if (slot.Element is not null) {
+                if(!includeMaterialElements)continue;
+                if(!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor)||!InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(state.SourceKey,slot.Id,occurrence))continue;
+                emitted |= InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,state.SourceKey,new(anchor,
+                    slot.Anchor=="velocity"?projectile.velocity.SafeNormalize(snapshot.Forward):snapshot.Forward,snapshot.MaterialVelocity){SourceCenter=snapshot.Center},VfxSourceBinding.Capture(projectile));
+                continue;
+            }
             if (!TryMarkSlotEmission(projectile, entityId, eventName, slot, ref state)) continue;
             emitted = true;
             EmitPrimitive(data, anchor, slot.Anchor == "velocity" ? projectile.velocity : snapshot.Forward, slot, manifest, state.SourceKey);
@@ -299,12 +328,13 @@ public static class InfiniVfxRuntime
 
     internal static bool OnDetachedEvent(GeneratedItemData data, string entityId, string eventName,
         VfxManifestSpec manifest, Vector2 center, Vector2 inheritedVelocity, string sourceKey,
-        InfiniVfxProjectileSnapshot? snapshot)
+        InfiniVfxProjectileSnapshot? snapshot,VfxSourceBinding? binding=null,ulong occurrence=0)
     {
         if (snapshot.HasValue && !snapshot.Value.IsValid) return false;
         if (Main.dedServ || data is null || manifest is null || !manifest.HasSlots || string.IsNullOrWhiteSpace(sourceKey))
             return false;
         var state = new InfiniVfxState { Tick = (int)Main.GameUpdateCount, SourceKey = sourceKey };
+        if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
@@ -312,6 +342,12 @@ public static class InfiniVfxRuntime
             Vector2 anchor = center;
             if (snapshot is { } captured && !captured.TryAnchor(slot.Anchor, center, out anchor)) continue;
             emitted = true;
+            if (slot.Element is not null && snapshot is {} materialSnapshot) {
+                if(!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor)||!InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(sourceKey,slot.Id,occurrence))continue;
+                InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,sourceKey,new(anchor,
+                    slot.Anchor=="velocity"?inheritedVelocity.SafeNormalize(materialSnapshot.Forward):materialSnapshot.Forward,materialSnapshot.MaterialVelocity){SourceCenter=materialSnapshot.Center},binding);
+                continue;
+            }
             EmitPrimitive(data, anchor, snapshot.HasValue && slot.Anchor != "velocity" ? snapshot.Value.Forward : inheritedVelocity,
                 slot, manifest, sourceKey);
             if (snapshot.HasValue && VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
@@ -441,7 +477,7 @@ public static class InfiniVfxRuntime
     internal static Color PresentationColor(GeneratedItemData? data, Color fallback)
         => RuntimeColorPolicy.Resolve(data?.Visual?.EffectColor, fallback);
 
-    private static Color LegacyPresentationColor(VfxManifestSpec manifest, Color fallback)
+    internal static Color LegacyPresentationColor(VfxManifestSpec manifest, Color fallback)
         => manifest.Motif.Element.ToLowerInvariant() switch
         {
             "fire" or "heat" => Color.OrangeRed,
@@ -456,12 +492,14 @@ public static class InfiniVfxRuntime
     private static bool SpendParticle(VfxManifestSpec manifest, ref InfiniVfxState state)
     {
         if (state.ParticlesThisTick >= manifest.Budget.MaxParticlesPerTick || state.ParticlesTotal >= manifest.Budget.MaxParticlesTotal) return false;
+        if(state.SourceKey.Length>0&&!InfiniDetachedVfxSystem.TrySpendDetachedParticle(state.SourceKey,manifest.Budget.MaxParticlesPerTick,manifest.Budget.MaxParticlesTotal))return false;
         state.ParticlesThisTick++; state.ParticlesTotal++; return true;
     }
 
     private static bool SpendDraw(VfxManifestSpec manifest, ref InfiniVfxState state, int cost)
     {
         if (state.DrawCallsThisFrame + cost > InfiniVfxClientOptions.EffectiveDrawBudget(manifest.Budget.MaxDrawCalls)) return false;
+        if(state.SourceKey.Length>0&&!InfiniDetachedVfxSystem.TrySpendSourceDraw(state.SourceKey,manifest.Budget.MaxDrawCalls,cost))return false;
         state.DrawCallsThisFrame += cost; return true;
     }
 

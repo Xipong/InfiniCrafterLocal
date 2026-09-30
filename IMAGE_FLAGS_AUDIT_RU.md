@@ -80,7 +80,7 @@
 | Флаг | Файл:строка | По умолчанию | Потребители |
 |------|-------------|--------------|-------------|
 | `INFINI_VFX_LLM_DIRECTOR` | `vfx_manifest_config.py:13` | `True` | `vfx_manifest.py`, `server.py` |
-| `INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS` | `vfx_manifest_config.py:15` | `1800` | `vfx_manifest.py` |
+| `INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS` | `vfx_manifest_config.py:15` | `8000` | `vfx_manifest.py` |
 | `INFINI_VFX_LLM_DIRECTOR_TEMPERATURE` | `vfx_manifest_config.py:16` | `0.34` | `vfx_manifest.py` |
 | `INFINI_VFX_LLM_REPAIR_TEMPERATURE` | `vfx_manifest_config.py:17` | `0.12` | `vfx_manifest.py` |
 | `INFINI_VFX_LLM_DIRECTOR_TIMEOUT` | `vfx_manifest_config.py:18` | `75` | `vfx_manifest.py` |

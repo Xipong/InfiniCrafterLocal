@@ -69,6 +69,13 @@ def role_contract_prompt_clause(role: str, canvas: int) -> str:
     if role == "item":
         subject = "inventory item"
         placement = "single centered inventory sprite"
+    elif role == "vfx_strip":
+        subject = "VFX strip texture ingredient"
+        placement = ("one VFX strip texture ingredient, preserve the full authored frame and UV placement, "
+                     "the long axis may reach the frame edges, no rotation, crop, recentering or silhouette refit, no UI or atlas")
+    elif role == "vfx_cutout":
+        subject = "VFX texture ingredient"
+        placement = "one isolated VFX texture ingredient, preserve authored orientation, no UI or atlas"
     elif role == "equip_overlay":
         subject = "wearable equipment overlay"
         placement = "single centered wearable layer, isolated from any player body or inventory card"

@@ -18,7 +18,7 @@ namespace InfiniCrafterLocal.Common.VFX;
 /// removes that projectile. Draw ownership is exact around Terraria's projectile
 /// pass; this system never mutates gameplay state.
 /// </summary>
-public sealed class InfiniDetachedVfxSystem : ModSystem
+public sealed partial class InfiniDetachedVfxSystem : ModSystem
 {
     private const int MaxEmissions = 256;
 
@@ -71,10 +71,14 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
 
     public override void OnWorldUnload() => Clear();
 
-    public override void PostUpdateWorld()
+    // Unlike PostUpdateWorld, this hook also runs on multiplayer clients.
+    // Retire legacy snapshots and source budgets even when no Draw follows.
+    public override void PostUpdateEverything()
     {
-        if (!Main.dedServ)
-            PruneParticleBudgets(Main.GameUpdateCount);
+        if (!Main.dedServ) {
+            UpdateMaterials();
+            PruneExpired();
+        }
     }
 
     internal static void Enqueue(
@@ -93,8 +97,7 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(texturePath))
             return;
         PruneExpired();
-        if (Emissions.Count >= MaxEmissions)
-            Emissions.RemoveAt(0);
+        MakeRoomForLegacyEmission();
         Emissions.Add(new DetachedEmission
         {
             SourceKey = sourceKey,
@@ -120,7 +123,7 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
     {
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey)) return;
         PruneExpired();
-        if (Emissions.Count >= MaxEmissions) Emissions.RemoveAt(0);
+        MakeRoomForLegacyEmission();
         Emissions.Add(new DetachedEmission {
             SourceKey = sourceKey, PrimitiveKind = kind, Layer = layer, Center = center, Forward = forward,
             Scale = scale, Density = density, PhaseOffset = phaseOffset, RepeatEvery = repeatEvery,
@@ -156,14 +159,14 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
     private static void DrawProjectiles(On_Main.orig_DrawProjectiles orig, Main self)
     {
         BeginDrawBudgetFrame();
-        DrawLayer("BeforeProjectiles");
-        orig(self);
-        DrawLayer("AfterProjectiles");
+        DrawingWorldPass=true;
+        try{DrawLayer("BeforeProjectiles");orig(self);DrawLayer("AfterProjectiles");}
+        finally{DrawingWorldPass=false;}
     }
 
     private static void DrawLayer(string layer)
     {
-        if (Main.dedServ || Emissions.Count == 0)
+        if (Main.dedServ || OwnedRecordCount == 0)
             return;
         PruneExpired();
         // Vanilla DrawProjectiles owns its own Begin/End. These surrounding
@@ -179,6 +182,15 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
         }
         try
         {
+            if(MaterialPaths.Any(p=>p.Design.Layer==layer))DrawMaterialPaths(layer,batch.GraphicsDevice);
+            // Authored PNG elements preserve texels, independent of vanilla's
+            // configurable sampler. This batch is owned and ends before legacy.
+            DrawMaterialSprites(layer,batch,()=>{
+                if(began)return;
+                batch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
+                began=true;
+            });
+            if(began){began=false;batch.End();}
             foreach (DetachedEmission emission in Emissions)
             {
                 if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
@@ -226,13 +238,14 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
 
     private static bool SpendDraw(DetachedEmission emission)
     {
-        int spent = DrawCallsBySource.TryGetValue(emission.SourceKey, out int value) ? value : 0;
-        if (spent >= InfiniVfxClientOptions.EffectiveDrawBudget(emission.MaxDrawCalls))
-            return false;
-        DrawCallsBySource[emission.SourceKey] = spent + 1;
-        return true;
+        return TrySpendSourceDraw(emission.SourceKey,emission.MaxDrawCalls,1);
     }
 
+    private static bool DrawingWorldPass;
+    internal static void BeginActiveDraw(string sourceKey)
+    {
+        if(!DrawingWorldPass&&sourceKey.Length>0)DrawCallsBySource.Remove(sourceKey);
+    }
     private static void BeginDrawBudgetFrame()
     {
         // Called once by DrawProjectiles, not once per layer or simulation tick.
@@ -257,6 +270,14 @@ public sealed class InfiniDetachedVfxSystem : ModSystem
 
     private static void Clear()
     {
+        MaterialOccurrences.Clear();
+        InfiniItemVfxRuntime.ClearUseEventCaches();
+        Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
+        MaterialPaths.Clear();
+        MaterialPathEffect?.Dispose();MaterialPathEffect=null;
+        PeriodicElements.Clear();
+        LastMaterialsTick=ulong.MaxValue;
+        MaterialEmissions.Clear();
         Emissions.Clear();
         DrawCallsBySource.Clear();
         ParticleBudgetsBySource.Clear();

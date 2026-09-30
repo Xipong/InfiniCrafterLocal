@@ -16,7 +16,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
 )
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA
+from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+from infini_local.services.asset_sync_service import runtime_asset_paths
 
 
 # Exact lower-camel nested DTO surfaces accepted by strict C# v5 deserialization.
@@ -199,7 +200,7 @@ def build_recipe_health(
     visual_ok = bool(visual_report.get("ok", required_assets_ok))
     manifest = data.get("vfxManifest") if isinstance(data.get("vfxManifest"), dict) else {}
     vfx_slots = [row for row in manifest.get("slots") or [] if isinstance(row, dict)]
-    vfx_ok = str(manifest.get("schema") or "") == VFX_MANIFEST_SCHEMA
+    vfx_ok = bool(validate_vfx_manifest_wire(data)["ok"])
     stage = data.get("llmStageAccounting") if isinstance(data.get("llmStageAccounting"), dict) else debug.get("llmStageAccounting")
     stage = dict(stage) if isinstance(stage, dict) else {}
     deliverable = is_deliverable_recipe_payload(data)
@@ -431,6 +432,25 @@ def quarantine_world_recipe_cache(
         )
         return str(destination)
 
+def _cache_assets_ready(data: dict[str, Any]) -> bool:
+    """Use the delivery owner for the exact canonical transfer roster.
+
+    Legacy records with no images stay optional; present paths are not optional
+    downloads. Material branches additionally require their selected producers'
+    ready status, canvas and alpha, as before.
+    """
+    from infini_local.pipelines.visual_delivery_gate import _asset_roster_problems, visual_delivery_report
+
+    raw_manifest = data.get("vfxManifest")
+    manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
+    if "assets" in manifest or any(
+        isinstance(slot, dict) and slot.get("rendererKind") in ("spriteElement", "texturedPath")
+        for slot in manifest.get("slots") or []
+    ):
+        return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
+    return not _asset_roster_problems(runtime_asset_paths(data))
+
+
 def read_world_recipe_cache(
     world_recipes_dir: Path,
     app_version: str,
@@ -463,6 +483,14 @@ def read_world_recipe_cache(
                     )
                 except (OSError, ValueError, TypeError):
                     pass
+            return None
+        vfx_report = validate_vfx_manifest_wire(data)
+        assets_ready = vfx_report["ok"] and _cache_assets_ready(data)
+        if not vfx_report["ok"] or not assets_ready:
+            quarantine_world_recipe_cache(
+                world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
+                reason="low_level_runtime_contract_invalid", details={"vfx": vfx_report, "assetsReady": assets_ready},
+            )
             return None
         data.pop("_llmHistory", None)
         debug = data.setdefault("debug", {})
@@ -497,7 +525,6 @@ def is_deliverable_recipe_payload(data: Any) -> bool:
         return False
     if not validate_runtime_wire(data).get("ok"):
         return False
-    manifest = data.get("vfxManifest")
-    if not isinstance(manifest, dict) or manifest.get("schema") != VFX_MANIFEST_SCHEMA:
+    if not validate_vfx_manifest_wire(data)["ok"]:
         return False
-    return True
+    return _cache_assets_ready(data)

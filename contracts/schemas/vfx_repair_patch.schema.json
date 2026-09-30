@@ -3,6 +3,86 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "assetIdsDelete": {
+      "items": {
+        "maxLength": 48,
+        "minLength": 1,
+        "not": {
+          "pattern": "[^A-Za-z0-9_-]"
+        },
+        "pattern": "^[A-Za-z0-9_-]{1,48}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "type": "array"
+    },
+    "assetIndicesDelete": {
+      "items": {
+        "maximum": 8,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "type": "array"
+    },
+    "assetsUpsert": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "canvasSize": {
+            "description": "Exact final square pixel canvas; independent of gameplay hitbox.",
+            "enum": [
+              16,
+              24,
+              32,
+              48,
+              64,
+              96,
+              128
+            ],
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 48,
+            "minLength": 1,
+            "not": {
+              "pattern": "[^A-Za-z0-9_-]"
+            },
+            "pattern": "^[A-Za-z0-9_-]{1,48}$",
+            "type": "string"
+          },
+          "layout": {
+            "description": "cutout fits an isolated soft-alpha subject; strip preserves the full frame/UV through keying+resize, no crop/recenter/refit/rotation. Either can serve either renderer.",
+            "enum": [
+              "cutout",
+              "strip"
+            ],
+            "type": "string"
+          },
+          "negativePrompt": {
+            "maxLength": 700,
+            "type": "string"
+          },
+          "prompt": {
+            "description": "One isolated texture ingredient consistent with accepted Visual; no UI/text/atlas. A strip may fill its long axis. No weapon/PCA/silhouette heuristics.",
+            "maxLength": 1400,
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "prompt",
+          "negativePrompt",
+          "canvasSize",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4,
+      "type": "array"
+    },
     "effectMagnitude": {
       "anyOf": [
         {
@@ -161,11 +241,670 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "backend": {
+                  "const": "Sprite"
+                },
+                "budgetWeight": {
+                  "const": 1
+                },
+                "density": {
+                  "const": 0
+                },
+                "emissionMode": {
+                  "const": "none"
+                },
+                "fadeIn": {
+                  "const": 0
+                },
+                "fadeOut": {
+                  "const": 0
+                },
+                "jitter": {
+                  "const": 0
+                },
+                "particleRole": {
+                  "const": "none"
+                },
+                "particleSystemId": {
+                  "const": "none"
+                },
+                "scale": {
+                  "const": 1
+                },
+                "signatureWeight": {
+                  "const": 0
+                },
+                "spread": {
+                  "const": 0
+                },
+                "textureRole": {
+                  "const": "none"
+                },
+                "visualCost": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "backend": {
+                  "const": "Primitive"
+                },
+                "budgetWeight": {
+                  "const": 1
+                },
+                "density": {
+                  "const": 0
+                },
+                "duration": {
+                  "const": 3
+                },
+                "emissionMode": {
+                  "const": "none"
+                },
+                "fadeIn": {
+                  "const": 0
+                },
+                "fadeOut": {
+                  "const": 0
+                },
+                "jitter": {
+                  "const": 0
+                },
+                "particleRole": {
+                  "const": "none"
+                },
+                "particleSystemId": {
+                  "const": "none"
+                },
+                "repeatEvery": {
+                  "const": 0
+                },
+                "scale": {
+                  "const": 1
+                },
+                "signatureWeight": {
+                  "const": 0
+                },
+                "spread": {
+                  "const": 0
+                },
+                "textureRole": {
+                  "const": "none"
+                },
+                "visualCost": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "channel": {
+                  "enum": [
+                    "motionTrail",
+                    "coreGlow",
+                    "ambientParticles",
+                    "impactShape",
+                    "impactParticles",
+                    "decaySmoke"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "enum": []
+                }
+              },
+              "required": [
+                "element"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "enum": []
+                },
+                "entityId": {
+                  "enum": [
+                    "workbench_blade",
+                    "nail"
+                  ]
+                },
+                "event": {
+                  "enum": [
+                    "periodic",
+                    "on_spawn"
+                  ]
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "projectileAfterimage",
+                    "spriteStampTrail",
+                    "historyRibbon",
+                    "tipTrail",
+                    "ghostArc",
+                    "wavyStrip",
+                    "beamLine",
+                    "fieldPulse",
+                    "orbitingMotes",
+                    "actorAfterimage",
+                    "impactRing",
+                    "impactSprite",
+                    "childMotes",
+                    "lightCue",
+                    "soundCue"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "enum": []
+                },
+                "path": {
+                  "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_crit",
+                    "on_expire",
+                    "on_hit",
+                    "on_kill",
+                    "on_spawn",
+                    "on_tile_collision",
+                    "on_use"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "enum": [
+                    "item"
+                  ]
+                },
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "startTick": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_expire",
+                    "on_kill"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "properties": {
+                    "attachment": {
+                      "const": "world"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "workbench_blade"
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "anchorHistory"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "nail"
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "anchorHistory"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "beam",
+                        "whip"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "path"
+              ]
+            },
+            "then": {
+              "properties": {
+                "anchor": {
+                  "const": "self"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "item"
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "item"
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "workbench_blade"
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "workbench_blade"
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "nail"
+                },
+                "rendererKind": {
+                  "const": "spriteElement"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "element": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "nail"
+                },
+                "rendererKind": {
+                  "const": "texturedPath"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "properties": {
+                    "texture": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "impact",
+                            "asset"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         ],
         "properties": {
           "alpha": {
-            "description": "Engine units: Draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity.",
+            "description": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
@@ -184,7 +923,7 @@
             "type": "string"
           },
           "backend": {
-            "description": "Retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient; this field does not select another runtime engine.",
+            "description": "Legacy retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient for legacy renderers. spriteElement requires Sprite; texturedPath requires Primitive, both use owned stock FNA paths.",
             "enum": [
               "Auto",
               "Realtime",
@@ -227,10 +966,409 @@
             "type": "number"
           },
           "duration": {
-            "description": "World ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade.",
+            "description": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
             "maximum": 120,
             "minimum": 3,
             "type": "integer"
+          },
+          "element": {
+            "additionalProperties": false,
+            "properties": {
+              "accelerationXPxPerTickSquared": {
+                "description": "Pixels per world tick squared, X in selected attachment frame.",
+                "maximum": 2,
+                "minimum": -2,
+                "type": "number"
+              },
+              "accelerationYPxPerTickSquared": {
+                "description": "Pixels per world tick squared, Y in selected attachment frame.",
+                "maximum": 2,
+                "minimum": -2,
+                "type": "number"
+              },
+              "attachment": {
+                "description": "world freezes event-time frame; source follows that exact live source generation in its forward/normal frame, ends on retirement. World acceleration uses world X/Y; source acceleration uses local frame.",
+                "enum": [
+                  "world",
+                  "source"
+                ],
+                "type": "string"
+              },
+              "colorProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  },
+                  "middle": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  },
+                  "start": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "count": {
+                "description": "Integer elements per emission; zero is silence. Charged when emitted, never per Draw.",
+                "maximum": 64,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "drag": {
+                "description": "Velocity retention per world tick (1 keeps velocity; 0 removes it).",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "heightProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "middle": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "start": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "heightPx": {
+                "description": "Pixels along texture Y axis, independent of width; zero stays zero.",
+                "maximum": 128,
+                "minimum": 0,
+                "type": "number"
+              },
+              "inheritVelocity": {
+                "description": "Fraction of captured engine velocity, converted to pixels per world tick and added once: Projectile.velocity * (1 + extraUpdates), Player.velocity unchanged. This is not measured anchor displacement; a position-driven controller can use engine velocity as steering. Runtime captures the conversion before source retirement; legacy Dust velocity semantics are unchanged.",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "offsetForwardPx": {
+                "description": "Pixels along captured source forward at emission.",
+                "maximum": 128,
+                "minimum": -128,
+                "type": "number"
+              },
+              "offsetSidePx": {
+                "description": "Pixels along captured source normal at emission.",
+                "maximum": 128,
+                "minimum": -128,
+                "type": "number"
+              },
+              "opacityProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "middle": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "start": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "rotationRadians": {
+                "description": "Radians relative to captured forward; never inferred image/PCA axis.",
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
+                "type": "number"
+              },
+              "rotationSpeedRadiansPerTick": {
+                "description": "Radians per world tick.",
+                "maximum": 1,
+                "minimum": -1,
+                "type": "number"
+              },
+              "speedMaxPxPerTick": {
+                "description": "Pixels per world tick, uniform speed maximum >= speedMinPxPerTick.",
+                "maximum": 24,
+                "minimum": 0,
+                "type": "number"
+              },
+              "speedMinPxPerTick": {
+                "description": "Pixels per world tick, uniform speed minimum.",
+                "maximum": 24,
+                "minimum": 0,
+                "type": "number"
+              },
+              "spreadRadians": {
+                "description": "Radians: full cone around captured forward.",
+                "maximum": 6.283185307179586,
+                "minimum": 0,
+                "type": "number"
+              },
+              "texture": {
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "const": "asset"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[^A-Za-z0-9_-]"
+                          },
+                          "pattern": "^[A-Za-z0-9_-]{1,48}$",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "entity",
+                            "impact"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "const": ""
+                        }
+                      }
+                    }
+                  }
+                ],
+                "description": "Explicit exact item/entity/impact image role or one declared asset ID. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer.",
+                "properties": {
+                  "assetId": {
+                    "maxLength": 48,
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "item",
+                      "entity",
+                      "impact",
+                      "asset"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "assetId"
+                ],
+                "type": "object"
+              },
+              "widthProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "middle": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "start": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "widthPx": {
+                "description": "Pixels along texture X axis, independent of height; zero stays zero.",
+                "maximum": 128,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "texture",
+              "attachment",
+              "count",
+              "offsetForwardPx",
+              "offsetSidePx",
+              "speedMinPxPerTick",
+              "speedMaxPxPerTick",
+              "spreadRadians",
+              "inheritVelocity",
+              "drag",
+              "accelerationXPxPerTickSquared",
+              "accelerationYPxPerTickSquared",
+              "rotationRadians",
+              "rotationSpeedRadiansPerTick",
+              "widthPx",
+              "heightPx",
+              "widthProfile",
+              "heightProfile",
+              "opacityProfile",
+              "colorProfile"
+            ],
+            "type": "object"
           },
           "emissionMode": {
             "enum": [
@@ -328,6 +1466,397 @@
             ],
             "type": "string"
           },
+          "path": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "const": "anchorHistory"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "historyTicks": {
+                      "minimum": 2
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "beam",
+                        "whip"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "historyTicks": {
+                      "const": 0
+                    },
+                    "minDistancePx": {
+                      "const": 0
+                    },
+                    "profileDomain": {
+                      "const": "length"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "uvMode": {
+                      "const": "stretch"
+                    }
+                  },
+                  "required": [
+                    "uvMode"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "repeatLengthPx": {
+                      "const": 1
+                    },
+                    "scrollPxPerTick": {
+                      "const": 0
+                    }
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "colorProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  },
+                  "middle": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  },
+                  "start": {
+                    "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate.",
+                    "enum": [
+                      "white",
+                      "gray",
+                      "brown",
+                      "tan",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "gold",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "black",
+                      "effect"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "historyTicks": {
+                "description": "World ticks retained: 2..32 for history, 0 for current geometry.",
+                "maximum": 32,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxSegmentLengthPx": {
+                "description": "Pixels: skip true gaps, never bridge/smooth into invented paths.",
+                "maximum": 4096,
+                "minimum": 1,
+                "type": "number"
+              },
+              "minDistancePx": {
+                "description": "Pixels between accepted history samples; 0 for current geometry.",
+                "maximum": 16,
+                "minimum": 0,
+                "type": "number"
+              },
+              "opacityProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "middle": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "start": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "profileDomain": {
+                "description": "age uses each retained history sample age/historyTicks; length uses normalized cumulative geometric length. History can select either; current beam/whip geometry requires length.",
+                "enum": [
+                  "age",
+                  "length"
+                ],
+                "type": "string"
+              },
+              "repeatLengthPx": {
+                "description": "Pixels per texture repeat along cumulative geometric distance. stretch requires 1.",
+                "maximum": 512,
+                "minimum": 1,
+                "type": "number"
+              },
+              "scrollPxPerTick": {
+                "description": "UV pixels per world-clock tick; stretch requires 0.",
+                "maximum": 32,
+                "minimum": -32,
+                "type": "number"
+              },
+              "source": {
+                "description": "Actual timestamped anchor history or exact accepted beam/whip collision geometry, read-only. Never approximate trajectory/range from item name or sprite. Preserve all collision corners.",
+                "enum": [
+                  "anchorHistory",
+                  "beam",
+                  "whip"
+                ],
+                "type": "string"
+              },
+              "texture": {
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "const": "asset"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[^A-Za-z0-9_-]"
+                          },
+                          "pattern": "^[A-Za-z0-9_-]{1,48}$",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "item",
+                            "entity",
+                            "impact"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "const": ""
+                        }
+                      }
+                    }
+                  }
+                ],
+                "description": "Explicit exact item/entity/impact image role or one declared asset ID. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer.",
+                "properties": {
+                  "assetId": {
+                    "maxLength": 48,
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "item",
+                      "entity",
+                      "impact",
+                      "asset"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "assetId"
+                ],
+                "type": "object"
+              },
+              "uvMode": {
+                "enum": [
+                  "stretch",
+                  "repeat"
+                ],
+                "type": "string"
+              },
+              "widthProfile": {
+                "additionalProperties": false,
+                "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                "properties": {
+                  "curve": {
+                    "enum": [
+                      "linear",
+                      "easeIn",
+                      "easeOut",
+                      "smoothStep"
+                    ],
+                    "type": "string"
+                  },
+                  "end": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "middle": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "start": {
+                    "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "start",
+                  "middle",
+                  "end",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "widthPx": {
+                "description": "Authored decorative pixels, not collision geometry width; zero stays zero.",
+                "maximum": 96,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "texture",
+              "source",
+              "historyTicks",
+              "minDistancePx",
+              "maxSegmentLengthPx",
+              "widthPx",
+              "widthProfile",
+              "opacityProfile",
+              "colorProfile",
+              "profileDomain",
+              "uvMode",
+              "repeatLengthPx",
+              "scrollPxPerTick"
+            ],
+            "type": "object"
+          },
           "rendererKind": {
             "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
             "enum": [
@@ -345,12 +1874,14 @@
               "impactSprite",
               "childMotes",
               "lightCue",
-              "soundCue"
+              "soundCue",
+              "spriteElement",
+              "texturedPath"
             ],
             "type": "string"
           },
           "repeatEvery": {
-            "description": "World ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration.",
+            "description": "Legacy world ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath: neutral=0; no repeated detached path emission.",
             "maximum": 120,
             "minimum": 0,
             "type": "integer"
@@ -383,12 +1914,13 @@
             "type": "string"
           },
           "startTick": {
-            "description": "Projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick.",
+            "description": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick. spriteElement: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. texturedPath: projectile age gate for live sampling.",
             "maximum": 120,
             "minimum": 0,
             "type": "integer"
           },
           "textureRole": {
+            "description": "Legacy image selector. spriteElement and texturedPath require none here and consume only their explicit nested texture selector and textureDependencyTuples.",
             "enum": [
               "item",
               "entity",
@@ -462,12 +1994,6 @@
   },
   "required": [
     "schema",
-    "effectMagnitude",
-    "visualBudgetClass",
-    "motif",
-    "slotsUpsert",
-    "slotIdsDelete",
-    "slotIndicesDelete",
     "note"
   ],
   "type": "object",

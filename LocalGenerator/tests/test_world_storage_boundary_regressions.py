@@ -6,12 +6,19 @@ import copy
 import pytest
 
 from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA
+from infini_local.pipelines import visual_delivery_gate
+from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.storage import world_storage
 from infini_local.web.vfx_debug_routes import _sample_data
 
 
 @pytest.fixture
-def recipe() -> dict:
+def recipe(tmp_path, monkeypatch) -> dict:
+    # The canonical sample references debug.png. A shape-only cache fixture can
+    # no longer claim that nonempty member is ready without its served bytes.
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
+    write_no_image_fixture_png(tmp_path / "debug.png")
     data = _sample_data()
     data["vfxManifest"] = {"schema": VFX_MANIFEST_SCHEMA, "slots": []}
     assert world_storage.is_deliverable_recipe_payload(data) is True

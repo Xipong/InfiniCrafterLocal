@@ -28,7 +28,7 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     validate_runtime_wire,
 )
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, attach_hybrid_vfx_manifest
+from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest, validate_vfx_manifest_wire
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_runtime_program
 from infini_local.pipelines.combine_validation import strict_validate_authored_item
@@ -99,33 +99,7 @@ def _assert_stage_topology(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _vfx_manifest_report(data: Mapping[str, Any]) -> dict[str, Any]:
-    manifest = data.get("vfxManifest")
-    errors: list[dict[str, str]] = []
-    if not isinstance(manifest, Mapping):
-        return {"schema": "infini.vfx-wire-report.v1", "ok": False, "errors": [{"path": "$.vfxManifest", "message": "missing VFX manifest"}]}
-    if str(manifest.get("schema") or "") != VFX_MANIFEST_SCHEMA:
-        errors.append({"path": "$.vfxManifest.schema", "message": f"expected {VFX_MANIFEST_SCHEMA}"})
-    allowed = {(str(row.get("entityId") or ""), str(row.get("event") or "")) for row in runtime_event_inventory(data) if isinstance(row, Mapping)}
-    seen_ids: set[str] = set()
-    slots = manifest.get("slots")
-    if not isinstance(slots, list):
-        errors.append({"path": "$.vfxManifest.slots", "message": "must be an array"})
-        slots = []
-    for index, slot in enumerate(slots):
-        path = f"$.vfxManifest.slots[{index}]"
-        if not isinstance(slot, Mapping):
-            errors.append({"path": path, "message": "must be an object"})
-            continue
-        slot_id = str(slot.get("id") or "")
-        pair = (str(slot.get("entityId") or ""), str(slot.get("event") or ""))
-        if not slot_id:
-            errors.append({"path": path + ".id", "message": "required"})
-        elif slot_id in seen_ids:
-            errors.append({"path": path + ".id", "message": "duplicate slot id"})
-        seen_ids.add(slot_id)
-        if pair not in allowed:
-            errors.append({"path": path, "message": f"entity/event pair {pair!r} is not present in runtimeProgram"})
-    return {"schema": "infini.vfx-wire-report.v1", "ok": not errors, "errors": errors}
+    return validate_vfx_manifest_wire(data)
 
 
 def _cached_payload_report(data: Any) -> dict[str, Any]:

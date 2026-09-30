@@ -560,7 +560,16 @@ def _contract_check_vfx_debug_force_recipe_never_crosses_or_persists_authority_b
     assert all("vfxForcedRecipeId" not in meta for meta in written_meta)
 
 
-def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tmp_path: Path) -> None:
+def _contract_check_recipe_debug_views_derive_from_authoritative_recipe_files(tmp_path: Path, monkeypatch) -> None:
+    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
+
+    # Present transfer-roster paths require actual offline PNG bytes in the
+    # serving roots; a generated status alone cannot certify a cache fixture.
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path)
+    for name in ("generated-a.png", "generated-b.png", "debug.png"):
+        write_no_image_fixture_png(tmp_path / name)
     routes = _build_shutdown_routes(tmp_path)
     routes.read_json_file = world_storage.read_json_file
 

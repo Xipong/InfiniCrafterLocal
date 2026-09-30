@@ -18,7 +18,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_stage_messages import stage_chat_message
-from infini_local.core.repair_merge import merge_frozen_subtree
+from infini_local.core.repair_merge import json_path_child, json_path_relative, merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.pipelines.llm_transport import (
     apply_llm_common_options,
@@ -398,8 +398,9 @@ def _build_visual_repair_scope(
     rows = raw.get("entities") if isinstance(raw, Mapping) and isinstance(raw.get("entities"), list) else []
     entity_child_error_indices: set[int] = set()
     for diagnostic in errors:
-        child_match = __import__("re").match(r"^\$\.entities\[(\d+)\]\.(.+)$", str(diagnostic.get("path") or ""))
-        if child_match:
+        diagnostic_path = str(diagnostic.get("path") or "")
+        child_match = __import__("re").match(r"^\$\.entities\[(\d+)\]", diagnostic_path)
+        if child_match and json_path_relative(diagnostic_path, child_match.group(0)):
             entity_child_error_indices.add(int(child_match.group(1)))
     mutable_ids: set[str] = set()
     delete_indices: set[int] = set()
@@ -422,9 +423,9 @@ def _build_visual_repair_scope(
         message = str(error.get("message") or "")
         if path == "$":
             whole_response = True
-        if path.startswith("$.item"):
+        relative_item_path = json_path_relative(path, "$.item")
+        if relative_item_path is not None:
             item_mutable = True
-            relative_item_path = "" if path == "$.item" else path.removeprefix("$.item.")
             item_paths.add(relative_item_path)
             # visualProjectRef=item rows mirror the item visual project verbatim.
             # A permission on a mirrored item field deterministically extends to the
@@ -437,15 +438,16 @@ def _build_visual_repair_scope(
                     entity_id = str(row.get("entityId") or "")
                     if entity_id in entity_ids and str(row.get("visualProjectRef") or "") == "item":
                         grant_entity(entity_id, relative_item_path)
-        if equipment_overlay_required and path.startswith("$.equipOverlay"):
+        relative_overlay_path = json_path_relative(path, "$.equipOverlay")
+        if equipment_overlay_required and relative_overlay_path is not None:
             overlay_mutable = True
-            overlay_paths.add("" if path == "$.equipOverlay" else path.removeprefix("$.equipOverlay."))
-        if path.startswith("$.animationPlan"):
+            overlay_paths.add(relative_overlay_path)
+        if json_path_relative(path, "$.animationPlan") is not None:
             animation_mutable = True
-        match = __import__("re").match(r"^\$\.entities\[(\d+)\](?:\.(.*))?$", path)
-        if match:
+        match = __import__("re").match(r"^\$\.entities\[(\d+)\]", path)
+        relative = json_path_relative(path, match.group(0)) if match else None
+        if match and relative is not None:
             index = int(match.group(1))
-            relative = str(match.group(2) or "")
             if not relative and index in entity_child_error_indices and "schema one_of" in message:
                 # oneOf emits an aggregate row marker alongside exact branch
                 # diagnostics. The aggregate must not widen exact field scope.
@@ -568,22 +570,23 @@ def _drop_schema_forbidden_mutable_fields(
         for field in (row.get("properties") or {})
     }
     forbidden_fields = {
-        path.split(".", 1)[0]
-        for path in mutable_paths
-        if path and path.split(".", 1)[0] not in valid_fields
+        str(field) for field in source
+        if field not in valid_fields
+        and json_path_child("", str(field)) in mutable_paths
     }
     for field in sorted(forbidden_fields):
         if field in source and field in out:
             out.pop(field, None)
-            accepted.append(f"{audit_path}.{field}")
+            accepted.append(json_path_child(audit_path, field))
     # Nested strict objects (the atomic grip) still repair exact leaves: an extra
     # child key must be removable without granting either valid coordinate.
     for field, child_schema in (schema.get("properties") or {}).items():
-        child_paths = tuple(path[len(field) + 1:] for path in mutable_paths if path.startswith(field + "."))
+        child_paths = tuple(relative for path in mutable_paths
+                            if (relative := json_path_relative(path, json_path_child("", field))))
         if child_paths and isinstance(source.get(field), Mapping) and isinstance(out.get(field), Mapping):
             out[field] = _drop_schema_forbidden_mutable_fields(
                 source[field], out[field], mutable_paths=child_paths, schema=child_schema,
-                audit_path=f"{audit_path}.{field}", accepted=accepted,
+                audit_path=json_path_child(audit_path, field), accepted=accepted,
             )
     return out
 

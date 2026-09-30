@@ -148,7 +148,17 @@ def test_captured_live20_repair_boundaries_close_offline() -> None:
         item_body_id = replay["itemBodyId"]
         kit, errors = _validate_kit(raw, entity_ids, item_body_id)
         assert kit is None, case
-        assert [row["path"] for row in errors] == replay["expectedInitialErrorPaths"]
+        # Preserve the archived response and diagnostics verbatim. The current
+        # exact-member path grammar quotes this literal foreign key; only its
+        # historical diagnostic spelling is projected for this offline replay.
+        old_paths = replay["expectedInitialErrorPaths"]
+        if "$.item.:palette" in old_paths:
+            assert ":palette" in raw["item"]
+        expected_paths = [
+            '$.item[":palette"]' if path == "$.item.:palette" else path
+            for path in old_paths
+        ]
+        assert [row["path"] for row in errors] == expected_paths
         scope = _build_visual_repair_scope(raw, errors, entity_ids, item_body_id)
         repaired, audit = _apply_visual_repair_patch(
             raw,

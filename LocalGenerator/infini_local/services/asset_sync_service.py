@@ -127,38 +127,42 @@ def asset_filename_from_path(value: Any) -> str:
     return name
 
 
+def runtime_asset_paths(data: dict[str, Any], *, include_vfx_assets: bool = True) -> list[Any]:
+    """Canonical DTO path projection shared by roster and image delivery gates."""
+    out: list[Any] = []
+    manifest_raw = data.get("vfxManifest")
+    manifest = manifest_raw if isinstance(manifest_raw, dict) else {}
+    assets = manifest.get("assets")
+    if include_vfx_assets and isinstance(assets, list):
+        out.extend(asset.get("spritePath") for asset in assets if isinstance(asset, dict))
+    visual_raw = data.get("visual")
+    visual = visual_raw if isinstance(visual_raw, dict) else {}
+    out.extend((visual.get("spritePath"), visual.get("equipOverlayPath")))
+    runtime_raw = data.get("runtimeProgram")
+    runtime = runtime_raw if isinstance(runtime_raw, dict) else {}
+    entities = runtime.get("entities")
+    for entity in entities if isinstance(entities, list) else []:
+        if isinstance(entity, dict):
+            visual_raw = entity.get("visual")
+            entity_visual = visual_raw if isinstance(visual_raw, dict) else {}
+            out.extend((entity_visual.get("spritePath"), entity_visual.get("impactSpritePath")))
+    return out
+
+
 def runtime_asset_files(data: dict[str, Any]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
-
-    def add(v: Any) -> None:
-        name = asset_filename_from_path(v)
-        if name and name not in seen:
-            seen.add(name)
+    # Same DTO paths and case-insensitive PNG identity as C#. Diagnostic JSON,
+    # debug plans, generic asset arrays and recipeMeta lists are not authorities.
+    for path in runtime_asset_paths(data):
+        name = asset_filename_from_path(path)
+        key = name.casefold()
+        if name.lower().endswith(".png") and key not in seen:
+            seen.add(key)
             out.append(name)
-
-    visual_raw = data.get("visual")
-    visual: dict[str, Any] = visual_raw if isinstance(visual_raw, dict) else {}
-    # Multiplayer clients only need final gameplay-facing assets, not raw generation intermediates.
-    add(visual.get("spritePath"))
-    add(visual.get("equipOverlayPath"))
-    add(visual.get("assetManifestPath"))
-    runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
-    for entity in runtime.get("entities") or []:
-        if not isinstance(entity, dict):
-            continue
-        entity_visual = entity.get("visual") if isinstance(entity.get("visual"), dict) else {}
-        add(entity_visual.get("spritePath"))
-    assets = visual.get("assets") or data.get("assets") or []
-    if isinstance(assets, list):
-        for asset in assets:
-            if not isinstance(asset, dict):
-                continue
-            status = str(asset.get("status") or "").strip().lower()
-            if status in {"failed", "prompt_only", ""}:
-                continue
-            add(asset.get("path") or asset.get("file"))
-    return out[:64]
+    if len(out) > 32:
+        raise ValueError("generated asset roster exceeds 32 files")
+    return out
 
 
 def attach_asset_sync_meta(data: dict[str, Any], *, asset_public_base_url: str = "") -> dict[str, Any]:

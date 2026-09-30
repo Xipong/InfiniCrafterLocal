@@ -257,6 +257,10 @@ public sealed partial class GeneratedItemData
 
     private void ValidateVfxEntityEventReferences()
     {
+        foreach (VfxAssetSpec asset in VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>())
+            if (string.IsNullOrWhiteSpace(asset.SpritePath) || !asset.SpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                || asset.SpriteStatus is not ("generated" or "generated_warn_invalid"))
+                throw new InvalidDataException("Required individual VFX PNG unavailable: " + asset.Id);
         bool hasItemContactBinding = RuntimeProgram.Bindings.Any(x => x.UsePolicy.ContactDamage);
         bool hasEmittingItemUse = RuntimeProgram.Bindings.Any(x =>
             (x.Input == RuntimeInputKind.PrimaryUse || x.Input == RuntimeInputKind.AlternateUse)
@@ -272,6 +276,22 @@ public sealed partial class GeneratedItemData
             {
                 throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}': {error.Message}", error);
             }
+            var texture = slot.Element?.Texture ?? slot.Path?.Texture;
+            if (slot.Element is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
+                throw new InvalidDataException("item spriteElement periodic requires startTick=0");
+            if (slot.Path is { } path) {
+                if (!entity.IsProjectileEntity) throw new InvalidDataException("texturedPath is projectile-only");
+                if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam
+                    || path.Source == "whip" && (entity.Movement.Code != 18 || entity.Controller.Code == RuntimeControllerCode.ChannelBeam)) throw new InvalidDataException("VFX path lacks exact collision geometry producer");
+            }
+            if (texture?.Source == "entity" && entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))
+                throw new InvalidDataException("VFX entity texture unavailable for exact entity");
+            if (texture?.Source == "item" && string.IsNullOrWhiteSpace(Visual.SpritePath)) throw new InvalidDataException("VFX item texture unavailable");
+            if (texture?.Source == "impact" && !(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s=>s.EntityId==entity.Id&&s.RendererKind=="impactSprite"))
+                throw new InvalidDataException("nested impact texture requires exact same-entity impactSprite producer");
+            if (texture?.Source == "impact" && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
+                || entity.Visual.ImpactSpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                throw new InvalidDataException("VFX selected impact texture unavailable");
             if (slot.TextureRole == "impact" && VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot))
                 && SourceMode is not ("developer_fixture" or "test_fixture")
                 && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)

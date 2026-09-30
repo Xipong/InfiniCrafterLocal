@@ -1,0 +1,26 @@
+{
+  "provenance": "Offline hand-authored DTO-path enumeration fixture; not a generated recipe or image-model output.",
+  "data": {
+    "visual": {
+      "spritePath": "C:\\fixture\\icon.png",
+      "equipOverlayPath": "/fixture/overlay.png",
+      "assetManifestPath": "/fixture/diagnostic.json",
+      "assets": [{"status": "generated", "path": "/fixture/ignored_visual_asset.png"}]
+    },
+    "assets": [{"status": "generated", "path": "/fixture/ignored_root_asset.png"}],
+    "runtimeProgram": {
+      "entities": [
+        {"id": "item", "visual": {"spritePath": "/fixture/ICON.PNG"}},
+        {"id": "orb", "visual": {"spritePath": "/fixture/orb.png", "impactSpritePath": "/fixture/impact.png"}}
+      ]
+    },
+    "vfxManifest": {
+      "assets": [
+        {"id": "grain", "spritePath": "/fixture/grain.png"},
+        {"id": "band", "spritePath": "https://offline-fixture.invalid/sprite/band.png"}
+      ]
+    },
+    "recipeMeta": {"assetFiles": ["ignored_meta.png"]}
+  },
+  "expectedFiles": ["grain.png", "band.png", "icon.png", "overlay.png", "orb.png", "impact.png"]
+}

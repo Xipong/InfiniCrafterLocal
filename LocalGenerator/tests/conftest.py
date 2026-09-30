@@ -23,6 +23,7 @@ _FULL_SUITE_MODULES = {
     "pydantic": "pydantic",
     "pydantic_core": "pydantic_core",
     "Pillow": "PIL",
+    "jsonschema": "jsonschema",
 }
 
 

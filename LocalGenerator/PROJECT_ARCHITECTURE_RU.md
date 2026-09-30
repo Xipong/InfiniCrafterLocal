@@ -1,4 +1,4 @@
-# LocalGenerator 0.4.242 — low-level runtime architecture
+# LocalGenerator 0.4.245 — low-level runtime architecture
 
 LocalGenerator авторит и валидирует данные; Terraria исполняет typed v5 wire.
 
@@ -10,7 +10,7 @@ LocalGenerator авторит и валидирует данные; Terraria и�
 
 ## Visual/VFX
 
-Visual получает `runtime_visual_roles()` из принятых entities. VFX получает `runtime_event_inventory()` и может создать слот только для существующей пары entity/event. Missing required PNG остаётся ошибкой.
+Visual получает `runtime_visual_roles()` из принятых entities. VFX получает `runtime_event_inventory()`, точный read-only runtimeProgram без entity visual payload и может создать слот только для существующей пары entity/event. Optional asset declarations нового VFX-контракта проходят тот же последующий image pass; одна декларация/ID может обслуживать несколько элементов без нескольких image jobs. Missing required PNG остаётся ошибкой. См. `../docs/VFX_MATERIAL_ELEMENTS_RU.md`; четвёртая текстовая LLM-стадия не добавляется.
 
 ## Storage
 

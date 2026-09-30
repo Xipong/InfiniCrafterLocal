@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import traceback
+from pathlib import Path
 from typing import Any
 
 try:
@@ -33,6 +34,7 @@ from infini_local.pipelines.pipeline_visual_config import (
 )
 from infini_local.services.visual_asset_pipeline import compact_zimage_asset_prompt
 from infini_local.storage.trace_runtime import log_event
+from infini_local.services.asset_sync_service import is_complete_png_file
 from infini_local.pipelines.sprite_geometry import (
     alpha_bbox_threshold,
     bbox_center,
@@ -643,11 +645,35 @@ def validate_processed_sprite(
     topology: str = "",
     part_count_min: int = 0,
     part_count_max: int = 0,
+    expected_canvas: int | None = None,
 ) -> dict[str, Any]:
     """Technical validation only. No art taste, no tier judging, no VLM."""
     if Image is None:
         return {"ok": False, "reasons": ["pillow_unavailable_required"], "warnings": [], "stats": {}, "role": role}
-    img = Image.open(path).convert("RGBA")
+    envelope_reasons: list[str] = []
+    img: Any = None
+    if expected_canvas is not None:
+        final_size = final_sprite_canvas(expected_canvas)
+        try:
+            if Path(path).suffix.lower() != ".png" or not is_complete_png_file(path):
+                envelope_reasons.append("invalid_png_envelope")
+            if Path(path).stat().st_size > 8 * 1024 * 1024:
+                envelope_reasons.append("asset_png_byte_limit_exceeded")
+            with Image.open(path) as source:
+                if source.format != "PNG":
+                    envelope_reasons.append("image_format_not_png")
+                if source.size != (final_size, final_size):
+                    envelope_reasons.append("final_canvas_mismatch")
+                if "A" not in source.getbands() and "transparency" not in source.info:
+                    envelope_reasons.append("png_alpha_channel_missing")
+                img = source.convert("RGBA")
+        except (OSError, ValueError):
+            envelope_reasons.append("invalid_png_envelope")
+        if envelope_reasons:
+            return {"ok": False, "reasons": list(dict.fromkeys(envelope_reasons)),
+                    "warnings": [], "stats": {}, "role": role}
+    else:
+        img = Image.open(path).convert("RGBA")
     alpha = img.getchannel("A")
     stats = alpha_stats(img)
     reasons: list[str] = []
@@ -692,7 +718,7 @@ def validate_processed_sprite(
         key_ratio = magenta_key_pixel_ratio(img)
         if key_ratio > 0.025:
             reasons.append(f"magenta_key_background_left:{key_ratio:.3f}")
-        if stats.get("transparentPct", 0) < 0.03:
+        if (role == "vfx_strip" and not stats.get("hasAlpha")) or (role != "vfx_strip" and stats.get("transparentPct", 0) < 0.03):
             reasons.append("almost_no_transparency_after_bg_removal")
         area_ratio = float(bb.get("core_area_ratio") or 0.0)
         if role == "item" and area_ratio < 0.18:
@@ -712,7 +738,7 @@ def validate_processed_sprite(
             warnings.append("many_partial_alpha_pixels")
         if not sprite_uses_soft_alpha(role) and stats.get("opaquePct", 0) < SPRITE_MIN_OPAQUE_PCT:
             reasons.append(f"too_few_opaque_pixels:{stats.get('opaquePct')}")
-        if stats.get("opaquePct", 0) > SPRITE_MAX_OPAQUE_PCT and role != "impact":
+        if stats.get("opaquePct", 0) > SPRITE_MAX_OPAQUE_PCT and role not in {"impact", "vfx_strip"}:
             # A nearly solid final sprite usually means the model drew the item on a
             # white/pink card/poster inside the magenta key. Treat it as a technical
             # background-removal failure, not as an acceptable warning, otherwise the
@@ -760,6 +786,11 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
     reasons = [str(x) for x in (validation.get("reasons") or [])]
     fatal_tokens = (
         "empty_alpha_bbox",
+        "invalid_png_envelope",
+        "asset_png_byte_limit_exceeded",
+        "image_format_not_png",
+        "final_canvas_mismatch",
+        "png_alpha_channel_missing",
         "magenta_key_background_left",
         "almost_no_transparency_after_bg_removal",
         "too_few_opaque_pixels",
@@ -831,11 +862,10 @@ def postprocess_sprite(
     part_count_min: int = 0,
     part_count_max: int = 0,
 ) -> str:
-    """Return processed sprite path; on postprocess failure, return the original path.
+    """Process an authored image through the selected technical role contract.
 
-    The caller should treat the return value as a usable asset path, not as a nullable
-    success flag. Failed cleanup preserves the raw generated image instead of dropping
-    the sprite entirely.
+    Legacy roles retain their raw-path failure policy. Required VFX ingredients
+    raise instead: the raw image cannot satisfy a failed final PNG/canvas contract.
     """
     if Image is None:
         raise RuntimeError("Pillow is required for sprite postprocess/validation")
@@ -865,11 +895,16 @@ def postprocess_sprite(
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
-        bg_removed, forward_axis = canonicalize_projectile_forward_axis(bg_removed, role)
-        if forward_axis.get("rotated") or forward_axis.get("flipped"):
-            save_stage(bg_removed, sprite_id, "15_projectile_forward_axis")
-
-        master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
+        if role == "vfx_strip":
+            # Full-frame UVs are authored data. Only key/alpha cleanup and uniform
+            # full-frame resize are allowed; never crop, rotate, center or refit.
+            forward_axis = {"rotated": False, "flipped": False}
+            master = bg_removed
+        else:
+            bg_removed, forward_axis = canonicalize_projectile_forward_axis(bg_removed, role)
+            if forward_axis.get("rotated") or forward_axis.get("flipped"):
+                save_stage(bg_removed, sprite_id, "15_projectile_forward_axis")
+            master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
         save_stage(master, sprite_id, "20_master_norm")
         final = bake_sprite_from_master(master, target_size, role)
         save_stage(final, sprite_id, "30_baked_final")
@@ -890,6 +925,8 @@ def postprocess_sprite(
         return str(out)
     except Exception as e:
         log_event("warn", "postprocess failed", {"path": path, "error": repr(e), "trace": traceback.format_exc()})
+        if role in {"vfx_cutout", "vfx_strip"}:
+            raise RuntimeError("required VFX ingredient postprocess failed") from e
         return path
 
 __all__ = [

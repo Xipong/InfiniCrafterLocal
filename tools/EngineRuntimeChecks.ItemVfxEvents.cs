@@ -107,6 +107,112 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    // Real held/equip hooks and visible-equipment entry point; CPU queues only.
+    private static void ItemPeriodicPresentationHasOneWorldTickOwner()
+    {
+        WithLighting((config, lights) => WithPlayer((player, _) =>
+        {
+            var system = new InfiniDetachedVfxSystem();
+            var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem)
+                .GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            var clock = typeof(Terraria.Main).GetField("_gameUpdateCount", BindingFlags.Static | BindingFlags.NonPublic)!;
+            object? oldClock = clock.GetValue(null);
+            var oldDust = Terraria.Main.dust; var oldRandom = Terraria.Main.rand;
+            bool oldMenu = Terraria.Main.gameMenu, oldGen = WorldGen.gen;
+            int oldMax = Terraria.Main.maxDustToDraw, oldWidth = Terraria.Main.screenWidth, oldHeight = Terraria.Main.screenHeight;
+            float oldCount = Dust.dCount; Vector2 oldScreen = Terraria.Main.screenPosition;
+            try
+            {
+                system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
+                clock.SetValue(null, 100u);
+                Terraria.Main.gameMenu = false; WorldGen.gen = false; Terraria.Main.maxDustToDraw = 6000;
+                Terraria.Main.screenWidth = 800; Terraria.Main.screenHeight = 600; Terraria.Main.screenPosition = Vector2.Zero;
+                Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(11); config.ParticleSpawnMultiplier = 1f;
+                config.PresentationLightMultiplier = 1f;
+                Terraria.Main.dust = new Dust[oldDust.Length];
+                for (int i = 0; i < Terraria.Main.dust.Length; i++) Terraria.Main.dust[i] = new Dust { dustIndex = i };
+                Dust.dCount = 0;
+                player.active = true; player.whoAmI = 4; player.Center = new Vector2(160f); player.direction = 1;
+                var data = GeneratedItemData.Placeholder(); data.Visual.SpritePath = "authored_periodic.png";
+                data.Accessory.Enabled = true;
+                string entity = data.RuntimeProgram.ItemEntityId;
+                data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
+                    UsePolicy = new RuntimeBindingUsePolicySpec { Action = new RuntimeBindingActionSpec {
+                        Kind = RuntimeBindingAction.EquipPassive, TargetId = entity } } } };
+                var shape = new VfxSlotSpec { Id = "shape", EntityId = entity, Event = RuntimeEventKind.Periodic,
+                    Anchor = "tip", RendererKind = "impactRing", ParticleSystemId = "dust", Density = 0f, RepeatEvery = 1, Duration = 20 };
+                var sprite = new VfxSlotSpec { Id = "sprite", EntityId = entity, Event = RuntimeEventKind.Periodic,
+                    Anchor = "tip", RendererKind = "spriteStampTrail", TextureRole = "item", ParticleSystemId = "none", RepeatEvery = 1, Duration = 20 };
+                var light = new VfxSlotSpec { Id = "light", EntityId = entity, Event = RuntimeEventKind.Periodic,
+                    Anchor = "tip", RendererKind = "lightCue", ParticleSystemId = "none", RepeatEvery = 1 };
+                data.VfxManifest.Slots = new[] { shape, sprite, light };
+                data.VfxManifest.Budget.MaxParticlesPerTick = 100; data.VfxManifest.Budget.MaxParticlesTotal = 100;
+                var generated = new GeneratedItem(); var item = new Item { type = 1, stack = 1 };
+                typeof(ModType<Item>).GetProperty("Entity")!.SetValue(generated, item);
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                player.inventory[0] = item;
+                void Hooks()
+                {
+                    generated.HoldItem(player);
+                    generated.UpdateAccessory(player, false);
+                    InfiniItemVfxRuntime.OnVisibleEquipment(player, data);
+                }
+                // Eligibility precedes the mark: an invalid held anchor must not consume the slot.
+                player.itemLocation = new Vector2(float.NaN, 160f); generated.HoldItem(player);
+                Equal(0, queue.Count, "invalid anchor does not enqueue");
+                player.itemLocation = Vector2.Zero;
+                Hooks();
+                Equal(2, queue.Count, "held/functional/visible routes enqueue one shape and one sprite per slot/tick");
+                Equal(1, Terraria.Main.dust.Count(d => d.active), "same routes spawn companion Dust once below budget");
+                Equal(1, lights.Count, "same routes enqueue periodic light once");
+                foreach (object emission in queue)
+                    Equal(Vector2.Zero, (Vector2)emission.GetType().GetProperty("Center")!.GetValue(emission)!, "world zero is a valid captured anchor");
+                clock.SetValue(null, 101u); player.itemLocation = new Vector2(180f); Hooks();
+                Equal(4, queue.Count, "next world tick retains authored snapshot overlap");
+                Equal(Vector2.Zero, (Vector2)queue[0]!.GetType().GetProperty("Center")!.GetValue(queue[0])!, "earlier snapshot stays frozen");
+                Equal(2, Terraria.Main.dust.Count(d => d.active), "next tick restores periodic Dust emission");
+                // A new owner and a new item identity do not share periodic marks.
+                var other = new Player { active = true, whoAmI = 5, itemLocation = new Vector2(160f), direction = 1 };
+                InfiniItemVfxRuntime.OnPeriodic(other, data, entity);
+                Equal(6, queue.Count, "other owner remains independent");
+                data.Id = "second-periodic-item"; Hooks();
+                Equal(8, queue.Count, "other item remains independent");
+                shape.EntityId = sprite.EntityId = light.EntityId = "other_entity";
+                InfiniItemVfxRuntime.OnPeriodic(player, data, "other_entity");
+                Equal(10, queue.Count, "other entity remains independent");
+                shape.EntityId = sprite.EntityId = light.EntityId = entity;
+                shape.Id = "second-shape-slot"; Hooks();
+                Equal(11, queue.Count, "other slot remains independent without replaying existing slots");
+                // Distinct events/calls are not periodic hook duplicates.
+                shape.Event = RuntimeEventKind.OnHit;
+                InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entity, RuntimeEventKind.OnHit);
+                InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entity, RuntimeEventKind.OnHit);
+                shape.Event = RuntimeEventKind.OnCrit;
+                InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entity, RuntimeEventKind.OnCrit);
+                Equal(14, queue.Count, "two hit invocations and crit stay distinct in one tick");
+                shape.Event = RuntimeEventKind.Periodic;
+                new InfiniCrafterLocal.Common.Systems.InfiniCraftWorldExitSystem().OnWorldUnload();
+                Hooks();
+                Equal(16, queue.Count, "real world-unload hook resets periodic marks at the same clock value");
+                // Armor's functional route uses the same mark as held and visible equipment.
+                clock.SetValue(null, 102u); data.Accessory.Enabled = false; data.Armor.Enabled = true;
+                generated.UpdateEquip(player); generated.HoldItem(player); InfiniItemVfxRuntime.OnVisibleEquipment(player, data);
+                Equal(18, queue.Count, "armor/held/visible routes also emit once");
+                shape.RepeatEvery = sprite.RepeatEvery = light.RepeatEvery = 3;
+                shape.SlotSeed = sprite.SlotSeed = light.SlotSeed = 0;
+                clock.SetValue(null, 103u); Hooks(); Equal(18, queue.Count, "positive cadence rejects off tick");
+                clock.SetValue(null, 105u); Hooks(); Equal(20, queue.Count, "positive cadence emits one copy on due tick");
+            }
+            finally
+            {
+                system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches(); clock.SetValue(null, oldClock);
+                Terraria.Main.dust = oldDust; Terraria.Main.rand = oldRandom; Terraria.Main.gameMenu = oldMenu; WorldGen.gen = oldGen;
+                Terraria.Main.maxDustToDraw = oldMax; Terraria.Main.screenWidth = oldWidth; Terraria.Main.screenHeight = oldHeight;
+                Dust.dCount = oldCount; Terraria.Main.screenPosition = oldScreen;
+            }
+        }));
+    }
+
     private static void ItemExplicitEffectColorReachesLight()
     {
         WithLighting((config, lights) =>
@@ -129,6 +235,7 @@ internal static partial class EngineRuntimeChecks
             foreach (float value in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity, 0f })
             foreach (bool badX in new[] { true, false })
             {
+                InfiniItemVfxRuntime.ClearUseEventCaches(); // independent coordinate fixture
                 slot.Anchor = anchor; slot.Event = eventName; slot.RepeatEvery = 1;
                 player.Center = new Vector2(160f); player.itemLocation = new Vector2(160f);
                 Vector2 point = value == 0f ? Vector2.Zero : badX ? new Vector2(value, 160) : new Vector2(160, value);
@@ -245,7 +352,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(14, Terraria.Main.dust.Count(d => d.active), "periodic has no positive total ceiling");
                 data.VfxManifest.Budget.MaxParticlesPerTick = 15;
                 InfiniItemVfxRuntime.OnPeriodic(player, data, entity);
-                Equal(15, Terraria.Main.dust.Count(d => d.active), "events and periodic share source tick ceiling");
+                Equal(14, Terraria.Main.dust.Count(d => d.active), "same periodic slot cannot spend again in one tick");
+                slot.Id = "independent_periodic_slot";
+                InfiniItemVfxRuntime.OnPeriodic(player, data, entity);
+                Equal(15, Terraria.Main.dust.Count(d => d.active), "distinct periodic slots and events share source tick ceiling");
                 clock.SetValue(null, 101u); data.VfxManifest.Budget.MaxParticlesTotal = 0;
                 InfiniItemVfxRuntime.OnPeriodic(player, data, entity);
                 Equal(15, Terraria.Main.dust.Count(d => d.active), "explicit zero stays silent");

@@ -7,7 +7,7 @@ public enum InfiniVfxRendererKind
 {
     None, ProjectileAfterimage, SpriteStampTrail, HistoryRibbon, TipTrail, GhostArc, WavyStrip,
     BeamLine, FieldPulse, OrbitingMotes, ActorAfterimage, ImpactRing, ImpactSprite, ChildMotes,
-    LightCue, SoundCue
+    LightCue, SoundCue, SpriteElement, TexturedPath
 }
 
 /// <summary>Exact renderer registry. Runtime never classifies prose or fuzzy renderer text.</summary>
@@ -29,6 +29,8 @@ public static class VfxRendererRegistry
     {
         return value switch
         {
+            "spriteElement" => InfiniVfxRendererKind.SpriteElement,
+            "texturedPath" => InfiniVfxRendererKind.TexturedPath,
             "projectileAfterimage" => InfiniVfxRendererKind.ProjectileAfterimage,
             "spriteStampTrail" => InfiniVfxRendererKind.SpriteStampTrail,
             "historyRibbon" => InfiniVfxRendererKind.HistoryRibbon,
@@ -51,6 +53,8 @@ public static class VfxRendererRegistry
 
     public static string ToWireName(InfiniVfxRendererKind kind) => kind switch
     {
+        InfiniVfxRendererKind.SpriteElement => "spriteElement",
+        InfiniVfxRendererKind.TexturedPath => "texturedPath",
         InfiniVfxRendererKind.ProjectileAfterimage => "projectileAfterimage",
         InfiniVfxRendererKind.SpriteStampTrail => "spriteStampTrail",
         InfiniVfxRendererKind.HistoryRibbon => "historyRibbon",

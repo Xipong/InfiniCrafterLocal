@@ -17,6 +17,7 @@ public sealed partial class GeneratedProjectile
         // One allowance per render invocation, shared by under/over passes.
         // A render need not be preceded by a new simulation tick.
         _vfxState.DrawCallsThisFrame = 0;
+        InfiniDetachedVfxSystem.BeginActiveDraw(_vfxState.SourceKey);
         InfiniVfxRuntime.Draw(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.UnderProjectile);
         DrawAuthoredEntityVisual(lightColor);
         InfiniVfxRuntime.Draw(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState, lightColor, InfiniVfxDrawPass.OverProjectile);

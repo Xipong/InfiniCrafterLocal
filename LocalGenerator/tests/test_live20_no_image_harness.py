@@ -6,12 +6,22 @@ from pathlib import Path
 from PIL import Image
 import pytest
 
+from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.vfx_manifest import _compile_manifest, validate_vfx_director_output
+from infini_local.pipelines import visual_delivery_gate
 from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
 from infini_local.qa.live_no_image_fixture import (
     hydrate_no_image_fixture_assets,
     write_no_image_fixture_png,
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from test_low_level_three_stage_pipeline import _vfx_output
+
+
+@pytest.fixture(autouse=True)
+def isolated_serving_roots(monkeypatch, tmp_path):
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
 
 
 def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path) -> None:
@@ -98,14 +108,17 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
 
 def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
     fixture = write_no_image_fixture_png(tmp_path / "no-image.png")
-    data = build_runtime_fixture("workbench_blade")
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
     for row in data["runtimeProgram"]["entities"]:
         if row["kind"] != "item_body":
             row.setdefault("visual", {})["assetMode"] = "baked_sprite"
-    data["vfxManifest"] = {"slots": [{
-        "entityId": entity["id"], "rendererKind": "impactRing", "textureRole": "impact",
-    }]}
+    authored = _vfx_output(data)
+    authored["slots"][0].update(entityId=entity["id"], event="periodic",
+                                rendererKind="impactRing", textureRole="impact")
+    report = validate_vfx_director_output(authored, data)
+    assert report["ok"], report["errors"]
+    data["vfxManifest"] = _compile_manifest(data, report["normalized"], "no_image_impact_probe")
 
     hydrate_no_image_fixture_assets(data, fixture)
     assert "impactSpritePath" not in entity["visual"]

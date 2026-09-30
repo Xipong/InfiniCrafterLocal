@@ -6,7 +6,7 @@ import pytest
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA
+from infini_local.core.vfx_manifest import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
 
 
@@ -25,8 +25,15 @@ def _wire():
 def test_a7_storage_delivery_gate_rejects_malformed_neighbour(field, value):
     delivery = sanitize_recipe_for_delivery(_wire())
     delivery.update(id="receipt_probe", name="Receipt probe", schemaVersion=5,
-                    runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
-                    vfxManifest={"schema": VFX_MANIFEST_SCHEMA})
+                    runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
+    # The positive control is a complete compiled empty VFX manifest, not only
+    # a schema marker. This observer isolates the malformed buff neighbour.
+    delivery["vfxManifest"] = _compile_manifest(delivery, {
+        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
+        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
+                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0},
+        "slots": [],
+    }, "receipt_probe")
     assert is_deliverable_recipe_payload(delivery)
     delivery["gameplay"]["generatedBuff"][field] = value
     assert not is_deliverable_recipe_payload(delivery)
