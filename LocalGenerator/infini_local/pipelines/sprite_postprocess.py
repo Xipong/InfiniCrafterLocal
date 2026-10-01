@@ -10,7 +10,9 @@ except Exception:
     Image = None
     ImageEnhance = None
 
+from infini_local.storage.world_recipe_runtime import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR
+from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output
 from infini_local.core.env_utils import env_int
 from infini_local.pipelines.pipeline_visual_config import (
     ALPHA_THRESHOLD,
@@ -88,7 +90,7 @@ def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> 
     target_fill = float(spec["targetFill"])
     for p in paths:
         try:
-            img = Image.open(p).convert("RGBA")
+            img = load_image_input(p, Image)
             img = apply_background_removal(img, preserve_alpha=sprite_uses_soft_alpha(role))
             img = cleanup_alpha(img, role)
             if not sprite_uses_soft_alpha(role):
@@ -109,17 +111,21 @@ def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> 
             if score > best_score:
                 best_score = score
                 best = p
+        except ImageOutputIOError:
+            raise
         except Exception:
             continue
     return best, round(max(0.0, min(1.0, best_score)), 3)
 
-def save_stage(img: Any, sprite_id: str, stage: str) -> str:
+def save_stage(img: Any, sprite_id: str, stage: str, *, output_dir: Path | None = None) -> str:
     if not SAVE_SPRITE_STAGES or Image is None:
         return ""
     try:
-        p = SPRITE_DIR / f"{sprite_id}_stage_{stage}.png"
-        img.save(p)
+        p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_stage_{stage}.png"
+        save_image_output(img, p)
         return str(p)
+    except ImageOutputIOError:
+        raise
     except Exception:
         return ""
 
@@ -667,13 +673,17 @@ def validate_processed_sprite(
                 if "A" not in source.getbands() and "transparency" not in source.info:
                     envelope_reasons.append("png_alpha_channel_missing")
                 img = source.convert("RGBA")
-        except (OSError, ValueError):
+        except OSError as exc:
+            if exc.errno is not None:
+                raise ImageOutputIOError("final image filesystem read failed") from exc
+            envelope_reasons.append("invalid_png_envelope")
+        except ValueError:
             envelope_reasons.append("invalid_png_envelope")
         if envelope_reasons:
             return {"ok": False, "reasons": list(dict.fromkeys(envelope_reasons)),
                     "warnings": [], "stats": {}, "role": role}
     else:
-        img = Image.open(path).convert("RGBA")
+        img = load_image_input(path, Image)
     alpha = img.getchannel("A")
     stats = alpha_stats(img)
     reasons: list[str] = []
@@ -861,6 +871,7 @@ def postprocess_sprite(
     topology: str = "",
     part_count_min: int = 0,
     part_count_max: int = 0,
+    output_dir: Path | None = None,
 ) -> str:
     """Process an authored image through the selected technical role contract.
 
@@ -870,9 +881,11 @@ def postprocess_sprite(
     if Image is None:
         raise RuntimeError("Pillow is required for sprite postprocess/validation")
     target_size = final_sprite_canvas(target_size)
+    decoded = False
     try:
-        raw = Image.open(path).convert("RGBA")
-        save_stage(raw, sprite_id, "00_raw")
+        raw = load_image_input(path, Image)
+        decoded = True
+        save_stage(raw, sprite_id, "00_raw", output_dir=output_dir)
 
         # Master-first pipeline: all destructive technical work happens before the
         # final downscale.  This does not change semantics; it only removes the
@@ -894,7 +907,7 @@ def postprocess_sprite(
         if role in {"item", "equip_overlay"}:
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
-        save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres")
+        save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres", output_dir=output_dir)
         if role == "vfx_strip":
             # Full-frame UVs are authored data. Only key/alpha cleanup and uniform
             # full-frame resize are allowed; never crop, rotate, center or refit.
@@ -903,14 +916,14 @@ def postprocess_sprite(
         else:
             bg_removed, forward_axis = canonicalize_projectile_forward_axis(bg_removed, role)
             if forward_axis.get("rotated") or forward_axis.get("flipped"):
-                save_stage(bg_removed, sprite_id, "15_projectile_forward_axis")
+                save_stage(bg_removed, sprite_id, "15_projectile_forward_axis", output_dir=output_dir)
             master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
-        save_stage(master, sprite_id, "20_master_norm")
+        save_stage(master, sprite_id, "20_master_norm", output_dir=output_dir)
         final = bake_sprite_from_master(master, target_size, role)
-        save_stage(final, sprite_id, "30_baked_final")
+        save_stage(final, sprite_id, "30_baked_final", output_dir=output_dir)
 
-        out = SPRITE_DIR / f"{sprite_id}.png"
-        final.save(out)
+        out = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}.png"
+        save_image_output(final, out)
         stats = alpha_stats(final)
         validation = validate_processed_sprite(
             str(out), role, topology=topology,
@@ -923,7 +936,11 @@ def postprocess_sprite(
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE, "alpha": stats,
                         "projectileForwardAxis": forward_axis, "validation": validation})
         return str(out)
+    except ImageOutputIOError:
+        raise
     except Exception as e:
+        if decoded and isinstance(e, OSError):
+            raise ImageOutputIOError("sprite processing filesystem operation failed") from e
         log_event("warn", "postprocess failed", {"path": path, "error": repr(e), "trace": traceback.format_exc()})
         if role in {"vfx_cutout", "vfx_strip"}:
             raise RuntimeError("required VFX ingredient postprocess failed") from e

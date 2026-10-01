@@ -215,7 +215,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "texturedPathSources": _textured_path_sources(data),
         "textureDependencyTuples": {
             "item": "existing accepted item image; assetId empty",
-            "entity": "same exact entity baked_sprite/reuse_item_icon image; assetId empty; no_asset/runtime_geometry forbidden",
+            "entity": "same exact entity baked_sprite/reuse_item_icon image; assetId empty; no_asset/runtime_geometry forbidden; legacy projectile/field aliases require exact bound visualRole and the same mode requirement",
             "impact": "same-entity impactSprite slot must produce the dedicated impact image; assetId empty",
             "asset": "exact declared VFX asset ID; no compensating artwork for a bad reference",
         },
@@ -251,7 +251,18 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
                 "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
             },
             "backend": {"type": "string", "enum": list(_BACKENDS), "description": "Legacy retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient for legacy renderers. spriteElement requires Sprite; texturedPath requires Primitive, both use owned stock FNA paths."},
-            "textureRole": {"type": "string", "enum": list(_TEXTURE_ROLES), "description": "Legacy image selector. spriteElement and texturedPath require none here and consume only their explicit nested texture selector and textureDependencyTuples."},
+            "textureRole": {
+                "type": "string", "enum": list(_TEXTURE_ROLES),
+                "description": (
+                    "Legacy PNG selector for " + ", ".join(renderer for renderer in _RENDERERS if renderer in SPRITE_TEXTURE_RENDERERS) + ": "
+                    "item=accepted item PNG; entity=bound entity baked_sprite/reuse_item_icon PNG "
+                    "(no_asset/runtime_geometry cannot supply one); projectile/field alias entity only when equal to bound visualRole, "
+                    "with the same mode requirement; impact=same-entity impactSprite producer "
+                    "(required companion slot for other sprite renderers); none invalid for sprites. "
+                    "Primitive/Dust/cue renderer hints require no PNG. spriteElement and texturedPath require none here "
+                    "and consume only their explicit nested texture selector and textureDependencyTuples."
+                ),
+            },
             "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
             "anchor": {"type": "string", "enum": list(_ANCHORS), "description": "Primitive/cue/event placement: self/field=bound entity center; owner=active owner center; tip/tipHistory=projectile geometric tip (item uses engine itemLocation); velocity=center with motion axis; hitPoint=captured event point, NPC center for item hit/crit. Item hitPoint without a captured point is silent. Projectile event anchors and sprite pose are frozen at emission and carried through the relay, including after source removal; unavailable owner is silent. History renderers use their named center/tip histories instead of relocating the path."},
             "channel": {"type": "string", "enum": list(_CHANNELS)},
@@ -348,57 +359,125 @@ def _number(value: Any, low: float, high: float, path: str, errors: list[dict[st
     return int(value) if integer else numeric
 
 
-def _asset_reference_errors(raw: Mapping[str, Any], *, require_used: bool = True) -> list[dict[str, Any]]:
+def vfx_png_dependencies(
+    data: Mapping[str, Any], manifest: Mapping[str, Any] | None = None, *, require_used: bool = False,
+) -> dict[str, Any]:
+    """Read-only projection of the PNG producers actually consumed by slots.
+
+    Producer roles name the existing image owners, not another asset registry or
+    request. Primitive, Dust and cue renderers consume no PNG, regardless of the
+    legacy hint. Admission checks selectors; delivery checks these exact owners'
+    execution results. No mode, reference, image request or saved wire is changed.
+    """
+    if manifest is None:
+        raw = data.get("vfxManifest")
+        manifest = raw if isinstance(raw, Mapping) else {}
     errors: list[dict[str, Any]] = []
-    assets = _rows(raw, "assets")
+    dependencies: list[dict[str, Any]] = []
+    assets = _rows(manifest, "assets")
     known: set[str] = set()
     for index, row in enumerate(assets):
-        if not isinstance(row, Mapping):
-            continue
-        asset_id = row.get("id")
+        asset_id = row.get("id") if isinstance(row, Mapping) else None
         if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None:
-            continue  # Schema owns type/format errors, before lookup or hashing.
+            continue  # Shape/format gates precede lookup; never hash hostile JSON.
         if asset_id in known:
             errors.append({"path": f"$.assets[{index}].id", "message": "duplicate asset id"})
         known.add(asset_id)
+    runtime = data.get("runtimeProgram")
+    entities = {row["id"]: row for row in _rows(runtime, "entities")
+                if isinstance(row, Mapping) and isinstance(row.get("id"), str)} if isinstance(runtime, Mapping) else {}
+    slots = _rows(manifest, "slots")
+    impacts = {slot["entityId"] for slot in slots if isinstance(slot, Mapping)
+               and slot.get("rendererKind") == "impactSprite" and isinstance(slot.get("entityId"), str)}
     used: set[str] = set()
     dangling = False
-    for index, slot in enumerate(_rows(raw, "slots")):
-        if not isinstance(slot, Mapping) or slot.get("rendererKind") not in MATERIAL_RENDERERS:
+    for index, slot in enumerate(slots):
+        if not isinstance(slot, Mapping):
             continue
-        payload_name = "element" if slot.get("rendererKind") == "spriteElement" else "path"
-        payload = slot.get(payload_name)
-        texture = payload.get("texture") if isinstance(payload, Mapping) else None
-        if not isinstance(texture, Mapping) or texture.get("source") != "asset":
+        renderer = slot.get("rendererKind")
+        if not isinstance(renderer, str):
             continue
-        asset_id = texture.get("assetId")
-        if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
-            dangling = True
-            errors.append({"path": f"$.slots[{index}].{payload_name}.texture.assetId", "message": "exact declared VFX asset id required; repair the reference, never create compensating artwork"})
+        selector = f"$.slots[{index}].textureRole"
+        asset_id = ""
+        if renderer in MATERIAL_RENDERERS:
+            name = "element" if renderer == "spriteElement" else "path"
+            payload = slot.get(name)
+            texture = payload.get("texture") if isinstance(payload, Mapping) else None
+            if not isinstance(texture, Mapping):
+                continue
+            source = texture.get("source")
+            asset_id = texture.get("assetId")
+            selector = f"$.slots[{index}].{name}.texture.source"
+        elif renderer in SPRITE_TEXTURE_RENDERERS:
+            source = slot.get("textureRole")
+            if not isinstance(source, str) or source not in _TEXTURE_ROLES:
+                errors.append({"path": selector, "message": "exact legacy textureRole enum required"})
+                continue
         else:
+            continue
+        if not isinstance(source, str):
+            continue  # Scalar enum/type diagnostics belong to the shape gate.
+        entity_id = slot.get("entityId")
+        if not isinstance(entity_id, str):
+            continue
+        if entity_id not in entities and source in ("entity", "projectile", "field", "impact"):
+            # Pair validation owns the unresolved entity; it cannot diagnose
+            # that entity's mode, alias or impact producer. Independent item/
+            # asset references still resolve below, including asset usage.
+            continue
+        entity = entities.get(entity_id, {})
+        raw_visual = entity.get("visual")
+        entity_visual = raw_visual if isinstance(raw_visual, Mapping) else {}
+        mode = entity_visual.get("assetMode")
+        role = ""
+        if source == "asset" and renderer in MATERIAL_RENDERERS:
+            if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
+                dangling = True
+                errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact declared VFX asset id required; repair the reference, never create compensating artwork"})
+                # Preserve empty-domain Repair: both selector leaves are broken,
+                # never permission to invent a request or redesign valid assets.
+                if not known:
+                    errors.append({"path": selector, "message": "asset texture source requires a declared VFX asset; repair the reference, never create compensating artwork"})
+                continue
             used.add(asset_id)
-    # A broken reference is not permission to delete/redesign its valid request.
+            role = "vfx:" + asset_id
+        elif source == "item":
+            role = "item"
+        elif source == "impact":
+            if entity_id not in impacts:
+                errors.append({"path": selector, "message": "impact texture requires a same-entity impactSprite image producer"})
+                continue
+            role = "impact:" + entity_id
+        elif source in ("entity", "projectile", "field"):
+            if source != "entity" and source != entity.get("visualRole"):
+                errors.append({"path": selector, "message": "textureRole must match the exact bound entity visualRole"})
+                continue
+            if mode not in ("baked_sprite", "reuse_item_icon"):
+                errors.append({"path": selector, "message": "entity texture requires the exact entity baked_sprite/reuse_item_icon producer; no_asset/runtime_geometry provide no PNG"})
+                continue
+            role = "item" if mode == "reuse_item_icon" or entity.get("kind") == "item_body" else "entity:" + entity_id
+        elif source == "none" and renderer in SPRITE_TEXTURE_RENDERERS:
+            errors.append({"path": selector, "message": "sprite renderer requires a non-none textureRole"})
+            continue
+        else:
+            continue  # Unsupported enum values already have exact shape errors.
+        if source == "asset":
+            producer = next(row for row in assets if isinstance(row, Mapping) and row.get("id") == asset_id)
+        elif source == "item" or (source in ("entity", "projectile", "field") and mode == "reuse_item_icon"):
+            raw_visual = data.get("visual")
+            producer = raw_visual if isinstance(raw_visual, Mapping) else {}
+        else:
+            producer = entity_visual
+        prefix = "impactSprite" if source == "impact" else "sprite"
+        dependencies.append({"slotId": slot.get("id"), "entityId": entity_id,
+                             "source": source, "role": role, "selectorPath": selector,
+                             "spritePath": producer.get(prefix + "Path"), "spriteStatus": producer.get(prefix + "Status")})
+    # A dangling selector is not permission to delete/redesign a valid request.
     if require_used and not dangling:
         for index, row in enumerate(assets):
             if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in known - used:
                 errors.append({"path": f"$.assets[{index}].id", "message": "unused new asset request"})
-    return errors
-
-
-def _impact_reference_errors(raw: Mapping[str, Any]) -> list[dict[str, Any]]:
-    raw_slots = raw.get("slots")
-    slots = raw_slots if isinstance(raw_slots, list) else []
-    producers = {slot["entityId"] for slot in slots if isinstance(slot, Mapping) and slot.get("rendererKind") == "impactSprite" and isinstance(slot.get("entityId"), str)}
-    errors: list[dict[str, Any]] = []
-    for index, slot in enumerate(slots):
-        if not isinstance(slot, Mapping) or slot.get("rendererKind") not in MATERIAL_RENDERERS:
-            continue
-        name = "element" if slot.get("rendererKind") == "spriteElement" else "path"
-        payload = slot.get(name)
-        texture = payload.get("texture") if isinstance(payload, Mapping) else None
-        if isinstance(texture, Mapping) and texture.get("source") == "impact" and isinstance(slot.get("entityId"), str) and slot["entityId"] not in producers:
-            errors.append({"path": f"$.slots[{index}].{name}.texture.source", "message": "impact texture requires a same-entity impactSprite image producer"})
-    return errors
+    return {"dependencies": dependencies, "errors": errors}
 
 
 def _material_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
@@ -460,7 +539,6 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         errors.append({"path": "$.slots", "message": f"at most {max_slots} slots"})
     seen_ids: set[str] = set()
     impact_sprite_entities: set[str] = set()
-    impact_texture_consumers: list[tuple[int, str]] = []
     normalized_slots: list[dict[str, Any]] = []
     enum_fields = {
         "rendererKind": _RENDERERS, "backend": _BACKENDS, "textureRole": _TEXTURE_ROLES,
@@ -527,19 +605,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             if clean["rendererKind"] == renderer and any(clean[field] != value for field, value in required.items()):
                 fields = " and ".join(f"{field}={value}" for field, value in required.items())
                 errors.append({"path": path, "message": f"{renderer} requires {fields}"})
-        if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "none":
-            errors.append({"path": path + ".textureRole", "message": "sprite renderer requires a non-none textureRole"})
-        if clean["rendererKind"] in SPRITE_TEXTURE_RENDERERS and clean["textureRole"] == "impact":
-            impact_texture_consumers.append((index, entity_id))
         normalized_slots.append(clean)
-    for index, entity_id in impact_texture_consumers:
-        if entity_id not in impact_sprite_entities:
-            errors.append({
-                "path": f"$.slots[{index}].textureRole",
-                "message": "sprite renderer using impact texture requires an impactSprite slot for the same entity",
-            })
-    errors.extend(_asset_reference_errors({**raw, "slots": slots}))
-    errors.extend(_impact_reference_errors({**raw, "slots": slots}))
+    errors.extend(vfx_png_dependencies(data, raw, require_used=True)["errors"])
     return {
         "ok": not errors,
         "errors": errors,
@@ -562,7 +629,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
     """Shared persisted-recipe shape gate; image delivery separately owns readiness.
 
     Reuse Director's additive branch definitions, never strip/coerce authored
-    controls or hydrate an image here. Legacy records retain their old admission;
+    controls or hydrate an image here. Inert legacy PNG selectors fail explicitly;
     collection IDs/pairs are checked before lookup across both renderer domains.
     """
     if not isinstance(data, Mapping) or not isinstance(data.get("vfxManifest"), Mapping):
@@ -623,7 +690,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
             for field in ("element", "path"):
                 if field in slot:
                     errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
-    for error in [*_asset_reference_errors({**manifest, "slots": slots}, require_used=False), *_impact_reference_errors({**manifest, "slots": slots})]:
+    for error in vfx_png_dependencies(data, manifest)["errors"]:
         errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
     return {"ok": not errors, "errors": errors}
 
@@ -1337,5 +1404,5 @@ __all__ = [
     "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "MalformedVfxDirectorOutput", "attach_hybrid_vfx_manifest",
     "VFX_PROMPT_STATIC_KEYS", "VFX_REPAIR_PROMPT_STATIC_KEYS",
     "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
-    "vfx_repair_schema", "validate_vfx_manifest_wire",
+    "vfx_repair_schema", "validate_vfx_manifest_wire", "vfx_png_dependencies",
 ]

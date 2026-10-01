@@ -206,6 +206,389 @@ internal static partial class EngineRuntimeChecks
         Console.WriteLine("DETAIL: selected owner same-tick attempts=1 expiry retry=1 invalidation retry=1; CPU decode failure boundary");
     }
 
+    // Real inventory -> cache -> FNA CPU queue. Decode/readback/upload/disposal
+    // are observed only at their GPU boundaries; this is not native GPU proof.
+    private sealed class AssetInvalidationProbe : IDisposable
+    {
+        internal readonly RuntimeSpriteCache Cache = new();
+        internal readonly GeneratedAssetSyncService Sync = new();
+        internal readonly SpriteBatch Batch;
+        internal readonly List<(string Path, byte[] Bytes, Texture2D Texture, int Thread)> Loads = new();
+        internal readonly List<(Texture2D Texture, int Thread)> Disposals = new();
+        internal int Reads, Uploads, Flushes, Attempts;
+        internal bool FailDecode;
+        private bool cleaningUp;
+        internal readonly int OwnerThread = Environment.CurrentManagedThreadId;
+        private readonly PropertyInfo sprites = typeof(InfiniMod).GetProperty("Sprites")!;
+        private readonly PropertyInfo assetSync = typeof(InfiniMod).GetProperty("AssetSync")!;
+        private readonly FieldInfo actions = typeof(Terraria.Main).GetField("_mainThreadActions", BindingFlags.Static | BindingFlags.NonPublic)!;
+        private readonly object? oldSprites, oldSync, oldActions;
+        private readonly GraphicsDeviceManager oldGraphics = Terraria.Main.graphics;
+        private readonly SpriteBatch oldBatch = Terraria.Main.spriteBatch;
+        private readonly List<IDisposable> hooks = new();
+        private readonly FieldInfo count = typeof(SpriteBatch).GetField("numSprites", AssetOwnerInstance)!;
+        private readonly FieldInfo textureInfo = typeof(SpriteBatch).GetField("textureInfo", AssetOwnerInstance)!;
+        internal int QueuedSprites => (int)count.GetValue(Batch)!;
+        internal int QueuedActions => ((System.Collections.Concurrent.ConcurrentQueue<Action>)actions.GetValue(null)!).Count;
+
+        internal AssetInvalidationProbe()
+        {
+            oldSprites = sprites.GetValue(null); oldSync = assetSync.GetValue(null); oldActions = actions.GetValue(null);
+            actions.SetValue(null, new System.Collections.Concurrent.ConcurrentQueue<Action>());
+            sprites.SetValue(null, Cache); assetSync.SetValue(null, Sync);
+            Terraria.Main.graphics = (GraphicsDeviceManager)RuntimeHelpers.GetUninitializedObject(typeof(GraphicsDeviceManager));
+            GC.SuppressFinalize(Terraria.Main.graphics);
+            Batch = (SpriteBatch)RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch)); GC.SuppressFinalize(Batch);
+            foreach (string name in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" }) {
+                var field = typeof(SpriteBatch).GetField(name, AssetOwnerInstance)!;
+                field.SetValue(Batch, Array.CreateInstance(field.FieldType.GetElementType()!, 128));
+            }
+            Terraria.Main.spriteBatch = Batch;
+            Func<GraphicsDevice, Stream, Texture2D> load = (_, stream) => {
+                Attempts++;
+                if (FailDecode) throw new InvalidOperationException("controlled decode boundary failure, no GPU");
+                using var memory = new MemoryStream(); stream.CopyTo(memory);
+                var texture = (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D)); GC.SuppressFinalize(texture);
+                typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 32);
+                typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 32);
+                Loads.Add((Path.GetFullPath(((FileStream)stream).Name), memory.ToArray(), texture, Environment.CurrentManagedThreadId));
+                return texture;
+            };
+            hooks.Add(new MonoMod.RuntimeDetour.Hook(typeof(Texture2D).GetMethod("FromStream", new[] { typeof(GraphicsDevice), typeof(Stream) })!, load));
+            Action<Texture2D, Color[]> read = (_, pixels) => { Reads++; Array.Fill(pixels, Color.White); };
+            Action<Texture2D, Color[]> upload = (_, _) => Uploads++;
+            Action<GraphicsResource> dispose = resource => Disposals.Add(((Texture2D)resource, Environment.CurrentManagedThreadId));
+            // Retain canonical selection/cache logic, replacing only GPU calls.
+            foreach (var method in typeof(RuntimeSpriteCache).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                hooks.Add(new MonoMod.RuntimeDetour.ILHook(method, il => {
+                    var cursor = new MonoMod.Cil.ILCursor(il);
+                    while (cursor.TryGotoNext(i => i.Operand is Mono.Cecil.MethodReference m &&
+                        ((m.DeclaringType.FullName == typeof(Texture2D).FullName && (m.Name == "GetData" || m.Name == "SetData") && m.Parameters.Count == 1)
+                        || (m.Name == "Dispose" && m.Parameters.Count == 0 && m.DeclaringType.FullName == typeof(GraphicsResource).FullName)))) {
+                        string name = ((Mono.Cecil.MethodReference)cursor.Next!.Operand).Name; cursor.Remove();
+                        if (name == "Dispose") cursor.EmitDelegate<Action<GraphicsResource>>(dispose);
+                        else cursor.EmitDelegate<Action<Texture2D, Color[]>>(name == "GetData" ? read : upload);
+                    }
+                }));
+            Action<SpriteBatch> flush = batch => {
+                int n = (int)count.GetValue(batch)!;
+                var textures = (Texture2D[])textureInfo.GetValue(batch)!;
+                if (!cleaningUp)
+                    for (int i = 0; i < n; i++) Equal(false, Disposals.Any(d => ReferenceEquals(d.Texture, textures[i])), "queued texture stays alive until real FNA End/Flush boundary");
+                Flushes++; count.SetValue(batch, 0);
+            };
+            hooks.Add(new MonoMod.RuntimeDetour.Hook(typeof(SpriteBatch).GetMethod("FlushBatch", AssetOwnerInstance)!, flush));
+            Batch.Begin();
+        }
+
+        internal GeneratedItem Item(string id, string path)
+        {
+            var item = ReviewItem(AssetOwnerData(id, path));
+            typeof(GeneratedItem).GetField("_lastHydrationTick", AssetOwnerInstance)!.SetValue(item, (int)Terraria.Main.GameUpdateCount);
+            return item;
+        }
+
+        internal Texture2D Draw(GeneratedItem item)
+        {
+            int before = QueuedSprites;
+            Equal(false, item.PreDrawInInventory(Batch, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1), "real inventory consumer queues runtime sprite");
+            Equal(before + 1, QueuedSprites, "inventory submits exactly one real FNA sprite");
+            return ((Texture2D[])textureInfo.GetValue(Batch)!)[before];
+        }
+
+        internal void DrainOwnerQueue()
+        {
+            Equal(false, (bool)typeof(SpriteBatch).GetField("beginCalled", AssetOwnerInstance)!.GetValue(Batch)!, "owner callback is exercised only after End");
+            // Installed Main.Update calls this after base.Update, outside Draw.
+            typeof(Terraria.Main).GetMethod("ConsumeAllMainThreadActions", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+        }
+
+        public void Dispose()
+        {
+            try {
+                // Cleanup must not mask the assertion that exposed an early disposal.
+                cleaningUp = true;
+                if ((bool)typeof(SpriteBatch).GetField("beginCalled", AssetOwnerInstance)!.GetValue(Batch)!) Batch.End();
+                Cache.Dispose(); DrainOwnerQueue(); Sync.Dispose();
+            } finally {
+                for (int i = hooks.Count - 1; i >= 0; i--) hooks[i].Dispose();
+                sprites.SetValue(null, oldSprites); assetSync.SetValue(null, oldSync); actions.SetValue(null, oldActions);
+                Terraria.Main.graphics = oldGraphics; Terraria.Main.spriteBatch = oldBatch;
+            }
+        }
+    }
+
+    private static void RuntimeSpriteInvalidationReloadsInventoryWithoutRetiringQueuedTexture()
+    {
+        WithLighting((_, __) => {
+            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
+            string path = Path.Combine(Terraria.Program.SavePath, "invalidate.png"), other = Path.Combine(Terraria.Program.SavePath, "neighbor", "invalidate.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(other)!);
+            File.WriteAllBytes(path, AssetOwnerCanonical); File.WriteAllBytes(other, AssetOwnerCanonical);
+            var item = probe.Item("invalidate", path); var independent = probe.Item("independent", other);
+            Texture2D first = probe.Draw(item);
+            Equal(true, ReferenceEquals(first, probe.Draw(item)), "unchanged hot inventory keeps exact texture");
+            Texture2D unrelated = probe.Draw(independent);
+            Equal(2, probe.Loads.Count, "initial target and unrelated load only once");
+            File.WriteAllBytes(path, AssetOwnerOtherColor);
+            System.Threading.Tasks.Task.Run(() => { for (int i = 0; i < 4; i++) probe.Cache.Invalidate(path); }).GetAwaiter().GetResult();
+            Equal(0, probe.Disposals.Count, "downloader invalidation cannot dispose queued texture");
+            Equal(2, probe.Uploads, "downloader invalidation cannot upload");
+            Texture2D refreshed = probe.Draw(item);
+            Equal(false, ReferenceEquals(first, refreshed), "same filename replacement must not return old loaded Texture2D");
+            Equal(3, probe.Loads.Count, "one lazy replacement load through inventory");
+            Equal(true, AssetOwnerOtherColor.SequenceEqual(probe.Loads[^1].Bytes), "real cache opens new bytes under the same filename");
+            Equal(true, ReferenceEquals(unrelated, probe.Draw(independent)), "one invalidation does not flush unrelated hot asset");
+            Equal(true, ReferenceEquals(refreshed, probe.Draw(item)), "replacement is itself a hot hit");
+            Equal(3, probe.Uploads, "replacement conversion/upload occurs once, not per draw");
+            Equal(0, probe.Disposals.Count, "old queued texture is retained until owner boundary");
+            probe.Batch.End(); probe.DrainOwnerQueue();
+            Equal(1, probe.Disposals.Count, "repeated invalidation retires old texture exactly once");
+            Equal(true, ReferenceEquals(first, probe.Disposals.Single().Texture), "retirement targets only stale generation");
+            Equal(probe.OwnerThread, probe.Disposals.Single().Thread, "retirement runs on the owner thread");
+            Equal(true, probe.Loads.All(l => l.Thread == probe.OwnerThread), "all loads run on consumer owner thread");
+            probe.DrainOwnerQueue(); Equal(1, probe.Disposals.Count, "no disposal replay");
+            System.Threading.Tasks.Task.Run(() => probe.Cache.Invalidate(path)).GetAwaiter().GetResult();
+            probe.DrainOwnerQueue();
+            Equal(2, probe.Disposals.Count, "unused replacement retires without another Draw or TryGet");
+            Equal(3, probe.Loads.Count, "retirement alone never reloads or uploads");
+            Equal(false, probe.Disposals.Any(d => ReferenceEquals(d.Texture, unrelated)), "same filename in another directory stays owned and alive");
+            Equal(path, item.Data.Visual.SpritePath, "no authored path rewrite");
+            Equal(0, probe.Sync.GetDebugSnapshot().DownloadStartedCount, "CPU observer starts no downloads");
+        });
+        Console.WriteLine("DETAIL: same-file A->B via inventory/FNA queue; repeated worker invalidation; independent hot asset; deferred owner disposal; GPU boundaries intercepted");
+    }
+
+    private static void RuntimeSpriteInvalidationAliasesUseSelectedOwnerAndBackoffKey()
+    {
+        WithLighting((_, __) => {
+            using var peers = new ReviewPeers();
+            string? oldRoot = Environment.GetEnvironmentVariable("ICL_INVALIDATION_ROOT");
+            Environment.SetEnvironmentVariable("ICL_INVALIDATION_ROOT", Terraria.Program.SavePath);
+            try {
+                foreach (string scenario in new[] { "local-shadow", "relative-padded", "environment", "stale-windows", "url" }) {
+                    using var probe = new AssetInvalidationProbe();
+                    string file = "alias_" + Guid.NewGuid().ToString("N") + ".png";
+                    string original = Path.Combine(Terraria.Program.SavePath, file), canonical = Path.GetFullPath(Path.Combine(probe.Sync.CacheRoot, file));
+                    File.WriteAllBytes(original, AssetOwnerOtherColor);
+                    string selector = scenario switch {
+                        "relative-padded" => "  " + Path.GetRelativePath(Environment.CurrentDirectory, original) + "  ",
+                        "environment" => "%ICL_INVALIDATION_ROOT%/" + file,
+                        "stale-windows" => @"Z:\unavailable-owner\" + file,
+                        "url" => "https://offline.invalid/" + file,
+                        _ => original,
+                    };
+                    CommitAssetOwner(probe.Sync, "alias", file, AssetOwnerCanonical);
+                    probe.Batch.End(); probe.DrainOwnerQueue(); probe.Batch.Begin();
+                    var item = probe.Item("alias", selector);
+                    string storedSelector = item.Data.Visual.SpritePath;
+                    Texture2D first = probe.Draw(item);
+                    Equal(canonical, probe.Loads.Single().Path, "initial certified owner: " + scenario);
+                    System.Threading.Tasks.Task.Run(() => probe.Cache.Invalidate(selector)).GetAwaiter().GetResult();
+                    Texture2D refreshed = probe.Draw(item);
+                    Equal(false, ReferenceEquals(first, refreshed), "alias invalidation removes selected canonical hot entry: " + scenario);
+                    Equal(canonical, probe.Loads[^1].Path, "alias reload preserves certified byte owner: " + scenario);
+                    Equal(true, AssetOwnerCanonical.SequenceEqual(probe.Loads[^1].Bytes), "alias cannot promote different local shadow bytes: " + scenario);
+                    Equal(storedSelector, item.Data.Visual.SpritePath, "stored authored selector unchanged: " + scenario);
+                    // A failed refresh must not resurrect the stale hot texture or
+                    // back off on the authored alias instead of the selected owner.
+                    probe.FailDecode = true; probe.Cache.Invalidate(canonical);
+                    DrawAssetOwner(item); DrawAssetOwner(item);
+                    Equal(3, probe.Attempts, "failure then same-key backoff makes one attempt: " + scenario);
+                    var negative = (Dictionary<string, DateTime>)typeof(RuntimeSpriteCache).GetField("_missingOrBad", AssetOwnerInstance)!.GetValue(probe.Cache)!;
+                    Equal(canonical, negative.Keys.Single(), "failure backoff retains selected full key: " + scenario);
+                    if (scenario == "environment") negative[selector.Trim()] = DateTime.UtcNow;
+                    probe.Cache.Invalidate(selector); Equal(0, negative.Count, "alias also clears selected owner's and legacy raw negative keys: " + scenario);
+                    DrawAssetOwner(item); DrawAssetOwner(item); Equal(4, probe.Attempts, "one invalidation retry then renewed backoff: " + scenario);
+                    probe.FailDecode = false; probe.Cache.Invalidate(selector);
+                    Texture2D recovered = probe.Draw(item);
+                    Equal(false, ReferenceEquals(refreshed, recovered), "recovery publishes only a fresh resource: " + scenario);
+                    Equal(5, probe.Attempts, "one successful recovery attempt: " + scenario);
+                    probe.Batch.End(); probe.DrainOwnerQueue();
+                    Equal(2, probe.Disposals.Count, "both invalidated successful generations retire once: " + scenario);
+                    Console.WriteLine("DETAIL: invalidation alias=" + scenario + " canonical loads=3 failedAttempts=2 negative-key-preserved=1");
+                }
+            } finally { Environment.SetEnvironmentVariable("ICL_INVALIDATION_ROOT", oldRoot); }
+        });
+    }
+
+    private static void RuntimeSpriteInvalidationClearAndDisposeFencePendingRetirement()
+    {
+        WithLighting((_, __) => {
+            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
+            string path = Path.Combine(Terraria.Program.SavePath, "retirement-lifecycle.png");
+            File.WriteAllBytes(path, AssetOwnerCanonical);
+            var item = probe.Item("retirement", path);
+            probe.Draw(item);
+            for (int generation = 0; generation < 2; generation++) {
+                System.Threading.Tasks.Task.Run(() => { for (int i = 0; i < 20; i++) probe.Cache.Invalidate(path); }).GetAwaiter().GetResult();
+                probe.Draw(item);
+            }
+            Equal(1, probe.QueuedActions, "multiple loaded generations share one retirement callback");
+            Equal(0, probe.Disposals.Count, "no early disposal of any queued generation");
+            DrawAssetOwner(probe.Item("missing", Path.Combine(Terraria.Program.SavePath, "missing-lifecycle.png")));
+            Equal(1, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "negative control exists before clear");
+            probe.Batch.End();
+            Equal(1, probe.Cache.Clear(clearMissingOrBad: false), "Clear return preserves active-entry count");
+            Equal(0, probe.Disposals.Count, "Clear only retires ownership; Main.Update reclaims live and pending resources");
+            Equal(1, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "Clear(false) preserves negative backoff");
+            Equal(1, probe.QueuedActions, "the already-enqueued callback remains harmless and coalesced");
+            probe.Batch.Begin(); Texture2D fresh = probe.Draw(item);
+            Equal(false, probe.Disposals.Any(d => ReferenceEquals(d.Texture, fresh)), "Clear permits a new independent loaded generation");
+            System.Threading.Tasks.Task.Run(() => probe.Cache.Invalidate(path)).GetAwaiter().GetResult();
+            Equal(1, probe.QueuedActions, "new retirement before old callback reuses its owner boundary");
+            probe.Batch.End(); probe.DrainOwnerQueue();
+            Equal(4, probe.Disposals.Count, "old callback does not redispose cleared generations");
+            Equal(4, probe.Disposals.Select(d => d.Texture).Distinct().Count(), "each reclaimed generation appears once");
+            probe.Batch.Begin(); probe.Draw(item); probe.Batch.End();
+            probe.Cache.Dispose();
+            Equal(4, probe.Disposals.Count, "Dispose retires final texture without synchronous disposal");
+            Equal(0, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "Dispose clears negative backoff");
+            Equal(true, probe.Cache.TryGet(path) is null, "disposed cache cannot recreate resources after unload");
+            probe.Cache.Invalidate(path); probe.Cache.Dispose(); probe.DrainOwnerQueue();
+            Equal(5, probe.Loads.Count, "late use and invalidation cannot reload disposed cache");
+            Equal(5, probe.Disposals.Count, "repeated Dispose and pending callback cannot double-dispose");
+        });
+        Console.WriteLine("DETAIL: repeated generations retire via one owner callback; Clear(false) preserves backoff; Clear/Dispose reclaim retired resources; no post-dispose resurrection");
+    }
+
+    private delegate int AssetClearOriginal(RuntimeSpriteCache cache, bool clearMissingOrBad);
+    private delegate int AssetClearHook(AssetClearOriginal original, RuntimeSpriteCache cache, bool clearMissingOrBad);
+
+    private static void RuntimeSpriteAlphaChecksAtOwnerBoundary()
+    {
+        // Preserve the accepted alpha/readback/upload/PCA test body unchanged.
+        // Its old synchronous Clear assertion is now observed AFTER the actual
+        // owner drain in this no-batch/no-DrawData fixture. Raw Clear/Unload with
+        // borrowers is tested separately above, without this fixture adapter.
+        var actions = typeof(Terraria.Main).GetField("_mainThreadActions", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object? prior = actions.GetValue(null);
+        actions.SetValue(null, new System.Collections.Concurrent.ConcurrentQueue<Action>());
+        int drains = 0;
+        AssetClearHook clear = (original, cache, negative) => {
+            int removed = original(cache, negative);
+            typeof(Terraria.Main).GetMethod("ConsumeAllMainThreadActions", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            drains++;
+            return removed;
+        };
+        try {
+            using var hook = new MonoMod.RuntimeDetour.Hook(typeof(RuntimeSpriteCache).GetMethod("Clear")!, clear);
+            RuntimeSpriteCachePremultipliesDecodedPixelsOnce();
+            Equal(2, drains, "unchanged alpha body observes both Clear calls at real owner queue boundary");
+        } finally { actions.SetValue(null, prior); }
+    }
+
+    private static int SpriteOwnedResources(RuntimeSpriteCache cache)
+        => cache.GetDebugSnapshot().TextureCount + ((IList)typeof(RuntimeSpriteCache).GetField("_retiredTextures", AssetOwnerInstance)!.GetValue(cache)!).Count;
+
+    private static void WithSpriteCapacity(Action action)
+    {
+        var config = typeof(Terraria.ModLoader.ContentInstance<InfiniCrafterLocal.Common.Config.InfiniGameplayQolConfig>).GetProperty("Instance")!;
+        object? prior = config.GetValue(null);
+        config.SetValue(null, new InfiniCrafterLocal.Common.Config.InfiniGameplayQolConfig { RuntimeSpriteCacheMaxTextures = 64 });
+        try { action(); } finally { config.SetValue(null, prior); }
+    }
+
+    private static void RuntimeSpriteBurstBoundsResidentAndDeferredResources()
+    {
+        WithLighting((_, __) => WithSpriteCapacity(() => {
+            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
+            string path = Path.Combine(Terraria.Program.SavePath, "bounded-burst.png"), other = Path.Combine(Terraria.Program.SavePath, "bounded-other.png");
+            File.WriteAllBytes(path, AssetOwnerCanonical); File.WriteAllBytes(other, AssetOwnerCanonical);
+            Texture2D first = probe.Draw(probe.Item("burst", path)), unrelated = probe.Draw(probe.Item("other", other));
+            int capacity = probe.Cache.GetDebugSnapshot().MaxCachedTextures, blocked = 0;
+            Texture2D previous = first;
+            for (int i = 0; i < capacity * 3; i++) {
+                System.Threading.Tasks.Task.Run(() => probe.Cache.Invalidate(path)).GetAwaiter().GetResult();
+                Texture2D? next = probe.Cache.TryGet(path, out float angle);
+                if (next is null) { blocked++; Equal(0f, angle, "pressure cannot return stale metadata"); }
+                else { Equal(false, ReferenceEquals(previous, next), "each admitted invalidated generation is fresh"); previous = next; }
+                Equal(true, SpriteOwnedResources(probe.Cache) <= capacity * 2, "burst combined resident+retired ownership is bounded before queue drain");
+                Equal(true, ReferenceEquals(unrelated, probe.Cache.TryGet(other)), "pressure preserves unrelated hot texture");
+                Equal(0, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "transient capacity admission never enters file backoff");
+            }
+            Equal(true, blocked > 0, "burst actually reaches admission pressure");
+            int owned = SpriteOwnedResources(probe.Cache), actions = probe.QueuedActions;
+            for (int i = 0; i < 1000; i++) probe.Cache.Invalidate(Path.Combine(Terraria.Program.SavePath, "unknown-" + i + ".png"));
+            Equal(owned, SpriteOwnedResources(probe.Cache), "unknown invalidation does not grow ownership");
+            Equal(actions, probe.QueuedActions, "unknown invalidation does not grow owner queue");
+            Equal(1, actions, "all loaded generations share one retirement callback");
+            Equal(0, probe.Disposals.Count, "all queued borrowers survive pressure");
+            probe.Batch.End(); probe.DrainOwnerQueue();
+            Equal(1, SpriteOwnedResources(probe.Cache), "only unrelated hot resource remains after owner drain");
+            Texture2D recovered = probe.Cache.TryGet(path)!;
+            Equal(true, recovered is not null, "admission recovers immediately after drain without backoff expiry/invalidation");
+            Equal(false, ReferenceEquals(previous, recovered), "recovery never lends a retired generation");
+            probe.Cache.Clear(); probe.DrainOwnerQueue();
+            Equal(probe.Loads.Count, probe.Disposals.Count, "all burst resources reclaimed exactly once");
+            Equal(probe.Loads.Count, probe.Disposals.Select(d => d.Texture).Distinct().Count(), "no burst disposal replay");
+            Console.WriteLine($"DETAIL: actual worker Invalidate->TryGet burst={capacity * 3} resourceCeiling={capacity * 2} blocked={blocked} loaded={probe.Loads.Count}; no file backoff");
+        }));
+    }
+
+    private static void RuntimeSpriteLruRetainsQueuedBorrowersUntilOwnerDrain()
+    {
+        WithLighting((_, __) => WithSpriteCapacity(() => {
+            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
+            string firstPath = Path.Combine(Terraria.Program.SavePath, "lru-first.png"); File.WriteAllBytes(firstPath, AssetOwnerCanonical);
+            Texture2D first = probe.Draw(probe.Item("lru", firstPath));
+            var drawData = new Terraria.DataStructures.DrawData(first, Vector2.Zero, first.Bounds, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            int capacity = probe.Cache.GetDebugSnapshot().MaxCachedTextures;
+            for (int i = 0; i < capacity; i++) {
+                string path = Path.Combine(Terraria.Program.SavePath, "lru-" + i + ".png"); File.WriteAllBytes(path, AssetOwnerCanonical);
+                Equal(true, probe.Cache.TryGet(path) is not null, "LRU replacement admits a real cache load");
+            }
+            Equal(capacity, probe.Cache.GetDebugSnapshot().TextureCount, "LRU preserves resident cap");
+            Equal(1L, probe.Cache.GetDebugSnapshot().EvictionCount, "one actual LRU eviction");
+            Equal(0, probe.Disposals.Count, "LRU cannot dispose a texture already borrowed by SpriteBatch/DrawData");
+            drawData.Draw(probe.Batch);
+            Equal(2, probe.QueuedSprites, "evicted DrawData still submits its borrowed texture before End");
+            Equal(1, probe.QueuedActions, "LRU uses existing coalesced owner retirement");
+            probe.Batch.End(); probe.DrainOwnerQueue();
+            Equal(true, ReferenceEquals(first, probe.Disposals.Single().Texture), "LRU disposes exactly its evicted generation after borrowers end");
+            probe.Cache.Clear(); probe.DrainOwnerQueue();
+            Equal(capacity + 1, probe.Disposals.Count, "LRU plus teardown reclaim every loaded texture once");
+            Equal(true, probe.Disposals.All(d => d.Thread == probe.OwnerThread), "all admitted-resource retirement belongs to owner drain");
+        }));
+    }
+
+    private static void RuntimeSpriteWorkerClearAndModUnloadDeferBorrowedResources()
+    {
+        WithLighting((_, __) => {
+            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
+            string path = Path.Combine(Terraria.Program.SavePath, "worker-teardown.png"); File.WriteAllBytes(path, AssetOwnerCanonical);
+            Texture2D first = probe.Draw(probe.Item("worker", path));
+            var drawData = new Terraria.DataStructures.DrawData(first, Vector2.Zero, first.Bounds, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            probe.Cache.TryGet(Path.Combine(Terraria.Program.SavePath, "worker-missing.png"));
+            int removed = System.Threading.Tasks.Task.Run(() => probe.Cache.Clear(false)).GetAwaiter().GetResult();
+            Equal(1, removed, "worker Clear return still counts active entries");
+            Equal(0, probe.Cache.GetDebugSnapshot().TextureCount, "worker Clear immediately removes lookup authority");
+            Equal(1, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "Clear(false) retains negative backoff");
+            int clearDisposals = probe.Disposals.Count;
+            drawData.Draw(probe.Batch);
+            Texture2D second = probe.Draw(probe.Item("worker", path));
+            Equal(false, ReferenceEquals(first, second), "Clear allows independent fresh load while old generation is retired");
+            int worker = System.Threading.Tasks.Task.Run(() => { int thread = Environment.CurrentManagedThreadId; peers.Mod.Unload(); return thread; }).GetAwaiter().GetResult();
+            Equal(false, worker == probe.OwnerThread, "actual Mod.Unload hook executed on isolated worker");
+            Console.WriteLine($"DETAIL: ownerThread={probe.OwnerThread} unloadWorker={worker} disposedAfterWorkerClear={clearDisposals} disposedAfterWorkerUnload={probe.Disposals.Count}; queuedBorrowers={probe.QueuedSprites}");
+            Equal(0, clearDisposals, "worker Clear cannot dispose borrowed graphics resource");
+            Equal(0, probe.Disposals.Count, "worker Mod.Unload cannot dispose queued borrower");
+            Equal(0, probe.Cache.GetDebugSnapshot().TextureCount, "unload removes active authority");
+            Equal(0, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "unload clears negative authority");
+            Equal(true, probe.Cache.TryGet(path) is null, "disposed cache never resurrects before callback");
+            probe.Cache.Invalidate(path); probe.Cache.Dispose();
+            Equal(1, probe.QueuedActions, "Clear/Unload share one captured-cache callback");
+            using var replacement = new RuntimeSpriteCache(); typeof(InfiniMod).GetProperty("Sprites")!.SetValue(null, replacement);
+            probe.Batch.End(); probe.DrainOwnerQueue();
+            Equal(2, probe.Disposals.Count, "owner callback reclaims both old-cache generations");
+            Equal(2, probe.Disposals.Select(d => d.Texture).Distinct().Count(), "worker lifecycle never double-disposes");
+            Equal(true, probe.Disposals.All(d => d.Thread == probe.OwnerThread), "worker teardown marshals all resource retirement to owner");
+            Equal(0, SpriteOwnedResources(probe.Cache), "disposed old cache owns no resources after drain");
+            Equal(0, replacement.GetDebugSnapshot().TextureCount, "captured old callback never mutates replacement cache");
+            probe.DrainOwnerQueue(); Equal(2, probe.Disposals.Count, "teardown callback cannot replay");
+        });
+    }
+
     private delegate Texture2D? AssetGetOriginal(RuntimeSpriteCache cache, string path);
     private delegate Texture2D? AssetGetHook(AssetGetOriginal original, RuntimeSpriteCache cache, string path);
 

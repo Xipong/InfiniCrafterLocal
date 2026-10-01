@@ -11,7 +11,9 @@ from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring import compile_runtime_program, strict_schema_errors
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _vfx_output
+from infini_local.pipelines import llm_authoring_pipeline as stage
+from test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
+from test_vfx_empty_asset_domain_repair import _offline_transport
 
 
 def _packet(data: dict, repair: bool) -> dict:
@@ -59,8 +61,39 @@ def test_sent_slot_schema_expresses_existing_renderer_requirements(repair, rende
     assert surface["rendererRequirements"][renderer] == required
 
 
+@pytest.mark.parametrize("repair", [False, True])
+def test_serialized_director_and_repair_explain_legacy_png_dependencies(monkeypatch, repair):
+    data = _accepted_visual_data("workbench_blade")
+    accepted = _vfx_output(data)
+    raw = copy.deepcopy(accepted)
+    raw["slots"][0]["entityId"] = "missing_entity"
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "retarget only the pair"}
+    sent = _offline_transport(monkeypatch, "legacy_png_packet", [raw, patch])
+    vfx.attach_hybrid_vfx_manifest(data, "legacy_png_guide", llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 2
+    packet = json.loads(sent[int(repair)]["messages"][1]["content"])
+    surface = packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]
+    slot_schema = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
+    description = slot_schema["properties"]["textureRole"]["description"]
+    for renderer in vfx.SPRITE_TEXTURE_RENDERERS:
+        assert renderer in description
+    for clause in (
+        "item=accepted item PNG", "entity=bound entity baked_sprite/reuse_item_icon PNG",
+        "no_asset/runtime_geometry cannot supply one", "projectile/field alias entity only when equal to bound visualRole",
+        "same mode requirement", "impact=same-entity impactSprite producer", "none invalid for sprites",
+        "Primitive/Dust/cue renderer hints require no PNG",
+    ):
+        assert clause in description, clause
+    assert "projectile/field aliases require exact bound visualRole" in surface["textureDependencyTuples"]["entity"]
+    assert surface["textureRole"] == slot_schema["properties"]["textureRole"]["enum"]
+    sources = {row["entityId"]: row for row in surface["entityTextureSources"]}
+    for entity in data["runtimeProgram"]["entities"]:
+        assert sources[entity["id"]]["assetMode"] == entity["visual"]["assetMode"]
+    assert packet["acceptedVisualKitReadOnly" if repair else "acceptedVisualKit"] == data["visualKit"]
+
+
 def test_renderer_channel_lane_domain_matches_existing_runtime_invariants():
-    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data = _accepted_visual_data("workbench_blade")
     surface = vfx.vfx_director_surface(data)
     schema = vfx.vfx_director_schema(data)["properties"]["slots"]["items"]
     raw = _vfx_output(data)

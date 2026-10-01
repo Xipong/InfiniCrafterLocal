@@ -368,6 +368,121 @@ internal static partial class EngineRuntimeChecks
     private static int ReviewParticleCount(object emission)
         => ((Array)emission.GetType().GetField("Particles", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(emission)!).Length;
 
+    private static IList ReviewPeriodicItems()
+        => (IList)typeof(InfiniDetachedVfxSystem).GetField("PeriodicElements", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+
+    private static GeneratedItemData ReviewItemLifecycleData(string attachment, bool hit = false)
+    {
+        var data = hit ? ReviewContactItemData() : ParseMaterialElement(MaterialElementWire(attachment));
+        data.Id = "material_item_lifecycle";
+        var slot = data.VfxManifest.Slots[0]; slot.Duration = 3; slot.Element!.Attachment = attachment; slot.Element.Count = 1;
+        slot.Element.OffsetForwardPx = 0; slot.Element.OffsetSidePx = 0;
+        slot.Element.SpeedMinPxPerTick = 0; slot.Element.SpeedMaxPxPerTick = 0; slot.Element.InheritVelocity = 0;
+        data.VfxManifest.Budget.MaxParticlesPerTick = 256; data.VfxManifest.Budget.MaxParticlesTotal = 12000;
+        return ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject());
+    }
+
+    private static void MaterialDeadItemPeriodicRetires(int mode, string attachment)
+    {
+        WithLighting((config, _) => {
+            using var peers = new ReviewPeers(); peers.Mode(mode, 0); config.ParticleSpawnMultiplier = 1;
+            var data = ReviewItemLifecycleData(attachment); peers.Register(data);
+            var owner = Terraria.Main.player[0]; owner.selectedItem = 0; owner.Center = new Vector2(100, 200);
+            var item = ReviewItem(data); owner.inventory[0] = item.Item;
+            item.HoldItem(owner); peers.System.PostUpdateEverything();
+            Equal(1, ReviewPeriodicItems().Count, "alive actual HoldItem registers one periodic source");
+            Equal(1, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "alive first periodic particle");
+            // Installed Player.Update returns before HoldItem/equipment producers
+            // when dead. Observe only the actual all-client update, without Draw.
+            owner.dead = true;
+            for (ulong tick = 101; tick <= 108; tick++) { MaterialClock(tick); peers.System.PostUpdateEverything(); }
+            Equal(true, owner.active && owner.dead && ReferenceEquals(owner.HeldItem, item.Item), "softcore death retains exact Item/Player objects");
+            int newGroups = OwnedMaterialQueue().Cast<object>().Count(e => (ulong)e.GetType().GetField("Start", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(e)! > 100);
+            Console.WriteLine($"DETAIL: dead Item mode={mode} attachment={attachment} producerCallsAfterDeath=0 registrations={ReviewPeriodicItems().Count} newGroups={newGroups} particles={OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount)}");
+            Equal(0, ReviewPeriodicItems().Count, "dead Item retires periodic registration without another producer or Draw");
+            Equal(0, newGroups, "dead Item cannot autonomously create fresh periodic groups");
+            Equal(0, OwnedMaterialQueue().Count, "old world lifetime expires; attached lifetime retires");
+        });
+    }
+    private static void MaterialDeadItemSpWorld() => MaterialDeadItemPeriodicRetires(NetmodeID.SinglePlayer, "world");
+    private static void MaterialDeadItemSpSource() => MaterialDeadItemPeriodicRetires(NetmodeID.SinglePlayer, "source");
+    private static void MaterialDeadItemClientWorld() => MaterialDeadItemPeriodicRetires(NetmodeID.MultiplayerClient, "world");
+    private static void MaterialDeadItemClientSource() => MaterialDeadItemPeriodicRetires(NetmodeID.MultiplayerClient, "source");
+
+    private static void MaterialDeadItemDelayKeepsWorldSnapshotAndFencesSource()
+    {
+        WithLighting((config, _) => {
+            using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
+            foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.MultiplayerClient })
+            foreach (string attachment in new[] { "world", "source" }) {
+                peers.System.OnWorldUnload(); MaterialClock(100); peers.Mode(mode, 0);
+                var data = ReviewItemLifecycleData(attachment, hit: true); data.VfxManifest.Slots[0].StartTick = 2;
+                data = ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject()); peers.Register(data);
+                var owner = Terraria.Main.player[0]; owner.dead = false; owner.selectedItem = 0; owner.Center = new Vector2(100, 200);
+                var item = ReviewItem(data); owner.inventory[0] = item.Item;
+                Vector2 captured = owner.Center;
+                item.OnHitNPC(owner, new NPC { active = true, Center = new Vector2(117, 223) }, new NPC.HitInfo(), 1);
+                Equal(1, OwnedMaterialQueue().Count, "actual item hit captures one delayed event");
+                Equal(0, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "delayed event spends no particles at capture");
+                owner.dead = true; owner.Center = new Vector2(700, 800); data.VfxManifest.Slots[0].Element!.WidthPx = 99;
+                MaterialClock(102); peers.System.PostUpdateEverything();
+                Equal(attachment == "world" ? 1 : 0, OwnedMaterialQueue().Count, "world snapshot survives death while exact source attachment retires");
+                if (attachment == "world") {
+                    object emission = OwnedMaterialQueue()[0]!;
+                    var frame = (VfxSourceFrame)emission.GetType().GetField("Frame", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(emission)!;
+                    Equal(captured, frame.Position, "delayed world event retains event-time owner coordinates after death/motion");
+                    Equal(1, ReviewParticleCount(emission), "delayed world event starts at authored due tick");
+                    object design = emission.GetType().GetField("Design", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(emission)!;
+                    Equal(8f, (float)design.GetType().GetProperty("Width")!.GetValue(design)!, "delayed world design remains copied before mutation");
+                }
+                MaterialClock(105); peers.System.PostUpdateEverything();
+                Equal(0, OwnedMaterialQueue().Count, "delayed world lifetime still expires at due+duration");
+            }
+        });
+    }
+
+    private static void MaterialItemRespawnReregistersAndKeepsGenerationFence()
+    {
+        WithLighting((config, _) => {
+            using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
+            foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.MultiplayerClient }) {
+                peers.System.OnWorldUnload(); MaterialClock(100); peers.Mode(mode, 0);
+                var data = ReviewItemLifecycleData("source"); peers.Register(data);
+                var owner = Terraria.Main.player[0]; owner.dead = false; owner.selectedItem = 0;
+                var item = ReviewItem(data); owner.inventory[0] = item.Item;
+                var originalBinding = VfxSourceBinding.Capture(owner, item.Item, data)!;
+                item.HoldItem(owner); peers.System.PostUpdateEverything();
+                item.HoldItem(owner); peers.System.PostUpdateEverything();
+                Equal(1, ReviewPeriodicItems().Count, "frozen alive tick cannot duplicate registration");
+                Equal(1, OwnedMaterialQueue().Count, "frozen alive tick cannot duplicate group");
+                owner.dead = true; MaterialClock(101); peers.System.PostUpdateEverything();
+                Equal(0, ReviewPeriodicItems().Count, "death removes registration before respawn");
+                Equal(0, OwnedMaterialQueue().Count, "source-attached particles retire at death");
+                owner.dead = false; MaterialClock(104); peers.System.PostUpdateEverything();
+                Equal(0, ReviewPeriodicItems().Count, "respawn alone does not resurrect retired registration");
+                MaterialClock(105); item.HoldItem(owner); peers.System.PostUpdateEverything();
+                Equal(1, ReviewPeriodicItems().Count, "actual producer re-registers same Item after respawn");
+                Equal(1, OwnedMaterialQueue().Count, "respawn resumes ordinary periodic cadence");
+                Equal(true, ReferenceEquals(originalBinding.Generation, VfxSourceBinding.Capture(owner, item.Item, data)!.Generation), "death/respawn does not invent a new Item identity");
+                var replacement = ReviewItem(data); owner.inventory[0] = replacement.Item;
+                MaterialClock(106); peers.System.PostUpdateEverything();
+                Equal(0, ReviewPeriodicItems().Count, "equal-definition Item replacement never inherits prior source");
+                Equal(0, OwnedMaterialQueue().Count, "old source attachment retires on exact Item replacement");
+                MaterialClock(107); replacement.HoldItem(owner); peers.System.PostUpdateEverything();
+                Equal(1, OwnedMaterialQueue().Count, "replacement gets its own registration");
+                var beforeNetwork = VfxSourceBinding.Capture(owner, replacement.Item, data)!;
+                // Exercise real token application on the SAME Item/ModItem objects.
+                replacement.NetReceive(new BinaryReader(new MemoryStream(ReviewItemWire(ReviewItem(data)))));
+                Equal(false, ReferenceEquals(beforeNetwork.Generation, VfxSourceBinding.Capture(owner, replacement.Item, data)!.Generation), "new network Item token changes canonical presentation generation");
+                MaterialClock(108); peers.System.PostUpdateEverything();
+                Equal(0, ReviewPeriodicItems().Count, "same-object new generation cannot inherit periodic registration");
+                Equal(0, OwnedMaterialQueue().Count, "same-object new generation cannot inherit attached particles");
+                MaterialClock(109); replacement.HoldItem(owner); peers.System.PostUpdateEverything();
+                Equal(1, OwnedMaterialQueue().Count, "new generation remains eligible for actual producer");
+            }
+        });
+    }
+
     private static void MaterialItemPeriodicPositiveTotalIsNotAGroupCap()
     {
         WithLighting((config, _) => {

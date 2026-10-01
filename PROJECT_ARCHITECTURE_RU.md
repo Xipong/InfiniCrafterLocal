@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.245 — целевая архитектура
+# InfiniCrafterLocal v0.4.246 — целевая архитектура
 
 ## Суть
 
@@ -85,6 +85,8 @@ C# не читает name/tooltip/tags/category для выбора gameplay. Н
 Текущая программа ограничена: 12 entities, 8 bindings, 48 calls, child depth 3, bounded event spawn/rate/lifetime. На entity допускается один movement slot и один controller slot. Это конечный безопасный component runtime, не ECS/VM общего назначения.
 
 ## Assets
+
+Технический image lifecycle имеет одного владельца `_execute_image_request`: оба публичных item/role adapters проецируют его результат, не повторяют retry/postprocess/publication. Private attempt directories передаются явно; logical IDs/seeds не заменяются filesystem nonce. Итоговые PNG атомарны и immutable. `vfx_png_dependencies` — read-only projection существующих producers для validation/delivery/cache, не новая AssetRegistry. Подробности и границы: [`IMAGE_ASSET_LIFECYCLE_RU.md`](docs/IMAGE_ASSET_LIFECYCLE_RU.md).
 
 Visual Director выбирает `baked_sprite`, `reuse_item_icon`, `runtime_geometry` или `no_asset` только там, где режим разрешён entity-role. Отсутствующий обязательный PNG — validator failure/Visual Repair. Placeholder не считается игровым результатом.
 

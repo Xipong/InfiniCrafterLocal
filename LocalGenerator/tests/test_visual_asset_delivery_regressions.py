@@ -10,7 +10,7 @@ import pytest
 from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
-from infini_local.core.vfx_manifest import _hydrate_vfx_asset_prompts
+from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, _hydrate_vfx_asset_prompts, validate_vfx_manifest_wire
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
 
@@ -109,7 +109,7 @@ def _stub_image_generation(monkeypatch, tmp_path: Path) -> list[tuple[str, str, 
         })
         return candidate
 
-    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = ""):
+    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "", publication_entity_id: str = ""):
         path = write_no_image_fixture_png(tmp_path / f"{asset_id}.png", size=canvas)
         calls.append((role, prompt, negative))
         return str(path), f"/sprite/{path.name}", 1.0, "generated"
@@ -194,8 +194,11 @@ def test_impact_texture_is_vfx_authored_planned_generated_and_projected(monkeypa
         "spriteNegativePrompt": "text, watermark, opaque square",
     }]})
     data["vfxManifest"] = {
-        "slots": [{"entityId": "shot", "rendererKind": "impactSprite", "textureRole": "impact"}],
+        "schema": VFX_MANIFEST_SCHEMA,
+        "slots": [{"id": "shot_impact", "entityId": "shot", "event": "on_spawn",
+                   "rendererKind": "impactSprite", "textureRole": "impact"}],
     }
+    assert validate_vfx_manifest_wire(data)["ok"]
     impact = next(row for row in build_visual_asset_plan(data) if row["role"] == "impact:shot")
     assert impact["required"] is True
     assert impact["prompt"] == "authored amber shard impact burst"

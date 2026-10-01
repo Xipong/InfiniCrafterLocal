@@ -55,6 +55,9 @@ public sealed class RuntimeSpriteCache : IDisposable
     private readonly Dictionary<string, CachedTexture> _textures = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _missingOrBad = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+    private readonly List<Texture2D> _retiredTextures = new();
+    private bool _retirementQueued;
+    private bool _disposed;
     private static readonly TimeSpan MissingRetryAfter = TimeSpan.FromSeconds(30);
     private const int DefaultMaxCachedTextures = 512;
     private const int MinCachedTextures = 64;
@@ -104,6 +107,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
         lock (_lock)
         {
+            if (_disposed) return null;
             string? key = null;
             try
             {
@@ -113,17 +117,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                     _missCount++;
                     return null;
                 }
-                // This is the same declared asset, not another texture source.
-                // An existing local shadow cannot outrank a lifecycle-certified
-                // canonical byte owner. Without that proof retain legacy/local behavior.
-                string? certified = InfiniCrafterLocalMod.AssetSync?.ResolveCertifiedLocalPath(path);
-                key = Path.GetFullPath(certified ?? path);
-                if (!File.Exists(key))
-                {
-                    string? synced = global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
-                    if (!string.IsNullOrWhiteSpace(synced) && File.Exists(synced))
-                        key = Path.GetFullPath(synced);
-                }
+                key = ResolveSelectedKey(path);
                 if (_textures.TryGetValue(key, out var cached))
                 {
                     _hitCount++;
@@ -140,6 +134,16 @@ public sealed class RuntimeSpriteCache : IDisposable
                     }
                     _missingOrBad.Remove(key);
                 }
+                RuntimeSpriteLimits limits = EffectiveLimits();
+                // Keep one resident-set worth of headroom for borrowed generations
+                // awaiting Main.Update. Moving a texture to retirement does not free
+                // its resource slot; only the owner callback does. Hot hits above
+                // remain available, and pressure is not a missing/bad-file failure.
+                if (_textures.Count + _retiredTextures.Count >= limits.MaxCachedTextures * 2)
+                {
+                    _missCount++;
+                    return null;
+                }
                 if (!File.Exists(key))
                 {
                     _missCount++;
@@ -147,7 +151,6 @@ public sealed class RuntimeSpriteCache : IDisposable
                     return null;
                 }
 
-                RuntimeSpriteLimits limits = EffectiveLimits();
                 if (!IsRuntimePngFileSizeAllowed(key, limits.MaxTextureFileBytes))
                 {
                     _missCount++;
@@ -193,6 +196,23 @@ public sealed class RuntimeSpriteCache : IDisposable
                 return null;
             }
         }
+    }
+
+    // The single existing source-selection policy, shared by lookup/invalidation.
+    // This is the same declared asset, not another texture source. A local shadow
+    // cannot outrank a lifecycle-certified canonical byte owner; without proof
+    // retain legacy/local behavior. No decoding or hashing is done here.
+    private static string ResolveSelectedKey(string path)
+    {
+        string? certified = InfiniCrafterLocalMod.AssetSync?.ResolveCertifiedLocalPath(path);
+        string key = Path.GetFullPath(certified ?? path);
+        if (!File.Exists(key))
+        {
+            string? synced = InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
+            if (!string.IsNullOrWhiteSpace(synced) && File.Exists(synced))
+                key = Path.GetFullPath(synced);
+        }
+        return key;
     }
 
     private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture)
@@ -351,10 +371,11 @@ public sealed class RuntimeSpriteCache : IDisposable
         lock (_lock)
         {
             int removed = _textures.Count;
+            // Clear/Mod.Unload can run on a loader worker, or while DrawData is
+            // still borrowing a resident. Remove lookup authority now, but keep
+            // resource ownership charged until the same Main.Update callback.
             foreach (var cached in _textures.Values)
-            {
-                try { cached.Texture.Dispose(); } catch { }
-            }
+                RetireTexture(cached.Texture);
             _textures.Clear();
             if (clearMissingOrBad)
                 _missingOrBad.Clear();
@@ -423,7 +444,7 @@ public sealed class RuntimeSpriteCache : IDisposable
             var texture = _textures[oldestKey].Texture;
             _textures.Remove(oldestKey);
             _evictionCount++;
-            try { texture.Dispose(); } catch { }
+            RetireTexture(texture);
         }
     }
 
@@ -444,19 +465,64 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
     }
 
+    // Called under _lock. Removing lookup authority is CPU-only; a texture
+    // already handed to SpriteBatch/DrawData must survive the current Draw.
+    private void InvalidateKey(string key)
+    {
+        _missingOrBad.Remove(key);
+        if (!_textures.Remove(key, out var cached)) return;
+        RetireTexture(cached.Texture);
+    }
+
+    // All previously admitted textures share this bounded, instance-owned queue.
+    // The producer may run on a loader/download worker; it never waits for Draw.
+    private void RetireTexture(Texture2D texture)
+    {
+        _retiredTextures.Add(texture);
+        if (_retirementQueued) return;
+        _retirementQueued = true;
+        // Installed Main.QueueMainThreadAction always enqueues; Main.Update
+        // drains it after base.Update, outside Draw (tML 2026.6.3.6).
+        Main.QueueMainThreadAction(DisposeRetiredTextures);
+    }
+
+    private void DisposeRetiredTextures()
+    {
+        lock (_lock)
+        {
+            ReleaseRetiredTextures();
+            _retirementQueued = false;
+        }
+    }
+
+    // Only the Main.Update callback owns this graphics-resource boundary.
+    // Keep slots charged under _lock until disposal completes; no producer waits
+    // on a main-thread task or frees admission capacity ahead of resource release.
+    private void ReleaseRetiredTextures()
+    {
+        foreach (var texture in _retiredTextures)
+        {
+            try { texture.Dispose(); } catch { }
+        }
+        _retiredTextures.Clear();
+    }
+
     public void Invalidate(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
         lock (_lock)
         {
+            if (_disposed) return;
+            // Preserve legacy raw-alias negative removal before expansion.
+            _missingOrBad.Remove(path.Trim());
             try
             {
-                string key = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path).Trim());
-                // Asset downloads happen on a background task. Do not dispose/recreate
-                // Texture2D from that thread; only clear the negative lookup cache so the
-                // next draw-thread TryGet() can load the freshly downloaded PNG.
-                _missingOrBad.Remove(key);
-                _missingOrBad.Remove(path.Trim());
+                path = Environment.ExpandEnvironmentVariables(path).Trim();
+                InvalidateKey(ResolveSelectedKey(path));
+                // Also retire a pre-certification entry at the authored local key.
+                // URL/Windows aliases may not have a valid local full path.
+                try { InvalidateKey(Path.GetFullPath(path)); } catch { }
+                _missingOrBad.Remove(path);
             }
             catch
             {
@@ -467,6 +533,11 @@ public sealed class RuntimeSpriteCache : IDisposable
 
     public void Dispose()
     {
-        Clear(clearMissingOrBad: true);
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Clear(clearMissingOrBad: true);
+        }
     }
 }

@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.245
+# InfiniCrafterLocal v0.4.246
 
 InfiniCrafterLocal генерирует предмет Terraria из двух parent items. Gameplay Author за один LLM-вызов составляет bounded low-level `runtimeProgram`; Python проверяет и компилирует точные entities/components/events; C# tModLoader исполняет только typed v5 DTO.
 
@@ -17,11 +17,15 @@ parents
 
 Код не выбирает weapon family и не выводит gameplay из name/tooltip/category/prose. Старые `AttackSpec`, `runtimeFamily`, whole-weapon macros, schema/cache migration и fallback удалены.
 
-## Поставка 0.4.245
+## Поставка 0.4.246
 
-Поставка 0.4.245 обновляет **мод и LocalGenerator вместе**; модели, личная конфигурация, cache и внешние `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Упаковка кандидата и чтение его `.tmod` не равны final acceptance: native/review и публикацией владеет родительская проверка, а игровой multiplayer, live LLM/image campaign и художественное качество отдельно не заявлены. Старые корректные рецепты не перерисовываются автоматически. VFX Director/условный Repair сохраняют бюджет ответа 8000 по умолчанию и приоритет явной настройки пользователя.
+Обновляй **мод и LocalGenerator вместе**. В 0.4.246 один исполнитель владеет image-attempt lifecycle, промежуточные файлы изолированы, а все новые итоговые PNG публикуются атомарно под immutable именами. Validation/delivery/cache используют одну проекцию выбранного VFX PNG producer; неисполняемые ссылки отвергаются без изменения Visual или механики. Включены безопасное deferred освобождение текстур, retirement Item-эффектов при смерти и exact-leaf Repair пустого asset-domain.
+
+Модели, личная конфигурация, cache и внешние `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Старые корректные recipes/PNG не мигрируют и не перерисовываются автоматически. VFX Director/условный Repair сохраняют лимит ответа 8000 по умолчанию и приоритет явной настройки. Native/контрактные проверки не заменяют Terraria/MP, live image campaign или художественную приёмку.
 
 ## Документы
+
+- `docs/IMAGE_ASSET_LIFECYCLE_RU.md` — единый image executor, private output ownership, immutable publication, failure phases и общая VFX PNG dependency projection;
 
 - `docs/VFX_MATERIAL_ELEMENTS_RU.md` — индивидуальные VFX-ассеты, spriteElement/texturedPath, механический read-only context; исправленные item-periodic budgets, nonowner lifecycle, ordered replay, unresolved Item forwarding, точная readiness, conflict-safe PNG byte authority, O(1) descriptor-reference lookup и backoff по selected canonical key;
 - `AGENTS.md` — hard rules;

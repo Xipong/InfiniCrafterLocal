@@ -27,8 +27,8 @@ def test_same_request_overlap_publishes_each_calls_validated_bytes(offline_backe
     original_backend = visual_sprite_generation.generate_sdcpp
     original_validator = visual_sprite_generation.validate_processed_sprite
 
-    def distinct_pngs(prompt, negative, asset_id, canvas):
-        paths = original_backend(prompt, negative, asset_id, canvas)
+    def distinct_pngs(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if threading.current_thread().name == "second":
             with Image.open(paths[0]) as source:
                 image = source.copy()
@@ -111,8 +111,8 @@ def test_real_adapter_retry_keeps_raw_evidence_unique_and_configured_seeds(offli
 
     original_adapter = backend.generate_sdcpp
 
-    def real_adapter(prompt, negative, asset_id, canvas):
-        paths = original_adapter(prompt, negative, asset_id, canvas)
+    def real_adapter(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original_adapter(prompt, negative, asset_id, canvas, output_dir=output_dir)
         all_raw_paths.append([Path(path) for path in paths])
         return paths
 

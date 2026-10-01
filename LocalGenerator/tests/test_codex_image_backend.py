@@ -51,7 +51,7 @@ def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
     from infini_local.pipelines import visual_sprite_generation as visual
     from infini_local.services.codex_auth import CodexError
     calls, fallbacks = [], []
-    def fail(*args):
+    def fail(*args, **kwargs):
         calls.append(args)
         raise CodexError("OpenAI HTTP 429: quota reached")
     monkeypatch.setattr(visual, "generate_openai_codex", fail)

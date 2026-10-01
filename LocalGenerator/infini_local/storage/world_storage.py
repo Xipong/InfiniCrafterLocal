@@ -16,7 +16,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
 )
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+from infini_local.core.vfx_manifest import validate_vfx_manifest_wire, vfx_png_dependencies
 from infini_local.services.asset_sync_service import runtime_asset_paths
 
 
@@ -436,17 +436,14 @@ def _cache_assets_ready(data: dict[str, Any]) -> bool:
     """Use the delivery owner for the exact canonical transfer roster.
 
     Legacy records with no images stay optional; present paths are not optional
-    downloads. Material branches additionally require their selected producers'
-    ready status, canvas and alpha, as before.
+    downloads. Every actual PNG consumer requires its selected producer's ready
+    status; ingredient canvas and alpha remain owned by the delivery gate.
     """
     from infini_local.pipelines.visual_delivery_gate import _asset_roster_problems, visual_delivery_report
 
     raw_manifest = data.get("vfxManifest")
     manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
-    if "assets" in manifest or any(
-        isinstance(slot, dict) and slot.get("rendererKind") in ("spriteElement", "texturedPath")
-        for slot in manifest.get("slots") or []
-    ):
+    if "assets" in manifest or vfx_png_dependencies(data)["dependencies"]:
         return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
     return not _asset_roster_problems(runtime_asset_paths(data))
 

@@ -130,4 +130,11 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     sprite_report = visual_delivery_report(data, check_backend_config=False)
     assert "required_impact_sprite_missing" in {problem["code"] for problem in sprite_report["problems"]}
     hydrate_no_image_fixture_assets(data, fixture)
-    assert visual_delivery_report(data, check_backend_config=False)["ok"]
+    assert "required_vfx_texture_not_ready" in {
+        problem["code"] for problem in visual_delivery_report(data, check_backend_config=False)["problems"]
+    }
+    # The no-image hydrator deliberately labels QA bytes, not a completed image
+    # execution. Supply that result explicitly for this offline delivery fixture.
+    entity["visual"]["impactSpriteStatus"] = "generated"
+    final_report = visual_delivery_report(data, check_backend_config=False)
+    assert final_report["ok"], final_report["problems"]

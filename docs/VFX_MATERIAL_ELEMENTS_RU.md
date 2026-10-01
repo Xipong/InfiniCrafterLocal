@@ -1,4 +1,4 @@
-# Индивидуальные VFX-элементы — контракт 0.4.245
+# Индивидуальные VFX-элементы — контракт 0.4.246
 
 Это спецификация расширения существующего VFX-контракта, а не заявление о художественном качестве всех сгенерированных предметов. Native/CPU-проверки подтверждают свои исполнительные границы; разнообразие и качество реальной генерации проверяются отдельно на model-authored результатах.
 
@@ -106,6 +106,15 @@ Live paths доступны projectile `periodic`/`on_spawn`, не item_body и 
 | Texture-load backoff | `RuntimeSpriteCache.TryGet` сохраняет окончательный normalized selected key вне try; catch, retry admission и lifecycle invalidation используют один и тот же ключ выбранного canonical cache path, а не исходный authored alias. После неудачного load повторный вызов не открывает файл до истечения backoff либо явной invalidation. |
 
 Версии technical transport не совпадают с runtime ABI: projectile event v5, material item event v5, compact material Item v6 и genuine legacy Item v5; это не новая model-authored схема. Для этих границ зарегистрированы headless regression checks. Их PASS подтверждает именно вызванные CPU/packet/byte-owner seams; он не означает native/GPU, socket delivery, Terraria multiplayer-матч, художественную или model/image-generation приёмку.
+
+## Исправления жизненного цикла в 0.4.246
+
+Эти изменения входят в 0.4.246; опубликованный тег 0.4.245 ими не переписан.
+
+- **Время жизни текстур.** `RuntimeSpriteCache` остаётся единственным владельцем GPU-текстур, а AssetSync — владельцем подтверждённых PNG bytes. Invalidation использует тот же selected key, что lookup/backoff, и сразу отзывает старую запись из выдачи. Invalidation, LRU, Clear и Dispose передают ранее выданные ресурсы в одну очередь освобождения конкретного экземпляра кеша. Callback выполняется в конце `Main.Update`, после текущего Draw: worker/download/unload не освобождает текстуру, которую ещё использует SpriteBatch/DrawData. Повторный Dispose не воскрешает кеш и не освобождает ресурс дважды.
+- **Ограничение владения.** При неизменном эффективном лимите N resident cache содержит не более N записей; сумма resident и ожидающих освобождения textures ограничена 2N. При исчерпании этого технического бюджета новая загрузка временно не допускается, без выдачи stale texture и без записи missing/bad backoff. Незатронутые hot hits доступны; после owner callback загрузка снова разрешена. Понижение настройки не освобождает уже заимствованные ресурсы посреди Draw; до безопасного освобождения может сохраняться ранее допущенный объём. Неизвестные invalidation keys не создают записи.
+- **Смерть владельца Item.** Канонический `ItemBinding.IsLive` требует живого игрока. Periodic-регистрация и source-attached экземпляры завершаются после смерти, даже без нового producer/Draw. Уже захваченные world events сохраняют delay/duration. После respawn тот же Item регистрируется заново только через настоящий producer; identity/generation fences не ослаблены.
+- **Repair при пустом asset-domain.** Если `source=asset` не может сослаться ни на один объявленный корректный ID, диагностика помечает и `texture.source`, и `texture.assetId`. Модель явно выбирает допустимую замену; код не выбирает её и не создаёт artwork. При непустом домене исправляется только сломанная ссылка, а source и существующие image requests остаются frozen. Остальные поля, gameplay и Visual не размораживаются.
 
 ## Проверка
 

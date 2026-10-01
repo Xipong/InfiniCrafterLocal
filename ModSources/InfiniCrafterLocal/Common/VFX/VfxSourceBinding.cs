@@ -57,7 +57,7 @@ internal abstract class VfxSourceBinding
         private readonly object fence;
         internal ItemBinding(Player p,Item i,GeneratedItem g,int index){owner=p;item=i;generation=g;fence=g.PresentationGeneration;ownerSlot=p.whoAmI;itemSlot=index;type=i.type;}
         internal override object Generation=>fence;
-        internal override bool IsLive=>owner.active&&ownerSlot>=0&&ownerSlot<Main.player.Length&&ReferenceEquals(Main.player[ownerSlot],owner)
+        internal override bool IsLive=>owner.active&&!owner.dead&&ownerSlot>=0&&ownerSlot<Main.player.Length&&ReferenceEquals(Main.player[ownerSlot],owner)
             &&!item.IsAir&&item.type==type&&ReferenceEquals(item.ModItem,generation)&&ReferenceEquals(generation.PresentationGeneration,fence)
             &&(itemSlot<0?ReferenceEquals(owner.HeldItem,item):itemSlot<owner.armor.Length&&ReferenceEquals(owner.armor[itemSlot],item));
         internal override bool TryFrame(string anchor,out VfxSourceFrame frame) {

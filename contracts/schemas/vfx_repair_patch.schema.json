@@ -1920,7 +1920,7 @@
             "type": "integer"
           },
           "textureRole": {
-            "description": "Legacy image selector. spriteElement and texturedPath require none here and consume only their explicit nested texture selector and textureDependencyTuples.",
+            "description": "Legacy PNG selector for projectileAfterimage, spriteStampTrail, actorAfterimage, impactSprite: item=accepted item PNG; entity=bound entity baked_sprite/reuse_item_icon PNG (no_asset/runtime_geometry cannot supply one); projectile/field alias entity only when equal to bound visualRole, with the same mode requirement; impact=same-entity impactSprite producer (required companion slot for other sprite renderers); none invalid for sprites. Primitive/Dust/cue renderer hints require no PNG. spriteElement and texturedPath require none here and consume only their explicit nested texture selector and textureDependencyTuples.",
             "enum": [
               "item",
               "entity",

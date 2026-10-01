@@ -284,19 +284,35 @@ public sealed partial class GeneratedItemData
                 if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam
                     || path.Source == "whip" && (entity.Movement.Code != 18 || entity.Controller.Code == RuntimeControllerCode.ChannelBeam)) throw new InvalidDataException("VFX path lacks exact collision geometry producer");
             }
-            if (texture?.Source == "entity" && entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))
-                throw new InvalidDataException("VFX entity texture unavailable for exact entity");
-            if (texture?.Source == "item" && string.IsNullOrWhiteSpace(Visual.SpritePath)) throw new InvalidDataException("VFX item texture unavailable");
-            if (texture?.Source == "impact" && !(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s=>s.EntityId==entity.Id&&s.RendererKind=="impactSprite"))
-                throw new InvalidDataException("nested impact texture requires exact same-entity impactSprite producer");
-            if (texture?.Source == "impact" && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
-                || entity.Visual.ImpactSpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
-                throw new InvalidDataException("VFX selected impact texture unavailable");
-            if (slot.TextureRole == "impact" && VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot))
-                && SourceMode is not ("developer_fixture" or "test_fixture")
-                && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
-                    || entity.Visual.ImpactSpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
-                throw new InvalidDataException($"VFX slot '{slot.Id}' requires an authored impact PNG for '{entity.Id}'");
+            bool legacyTexture = VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot));
+            string? selected = texture?.Source ?? (legacyTexture ? slot.TextureRole : null);
+            string selector = texture is null ? "textureRole" : slot.Element is not null ? "element.texture.source" : "path.texture.source";
+            if (selected is "entity" or "projectile" or "field") {
+                if (selected != "entity" && !string.Equals(selected, entity.VisualRole, StringComparison.Ordinal))
+                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} must match exact entity visualRole");
+                if (entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))
+                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact entity baked_sprite/reuse_item_icon PNG producer");
+            }
+            if (selected == "item" && texture is not null && string.IsNullOrWhiteSpace(Visual.SpritePath))
+                throw new InvalidDataException($"VFX slot '{slot.Id}' {selector}: item texture unavailable");
+            if (selected is "item" or "entity" or "projectile" or "field"
+                && SourceMode is not ("developer_fixture" or "test_fixture")) {
+                bool itemProducer = selected == "item" || entity.Visual.AssetMode == "reuse_item_icon";
+                string png = itemProducer ? Visual.SpritePath : entity.Visual.SpritePath;
+                string status = itemProducer ? Visual.SpriteStatus : entity.Visual.SpriteStatus;
+                if (string.IsNullOrWhiteSpace(png) || !png.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                    || status is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation"))
+                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
+            }
+            if (selected == "impact") {
+                if (!(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s => s.EntityId == entity.Id && s.RendererKind == "impactSprite"))
+                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact same-entity impactSprite producer");
+                if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))
+                    && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
+                        || !entity.Visual.ImpactSpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                        || entity.Visual.ImpactSpriteStatus is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation")))
+                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires an authored impact PNG for '{entity.Id}'");
+            }
         }
     }
 }

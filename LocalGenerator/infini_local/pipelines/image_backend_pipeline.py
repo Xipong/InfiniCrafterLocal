@@ -108,6 +108,7 @@ from infini_local.storage.trace_runtime import (
     trace_event,
 )
 from infini_local.storage.world_recipe_runtime import safe_file_part
+from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 
 from infini_local.pipelines.llm_transport import (
     http_get_json,
@@ -231,8 +232,7 @@ def fetch_comfyui_image(image_meta: dict[str, Any], out_path: Path) -> str:
         "type": image_meta.get("type", "output"),
     })
     data = http_binary_get(f"{COMFYUI_URL}/view?{query}", timeout=60)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(data)
+    write_image_bytes(out_path, data)
     return str(out_path)
 
 def sdcpp_repair_command_template(template: str) -> tuple[str, bool, str]:
@@ -348,7 +348,7 @@ def extract_image_from_server_response(raw: bytes, ctype: str, out_path: Path) -
         timeout=SDCPP_SERVER_REQUEST_TIMEOUT,
     )
 
-def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     if not ensure_sdcpp_server():
         log_event("warn", "stable-diffusion.cpp server is not available; image asset generation will fail/retry", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
         return []
@@ -378,7 +378,7 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
             seed = SDCPP_SEED + i
         else:
             seed = random.randint(1, 2**31 - 1)
-        out_path = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_sdcpp_server_{i}.png"
+        out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_sdcpp_server_{i}.png"
         ok = False
         last_err = ""
         for path in paths:
@@ -402,6 +402,8 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
                         ok = True
                         break
                     last_err = f"no image in response from {url} style={style} contentType={ctype} bodyPrefix={raw[:200]!r}"
+                except ImageOutputIOError:
+                    raise
                 except Exception as e:
                     last_err = repr(e)
             if ok:
@@ -434,7 +436,7 @@ def image_api_url() -> str:
 
 def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, timeout: int) -> bool:
     if raw[:8] == b"\x89PNG\r\n\x1a\n" or "image/png" in (ctype or ""):
-        out_path.write_bytes(raw)
+        write_image_bytes(out_path, raw)
         return True
     try:
         obj = json.loads(raw.decode("utf-8"))
@@ -451,11 +453,11 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
                 val = str(b64)
                 if val.startswith("data:") and "," in val:
                     val = val.split(",", 1)[1]
-                out_path.write_bytes(base64.b64decode(val))
+                write_image_bytes(out_path, base64.b64decode(val))
                 return True
             url = first.get("url") or first.get("image_url")
             if url:
-                out_path.write_bytes(http_binary_get(str(url), timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(str(url), timeout=timeout))
                 return True
 
     # Some OpenAI-compatible gateways use {images:[...]} or {image:"..."}.
@@ -466,40 +468,43 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
             val = val.get("b64_json") or val.get("url") or val.get("image")
         if isinstance(val, str):
             if val.startswith("http://") or val.startswith("https://"):
-                out_path.write_bytes(http_binary_get(val, timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(val, timeout=timeout))
                 return True
             if val.startswith("data:") and "," in val:
                 val = val.split(",", 1)[1]
-            out_path.write_bytes(base64.b64decode(val))
+            write_image_bytes(out_path, base64.b64decode(val))
             return True
 
     for key in ["b64_json", "image_base64", "base64", "image", "png", "output", "result"]:
         val = obj.get(key) if isinstance(obj, dict) else None
         if isinstance(val, str) and len(val) > 64:
             if val.startswith("http://") or val.startswith("https://"):
-                out_path.write_bytes(http_binary_get(val, timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(val, timeout=timeout))
                 return True
             if val.startswith("data:") and "," in val:
                 val = val.split(",", 1)[1]
-            out_path.write_bytes(base64.b64decode(val))
+            write_image_bytes(out_path, base64.b64decode(val))
             return True
     return False
 
-def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     from infini_local.services.codex_image_backend import generate_image
     from infini_local.pipelines import pipeline_visual_config as config
     paths = []
     for variant in range(max(1, int(GENERATE_VARIANTS))):
-        path = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
-        generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
-                       quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
-                       timeout=config.CODEX_IMAGE_TIMEOUT)
+        path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
+        try:
+            generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
+                           quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
+                           timeout=config.CODEX_IMAGE_TIMEOUT)
+        except OSError as exc:
+            raise ImageOutputIOError("Codex raw image write failed") from exc
         paths.append(str(path))
         log_event("info", "Codex OAuth generated sprite", {"spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
     return paths
 
 
-def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     """Generate sprite through an OpenAI-compatible image API.
 
     This is intentionally independent from INFINI_LLM_PROVIDER: OpenRouter (or any
@@ -526,7 +531,7 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
             "size": size,
             "response_format": "b64_json",
         }
-        out_path = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_image_api_{i}.png"
+        out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_image_api_{i}.png"
         try:
             req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
             t0 = time.time()
@@ -538,6 +543,8 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
                 log_event("info", "image API generated sprite", {"spriteId": sprite_id, "model": IMAGE_API_MODEL, "url": url, "ms": int((time.time()-t0)*1000), "path": str(out_path)})
                 continue
             log_event("warn", "image API response had no usable image", {"spriteId": sprite_id, "contentType": ctype, "bodyPrefix": raw[:300].decode("utf-8", "replace")})
+        except ImageOutputIOError:
+            raise
         except urlerror.HTTPError as e:
             body = ""
             try:
@@ -556,6 +563,8 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
                     if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT) and out_path.exists():
                         out.append(str(out_path))
                         continue
+                except ImageOutputIOError:
+                    raise
                 except Exception as e2:
                     log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
             log_event("warn", "image API HTTP error", {"spriteId": sprite_id, "status": e.code, "body": body})
@@ -563,13 +572,13 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
             log_event("warn", "image API generation failed", {"spriteId": sprite_id, "error": repr(e)})
     return out
 
-def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     """Generate image through persistent stable-diffusion.cpp server only.
 
     v0.4.19 intentionally removed CLI/subprocess-per-image mode because it reloads
     model weights on every sprite and makes gameplay crafting unusably slow.
     """
-    out = generate_sdcpp_server(prompt, negative, sprite_id, preferred_canvas)
+    out = generate_sdcpp_server(prompt, negative, sprite_id, preferred_canvas, output_dir=output_dir)
     if out:
         return out
     log_event("warn", "stable-diffusion.cpp server unavailable; image asset will fail/retry instead of procedural authoring", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
@@ -584,7 +593,7 @@ def append_a1111_lora(prompt: str) -> str:
         parts.append(f"<lora:{A1111_LORA_NAME}:{weight}>")
     return ", ".join(p for p in parts if p)
 
-def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32) -> list[str]:
+def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     # Low-VRAM safe by default: sequential requests, batch size 1, no hires fix.
     width = env_int("INFINI_A1111_WIDTH", A1111_WIDTH, lo=64, hi=2048)
     height = env_int("INFINI_A1111_HEIGHT", A1111_HEIGHT, lo=64, hi=2048)
@@ -615,8 +624,8 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
         raw = http_json(f"{A1111_URL}/sdapi/v1/txt2img", payload, timeout=VISUAL_GENERATION_TIMEOUT)
         for j, b64 in enumerate(raw.get("images", [])):
             data = base64.b64decode(b64.split(",")[-1])
-            p = SPRITE_DIR / f"{sprite_id}_raw_a1111_{request_i}_{j}.png"
-            p.write_bytes(data)
+            p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_a1111_{request_i}_{j}.png"
+            write_image_bytes(p, data)
             out.append(str(p))
         remaining -= this_batch
         request_i += 1
@@ -625,7 +634,7 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
     return out
 
-def generate_comfyui(prompt: str, negative: str, sprite_id: str) -> list[str]:
+def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: Path | None = None) -> list[str]:
     """Run a real ComfyUI workflow and download its output PNGs.
 
     Contract:
@@ -650,9 +659,11 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str) -> list[str]:
     metas = extract_comfyui_images(history, prompt_id)
     out: list[str] = []
     for i, meta in enumerate(metas):
-        p = SPRITE_DIR / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy_{i}.png"
+        p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy_{i}.png"
         try:
             out.append(fetch_comfyui_image(meta, p))
+        except ImageOutputIOError:
+            raise
         except Exception as e:
             log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(e)})
     log_event("info", "ComfyUI images downloaded", {"spriteId": sprite_id, "count": len(out), "promptId": prompt_id, "removeBg": REMOVE_BG,

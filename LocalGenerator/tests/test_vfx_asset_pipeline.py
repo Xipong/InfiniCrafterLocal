@@ -143,10 +143,10 @@ def offline_backend(monkeypatch, tmp_path):
                 finally:
                     events.append("exit")
 
-    def configured_sdcpp(prompt, negative, asset_id, canvas):
+    def configured_sdcpp(prompt, negative, asset_id, canvas, *, output_dir=None):
         calls.append({"id": asset_id, "prompt": prompt, "negative": negative, "canvas": canvas})
         layout = "strip" if "preserve the full authored frame" in prompt else "cutout"
-        path = tmp_path / f"{asset_id}_offline_fixture_raw_sdcpp.png"
+        path = (output_dir if output_dir is not None else tmp_path) / f"{asset_id}_offline_fixture_raw_sdcpp.png"
         return [_raw_fixture(path, layout=layout, alpha=255 if "_vfx_" not in asset_id else 144)]
 
     for module in (sprite_postprocess, visual_asset_manifest, visual_sprite_generation, visual_delivery_gate):
@@ -227,11 +227,11 @@ def test_backend_error_never_fabricates_a_required_vfx_ingredient(offline_backen
     calls, events = offline_backend
     original_backend = visual_sprite_generation.generate_sdcpp
 
-    def fail_requested(prompt, negative, asset_id, canvas):
+    def fail_requested(prompt, negative, asset_id, canvas, *, output_dir=None):
         if "_vfx_" in asset_id:
             calls.append({"id": asset_id, "prompt": prompt, "canvas": canvas})
             raise RuntimeError("offline fixture: backend generation error")
-        return original_backend(prompt, negative, asset_id, canvas)
+        return original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
 
     monkeypatch.setattr(visual_sprite_generation, "generate_sdcpp", fail_requested)
     monkeypatch.setattr(visual_sprite_generation, "VISUAL_ALLOW_PROCEDURAL_FALLBACK", True)
@@ -249,8 +249,8 @@ def test_cutout_postprocess_failure_cannot_report_the_raw_image_as_success(offli
     original_backend = visual_sprite_generation.generate_sdcpp
     original_master = sprite_postprocess.prepare_sprite_master
 
-    def exact_alpha_fixture(prompt, negative, asset_id, canvas):
-        paths = original_backend(prompt, negative, asset_id, canvas)
+    def exact_alpha_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if "_vfx_" in asset_id:
             # A valid raw, already-alpha PNG must still not hide a failed processing stage.
             image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
@@ -469,8 +469,8 @@ def test_same_authored_asset_id_changed_png_does_not_replace_distributed_file(of
     old_path = Path(first["vfxManifest"]["assets"][0]["spritePath"])
     old_bytes = old_path.read_bytes()
     original = visual_sprite_generation.generate_sdcpp
-    def changed_fixture(prompt, negative, asset_id, canvas):
-        paths = original(prompt, negative, asset_id, canvas)
+    def changed_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_"):
             with Image.open(paths[0]) as image:
                 image.putpixel((14, 23), (50, 210, 90, 144))
@@ -512,14 +512,14 @@ def test_strip_retry_keeps_asymmetric_uv_landmarks_and_publishes_only_final_png(
     attempts = 0
     bakes = 0
     original_refit = visual_sprite_generation.refit_processed_sprite_to_contract
-    def backend_with_first_failure(prompt, negative, asset_id, canvas):
+    def backend_with_first_failure(prompt, negative, asset_id, canvas, *, output_dir=None):
         nonlocal attempts
         if asset_id.startswith("infini_vfx_job_"):
             attempts += 1
             if attempts == 1 and failure == "backend_exception":
                 calls.append({"id": asset_id, "prompt": prompt, "canvas": canvas})
                 raise RuntimeError("offline first-attempt failure")
-        paths = original_backend(prompt, negative, asset_id, canvas)
+        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_") and attempts == 1 and failure == "invalid_png":
             Path(paths[0]).write_bytes(b"offline corrupt PNG fixture")
         return paths
@@ -556,8 +556,8 @@ def test_strip_retry_keeps_asymmetric_uv_landmarks_and_publishes_only_final_png(
 def test_tiny_strip_does_not_enter_silhouette_refit(offline_backend, monkeypatch):
     original_backend = visual_sprite_generation.generate_sdcpp
     original_refit = visual_sprite_generation.refit_processed_sprite_to_contract
-    def tiny_uv_fixture(prompt, negative, asset_id, canvas):
-        paths = original_backend(prompt, negative, asset_id, canvas)
+    def tiny_uv_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_"):
             image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
             ImageDraw.Draw(image).rectangle((2, 48, 3, 49), fill=(210, 100, 20, 144))
@@ -580,10 +580,10 @@ def test_tiny_strip_does_not_enter_silhouette_refit(offline_backend, monkeypatch
 
 def test_requested_asset_rejects_backend_internal_procedural_substitution(offline_backend, monkeypatch, tmp_path):
     original_backend = visual_sprite_generation.generate_sdcpp
-    def backend_fallback_fixture(prompt, negative, asset_id, canvas):
-        paths = original_backend(prompt, negative, asset_id, canvas)
+    def backend_fallback_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
+        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_"):
-            path = tmp_path / (asset_id + "_procedural.png")
+            path = output_dir / (asset_id + "_procedural.png")
             path.write_bytes(Path(paths[0]).read_bytes())
             return [str(path)]
         return paths
@@ -637,12 +637,12 @@ def test_partial_generation_does_not_hide_failed_requested_ingredient(offline_ba
     bad_request["negativePrompt"] += ", offline partial failure fixture"
     data = _data([_request("good"), bad_request])
     original = visual_sprite_generation.generate_sdcpp
-    def partial_backend(prompt, negative, asset_id, canvas):
+    def partial_backend(prompt, negative, asset_id, canvas, *, output_dir=None):
         # Intermediates are invocation-owned now; target the exact authored request,
         # not the plan's stable ID as a mutable backend filename.
         if negative == bad_request["negativePrompt"]:
             raise RuntimeError("offline partial failure fixture")
-        return original(prompt, negative, asset_id, canvas)
+        return original(prompt, negative, asset_id, canvas, output_dir=output_dir)
     monkeypatch.setattr(visual_sprite_generation, "generate_sdcpp", partial_backend)
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
     good, bad = out["vfxManifest"]["assets"]

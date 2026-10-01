@@ -731,6 +731,95 @@ internal static partial class EngineRuntimeChecks
         validate.Invoke(data, null);
     }
 
+    private static System.Text.Json.Nodes.JsonObject LegacyTextureProducerWire(string renderer, string mode, string selector)
+    {
+        // Start from a genuinely admitted canonical DTO, then serialize hostile
+        // raw JSON without ToJson/Normalize erasing the selector defect.
+        var data = ReviewProjectileData("periodic");
+        var wire = System.Text.Json.Nodes.JsonNode.Parse(data.ToJson())!.AsObject();
+        var actor = wire["runtimeProgram"]!["entities"]![1]!;
+        actor["visual"]!["assetMode"] = mode;
+        var manifest = wire["vfxManifest"]!.AsObject(); manifest.Remove("assets");
+        var slot = new VfxSlotSpec { Id = "legacy_texture", EntityId = "actor", Event = "periodic",
+            RendererKind = renderer, TextureRole = selector, ParticleRole = "none", ParticleSystemId = "none" };
+        manifest["slots"] = new System.Text.Json.Nodes.JsonArray(System.Text.Json.JsonSerializer.SerializeToNode(slot,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }));
+        return wire;
+    }
+
+    private static void LegacyTextureProducerRejects(string renderer, string mode, string selector)
+    {
+        var wire = LegacyTextureProducerWire(renderer, mode, selector);
+        var admitted = GeneratedItemData.FromJson(wire.ToJsonString());
+        if (admitted is not null)
+            Console.WriteLine($"DETAIL: baseline actual FromJson accepted {renderer}/{mode}/{selector}; ResolveTexturePath='{InfiniVfxRuntime.ResolveTexturePath(admitted, "actor", selector)}'");
+        Equal(false, admitted is not null, $"legacy selected producer {renderer}/{mode}/{selector}");
+        ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson", out var error);
+        Equal(true, error?.Message.Contains("textureRole", StringComparison.Ordinal) == true, "exact selector admission diagnostic");
+    }
+
+    private static void LegacyTextureProducerRejectsUnready()
+    {
+        foreach (string selector in new[] { "item", "entity", "impact" }) {
+            var wire = LegacyTextureProducerWire("projectileAfterimage", "baked_sprite", selector);
+            wire["sourceMode"] = "generated";
+            wire["visual"]!["spritePath"] = "item.png";
+            wire["visual"]!["spriteStatus"] = selector == "item" ? "pending" : "generated";
+            wire["runtimeProgram"]!["entities"]![1]!["visual"]!["spritePath"] = "actor.png";
+            wire["runtimeProgram"]!["entities"]![1]!["visual"]!["spriteStatus"] = selector == "entity" ? "pending" : "generated";
+            if (selector == "impact") {
+                var actorVisual = wire["runtimeProgram"]!["entities"]![1]!["visual"]!;
+                actorVisual["impactSpritePath"] = "impact.png"; actorVisual["impactSpriteStatus"] = "pending";
+                var producer = wire["vfxManifest"]!["slots"]![0]!.DeepClone(); producer["id"] = "paired_impact"; producer["rendererKind"] = "impactSprite";
+                wire["vfxManifest"]!["slots"]!.AsArray().Add(producer);
+            }
+            Equal(false, GeneratedItemData.FromJson(wire.ToJsonString()) is not null, "selected unready PNG owner " + selector);
+        }
+    }
+
+    private static void LegacyTextureProducerPositiveControls()
+    {
+        int observed = 0;
+        foreach (var (renderer, mode, selector, field, expected) in new[] {
+            ("projectileAfterimage", "baked_sprite", "entity", false, "actor.png"),
+            ("spriteStampTrail", "reuse_item_icon", "entity", false, "item.png"),
+            ("actorAfterimage", "baked_sprite", "projectile", false, "actor.png"),
+            ("spriteStampTrail", "reuse_item_icon", "projectile", false, "item.png"),
+            ("actorAfterimage", "baked_sprite", "field", true, "actor.png"),
+            ("projectileAfterimage", "no_asset", "item", false, "item.png"),
+            ("projectileAfterimage", "baked_sprite", "impact", false, "impact.png"),
+            ("impactRing", "runtime_geometry", "entity", false, ""),
+            ("childMotes", "no_asset", "impact", false, ""),
+            ("lightCue", "no_asset", "field", false, ""),
+            ("soundCue", "runtime_geometry", "impact", false, ""),
+        }) {
+            var wire = LegacyTextureProducerWire(renderer, mode, selector);
+            wire["sourceMode"] = "generated"; wire["visual"]!["spritePath"] = "item.png"; wire["visual"]!["spriteStatus"] = "generated";
+            var actor = wire["runtimeProgram"]!["entities"]![1]!;
+            actor["visual"]!["spritePath"] = mode == "baked_sprite" ? "actor.png" : mode == "reuse_item_icon" ? "item.png" : "";
+            actor["visual"]!["spriteStatus"] = mode is "baked_sprite" or "reuse_item_icon" ? "generated" : "not_required";
+            if (field) { actor["kind"] = "field"; actor["visualRole"] = "field"; actor["visual"]!["role"] = "field"; }
+            var slot = wire["vfxManifest"]!["slots"]![0]!;
+            if (renderer is "lightCue" or "soundCue") { slot["channel"] = renderer == "lightCue" ? "light" : "sound"; slot["lane"] = "cue"; }
+            if (selector == "impact" && expected != "") {
+                actor["visual"]!["impactSpritePath"] = "impact.png"; actor["visual"]!["impactSpriteStatus"] = "generated";
+                var impact = slot.DeepClone(); impact["id"] = "impact_producer"; impact["rendererKind"] = "impactSprite";
+                wire["vfxManifest"]!["slots"]!.AsArray().Add(impact);
+            }
+            var admitted = GeneratedItemData.FromJson(wire.ToJsonString());
+            if (admitted is null) { ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson", out var error); throw new InvalidOperationException("positive PNG control rejected: " + error?.Message); }
+            var roundtrip = GeneratedItemData.FromJson(admitted.ToNetworkJson());
+            Equal(true, roundtrip is not null, "positive network DTO retains selection");
+            if (VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(admitted.VfxManifest.Slots[0]))) {
+                Equal(expected, InfiniVfxRuntime.ResolveTexturePath(admitted, "actor", selector), "actual selected PNG owner");
+                Equal(expected, InfiniVfxRuntime.ResolveTexturePath(roundtrip!, "actor", selector), "selected PNG after network DTO round trip");
+            }
+            observed++;
+        }
+        Console.WriteLine($"DETAIL: canonical legacy PNG/non-PNG positive DTO controls={observed}");
+    }
+
     private static void VfxEventReferencesFollowRuntimeProducers()
     {
         var item = new RuntimeEntitySpec { Id = "held_item", Kind = RuntimeEntityKind.ItemBody };

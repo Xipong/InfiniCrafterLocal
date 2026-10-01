@@ -6,9 +6,7 @@ import pytest
 
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring import compile_runtime_program
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _vfx_output
+from test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
 
 
 @pytest.mark.parametrize("old,new", [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)])
@@ -87,7 +85,7 @@ def _slot_patch(candidate):
 
 
 def test_vfx_filter_applies_type_only_repair_from_actual_validator_scope():
-    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data = _accepted_visual_data("workbench_blade")
     previous = _vfx_output(data)
     previous["slots"][0]["scale"] = True
     report = vfx.validate_vfx_director_output(previous, data)
@@ -112,7 +110,7 @@ def test_vfx_filter_applies_type_only_repair_from_actual_validator_scope():
 
 
 def test_vfx_filter_audits_type_only_rewrite_of_independent_valid_slot():
-    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data = _accepted_visual_data("workbench_blade")
     previous = _vfx_output(data)
     previous["slots"][0]["scale"] = 1
     report = vfx.validate_vfx_director_output(previous, data)

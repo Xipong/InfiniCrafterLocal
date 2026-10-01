@@ -1,4 +1,4 @@
-# LocalGenerator 0.4.245 — low-level runtime architecture
+# LocalGenerator 0.4.246 — low-level runtime architecture
 
 LocalGenerator авторит и валидирует данные; Terraria исполняет typed v5 wire.
 

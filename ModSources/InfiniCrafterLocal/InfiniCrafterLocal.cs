@@ -15,7 +15,7 @@ namespace InfiniCrafterLocal;
 // authoring here — generated behavior must already be explicit GeneratedItemData.
 public sealed class InfiniCrafterLocalMod : Mod
 {
-    public const string ModVersion = "0.4.245";
+    public const string ModVersion = "0.4.246";
     public static InfiniCrafterLocalMod Instance { get; private set; } = null!;
     public static GeneratorClient Generator { get; private set; } = null!;
     public static RuntimeSpriteCache Sprites { get; private set; } = null!;

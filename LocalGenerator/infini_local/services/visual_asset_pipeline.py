@@ -6,6 +6,40 @@ from pathlib import Path
 from typing import Any
 
 
+class ImageOutputIOError(OSError):
+    """An actual local image-output filesystem operation failed, not decoding."""
+
+
+
+def write_image_bytes(path: Path, raw: bytes) -> None:
+    """Keep disk errors distinct from transport/base64/provider content errors."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+    except OSError as exc:
+        raise ImageOutputIOError("image bytes write failed") from exc
+
+
+def save_image_output(image: Any, path: Path) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(path)
+    except OSError as exc:
+        raise ImageOutputIOError("processed image write failed") from exc
+
+
+def load_image_input(path: str, image_cls: Any) -> Any:
+    try:
+        with image_cls.open(path) as source:
+            return source.convert("RGBA")
+    except OSError as exc:
+        # UnidentifiedImageError and Pillow's truncated-image OSError have no
+        # filesystem errno. They remain bounded technical-quality failures.
+        if exc.errno is not None:
+            raise ImageOutputIOError("image input filesystem read failed") from exc
+        raise
+
+
 def sanitize_image_prompt_background(text: Any) -> str:
     """Use chroma/magenta key prompts instead of asking the image model for alpha.
 
@@ -384,7 +418,6 @@ def generate_procedural_asset(
     role = str(role or "projectile").lower()
     from infini_local.pipelines.sprite_contracts import final_sprite_canvas
     canvas = final_sprite_canvas(canvas_size)
-    sprite_dir.mkdir(parents=True, exist_ok=True)
     seed = f"{data.get('id') or data.get('name') or 'item'}:{role}:{variant}"
     color = _stable_rgb(seed)
     accent = _stable_rgb(seed + ":accent")
@@ -412,7 +445,7 @@ def generate_procedural_asset(
     name = f"{str(data.get('id') or 'generated')}_{role}_{variant}_{canvas}_procedural.png"
     safe = re.sub(r"[^a-zA-Z0-9_.-]+", "_", name)[:120]
     path = sprite_dir / safe
-    img.save(path)
+    save_image_output(img, path)
     return str(path)
 
 

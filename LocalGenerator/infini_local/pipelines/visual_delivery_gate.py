@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
-from infini_local.core.vfx_manifest import SPRITE_TEXTURE_RENDERERS, validate_vfx_manifest_wire
+from infini_local.core.vfx_manifest import validate_vfx_manifest_wire, vfx_png_dependencies
 from infini_local.pipelines.pipeline_visual_config import (
     IMAGE_BACKEND,
     IMAGE_BACKEND_CONFIG_ERROR,
@@ -133,34 +133,13 @@ def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
 
 
-def _impact_entity_ids(data: dict[str, Any]) -> set[str]:
-    raw_manifest = data.get("vfxManifest")
-    manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
-    required = {
-        str(slot.get("entityId") or "").strip()
-        for slot in manifest.get("slots") or []
-        if isinstance(slot, dict)
-        and str(slot.get("rendererKind") or "") in SPRITE_TEXTURE_RENDERERS
-        and str(slot.get("textureRole") or "").strip().lower() == "impact"
-    }
-    for slot in manifest.get("slots") or []:
-        # A refused wire record may still be inspected for legacy diagnostic
-        # dependencies. Do not hash hostile JSON values after its canonical gate.
-        if not isinstance(slot, dict) or slot.get("rendererKind") not in ("spriteElement", "texturedPath"):
-            continue
-        payload = slot.get("element" if slot["rendererKind"] == "spriteElement" else "path")
-        texture = payload.get("texture") if isinstance(payload, dict) else None
-        if isinstance(texture, dict) and texture.get("source") == "impact":
-            required.add(str(slot.get("entityId") or ""))
-    return required - {""}
-
-
 def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool = True) -> dict[str, Any]:
     raw_visual = data.get("visual")
     visual: dict[str, Any] = raw_visual if isinstance(raw_visual, dict) else {}
     problems: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     vfx_report = validate_vfx_manifest_wire(data) if "vfxManifest" in data else {"ok": True, "errors": []}
+    png_dependencies = vfx_png_dependencies(data)["dependencies"] if vfx_report["ok"] else []
     if not vfx_report["ok"]:
         problems.append({"code": "vfx_manifest_invalid", "message": "VFX wire shape/references are invalid.", "errors": vfx_report["errors"]})
     if check_backend_config and IMAGE_BACKEND_CONFIG_ERROR:
@@ -240,7 +219,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
         slots.append({"role": "entity:" + entity_id, "entityId": entity_id, "assetMode": mode, "required": required, "status": status, "path": path, "exists": exists, "completePng": exists if path else False, "usable": usable, "technicalScore": entity_visual.get("spriteTechnicalScore")})
 
     entities_by_id = {str(entity.get("id") or ""): entity for entity in _runtime_entities(data)}
-    for entity_id in sorted(_impact_entity_ids(data)):
+    for entity_id in sorted({row["entityId"] for row in png_dependencies if row["source"] == "impact"}):
         entity = entities_by_id.get(entity_id)
         raw_impact_visual = entity.get("visual") if isinstance(entity, dict) else None
         entity_visual: dict[str, Any] = raw_impact_visual if isinstance(raw_impact_visual, dict) else {}
@@ -271,32 +250,6 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
 
     raw_manifest = data.get("vfxManifest")
     manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
-    # The canonical validator owns producer applicability. This projection only
-    # requires the selected producer's actual ready PNG, even if inventory images
-    # are optional by policy or the wire record is still pending.
-    slots_by_role = {row["role"]: row for row in slots}
-    for slot in (manifest.get("slots") or []) if vfx_report["ok"] else []:
-        if slot.get("rendererKind") not in {"spriteElement", "texturedPath"}:
-            continue
-        payload = slot["element" if slot["rendererKind"] == "spriteElement" else "path"]
-        source = payload["texture"]["source"]
-        if source == "asset":
-            continue  # Every declared ingredient has its own strict gate below.
-        entity_id = slot["entityId"]
-        is_item = entities_by_id.get(entity_id, {}).get("kind") == "item_body"
-        role = "item" if source == "item" or (source == "entity" and is_item) else source + ":" + entity_id
-        producer = slots_by_role.get(role)
-        ready = bool(producer and producer["usable"] and producer["status"].strip().lower() in {
-            "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation",
-        })
-        if producer is not None:
-            producer["required"] = True
-            producer["usable"] = ready
-        if not ready:
-            problems.append({
-                "code": "required_vfx_texture_not_ready", "slotId": slot["id"], "role": role,
-                "message": f"VFX slot {slot['id']!r} requires its selected {source} producer's ready PNG.",
-            })
     occupied_names = {asset_sync_service.asset_filename_from_path(path).casefold()
                       for path in asset_sync_service.runtime_asset_paths(data, include_vfx_assets=False) if path}
     for asset in (manifest.get("assets") or []) if vfx_report["ok"] else []:
@@ -325,6 +278,30 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
             "status": status, "path": path, "exists": resolved is not None, "completePng": complete,
             "usable": usable, "technicalScore": asset.get("spriteTechnicalScore"), "validation": validation,
         })
+    # The same canonical projection gates legacy and material consumers. Reuse
+    # selects the item owner, aliases select only their exact entity, and ignored
+    # primitive/Dust/cue hints can never invent a PNG requirement.
+    slots_by_role = {row["role"]: row for row in slots}
+    for dependency in png_dependencies:
+        role = dependency["role"]
+        producer = slots_by_role.get(role)
+        # Item-body baked entity selection consumes its projected entity path,
+        # while reuse consumes the root path. Check the actual selected metadata,
+        # not a healthy sibling/item image that the renderer never selects.
+        ready = bool(producer and producer["usable"]
+            and asset_sync_service.asset_filename_from_path(dependency["spritePath"])
+                == asset_sync_service.asset_filename_from_path(producer["path"])
+            and str(dependency["spriteStatus"] or "").strip().lower() in {
+                "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation",
+            })
+        if producer is not None:
+            producer["required"] = True
+            producer["usable"] = ready
+        if not ready:
+            problems.append({
+                "code": "required_vfx_texture_not_ready", "slotId": dependency["slotId"], "role": role,
+                "message": f"VFX slot {dependency['slotId']!r} requires its selected {dependency['source']} producer's ready PNG.",
+            })
     problems.extend(_asset_roster_problems(asset_sync_service.runtime_asset_paths(data)))
 
     return {

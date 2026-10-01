@@ -20,6 +20,8 @@ import shlex
 from typing import Any, Callable
 from urllib import request as urlrequest
 
+from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
+
 
 @dataclass(frozen=True)
 class SdcppBackendConfig:
@@ -439,7 +441,7 @@ def extract_image_from_response(
 ) -> bool:
     """Decode an image from common sd.cpp/A1111/OpenAI-compatible responses."""
     if raw[:8] == b"\x89PNG\r\n\x1a\n" or "image/png" in (ctype or ""):
-        out_path.write_bytes(raw)
+        write_image_bytes(out_path, raw)
         return True
     try:
         obj = json.loads(raw.decode("utf-8"))
@@ -450,25 +452,27 @@ def extract_image_from_response(
         b64 = str(images[0])
         if "," in b64 and b64.strip().startswith("data:"):
             b64 = b64.split(",", 1)[1]
-        out_path.write_bytes(base64.b64decode(b64))
+        write_image_bytes(out_path, base64.b64decode(b64))
         return True
     data = obj.get("data") if isinstance(obj, dict) else None
     if isinstance(data, list) and data:
         first = data[0]
         if isinstance(first, dict):
             if first.get("b64_json"):
-                out_path.write_bytes(base64.b64decode(str(first["b64_json"])))
+                write_image_bytes(out_path, base64.b64decode(str(first["b64_json"])))
                 return True
             if first.get("url") and fetch_url is not None:
-                out_path.write_bytes(fetch_url(str(first["url"]), timeout))
+                write_image_bytes(out_path, fetch_url(str(first["url"]), timeout))
                 return True
     for key in ["image", "png", "output", "result"]:
         val = obj.get(key) if isinstance(obj, dict) else None
         if isinstance(val, str) and len(val) > 64:
             try:
                 b64 = val.split(",", 1)[1] if val.startswith("data:") and "," in val else val
-                out_path.write_bytes(base64.b64decode(b64))
+                write_image_bytes(out_path, base64.b64decode(b64))
                 return True
+            except ImageOutputIOError:
+                raise
             except Exception:
                 pass
     for key in ["path", "file", "filename", "output_path"]:
@@ -476,6 +480,6 @@ def extract_image_from_response(
         if isinstance(val, str):
             p = Path(val)
             if p.exists():
-                out_path.write_bytes(p.read_bytes())
+                write_image_bytes(out_path, p.read_bytes())
                 return True
     return False

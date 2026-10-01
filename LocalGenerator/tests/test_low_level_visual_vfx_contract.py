@@ -18,6 +18,7 @@ from infini_local.pipelines.image_backend_pipeline import comfyui_mapping
 from infini_local.pipelines.visual_generation_pipeline import (
     VISUAL_REPAIR_PATCH_SCHEMA,
     _apply_visual_repair_patch,
+    _apply_kit,
     _build_visual_repair_scope,
     _validate_kit,
 )
@@ -454,7 +455,7 @@ def test_visual_entity_to_runtime_pair_to_final_vfx_manifest_closure() -> None:
     assert kit_errors == []
     assert kit is not None
     assert {row["entityId"] for row in kit["entities"]} == set(entity_ids)
-    compiled["visualKit"] = kit
+    compiled = _apply_kit(compiled, kit)  # Mirror the production Visual -> runtime DTO projection.
 
     pair = vfx_director_surface(compiled)["runtimePairs"][0]
     raw_vfx = {

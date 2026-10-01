@@ -124,6 +124,18 @@ def _visual_kit(data: dict) -> dict:
     }
 
 
+def _accepted_visual_data(fixture_name: str) -> dict:
+    data = compile_runtime_program(build_runtime_fixture(fixture_name))
+    runtime = data["runtimeProgram"]
+    kit, errors = visual_stage._validate_kit(
+        _visual_kit(data), [row["id"] for row in runtime["entities"]], runtime["itemEntityId"],
+    )
+    assert kit is not None, errors
+    # VFX follows Visual in production; a mechanics-only compiler result or an
+    # ignored visualKit assignment does not project the actual PNG producers.
+    return visual_stage._apply_kit(data, kit)
+
+
 def _visual_patch(data: dict) -> dict:
     kit = _visual_kit(data)
     return {
@@ -581,8 +593,7 @@ def test_unrecoverable_visual_json_fails_after_one_repair_without_substituting_d
 
 
 def test_malformed_vfx_json_uses_the_single_bounded_vfx_repair(monkeypatch: pytest.MonkeyPatch) -> None:
-    visual = compile_runtime_program(build_runtime_fixture("workbench_blade"))
-    visual["visualKit"] = _visual_kit(visual)
+    visual = _accepted_visual_data("workbench_blade")
     visual["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
         "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0, "visualDirectorCalls": 1,
         "visualRepairCalls": 0, "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
@@ -1642,7 +1653,7 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
 
 
 def test_vfx_repair_freezes_valid_fields_and_accepts_missing_broken_slot_params() -> None:
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data = _accepted_visual_data("door_on_chain")
     previous = _vfx_output(data)
     previous["slots"][0]["duration"] = 999
     del previous["slots"][0]["fadeOut"]
@@ -1650,6 +1661,7 @@ def test_vfx_repair_freezes_valid_fields_and_accepts_missing_broken_slot_params(
     report = validate_vfx_director_output(previous, data)
     assert not report["ok"]
     scope = _build_vfx_repair_scope(previous, report["errors"])
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": "slot_0", "paths": ["duration", "fadeOut"]}]
     fixed_slot = copy.deepcopy(previous["slots"][0])
     fixed_slot["duration"] = 30
     fixed_slot["fadeOut"] = 0.6
@@ -3005,7 +3017,7 @@ def test_gameplay_dependency_blocker_prefers_existing_exact_parameter() -> None:
 
 
 def test_vfx_root_pair_error_only_thaws_entity_and_event() -> None:
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data = _accepted_visual_data("door_on_chain")
     previous = _vfx_output(data)
     previous["slots"][0]["entityId"] = "missing_entity"
     old_duration = previous["slots"][0]["duration"]
