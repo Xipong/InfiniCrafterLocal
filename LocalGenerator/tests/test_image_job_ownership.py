@@ -13,10 +13,11 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 import threading
 
 R = Path(__file__).resolve().parents[2]
-OUT = Path(os.environ['TMPDIR']) / 'image-job-ownership-tests'
+OUT = Path(tempfile.gettempdir()) / 'image-job-ownership-tests'
 
 import pytest
 from PIL import Image, ImageDraw
