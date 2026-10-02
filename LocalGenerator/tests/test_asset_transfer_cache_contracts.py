@@ -25,6 +25,29 @@ from infini_local.web.vfx_debug_routes import _sample_data
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _slot, offline_backend
 
 
+def test_full_cache_callback_performs_one_png_assessment(offline_backend, monkeypatch):
+    from collections import Counter
+    from infini_local.pipelines import sprite_postprocess
+
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(layout='strip')]))
+    calls = Counter()
+    validate = asset_sync_service.is_complete_png_file
+
+    def observe(path):
+        calls[Path(path).resolve()] += 1
+        return validate(path)
+
+    monkeypatch.setattr(asset_sync_service, 'is_complete_png_file', observe)
+    monkeypatch.setattr(sprite_postprocess, 'is_complete_png_file', observe)
+    report = _cached_payload_report(data)
+    assert report['ok'], report['errors']
+    selected = [visual_delivery_gate._resolved_asset_path(name)
+                for name in asset_sync_service.runtime_asset_files(data)]
+    assert all(path is not None for path in selected)
+    files = {path.resolve() for path in selected if path is not None}
+    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+
+
 def _get_asset(filename: str) -> HttpCapture:
     # These are exactly the three dependencies used by the unchanged asset route.
     routes = ServerUtilityRoutes.__new__(ServerUtilityRoutes)
@@ -102,6 +125,32 @@ def _pad_complete_png(path: Path, target_size: int) -> None:
     assert path.stat().st_size == target_size
     assert asset_sync_service.is_complete_png_file(path)
 
+@pytest.mark.parametrize('width,height,accepted', [
+    (512, 1, True), (1, 512, True), (513, 1, False), (1, 513, False),
+])
+def test_final_png_dimension_admission_matches_client_512_ceiling(
+    offline_backend, tmp_path, width, height, accepted,
+):
+    from PIL import Image
+
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    target = Path(data['visual']['spritePath'])
+    # Fully encoded manual pixels, not a forged/truncated IHDR.
+    Image.new('RGBA', (width, height), (210, 100, 20, 255)).save(target)
+    with Image.open(target) as source:
+        source.load()
+        assert source.size == (width, height)
+    assert asset_sync_service.is_complete_png_file(target) is accepted
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert report['ok'] is accepted, report['problems']
+    if accepted:
+        world_storage.write_world_recipe_cache(tmp_path / 'dimension-cache', 'test', 'recipe', 'world', data)
+        assert world_storage.read_world_recipe_cache(tmp_path / 'dimension-cache', 'test', 'v5', 'recipe', 'world')
+    else:
+        assert any(row['code'] == 'asset_roster_invalid_png' for row in report['problems'])
+        _assert_cache_refusal(data, tmp_path / 'dimension-cache')
+
+
 def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offline_backend, tmp_path):
     from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES
 
@@ -133,6 +182,132 @@ def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offli
     report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
     assert {p["code"] for p in report["problems"]} == {"asset_roster_byte_limit_exceeded"}
     _assert_cache_refusal(data, tmp_path / "over-budget-cache")
+
+@pytest.mark.parametrize('requests', [[], [_request(layout='cutout')], [_request(layout='strip')]],
+                         ids=['shared-item', 'cutout-ingredient', 'strip-ingredient'])
+def test_delivery_assesses_each_selected_png_once_and_rechecks_next_operation(
+    offline_backend, monkeypatch, requests,
+):
+    from collections import Counter
+    from infini_local.pipelines import sprite_postprocess
+
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data(requests))
+    before = copy.deepcopy(data)
+    calls = Counter()
+    real = asset_sync_service.is_complete_png_file
+
+    def counted(path):
+        calls[Path(path).resolve()] += 1
+        return real(path)
+
+    monkeypatch.setattr(asset_sync_service, 'is_complete_png_file', counted)
+    monkeypatch.setattr(sprite_postprocess, 'is_complete_png_file', counted)
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert report['ok'], report['problems']
+    selected_files = [visual_delivery_gate._resolved_asset_path(name)
+                      for name in asset_sync_service.runtime_asset_files(data)]
+    assert all(path is not None for path in selected_files)
+    files = {path.resolve() for path in selected_files if path is not None}
+    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+    assert data == before
+    # No operation result may survive into a later assessment.
+    Path(data['visual']['spritePath']).write_bytes(b'explicit corrupt next-operation fixture')
+    calls.clear()
+    next_report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert not next_report['ok']
+    assert any(row['code'] == 'asset_roster_invalid_png' for row in next_report['problems'])
+    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+    assert data == before
+
+
+@pytest.mark.parametrize('change', ['same_size', 'serving_precedence'])
+def test_delivery_refuses_png_snapshot_changed_during_assessment(
+    offline_backend, monkeypatch, tmp_path, change,
+):
+    import os
+
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    item = Path(data['visual']['spritePath'])
+    raw = item.read_bytes()
+    real = asset_sync_service.is_complete_png_file
+    mutated = []
+    if change == 'serving_precedence':
+        world = visual_delivery_gate.WORLD_RECIPES_DIR / item.name
+        world.parent.mkdir(parents=True)
+        item.replace(world)
+        selected = world
+    else:
+        selected = item
+
+    def change_after_validation(path):
+        result = real(path)
+        if Path(path) == selected and not mutated:
+            stat = selected.stat()
+            if change == 'same_size':
+                # A same-length overwrite with restored mtime still changes ctime.
+                selected.write_bytes(b'X' * len(raw))
+                os.utime(selected, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+            else:
+                item.write_bytes(b'X' * len(raw))
+            mutated.append(True)
+        return result
+
+    monkeypatch.setattr(asset_sync_service, 'is_complete_png_file', change_after_validation)
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert mutated and not report['ok'], 'delivery reused stale bytes or serving-root selection'
+    assert any(row['code'] in {'asset_roster_changed_during_assessment', 'asset_roster_invalid_png'}
+               for row in report['problems'])
+
+
+def test_delivery_refuses_valid_symlink_retarget_between_slots_and_roster(
+    offline_backend, monkeypatch, tmp_path,
+):
+    from PIL import Image
+
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    item = Path(data['visual']['spritePath'])
+    original = tmp_path / 'selected_before.png'
+    replacement = tmp_path / 'selected_after.png'
+    item.replace(original)
+    Image.new('RGBA', (32, 32), (30, 180, 210, 255)).save(replacement)
+    assert asset_sync_service.is_complete_png_file(original)
+    assert asset_sync_service.is_complete_png_file(replacement)
+    assert original.read_bytes() != replacement.read_bytes()
+    item.symlink_to(original)
+    roster = visual_delivery_gate._asset_roster_problems
+    changed = []
+
+    def retarget(paths, **kwargs):
+        item.unlink()
+        item.symlink_to(replacement)
+        changed.append(True)
+        return roster(paths, **kwargs)
+
+    monkeypatch.setattr(visual_delivery_gate, '_asset_roster_problems', retarget)
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert changed and not report['ok'], 'two healthy files were combined into a nonexistent stable snapshot'
+    assert any(row['code'] == 'asset_roster_changed_during_assessment' for row in report['problems'])
+
+
+def test_unique_png_assessment_does_not_discount_distinct_transfer_names(
+    offline_backend, monkeypatch, tmp_path,
+):
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    item = Path(data['visual']['spritePath'])
+    alias = tmp_path / 'inactive_transfer_alias.png'
+    alias.symlink_to(item)
+    data['visual']['equipOverlayPath'] = str(alias)
+    size = item.stat().st_size
+    assert len(asset_sync_service.runtime_asset_files(data)) == 2
+    assert _get_asset(item.name).wfile.getvalue() == _get_asset(alias.name).wfile.getvalue()
+    monkeypatch.setattr(visual_delivery_gate, 'MAX_DELIVERABLE_ASSET_BYTES', size * 2)
+    control = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert control['ok'], control['problems']
+    monkeypatch.setattr(visual_delivery_gate, 'MAX_DELIVERABLE_ASSET_BYTES', size * 2 - 1)
+    refused = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert not refused['ok'], 'physical-file validation dedupe discounted actual transfer bytes'
+    assert {row['code'] for row in refused['problems']} == {'asset_roster_byte_limit_exceeded'}
+
 
 def test_whole_roster_file_count_refusal_reaches_cache(offline_backend, monkeypatch, tmp_path):
     data = visual_sprite_generation.maybe_generate_visual_assets(_data())

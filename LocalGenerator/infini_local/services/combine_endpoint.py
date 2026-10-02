@@ -28,6 +28,71 @@ JsonSender = Callable[[Any], None]
 JsonStatusSender = Callable[[int, Any], None]
 TraceEvent = Callable[[str, str, str, Any], None]
 
+_GENERATION_STATE_LOCK = threading.RLock()
+_GENERATION_ACTIVE = 0
+_GENERATION_WAITING = 0
+_GENERATION_ACCEPTING = True
+
+
+def generation_activity_snapshot() -> dict[str, int | bool]:
+    with _GENERATION_STATE_LOCK:
+        return {"active": _GENERATION_ACTIVE, "waiting": _GENERATION_WAITING,
+                "accepting": _GENERATION_ACCEPTING}
+
+
+def request_shutdown(*, force: bool = False) -> tuple[bool, dict[str, int | bool]]:
+    """Atomically close new admission, or refuse while admitted work exists."""
+    global _GENERATION_ACCEPTING
+    with _GENERATION_STATE_LOCK:
+        if not force and (_GENERATION_ACTIVE or _GENERATION_WAITING):
+            return False, generation_activity_snapshot()
+        _GENERATION_ACCEPTING = False
+        return True, generation_activity_snapshot()
+
+
+class _GenerationAdmission:
+    """Request-scoped counter ownership, including waits and exceptional exits."""
+
+    def __init__(self) -> None:
+        self.admitted = False
+        self.active = False
+
+    def __enter__(self) -> _GenerationAdmission:
+        global _GENERATION_WAITING
+        with _GENERATION_STATE_LOCK:
+            self.admitted = _GENERATION_ACCEPTING
+            if self.admitted:
+                _GENERATION_WAITING += 1
+        return self
+
+    def activate(self) -> bool:
+        global _GENERATION_WAITING, _GENERATION_ACTIVE
+        with _GENERATION_STATE_LOCK:
+            if not _GENERATION_ACCEPTING:
+                return False
+            _GENERATION_WAITING -= 1
+            _GENERATION_ACTIVE += 1
+            self.active = True
+            return True
+
+    def __exit__(self, *_exc: Any) -> None:
+        global _GENERATION_WAITING, _GENERATION_ACTIVE
+        with _GENERATION_STATE_LOCK:
+            if self.admitted:
+                if self.active:
+                    _GENERATION_ACTIVE -= 1
+                else:
+                    _GENERATION_WAITING -= 1
+
+
+def _shutdown_refusal(json_status: JsonStatusSender, app_version: str) -> None:
+    json_status(503, {
+        "ok": False, "status": "generator_shutting_down", "error": "generator_shutting_down",
+        "message": "Generator is shutting down; no new generation was started.",
+        "version": app_version, "httpStatus": 503, "retryable": True,
+        "cacheRecoveryAllowed": True, "generationActivity": generation_activity_snapshot(),
+    })
+
 
 def _response_json_error(
     value: Any,
@@ -140,104 +205,111 @@ def handle_combine_request(
             "recipeKey": cache_key,
         })
         return
-    multi_dev = bool(payload.get("multiDevCraft"))
-    semaphore = MULTIDEV_SEMAPHORE if multi_dev else COMBINE_SEMAPHORE
-    concurrency = MULTIDEV_CONCURRENCY if multi_dev else COMBINE_CONCURRENCY
-    profile_id = str(payload.get("llmProfileId") or "").strip().lower() if multi_dev else ""
-    profile_semaphore = MULTIDEV_PROFILE_SEMAPHORES.get(profile_id) if multi_dev else None
-    profile_acquired = False
-    if multi_dev:
-        if profile_semaphore is None:
-            json_status(422, {
-                "ok": False,
-                "status": "invalid_multidev_profile",
-                "error": "invalid_multidev_profile",
-                "message": "Multi-dev craft requires exact llmProfileId llm_1, llm_2, or llm_3.",
-                "playerMessage": "Multi-dev LLM profile is invalid. Items were returned.",
-                "version": app_version,
-                "httpStatus": 422,
-                "retryable": False,
-                "cacheRecoveryAllowed": False,
-                "multiDevCraft": True,
-            })
+    with _GenerationAdmission() as admission:
+        if not admission.admitted:
+            _shutdown_refusal(json_status, app_version)
             return
-        profile_acquired = profile_semaphore.acquire(blocking=False)
-        if not profile_acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
-            profile_acquired = profile_semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
-        if not profile_acquired:
+        multi_dev = bool(payload.get("multiDevCraft"))
+        semaphore = MULTIDEV_SEMAPHORE if multi_dev else COMBINE_SEMAPHORE
+        concurrency = MULTIDEV_CONCURRENCY if multi_dev else COMBINE_CONCURRENCY
+        profile_id = str(payload.get("llmProfileId") or "").strip().lower() if multi_dev else ""
+        profile_semaphore = MULTIDEV_PROFILE_SEMAPHORES.get(profile_id) if multi_dev else None
+        profile_acquired = False
+        if multi_dev:
+            if profile_semaphore is None:
+                json_status(422, {
+                    "ok": False,
+                    "status": "invalid_multidev_profile",
+                    "error": "invalid_multidev_profile",
+                    "message": "Multi-dev craft requires exact llmProfileId llm_1, llm_2, or llm_3.",
+                    "playerMessage": "Multi-dev LLM profile is invalid. Items were returned.",
+                    "version": app_version,
+                    "httpStatus": 422,
+                    "retryable": False,
+                    "cacheRecoveryAllowed": False,
+                    "multiDevCraft": True,
+                })
+                return
+            profile_acquired = profile_semaphore.acquire(blocking=False)
+            if not profile_acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
+                profile_acquired = profile_semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
+            if not profile_acquired:
+                json_status(409, {
+                    "ok": False,
+                    "status": "multidev_profile_busy",
+                    "error": "multidev_profile_busy",
+                    "message": f"Multi-dev profile {profile_id} is already generating an item.",
+                    "playerMessage": f"{profile_id} is already busy. Items were returned; use another lane or retry.",
+                    "version": app_version,
+                    "httpStatus": 409,
+                    "retryable": True,
+                    "cacheRecoveryAllowed": False,
+                    "combineConcurrency": concurrency,
+                    "multiDevCraft": True,
+                    "llmProfileId": profile_id,
+                    "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
+                })
+                return
+        acquired = semaphore.acquire(blocking=False)
+        if not acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
+            trace_event("step", "HTTP:/combine", "generator busy; waiting for active craft/cache", {
+                "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
+                "combineConcurrency": concurrency,
+                "multiDevCraft": multi_dev,
+                "combineBusyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
+            })
+            acquired = semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
+        if not acquired:
+            if profile_acquired and profile_semaphore is not None:
+                profile_semaphore.release()
             json_status(409, {
                 "ok": False,
-                "status": "multidev_profile_busy",
-                "error": "multidev_profile_busy",
-                "message": f"Multi-dev profile {profile_id} is already generating an item.",
-                "playerMessage": f"{profile_id} is already busy. Items were returned; use another lane or retry.",
+                "status": "generator_busy",
+                "error": "generator_busy",
+                "message": "LocalGenerator is already generating an item; retry shortly.",
+                "playerMessage": "Generator is busy. Items were returned; try again shortly.",
                 "version": app_version,
                 "httpStatus": 409,
                 "retryable": True,
                 "cacheRecoveryAllowed": False,
                 "combineConcurrency": concurrency,
-                "multiDevCraft": True,
-                "llmProfileId": profile_id,
+                "multiDevCraft": multi_dev,
                 "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
             })
             return
-    acquired = semaphore.acquire(blocking=False)
-    if not acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
-        trace_event("step", "HTTP:/combine", "generator busy; waiting for active craft/cache", {
-            "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
-            "combineConcurrency": concurrency,
-            "multiDevCraft": multi_dev,
-            "combineBusyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
-        })
-        acquired = semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
-    if not acquired:
-        if profile_acquired and profile_semaphore is not None:
-            profile_semaphore.release()
-        json_status(409, {
-            "ok": False,
-            "status": "generator_busy",
-            "error": "generator_busy",
-            "message": "LocalGenerator is already generating an item; retry shortly.",
-            "playerMessage": "Generator is busy. Items were returned; try again shortly.",
-            "version": app_version,
-            "httpStatus": 409,
-            "retryable": True,
-            "cacheRecoveryAllowed": False,
-            "combineConcurrency": concurrency,
-            "multiDevCraft": multi_dev,
-            "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
-        })
-        return
-    try:
-        data = combine(payload)
-    except Exception as error:
-        snapshot_error = ""
-        attached = getattr(error, "_infini_failure_snapshot", None)
-        snapshot: dict[str, Any] = deepcopy(attached) if isinstance(attached, dict) else {}
-        if not snapshot and last_failure_summary is not None:
-            try:
-                candidate = last_failure_summary()
-                if isinstance(candidate, dict):
-                    snapshot = deepcopy(candidate)
-            except Exception as diagnostic_error:
-                snapshot_error = repr(diagnostic_error)
         try:
-            setattr(error, "_infini_failure_snapshot", snapshot)
-            if snapshot_error:
-                setattr(error, "_infini_failure_snapshot_error", snapshot_error)
-        except Exception:
-            pass
-        raise
-    finally:
-        semaphore.release()
-        if profile_acquired and profile_semaphore is not None:
-            profile_semaphore.release()
-    if _response_json_error(
-        data,
-        source="fresh",
-        app_version=app_version,
-        trace_event=trace_event,
-        json_status=json_status,
-    ):
-        return
-    json(data)
+            if not admission.activate():
+                _shutdown_refusal(json_status, app_version)
+                return
+            data = combine(payload)
+        except Exception as error:
+            snapshot_error = ""
+            attached = getattr(error, "_infini_failure_snapshot", None)
+            snapshot: dict[str, Any] = deepcopy(attached) if isinstance(attached, dict) else {}
+            if not snapshot and last_failure_summary is not None:
+                try:
+                    candidate = last_failure_summary()
+                    if isinstance(candidate, dict):
+                        snapshot = deepcopy(candidate)
+                except Exception as diagnostic_error:
+                    snapshot_error = repr(diagnostic_error)
+            try:
+                setattr(error, "_infini_failure_snapshot", snapshot)
+                if snapshot_error:
+                    setattr(error, "_infini_failure_snapshot_error", snapshot_error)
+            except Exception:
+                pass
+            raise
+        finally:
+            semaphore.release()
+            if profile_acquired and profile_semaphore is not None:
+                profile_semaphore.release()
+        if _response_json_error(
+            data,
+            source="fresh",
+            app_version=app_version,
+            trace_event=trace_event,
+            json_status=json_status,
+        ):
+            return
+        json(data)

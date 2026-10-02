@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import math
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, NoReturn
 
 from infini_local.core.repair_merge import json_path_child
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -586,16 +586,106 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
     return errors[:limit]
 
 
+def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int, int]:
+    """Derive input nodes/depth/text width and assertion weight from Author schema.
+
+    Union branches share one input value: size uses the largest branch, while
+    assertion weight includes every branch the strict validator may examine.
+    A bounded input has at most nodes * weight diagnostics, including missing
+    properties, union wrappers and extra keys. This is not a display limit.
+    """
+    nodes, depth = 1, 0
+    weight = 1 + len(schema) + len(schema.get("required", []))
+    text_width = max([schema.get("maxLength", 0), *(
+        len(value) for value in [schema.get("const"), *schema.get("enum", [])]
+        if isinstance(value, str)
+    )])
+    children = [_author_schema_work_bounds(child) for child in schema.get("properties", {}).values()]
+    if children:
+        nodes += sum(child[0] for child in children)
+        depth = 1 + max(child[1] for child in children)
+        text_width = max(text_width, *(len(key) for key in schema["properties"]))
+    item = schema.get("items")
+    if isinstance(item, Mapping):
+        # Author collections must have a declared finite size. Never fall back
+        # to a guessed error cap when the contract is extended.
+        count = schema["maxItems"]
+        child = _author_schema_work_bounds(item)
+        nodes += count * child[0]
+        depth = max(depth, 1 + child[1])
+        children.append(child)
+    for key in ("oneOf", "anyOf", "allOf"):
+        branches = [_author_schema_work_bounds(branch) for branch in schema.get(key, [])]
+        if branches:
+            nodes = max(nodes, max(branch[0] for branch in branches))
+            depth = max(depth, max(branch[1] for branch in branches))
+            children.extend(branches)
+    for key in ("if", "then", "else"):
+        if isinstance(schema.get(key), Mapping):
+            children.append(_author_schema_work_bounds(schema[key]))
+    text_width = max([text_width, *(child[2] for child in children)])
+    weight += sum(child[3] for child in children)
+    return nodes, depth, text_width, weight
+
+
+def assert_bounded_author_input(
+    value: Any, *, schema: Mapping[str, Any] | None = None, authored_only: bool = True,
+) -> tuple[Any, int]:
+    """Refuse unbounded input before recursive validation, copying or Repair.
+
+    Return the read-only Author projection and its non-truncating diagnostic
+    ceiling. Pipeline metadata is outside Author validation; raw provider input
+    instead checks the whole object before projection/copying. Work refusal is
+    an exception, never a diagnostic prefix advertising incomplete authority.
+    """
+    schema = schema if schema is not None else author_item_response_schema()
+    max_nodes, max_depth, text_width, weight = _author_schema_work_bounds(schema)
+    max_text = max_nodes * text_width
+
+    def refuse(error_path: str, dimension: str) -> NoReturn:
+        # RuntimeError is not a JSON syntax failure eligible for Format Repair.
+        raise RuntimeError(f"Author input exceeds schema-derived work bounds at {error_path} ({dimension})")
+
+    if isinstance(value, Mapping) and len(value) > max_nodes:
+        refuse("$", "object members")
+    candidate = (
+        {key: item for key, item in value.items() if key in schema["properties"]}
+        if authored_only and isinstance(value, Mapping) else value
+    )
+    pending = [(candidate, 0, "$")]
+    nodes = text = 0
+    while pending:
+        current, depth, current_path = pending.pop()
+        nodes += 1
+        if nodes > max_nodes or depth > max_depth:
+            refuse(current_path, "nodes/depth")
+        if isinstance(current, (dict, list)):
+            # Count immediate children before enumerating/allocating their paths.
+            if nodes + len(pending) + len(current) > max_nodes:
+                refuse(current_path, "container size")
+            children = current.items() if isinstance(current, dict) else enumerate(current)
+            for key, child in children:
+                if isinstance(current, dict):
+                    if not isinstance(key, str):
+                        refuse(current_path, "non-JSON object key")
+                    text += len(key)
+                    if text > max_text:
+                        refuse(current_path, "text")
+                pending.append((child, depth + 1, json_path_child(current_path, key)))
+        elif isinstance(current, str):
+            text += len(current)
+            if text > max_text:
+                refuse(current_path, "text")
+    return candidate, max_nodes * weight
+
+
 def strict_author_shape_report(value: Any) -> dict[str, Any]:
     # The provider response is strict, while pipeline metadata (id/debug/parents) is
     # attached after the LLM call. Validate only the authored contract surface here;
     # this is a projection boundary, not permission for unknown authored fields.
-    if not isinstance(value, Mapping):
-        candidate: Any = value
-    else:
-        allowed = set(author_item_response_schema()["properties"])
-        candidate = {key: copy.deepcopy(item) for key, item in value.items() if key in allowed}
-    errors = strict_schema_errors(candidate, author_item_response_schema())
+    schema = author_item_response_schema()
+    candidate, limit = assert_bounded_author_input(value, schema=schema)
+    errors = strict_schema_errors(candidate, schema, limit=limit)
     return {"schema": "infini.author-item-shape-report.v1", "ok": not errors, "errors": errors}
 
 
@@ -646,14 +736,20 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
     program = out.setdefault("runtimeProgram", {})
 
     def upsert(rows: list[Any], replacements: list[Any]) -> list[Any]:
-        by_id = {str(row.get("id")): copy.deepcopy(row) for row in rows if isinstance(row, dict) and row.get("id")}
-        order = [str(row.get("id")) for row in rows if isinstance(row, dict) and row.get("id")]
+        # Sparse Repair is not a sanitation boundary: retain malformed/ID-less
+        # rows, distinct duplicate occurrences and their original ordering.
+        result = copy.deepcopy(rows)
         for row in replacements:
             key = str(row.get("id"))
-            if key not in by_id:
-                order.append(key)
-            by_id[key] = copy.deepcopy(row)
-        return [by_id[key] for key in order if key in by_id]
+            indices = [index for index, old in enumerate(result)
+                       if isinstance(old, dict) and str(old.get("id")) == key]
+            if len(indices) > 1:
+                raise ValueError(f"ambiguous gameplay repair upsert id: {key!r}")
+            if indices:
+                result[indices[0]] = copy.deepcopy(row)
+            else:
+                result.append(copy.deepcopy(row))
+        return result
 
     def delete(rows: list[Any], ids: list[Any]) -> list[Any]:
         doomed = {str(value) for value in ids}
@@ -727,6 +823,7 @@ __all__ = [
     "PRIMARY_ENTITY_SELECTION_FIELD",
     "PRIMARY_ENTITY_SELECTION_JSON_PATH",
     "apply_repair_patch",
+    "assert_bounded_author_input",
     "authored_primary_entity_id",
     "author_item_repair_schema",
     "author_item_response_schema",

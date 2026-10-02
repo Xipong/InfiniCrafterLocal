@@ -7,7 +7,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from infini_local.core import strict_json
 from infini_local.core.json_debug import bounded_json_dumps
@@ -455,7 +455,10 @@ def read_world_recipe_cache(
     recipe_key_value: str,
     world_id: Any,
     world_name: Any = None,
+    *,
+    validate_payload: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
+    """Read, assess and quarantine one version under the canonical path lock."""
     recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
     with _storage_lock(recipe_path):
         data = read_json_file(recipe_path)
@@ -481,14 +484,15 @@ def read_world_recipe_cache(
                 except (OSError, ValueError, TypeError):
                     pass
             return None
-        vfx_report = validate_vfx_manifest_wire(data)
-        assets_ready = vfx_report["ok"] and _cache_assets_ready(data)
-        if not vfx_report["ok"] or not assets_ready:
-            quarantine_world_recipe_cache(
-                world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
-                reason="low_level_runtime_contract_invalid", details={"vfx": vfx_report, "assetsReady": assets_ready},
-            )
-            return None
+        if validate_payload is None:
+            vfx_report = validate_vfx_manifest_wire(data)
+            assets_ready = vfx_report["ok"] and _cache_assets_ready(data)
+            if not vfx_report["ok"] or not assets_ready:
+                quarantine_world_recipe_cache(
+                    world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
+                    reason="low_level_runtime_contract_invalid", details={"vfx": vfx_report, "assetsReady": assets_ready},
+                )
+                return None
         data.pop("_llmHistory", None)
         debug = data.setdefault("debug", {})
         debug.update({"cacheHit": "world_file", "cacheScope": "world"})
@@ -498,13 +502,28 @@ def read_world_recipe_cache(
             "worldId": str(world_id),
             "storage": "world_recipe_file_authority",
         })
-        return sanitize_recipe_for_delivery(data)
+        delivered = sanitize_recipe_for_delivery(data)
+        if validate_payload is not None:
+            report = validate_payload(delivered)
+            if not report["ok"]:
+                from infini_local.storage.trace_runtime import trace_event
+
+                context = {"recipeKey": recipe_key_value, "worldId": str(world_id),
+                           "reason": "low_level_runtime_contract_invalid"}
+                try:
+                    path = quarantine_world_recipe_cache(
+                        world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
+                        reason=context["reason"], details={"errors": report.get("errors", [])[:24]},
+                    )
+                    if path:
+                        trace_event("warn", "COMBINE:cache", "invalid low-level runtime recipe quarantined", {**context, "path": path})
+                except (OSError, ValueError, TypeError) as exc:
+                    trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {**context, "error": repr(exc)})
+                return None
+        return delivered
 
 
-
-
-
-def is_deliverable_recipe_payload(data: Any) -> bool:
+def is_deliverable_recipe_payload(data: Any, *, check_assets: bool = True) -> bool:
     if not isinstance(data, dict) or not str(data.get("name") or "").strip():
         return False
     schema_version = data.get("schemaVersion")
@@ -524,4 +543,4 @@ def is_deliverable_recipe_payload(data: Any) -> bool:
         return False
     if not validate_vfx_manifest_wire(data)["ok"]:
         return False
-    return _cache_assets_ready(data)
+    return not check_assets or _cache_assets_ready(data)

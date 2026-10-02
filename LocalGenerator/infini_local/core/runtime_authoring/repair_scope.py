@@ -138,6 +138,24 @@ def _program_rows(current: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]
     }
 
 
+def _program_index_rows(current: Mapping[str, Any]) -> dict[str, list[Any]]:
+    """Source coordinates for diagnostic paths, never a filtered graph view."""
+    program = _mapping(current.get("runtimeProgram"))
+    return {namespace: _values(program.get(namespace))
+            for namespace in ("entities", "bindings", "calls")}
+
+
+def _ambiguous_row_ids(values: list[dict[str, Any]]) -> set[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for row in values:
+        row_id = str(row.get("id") or "")
+        if row_id and row_id in seen:
+            duplicates.add(row_id)
+        seen.add(row_id)
+    return duplicates
+
+
 def _id_maps(rows: Mapping[str, list[dict[str, Any]]]) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     namespace_by_id: dict[str, str] = {}
     row_by_id: dict[str, dict[str, Any]] = {}
@@ -150,14 +168,14 @@ def _id_maps(rows: Mapping[str, list[dict[str, Any]]]) -> tuple[dict[str, str], 
     return namespace_by_id, row_by_id
 
 
-def _node_from_path(path: str, rows: Mapping[str, list[dict[str, Any]]]) -> tuple[str, int, str] | None:
+def _node_from_path(path: str, rows: Mapping[str, list[Any]]) -> tuple[str, int, str] | None:
     match = _NODE_PATH_RE.match(path)
     if not match:
         return None
     namespace = match.group(1) or ""
     index = int(match.group(2))
     values = rows.get(namespace, [])
-    row_id = str(values[index].get("id") or "") if 0 <= index < len(values) else ""
+    row_id = str(_mapping(values[index]).get("id") or "") if 0 <= index < len(values) else ""
     return namespace, index, row_id
 
 
@@ -992,6 +1010,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     error_rows = [dict(row) for row in errors]
     error_codes = {str(row.get("code") or "") for row in error_rows}
     rows = _program_rows(current)
+    indexed_rows = _program_index_rows(current)
+    ambiguous_ids = {namespace: _ambiguous_row_ids(values) for namespace, values in rows.items()}
     error_paths_all = [str(row.get("path") or "$") for row in error_rows]
     namespace_by_id, row_by_id = _id_maps(rows)
     mutable = {name: set() for name in ("entities", "bindings", "calls")}
@@ -1038,12 +1058,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     error_paths: list[str] = []
 
     def grant(namespace: str, row_id: str, relative_path: str) -> None:
-        if not row_id:
+        if not row_id or row_id in ambiguous_ids[namespace]:
             return
         field_permissions[namespace].setdefault(row_id, set()).add(relative_path.strip("."))
 
     def mark(namespace: str, row_id: str, *, can_delete: bool = False) -> None:
-        if row_id:
+        if row_id and row_id not in ambiguous_ids[namespace]:
             mutable[namespace].add(row_id)
             if can_delete:
                 deletable[namespace].add(row_id)
@@ -1105,9 +1125,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             str(value) for value in _values(candidate_error.get("relatedIds"))
             if str(value) in item_entity_ids
         }
-        candidate_node = _node_from_path(str(candidate_error.get("path") or "$"), rows)
+        candidate_node = _node_from_path(str(candidate_error.get("path") or "$"), indexed_rows)
         if candidate_node is not None and candidate_node[0] == "calls":
-            candidate_call = rows["calls"][candidate_node[1]]
+            candidate_call = _mapping(indexed_rows["calls"][candidate_node[1]])
             candidate_target = str(candidate_call.get("target") or "")
             if candidate_target in item_entity_ids:
                 candidate_targets.add(candidate_target)
@@ -1155,14 +1175,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         }
         repair_requirements.append(requirement_row)
         error_paths.append(path)
-        node = _node_from_path(path, rows)
+        node = _node_from_path(path, indexed_rows)
         node_namespace = ""
         node_index = -1
         node_id = ""
         node_row: dict[str, Any] = {}
         if node is not None:
             node_namespace, node_index, node_id = node
-            node_row = rows.get(node_namespace, [])[node_index] if 0 <= node_index < len(rows.get(node_namespace, [])) else {}
+            node_row = dict(_mapping(indexed_rows[node_namespace][node_index])) if 0 <= node_index < len(indexed_rows[node_namespace]) else {}
             if node_id:
                 requirement_row["affectedIds"] = sorted(set(requirement_row["affectedIds"] + [node_id]))
             if node_namespace == "calls":
@@ -2396,10 +2416,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         "callParamKeys": [
             {"callId": call_id, "key": key}
             for call_id, key in sorted(deletable_call_param_keys)
+            if call_id not in ambiguous_ids["calls"]
         ],
         "callPropertyKeys": [
             {"callId": call_id, "key": key}
             for call_id, key in sorted(deletable_call_property_keys)
+            if call_id not in ambiguous_ids["calls"]
         ],
     }
     scope["create"] = {
@@ -2513,7 +2535,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             continue
         related_ids = [str(value) for value in error.get("relatedIds") or [] if str(value)]
         if not related_ids:
-            node = _node_from_path(str(error.get("path") or "$"), rows)
+            node = _node_from_path(str(error.get("path") or "$"), indexed_rows)
             if node is not None and node[0] == "bindings" and node[2]:
                 related_ids = [node[2]]
         exclusive_inputs.update(
@@ -2757,6 +2779,8 @@ def filter_repair_patch_scope(
     )
     for namespace, upsert_key, delete_key, index_delete_key, scope_key, id_key in specs:
         original_rows = rows[namespace]
+        indexed_rows = _program_index_rows(current)[namespace]
+        ambiguous_ids = _ambiguous_row_ids(original_rows)
         original_by_id = {
             str(row.get(id_key) or ""): row
             for row in original_rows
@@ -2773,7 +2797,7 @@ def filter_repair_patch_scope(
         for index, value in enumerate(patch.get(delete_key) or []):
             row_id = str(value)
             path = f"$.{delete_key}[{index}]"
-            if row_id in deletable_ids:
+            if row_id in deletable_ids and row_id not in ambiguous_ids:
                 filtered[delete_key].append(row_id)
                 accepted.append(path)
             else:
@@ -2786,7 +2810,7 @@ def filter_repair_patch_scope(
                 filtered[index_delete_key].append(numeric)
                 accepted.append(path)
             else:
-                preserved = original_rows[numeric] if 0 <= numeric < len(original_rows) else None
+                preserved = indexed_rows[numeric] if 0 <= numeric < len(indexed_rows) else None
                 ignored.append(_filter_ignored(path, numeric, preserved, "valid_index_delete_ignored"))
 
         for index, candidate in enumerate(patch.get(upsert_key) or []):
@@ -2794,6 +2818,9 @@ def filter_repair_patch_scope(
                 continue
             row_id = str(candidate.get(id_key) or "")
             path = f"$.{upsert_key}[{index}]"
+            if row_id in ambiguous_ids:
+                ignored.append(_filter_ignored(path, candidate, None, "ambiguous_id_requires_index_deletion"))
+                continue
             original = original_by_id.get(row_id)
             if original is not None:
                 if row_id not in mutable_ids:
@@ -3691,13 +3718,14 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
             ]
 
     deletable = _mapping(scope.get("deletable"))
+    indexed_rows = _program_index_rows(current)
     broken_by_index: dict[str, list[dict[str, Any]]] = {}
     for namespace in ("entities", "bindings", "calls"):
         index_key = namespace[:-1] + "Indices" if namespace != "entities" else "entityIndices"
         indices = [int(value) for value in deletable.get(index_key) or []]
         broken_by_index[namespace] = [
-            {"index": index, "value": copy.deepcopy(rows[namespace][index])}
-            for index in indices if 0 <= index < len(rows[namespace])
+            {"index": index, "value": copy.deepcopy(indexed_rows[namespace][index])}
+            for index in indices if 0 <= index < len(indexed_rows[namespace])
         ]
     return {
         "broken": broken,

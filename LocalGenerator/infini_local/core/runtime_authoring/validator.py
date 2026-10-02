@@ -243,23 +243,18 @@ def _max_depth(edges: Mapping[str, set[str]], roots: Iterable[str]) -> int:
     return max((depth(root) for root in roots), default=0)
 
 
-def _numeric_param(params: Mapping[str, Any], key: str, default: float) -> float:
+def _numeric_param(params: Mapping[str, Any], key: str, default: int | float) -> int | float:
     value = params.get(key)
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
+        # Predicate comparison needs no coercion. A valid JSON integer may be
+        # outside float range; strict shape owns its structured refusal.
+        return value
     return default
 
 
 def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
-    return any((
-        _numeric_param(params, "miningSpeedMultiplier", 1) != 1,
-        _numeric_param(params, "lightStrength", 0) > 0,
-        params.get("oreSenseEnabled") is True,
-        _numeric_param(params, "moveSpeedBonusFactor", 0) != 0,
-        _numeric_param(params, "jumpSpeedBonusPxPerTick", 0) > 0,
-        _numeric_param(params, "manaRegenBonusPoints", 0) > 0,
-        _numeric_param(params, "lifeRegenHpPerSecond", 0) > 0,
-    ))
+    # Preserve the existing strict-wire seam; effect facts live in the registry.
+    return CAPABILITY_REGISTRY["apply_generated_buff_on_use"].has_non_neutral_effect(params)
 
 
 def _event_available(
@@ -317,6 +312,19 @@ def _validate_requirement(
             return ValidationIssue(path, "missing_capability_dependency", requirement.message, (requirement.capability,), (target_id,))
         return None
     if requirement.kind == "capability_group_present":
+        # nonzero_params declares a causal effective-effect group, rather than
+        # mere capability-name presence. All alternatives remain registry-owned.
+        if requirement.nonzero_params and not any(
+            row.get("fn") in requirement.any_of
+            and (effect_cap := CAPABILITY_REGISTRY.get(str(row.get("fn") or ""))) is not None
+            and isinstance((effect_params := row.get("params")), Mapping)
+            and effect_cap.has_non_neutral_effect(effect_params)
+            for row in target_calls
+        ):
+            return ValidationIssue(
+                f"{path}.params", "empty_component", requirement.message,
+                tuple(f"{name} > 0" for name in requirement.nonzero_params),
+            )
         if not fns.intersection(requirement.any_of):
             return ValidationIssue(path, "missing_capability_group", requirement.message, requirement.any_of, (target_id,))
         return None
@@ -475,7 +483,7 @@ def _validate_requirement(
             )
         return None
     if requirement.kind == "non_neutral_param":
-        if not _has_non_neutral_generated_buff(params):
+        if not cap.has_non_neutral_effect(params):
             return ValidationIssue(f"{path}.params", "inert_component", requirement.message, ("set one non-neutral effect", "remove the call"))
         return None
     if requirement.kind == "event_available":

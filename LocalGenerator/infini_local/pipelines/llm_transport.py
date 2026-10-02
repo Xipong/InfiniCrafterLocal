@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from functools import wraps
 import copy
 import hashlib
 import json
@@ -17,6 +18,7 @@ from urllib import error as urlerror
 from urllib.parse import urlsplit
 
 from infini_local.core.env_utils import env_str
+from infini_local.core.http_io import HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds, read_with_deadline, urlopen_no_redirect
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
@@ -51,6 +53,175 @@ from infini_local.core.llm_config import (
     OPENROUTER_PROVIDER,
 )
 from infini_local.storage.trace_runtime import log_event
+
+
+_CURRENT_LLM_DEADLINE: ContextVar[float | None] = ContextVar("infini_llm_deadline", default=None)
+_CURRENT_LLM_DIAGNOSTICS: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_diagnostics", default=None)
+_CURRENT_LLM_ATTEMPT: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_attempt", default=None)
+_LLM_MAX_DIAGNOSTIC_ATTEMPTS = 16
+_LLM_CALL_SEQUENCE = 0
+
+
+def _request_deadline(timeout: float) -> float:
+    requested = time.monotonic() + float(timeout)
+    current = _CURRENT_LLM_DEADLINE.get()
+    return min(current, requested) if current is not None else requested
+
+
+def _bounded_llm_call(call):
+    """Share one budget across negotiation, retries, failover and body reads."""
+    @wraps(call)
+    def bounded(payload, timeout=10, *args, **kwargs):
+        deadline = _CURRENT_LLM_DEADLINE.get()
+        token = None
+        if deadline is None:
+            deadline = _request_deadline(timeout)
+            token = _CURRENT_LLM_DEADLINE.set(deadline)
+        diagnostic_token = None
+        state = None
+        if call.__name__ == "llm_chat_json" and _CURRENT_LLM_DIAGNOSTICS.get() is None:
+            state = _new_llm_diagnostics(payload)
+            diagnostic_token = _CURRENT_LLM_DIAGNOSTICS.set(state)
+        try:
+            remaining_seconds(deadline)
+            result = call(payload, timeout, *args, **kwargs)
+            if state is not None:
+                result["_debug"] = {**(result.get("_debug") or {}), **_llm_diagnostic_summary(state)}
+                log_event("info", "LLM logical call finished", {**_llm_diagnostic_summary(state), "outcome": "success"})
+            return result
+        except Exception as error:
+            if state is not None:
+                summary = _llm_diagnostic_summary(state)
+                setattr(error, "_infini_transport_debug", summary)
+                log_event("warn", "LLM logical call failed", {**summary, "outcome": "failure", "errorType": type(error).__name__})
+            raise
+        finally:
+            if diagnostic_token is not None:
+                _CURRENT_LLM_DIAGNOSTICS.reset(diagnostic_token)
+            if token is not None:
+                _CURRENT_LLM_DEADLINE.reset(token)
+    return bounded
+
+
+def _reasoning_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
+    raw = payload.get("reasoning") or payload.get(_REASONING_INTENT_KEY)
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    effort = payload.get("reasoning_effort") or raw.get("effort")
+    if effort:
+        out["effort"] = effort if isinstance(effort, str) and effort in _REASONING_EFFORT_RANK else "unsupported"
+    if type(raw.get("max_tokens")) is int:
+        out["max_tokens"] = max(0, min(64000, raw["max_tokens"]))
+    for name in ("enabled", "exclude"):
+        if type(raw.get(name)) is bool:
+            out[name] = raw[name]
+    return out
+
+
+def _format_diagnostic(payload: dict[str, Any]) -> str:
+    raw = payload.get("response_format")
+    if not isinstance(raw, dict):
+        text = payload.get("text")
+        raw = text.get("format") if isinstance(text, dict) else None
+    mode = raw.get("type") if isinstance(raw, dict) else "text"
+    return mode if isinstance(mode, str) and mode in {"json_schema", "json_object", "text"} else "unsupported"
+
+
+def _new_llm_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
+    global _LLM_CALL_SEQUENCE
+    with _LLM_POOL_LOCK:
+        _LLM_CALL_SEQUENCE += 1
+        sequence = _LLM_CALL_SEQUENCE
+    lease = _CURRENT_LLM_ITEM_LEASE.get()
+    return {
+        "logicalCallId": f"{lease.lease_id if lease else 'standalone'}:call:{sequence}",
+        "stage": _llm_replay_stage_from_payload(payload), "leaseId": lease.lease_id if lease else "",
+        "requestedApiMode": _normalized_api_mode(_primary_llm_context().get("api_mode")),
+        "requestedResponseFormat": _format_diagnostic(payload), "requestedReasoning": _reasoning_diagnostic(payload),
+        "physicalAttemptCount": 0, "physicalAttemptsDropped": 0, "physicalAttempts": [],
+        "lastAttempt": {}, "nextReason": "initial", "rateWaitMsTotal": 0.0, "diagnosticEventCount": 0,
+    }
+
+
+def _llm_diagnostic_summary(state: dict[str, Any]) -> dict[str, Any]:
+    last = state["lastAttempt"]
+    return {
+        **{name: state[name] for name in ("logicalCallId", "stage", "leaseId", "requestedApiMode",
+           "requestedResponseFormat", "requestedReasoning", "physicalAttemptCount", "physicalAttemptsDropped", "rateWaitMsTotal")},
+        "physicalAttempts": copy.deepcopy(state["physicalAttempts"]),
+        "rateWaitReason": last.get("rateWaitReason", "none"),
+        "physicalAttemptScope": "llm_generation_http_post" if state["physicalAttemptCount"] is not None else "codex_owner_unobserved",
+        "effectiveApiMode": last.get("effectiveApiMode"), "effectiveResponseFormat": last.get("effectiveResponseFormat"),
+        "effectiveReasoning": copy.deepcopy(last.get("effectiveReasoning")),
+    }
+
+
+def _attempt_reason(reason: str) -> None:
+    state = _CURRENT_LLM_DIAGNOSTICS.get()
+    if state is not None:
+        state["nextReason"] = reason
+
+
+def _public_provider_body(body: str, context: dict[str, Any]) -> str:
+    # Provider errors may reflect Authorization; retain internal evidence, not credentials in traces.
+    secret = str(context.get("api_key") or "")
+    try:
+        body = json.dumps(json.loads(body), ensure_ascii=False)
+    except (ValueError, TypeError):
+        pass
+    return body.replace(secret, "[redacted]")[:600] if secret else body[:600]
+
+
+def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
+    state = _CURRENT_LLM_DIAGNOSTICS.get()
+    if state is None:
+        return http_json(url, wire, timeout=timeout, headers=llm_headers(context=context))
+    effective_reasoning = _reasoning_diagnostic(wire)
+    row = {
+        **{name: state[name] for name in ("logicalCallId", "stage", "leaseId", "requestedApiMode", "requestedResponseFormat", "requestedReasoning")},
+        "profileId": _profile_id(context), "provider": active_llm_provider(context),
+        "openrouterProvider": _openrouter_provider(context),
+        "effectiveApiMode": api_mode, "effectiveResponseFormat": _format_diagnostic(wire),
+        "effectiveReasoning": effective_reasoning,
+        "unsupportedReasoningFields": sorted(set(state["requestedReasoning"]) - set(effective_reasoning)),
+        "reason": state["nextReason"], "networkStarted": None, "httpStatus": None,
+        "physicalAttemptIndex": None, "rateWaitMs": 0.0, "rateWaitReason": "none",
+        "connectMs": None, "openMs": 0.0, "readMs": 0.0,
+    }
+    token = _CURRENT_LLM_ATTEMPT.set(row)
+    try:
+        return http_json(url, wire, timeout=timeout, headers=llm_headers(context=context))
+    except urlerror.HTTPError as error:
+        row["httpStatus"] = error.code
+        _read_llm_http_error(error, timeout)
+        row["errorType"] = type(error).__name__
+        raise
+    except Exception as error:
+        row["errorType"] = type(error).__name__
+        raise
+    finally:
+        row["deadlineRemainingMs"] = round(max(0.0, _request_deadline(timeout) - time.monotonic()) * 1000, 3)
+        state["rateWaitMsTotal"] += row["rateWaitMs"]
+        if row["networkStarted"] is True:
+            state["physicalAttemptCount"] += 1
+            row["physicalAttemptIndex"] = state["physicalAttemptCount"]
+        state["lastAttempt"] = row
+        if state["diagnosticEventCount"] < _LLM_MAX_DIAGNOSTIC_ATTEMPTS:
+            if row["networkStarted"] is True:
+                state["physicalAttempts"].append(copy.deepcopy(row))
+            log_event("info", "LLM physical attempt" if row["networkStarted"] is True else "LLM transport wait", row)
+        elif row["networkStarted"] is True:
+            state["physicalAttemptsDropped"] += 1
+        state["diagnosticEventCount"] += 1
+        _CURRENT_LLM_ATTEMPT.reset(token)
+
+
+def _llm_backoff(seconds: float) -> None:
+    deadline = _CURRENT_LLM_DEADLINE.get()
+    remaining = remaining_seconds(deadline) if deadline is not None else seconds
+    time.sleep(min(seconds, remaining))
+    if deadline is not None:
+        remaining_seconds(deadline)
 
 
 _RESOLVED_LLM_MODELS: dict[str, str] = {}
@@ -119,6 +290,8 @@ def _reserve_remote_rate_slot(
     minimum_interval = _model_min_interval_seconds(payload.get("model"))
     deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
     while True:
+        if deadline is not None:
+            remaining_seconds(deadline)
         blocked_wait = 0.0
         wait_seconds = 0.0
         with _LLM_RATE_LOCK:
@@ -145,42 +318,20 @@ def _reserve_remote_rate_slot(
                     wait_seconds,
                     events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
                 )
+            row = _CURRENT_LLM_ATTEMPT.get()
+            if row is not None and wait_seconds > 0.0:
+                row["rateWaitReason"] = (
+                    "provider_cooldown" if blocked_wait >= wait_seconds else
+                    "token_window" if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW else "pacing")
             if wait_seconds <= 0.0:
                 events.append((now, tokens))
                 state["lastRequest"] = now
                 return
-            # A provider-enforced 429 cooldown (blockedUntil) is never bypassed:
-            # sending anyway guarantees another 429 and burns the attempt.  When
-            # that cooldown outlives the caller's deadline, sleep to the deadline
-            # and fail locally with an honest bounded timeout instead.  No rate
-            # event is recorded: no request is actually sent.
-            blocked_timeout = (
-                blocked_wait >= wait_seconds
-                and deadline is not None
-                and now + wait_seconds > deadline
-            )
-            # Own pacing only: respect the caller's deadline; once it is
-            # exhausted, send anyway.  The provider-side limiter remains the
-            # hard authority; this only prevents an unobservable multi-minute
-            # stall inside our own code.
-            pacing_deadline_bypass = (
-                blocked_wait < wait_seconds
-                and deadline is not None
-                and now + wait_seconds > deadline
-            )
-        if blocked_timeout:
-            time.sleep(max(0.0, (deadline or time.monotonic()) - time.monotonic()))
-            raise TimeoutError(
-                "remote LLM provider cooldown outlasts the request timeout; "
-                "request not sent (provider-enforced backoff)"
-            )
-        if pacing_deadline_bypass:
-            with _LLM_RATE_LOCK:
-                now = time.monotonic()
-                state = _LLM_RATE_STATE.setdefault(key, {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0})
-                state.setdefault("events", []).append((now, tokens))
-                state["lastRequest"] = now
-            return
+        # Own pacing and provider cooldown both consume the logical budget;
+        # neither may reserve/send after it is spent. No event means no send.
+        if deadline is not None and now + wait_seconds > deadline:
+            time.sleep(max(0.0, deadline - time.monotonic()))
+            raise HttpDeadlineExceeded("remote LLM rate wait exhausted the deadline; request not sent")
         time.sleep(wait_seconds)
 
 
@@ -924,13 +1075,18 @@ def apply_minimum_reasoning_effort(
         req["reasoning"] = reasoning
     return req
 
-def http_get_json(url: str, timeout: int = 5, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def http_get_json(url: str, timeout: float = 5, headers: dict[str, str] | None = None) -> dict[str, Any]:
     merged = {"Accept": "application/json"}
     if headers:
         merged.update(headers)
     req = urlrequest.Request(url, headers=merged, method="GET")
-    with urlrequest.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    deadline = _request_deadline(timeout)
+    try:
+        with urlopen_no_redirect(req, deadline=deadline) as resp:
+            return json.loads(read_with_deadline(resp, deadline=deadline).decode("utf-8"))
+    except urlerror.HTTPError as error:
+        error.close()
+        raise
 
 def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     """Resolve the active OpenAI-compatible model name.
@@ -1066,24 +1222,73 @@ def _cache_route(context: dict[str, Any], model: str) -> str:
         return ""
     return "explicit" if (int(match.group(1)), int(match.group(2) or 0)) >= (5, 6) else "key"
 
-def http_json(url: str, payload: dict[str, Any], timeout: int = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    # The caller's timeout owns the whole call: waiting in the rate limiter for
-    # longer than the request itself may take would hang crafts with no
-    # transport error to diagnose.  The limiter clamps its sleep to the deadline
-    # and lets the request through; the provider still enforces its own limits.
-    _reserve_remote_rate_slot(url, payload, data, max_wait_seconds=float(max(1, int(timeout))))
+    deadline = _request_deadline(timeout)
+    row = _CURRENT_LLM_ATTEMPT.get()
+    if row is not None:
+        row["networkStarted"] = False
+    wait_started = time.monotonic()
+    try:
+        _reserve_remote_rate_slot(url, payload, data, max_wait_seconds=remaining_seconds(deadline))
+    finally:
+        if row is not None:
+            row["rateWaitMs"] = round((time.monotonic() - wait_started) * 1000, 3)
+    remaining_seconds(deadline)
     merged = {"Content-Type": "application/json"}
     if headers:
         merged.update(headers)
     req = urlrequest.Request(url, data=data, headers=merged, method="POST")
     try:
-        with urlrequest.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        open_started = time.monotonic()
+        if row is not None:
+            row["networkStarted"] = True
+        try:
+            response = urlopen_no_redirect(req, deadline=deadline)
+        finally:
+            if row is not None:
+                row["openMs"] = round((time.monotonic() - open_started) * 1000, 3)
+        with response as resp:
+            if row is not None:
+                row["httpStatus"] = resp.status
+            read_started = time.monotonic()
+            try:
+                raw = read_with_deadline(resp, deadline=deadline)
+            finally:
+                if row is not None:
+                    row["readMs"] = round((time.monotonic() - read_started) * 1000, 3)
+            result = json.loads(raw.decode("utf-8"))
+            if isinstance(result, dict):
+                result.pop("_debug", None)  # Client-owned metadata, never a provider-controlled trace injection.
+            return result
     except urlerror.HTTPError as error:
+        setattr(error, "_infini_deadline", deadline)
         if error.code == 429:
             _mark_remote_rate_limited(url, payload, error)
         raise
+
+def _read_llm_http_error(error: urlerror.HTTPError, timeout: float) -> str:
+    existing = getattr(error, "_infini_body", None)
+    if existing is not None:
+        return str(existing)
+    deadline = min(_request_deadline(timeout), getattr(error, "_infini_deadline", float("inf")))
+    row = _CURRENT_LLM_ATTEMPT.get()
+    read_started = time.monotonic()
+    try:
+        body = read_with_deadline(error, deadline=deadline, max_bytes=2000).decode("utf-8", "replace")
+    except HttpResponseTooLarge:
+        body = ""  # Incomplete evidence must not establish a capability rejection.
+    except HttpDeadlineExceeded:
+        raise
+    except Exception:
+        body = ""
+    finally:
+        error.close()
+        if row is not None:
+            row["readMs"] += round((time.monotonic() - read_started) * 1000, 3)
+    setattr(error, "_infini_body", body)
+    return body
+
 
 def _llm_replay_stage_from_payload(payload: dict[str, Any]) -> str:
     """Read explicit finite transport metadata; never inspect prompt content."""
@@ -1224,9 +1429,9 @@ def request_shape_rejection_diagnosis(
     The transport's own per-run recovery is reported separately, by the caller
     that performs it.
     """
-    if not isinstance(exc, urlerror.HTTPError) or exc.code != 400:
-        return None
     request = payload if isinstance(payload, dict) else {}
+    if not isinstance(exc, urlerror.HTTPError) or not _strict_schema_rejected(exc, request):
+        return None
     response_format = request.get("response_format")
     response_mode = (
         str(response_format.get("type") or "") if isinstance(response_format, dict) else ""
@@ -1240,7 +1445,7 @@ def request_shape_rejection_diagnosis(
     return {
         "code": "provider_rejected_request_shape",
         "status": exc.code,
-        "providerBody": str(getattr(exc, "_infini_body", ""))[:600],
+        "providerBody": _public_provider_body(str(getattr(exc, "_infini_body", "")), context or {}),
         "provider": active_llm_provider(context),
         "model": str((context or {}).get("model") or ""),
         "baseUrl": str((context or {}).get("base_url") or ""),
@@ -1249,23 +1454,43 @@ def request_shape_rejection_diagnosis(
         "configuredApiMode": api_mode,
         "openrouterProvider": _openrouter_provider(context or _primary_llm_context()),
         "schemaChars": schema_chars,
-        "knownWorkingResponseFormat": "json_object",
-        "knownWorkingApiMode": "chat_completions",
+        "knownWorkingResponseFormat": "",
+        "knownWorkingApiMode": "",
+        "candidateResponseFormat": "json_object",
+        "candidateApiMode": "chat_completions",
+        "schemaCapabilityScope": _strict_schema_rejection_scope(exc, request),
         "hint": (
-            "Провайдер отклонил форму запроса, а не содержание промпта: модель ещё не получила задание. "
+            "Провайдер явно отклонил json_schema/response_format; по одному статусу 400 причина не определяется. "
             f"Отправлен response_format={response_mode} (INFINI_LLM_RESPONSE_FORMAT={LLM_RESPONSE_FORMAT_MODE}), "
             f"схема {schema_chars} символов, INFINI_LLM_API_MODE={api_mode}. "
-            "Большая strict JSON Schema не принимается частью OpenAI-compatible провайдеров, в том числе "
-            "Google Gemini: у них недокументированный лимит сложности схемы. "
-            "Рабочая комбинация — INFINI_LLM_RESPONSE_FORMAT=json_object и INFINI_LLM_API_MODE=chat_completions; "
-            "укажи её в настройках, чтобы не платить лишним отклонённым запросом каждый запуск. "
-            "config.env код не меняет сам."
+            "Кандидат для того же промпта — INFINI_LLM_RESPONSE_FORMAT=json_object и "
+            "INFINI_LLM_API_MODE=chat_completions. Пригодность этой комбинации ещё не проверена; "
+            "process cache меняется только после успешного ответа с валидным JSON. config.env код не меняет сам."
         ),
     }
 
 
 def _responses_chat_fallback_allowed(exc: Exception) -> bool:
-    return isinstance(exc, urlerror.HTTPError) and exc.code in _RESPONSES_CHAT_COMPATIBILITY_STATUSES
+    if not isinstance(exc, urlerror.HTTPError) or exc.code not in _RESPONSES_CHAT_COMPATIBILITY_STATUSES:
+        return False
+    body = str(getattr(exc, "_infini_body", "")).lower()
+    try:
+        decoded = json.loads(body)
+    except (ValueError, TypeError):
+        decoded = None
+    error = decoded.get("error") if isinstance(decoded, dict) else None
+    error = error if isinstance(error, dict) else {}
+    param = str(error.get("param") or "")
+    if param in {"messages", "model", "temperature", "max_tokens"} or any(value in body for value in (
+        "context_length", "context length", "context limit", "invalid_messages", "model_not_found",
+    )):
+        return False
+    if exc.code in {404, 405, 415, 501}:
+        return True
+    return any(value in body for value in (
+        "responses endpoint not supported", "responses api not supported", "unsupported endpoint",
+        "unsupported_parameter", "unsupported parameter", "unrecognized request argument",
+    ))
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     out = _clean_llm_payload(payload)
@@ -1442,7 +1667,7 @@ def _responses_output_text(result: dict[str, Any]) -> str:
     return "".join(chunks).strip()
 
 
-def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
+def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
     prepared = _payload_for_context(payload, context)
     lease = _CURRENT_LLM_ITEM_LEASE.get()
@@ -1460,12 +1685,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
         previous_id = lease.previous_response_id
     request_payload = _responses_payload_from_chat(prepared, previous_id, cache_source=payload, context=context)
     try:
-        result = http_json(
-            llm_responses_url(context),
-            request_payload,
-            timeout=timeout,
-            headers=llm_headers(context=context),
-        )
+        result = _perform_llm_http(llm_responses_url(context), request_payload, timeout, context, api_mode="responses")
         if not isinstance(result, dict):
             raise RuntimeError("LLM Responses endpoint returned a non-object response")
         status = str(result.get("status") or "completed").lower()
@@ -1493,11 +1713,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
             },
         }
     except urlerror.HTTPError as error:
-        try:
-            body = error.read().decode("utf-8", "replace")[:2000]
-            setattr(error, "_infini_body", body)
-        except Exception:
-            pass
+        _read_llm_http_error(error, timeout)
         raise
 
 
@@ -1510,7 +1726,8 @@ def _record_llm_stage(payload: dict[str, Any]) -> str:
     return stage
 
 
-def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
+@_bounded_llm_call
+def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     stage = _llm_replay_stage_from_payload(payload)
     # Raw replay is an explicit offline seam.  Resolve it before choosing
     # Responses vs Chat so auto/responses profiles can never make a network
@@ -1519,21 +1736,32 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
     if replay is not None:
         return replay
     if active_llm_provider(context) == "openai_codex":
-        from infini_local.services.codex_text_backend import generate_chat
+        from infini_local.services.codex_text_backend import generate_chat, _request_payload
         prepared = _payload_for_context(payload, context)
         if _prompt_cache_boundary(payload) is not None:
             identity_source = {**prepared, PROMPT_CACHE_METADATA_KEY: payload[PROMPT_CACHE_METADATA_KEY]}
             prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]))
-        result = generate_chat(prepared, timeout=timeout)
+        state = _CURRENT_LLM_DIAGNOSTICS.get()
+        if state is not None:
+            state["physicalAttemptCount"] = None  # Subscription/auth network I/O belongs to the Codex owner.
+            codex_wire = _request_payload(prepared)
+            state["lastAttempt"] = {
+                "effectiveApiMode": "codex_subscription_sse",
+                "effectiveResponseFormat": _format_diagnostic(codex_wire),
+                "effectiveReasoning": _reasoning_diagnostic(codex_wire),
+            }
+        result = generate_chat(prepared, timeout=remaining_seconds(_request_deadline(timeout)))
         usage = _usage_fields(result)
         result["_debug"] = {**(result.get("_debug") or {}), **usage}
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
         return result
     mode = _normalized_api_mode(context.get("api_mode"))
-    capability_key = _llm_context_key(context)
+    effective_model = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
+    capability_key = _llm_context_key({**context, "model": effective_model})
     lease = _CURRENT_LLM_ITEM_LEASE.get()
     responses_allowed = mode in {"auto", "responses"}
     responses_to_chat_fallback = False
+    had_working_chain = False
     if _RESPONSES_CAPABILITY.get(capability_key) is False:
         responses_allowed = False
     if lease is not None and lease.context is context and lease.responses_disabled:
@@ -1548,11 +1776,13 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
             if _is_budget_or_auth_failure(error) or not _responses_chat_fallback_allowed(error):
                 raise
             had_working_chain = bool(lease is not None and lease.context is context and lease.previous_response_id)
-            _RESPONSES_CAPABILITY[capability_key] = True if had_working_chain else False
+            if had_working_chain:
+                _RESPONSES_CAPABILITY[capability_key] = True
             if lease is not None and lease.context is context:
                 lease.responses_disabled = True
                 lease.previous_response_id = ""
             responses_to_chat_fallback = True
+            _attempt_reason("responses_to_chat_fallback")
             log_event("warn", "LLM Responses incompatible; retrying same stage through stateless Chat Completions", {
                 "stage": stage,
                 "profileId": context.get("profile_id"),
@@ -1571,6 +1801,13 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: int, context: dic
             **_usage_fields(result),
         }
         if responses_to_chat_fallback:
+            if not had_working_chain:
+                try:
+                    parse_first_valid_llm_json(result["choices"][0]["message"]["content"])
+                except (ValueError, TypeError, KeyError, IndexError):
+                    pass
+                else:
+                    _RESPONSES_CAPABILITY[capability_key] = False
             result = _with_transport_retry_debug(result, ["responses_to_chat_fallback"])
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
     return result
@@ -1592,28 +1829,71 @@ def _payload_without_strict_schema(payload: dict[str, Any]) -> dict[str, Any]:
     return relaxed
 
 
-def _strict_schema_rejected(exc: Exception, payload: dict[str, Any]) -> bool:
-    """True when the provider rejected this request's strict schema envelope."""
+def _strict_schema_rejection_scope(exc: Exception, payload: dict[str, Any]) -> str:
+    """Relevant provider evidence only: unsupported format vs this exact schema."""
     if not isinstance(exc, urlerror.HTTPError) or exc.code != 400:
-        return False
+        return ""
     response_format = payload.get("response_format")
-    return isinstance(response_format, dict) and str(response_format.get("type") or "") == "json_schema"
+    if not isinstance(response_format, dict) or response_format.get("type") != "json_schema":
+        return ""
+    body = str(getattr(exc, "_infini_body", ""))
+    try:
+        decoded = json.loads(body)
+    except (ValueError, TypeError):
+        decoded = None
+    details = decoded.get("error") if isinstance(decoded, dict) else None
+    details = details if isinstance(details, dict) else {}
+    param = str(details.get("param") or "").lower()
+    code = str(details.get("code") or "").lower()
+    text = str(details.get("message") or body).lower()
+    if param and not param.startswith(("response_format", "text.format", "json_schema")):
+        return ""
+    if any(value in code + " " + text for value in (
+        "context_length", "context length", "context limit", "invalid_messages", "model_not_found",
+    )):
+        return ""
+    schema_named = bool(re.search(r"json[_ -]schema|response_format|strict schema", text + " " + code + " " + param))
+    if not schema_named:
+        return ""
+    if any(value in code + " " + text + " " + param for value in (
+        "complexity", "too complex", "too large", "nesting", "invalid_json_schema", ".schema",
+    )):
+        return "schema"
+    if any(value in text + " " + code for value in (
+        "not supported", "unsupported", "does not support", "not available",
+    )):
+        return "profile"
+    return ""
 
 
-def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context: dict[str, Any]) -> dict[str, Any]:
+def _strict_schema_rejected(exc: Exception, payload: dict[str, Any]) -> bool:
+    return bool(_strict_schema_rejection_scope(exc, payload))
+
+
+def _strict_schema_capability_keys(payload: dict[str, Any], context: dict[str, Any]) -> tuple[str, str]:
+    model = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
+    base = _llm_context_key({**context, "model": model, "api_mode": "chat_completions"})
+    schema_bytes = json.dumps(payload.get("response_format"), ensure_ascii=False,
+                             sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return base, base + "|schema=" + hashlib.sha256(schema_bytes).hexdigest()
+
+
+@_bounded_llm_call
+def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     ensure_llm_auth_configured(context)
     prepared = dict(payload)
-    capability_key = _llm_context_key(context)
+    capability_key, schema_key = _strict_schema_capability_keys(payload, context)
     schema_downgraded = False
-    # A profile that already refused the strict schema in this run must not be
-    # asked again: the rejection is a property of the provider, not of the stage.
+    # Only successful negotiations establish unsupported format or exact-schema scope.
     if (
-        _STRICT_SCHEMA_CAPABILITY.get(capability_key) is False
+        (_STRICT_SCHEMA_CAPABILITY.get(capability_key) is False
+         or _STRICT_SCHEMA_CAPABILITY.get(schema_key) is False)
         and isinstance(prepared.get("response_format"), dict)
         and str((prepared.get("response_format") or {}).get("type") or "") == "json_schema"
     ):
         prepared = _payload_without_strict_schema(prepared)
         schema_downgraded = True
+        _attempt_reason("schema_capability_cached")
     try:
         return _llm_chat_json_exact_context(
             prepared, timeout, context, schema_downgraded=schema_downgraded
@@ -1622,7 +1902,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
         if schema_downgraded or not _strict_schema_rejected(error, prepared):
             raise
         diagnosis = getattr(error, "_infini_shape_diagnosis", None)
-        _STRICT_SCHEMA_CAPABILITY[capability_key] = False
+        scope = _strict_schema_rejection_scope(error, prepared)
         # The preceding diagnosis event already carries the full explanation, so
         # this one stays a short "what changed" line: three paragraphs of identical
         # prose in the server window would bury the fact that the craft recovered.
@@ -1638,21 +1918,34 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: int, context
             "schemaChars": (diagnosis or {}).get("schemaChars"),
             "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
             "detail": (
-                "Провайдер отклонил strict JSON Schema (HTTP 400) — форму запроса, а не промпт. "
-                "На этот прогон транспорт сам перешёл на response_format=json_object, и тот же самый "
-                "промпт проходит: форму ответа задаёт requiredJsonShape, а проверяют локальный "
-                "валидатор и компилятор. Чтобы не платить лишним запросом каждый запуск, поставь "
-                "INFINI_LLM_RESPONSE_FORMAT=json_object в настройках; config.env код не меняет."
+                "Провайдер явно отклонил json_schema (HTTP 400). Тот же промпт повторяется с "
+                "response_format=json_object; успешное восстановление ещё не установлено. "
+                "INFINI_LLM_RESPONSE_FORMAT=json_object — кандидат, не доказанная конфигурация. "
+                "Cache меняется только после валидного ответа; config.env код не меняет."
             ),
         })
-        return _llm_chat_json_exact_context(
+        _attempt_reason("json_schema_to_json_object_fallback")
+        result = _llm_chat_json_exact_context(
             _payload_without_strict_schema(prepared), timeout, context, schema_downgraded=True
         )
+        result = _with_transport_retry_debug(result, ["json_schema_to_json_object_fallback"])
+        # A 2xx envelope with malformed authored JSON is not a valid recovery.
+        try:
+            parse_first_valid_llm_json(result["choices"][0]["message"]["content"])
+        except (ValueError, TypeError, KeyError, IndexError):
+            return result
+        _STRICT_SCHEMA_CAPABILITY[schema_key if scope == "schema" else capability_key] = False
+        log_event("info", "LLM schema negotiation accepted", {
+            "stage": _llm_replay_stage_from_payload(payload), "profileId": context.get("profile_id"),
+            "schemaCapabilityScope": scope, "knownWorkingResponseFormat": "json_object",
+            "knownWorkingApiMode": "chat_completions",
+        })
+        return result
 
 
 def _llm_chat_json_exact_context(
     payload: dict[str, Any],
-    timeout: int,
+    timeout: float,
     context: dict[str, Any],
     *,
     schema_downgraded: bool = False,
@@ -1661,7 +1954,7 @@ def _llm_chat_json_exact_context(
     _cache_wire_options(candidate, payload, context, api_mode="chat")
     url = llm_chat_completions_url(context)
     try:
-        result = http_json(url, candidate, timeout=timeout, headers=llm_headers(context=context))
+        result = _perform_llm_http(url, candidate, timeout, context, api_mode="chat_completions")
         choices = result.get("choices") if isinstance(result, dict) else None
         first_choice = choices[0] if isinstance(choices, list) and choices else None
         message = first_choice.get("message") if isinstance(first_choice, dict) else None
@@ -1684,15 +1977,9 @@ def _llm_chat_json_exact_context(
         }
         if schema_downgraded:
             result["_debug"]["strictSchemaDowngraded"] = True
-            result = _with_transport_retry_debug(result, ["json_schema_to_json_object_fallback"])
         return result
     except urlerror.HTTPError as error:
-        body = ""
-        try:
-            body = error.read().decode("utf-8", "replace")[:2000]
-            setattr(error, "_infini_body", body)
-        except Exception:
-            pass
+        body = _public_provider_body(_read_llm_http_error(error, timeout), context)
         provider = active_llm_provider(context)
         if provider == "openrouter" and error.code == 401:
             message = "OpenRouter auth failed: API key is missing/invalid or was not saved in config.env (401 Unauthorized)."
@@ -1747,6 +2034,7 @@ def _next_lease_profile(lease: LlmItemLease, attempted: set[str]) -> dict[str, A
 
 
 def _switch_lease_profile(lease: LlmItemLease, context: dict[str, Any], error: Exception) -> None:
+    _attempt_reason("profile_failover")
     previous_id = lease.profile_id
     next_id = _profile_id(context)
     lease.context = context
@@ -1770,6 +2058,7 @@ def _switch_lease_profile(lease: LlmItemLease, context: dict[str, Any], error: E
 
 
 def _switch_lease_to_legacy_fallback(lease: LlmItemLease | None, fallback: dict[str, Any]) -> None:
+    _attempt_reason("legacy_fallback")
     if lease is None:
         return
     lease.context = fallback
@@ -1804,9 +2093,10 @@ def _with_transport_retry_debug(
     return result
 
 
+@_bounded_llm_call
 def _llm_json_single_context_with_length_retry(
     payload: dict[str, Any],
-    timeout: int,
+    timeout: float,
     context: dict[str, Any],
 ) -> dict[str, Any]:
     result = _llm_json_single_context(payload, timeout, context)
@@ -1853,6 +2143,7 @@ def _llm_json_single_context_with_length_retry(
         "finishReason": finish_reason,
         "cause": retry_cause,
     })
+    _attempt_reason(retry_cause)
     retry_result = _llm_json_single_context(retry_payload, timeout, context)
     return _with_transport_retry_debug(retry_result, [retry_cause], prior_result=result)
 
@@ -1926,7 +2217,8 @@ def _with_transport_footprint(result: dict[str, Any], payload: dict[str, Any], m
     return out
 
 
-def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
+@_bounded_llm_call
+def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any]:
     mode = _record_llm_stage(payload)
 
     def finish(result: dict[str, Any], used_payload: dict[str, Any]) -> dict[str, Any]:
@@ -1949,6 +2241,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                 result = _llm_json_single_context_with_length_retry(attempt_payload, timeout, context)
                 return finish(_with_transport_retry_debug(result, retry_causes), attempt_payload)
             except Exception as profile_error:
+                remaining_seconds(_request_deadline(timeout))
                 if not _is_profile_failover_failure(profile_error):
                     raise
                 _mark_profile_failed(context, profile_error)
@@ -1973,6 +2266,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
         return finish(result, primary_payload)
     except Exception as first_error:
+        remaining_seconds(_request_deadline(timeout))
         if not fallback:
             if not _is_transport_error(first_error):
                 raise
@@ -1981,6 +2275,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
             total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
                 retry_causes.append("transient_http")
+                _attempt_reason("transient_http")
                 delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
                 log_event("warn", "retrying transient LLM failure without fallback", {
                     "attempt": attempt,
@@ -1990,7 +2285,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                     "model": primary.get("model"),
                     "status": getattr(last_error, "code", None),
                 })
-                time.sleep(delay)
+                _llm_backoff(delay)
                 try:
                     result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
                     return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
@@ -2013,6 +2308,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
             total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
                 retry_causes.append("primary_transport")
+                _attempt_reason("primary_transport")
                 try:
                     log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": active_llm_provider(primary), "model": primary.get("model")})
                     result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)

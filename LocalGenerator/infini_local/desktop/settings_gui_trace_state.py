@@ -37,6 +37,7 @@ class SettingsGuiTraceStateMixin:
         bar = ttk.Frame(outer)
         bar.pack(fill="x", pady=(0, 8))
         ttk.Button(bar, text="Refresh trace", command=self.refresh_trace).pack(side="left", padx=2)
+        ttk.Button(bar, text="Cancel refresh", command=self.cancel_trace_refresh).pack(side="left", padx=2)
         ttk.Button(bar, text="Open /trace", command=self.open_trace_page).pack(side="left", padx=2)
         ttk.Button(bar, text="Open trace.json", command=self.open_trace_json).pack(side="left", padx=2)
         ttk.Button(bar, text="Open cache folder", command=self.open_cache_folder).pack(side="left", padx=2)
@@ -74,8 +75,20 @@ class SettingsGuiTraceStateMixin:
         text.insert("1.0", content)
         text.configure(state="normal")
 
-    def _load_local_trace_snapshot(self, reason: str = "") -> dict:
-        cache = ROOT / "cache"
+    @staticmethod
+    def _cache_dir_from_environment(env: dict[str, str]) -> Path:
+        # Match env_path() and the GUI launch cwd, including an explicit blank
+        # override (Path("") == cwd). Do not expand ~ or reinterpret saved keys.
+        cache = Path(env.get("INFINI_CACHE_DIR", str(ROOT / "cache")).strip())
+        return (cache if cache.is_absolute() else ROOT / cache).resolve()
+
+    def _effective_cache_dir(self) -> Path:
+        env = os.environ.copy()
+        env.update(self.collect())
+        return self._cache_dir_from_environment(env)
+
+    def _load_local_trace_snapshot(self, reason: str = "", cache: Path | None = None) -> dict:
+        cache = cache if cache is not None else self._effective_cache_dir()
         return {
             "ok": False,
             "source": "local_cache_fallback",
@@ -94,13 +107,15 @@ class SettingsGuiTraceStateMixin:
             "lastCombineFailure": json.loads((cache / "last_combine_failure.json").read_text(encoding="utf-8")) if (cache / "last_combine_failure.json").exists() else None,
         }
 
-    def _fetch_trace_snapshot(self) -> dict:
-        health = self._fetch_health_snapshot(timeout=8)
+    def _fetch_trace_snapshot(self, base_url: str | None = None) -> dict:
+        base_url = base_url if base_url is not None else self._server_base_url()
+        health = self._fetch_health_snapshot(timeout=8, base_url=base_url)
         if not self._health_matches_this_gui(health):
-            raise RuntimeError(self._server_identity_warning(health).replace("\n", " | "))
-        url = self._server_base_url() + "/trace.json"
-        with urllib.request.urlopen(url, timeout=18) as resp:
-            return json.loads(resp.read().decode("utf-8", "replace"))
+            raise RuntimeError("Trace refused: другая копия server.py")
+        snap = self._read_gui_json(base_url + "/trace.json", timeout=18)
+        if not self._health_matches_this_gui(snap) or snap.get("pid") != health.get("pid"):
+            raise RuntimeError("Trace refused: server identity changed")
+        return snap
 
     def _pretty(self, value) -> str:
         try:
@@ -125,14 +140,37 @@ class SettingsGuiTraceStateMixin:
         return head + body + "\n" + ("═" * 96) + "\n"
 
     def refresh_trace(self):
-        try:
-            snap = self._fetch_trace_snapshot()
-            self.trace_status_var.set("Trace loaded from server /trace.json")
-        except Exception as e:
-            reason = str(e)
-            snap = self._load_local_trace_snapshot(reason)
-            self.trace_status_var.set(f"Server trace unavailable, local cache fallback: {reason}")
+        # Capture Tk/config on the UI thread before starting any I/O.
+        base_url = self._server_base_url()
+        cache = self._effective_cache_dir()
+        self.trace_status_var.set("Loading trace…")
 
+        def work(cancel):
+            try:
+                snap = self._fetch_trace_snapshot(base_url=base_url)
+                return snap, "Trace loaded from server /trace.json"
+            except Exception:
+                if cancel.is_set():
+                    return None
+                reason = "server unavailable or identity mismatch"
+                snap = self._load_local_trace_snapshot(reason, cache=cache)
+                return snap, f"Local cache fallback: {cache} ({reason})"
+
+        def apply(ok, result):
+            if not ok or result is None:
+                self.trace_status_var.set("Trace unavailable; local trace could not be read.")
+                return
+            snap, status = result
+            self.trace_status_var.set(status)
+            self._render_trace_snapshot(snap)
+
+        self._run_gui_task("trace", work, apply)
+
+    def cancel_trace_refresh(self):
+        self._cancel_gui_task("trace")
+        self.trace_status_var.set("Trace refresh cancelled; any in-flight read is being retired.")
+
+    def _render_trace_snapshot(self, snap: dict):
         pipeline = snap.get("pipeline") or {}
         trace_cfg = snap.get("traceConfig") or {}
         summary = []
@@ -166,25 +204,71 @@ class SettingsGuiTraceStateMixin:
         self.status_var.set("Opened /trace.json.")
 
     def open_cache_folder(self):
-        cache = ROOT / "cache"
+        cache = self._effective_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)
         os.startfile(cache) if os.name == "nt" else webbrowser.open(cache.as_uri())
+        self.status_var.set(f"Opened launch cache: {cache}")
 
     def clear_trace_files(self):
-        if messagebox.askyesno("Clear trace", "Очистить events.ndjson / prompt_trace.ndjson / pipeline_trace.ndjson?"):
+        if "trace-clear" in self.__dict__.get("_gui_tasks", {}):
+            self.trace_status_var.set("Trace clear already in progress.")
+            return
+        if not messagebox.askyesno("Clear trace", "Очистить events.ndjson / prompt_trace.ndjson / pipeline_trace.ndjson?"):
+            return
+        base_url = self._server_base_url()
+        cache = self._effective_cache_dir()
+        self._cancel_gui_task("trace")
+        self.trace_status_var.set("Clearing trace…")
+
+        def work(cancel):
             try:
-                with urllib.request.urlopen(self._server_base_url() + "/trace_clear", timeout=4) as resp:
-                    _ = resp.read()
-                self.trace_status_var.set("Trace cleared through server.")
-            except Exception:
-                cache = ROOT / "cache"
-                for name in ["events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"]:
-                    try:
-                        trace_tools.clear_ndjson(cache / name)
-                    except Exception:
-                        pass
-                self.trace_status_var.set("Trace cleared locally.")
-            self.refresh_trace()
+                health = self._fetch_health_snapshot(timeout=2, base_url=base_url)
+            except Exception as exc:
+                # HTTP refusals/timeouts are not proof that the selected helper
+                # is offline; never truncate its files as a destructive fallback.
+                if not self._connection_was_refused(exc):
+                    return "Trace clear refused: server liveness/identity unavailable."
+                health = None
+            if cancel.is_set():
+                return None
+            if health is not None:
+                if health.get("ok") is not True or not self._health_matches_this_gui(health):
+                    return "Trace clear refused: unknown/foreign server root."
+                projection = health.get("effectiveConfig") or {}
+                live_cache = projection.get("cacheDir") if isinstance(projection, dict) else None
+                live_cache = live_cache or health.get("cacheDir")
+                if not isinstance(live_cache, str) or self._norm_path_for_compare(live_cache) != self._norm_path_for_compare(cache):
+                    return "Trace clear refused: live cache differs from launch cache or is unverified. Check applied config / restart."
+                reply = self._read_gui_json(base_url + "/trace_clear", timeout=4, max_bytes=64 * 1024)
+                cleared = reply.get("cleared")
+                expected = {self._norm_path_for_compare(cache / name) for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")}
+                acknowledged = set()
+                if isinstance(cleared, list):
+                    for value in cleared:
+                        if isinstance(value, str):
+                            path = Path(value)
+                            path = (path if path.is_absolute() else ROOT / path).resolve()
+                            acknowledged.add(self._norm_path_for_compare(path))
+                if reply.get("ok") is not True or not expected.issubset(acknowledged):
+                    return "Trace clear unavailable; server did not confirm all selected trace files."
+                return "Trace cleared through this server."
+            paths = [cache / name for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")]
+            # Refuse known linked trace/lock leaves before clearing any file;
+            # folder configuration never authorizes mutation of their targets.
+            if any(path.is_symlink() or path.with_name(path.name + ".lock").is_symlink() for path in paths):
+                return "Trace clear refused: linked trace/lock file outside the selected-file contract."
+            for path in paths:
+                if cancel.is_set():
+                    return None
+                trace_tools.clear_ndjson(path)
+            return f"Trace cleared locally: {cache}"
+
+        def apply(ok, result):
+            self.trace_status_var.set(result if ok and result else "Trace clear unavailable; not confirmed.")
+            if ok and result and result.startswith("Trace cleared"):
+                self.refresh_trace()
+
+        self._run_gui_task("trace-clear", work, apply)
 
     def _refresh_secret_entries(self):
         show = "" if self.show_secrets.get() else "*"
@@ -424,6 +508,8 @@ class SettingsGuiTraceStateMixin:
         write_env(CONFIG_PATH, data)
         self.data = data
         self.status_var.set(f"Saved: {CONFIG_PATH}")
+        if "applied_config_var" in self.__dict__:
+            self._update_applied_config_feedback("Saved")
 
     def apply_preset(self):
         preset_name = self.preset_var.get().strip()

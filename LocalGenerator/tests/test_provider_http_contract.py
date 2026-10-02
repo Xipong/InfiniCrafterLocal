@@ -201,7 +201,10 @@ def test_post_body_validation_has_bounded_exact_failure(body, length, status, er
     ("vfx", "get", "/debug/vfx_matrix?verbose=1", True), ("vfx", "get", "/debug/vfx_matrix_extra", False),
     ("vfx", "post", "/debug/vfx_select?dryRun=1", True), ("vfx", "post", "/debug/vfx_select_extra", False),
 ])
-def test_utility_and_debug_dispatch_use_exact_parsed_route(tmp_path, owner, method, path, accepted):
+def test_utility_and_debug_dispatch_use_exact_parsed_route(tmp_path, monkeypatch, owner, method, path, accepted):
+    from infini_local.services import combine_endpoint
+
+    monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
     routes = utility_routes(tmp_path) if owner == "utility" else VfxDebugRoutes(
         app_version="test", normalize_world_id_from_payload=lambda _: "world",
         read_world_recipe_cache=lambda *_a, **_k: None, write_world_recipe_cache=lambda *_a, **_k: None,
@@ -235,6 +238,285 @@ def test_sprite_path_cannot_escape_serving_root(tmp_path, kind):
     handler = Capture()
     routes.sprite_file(handler, "/sprite/leak.png" if kind == "outside-symlink" else "/sprite/%2e%2e%2foutside.png")
     assert handler.code == 404 and handler.wfile.getvalue() == b""
+
+
+def test_health_acknowledges_only_allowlisted_applied_config(tmp_path, monkeypatch):
+    from infini_local.web import server
+
+    monkeypatch.setattr(server.combine_endpoint, "_GENERATION_ACCEPTING", True)
+    monkeypatch.setattr(server, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(server, "WORLD_RECIPES_DIR", tmp_path / "worlds")
+    monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **_: {"autostart": False, "command": []})
+    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {
+        "provider": "openrouter", "model": "fixture/model", "openrouterProvider": "Exact/slug",
+        "api_key": "SYNTHETIC-SECRET-MUST-NOT-ENTER-PROJECTION",
+        "baseUrl": "https://fixture.invalid/?key=SYNTHETIC-URL-SECRET",
+    })
+    health = server._health_payload()
+    assert health["effectiveConfig"] == {
+        "cacheDir": str((tmp_path / "cache").resolve()),
+        "worldRecipesDir": str((tmp_path / "worlds").resolve()),
+        "imageBackend": server.visual_config.IMAGE_BACKEND,
+        "llmProvider": "openrouter", "llmModel": "fixture/model",
+        "openrouterProvider": "Exact/slug", "sdcppAutostart": False,
+    }
+    assert "SECRET" not in json.dumps(health["effectiveConfig"])
+    assert health["generationActivity"] == {"active": 0, "waiting": 0, "accepting": True}
+
+
+@pytest.mark.parametrize("phase", ["active", "waiting", "failure"])
+def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, monkeypatch, phase):
+    from infini_local.services import combine_endpoint as endpoint
+
+    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True, raising=False)
+    semaphore = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", semaphore)
+    monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 2)
+    entered, release = threading.Event(), threading.Event()
+    failures = []
+    result = Capture()
+    if phase == "waiting":
+        semaphore.acquire()
+
+    def generate(_):
+        entered.set()
+        assert release.wait(5)
+        if phase == "failure":
+            raise ValueError("intentional pipeline failure")
+        return {"id": "finished"}
+
+    def run():
+        try:
+            endpoint.handle_combine_request(
+                {}, app_version="test", combine_cache_lookup=lambda _: ("key", None),
+                sanitize_recipe_for_delivery=lambda p: p, combine=generate,
+                trace_event=lambda _l, _s, msg, _d: entered.set() if "waiting for active craft" in msg else None,
+                json=result.json, json_status=result.json_status,
+            )
+        except BaseException as exc:
+            failures.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    shutdown = Capture()
+    routes = utility_routes(tmp_path)
+    try:
+        assert entered.wait(5)
+        routes.handle_get(shutdown, "/shutdown")
+        assert shutdown.code == 409, "safe restart must not discard admitted work"
+        assert shutdown.payload["status"] == "generator_busy"
+        activity = shutdown.payload["generationActivity"]
+        assert activity == {"active": int(phase != "waiting"), "waiting": int(phase == "waiting"), "accepting": True}
+    finally:
+        release.set()
+        if phase == "waiting":
+            semaphore.release()
+        worker.join(5)
+    assert not worker.is_alive()
+    assert len(failures) == int(phase == "failure"), failures
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": True}
+    assert semaphore.acquire(blocking=False)
+    semaphore.release()
+
+
+def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypatch):
+    from infini_local.services import combine_endpoint as endpoint
+
+    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True, raising=False)
+    shutdown, generated = Capture(), Capture()
+    stopped = threading.Event()
+    shutdown.server = SimpleNamespace(shutdown=stopped.set)
+    routes = utility_routes(tmp_path)
+    routes.handle_get(shutdown, "/shutdown")
+    assert shutdown.code == 200
+    endpoint.handle_combine_request(
+        {}, app_version="test", combine_cache_lookup=lambda _: ("key", None),
+        sanitize_recipe_for_delivery=lambda p: p, combine=lambda _: {"id": "must_not_start"},
+        trace_event=lambda *_: None, json=generated.json, json_status=generated.json_status,
+    )
+    assert generated.code == 503 and generated.payload["status"] == "generator_shutting_down"
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False}
+    assert stopped.wait(2)
+
+
+@pytest.mark.parametrize("view,recipe_reads,rows", [("recipes", 50, 50), ("health", 100, 100), ("latest", 1, 1), ("contracts", 1, 1)])
+def test_debug_views_read_only_selected_recipe_bodies(tmp_path, view, recipe_reads, rows):
+    import os
+
+    routes = utility_routes(tmp_path)
+    for index in range(200):
+        world = tmp_path / f"world_{index % 2}"
+        recipes = world / "recipes"
+        recipes.mkdir(parents=True, exist_ok=True)
+        (world / "manifest.json").write_text(json.dumps({"worldId": str(index % 2)}))
+        path = recipes / f"r_{index:024x}.json"
+        path.write_text(json.dumps({"name": f"recipe-{index}", "recipeKey": path.stem,
+                                   "recipeHealth": {"ok": True, "status": "ready"},
+                                   "contractVersions": {"fixture": index}}))
+        os.utime(path, (1000 + index, 1000 + index))
+    reads = []
+
+    def read(path):
+        reads.append(path)
+        return world_storage.read_json_file(path)
+
+    routes.read_json_file = read
+    handler = Capture()
+    route = {"recipes": "/debug/recipes", "health": "/debug/recipe_health",
+             "latest": "/debug/latest_recipe", "contracts": "/debug/contracts"}[view]
+    routes.handle_get(handler, route)
+    if view in {"recipes", "health"}:
+        actual = handler.payload[view]
+        assert len(actual) == rows
+        assert actual[0]["key"] == f"r_{199:024x}"
+    elif view == "latest":
+        assert handler.payload["name"] == "recipe-199"
+    else:
+        assert handler.payload["latestRecipeContractVersions"] == {"fixture": 199}
+    assert sum(p.parent.name == "recipes" for p in reads) == recipe_reads
+    assert sum(p.name == "manifest.json" for p in reads) <= 2
+
+
+@pytest.mark.parametrize("multi_dev", [False, True], ids=["ordinary-slot", "multidev-profile-slot"])
+def test_explicit_force_shutdown_does_not_start_waiting_generation(tmp_path, monkeypatch, multi_dev):
+    from infini_local.services import combine_endpoint as endpoint
+
+    entered, stopped = threading.Event(), threading.Event()
+
+    class ObservedSemaphore(threading.BoundedSemaphore):
+        def acquire(self, blocking=True, timeout=None):
+            acquired = super().acquire(blocking=blocking, timeout=timeout)
+            if not blocking and not acquired:
+                entered.set()
+            return acquired
+
+    held = ObservedSemaphore(1)
+    held.acquire()
+    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True)
+    monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 2)
+    if multi_dev:
+        monkeypatch.setattr(endpoint, "MULTIDEV_PROFILE_SEMAPHORES", {"llm_2": held})
+    else:
+        monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", held)
+    result, shutdown, failures, calls = Capture(), Capture(), [], []
+    setattr(shutdown, "server", SimpleNamespace(shutdown=stopped.set))
+
+    def run():
+        try:
+            endpoint.handle_combine_request(
+                {"multiDevCraft": multi_dev, "llmProfileId": "llm_2"}, app_version="test",
+                combine_cache_lookup=lambda _: ("key", None), sanitize_recipe_for_delivery=lambda p: p,
+                combine=lambda _: calls.append("generate") or {"id": "unexpected"},
+                trace_event=lambda *_: None, json=result.json, json_status=result.json_status,
+            )
+        except BaseException as exc:
+            failures.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    try:
+        assert entered.wait(5)
+        utility_routes(tmp_path).handle_get(shutdown, "/shutdown?force=1")
+        assert shutdown.code == 200 and shutdown.payload["forced"] is True
+        assert shutdown.payload["generationActivity"] == {"active": 0, "waiting": 1, "accepting": False}
+    finally:
+        held.release()
+        worker.join(5)
+    assert not worker.is_alive() and not failures and not calls
+    assert result.code == 503
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False}
+    assert held.acquire(blocking=False)
+    held.release()
+    assert stopped.wait(2)
+
+
+def test_debug_views_skip_unreadable_without_mutating_authority(tmp_path):
+    import os
+
+    directory = tmp_path / "world_test" / "recipes"
+    directory.mkdir(parents=True)
+    good, broken = directory / "valid.json", directory / "newest.json"
+    good.write_text(json.dumps({"name": "valid", "recipeKey": "valid"}))
+    broken.write_text("{broken")
+    os.utime(good, (1000, 1000))
+    os.utime(broken, (1001, 1001))
+    routes = utility_routes(tmp_path)
+    routes.read_json_file = world_storage.read_json_file
+    before = {p: p.read_bytes() for p in (good, broken)}
+    assert routes.debug_latest_recipe_dump()["name"] == "valid"
+    assert [row["key"] for row in routes.debug_recipes()] == ["valid"]
+    assert routes.debug_contracts()["latestRecipeContractVersions"] == {}
+    assert routes.debug_recipe_health() == []
+    assert {p: p.read_bytes() for p in before} == before
+
+
+@pytest.mark.parametrize("backend,autostart,alive,configured,local_files,expected", [
+    ("sdcpp", False, True, False, False, True),
+    ("sdcpp", False, False, False, False, False),
+    ("sdcpp", True, False, False, False, False),
+    ("sdcpp", True, False, True, True, True),
+    ("sdcpp", True, True, True, False, False),
+    ("a1111", False, False, False, False, True),
+])
+def test_visual_doctor_checks_selected_backend_ownership(
+    tmp_path, backend, autostart, alive, configured, local_files, expected,
+):
+    routes = utility_routes(tmp_path)
+    routes.health_payload = lambda: {
+        "imageBackend": backend, "visualRequireItemSprite": True,
+        "visualRequireZImageBackend": False, "pillowAvailable": True,
+    }
+    local = tmp_path / "local-component"
+    if local_files:
+        local.write_bytes(b"fixture")
+    snapshot = {"autostart": autostart, "serverAlive": alive, "serverConfigured": configured,
+                "serverUrl": "http://127.0.0.1:8080", "serverExe": str(local), "model": str(local)}
+    calls = []
+    routes.sdcpp_debug_snapshot = lambda **_: calls.append("sdcpp") or snapshot
+    result = routes.visual_doctor_payload("/visual_doctor.json")
+    assert result["ok"] is expected, result["checks"]
+    checks = {check["name"]: check for check in result["checks"]}
+    if backend != "sdcpp":
+        assert not calls and not any(name.startswith("sdcpp_") for name in checks)
+    elif not autostart:
+        assert not any(name in checks for name in ("sdcpp_serverExe", "sdcpp_model"))
+        assert checks["sdcpp_alive"]["ok"] is alive
+
+
+@pytest.mark.parametrize("mutation", ["append", "replace", "truncate", "unlink"])
+def test_asset_response_pins_open_handle_and_bounds_body(tmp_path, monkeypatch, mutation):
+    from infini_local.web import server_utility_routes as routes_module
+
+    monkeypatch.setattr(routes_module, "MAX_ASSET_RESPONSE_BYTES", 128)
+    path = tmp_path / "mutable.png"
+    initial = b"original" * 8
+    path.write_bytes(initial)
+    handler = Capture()
+
+    def mutate_after_headers():
+        if mutation == "append":
+            with path.open("ab") as stream:
+                stream.write(b"overflow" * 64)
+        elif mutation == "replace":
+            replacement = tmp_path / "replacement.png"
+            replacement.write_bytes(b"replacement" * 64)
+            replacement.replace(path)
+        elif mutation == "truncate":
+            path.write_bytes(initial[:8])
+        else:
+            path.unlink()
+
+    handler.end_headers = mutate_after_headers
+    ServerUtilityRoutes.send_bounded_asset_file(handler, path, "image/png", immutable=True)
+    assert handler.code == 200
+    assert int(handler.headers["Content-Length"]) == len(initial)
+    assert len(handler.wfile.getvalue()) <= len(initial) <= routes_module.MAX_ASSET_RESPONSE_BYTES
+    if mutation == "truncate":
+        assert handler.wfile.getvalue() == initial[:8]
+        assert getattr(handler, "close_connection", False), "short body must close the HTTP connection"
+    else:
+        assert handler.wfile.getvalue() == initial
 
 
 @pytest.mark.parametrize("oversized", [False, True], ids=["streamed-small", "oversize-refused"])
@@ -369,6 +651,126 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
     assert latest_dump["ok"] is True
     assert latest_dump["name"] in {"Generated A", "Generated B"}
     assert routes.debug_contracts()["latestRecipeContractVersions"] == {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}
+
+
+@pytest.mark.parametrize("move_fails", [False, True], ids=["quarantined", "quarantine-io-refused"])
+def test_cache_rejection_retains_quarantine_diagnostics(tmp_path, monkeypatch, move_fails):
+    from infini_local.storage import trace_runtime
+    from infini_local.web.vfx_debug_routes import _sample_data
+
+    path = world_storage.world_recipe_file(tmp_path, "world", "recipe")
+    world_storage.atomic_write_json(path, _sample_data())
+    events = []
+    monkeypatch.setattr(trace_runtime, "trace_event", lambda *event: events.append(event))
+    if move_fails:
+        def refuse(*_a, **_k):
+            raise PermissionError("quarantine fixture denied")
+        monkeypatch.setattr(world_storage, "quarantine_world_recipe_cache", refuse)
+    cached = world_storage.read_world_recipe_cache(
+        tmp_path, "fixture", "fixture-identity", "recipe", "world",
+        validate_payload=lambda _: {"ok": False, "errors": ["fixture:invalid_binding"]},
+    )
+    assert cached is None
+    assert path.exists() is move_fails
+    assert len(events) == 1 and events[0][0] == "warn"
+    assert events[0][3]["recipeKey"] == "recipe"
+    assert ("could not quarantine" in events[0][2]) is move_fails
+
+
+def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, monkeypatch):
+    """Schedule either an atomic reader or a versioned/CAS reader without sleeps."""
+    from copy import deepcopy
+    from infini_local.core.vfx_manifest import _compile_manifest
+    from infini_local.pipelines import combine_pipeline as pipeline, visual_delivery_gate as visual
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.services import combine_endpoint
+    from infini_local.storage import world_recipe_runtime as recipes
+    from infini_local.web.vfx_debug_routes import _sample_data
+
+    monkeypatch.setattr(recipes, "WORLD_RECIPES_DIR", tmp_path / "worlds")
+    monkeypatch.setattr(visual, "WORLD_RECIPES_DIR", tmp_path / "worlds")
+    monkeypatch.setattr(visual, "SPRITE_DIR", tmp_path / "sprites")
+    good = _sample_data()
+    hydrate_no_image_fixture_assets(good, write_no_image_fixture_png(tmp_path / "sprites" / "test.png"))
+    good["vfxManifest"] = _compile_manifest(good, {
+        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
+        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
+                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
+    }, "cache-race-contract")
+    assert pipeline._cached_payload_report(good)["ok"]
+    payload = {"worldId": "race", "itemA": {"type": 1}, "itemB": {"type": 2}}
+    key, _ = pipeline.combine_cache_lookup(payload)
+    path = recipes.world_recipe_file("race", key)
+    recipes.cache_put(key, payload["itemA"], payload["itemB"], good, "race")
+    assert pipeline.combine_cache_lookup(payload)[1]["id"] == good["id"]
+    bad = deepcopy(good)
+    bad["runtimeProgram"]["bindings"][0]["id"] = ""
+    world_storage.atomic_write_json(path, bad)
+    fresh = deepcopy(good)
+    fresh["id"] = "fresh_valid_recipe"
+    entered, resume, probed, written = (threading.Event() for _ in range(4))
+    failures, schedule = [], {}
+    original_report = pipeline._cached_payload_report
+
+    def paused_report(data):
+        if threading.current_thread().name == "stale-reader":
+            entered.set()
+            assert resume.wait(5), "reader barrier not released"
+        return original_report(data)
+
+    def reader():
+        try:
+            pipeline.combine_cache_lookup(payload)
+        except BaseException as exc:
+            failures.append(exc)
+
+    def writer():
+        lock = world_storage._storage_lock(path)
+        # Arrange a deterministic race for the old/CAS design, or let an atomic
+        # read finish first. This controls scheduling, not the correctness oracle.
+        immediate = lock.acquire(blocking=False)
+        schedule["immediate"] = immediate
+        probed.set()
+        try:
+            recipes.cache_put(key, payload["itemA"], payload["itemB"], fresh, "race")
+            written.set()
+        except BaseException as exc:
+            failures.append(exc)
+        finally:
+            if immediate:
+                lock.release()
+
+    monkeypatch.setattr(pipeline, "_cached_payload_report", paused_report)
+    rt = threading.Thread(target=reader, name="stale-reader")
+    wt = threading.Thread(target=writer, name="fresh-writer")
+    rt.start()
+    try:
+        assert entered.wait(5)
+        wt.start()
+        assert probed.wait(5)
+        if schedule["immediate"]:
+            assert written.wait(5)
+    finally:
+        resume.set()
+        rt.join(5)
+        if wt.ident is not None:
+            wt.join(5)
+    assert not rt.is_alive() and not wt.is_alive()
+    assert not failures, failures
+    assert written.is_set()
+    assert path.exists(), "stale reader removed the committed fresh recipe"
+    assert world_storage.read_json_file(path)["id"] == "fresh_valid_recipe"
+    handler = Capture()
+    combine_endpoint.handle_combine_request(
+        {**payload, "cacheOnly": True}, app_version="test",
+        combine_cache_lookup=pipeline.combine_cache_lookup,
+        sanitize_recipe_for_delivery=recipes.sanitize_recipe_for_delivery,
+        combine=lambda _: pytest.fail("cacheOnly must not generate"), trace_event=lambda *_a, **_k: None,
+        json=handler.json, json_status=handler.json_status,
+    )
+    assert handler.code == 200 and handler.payload["id"] == "fresh_valid_recipe"
+    assert all(world_storage.read_json_file(p).get("id") != "fresh_valid_recipe"
+               for p in (path.parent.parent / "invalid").glob("*.json") if not p.name.endswith(".reason.json"))
 
 
 def test_authored_promise_exhaustion_reports_invalid_output() -> None:

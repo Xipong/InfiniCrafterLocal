@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from infini_local.core.http_io import HttpDeadlineExceeded
 from infini_local.storage.world_recipe_runtime import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
@@ -471,7 +472,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             result = replace(result, public_path="", status="failed", error=repr(exc), failure_phase=phase)
             trace_event("error", f"IMAGE:{request.audit_role}", "sprite generation attempt failed", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND}, error=repr(exc))
             log_event("warn", f"{request.audit_role} sprite generation attempt failed", {"attempt": attempt, "error": repr(exc), "trace": traceback.format_exc()})
-            if (isinstance(exc, (CodexError, ImageOutputIOError)) or phase == "publication"
+            if (isinstance(exc, (CodexError, ImageOutputIOError, HttpDeadlineExceeded)) or phase == "publication"
                     or (isinstance(exc, OSError) and phase in {"processing", "projection"})):
                 terminal = True
                 break

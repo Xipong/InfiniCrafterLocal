@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import subprocess
 import sys
 import threading
 from queue import Empty, Queue
 import time
+import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
+from infini_local.core import http_io
 from infini_local.desktop.tk_compat import filedialog, messagebox
 from infini_local.desktop.settings_gui_theme import (
     ROOT,
@@ -20,6 +21,54 @@ from infini_local.desktop.settings_gui_theme import (
 
 
 class SettingsGuiServerControlsMixin:
+    def _run_gui_task(self, name, work, on_result):
+        """Worker -> Queue -> Tk.after; workers receive only captured plain data."""
+        if self.__dict__.get("_gui_closed", False):
+            return
+        tasks = self.__dict__.setdefault("_gui_tasks", {})
+        previous = tasks.get(name)
+        if previous:
+            previous["cancel"].set()
+            # Coalesce refresh clicks: one bounded in-flight worker and one
+            # newest captured request, never one thread per click.
+            previous["pending"] = (work, on_result)
+            return
+        state = {"cancel": threading.Event(), "results": Queue(maxsize=1), "after": None, "pending": None}
+        tasks[name] = state
+
+        def worker():
+            try:
+                state["results"].put((True, work(state["cancel"])))
+            except Exception:
+                # Raw transport errors can include credentials/URLs. UI gets only
+                # a failure flag; a workflow may return its own safe diagnostics.
+                state["results"].put((False, None))
+
+        def poll():
+            if self.__dict__.get("_gui_closed", False) or tasks.get(name) is not state:
+                return
+            try:
+                result = state["results"].get_nowait()
+            except Empty:
+                state["after"] = self.after(100, poll)
+                return
+            tasks.pop(name, None)
+            if state["pending"] is not None:
+                self._run_gui_task(name, *state["pending"])
+            elif not state["cancel"].is_set():
+                on_result(*result)
+
+        threading.Thread(target=worker, daemon=True, name="settings-" + name).start()
+        state["after"] = self.after(100, poll)
+
+    def _cancel_gui_task(self, name):
+        state = self.__dict__.get("_gui_tasks", {}).get(name)
+        if state:
+            state["cancel"].set()
+            state["pending"] = None
+            # Keep polling solely to reap the bounded in-flight worker. A new
+            # refresh coalesces until its network timeout/result returns.
+
     def ping_codex_image_account(self):
         """Read-only account connectivity probe; there is no image-model list API."""
         from infini_local.services import codex_catalog
@@ -223,11 +272,12 @@ class SettingsGuiServerControlsMixin:
 
     @staticmethod
     def _norm_path_for_compare(value: str | Path) -> str:
-        # Compare Windows paths reliably even when tests run on Linux.
-        text = str(value or "").strip().replace("\\", "/")
-        while "//" in text and not text.startswith("http"):
-            text = text.replace("//", "/")
-        return text.rstrip("/").lower()
+        # Preserve POSIX case while comparing Windows drive/UNC names under
+        # Linux tests too. Never turn a distinct case-sensitive copy into ours.
+        text = str(value or "").strip()
+        if os.name == "nt" or PureWindowsPath(text).drive:
+            return PureWindowsPath(text).as_posix().rstrip("/").casefold()
+        return str(Path(text)).rstrip("/")
 
     @staticmethod
     def _parent_path_text(value: str, levels: int) -> str:
@@ -254,9 +304,11 @@ class SettingsGuiServerControlsMixin:
         return ""
 
     def _health_matches_this_gui(self, snap: dict) -> bool:
-        root = self._infer_server_root_from_health(snap)
+        # Custom cache roots make cache-derived server-root guesses unsafe.
+        # Require the explicit runtime acknowledgement for remote operations.
+        root = str(snap.get("serverRoot") or "").strip()
         if not root:
-            return True
+            return False
         return self._norm_path_for_compare(root) == self._norm_path_for_compare(ROOT)
 
     @staticmethod
@@ -273,9 +325,21 @@ class SettingsGuiServerControlsMixin:
             or str(snap.get("server_version") or "").lower().startswith("infinicrafter")
         )
 
-    def _fetch_health_snapshot(self, timeout: int = 8) -> dict:
-        with urllib.request.urlopen(self._server_base_url() + "/health", timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8", "replace"))
+    @staticmethod
+    def _read_gui_json(url: str, timeout: float, max_bytes: int = 16 * 1024 * 1024) -> dict:
+        # Reuse the transport-owned monotonic/redirect/body boundary. A trickled
+        # body must not retain a GUI task forever through idle-timeout resets.
+        deadline = time.monotonic() + timeout
+        with http_io.urlopen_no_redirect(urllib.request.Request(url), deadline=deadline) as response:
+            body = http_io.read_with_deadline(response, deadline=deadline, max_bytes=max_bytes)
+        value = json.loads(body.decode("utf-8", "replace"))
+        if not isinstance(value, dict):
+            raise ValueError("GUI diagnostic endpoint returned no object")
+        return value
+
+    def _fetch_health_snapshot(self, timeout: float = 8, base_url: str | None = None) -> dict:
+        base_url = base_url if base_url is not None else self._server_base_url()
+        return self._read_gui_json(base_url + "/health", timeout=timeout)
 
     def _server_identity_warning(self, snap: dict) -> str:
         root = self._infer_server_root_from_health(snap) or "unknown"
@@ -285,8 +349,8 @@ class SettingsGuiServerControlsMixin:
             f"Ответивший server.py: {root}\n"
             f"PID: {pid}\n"
             f"Текущий GUI: {ROOT}\n\n"
-            "Start server теперь может прибить старый helper автоматически. "
-            "Если порт занят не InfiniCrafterLocal, GUI остановится и покажет предупреждение."
+            "GUI не будет убивать чужой процесс автоматически. "
+            "Останови другую копию вручную или выбери её GUI; Safe/Force restart работают только с текущим root."
         )
 
     def _server_port(self) -> int:
@@ -295,164 +359,36 @@ class SettingsGuiServerControlsMixin:
         except Exception:
             return 5055
 
-    def _try_http_shutdown_current_server(self, timeout: float = 2.0) -> bool:
+    def _try_http_shutdown_current_server(self, timeout: float = 2.0, base_url: str | None = None, force: bool = False) -> tuple[bool, str]:
+        base_url = base_url if base_url is not None else self._server_base_url()
+        url = base_url + ("/shutdown?force=1" if force else "/shutdown")
         try:
-            with urllib.request.urlopen(self._server_base_url() + "/shutdown", timeout=timeout) as resp:
-                resp.read()
-            return True
+            reply = self._read_gui_json(url, timeout=timeout, max_bytes=64 * 1024)
+            if reply.get("ok") is True:
+                return True, ""
+            return False, "Shutdown refused or not acknowledged."
+        except urllib.error.HTTPError as exc:
+            if exc.code == 409:
+                return False, "Safe restart refused: generator busy (atomic server guard)."
+            return False, "Shutdown refused by server; no process termination attempted."
         except Exception:
-            return False
+            return False, "Shutdown unavailable; no process termination attempted."
 
-    def _wait_until_helper_stops(self, timeout: float = 4.0) -> bool:
-        deadline = time.time() + timeout
-        while time.time() < deadline:
+    def _wait_until_helper_stops(self, timeout: float = 4.0, base_url: str | None = None, cancel: threading.Event | None = None) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if cancel is not None and cancel.is_set():
+                return False
             try:
-                self._fetch_health_snapshot(timeout=0.7)
-            except Exception:
-                return True
-            time.sleep(0.2)
+                self._fetch_health_snapshot(timeout=min(0.7, max(0.05, deadline - time.monotonic())), base_url=base_url)
+            except Exception as exc:
+                # A timeout, 503, malformed JSON or wrong root is not a free port.
+                return self._connection_was_refused(exc)
+            if cancel is not None:
+                cancel.wait(min(0.2, max(0, deadline - time.monotonic())))
+            else:
+                time.sleep(min(0.2, max(0, deadline - time.monotonic())))
         return False
-
-    @staticmethod
-    def _pid_command_line(pid: int) -> str:
-        if pid <= 0:
-            return ""
-        if os.name == "nt":
-            try:
-                cmd = [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    f"(Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\").CommandLine",
-                ]
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-                return (proc.stdout or "").strip()
-            except Exception:
-                return ""
-        try:
-            return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
-        except Exception:
-            return ""
-
-    @staticmethod
-    def _looks_like_infini_server_command(command_line: str) -> bool:
-        text = str(command_line or "").replace("\\", "/").lower()
-        if not text:
-            return False
-        if "sd-server" in text or "stable-diffusion" in text:
-            return False
-        return (
-            "infinicrafterlocal" in text
-            or ("localgenerator" in text and "server.py" in text)
-            or ("infini_local" in text and "web/server" in text)
-        )
-
-    @staticmethod
-    def _listening_pids_on_port(port: int) -> list[int]:
-        pids: set[int] = set()
-        try:
-            if os.name == "nt":
-                proc = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, timeout=4)
-                text = proc.stdout or ""
-                for line in text.splitlines():
-                    cols = line.split()
-                    if len(cols) < 5:
-                        continue
-                    local_addr = cols[1]
-                    state = cols[3].upper() if len(cols) >= 5 else ""
-                    if state != "LISTENING" or not local_addr.endswith(f":{port}"):
-                        continue
-                    try:
-                        pids.add(int(cols[-1]))
-                    except Exception:
-                        pass
-            else:
-                # Best-effort fallback for dev/Linux. Prefer ss, then lsof if present.
-                proc = subprocess.run(["bash", "-lc", f"ss -ltnp 'sport = :{port}' 2>/dev/null || true"], capture_output=True, text=True, timeout=4)
-                for part in (proc.stdout or "").replace(',', ' ').split():
-                    if "pid=" in part:
-                        try:
-                            pids.add(int(part.split("pid=", 1)[1].split("=", 1)[0].split()[0]))
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        return sorted(pid for pid in pids if pid > 0)
-
-    @staticmethod
-    def _terminate_pid(pid: int, force: bool = False) -> bool:
-        if pid <= 0 or pid == os.getpid():
-            return False
-        try:
-            if os.name == "nt":
-                args = ["taskkill", "/PID", str(pid), "/T"]
-                if force:
-                    args.append("/F")
-                subprocess.run(args, capture_output=True, text=True, timeout=5)
-            else:
-                os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
-            return True
-        except Exception:
-            return False
-
-    def _cleanup_old_helper_servers_before_start(self) -> list[str]:
-        """Stop stale LocalGenerator helpers on the configured port before starting.
-
-        Users often close the visible console with the window X, leaving another
-        python/server.py copy on 5055.  Start server should behave like restart:
-        ask the answering helper to shutdown, then kill only processes that look
-        like InfiniCrafterLocal helpers.
-        """
-        actions: list[str] = []
-        snap: dict | None = None
-        try:
-            snap = self._fetch_health_snapshot(timeout=1.2)
-        except Exception:
-            snap = None
-
-        if snap and snap.get("ok"):
-            if not self._health_looks_like_infini_helper(snap):
-                actions.append(f"port {self._server_port()} answers /health but not as InfiniCrafterLocal; not killed")
-            else:
-                root = self._infer_server_root_from_health(snap) or "unknown"
-                pid_raw = snap.get("pid")
-                actions.append(f"found helper on {self._server_base_url()} pid={pid_raw or 'unknown'} root={root}")
-                if self._try_http_shutdown_current_server(timeout=1.5):
-                    actions.append("requested /shutdown")
-                    if self._wait_until_helper_stops(timeout=4.0):
-                        actions.append("old helper stopped gracefully")
-                        return actions
-                try:
-                    pid = int(pid_raw or 0)
-                except Exception:
-                    pid = 0
-                if pid and pid != os.getpid():
-                    if self._terminate_pid(pid, force=False):
-                        actions.append(f"sent terminate to pid {pid}")
-                        if self._wait_until_helper_stops(timeout=2.0):
-                            return actions
-                    if self._terminate_pid(pid, force=True):
-                        actions.append(f"force-killed pid {pid}")
-                        self._wait_until_helper_stops(timeout=2.0)
-                        return actions
-
-        port = self._server_port()
-        for pid in self._listening_pids_on_port(port):
-            if pid == os.getpid():
-                continue
-            cmdline = self._pid_command_line(pid)
-            if self._looks_like_infini_server_command(cmdline):
-                if self._terminate_pid(pid, force=False):
-                    actions.append(f"sent terminate to stale helper pid {pid}")
-                    time.sleep(0.3)
-                # If it still listens, force-kill.
-                if pid in self._listening_pids_on_port(port):
-                    if self._terminate_pid(pid, force=True):
-                        actions.append(f"force-killed stale helper pid {pid}")
-            else:
-                actions.append(f"port {port} is used by non-Infini process pid {pid}; not killed")
-        self._wait_until_helper_stops(timeout=2.0)
-        return actions
 
     def open_sdcpp_start(self):
         self.save()
@@ -542,72 +478,257 @@ class SettingsGuiServerControlsMixin:
             messagebox.showinfo("Проверка", "Критичных проблем в настройках не вижу.")
             self.status_var.set("Проверка прошла без критичных предупреждений.")
 
+    def _shutdown_identity_is_safe(self, snap: dict) -> bool:
+        if not isinstance(snap, dict) or snap.get("ok") is not True:
+            return False
+        pid = snap.get("pid")
+        return (
+            self._health_matches_this_gui(snap)
+            and type(pid) is int and pid > 0 and pid != os.getpid()
+        )
+
+    @staticmethod
+    def _activity_restart_refusal(snap: dict) -> str:
+        activity = snap.get("generationActivity")
+        if not isinstance(activity, dict):
+            return "Safe restart refused: generation activity unknown."
+        active, waiting, accepting = (activity.get(key) for key in ("active", "waiting", "accepting"))
+        if type(active) is not int or active < 0 or type(waiting) is not int or waiting < 0 or type(accepting) is not bool:
+            return "Safe restart refused: generation activity unknown."
+        if active or waiting:
+            return f"Safe restart refused: generator busy (active={active}, waiting={waiting}). Wait, or explicitly Force restart."
+        if not accepting:
+            return "Safe restart refused: server is not accepting generation; shutdown already in progress."
+        return ""
+
     def start_server(self):
-        self.save()
-        cleanup_actions: list[str] = []
-        if self.proc and self.proc.poll() is None:
+        self._request_server_action(restart=True)
+
+    def force_restart_server(self):
+        if messagebox.askyesno("Force restart", "Прервать активные/ожидающие craft и перезапустить этот server.py?\nГотовность recipe/refund это действие не подтверждает."):
+            self._request_server_action(restart=True, force=True)
+        else:
+            self.status_var.set("Force restart cancelled.")
+
+    @staticmethod
+    def _connection_was_refused(exc: Exception) -> bool:
+        reason = getattr(exc, "reason", exc)
+        return isinstance(reason, ConnectionRefusedError) or getattr(reason, "errno", None) in {111, 61, 10061}
+
+    def _request_server_action(self, restart: bool, force: bool = False):
+        if "server-action" in self.__dict__.get("_gui_tasks", {}):
+            self.status_var.set("Server action already in progress; wait for its result.")
+            return
+        base_url = self._server_base_url()
+        data = self.collect()
+        owned_running = self.proc is not None and self.proc.poll() is None
+        self.status_var.set("Force restart: checking identity…" if force else "Safe restart/stop: checking generation activity…")
+
+        def work(cancel):
             try:
-                self.proc.terminate()
-                cleanup_actions.append("terminated GUI-owned server.py")
-                try:
-                    self.proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    self.proc.kill()
-                    cleanup_actions.append("force-killed GUI-owned server.py")
-            except Exception as e:
-                cleanup_actions.append(f"failed to stop GUI-owned server.py: {e}")
-            self.proc = None
-        cleanup_actions.extend(self._cleanup_old_helper_servers_before_start())
-        try:
-            snap = self._fetch_health_snapshot(timeout=1.5)
-            if snap.get("ok"):
-                if self._health_looks_like_infini_helper(snap):
-                    warning = self._server_identity_warning(snap)
-                else:
-                    warning = (
-                        f"Порт {self._server_port()} занят другим HTTP-сервисом, не похожим на InfiniCrafterLocal.\n"
-                        "GUI не будет убивать чужой процесс автоматически."
-                    )
-                messagebox.showwarning("Port still busy", warning)
-                self.status_var.set(f"Порт {self._server_port()} всё ещё занят; новый server.py не запускаю.")
+                snap = self._fetch_health_snapshot(timeout=2, base_url=base_url)
+            except Exception as exc:
+                if restart and not owned_running and self._connection_was_refused(exc):
+                    return ""
+                return "Restart/stop refused: health/activity unknown; no process termination attempted."
+            if not self._shutdown_identity_is_safe(snap):
+                return "Restart refused: unknown/foreign server root or unsafe PID. GUI не будет убивать чужой процесс."
+            refusal = "" if force else self._activity_restart_refusal(snap)
+            if refusal or cancel.is_set():
+                return refusal or "Restart cancelled."
+            if self._safe_effective_config(snap) is None:
+                return "Restart/stop refused: applied-config projection unverified; no shutdown or process termination attempted."
+            stopped, refusal = self._try_http_shutdown_current_server(timeout=2, base_url=base_url, force=force)
+            if not stopped:
+                return refusal
+            if not self._wait_until_helper_stops(timeout=4, base_url=base_url, cancel=cancel):
+                return "Port still busy: helper has not stopped; no new server launched."
+            return ""
+
+        def apply(ok, refusal):
+            if not ok or refusal:
+                self.status_var.set(refusal if ok else "Safe restart refused: activity unknown.")
                 return
-        except Exception:
-            pass
+            if self.collect() != data:
+                self.status_var.set("Restart cancelled: GUI settings changed while checking; start again.")
+                return
+            if restart:
+                self._start_server_after_guard()
+            else:
+                self.proc = None
+                self._cancel_gui_task("health-config")
+                self._applied_config_ack = None
+                scheduled = self.__dict__.get("_health_after_id")
+                if scheduled is not None:
+                    self.after_cancel(scheduled)
+                    self._health_after_id = None
+                self._update_applied_config_feedback("Stopped")
+                self.status_var.set("Server stopped through guarded /shutdown.")
+
+        self._run_gui_task("server-action", work, apply)
+
+    def _start_server_after_guard(self):
+        # Only the acknowledged shutdown/free-port path reaches launch. Never
+        # terminate/kill a PID here: that would bypass atomic busy admission.
+        self._cancel_gui_task("health-config")
+        self._applied_config_ack = None
+        self._update_applied_config_feedback()
+        self.save()
         env = os.environ.copy()
         env.update(self.collect())
         cmd = [sys.executable, str(ROOT / "server.py")]
         try:
+            options = {"cwd": str(ROOT), "env": env}
             if os.name == "nt":
-                self.proc = subprocess.Popen(cmd, cwd=str(ROOT), env=env, creationflags=subprocess.CREATE_NEW_CONSOLE)
-            else:
-                self.proc = subprocess.Popen(cmd, cwd=str(ROOT), env=env)
-            suffix = f" Старые процессы: {'; '.join(cleanup_actions[:3])}" if cleanup_actions else ""
-            self.status_var.set("server.py запущен. Health откроется через пару секунд." + suffix)
-            threading.Thread(target=self._delayed_health_check, daemon=True).start()
-        except Exception as e:
-            messagebox.showerror("Start failed", str(e))
-            self.status_var.set(f"Start failed: {e}")
+                options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+            self.proc = subprocess.Popen(cmd, **options)
+            self.status_var.set("server.py запущен. Runtime config ещё не подтверждён.")
+            previous = self.__dict__.get("_health_after_id")
+            if previous is not None:
+                self.after_cancel(previous)
+            def check_launched_server():
+                self._health_after_id = None
+                self._delayed_health_check()
+            self._health_after_id = self.after(1000, check_launched_server)
+        except Exception:
+            messagebox.showerror("Start failed", "Не удалось запустить server.py; проверь Python/права/порт.")
+            self.status_var.set("Start failed; runtime config not acknowledged.")
+
+    @staticmethod
+    def _safe_effective_config(snap: dict) -> dict | None:
+        # Exact parent-agreed partial projection, not a copy of loaded config.
+        effective = snap.get("effectiveConfig")
+        if not isinstance(effective, dict):
+            return None
+        types: dict[str, type] = {key: str for key in (
+            "cacheDir", "worldRecipesDir", "imageBackend", "llmProvider", "llmModel", "openrouterProvider",
+        )}
+        types["sdcppAutostart"] = bool
+        if any(type(effective.get(key)) is not kind for key, kind in types.items()):
+            return None
+        return {key: effective[key] for key in types}
+
+    def _proposed_effective_config(self) -> dict:
+        # This is a partial comparison of launch inputs, not a second runtime
+        # config owner. No token/key/URL/freeform command fields are projected.
+        env = os.environ.copy()
+        env.update(self.collect())
+        cache = self._cache_dir_from_environment(env)
+        worlds = Path(env.get("INFINI_WORLD_RECIPES_DIR", str(cache / "world_recipes")).strip())
+        worlds = (worlds if worlds.is_absolute() else ROOT / worlds).resolve()
+        provider = env.get("INFINI_LLM_PROVIDER", "").strip().lower().replace("-", "_")
+        # Read-only comparison normalization from llm_transport's main-profile
+        # rules; never import runtime bootstrap (which creates cache folders).
+        if provider in {"openrouter", "or"}:
+            provider = "openrouter"
+        elif provider in {"openai", "openai_compat", "api", "remote"}:
+            provider = "openai_compat"
+        elif provider in {"local", "lmstudio", "lm_studio", "ollama", ""}:
+            or_model = next((env[key].strip() for key in ("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL") if env.get(key, "").strip()), "auto")
+            # Only the legacy implicit provider decision observes configured
+            # credential presence; no credential/value/hash is projected or kept.
+            implicit_or = not provider and any(env.get(key, "").strip() for key in ("INFINI_OPENROUTER_API_KEY", "OPENROUTER_API_KEY")) and or_model.lower() not in {"auto", "default"}
+            provider = "openrouter" if implicit_or else "local"
+        backend = env.get("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()
+        # These declared canonical aliases are parity-tested against the visual
+        # owner; this is display comparison only, never backend dispatch/config.
+        backend = {
+            "stablediffusioncpp": "sdcpp", "stable-diffusion.cpp": "sdcpp", "stable_diffusion_cpp": "sdcpp",
+            "api_image": "image_api", "openai_image": "image_api", "openai_images": "image_api",
+            "openai_compat_image": "image_api", "none": "off", "disabled": "off",
+        }.get(backend, backend)
+        model_keys = {
+            "local": ("INFINI_LMSTUDIO_MODEL", "OPENAI_MODEL"),
+            "openrouter": ("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL"),
+            "openai_compat": ("INFINI_OPENAI_COMPAT_MODEL", "OPENAI_MODEL"),
+            "openai_codex": ("INFINI_CODEX_LLM_MODEL",),
+        }.get(provider, ())
+        # Match core.llm_config env_first and the primary auth snapshot: auto is
+        # config-only, never resolved through a catalog/provider request here.
+        model = next((env[key].strip() for key in model_keys if env.get(key, "").strip()),
+                     "" if provider == "openai_codex" else "auto")
+        return {
+            "cacheDir": str(cache), "worldRecipesDir": str(worlds),
+            "imageBackend": backend,
+            "llmProvider": provider,
+            "llmModel": model,
+            "openrouterProvider": env.get("INFINI_OPENROUTER_PROVIDER", "").strip() if provider == "openrouter" else "",
+            "sdcppAutostart": env.get("INFINI_SDCPP_SERVER_AUTOSTART", "0").strip().lower() in {"1", "true", "yes", "on", "y", "t"},
+        }
+
+    def _install_applied_config_tracking(self):
+        # Only these non-secret inputs participate in the partial projection.
+        # Editing other fields cannot manufacture an acknowledgement of them.
+        for key in (
+            "INFINI_HOST", "INFINI_PORT", "INFINI_CACHE_DIR", "INFINI_WORLD_RECIPES_DIR",
+            "INFINI_IMAGE_BACKEND", "INFINI_LLM_PROVIDER", "INFINI_LMSTUDIO_MODEL",
+            "INFINI_OPENROUTER_MODEL", "INFINI_OPENAI_COMPAT_MODEL", "INFINI_CODEX_LLM_MODEL",
+            "INFINI_OPENROUTER_PROVIDER", "INFINI_SDCPP_SERVER_AUTOSTART",
+        ):
+            variable = self.vars.get(key)
+            if variable is not None and callable(getattr(variable, "trace_add", None)):
+                variable.trace_add("write", lambda *_args: self._update_applied_config_feedback("Edited"))
+
+    def _update_applied_config_feedback(self, state: str = ""):
+        prefix = state + "; " if state else ""
+        ack = self.__dict__.get("_applied_config_ack")
+        if not ack or ack.get("baseUrl") != self._server_base_url():
+            self.applied_config_var.set(prefix + "Runtime config unconfirmed (partial non-secret projection; pools/secrets unverified).")
+            return
+        proposed = self._proposed_effective_config()
+        mismatches = [key for key in proposed if proposed[key] != ack["effectiveConfig"].get(key)]
+        if mismatches:
+            text = "Restart required / runtime mismatch: " + ", ".join(mismatches) + ". Partial non-secret projection; pools/secrets unverified."
+        else:
+            text = "Runtime matches launch settings at last health check (partial non-secret projection; pools/secrets unverified)."
+        self.applied_config_var.set(prefix + text)
 
     def _delayed_health_check(self):
-        time.sleep(2.5)
-        url = self._server_base_url() + "/health"
-        try:
-            snap = self._fetch_health_snapshot(timeout=10)
-            if not self._health_matches_this_gui(snap):
-                self.status_var.set("Health ответил, но это другая копия server.py на том же порту.")
+        # Called by the Tk loop, never a background thread. Capture plain launch
+        # inputs here and return results through the same bounded queue pattern.
+        if self.__dict__.get("_gui_closed", False):
+            return
+        base_url = self._server_base_url()
+        expected_pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else None
+        self.applied_config_var.set("Checking runtime config (partial non-secret projection)…")
+
+        def work(cancel):
+            snap = self._fetch_health_snapshot(timeout=3, base_url=base_url)
+            if not self._shutdown_identity_is_safe(snap) or (expected_pid is not None and snap.get("pid") != expected_pid):
+                return None
+            # Drop all other health/config/auth metadata before it enters the UI
+            # queue or cached acknowledgement; unexpected fields cannot leak.
+            safe = self._safe_effective_config(snap)
+            if safe is None:
+                return None
+            return {"pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe}
+
+        def apply(ok, ack):
+            if not ok or ack is None:
+                self._applied_config_ack = None
+                self.applied_config_var.set("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
                 return
-            self.status_var.set(f"Health OK: {url}")
-        except Exception as e:
-            self.status_var.set(f"server.py запущен, но health пока не ответил: {e}")
+            self._applied_config_ack = ack
+            self._update_applied_config_feedback()
+            self.status_var.set(self.applied_config_var.get())
+
+        self._run_gui_task("health-config", work, apply)
 
     def stop_server(self):
-        if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
-            self.status_var.set("Stop signal sent to server.py")
-        else:
-            self.status_var.set("Нет server.py процесса, запущенного из этого GUI.")
+        self._request_server_action(restart=False)
 
     def on_close(self):
+        self._gui_closed = True
+        health_after = self.__dict__.get("_health_after_id")
+        if health_after is not None:
+            self.after_cancel(health_after)
+            self._health_after_id = None
+        for state in self.__dict__.get("_gui_tasks", {}).values():
+            state["cancel"].set()
+            state["pending"] = None
+            if state["after"] is not None:
+                self.after_cancel(state["after"])
+        self.__dict__.get("_gui_tasks", {}).clear()
         if getattr(self, "_codex_login_running", False):
             self._codex_login_cancel.set()
         self.destroy()

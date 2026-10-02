@@ -35,12 +35,15 @@ internal static class RuntimeDelayedActionScheduler
         Vector2 Direction,
         int DamageDone,
         int ChildDepth,
-        int Ticks,
+        uint EnqueuedTick,
+        uint DueTick,
         int ReservedSpawnBudget,
         RuntimeSpawnBudget Budget,
         bool OwnerHitReceipt);
 
     private static readonly List<PendingAction> Pending = new();
+    private static uint? DispatchTick;
+    private static int ExecutedThisTick;
 
     public static bool TrySchedule(
         GeneratedItemData data,
@@ -57,6 +60,8 @@ internal static class RuntimeDelayedActionScheduler
         bool ownerHitReceipt = false)
     {
         if (data is null || action is null || owner is null || !owner.active || source is null || action.DelayTicks <= 0)
+            return false;
+        if (!RuntimeProgramExecutor.HasActionAuthority(action, owner))
             return false;
         if (Pending.Count >= InfiniRuntimeLimits.MaxPendingRuntimeActions)
             return false;
@@ -125,13 +130,15 @@ internal static class RuntimeDelayedActionScheduler
                 return false;
         }
 
+        uint enqueuedTick = Main.GameUpdateCount;
+        uint dueTick = unchecked(enqueuedTick + (uint)Math.Clamp(action.DelayTicks, 1, 600));
         Pending.Add(new PendingAction(
             data, sourceEntity, action, owner.whoAmI, owner,
             capturedSource,
             sourceProjectile, projectileSlot, sourceProjectile?.identity ?? 0,
             sourceProjectile?.type ?? 0, sourceModProjectile,
             target?.whoAmI ?? -1, target, position, direction, damageDone,
-            childDepth, Math.Clamp(action.DelayTicks, 1, 600), reservedSpawnBudget, budget, ownerHitReceipt));
+            childDepth, enqueuedTick, dueTick, reservedSpawnBudget, budget, ownerHitReceipt));
         return true;
     }
 
@@ -152,20 +159,26 @@ internal static class RuntimeDelayedActionScheduler
 
     public static void Update()
     {
-        int executed = 0;
+        uint now = Main.GameUpdateCount;
+        if (DispatchTick != now)
+        {
+            DispatchTick = now;
+            ExecutedThisTick = 0;
+        }
         for (int i = 0; i < Pending.Count;)
         {
             PendingAction pending = Pending[i];
-            int ticks = pending.Ticks - 1;
-            if (ticks > 0)
+            // GameUpdateCount is a wrapping uint. Delays are bounded to 600,
+            // far below the half-clock horizon of this signed comparison.
+            // A post-projectile visit in the enqueue update is not a new tick.
+            if (unchecked((int)(now - pending.DueTick)) < 0)
             {
-                Pending[i] = pending with { Ticks = ticks };
                 i++;
                 continue;
             }
-            if (executed >= InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick)
+            if (ExecutedThisTick >= InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick)
             {
-                Pending[i] = pending with { Ticks = 1 };
+                // Pressure defers dispatch, never rewrites the authored due time.
                 i++;
                 continue;
             }
@@ -210,7 +223,7 @@ internal static class RuntimeDelayedActionScheduler
                 pending.ChildDepth,
                 pending.Budget,
                 pending.ReservedSpawnBudget);
-            executed++;
+            ExecutedThisTick++;
         }
     }
 
@@ -219,6 +232,8 @@ internal static class RuntimeDelayedActionScheduler
         foreach (PendingAction pending in Pending)
             pending.Budget.Return(pending.ReservedSpawnBudget);
         Pending.Clear();
+        DispatchTick = null;
+        ExecutedThisTick = 0;
     }
 }
 

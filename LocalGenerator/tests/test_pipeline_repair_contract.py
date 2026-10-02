@@ -1469,6 +1469,184 @@ def test_every_validator_error_has_explicit_repair_policy() -> None:
     assert REPAIR_ERROR_POLICY["unknown_registry_requirement"]["llmRepairable"] is False
 
 
+def _bounded_invalid_buff_calls(fields=("durationTicks",)):
+    from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+    good = build_capability_witness("apply_vanilla_buff_on_use")
+    program = good["runtimeProgram"]
+    buff = next(row for row in program["calls"] if row["fn"] == "apply_vanilla_buff_on_use")
+    support = [row for row in program["calls"] if row is not buff]
+    max_calls = runtime_program_author_schema()["properties"]["calls"]["maxItems"]
+    program["calls"] = support + [dict(copy.deepcopy(buff), id=f"buff_{index}") for index in range(max_calls - len(support))]
+    invalid = copy.deepcopy(good)
+    for row in invalid["runtimeProgram"]["calls"]:
+        if row["fn"] == "apply_vanilla_buff_on_use":
+            row["params"].update({field: 0 for field in fields})
+    return invalid, good
+
+
+@pytest.mark.parametrize("fields", [("durationTicks",), ("buffId", "durationTicks")], ids=["single-leaf", "saturated-multi-leaf"])
+@pytest.mark.parametrize("failure_envelope", ["direct", "nested", "orchestration"])
+def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
+    from infini_local.pipelines.combine_pipeline import _failure_report
+
+    current, good = _bounded_invalid_buff_calls(fields)
+    assert validate_runtime_program(good)["ok"]
+    validation = validate_runtime_program(current)
+    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    assert not validation["ok"]
+    assert len(validation["errors"]) == len(broken) * (len(fields) + 1), "complete canonical shape errors must reach every bounded leaf"
+    failure = {"errors": validation["errors"]} if failure_envelope == "direct" else {"validation": validation}
+    if failure_envelope == "orchestration":
+        failure = _failure_report(current, ValueError("bounded authored range rejection"), "gameplay_validation_or_compile")
+        assert failure["errors"] == validation["errors"], "the canonical failure envelope must not truncate diagnostics"
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=failure)
+    assert dossier["exactValidationErrors"] == validation["errors"], "one Repair cannot silently drop later canonical diagnostics"
+    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == sorted(
+        [{"id": row["id"], "paths": ["params." + field for field in fields]} for row in broken], key=lambda row: row["id"])
+    candidate = copy.deepcopy(good["runtimeProgram"]["calls"])
+    candidate[0]["params"]["damage"] = 100
+    filtered, audit = filter_repair_patch_scope(current, {"note": "repair every diagnosed duration", "realizationReplacement": good["realization"], "callsUpsert": candidate}, dossier["repairScope"])
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    assert apply_repair_patch(current, filtered) == good
+
+
+@pytest.mark.parametrize("consumer", ["shape", "runtime", "author", "parsed-author", "dossier"])
+@pytest.mark.parametrize("damage", ["oversized-list", "extra-members", "deep-container", "cyclic-container", "oversized-text"])
+def test_author_input_work_guard_precedes_validation_copy_and_repair(consumer, damage):
+    from infini_local.core.runtime_authoring import program_schema
+
+    class UninspectedList(list):
+        def __iter__(self):
+            raise AssertionError("oversized array must be refused before enumeration")
+
+        def __deepcopy__(self, memo):
+            raise AssertionError("oversized array must be refused before copying")
+
+    class UninspectedDict(dict):
+        def __iter__(self):
+            raise AssertionError("oversized object must be refused before enumeration")
+
+        def items(self):
+            raise AssertionError("oversized object must be refused before enumeration")
+
+        def __deepcopy__(self, memo):
+            raise AssertionError("oversized object must be refused before copying")
+
+    current = build_runtime_fixture("workbench_blade")
+    nodes, depth, width, _ = program_schema._author_schema_work_bounds(program_schema.author_item_response_schema())
+    if damage == "oversized-list":
+        current["runtimeProgram"]["calls"] = UninspectedList([None] * (nodes + 1))
+    elif damage == "extra-members":
+        current["runtimeProgram"]["calls"][0]["params"] = UninspectedDict({f"extra_{i}": 0 for i in range(nodes + 1)})
+    elif damage == "oversized-text":
+        current["realization"]["description"] = "x" * (nodes * width + 1)
+    else:
+        value = {}
+        if damage == "cyclic-container":
+            value["cycle"] = value
+        else:
+            for _ in range(depth + 1):
+                value = {"nested": value}
+        current["runtimeProgram"]["calls"][0]["params"]["unknown"] = value
+    consume = {
+        "shape": program_schema.strict_author_shape_report,
+        "runtime": validate_runtime_program,
+        "author": authored_item_validation_report,
+        "parsed-author": gameplay_stage._prepare_parsed_author_item,
+        "dossier": lambda value: gameplay_stage.build_gameplay_repair_dossier(
+            value, {}, {}, {}, {}, failure_report={"errors": [{"path": "$", "code": "compile_or_wire_rejection", "message": "guard before fragments"}]}),
+    }[consumer]
+    with pytest.raises(RuntimeError, match="Author input exceeds schema-derived work bounds"):
+        consume(current)
+
+
+def test_maximal_author_schema_shape_keeps_worst_branch_and_report_tail():
+    from infini_local.core.runtime_authoring import program_schema
+
+    schema = program_schema.author_item_response_schema()
+    program_schema_properties = schema["properties"]["runtimeProgram"]["properties"]
+    branches = program_schema_properties["calls"]["items"]["oneOf"]
+    worst = max(branches, key=lambda branch: len(branch["properties"]["params"]["properties"]))
+    fn = worst["properties"]["fn"]["const"]
+    good = build_capability_witness(fn)
+    call = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)
+    for key, spec in CAPABILITY_REGISTRY[fn].params.items():
+        if key not in call["params"]:
+            call["params"][key] = spec.enum[0] if spec.enum else spec.neutral
+    assert set(call["params"]) == set(worst["properties"]["params"]["properties"])
+    program = good["runtimeProgram"]
+    for namespace, source in (("calls", call), ("entities", program["entities"][0]), ("bindings", program["bindings"][0])):
+        program[namespace] = [dict(copy.deepcopy(source), id=f"max_{namespace}_{index}") for index in range(program_schema_properties[namespace]["maxItems"])]
+    concept_schema = schema["properties"]["concept"]["properties"]["plannedPlayerActions"]
+    good["concept"]["plannedPlayerActions"] = [{"input": "primary_use", "intent": "bounded sketch"} for _ in range(concept_schema["maxItems"])]
+    evaluation_schema = schema["properties"]["realization"]["properties"]["selfEvaluation"]["properties"]
+    for section, checks in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
+        rows_schema = evaluation_schema[section]["properties"][checks]
+        row = good["realization"]["selfEvaluation"][section][checks][0]
+        row["runtimeRefs"] = ["bounded_ref"] * rows_schema["items"]["properties"]["runtimeRefs"]["maxItems"]
+        good["realization"]["selfEvaluation"][section][checks] = [copy.deepcopy(row) for _ in range(rows_schema["maxItems"])]
+    good = {key: good[key] for key in schema["properties"]}
+    # This is a maximal strict-shape control, not a semantically valid graph:
+    # repeating singleton components deliberately isolates diagnostic collection.
+    assert program_schema.strict_author_shape_report(good)["ok"]
+    current = copy.deepcopy(good)
+    for row in current["runtimeProgram"]["calls"]:
+        row["params"] = {key: "bad" for key in row["params"]}
+    for section, checks in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
+        for row in current["realization"]["selfEvaluation"][section][checks]:
+            row["runtimeRefs"] = [0] * len(row["runtimeRefs"])
+    expected = strict_schema_errors(current, schema, limit=len(json.dumps(current)))
+    assert len(expected) > 1024, "do not replace 128 with another guessed prefix"
+    report = program_schema.strict_author_shape_report(current)
+    assert report["errors"] == expected
+    last_check = evaluation_schema["programVsReport"]["properties"]["behaviorChecks"]["maxItems"] - 1
+    last_ref = evaluation_schema["programVsReport"]["properties"]["behaviorChecks"]["items"]["properties"]["runtimeRefs"]["maxItems"] - 1
+    tail_path = f"$.realization.selfEvaluation.programVsReport.behaviorChecks[{last_check}].runtimeRefs[{last_ref}]"
+    assert report["errors"][-1]["path"] == tail_path
+    canonical = validate_runtime_program(current)["errors"]
+    shape_errors = [row for row in canonical if row["code"].startswith("shape_")]
+    assert [(row["path"], row["code"]) for row in shape_errors] == [(row["path"], "shape_" + row["kind"]) for row in expected]
+    assert authored_item_validation_report(current)["errors"] == canonical
+    assert strict_schema_errors(current, schema) == expected[:128]
+    assert strict_schema_errors(current, schema, limit=7) == expected[:7]
+    assert strict_schema_errors(current, schema, limit=0) == []
+
+
+@pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
+def test_strict_author_exception_keeps_all_targets_separate_from_display(identity_tail):
+    from infini_local.pipelines.combine_pipeline import _failure_report
+    from infini_local.pipelines.combine_validation import strict_validate_authored_item
+
+    current, _ = _bounded_invalid_buff_calls(("buffId", "durationTicks"))
+    parent_a, parent_b = {"name": "Parent A"}, {"name": "Parent B"}
+    if identity_tail:
+        current["name"] = parent_a["name"]
+    expected = authored_item_validation_report(current, parent_a, parent_b)["errors"]
+    assert len(expected) > 128
+    with pytest.raises(PlannerUnavailable) as caught:
+        strict_validate_authored_item(current, parent_a, parent_b)
+    assert caught.value.author_repair_targets == expected
+    assert expected[-1]["message"] not in str(caught.value), "only the human display is truncated"
+    failure = _failure_report(current, caught.value, "gameplay_validation_or_compile")
+    assert failure["errors"] == expected
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=failure)
+    assert dossier["exactValidationErrors"] == expected
+    if identity_tail:
+        assert expected[-1]["code"] == "uncombined_identity"
+        assert dossier["repairScope"]["metadataFields"] == ["name"]
+
+
+def test_complete_author_errors_do_not_override_distinct_downstream_provenance():
+    current, _ = _bounded_invalid_buff_calls()
+    validation = validate_runtime_program(current)
+    downstream = [{"path": "$", "code": "compile_or_wire_rejection", "message": "downstream-only defect"}]
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report={"errors": downstream, "validation": validation})
+    assert dossier["exactValidationErrors"] == downstream
+    assert dossier["repairScope"]["nonRepairableErrors"]
+    assert all(not paths for paths in dossier["repairScope"]["fieldPermissions"].values())
+
+
 def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_prompt() -> None:
     current = build_runtime_fixture("workbench_blade")
     current["runtimeProgram"]["calls"] = [

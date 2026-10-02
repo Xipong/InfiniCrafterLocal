@@ -5,10 +5,11 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, unquote, urlparse
 
 from infini_local.storage.trace_tools import clear_ndjson
+from infini_local.services.combine_endpoint import request_shutdown
 
 
 MAX_ASSET_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -83,7 +84,7 @@ class ServerUtilityRoutes:
 
         # path.startswith("/shutdown") intentionally avoided for exact route matching + query support.
         if request_path == "/shutdown":
-            self.shutdown(handler)
+            self.shutdown(handler, path)
             return True
         if request_path == "/health":
             handler.json(self.health_payload())
@@ -124,7 +125,7 @@ class ServerUtilityRoutes:
             handler.json(self.last_combine_failure_payload())
             return True
         if request_path == "/debug/recipe_health":
-            handler.json({"recipeStorage": "authoritative_world_recipe_files", "health": self.debug_recipe_health()[:100]})
+            handler.json({"recipeStorage": "authoritative_world_recipe_files", "health": self.debug_recipe_health()})
             return True
         if request_path == "/debug/contracts":
             handler.json(self.debug_contracts())
@@ -133,7 +134,7 @@ class ServerUtilityRoutes:
             handler.json(self.debug_latest_recipe_dump(path))
             return True
         if request_path == "/debug/recipes":
-            handler.json({"recipeStorage": "authoritative_world_recipe_files", "recipes": self.debug_recipes()[:50]})
+            handler.json({"recipeStorage": "authoritative_world_recipe_files", "recipes": self.debug_recipes()})
             return True
         if request_path == "/debug/worlds":
             handler.json({"worldRecipesDir": str(self.world_recipes_dir), "worlds": self.debug_worlds()})
@@ -146,15 +147,23 @@ class ServerUtilityRoutes:
             return True
         return False
 
-    def shutdown(self, handler: Any) -> None:
-        # Local GUI uses this to cleanly replace stale helper instances left behind
-        # when a console/window was closed incorrectly. Keep it before /health.
+    def shutdown(self, handler: Any, path: str = "") -> None:
+        force = parse_qs(urlparse(path).query).get("force", ["0"])[0] == "1"
+        accepted, activity = request_shutdown(force=force)
+        if not accepted:
+            handler.json_status(409, {
+                "ok": False, "status": "generator_busy", "version": self.app_version,
+                "generationActivity": activity, "message": "Active or queued generation prevents safe shutdown.",
+            })
+            return
         handler.json({
             "ok": True,
             "version": self.app_version,
             "serverRoot": str(self.root),
             "pid": os.getpid(),
             "message": "shutdown scheduled",
+            "generationActivity": activity,
+            "forced": force,
         })
 
         def _shutdown_later() -> None:
@@ -267,8 +276,8 @@ class ServerUtilityRoutes:
         probe = str(q.get("probe", ["0"])[0]).strip().lower() in {"1", "true", "yes", "on"}
         role = q.get("role", ["item"])[0]
         health = self.health_payload()
-        sdcpp = self.sdcpp_debug_snapshot(include_log_tail=not probe)
         backend = str(health.get("imageBackend") or "").lower()
+        sdcpp = self.sdcpp_debug_snapshot(include_log_tail=not probe) if backend == "sdcpp" else {}
         checks: list[dict[str, Any]] = []
 
         def add(name: str, ok: bool, level: str, message: str, **extra: Any) -> None:
@@ -297,13 +306,24 @@ class ServerUtilityRoutes:
         add("pillow", bool(health.get("pillowAvailable")), "error" if not health.get("pillowAvailable") else "ok", "Pillow is required for sprite postprocess/keying.")
         add("sprite_dir_writable", self._dir_writable_check(self.sprite_dir).get("writable", False), "error", "Sprite cache must be writable.", check=self._dir_writable_check(self.sprite_dir))
         add("cache_dir_writable", self._dir_writable_check(self.cache_dir).get("writable", False), "error", "Cache dir must be writable.", check=self._dir_writable_check(self.cache_dir))
-        add("sdcpp_configured", bool(sdcpp.get("serverConfigured")), "error" if not sdcpp.get("serverConfigured") else "ok", "sd.cpp server exe/model must be configured.")
-        add("sdcpp_alive", bool(sdcpp.get("serverAlive")), "warn" if not sdcpp.get("serverAlive") else "ok", "sd.cpp server should be alive before crafting; /sdcpp_start can start it.")
-        for key in ["serverExe", "model", "vae", "llm"]:
-            fc = self._file_check(sdcpp.get(key))
-            add(f"sdcpp_{key}", bool(fc.get("exists") if fc.get("configured") else key not in {"vae", "llm"}), "error" if key in {"serverExe", "model"} else "warn", f"sd.cpp {key} path check.", check=fc)
-        if sdcpp.get("loraFile"):
-            add("sdcpp_lora_file", bool(self._file_check(sdcpp.get("loraFile")).get("exists")), "warn", "Optional LoRA file path check.", check=self._file_check(sdcpp.get("loraFile")))
+        if backend == "sdcpp":
+            managed = sdcpp.get("autostart") is not False
+            if managed:
+                add("sdcpp_configured", bool(sdcpp.get("serverConfigured")), "error", "Managed sd.cpp requires local server exe/model configuration.")
+                for key in ("serverExe", "model", "vae", "llm"):
+                    fc = self._file_check(sdcpp.get(key))
+                    required = key in {"serverExe", "model"}
+                    add(f"sdcpp_{key}", bool(fc.get("isFile") or (not required and not fc.get("configured"))),
+                        "error" if required else "warn", f"Managed sd.cpp {key} path check.", check=fc)
+                if sdcpp.get("loraFile"):
+                    fc = self._file_check(sdcpp.get("loraFile"))
+                    add("sdcpp_lora_file", bool(fc.get("isFile")), "warn", "Optional LoRA file path check.", check=fc)
+            else:
+                endpoint = urlparse(str(sdcpp.get("serverUrl") or ""))
+                add("sdcpp_endpoint", endpoint.scheme in {"http", "https"} and bool(endpoint.hostname),
+                    "error", "Externally managed sd.cpp requires a configured HTTP endpoint, not local model files.")
+            add("sdcpp_alive", bool(sdcpp.get("serverAlive")), "warn" if managed else "error",
+                "Managed sd.cpp can start on demand." if managed else "Externally managed sd.cpp must already be reachable.")
 
         probe_payload = None
         if probe:
@@ -382,104 +402,85 @@ class ServerUtilityRoutes:
             "debug": dummy.get("debug"),
         })
 
-    def _world_recipe_records(self, world_dir: Path) -> list[dict[str, Any]]:
-        """Build debug-only derived rows from authoritative ``recipes/*.json`` files."""
-        manifest = self.read_json_file(world_dir / "manifest.json") or {}
-        recipes_dir = world_dir / "recipes"
-        if not recipes_dir.is_dir():
-            return []
-        records: list[dict[str, Any]] = []
-        for recipe_path in recipes_dir.glob("*.json"):
+    def _iter_recipe_records(self, world_dir: Path | None = None) -> Iterator[dict[str, Any]]:
+        """Order file metadata first, then read only bodies the consumer needs.
+
+        Metadata discovery still scans O(N) paths. Unreadable/legacy records may
+        require more reads before a view fills; world aggregates remain full scans.
+        No persistent or shadow index is maintained.
+        """
+        candidates: list[tuple[float, Path]] = []
+        directories = [world_dir] if world_dir is not None else (
+            sorted(self.world_recipes_dir.iterdir()) if self.world_recipes_dir.exists() else []
+        )
+        for directory in directories:
+            if not directory.is_dir():
+                continue
+            for recipe_path in (directory / "recipes").glob("*.json"):
+                try:
+                    candidates.append((recipe_path.stat().st_mtime, recipe_path))
+                except OSError:
+                    continue
+        candidates.sort(key=lambda row: (-row[0], str(row[1])))
+        manifests: dict[Path, dict[str, Any]] = {}
+        for updated_at, recipe_path in candidates:
             recipe = self.read_json_file(recipe_path)
             if not isinstance(recipe, dict):
                 continue
+            directory = recipe_path.parent.parent
+            if directory not in manifests:
+                manifests[directory] = self.read_json_file(directory / "manifest.json") or {}
+            manifest = manifests[directory]
             recipe_meta = recipe.get("recipeMeta") if isinstance(recipe.get("recipeMeta"), dict) else {}
             health = recipe.get("recipeHealth") if isinstance(recipe.get("recipeHealth"), dict) else {}
             health_parents = health.get("parents") if isinstance(health.get("parents"), dict) else {}
-            try:
-                updated_at = recipe_path.stat().st_mtime
-            except OSError:
-                updated_at = 0.0
-            records.append({
-                "path": recipe_path,
-                "recipe": recipe,
-                "health": health,
+            yield {
+                "path": recipe_path, "recipe": recipe, "health": health,
                 "key": str(recipe_meta.get("recipeKey") or recipe.get("recipeKey") or recipe_path.stem),
                 "parentA": str(recipe_meta.get("parentA") or health_parents.get("a") or recipe.get("parentA") or ""),
                 "parentB": str(recipe_meta.get("parentB") or health_parents.get("b") or recipe.get("parentB") or ""),
                 "worldId": str(manifest.get("worldId") or recipe_meta.get("worldId") or ""),
                 "worldName": str(manifest.get("worldName") or recipe_meta.get("worldName") or ""),
                 "updatedAt": float(updated_at),
-            })
-        records.sort(key=lambda row: (row["updatedAt"], row["key"]))
-        return records
+            }
 
     def debug_recipes(self) -> list[dict[str, Any]]:
         recipes: list[dict[str, Any]] = []
-        if self.world_recipes_dir.exists():
-            for world_dir in sorted(self.world_recipes_dir.iterdir()):
-                if not world_dir.is_dir():
-                    continue
-                for record in self._world_recipe_records(world_dir)[-50:]:
-                    recipe = record["recipe"]
-                    recipes.append({
-                        "worldId": record["worldId"],
-                        "worldName": record["worldName"],
-                        "createdAt": record["updatedAt"],
-                        "a": record["parentA"],
-                        "b": record["parentB"],
-                        "result": recipe.get("name", ""),
-                        "key": record["key"],
-                        "file": str(record["path"]),
-                    })
-        recipes.sort(key=lambda row: row.get("createdAt") or 0, reverse=True)
+        for record in self._iter_recipe_records():
+            recipe = record["recipe"]
+            recipes.append({
+                "worldId": record["worldId"], "worldName": record["worldName"],
+                "createdAt": record["updatedAt"], "a": record["parentA"], "b": record["parentB"],
+                "result": recipe.get("name", ""), "key": record["key"], "file": str(record["path"]),
+            })
+            if len(recipes) == 50:
+                break
         return recipes
 
     def debug_recipe_health(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
-        if self.world_recipes_dir.exists():
-            for world_dir in sorted(self.world_recipes_dir.iterdir()):
-                if not world_dir.is_dir():
-                    continue
-                for record in self._world_recipe_records(world_dir):
-                    health = record["health"]
-                    if not isinstance(health, dict) or not health:
-                        continue
-                    rows.append({
-                        "worldId": record["worldId"],
-                        "worldName": record["worldName"],
-                        "key": record["key"],
-                        "ok": bool(health.get("ok")),
-                        "status": health.get("status", "unknown"),
-                        "result": health.get("resultName") or record["recipe"].get("name", ""),
-                        "runtime": health.get("runtime", {}),
-                        "visual": health.get("visual", {}),
-                        "warnings": health.get("warnings", []),
-                        "problems": health.get("problems", []),
-                        "updatedAt": record["updatedAt"],
-                    })
-        rows.sort(key=lambda row: row.get("updatedAt") or 0, reverse=True)
+        for record in self._iter_recipe_records():
+            health = record["health"]
+            if not health:
+                continue
+            rows.append({
+                "worldId": record["worldId"], "worldName": record["worldName"], "key": record["key"],
+                "ok": bool(health.get("ok")), "status": health.get("status", "unknown"),
+                "result": health.get("resultName") or record["recipe"].get("name", ""),
+                "runtime": health.get("runtime", {}), "visual": health.get("visual", {}),
+                "warnings": health.get("warnings", []), "problems": health.get("problems", []),
+                "updatedAt": record["updatedAt"],
+            })
+            if len(rows) == 100:
+                break
         return rows
-
-    def _latest_recipe_file(self) -> Path | None:
-        best_path: Path | None = None
-        best_time = -1.0
-        if self.world_recipes_dir.exists():
-            for world_dir in sorted(self.world_recipes_dir.iterdir()):
-                if not world_dir.is_dir():
-                    continue
-                for record in self._world_recipe_records(world_dir):
-                    if record["updatedAt"] > best_time:
-                        best_time = record["updatedAt"]
-                        best_path = record["path"]
-        return best_path
 
     def debug_latest_recipe_dump(self, path: str = "") -> dict[str, Any]:
         del path
-        recipe_path = self._latest_recipe_file()
-        if recipe_path is None:
+        record = next(self._iter_recipe_records(), None)
+        if record is None:
             return {"ok": False, "error": "no_recipe", "message": "No world recipe has been committed yet."}
-        recipe = self.read_json_file(recipe_path) or {}
+        recipe_path, recipe = record["path"], record["recipe"]
         runtime = recipe.get("runtimeProgram") if isinstance(recipe.get("runtimeProgram"), dict) else {}
         entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
         visual = recipe.get("visual") if isinstance(recipe.get("visual"), dict) else {}
@@ -510,12 +511,7 @@ class ServerUtilityRoutes:
 
     def debug_contracts(self) -> dict[str, Any]:
         latest: dict[str, Any] = {}
-        candidates: list[dict[str, Any]] = []
-        if self.world_recipes_dir.exists():
-            for world_dir in sorted(self.world_recipes_dir.iterdir()):
-                if world_dir.is_dir():
-                    candidates.extend(self._world_recipe_records(world_dir))
-        for record in sorted(candidates, key=lambda row: row["updatedAt"], reverse=True):
+        for record in self._iter_recipe_records():
             recipe = record["recipe"]
             contract_versions = recipe.get("contractVersions") if isinstance(recipe.get("contractVersions"), dict) else {}
             if contract_versions:
@@ -536,7 +532,7 @@ class ServerUtilityRoutes:
                 if not world_dir.is_dir():
                     continue
                 manifest = self.read_json_file(world_dir / "manifest.json") or {}
-                records = self._world_recipe_records(world_dir)
+                records = list(self._iter_recipe_records(world_dir))
                 health_counts: dict[str, int] = {}
                 for record in records:
                     health = record["health"]
@@ -557,32 +553,43 @@ class ServerUtilityRoutes:
     @staticmethod
     def send_bounded_asset_file(handler: Any, path: Path, content_type: str, *, immutable: bool) -> None:
         try:
-            size = path.stat().st_size
+            stream = path.open("rb")
         except OSError:
             handler.send_error(404)
             return
-        if size <= 0:
-            handler.send_error(404)
-            return
-        if size > MAX_ASSET_RESPONSE_BYTES:
-            handler.send_error(413)
-            return
-
-        handler.send_response(200)
-        handler.send_header("Content-Type", content_type)
-        handler.send_header("Content-Length", str(size))
-        if immutable:
-            handler.send_header("Cache-Control", "public, max-age=31536000, immutable")
-        handler.end_headers()
-        try:
-            with path.open("rb") as stream:
-                while True:
-                    chunk = stream.read(ASSET_STREAM_CHUNK_BYTES)
+        # Derive framing from the handle we actually serve, not a prior path stat.
+        # Concurrent atomic replacement/unlink cannot switch the selected inode.
+        with stream:
+            try:
+                size = os.fstat(stream.fileno()).st_size
+            except OSError:
+                handler.send_error(404)
+                return
+            if size <= 0:
+                handler.send_error(404)
+                return
+            if size > MAX_ASSET_RESPONSE_BYTES:
+                handler.send_error(413)
+                return
+            try:
+                handler.send_response(200)
+                handler.send_header("Content-Type", content_type)
+                handler.send_header("Content-Length", str(size))
+                if immutable:
+                    handler.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                handler.end_headers()
+                remaining = size
+                while remaining:
+                    chunk = stream.read(min(ASSET_STREAM_CHUNK_BYTES, remaining))
                     if not chunk:
-                        break
+                        # A concurrently truncated file cannot complete this body.
+                        # Never let the next HTTP response fill its missing bytes.
+                        handler.close_connection = True
+                        return
                     handler.wfile.write(chunk)
-        except (BrokenPipeError, ConnectionResetError):
-            return
+                    remaining -= len(chunk)
+            except OSError:
+                handler.close_connection = True
 
     def get_asset(self, handler: Any, path: str) -> None:
         q = parse_qs(urlparse(path).query)

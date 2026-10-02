@@ -5,6 +5,17 @@ import importlib.util
 from pathlib import Path
 import re
 import sys
+import json
+import os
+import threading
+import time
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
+
+import pytest
+
+from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -159,13 +170,13 @@ def _check_gui_health_identity_helpers_detect_other_copy_from_root() -> None:
     assert "serverRoot" in GUI_SOURCE
     assert "assetSync" in GUI_SOURCE
     assert "Port still busy" in GUI_SOURCE
-    assert "_cleanup_old_helper_servers_before_start" in GUI_SOURCE
+    assert "generationActivity" in GUI_SOURCE
     assert "_health_looks_like_infini_helper" in GUI_SOURCE
     assert "/shutdown" in GUI_SOURCE
 
 
 def _check_gui_trace_fetch_uses_health_identity_and_longer_timeout() -> None:
-    assert "_fetch_health_snapshot(timeout=8)" in GUI_SOURCE
+    assert "_fetch_health_snapshot(timeout=8, base_url=base_url)" in GUI_SOURCE
     assert "timeout=18" in GUI_SOURCE
     assert "другая копия" in GUI_SOURCE
 
@@ -197,14 +208,14 @@ def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
     assert 'self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name' in GUI_SOURCE
 
 
-def _check_start_server_has_safe_stale_process_cleanup_contract() -> None:
-    assert "taskkill" in GUI_SOURCE
-    assert "netstat" in GUI_SOURCE
+def _check_start_server_has_guarded_http_restart_contract() -> None:
     assert "server.py запущен" in GUI_SOURCE
     assert "GUI не будет убивать чужой процесс" in GUI_SOURCE
-    assert settings_gui.SettingsGui._looks_like_infini_server_command(r"python D:\X\InfiniCrafterLocal\LocalGenerator\server.py")
-    assert settings_gui.SettingsGui._looks_like_infini_server_command(r"python D:\X\LocalGenerator\server.py")
-    assert not settings_gui.SettingsGui._looks_like_infini_server_command(r"C:\Games\sdcpp\sd-server.exe")
+    assert "force_restart_server" in GUI_SOURCE
+    assert "_shutdown_identity_is_safe" in GUI_SOURCE
+    assert "_activity_restart_refusal" in GUI_SOURCE
+    assert "self.proc.terminate(" not in GUI_SOURCE
+    assert "self.proc.kill(" not in GUI_SOURCE
     assert settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "serverRoot": r"D:\X\LocalGenerator"})
     assert not settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "service": "unrelated"})
 
@@ -324,6 +335,956 @@ def _check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> No
         assert f"{gate}=1" in config_env
     assert f"{gate}=1" in config_example
     assert gate in registry
+
+
+class _UiVar:
+    """Strict UI-bound variable; a worker read or write is a test failure."""
+    def __init__(self, value=""):
+        self.value = value
+        self.owner = threading.get_ident()
+
+    def get(self):
+        assert threading.get_ident() == self.owner, "worker read a Tk variable"
+        return self.value
+
+    def set(self, value):
+        assert threading.get_ident() == self.owner, "worker wrote a Tk variable"
+        self.value = value
+
+
+class _GuiWorkflowHarness(SettingsGuiServerControlsMixin, settings_trace_state.SettingsGuiTraceStateMixin):
+    """Real desktop callbacks with an explicit headless UI scheduling seam."""
+    def __init__(self):
+        self.vars = {}
+        self.text_widgets = {}
+        self.data = dict(settings_schema.DEFAULTS)
+        self.radmin_enabled = _UiVar(False)
+        self.status_var = _UiVar()
+        self.applied_config_var = _UiVar("Runtime config not checked (partial non-secret projection).")
+        self.trace_status_var = _UiVar()
+        self.proc = None
+        self.owner = threading.get_ident()
+        self.jobs = {}
+        self.serial = 0
+        self.rendered = {}
+        self.destroyed = False
+
+    def after(self, _delay, callback):
+        assert threading.get_ident() == self.owner, "worker scheduled Tk callback"
+        self.serial += 1
+        self.jobs[self.serial] = callback
+        return self.serial
+
+    def after_cancel(self, job):
+        assert threading.get_ident() == self.owner
+        self.jobs.pop(job, None)
+
+    def drain_until(self, predicate, timeout=3):
+        deadline = time.monotonic() + timeout
+        while not predicate() and time.monotonic() < deadline:
+            callbacks, self.jobs = self.jobs, {}
+            for callback in callbacks.values():
+                callback()
+            time.sleep(0.005)
+        assert predicate(), "worker result did not reach UI within test deadline"
+
+    def _set_trace_text(self, key, content):
+        assert threading.get_ident() == self.owner, "worker rendered Tk text"
+        self.rendered[key] = content
+
+    def _lora_dir_from_file(self, _filename):
+        return ""
+
+    def destroy(self):
+        self.destroyed = True
+
+
+@pytest.fixture
+def gui_workflow(tmp_path, monkeypatch):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    root = tmp_path / "LocalGenerator"
+    root.mkdir()
+    config = root / "config.env"
+    monkeypatch.setattr(settings_trace_state, "ROOT", root)
+    monkeypatch.setattr(settings_trace_state, "CONFIG_PATH", config)
+    monkeypatch.setattr(controls, "ROOT", root)
+    monkeypatch.setattr(controls, "CONFIG_PATH", config)
+    monkeypatch.delenv("INFINI_CACHE_DIR", raising=False)
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
+    monkeypatch.setenv("no_proxy", "127.0.0.1,localhost")
+    return _GuiWorkflowHarness(), root, config
+
+
+@pytest.mark.parametrize("saved,inherited,relative", [
+    (None, None, "cache"),
+    ("selected-cache", None, "selected-cache"),
+    ("ABSOLUTE", None, "absolute-cache"),
+    (None, "inherited-cache", "inherited-cache"),
+    (None, "ABSOLUTE", "absolute-cache"),
+    ("selected-cache", "inherited-cache", "selected-cache"),
+    ("", "inherited-cache", "."),
+])
+def test_offline_trace_cache_root_matches_gui_launch_environment(gui_workflow, monkeypatch, saved, inherited, relative):
+    gui, root, config = gui_workflow
+    if saved is not None:
+        config.write_text("INFINI_CACHE_DIR=" + (str(root / "absolute-cache") if saved == "ABSOLUTE" else saved) + "\n", encoding="utf-8")
+    if inherited is not None:
+        monkeypatch.setenv("INFINI_CACHE_DIR", str(root / "absolute-cache") if inherited == "ABSOLUTE" else inherited)
+    selected = (root / relative).resolve()
+    selected.mkdir(exist_ok=True)
+    (selected / "events.ndjson").write_text('{"message":"selected"}\n', encoding="utf-8")
+    launch_env = os.environ.copy()
+    launch_env.update(gui.collect())
+    launch_path = Path(launch_env.get("INFINI_CACHE_DIR", str(root / "cache")))
+    if not launch_path.is_absolute():
+        launch_path = root / launch_path
+    assert launch_path.resolve() == selected
+    snapshot = gui._load_local_trace_snapshot("offline")
+    assert Path(snapshot["cacheDir"]).resolve() == selected
+    assert snapshot["events"] == [{"message": "selected"}]
+
+
+def test_trace_refresh_returns_while_worker_is_held_and_only_ui_renders(gui_workflow, monkeypatch):
+    gui, root, config = gui_workflow
+    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+
+    def fetch(*args, **kwargs):
+        calls.append((threading.get_ident(), args, kwargs))
+        entered.set()
+        assert release.wait(2), "test network hold expired"
+        finished.set()
+        return {"serverRoot": str(root), "cacheDir": "held-server-cache", "events": [{"message": "from-worker"}]}
+
+    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
+    try:
+        before = time.monotonic()
+        gui.refresh_trace()
+        elapsed = time.monotonic() - before
+        assert elapsed < 0.2, "Refresh blocked the UI callback on network I/O"
+        assert entered.wait(1)
+        assert not gui.rendered, "trace rendered before the held worker returned"
+        assert calls[0][0] != gui.owner
+        release.set()
+        assert finished.wait(1)
+        gui.drain_until(lambda: "summary" in gui.rendered)
+        assert "from-worker" in gui.rendered["events"]
+    finally:
+        release.set()
+
+
+def test_overlapping_trace_refresh_has_one_worker_and_only_latest_pending_request(gui_workflow, monkeypatch):
+    gui, root, _config = gui_workflow
+    gui.vars["INFINI_PORT"] = _UiVar("5055")
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+
+    def fetch(*args, **kwargs):
+        calls.append(kwargs["base_url"])
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(3)
+        return {"serverRoot": str(root), "cacheDir": calls[-1], "events": [{"message": calls[-1]}]}
+
+    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
+    try:
+        gui.refresh_trace()
+        assert entered.wait(1)
+        for port in range(5100, 5125):
+            gui.vars["INFINI_PORT"].set(str(port))
+            gui.refresh_trace()
+        assert calls == ["http://127.0.0.1:5055"], "overlapping refresh spawned unbounded I/O workers"
+        assert len(gui.jobs) == 1
+        release.set()
+        gui.drain_until(lambda: "5124" in gui.rendered.get("summary", ""))
+        assert calls == ["http://127.0.0.1:5055", "http://127.0.0.1:5124"]
+        assert not gui.jobs
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize("action", ["cancel", "close"])
+def test_trace_cancel_or_close_retires_held_and_pending_results(gui_workflow, monkeypatch, action):
+    gui, root, _config = gui_workflow
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+
+    def fetch(*args, **kwargs):
+        calls.append(kwargs["base_url"])
+        entered.set()
+        assert release.wait(3)
+        finished.set()
+        return {"serverRoot": str(root), "cacheDir": "stale", "events": [{"message": "stale"}]}
+
+    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
+    try:
+        gui.refresh_trace()
+        assert entered.wait(1)
+        gui.refresh_trace()  # pending request must be retired as well
+        if action == "close":
+            gui.on_close()
+            assert gui.destroyed
+            assert not gui.jobs, "close retained a Tk after callback"
+        else:
+            cancel = getattr(gui, "cancel_trace_refresh", None)
+            assert callable(cancel), "trace refresh has no cancellation action"
+            cancel()
+            assert "cancel" in gui.trace_status_var.get().lower()
+        release.set()
+        assert finished.wait(1)
+        if action == "cancel":
+            gui.drain_until(lambda: not gui.jobs)
+        else:
+            for callback in list(gui.jobs.values()):
+                callback()
+        assert not gui.rendered
+        assert len(calls) == 1
+        assert not gui.__dict__.get("_gui_tasks", {})
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize("online", [False, True])
+def test_open_and_clear_use_selected_cache_and_preserve_recipes_pngs_and_other_roots(gui_workflow, monkeypatch, online):
+    gui, root, config = gui_workflow
+    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    selected, other = root / "selected-cache", root / "cache"
+    preserved = {}
+    for cache in (selected, other):
+        cache.mkdir()
+        for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"):
+            (cache / name).write_text('{"message":"' + cache.name + '"}\n', encoding="utf-8")
+        (cache / "recipes").mkdir()
+        (cache / "recipes" / "recipe.json").write_bytes(b'{"authoritative":true}')
+        (cache / "sprite.png").write_bytes(b"PNG-fixture-bytes")
+        (cache / "last_combine_failure.json").write_bytes(b'{"keepFailure":true}')
+        for path in cache.rglob("*"):
+            if path.is_file() and (cache == other or path.name not in {"events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"}):
+                preserved[path] = path.read_bytes()
+    opened, requests = [], []
+    monkeypatch.setattr(settings_trace_state.webbrowser, "open", lambda uri: opened.append(uri))
+    monkeypatch.setattr(settings_trace_state.os, "startfile", lambda path: opened.append(Path(path).as_uri()), raising=False)
+    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
+
+    def read_gui_json(url, **kwargs):
+        requests.append(str(url))
+        assert online and "/trace_clear" in str(url)
+        for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"):
+            settings_trace_state.trace_tools.clear_ndjson(selected / name)
+        return {"ok": True, "cleared": [str(selected / name) for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")]}
+
+    def health(*args, **kwargs):
+        if not online:
+            raise ConnectionRefusedError("offline fixture")
+        return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "cacheDir": str(selected)}
+
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
+    monkeypatch.setattr(gui, "refresh_trace", lambda: None)
+    monkeypatch.setattr(gui, "_read_gui_json", read_gui_json)
+    gui.open_cache_folder()
+    assert opened == [selected.as_uri()], "Open cache ignored selected launch root"
+    gui.clear_trace_files()
+    gui.drain_until(lambda: all((selected / name).read_bytes() == b"" for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")))
+    assert all(path.read_bytes() == data for path, data in preserved.items())
+    assert len(requests) == (1 if online else 0)
+
+
+@contextmanager
+def _gui_loopback_http(responses):
+    """Synthetic diagnostic HTTP only, not the application's real server."""
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            response = responses.get(urlsplit(self.path).path, (404, {"ok": False}))
+            if callable(response):
+                response = response(self.path)
+            code, value = response
+            body = json.dumps(value).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    worker.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)
+        assert not worker.is_alive()
+
+
+@pytest.mark.parametrize("identity", ["foreign-health", "unknown-health", "foreign-trace", "changed-pid", "matching"])
+def test_real_trace_http_checks_both_health_and_trace_identity_off_ui_thread(gui_workflow, monkeypatch, identity):
+    gui, root, config = gui_workflow
+    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    cache = root / "selected-cache"
+    cache.mkdir()
+    (cache / "events.ndjson").write_text('{"message":"local-fixture"}\n', encoding="utf-8")
+    pid = os.getpid() + 1000
+    health = {"ok": True, "serverRoot": str(root), "pid": pid}
+    trace = {"ok": True, "serverRoot": str(root), "pid": pid, "cacheDir": "online-cache", "events": [{"message": "online-fixture"}]}
+    if identity == "foreign-health":
+        health["serverRoot"] = str(root.parent / "foreign")
+    elif identity == "unknown-health":
+        health.pop("serverRoot")
+    elif identity == "foreign-trace":
+        trace["serverRoot"] = str(root.parent / "foreign")
+    elif identity == "changed-pid":
+        trace["pid"] = pid + 1
+    with _gui_loopback_http({"/health": (200, health), "/trace.json": (200, trace)}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.refresh_trace()
+        gui.drain_until(lambda: "summary" in gui.rendered)
+    if identity == "matching":
+        assert "online-fixture" in gui.rendered["events"]
+        assert "local" not in gui.trace_status_var.get().lower()
+    else:
+        assert "local-fixture" in gui.rendered["events"], "accepted a foreign or replaced server's trace"
+        assert "online-fixture" not in gui.rendered["events"]
+    assert len(requests) == (1 if identity in {"foreign-health", "unknown-health"} else 2)
+
+
+def test_trace_clear_refuses_unknown_root_without_http_or_local_mutation(gui_workflow, monkeypatch):
+    gui, root, _config = gui_workflow
+    cache = root / "cache"
+    cache.mkdir()
+    trace_file = cache / "events.ndjson"
+    trace_file.write_bytes(b'{"preserve":true}\n')
+    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
+    with _gui_loopback_http({"/health": (200, {"ok": True, "pid": os.getpid() + 1000}),
+                            "/trace_clear": (200, {"ok": True})}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.clear_trace_files()
+        gui.drain_until(lambda: "trace-clear" not in gui.__dict__.get("_gui_tasks", {}))
+    assert requests == ["/health"], "cleared an unverified server"
+    assert trace_file.read_bytes() == b'{"preserve":true}\n'
+    assert "refused" in gui.trace_status_var.get().lower()
+
+
+@pytest.mark.parametrize("activity", [
+    {"active": 1, "waiting": 0, "accepting": True},
+    {"active": 0, "waiting": 2, "accepting": True},
+    {"active": 0, "waiting": 0, "accepting": False},
+    None,
+    {"active": "0", "waiting": 0, "accepting": True},
+])
+def test_safe_restart_does_not_save_shutdown_kill_or_spawn_busy_or_unknown_server(gui_workflow, monkeypatch, activity):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
+    original = config.read_bytes()
+    actions = []
+
+    class Owned:
+        pid = os.getpid() + 1000
+        def poll(self):
+            return None
+        def terminate(self):
+            actions.append("terminate")
+        def kill(self):
+            actions.append("kill")
+        def wait(self, **kwargs):
+            return 0
+
+    gui.proc = Owned()
+    snap = {"ok": True, "serverRoot": str(root), "pid": gui.proc.pid}
+    if activity is not None:
+        snap["generationActivity"] = activity
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: snap)
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    monkeypatch.setattr(gui, "_try_http_shutdown_current_server", lambda *a, **k: actions.append("shutdown") or True)
+    monkeypatch.setattr(gui, "_delayed_health_check", lambda *a, **k: None)
+    monkeypatch.setattr(controls.messagebox, "showwarning", lambda *a, **k: None)
+    gui.start_server()
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert not actions, "safe restart interrupted occupied or unverifiable generation"
+    assert config.read_bytes() == original, "busy restart saved before admission guard"
+    assert any(word in gui.status_var.get().lower() for word in ("busy", "unknown", "accepting", "refused"))
+
+
+@pytest.mark.parametrize("shutdown_code", [409, 200])
+def test_safe_restart_uses_atomic_shutdown_and_never_falls_through_to_process_kill(gui_workflow, monkeypatch, shutdown_code):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_CACHE_DIR=saved-cache\nINFINI_IMAGE_BACKEND=off\n")
+    original = config.read_bytes()
+    actions = []
+    pid = os.getpid() + 1000
+
+    class Owned:
+        def __init__(self):
+            self.pid = pid
+        def poll(self):
+            return None
+        def terminate(self):
+            actions.append("terminate")
+        def kill(self):
+            actions.append("kill")
+        def wait(self, **kwargs):
+            return 0
+
+    gui.proc = Owned()
+    idle = {"ok": True, "serverRoot": str(root), "pid": pid,
+            "effectiveConfig": gui._proposed_effective_config(),
+            "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
+    stopped = [False]
+
+    def health(_path):
+        return (503, {"ok": False}) if stopped[0] else (200, idle)
+
+    def shutdown(path):
+        if shutdown_code == 409:
+            return 409, {"ok": False, "status": "generator_busy", "generationActivity": {"active": 1, "waiting": 0, "accepting": True}}
+        stopped[0] = True
+        return 200, {"ok": True}
+
+    # This test owns only acknowledgement -> launch, not a real helper lifetime.
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    monkeypatch.setattr(gui, "_delayed_health_check", lambda *a, **k: None)
+    monkeypatch.setattr(controls.messagebox, "showwarning", lambda *a, **k: None)
+    def capture_launch(cmd, **kwargs):
+        # Never retain inherited credentials in pytest assertion diagnostics.
+        safe_env = {key: kwargs["env"].get(key) for key in ("INFINI_CACHE_DIR", "INFINI_IMAGE_BACKEND")}
+        actions.append((cmd, {"cwd": kwargs["cwd"], "env": safe_env}))
+        return Owned()
+
+    monkeypatch.setattr(controls.subprocess, "Popen", capture_launch)
+    monkeypatch.setenv("INFINI_CACHE_DIR", "inherited-cache")
+    with _gui_loopback_http({"/health": health, "/shutdown": shutdown}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.start_server()
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}), timeout=8)
+    assert "terminate" not in actions and "kill" not in actions, "safe path bypassed atomic server refusal"
+    assert any(path.startswith("/shutdown") for path in requests), "idle health alone is not an atomic restart guard"
+    assert not any("force=1" in path for path in requests)
+    if shutdown_code == 409:
+        assert not actions
+        assert config.read_bytes() == original
+        assert "busy" in gui.status_var.get().lower()
+    else:
+        assert len(actions) == 1
+        cmd, kwargs = actions[0]
+        assert cmd[-1] == str(root / "server.py")
+        assert kwargs["cwd"] == str(root)
+        assert kwargs["env"]["INFINI_CACHE_DIR"] == "saved-cache"
+        assert kwargs["env"]["INFINI_IMAGE_BACKEND"] == "off"
+        assert "запущен" in gui.status_var.get()
+
+
+@pytest.mark.parametrize("identity", ["foreign-root", "unknown-root", "caller-pid", "invalid-pid", "unrelated-service"])
+def test_safe_restart_refuses_unverified_identity_before_shutdown_or_save(gui_workflow, monkeypatch, identity):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
+    original = config.read_bytes()
+    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+            "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
+    if identity == "foreign-root":
+        snap["serverRoot"] = str(root.parent / "foreign")
+    elif identity == "unknown-root":
+        snap.pop("serverRoot")
+    elif identity == "caller-pid":
+        snap["pid"] = os.getpid()
+    elif identity == "invalid-pid":
+        snap["pid"] = "123"
+    else:
+        snap = {"ok": True, "service": "unrelated"}
+    actions = []
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.start_server()
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert requests == ["/health"], "safe restart targeted an unverified/foreign/caller process"
+    assert not actions
+    assert config.read_bytes() == original
+
+
+@pytest.mark.parametrize("confirmed,identity", [(False, "matching"), (True, "matching"), (True, "foreign"), (True, "caller")])
+def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pid(gui_workflow, monkeypatch, confirmed, identity):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
+    original = config.read_bytes()
+    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+            "effectiveConfig": gui._proposed_effective_config(),
+            "generationActivity": {"active": 1, "waiting": 1, "accepting": True}}
+    if identity == "foreign":
+        snap["serverRoot"] = str(root.parent / "foreign")
+    if identity == "caller":
+        snap["pid"] = os.getpid()
+    confirmations, actions = [], []
+
+    def ask(*args, **kwargs):
+        assert threading.get_ident() == gui.owner
+        confirmations.append(args)
+        return confirmed
+
+    monkeypatch.setattr(controls.messagebox, "askyesno", ask)
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        force = getattr(gui, "force_restart_server", None)
+        assert callable(force), "Force restart is not a separate explicit action"
+        force()
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert len(confirmations) == 1
+    if confirmed and identity == "matching":
+        assert requests == ["/health", "/shutdown?force=1"]
+        assert actions == ["spawn"]
+    else:
+        assert requests == (["/health"] if confirmed else [])
+        assert not actions
+        assert config.read_bytes() == original
+
+
+def test_stop_server_is_also_busy_aware_without_direct_terminate(gui_workflow, monkeypatch):
+    gui, root, _config = gui_workflow
+    actions = []
+    class Owned:
+        pid = os.getpid() + 1000
+        def poll(self):
+            return None
+        def terminate(self):
+            actions.append("terminate")
+    gui.proc = Owned()
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: {
+        "ok": True, "serverRoot": str(root), "pid": gui.proc.pid,
+        "generationActivity": {"active": 1, "waiting": 0, "accepting": True}})
+    monkeypatch.setattr(gui, "_try_http_shutdown_current_server", lambda *a, **k: actions.append("shutdown") or (True, ""))
+    gui.stop_server()
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert not actions
+    assert "busy" in gui.status_var.get().lower()
+
+
+@pytest.mark.parametrize("owned", [False, True])
+def test_start_on_refused_port_only_launches_when_no_owned_process_is_running(gui_workflow, monkeypatch, owned):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    import socket
+    gui, root, _config = gui_workflow
+    calls = []
+    class Owned:
+        pid = os.getpid() + 1000
+        def poll(self):
+            return None
+    gui.proc = Owned() if owned else None
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: calls.append("spawn") or Owned())
+    # Reserve then close one ephemeral loopback port; no application is started.
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    gui.vars["INFINI_PORT"] = _UiVar(str(port))
+    gui.start_server()
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert calls == ([] if owned else ["spawn"])
+
+
+def test_overlapping_server_actions_do_not_queue_extra_shutdowns_or_block_ui(gui_workflow, monkeypatch):
+    gui, root, _config = gui_workflow
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    reads = []
+    def health(*args, **kwargs):
+        reads.append(kwargs["base_url"])
+        entered.set()
+        assert release.wait(3)
+        finished.set()
+        return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+                "generationActivity": {"active": 1, "waiting": 0, "accepting": True}}
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
+    try:
+        before = time.monotonic()
+        gui.start_server()
+        assert time.monotonic() - before < 0.2
+        assert entered.wait(1)
+        for _ in range(25):
+            gui.start_server()
+        release.set()
+        assert finished.wait(1)
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+        assert len(reads) == 1, "repeated Start queued another restart after the initial guard"
+        assert not gui.jobs
+    finally:
+        release.set()
+
+
+def test_shutdown_wait_does_not_treat_http_error_or_timeout_as_port_free(gui_workflow, monkeypatch):
+    gui, _root, _config = gui_workflow
+    with _gui_loopback_http({"/health": (503, {"ok": False})}) as (base, requests):
+        assert gui._wait_until_helper_stops(timeout=0.1, base_url=base) is False
+        assert requests == ["/health"]
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(TimeoutError()))
+    assert gui._wait_until_helper_stops(timeout=0.1, base_url="http://127.0.0.1:1") is False
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError()))
+    assert gui._wait_until_helper_stops(timeout=0.1, base_url="http://127.0.0.1:1") is True
+
+
+def _configure_applied_fixture(gui, root, config):
+    config.write_text("\n".join((
+        "INFINI_CACHE_DIR=selected-cache", "INFINI_WORLD_RECIPES_DIR=selected-worlds",
+        "INFINI_IMAGE_BACKEND=off", "INFINI_LLM_PROVIDER=openrouter",
+        "INFINI_OPENROUTER_MODEL=Provider/Model", "INFINI_OPENROUTER_PROVIDER=Exact-Slug",
+        "INFINI_SDCPP_SERVER_AUTOSTART=0", "INFINI_OPENROUTER_API_KEY=FAKE-SAVED-SECRET-CANARY",
+    )) + "\n", encoding="utf-8")
+    return {"cacheDir": str((root / "selected-cache").resolve()),
+            "worldRecipesDir": str((root / "selected-worlds").resolve()),
+            "imageBackend": "off", "llmProvider": "openrouter", "llmModel": "Provider/Model",
+            "openrouterProvider": "Exact-Slug", "sdcppAutostart": False}
+
+
+def test_applied_config_health_is_async_partial_nonsecret_and_main_thread_only(gui_workflow, monkeypatch):
+    gui, root, config = gui_workflow
+    effective = _configure_applied_fixture(gui, root, config)
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+    def health(*args, **kwargs):
+        calls.append(threading.get_ident())
+        entered.set()
+        assert release.wait(2)
+        return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+                "effectiveConfig": {**effective, "unrelatedSecret": "FAKE-HEALTH-SECRET-CANARY"},
+                "llmAuth": {"secret": "FAKE-AUTH-SECRET-CANARY"}}
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
+    try:
+        before = time.monotonic()
+        gui._delayed_health_check()
+        assert time.monotonic() - before < 0.2, "health confirmation blocked the UI callback"
+        assert entered.wait(1)
+        release.set()
+        gui.drain_until(lambda: "matches" in gui.applied_config_var.get().lower())
+        assert calls == [calls[0]] and calls[0] != gui.owner
+        feedback = gui.applied_config_var.get()
+        assert "partial" in feedback.lower()
+        assert "secret" in feedback.lower()
+        assert "CANARY" not in feedback
+        assert "CANARY" not in gui.status_var.get()
+        assert "CANARY" not in repr(gui.__dict__.get("_applied_config_ack", {}))
+    finally:
+        release.set()
+
+
+def test_gui_has_no_legacy_pid_kill_fallback_reachable_from_restart():
+    # Old helper cleanup itself could still bypass admission/identity fencing.
+    controls_source = GUI_PATH.with_name("settings_gui_server_controls.py").read_text(encoding="utf-8")
+    assert "def _cleanup_old_helper_servers_before_start" not in controls_source
+    assert "def _terminate_pid" not in controls_source
+    assert "self.proc.terminate(" not in controls_source
+    assert "self.proc.kill(" not in controls_source
+
+
+@pytest.mark.parametrize("changed", ["pin-after-save", "pin-during-health", "missing-projection", "foreign-root"])
+def test_applied_feedback_never_confirms_unsaved_or_unacknowledged_launch_changes(gui_workflow, monkeypatch, changed):
+    gui, root, config = gui_workflow
+    effective = _configure_applied_fixture(gui, root, config)
+    entered, release = threading.Event(), threading.Event()
+    def health(*args, **kwargs):
+        entered.set()
+        if changed == "pin-during-health":
+            assert release.wait(2)
+        snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "effectiveConfig": effective}
+        if changed == "missing-projection":
+            snap.pop("effectiveConfig")
+        if changed == "foreign-root":
+            snap["serverRoot"] = str(root.parent / "foreign")
+        return snap
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
+    try:
+        gui._delayed_health_check()
+        assert entered.wait(1)
+        if changed == "pin-during-health":
+            gui.vars["INFINI_OPENROUTER_PROVIDER"] = _UiVar("exact-slug")  # case is significant
+        release.set()
+        gui.drain_until(lambda: "health-config" not in gui.__dict__.get("_gui_tasks", {}))
+        if changed == "pin-after-save":
+            assert "matches" in gui.applied_config_var.get().lower()
+            gui.vars["INFINI_OPENROUTER_PROVIDER"] = _UiVar("exact-slug")
+            gui.save()
+        text = gui.applied_config_var.get().lower()
+        assert "matches" not in text, "stale health acknowledgement hid a new launch mismatch"
+        if changed.startswith("pin"):
+            assert "openrouterprovider" in text
+            assert "restart" in text
+        else:
+            assert "unconfirmed" in text
+        assert "partial" in text
+        assert "CANARY" not in gui.applied_config_var.get()
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize("linked_name", ["prompt_trace.ndjson", "prompt_trace.ndjson.lock"])
+def test_offline_clear_refuses_symlinked_trace_or_lock_before_touching_any_cache_bytes(gui_workflow, monkeypatch, linked_name):
+    gui, root, _config = gui_workflow
+    cache = root / "cache"
+    cache.mkdir()
+    for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"):
+        (cache / name).write_bytes(b'{"keep":true}\n')
+    foreign = root.parent / "foreign-sprite.png"
+    foreign.write_bytes(b"preserved-foreign-PNG")
+    linked = cache / linked_name
+    linked.unlink(missing_ok=True)
+    linked.symlink_to(foreign)
+    originals = {path: path.read_bytes() for path in (foreign, cache / "events.ndjson", cache / "pipeline_trace.ndjson")}
+    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError()))
+    monkeypatch.setattr(gui, "refresh_trace", lambda: None)
+    gui.clear_trace_files()
+    gui.drain_until(lambda: "trace-clear" not in gui.__dict__.get("_gui_tasks", {}))
+    assert all(path.read_bytes() == value for path, value in originals.items()), "clear followed a trace/lock symlink or partially truncated the selected cache"
+    assert "refused" in gui.trace_status_var.get().lower()
+
+
+@pytest.mark.parametrize("identity", ["missing-pid", "invalid-pid", "caller-pid", "different-owned-pid"])
+def test_applied_config_never_acknowledges_an_unverified_or_other_owned_process(gui_workflow, monkeypatch, identity):
+    gui, root, config = gui_workflow
+    effective = _configure_applied_fixture(gui, root, config)
+    pid = os.getpid() + 1000
+    class Owned:
+        def __init__(self):
+            self.pid = pid
+        def poll(self):
+            return None
+    gui.proc = Owned()
+    snap = {"ok": True, "serverRoot": str(root), "pid": pid, "effectiveConfig": effective}
+    if identity == "missing-pid":
+        snap.pop("pid")
+    elif identity == "invalid-pid":
+        snap["pid"] = str(pid)
+    elif identity == "caller-pid":
+        snap["pid"] = os.getpid()
+    else:
+        snap["pid"] = pid + 1
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: snap)
+    gui._delayed_health_check()
+    gui.drain_until(lambda: "health-config" not in gui.__dict__.get("_gui_tasks", {}))
+    assert "unconfirmed" in gui.applied_config_var.get().lower()
+    assert gui.__dict__.get("_applied_config_ack") is None
+
+
+def test_successful_safe_stop_retires_runtime_config_ack(gui_workflow, monkeypatch):
+    gui, root, config = gui_workflow
+    effective = _configure_applied_fixture(gui, root, config)
+    gui._applied_config_ack = {"baseUrl": gui._server_base_url(), "pid": os.getpid() + 1000, "effectiveConfig": effective}
+    gui._update_applied_config_feedback()
+    assert "matches" in gui.applied_config_var.get().lower()
+    health = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "effectiveConfig": effective,
+              "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: health)
+    monkeypatch.setattr(gui, "_try_http_shutdown_current_server", lambda *a, **k: (True, ""))
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    gui.stop_server()
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert gui.__dict__.get("_applied_config_ack") is None
+    assert "matches" not in gui.applied_config_var.get().lower()
+    assert "stopped" in gui.status_var.get().lower()
+
+
+@pytest.mark.parametrize("secret,model,expected", [("", "Provider/Model", "local"), ("FAKE-INFER-CANARY", "auto", "local"), ("FAKE-INFER-CANARY", "Provider/Model", "openrouter")])
+def test_gui_projection_handles_implicit_main_provider_without_retaining_secret(gui_workflow, monkeypatch, secret, model, expected):
+    gui, _root, config = gui_workflow
+    config.write_text(f"INFINI_LLM_PROVIDER=\nINFINI_OPENROUTER_API_KEY={secret}\nINFINI_OPENROUTER_MODEL={model}\n", encoding="utf-8")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    projection = gui._proposed_effective_config()
+    assert projection["llmProvider"] == expected
+    assert "CANARY" not in repr(projection)
+
+
+@pytest.mark.parametrize("provider,expected", [("", "local"), ("or", "openrouter"), ("openai-compat", "openai_compat"), ("lm_studio", "local")])
+def test_gui_projection_preserves_declared_provider_aliases_without_false_restart_mismatch(gui_workflow, monkeypatch, provider, expected):
+    gui, _root, config = gui_workflow
+    config.write_text(f"INFINI_LLM_PROVIDER={provider}\n", encoding="utf-8")
+    # Avoid importing runtime config/server or evaluating inherited credentials.
+    monkeypatch.delenv("INFINI_OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    assert gui._proposed_effective_config()["llmProvider"] == expected
+
+
+def test_gui_projection_handles_all_canonical_backend_aliases_without_bootstrap_side_effects(gui_workflow):
+    import ast
+    gui, _root, config = gui_workflow
+    owner = GUI_PATH.parents[1] / "pipelines" / "pipeline_visual_config.py"
+    aliases = next(ast.literal_eval(node.value) for node in ast.parse(owner.read_text(encoding="utf-8")).body
+                   if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "IMAGE_BACKEND_ALIASES" for target in node.targets))
+    for raw, canonical in aliases.items():
+        config.write_text(f"INFINI_IMAGE_BACKEND={raw}\n", encoding="utf-8")
+        assert gui._proposed_effective_config()["imageBackend"] == canonical
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX roots are case-sensitive; native Windows names are not")
+def test_gui_root_identity_preserves_posix_case_and_does_not_accept_different_copy(gui_workflow):
+    gui, root, _config = gui_workflow
+    assert gui._health_matches_this_gui({"serverRoot": str(root)})
+    assert not gui._health_matches_this_gui({"serverRoot": str(root.with_name(root.name.swapcase()))})
+    assert gui._norm_path_for_compare(r"C:\\Copies\\LocalGenerator") == gui._norm_path_for_compare("c:/copies/localgenerator")
+
+
+@pytest.mark.parametrize("reply", [{"ok": False}, {"ok": True}, {"ok": True, "cleared": []}])
+def test_trace_clear_never_reports_partial_server_ack_as_success(gui_workflow, monkeypatch, reply):
+    gui, root, _config = gui_workflow
+    cache = root / "cache"
+    health = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "cacheDir": str(cache)}
+    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
+    refreshes = []
+    monkeypatch.setattr(gui, "refresh_trace", lambda: refreshes.append(True))
+    with _gui_loopback_http({"/health": (200, health), "/trace_clear": (200, reply)}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.clear_trace_files()
+        gui.drain_until(lambda: "trace-clear" not in gui.__dict__.get("_gui_tasks", {}))
+    assert requests == ["/health", "/trace_clear"]
+    assert "unavailable" in gui.trace_status_var.get().lower()
+    assert not refreshes
+
+
+@pytest.mark.parametrize("health_kind", ["forbidden", "timeout", "foreign", "different-cache"])
+def test_trace_clear_refuses_unknown_or_different_live_target_instead_of_local_fallback(gui_workflow, monkeypatch, health_kind):
+    gui, root, config = gui_workflow
+    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    cache = root / "selected-cache"
+    cache.mkdir()
+    trace_file = cache / "events.ndjson"
+    trace_file.write_bytes(b'{"preserve":true}\n')
+    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
+    if health_kind == "timeout":
+        monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(TimeoutError()))
+    health = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+              "cacheDir": str(root / "other-live-cache")}
+    if health_kind == "foreign":
+        health["serverRoot"] = str(root.parent / "foreign")
+    with _gui_loopback_http({"/health": (403 if health_kind == "forbidden" else 200, health),
+                            "/trace_clear": (200, {"ok": True})}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        gui.clear_trace_files()
+        gui.drain_until(lambda: "trace-clear" not in gui.__dict__.get("_gui_tasks", {}))
+    assert requests == ([] if health_kind == "timeout" else ["/health"])
+    assert trace_file.read_bytes() == b'{"preserve":true}\n', "health refusal/unverifiable liveness cleared local cache"
+    assert any(word in gui.trace_status_var.get().lower() for word in ("refused", "unavailable"))
+
+
+def test_spawn_retires_old_applied_ack_and_schedules_main_loop_health_confirmation(gui_workflow, monkeypatch):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    effective = _configure_applied_fixture(gui, root, config)
+    gui._applied_config_ack = {"baseUrl": gui._server_base_url(), "pid": 987654, "effectiveConfig": effective}
+    gui._update_applied_config_feedback()
+    assert "matches" in gui.applied_config_var.get().lower()
+    class Owned:
+        pid = os.getpid() + 1000
+        def poll(self):
+            return None
+    calls = []
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: Owned())
+    monkeypatch.setattr(gui, "_delayed_health_check", lambda: calls.append(threading.get_ident()))
+    gui._start_server_after_guard()
+    assert gui.__dict__.get("_applied_config_ack") is None, "new process retained old PID's config acknowledgement"
+    assert "matches" not in gui.applied_config_var.get().lower()
+    assert gui.jobs, "launch never schedules asynchronous runtime acknowledgement"
+    gui.drain_until(lambda: bool(calls))
+    assert calls == [gui.owner]
+
+
+def test_close_cancels_scheduled_post_launch_health_callback(gui_workflow, monkeypatch):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, _root, _config = gui_workflow
+    class Owned:
+        pid = os.getpid() + 1000
+        def poll(self):
+            return None
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: Owned())
+    gui._start_server_after_guard()
+    assert gui.jobs, "native health callback was never scheduled"
+    gui.on_close()
+    assert not gui.jobs, "post-launch health after callback survived destroyed GUI"
+
+
+@pytest.mark.parametrize("provider,model_key,model_value,inherited_key,inherited_model,expected_model", [
+    ("local", "INFINI_LMSTUDIO_MODEL", "", "OPENAI_MODEL", "Inherited/Model", "Inherited/Model"),
+    ("openrouter", "INFINI_OPENROUTER_MODEL", "", "OPENROUTER_MODEL", "Inherited/Model", "Inherited/Model"),
+    ("openai_compat", "INFINI_OPENAI_COMPAT_MODEL", "", "OPENAI_MODEL", "Inherited/Model", "Inherited/Model"),
+    ("local", "INFINI_LMSTUDIO_MODEL", "", "OPENAI_MODEL", "", "auto"),
+    ("openai_codex", "INFINI_CODEX_LLM_MODEL", "", "OPENAI_MODEL", "Inherited/Model", ""),
+])
+def test_applied_projection_matches_runtime_main_model_fallback_and_inactive_pin(gui_workflow, monkeypatch, provider, model_key, model_value, inherited_key, inherited_model, expected_model):
+    gui, _root, config = gui_workflow
+    config.write_text(f"INFINI_LLM_PROVIDER={provider}\n{model_key}={model_value}\n"
+                      "INFINI_OPENROUTER_PROVIDER=Exact-Slug\nINFINI_IMAGE_BACKEND=off\n", encoding="utf-8")
+    monkeypatch.setenv(inherited_key, inherited_model)
+    projected = gui._proposed_effective_config()
+    assert projected["llmProvider"] == provider
+    assert projected["llmModel"] == expected_model
+    assert projected["openrouterProvider"] == ("Exact-Slug" if provider == "openrouter" else "")
+
+
+@pytest.mark.parametrize("projection", [None, {}, {"sdcppAutostart": "0"}])
+@pytest.mark.parametrize("force", [False, True])
+def test_restart_refuses_unverifiable_applied_projection_without_any_destructive_fallback(gui_workflow, monkeypatch, projection, force):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
+    original = config.read_bytes()
+    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+            "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
+    if projection is not None:
+        snap["effectiveConfig"] = projection
+    actions = []
+    monkeypatch.setattr(controls.messagebox, "askyesno", lambda *a, **k: True)
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
+        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
+        (gui.force_restart_server if force else gui.start_server)()
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert requests == ["/health"], "unverifiable projection was treated as shutdown admission"
+    assert not actions
+    assert config.read_bytes() == original
+    assert "projection" in gui.status_var.get().lower()
+
+
+@pytest.mark.parametrize("endpoint", ["health", "shutdown"])
+def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, endpoint):
+    gui, _root, _config = gui_workflow
+    class Trickle(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for byte in body:
+                    self.wfile.write(bytes([byte]))
+                    self.wfile.flush()
+                    time.sleep(0.03)  # every gap is shorter than the socket timeout
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        def log_message(self, *_args):
+            pass
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Trickle)
+    worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    worker.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        if endpoint == "health":
+            with pytest.raises(TimeoutError):
+                gui._fetch_health_snapshot(timeout=0.1, base_url=base_url)
+        else:
+            assert gui._try_http_shutdown_current_server(timeout=0.1, base_url=base_url)[0] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)
+        assert not worker.is_alive()
 
 
 # One collected item per contract module: the checks above keep source order and

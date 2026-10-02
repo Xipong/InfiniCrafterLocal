@@ -37,6 +37,10 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self.minsize(960, 700)
         self._configure_theme()
         self.proc: subprocess.Popen | None = None
+        self._gui_closed = False
+        self._gui_tasks = {}
+        self._applied_config_ack = None
+        self._health_after_id = None
         self.data = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
         self.vars: dict[str, tk.StringVar] = {}
         self.text_widgets: dict[str, tk.Text] = {}
@@ -50,9 +54,11 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self.show_secrets = tk.BooleanVar(value=False)
         self.radmin_enabled = tk.BooleanVar(value=(self.data.get("INFINI_HOST") == "0.0.0.0" or bool(self.data.get("INFINI_ASSET_PUBLIC_BASE_URL"))))
         self.status_var = tk.StringVar(value="Готово. Выбери профиль генерации, при необходимости включи Radmin/LAN, затем сохрани настройки и запусти сервер.")
+        self.applied_config_var = tk.StringVar(value="Runtime config not checked (partial non-secret projection; pools/secrets unverified).")
         self._build_ui()
         self._install_global_edit_shortcuts()
         self._refresh_visibility()
+        self._install_applied_config_tracking()
 
     def _var(self, key: str) -> tk.StringVar:
         v = tk.StringVar(value=self.data.get(key, DEFAULTS.get(key, "")))

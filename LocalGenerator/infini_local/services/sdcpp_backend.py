@@ -478,8 +478,13 @@ def extract_image_from_response(
     for key in ["path", "file", "filename", "output_path"]:
         val = obj.get(key) if isinstance(obj, dict) else None
         if isinstance(val, str):
-            p = Path(val)
-            if p.exists():
-                write_image_bytes(out_path, p.read_bytes())
-                return True
+            # A declared local output is an actual filesystem source, not an
+            # absent image hint. Missing/unreadable paths must stop this image
+            # operation rather than trigger another transport shape/model call.
+            try:
+                image_bytes = Path(val).read_bytes()
+            except OSError as exc:
+                raise ImageOutputIOError("sd.cpp local image source read failed") from exc
+            write_image_bytes(out_path, image_bytes)
+            return True
     return False

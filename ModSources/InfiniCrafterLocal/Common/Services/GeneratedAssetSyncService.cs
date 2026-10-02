@@ -134,6 +134,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private int _downloadStartedCount;
     private readonly object _lock = new();
     private bool _disposed; // Guarded by _lock, including the final file commit.
+    private readonly CancellationTokenSource _downloadCancellation = new();
+    private int _activeHttpDownloads; // Owns token access through each worker's final cleanup.
+    private bool _downloadCancellationCompleted; // Cancel callbacks have finished; guarded by _lock.
 
     public string CacheRoot { get; }
 
@@ -148,6 +151,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     {
         lock (_lock)
         {
+            if (_disposed) return;
             _disposed = true;
             _inFlight.Clear();
             _knownMissing.Clear();
@@ -158,6 +162,17 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
             _certifiedDescriptorsByFile.Clear();
+        }
+        // Cancellation can synchronously invoke transport callbacks. Never run
+        // them under _lock, and never dispose their CTS while a worker uses it.
+        try { _downloadCancellation.Cancel(); }
+        finally
+        {
+            lock (_lock)
+            {
+                _downloadCancellationCompleted = true;
+                if (_activeHttpDownloads == 0) _downloadCancellation.Dispose();
+            }
         }
     }
 
@@ -979,17 +994,25 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private async Task DownloadOneAsync(string baseUrl, string itemId, string file, string local, string key, GeneratedAssetWireDescriptor? descriptor)
     {
-        await HttpSlots.WaitAsync().ConfigureAwait(false);
-        bool integrityFailure = false;
+        CancellationToken cancellationToken;
+        lock (_lock)
+        {
+            if (_disposed) return;
+            cancellationToken = _downloadCancellation.Token;
+            _activeHttpDownloads++;
+        }
+        bool ownsSlot = false, integrityFailure = false;
         try
         {
+            await HttpSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
+            ownsSlot = true;
             lock (_lock)
             {
                 if (_disposed) return;
                 Directory.CreateDirectory(CacheRoot);
             }
             string url = baseUrl.TrimEnd('/') + "/get_asset?file=" + Uri.EscapeDataString(file);
-            byte[] bytes = await DownloadAssetBytesWithBoundedStreamAsync(url).ConfigureAwait(false);
+            byte[] bytes = await DownloadAssetBytesWithBoundedStreamAsync(url, cancellationToken).ConfigureAwait(false);
             lock (_lock)
             {
                 if (_disposed) return;
@@ -1013,6 +1036,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
             }
             CommitVerifiedAsset(itemId, file, bytes, actualHash);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Service retirement is not an offline/integrity retry.
+        }
         catch (Exception ex)
         {
             lock (_lock)
@@ -1032,11 +1059,14 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
         finally
         {
-            HttpSlots.Release();
+            if (ownsSlot) HttpSlots.Release();
             lock (_lock)
             {
                 _inFlight.Remove(key);
                 ClearExpiredInFlightAndMissingLocked(DateTime.UtcNow);
+                _activeHttpDownloads--;
+                if (_disposed && _downloadCancellationCompleted && _activeHttpDownloads == 0)
+                    _downloadCancellation.Dispose();
             }
         }
     }
@@ -1077,24 +1107,24 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
     }
 
-    private async Task<byte[]> DownloadAssetBytesWithBoundedStreamAsync(string url)
+    private async Task<byte[]> DownloadAssetBytesWithBoundedStreamAsync(string url, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+        using HttpResponseMessage response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         long? contentLength = response.Content.Headers.ContentLength;
         if (contentLength.HasValue && contentLength.Value > MaxAssetBytes)
             throw new InvalidDataException($"asset size {contentLength.Value} exceeds maximum {MaxAssetBytes}");
-        await using Stream stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using MemoryStream memory = new(capacity: (int)Math.Min(Math.Max(contentLength.GetValueOrDefault(1024), 1024), MaxAssetBytes + 1024));
         byte[] buffer = new byte[8192];
         int total = 0;
         while (true)
         {
-            int read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false);
+            int read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
             if (read <= 0) break;
             total += read;
             if (total > MaxAssetBytes) throw new InvalidDataException($"asset size exceeded maximum {MaxAssetBytes}");
-            await memory.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
         return memory.ToArray();
     }

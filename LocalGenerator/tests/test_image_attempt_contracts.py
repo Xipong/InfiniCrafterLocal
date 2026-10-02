@@ -99,7 +99,7 @@ def offline(monkeypatch, request, tmp_path):
         color = (30, 180, 210) if threading.current_thread().name == 'second' or 'impact fixture' in payload['prompt'] else (210, 100, 20)
         return Response(png(color, strip='preserve the full authored frame' in payload['prompt']))
 
-    monkeypatch.setattr(backend.urlrequest, 'urlopen', urlopen)
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', urlopen)
     return root, requests
 
 def invoke(kind, asset_id, data=None):
@@ -251,7 +251,7 @@ def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypa
 @pytest.mark.parametrize('content_fault', ['unidentified', 'truncated'])
 def test_corrupt_provider_image_remains_a_bounded_quality_retry(offline, monkeypatch, kind, content_fault):
     root, requests = offline
-    original_urlopen = backend.urlrequest.urlopen
+    original_urlopen = backend.urlopen_no_redirect
     calls = []
     corrupt = b'not a PNG: provider content fault' if content_fault == 'unidentified' else png((210, 100, 20))[:60]
     if content_fault == 'truncated':
@@ -266,13 +266,33 @@ def test_corrupt_provider_image_remains_a_bounded_quality_retry(offline, monkeyp
             return Response(corrupt)
         return original_urlopen(req, **kwargs)
 
-    monkeypatch.setattr(backend.urlrequest, 'urlopen', corrupt_then_valid)
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', corrupt_then_valid)
     monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
     result = invoke(kind, 'corrupt_quality')
     assert result[3] == 'generated' and Path(result[0]).exists()
     assert len(calls) == 2 and len(requests) == 1
     assert calls[0]['seed'] == calls[1]['seed'] == 731
     assert 'STRICT RETRY 1' in calls[1]['prompt']
+
+
+def test_raw_provider_canvas_above_client_limit_still_processes_to_final_png(offline, monkeypatch):
+    root, _ = offline
+    with Image.open(io.BytesIO(png((210, 100, 20)))) as source:
+        large = source.resize((1024, 1024), Image.Resampling.NEAREST)
+    stream = io.BytesIO()
+    large.save(stream, format='PNG')
+    raw = stream.getvalue()
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', lambda *args, **kwargs: Response(raw))
+    data = _data([])
+    result = invoke('item', 'large_raw_canvas', data)
+    assert result[3] == 'generated'
+    with Image.open(data['visual']['spriteRawPath']) as source:
+        assert source.size == (1024, 1024)
+    assert Path(data['visual']['spriteRawPath']).read_bytes() == raw
+    with Image.open(result[0]) as source:
+        assert source.size == (32, 32)
+    assert sync.is_complete_png_file(result[0])
+    assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
 
 
 def test_legacy_non_io_projection_tail_still_recovers_warn_without_a_placeholder(offline, monkeypatch):

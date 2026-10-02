@@ -1387,14 +1387,16 @@
                         "minimum": 0,
                         "maximum": 500,
                         "description": "Life restored",
-                        "x-infini-semanticType": "life_points"
+                        "x-infini-semanticType": "life_points",
+                        "x-infini-neutral": 0
                       },
                       "healMana": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 500,
                         "description": "Mana restored",
-                        "x-infini-semanticType": "mana_points"
+                        "x-infini-semanticType": "mana_points",
+                        "x-infini-neutral": 0
                       },
                       "usesPotionRules": {
                         "type": "boolean",
@@ -1691,7 +1693,7 @@
                         "type": "number",
                         "minimum": 0.1,
                         "maximum": 4,
-                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
+                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar"
                       }

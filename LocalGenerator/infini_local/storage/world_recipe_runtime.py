@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import hashlib
-from typing import Any
+from typing import Any, Callable
 
 from infini_local.core.config_bootstrap import APP_VERSION, RECIPE_IDENTITY_VERSION, WORLD_RECIPES_DIR
 from infini_local.core.item_identity_tools import name_of, recipe_key as _world_recipe_key
@@ -82,7 +82,10 @@ def quarantine_world_recipe_cache(
     )
 
 
-def read_world_recipe_cache(recipe_key_value: str, world_id: Any, world_name: Any = None) -> dict[str, Any] | None:
+def read_world_recipe_cache(
+    recipe_key_value: str, world_id: Any, world_name: Any = None, *,
+    validate_payload: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     return world_storage.read_world_recipe_cache(
         WORLD_RECIPES_DIR,
         APP_VERSION,
@@ -90,18 +93,22 @@ def read_world_recipe_cache(recipe_key_value: str, world_id: Any, world_name: An
         recipe_key_value,
         world_id,
         world_name,
+        validate_payload=validate_payload,
     )
 
 
-def is_deliverable_recipe_payload(data: Any) -> bool:
-    return world_storage.is_deliverable_recipe_payload(data)
+def is_deliverable_recipe_payload(data: Any, *, check_assets: bool = True) -> bool:
+    return world_storage.is_deliverable_recipe_payload(data, check_assets=check_assets)
 
 
-def cache_get(key: str, world_id: Any | None = None, world_name: Any = None) -> dict[str, Any] | None:
+def cache_get(
+    key: str, world_id: Any | None = None, world_name: Any = None, *,
+    validate_payload: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     # Primary and only gameplay storage: explicit per-world recipe files.
     if world_id is None:
         return None
-    return read_world_recipe_cache(key, world_id, world_name)
+    return read_world_recipe_cache(key, world_id, world_name, validate_payload=validate_payload)
 
 
 def cache_put(key: str, a: dict[str, Any], b: dict[str, Any], data: dict[str, Any], world_id: Any | None = None, world_name: Any = None) -> None:

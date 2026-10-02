@@ -544,7 +544,10 @@ CSHARP_SEAMS = [
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxPendingRuntimeActions", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "for (int i = 0; i < Pending.Count;)", True),
-    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "Pending[i] = pending with { Ticks = 1 }", True),
+    # Native SwarmDelayedDuePressureKeepsWorldTickBudget proves retained due
+    # timestamps and no extra allowance on same-count visits. Bind the source
+    # seam to that world-tick pressure guard, not the removed visit countdown.
+    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "public static void Update()", "public static void Clear()", "ExecutedThisTick >= InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "for (int i = Pending.Count - 1", False),
     (
         "Content/Items/GeneratedItem.cs",

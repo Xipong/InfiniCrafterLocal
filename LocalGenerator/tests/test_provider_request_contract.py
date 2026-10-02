@@ -15,7 +15,10 @@ from infini_local.core.llm_json_tools import json_object_candidates, parse_first
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.desktop import settings_schema
 from infini_local.pipelines import llm_transport as llm
-from test_provider_transport_contract import http_error, packet, wire
+from test_provider_transport_contract import http_error, schema_error, packet, wire, loopback_transport
+
+SCHEMA_REJECTION = {"error": {"code": "unsupported_response_format", "param": "response_format",
+                              "message": "json_schema response_format is not supported"}}
 
 GOOGLE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
@@ -96,8 +99,76 @@ def test_author_reasoning_floor_does_not_lower_explicit_high(monkeypatch, initia
     assert llm.apply_minimum_reasoning_effort(request, model_name="gemini-3.5-flash-lite", minimum="medium")["reasoning_effort"] == expected
 
 
+@pytest.mark.parametrize("cause", ["messages", "unsupported_valid", "unsupported_failed", "unsupported_malformed", "complexity", "model_override", "model_override_whitespace"])
+def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_exact_scope(
+    loopback_transport, cause,
+):
+    endpoint, _events = loopback_transport
+    rejection = copy.deepcopy(SCHEMA_REJECTION)
+    if cause == "messages":
+        rejection = {"error": {"code": "context_length_exceeded", "param": "messages",
+                               "message": "messages exceed the model context limit"}}
+    elif cause == "complexity":
+        rejection = {"error": {"code": "invalid_json_schema", "param": "response_format.json_schema.schema",
+                               "message": "json_schema exceeds schema complexity limits"}}
+    recovery = {}
+    if cause == "unsupported_failed":
+        recovery = {"status": 400, "body": {"error": {"code": "context_length_exceeded", "param": "messages"}}}
+    elif cause == "unsupported_malformed":
+        recovery = {"body": {"choices": [{"message": {"content": "{"}}]}}
+    replies = [{"status": 400, "body": rejection}]
+    if cause != "messages":
+        replies.append(recovery)
+    replies.extend([{}, {}])
+    base, observed = endpoint(replies)
+    context = {"provider": "openrouter", "openrouter_provider": "ExactVendor/Endpoint-Turbo",
+               "base_url": base, "model": "vendor/model", "api_mode": "chat_completions",
+               "api_key": "synthetic-loopback-key"}
+    request = packet(schema=True)
+    if cause in {"model_override", "model_override_whitespace"}:
+        request[llm.LLM_MODEL_OVERRIDE_KEY] = " override/first " if cause == "model_override_whitespace" else "override/first"
+    before = copy.deepcopy(request)
+    if cause in {"messages", "unsupported_failed"}:
+        with pytest.raises(urllib.error.HTTPError):
+            llm._llm_chat_json_single_context(request, 1, context)
+        assert llm._STRICT_SCHEMA_CAPABILITY == {}
+    else:
+        first = llm._llm_chat_json_single_context(request, 1, context)
+        assert first["choices"][0]["message"]["content"] == ("{" if cause == "unsupported_malformed" else "{}")
+        if cause == "unsupported_malformed":
+            assert llm._STRICT_SCHEMA_CAPABILITY == {}
+        else:
+            assert False in llm._STRICT_SCHEMA_CAPABILITY.values()
+    if cause == "complexity":
+        # Same schema can reuse the evidence, another schema must re-negotiate.
+        llm._llm_chat_json_single_context(request, 1, context)
+    next_request = copy.deepcopy(request)
+    next_request["messages"][1]["content"] = "smaller next authored packet"
+    if cause == "complexity":
+        next_request["response_format"]["json_schema"]["schema"]["properties"] = {"value": {"type": "string"}}
+    elif cause in {"model_override", "model_override_whitespace"}:
+        next_request[llm.LLM_MODEL_OVERRIDE_KEY] = "override/first" if cause == "model_override_whitespace" else "override/second"
+    llm._llm_chat_json_single_context(next_request, 1, context)
+    formats = [body["response_format"]["type"] for _, _, body, _ in observed]
+    assert formats == {
+        "messages": ["json_schema", "json_schema"],
+        "unsupported_valid": ["json_schema", "json_object", "json_object"],
+        "unsupported_failed": ["json_schema", "json_object", "json_schema"],
+        "unsupported_malformed": ["json_schema", "json_object", "json_schema"],
+        "complexity": ["json_schema", "json_object", "json_object", "json_schema"],
+        "model_override": ["json_schema", "json_object", "json_schema"],
+        "model_override_whitespace": ["json_schema", "json_object", "json_object"],
+    }[cause]
+    assert all(body["provider"] == {"only": [context["openrouter_provider"]], "allow_fallbacks": False}
+               for _, _, body, _ in observed)
+    if cause != "messages":
+        assert observed[1][2] == {**observed[0][2], "response_format": {"type": "json_object"}}
+    assert request == before
+
+
 @pytest.mark.parametrize("failure,format_type,expected", [
     pytest.param(400, "json_schema", True, id="schema-400"),
+    pytest.param("unrelated400", "json_schema", False, id="unrelated-invalid-argument-400"),
     pytest.param(400, "json_object", False, id="object-400"),
     pytest.param(400, None, False, id="absent-format-400"),
     *[pytest.param(code, "json_schema", False, id=f"unrelated-{code}") for code in (401, 403, 404, 429, 500, 503)],
@@ -109,8 +180,10 @@ def test_request_shape_diagnosis_is_pure_and_status_specific(failure, format_typ
     if format_type is None:
         request.pop("response_format")
     before = copy.deepcopy(request)
-    error = TimeoutError("timed out") if failure == "timeout" else http_error(GOOGLE + "/chat/completions", failure, '{"error":{"code":400,"status":"INVALID_ARGUMENT"}}')
-    if isinstance(error, urllib.error.HTTPError):
+    error = TimeoutError("timed out") if failure == "timeout" else (
+        schema_error(GOOGLE + "/chat/completions") if failure == 400 else
+        http_error(GOOGLE + "/chat/completions", 400 if failure == "unrelated400" else failure))
+    if failure == "unrelated400":
         error._infini_body = '{"error":{"code":400,"status":"INVALID_ARGUMENT"}}'
     diagnosis = llm.request_shape_rejection_diagnosis(error, request, context)
     assert llm._strict_schema_rejected(error, request) is expected
@@ -120,10 +193,11 @@ def test_request_shape_diagnosis_is_pure_and_status_specific(failure, format_typ
     else:
         assert isinstance(diagnosis, dict)
         assert (diagnosis["code"], diagnosis["status"], diagnosis["sentResponseFormat"]) == ("provider_rejected_request_shape", 400, "json_schema")
-        assert diagnosis["knownWorkingResponseFormat"] == "json_object" and diagnosis["knownWorkingApiMode"] == "chat_completions"
+        assert diagnosis["knownWorkingResponseFormat"] == "" and diagnosis["knownWorkingApiMode"] == ""
+        assert diagnosis["candidateResponseFormat"] == "json_object" and diagnosis["candidateApiMode"] == "chat_completions"
         assert diagnosis["schemaChars"] > 0 and "INVALID_ARGUMENT" in diagnosis["providerBody"]
         assert "response_format" not in diagnosis and isinstance(diagnosis["knownWorkingResponseFormat"], str)
-        for text in ("json_object", "chat_completions", "INFINI_LLM_RESPONSE_FORMAT", "INFINI_LLM_API_MODE", "не получила задание"):
+        for text in ("json_object", "chat_completions", "INFINI_LLM_RESPONSE_FORMAT", "INFINI_LLM_API_MODE", "ещё не проверена"):
             assert text in diagnosis["hint"]  # Operator copy is the contract on this surface.
 
 
@@ -144,7 +218,8 @@ def test_transport_schema_recovery_changes_only_envelope_and_is_bounded(wire, mo
     relaxed = llm._payload_without_strict_schema(request)
     assert relaxed == {**request, "response_format": {"type": "json_object"}}
     assert request == before
-    wire.replies.extend([failure] if success else [failure, failure])
+    first_failure = schema_error(GOOGLE + "/chat/completions") if failure == 400 and format_type == "json_schema" else failure
+    wire.replies.extend([first_failure] if success else [first_failure, failure])
     context = llm._primary_llm_context()
     if success:
         result = llm._llm_chat_json_single_context(request, 60, context)
@@ -161,6 +236,7 @@ def test_transport_schema_recovery_changes_only_envelope_and_is_bounded(wire, mo
         again = llm._llm_chat_json_single_context(request, 60, context)
         assert again["_debug"]["strictSchemaDowngraded"] is True
         assert len(wire.calls) == 1 and wire.calls[0][1]["response_format"] == {"type": "json_object"}
+        assert again["_debug"].get("transportRetryCount", 0) == 0  # Cached evidence is not another send.
     else:
         with pytest.raises(urllib.error.HTTPError) as caught:
             llm._llm_chat_json_single_context(request, 60, context)
@@ -176,7 +252,7 @@ def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(w
     from infini_local.core.errors import PlannerUnavailable
     wire.configure(OPENROUTER_PROVIDER="", LLM_PROVIDER="openai_compat", OPENAI_COMPAT_BASE_URL=GOOGLE,
                    OPENAI_COMPAT_MODEL="gemini-3.5-flash-lite", LLM_API_MODE="chat_completions")
-    wire.replies.extend([400, 400])
+    wire.replies.extend([schema_error(GOOGLE + "/chat/completions"), 400])
     request = packet(schema=True)
     events, logs = [], []
     monkeypatch.setattr(author, "USE_LLM", True)

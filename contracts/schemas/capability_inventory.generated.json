@@ -552,6 +552,21 @@
           "kind": "binding_action_present",
           "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
           "target": "item_body"
+        },
+        {
+          "anyOf": [
+            "restore_resources_on_use",
+            "apply_vanilla_buff_on_use",
+            "apply_generated_buff_on_use",
+            "move_player_on_use"
+          ],
+          "kind": "capability_group_present",
+          "message": "An apply_item_effects lane needs at least one effective use effect: positive healing or another active registered item-use effect. Potion rules alone are not an effect.",
+          "nonzeroParams": [
+            "healLife",
+            "healMana"
+          ],
+          "target": "same_target"
         }
       ],
       "safetyLimits": "bounded by runtime program limits",

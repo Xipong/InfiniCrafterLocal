@@ -22,6 +22,150 @@ namespace InfiniCrafterLocal.Common.Players;
 // or accept client-generated authoritative data.
 public sealed partial class InfiniCraftPlayer
 {
+    private const string ReadOnlyRemoteStationClaimSaveKey = "infiniReadOnlyRemoteStationClaimV1";
+    private const string DormantRemoteStationClaimsSaveKey = "infiniDormantRemoteStationClaimsV1";
+    private const string StationOriginScopeSaveKey = "infiniStationEscrowOriginScopeV1";
+    private string _stationEscrowOriginScope = "";
+    private TagCompound? _readOnlyRemoteStationClaim;
+    private readonly List<TagCompound> _dormantRemoteStationClaims = new();
+    private TagCompound? _activeRemoteStationClaim;
+
+    private IEnumerable<TagCompound> DormantRemoteStationClaims()
+    {
+        if (_readOnlyRemoteStationClaim is not null) yield return _readOnlyRemoteStationClaim;
+        foreach (TagCompound claim in _dormantRemoteStationClaims) yield return claim;
+    }
+
+    private void RetainDormantRemoteStationClaim(TagCompound claim)
+    {
+        if (_readOnlyRemoteStationClaim is null) _readOnlyRemoteStationClaim = claim;
+        else _dormantRemoteStationClaims.Add(claim);
+    }
+
+    internal bool EnsureRemoteStationAuthority()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            return false;
+        string current = Common.Systems.GeneratedStationEscrowStateSystem.AuthorityScope;
+        if (!Common.Systems.GeneratedStationEscrowStateSystem.IsExactAuthorityScope(current))
+            return false;
+        if (_stationEscrowUsesRemoteAuthority && !string.Equals(_stationEscrowOriginScope, current, StringComparison.Ordinal))
+            ParkRemoteStationClaim();
+        if (!_stationEscrowUsesRemoteAuthority)
+        {
+            // Foreign/unscoped history stays raw and cannot confer authority, but
+            // it must not disable unrelated fresh inventory work on this world.
+            TagCompound[] matching = DormantRemoteStationClaims().Where(claim =>
+                claim.ContainsKey(StationOriginScopeSaveKey) && claim[StationOriginScopeSaveKey] is string scope
+                && string.Equals(scope, current, StringComparison.Ordinal)).ToArray();
+            if (matching.Length > 1) return false; // Never choose/merge ambiguous claims.
+            if (matching.Length == 1)
+            {
+                if (HasAnyInput || HasAnyCraftLanePending || HasPendingStationEscrowOperation) return false;
+                TagCompound retained = matching[0];
+                try { RestoreScopedRemoteStationClaim(retained); }
+                catch
+                {
+                    for (int index = 0; index < 6; index++) InputSlot(index).TurnToAir();
+                    ClearPendingStationEscrowOperation(); ClearCraft(); InitializeMultiDevCraftState();
+                    _stationEscrowUsesRemoteAuthority = false; _stationEscrowOriginScope = "";
+                    return false;
+                }
+                _activeRemoteStationClaim = (TagCompound)retained.Clone();
+                if (ReferenceEquals(retained, _readOnlyRemoteStationClaim)) _readOnlyRemoteStationClaim = null;
+                else _dormantRemoteStationClaims.Remove(retained);
+            }
+        }
+        _stationEscrowOriginScope = current;
+        return true;
+    }
+
+    private bool CanMutateStationInputs()
+    {
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            return EnsureRemoteStationAuthority();
+        return Main.netMode == NetmodeID.Server || !_stationEscrowUsesRemoteAuthority;
+    }
+
+    private TagCompound CaptureRemoteStationClaim()
+    {
+        // Keep unknown literal fields from an exactly restored claim through its
+        // next park; refresh only live bookkeeping, never a foreign claim.
+        var claim = _activeRemoteStationClaim is null ? new TagCompound() : (TagCompound)_activeRemoteStationClaim.Clone();
+        claim.Remove("infiniPendingStationEscrow");
+        claim["infiniStationEscrowClientId"] = _stationEscrowClientId;
+        claim["infiniStationEscrowRemoteAuthority"] = true;
+        claim[StationOriginScopeSaveKey] = _stationEscrowOriginScope;
+        var mirror = new List<TagCompound>();
+        for (int index = 0; index < 6; index++)
+            if (HasInputAt(index)) mirror.Add(new TagCompound { ["index"] = index, ["item"] = ItemIO.Save(InputSlot(index)) });
+        claim["infiniStationEscrowMirror"] = mirror;
+        if (HasPendingStationEscrowOperation)
+        {
+            var pending = new TagCompound { ["operationId"] = _pendingStationEscrowOperationId,
+                ["action"] = (int)_pendingStationEscrowAction, ["index"] = _pendingStationEscrowIndex };
+            if (_pendingStationEscrowItem is not null && !_pendingStationEscrowItem.IsAir)
+                pending["item"] = ItemIO.Save(_pendingStationEscrowItem);
+            claim["infiniPendingStationEscrow"] = pending;
+        }
+        claim["infiniPendingRemoteCrafts"] = SavePendingRemoteCrafts();
+        return claim;
+    }
+
+    private void ParkRemoteStationClaim()
+    {
+        if (!_stationEscrowUsesRemoteAuthority || Main.netMode == NetmodeID.Server)
+            return;
+        // Capture before retiring the active mirror. There is no local refund and
+        // no cancellation against whichever unrelated server is now connected.
+        RetainDormantRemoteStationClaim(CaptureRemoteStationClaim());
+        _activeRemoteStationClaim = null;
+        for (int index = 0; index < 6; index++) InputSlot(index).TurnToAir();
+        ClearPendingStationEscrowOperation();
+        ClearCraft();
+        InitializeMultiDevCraftState();
+        _stationEscrowUsesRemoteAuthority = false;
+        _stationEscrowOriginScope = "";
+    }
+
+    private void RefreshRemoteStationAuthority()
+    {
+        if (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server
+            && (Main.netMode != NetmodeID.MultiplayerClient
+                || !Common.Systems.GeneratedStationEscrowStateSystem.IsExactAuthorityScope(_stationEscrowOriginScope)))
+            ParkRemoteStationClaim();
+        if (Main.netMode == NetmodeID.MultiplayerClient) EnsureRemoteStationAuthority();
+    }
+
+    private void RestoreScopedRemoteStationClaim(TagCompound tag)
+    {
+        _stationEscrowClientId = Common.Systems.GeneratedStationEscrowStateSystem.NormalizeClientId(tag.GetString("infiniStationEscrowClientId"));
+        if (_stationEscrowClientId.Length == 0)
+            throw new InvalidOperationException("Invalid remote claim owner");
+        _stationEscrowOriginScope = tag.GetString(StationOriginScopeSaveKey);
+        _stationEscrowUsesRemoteAuthority = true;
+        foreach (TagCompound row in tag.GetList<TagCompound>("infiniStationEscrowMirror"))
+        {
+            int index = row.GetInt("index");
+            if (index is < 0 or > 5 || !row.ContainsKey("item")) continue;
+            Item item = ItemIO.Load(row.GetCompound("item"));
+            if (item is not null && !item.IsAir && item.stack > 0) InputSlot(index) = item.Clone();
+        }
+        if (tag.ContainsKey("infiniPendingStationEscrow"))
+        {
+            TagCompound pending = tag.GetCompound("infiniPendingStationEscrow");
+            string operationId = pending.GetString("operationId");
+            int action = pending.GetInt("action"), index = pending.GetInt("index");
+            if (operationId.Length == 32 && operationId.All(Uri.IsHexDigit) && action is >= 1 and <= 4 && index is >= -1 and <= 5)
+            {
+                _pendingStationEscrowOperationId = operationId; _pendingStationEscrowAction = (byte)action;
+                _pendingStationEscrowIndex = index; _pendingStationEscrowWaitTicks = 0;
+                _pendingStationEscrowItem = pending.ContainsKey("item") ? ItemIO.Load(pending.GetCompound("item")) : null;
+            }
+        }
+        if (tag.ContainsKey("infiniPendingRemoteCrafts")) RestorePendingRemoteCrafts(tag.GetList<TagCompound>("infiniPendingRemoteCrafts"));
+    }
+
     private static string NormalizeCraftRequestId(string? requestId)
         => (requestId ?? string.Empty).Trim();
 
@@ -39,6 +183,10 @@ public sealed partial class InfiniCraftPlayer
         InitializeMultiDevCraftState();
         _stationEscrowClientId = Guid.NewGuid().ToString("N");
         _stationEscrowUsesRemoteAuthority = false;
+        _stationEscrowOriginScope = "";
+        _readOnlyRemoteStationClaim = null;
+        _dormantRemoteStationClaims.Clear();
+        _activeRemoteStationClaim = null;
         ClearPendingStationEscrowOperation();
     }
 
@@ -49,6 +197,7 @@ public sealed partial class InfiniCraftPlayer
         // A half-open remote escrow operation is durable and must resend the same
         // operationId after reconnect. Clearing it here loses the exact optimistic unit.
         _pendingStationEscrowWaitTicks = 0;
+        RefreshRemoteStationAuthority();
         if (Main.netMode == NetmodeID.MultiplayerClient)
             ResendPendingRemoteCrafts();
         // Late-join catch-up: make sure this client has the generated-item registry
@@ -66,10 +215,18 @@ public sealed partial class InfiniCraftPlayer
         _pendingRemoteCraftSavedForWorldExit = false;
         try
         {
+            RefreshRemoteStationAuthority();
+            if (_readOnlyRemoteStationClaim is not null)
+                tag[ReadOnlyRemoteStationClaimSaveKey] = _readOnlyRemoteStationClaim.Clone();
+            if (_dormantRemoteStationClaims.Count > 0)
+                tag[DormantRemoteStationClaimsSaveKey] = _dormantRemoteStationClaims.Select(claim => (TagCompound)claim.Clone()).ToList();
+            if (_stationEscrowUsesRemoteAuthority)
+                foreach (var entry in CaptureRemoteStationClaim()) tag[entry.Key] = entry.Value;
             if (string.IsNullOrWhiteSpace(_stationEscrowClientId))
                 _stationEscrowClientId = Guid.NewGuid().ToString("N");
             tag["infiniStationEscrowClientId"] = _stationEscrowClientId;
             tag["infiniStationEscrowRemoteAuthority"] = _stationEscrowUsesRemoteAuthority;
+            if (_stationEscrowUsesRemoteAuthority) tag[StationOriginScopeSaveKey] = _stationEscrowOriginScope;
             if (_stationEscrowUsesRemoteAuthority)
             {
                 var mirror = new List<TagCompound>();
@@ -127,38 +284,30 @@ public sealed partial class InfiniCraftPlayer
             _stationEscrowClientId = Common.Systems.GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
             if (_stationEscrowClientId.Length == 0)
                 _stationEscrowClientId = Guid.NewGuid().ToString("N");
-            _stationEscrowUsesRemoteAuthority = tag.ContainsKey("infiniStationEscrowRemoteAuthority")
-                && tag.GetBool("infiniStationEscrowRemoteAuthority");
-            if (_stationEscrowUsesRemoteAuthority && tag.ContainsKey("infiniStationEscrowMirror"))
+            bool remoteClaim = (tag.ContainsKey("infiniStationEscrowRemoteAuthority") && tag.GetBool("infiniStationEscrowRemoteAuthority"))
+                || tag.ContainsKey("infiniStationEscrowMirror") || tag.ContainsKey("infiniPendingStationEscrow")
+                || tag.GetList<TagCompound>("infiniPendingRemoteCrafts").Count > 0;
+            _stationEscrowUsesRemoteAuthority = false;
+            _stationEscrowOriginScope = "";
+            _readOnlyRemoteStationClaim = null;
+            _dormantRemoteStationClaims.Clear();
+            _activeRemoteStationClaim = null;
+            if (tag.ContainsKey(ReadOnlyRemoteStationClaimSaveKey))
+                RetainDormantRemoteStationClaim((TagCompound)tag.GetCompound(ReadOnlyRemoteStationClaimSaveKey).Clone());
+            foreach (TagCompound claim in tag.GetList<TagCompound>(DormantRemoteStationClaimsSaveKey))
+                RetainDormantRemoteStationClaim((TagCompound)claim.Clone());
+            if (remoteClaim)
             {
-                foreach (TagCompound row in tag.GetList<TagCompound>("infiniStationEscrowMirror"))
-                {
-                    int index = row.GetInt("index");
-                    if (index is < 0 or > 5 || !row.ContainsKey("item"))
-                        continue;
-                    Item item = ItemIO.Load(row.GetCompound("item"));
-                    if (item is not null && !item.IsAir && item.stack > 0)
-                        InputSlot(index) = item.Clone();
-                }
+                TagCompound liveClaim = (TagCompound)tag.Clone();
+                // Archive metadata is not part of the separate live authority.
+                liveClaim.Remove(ReadOnlyRemoteStationClaimSaveKey);
+                liveClaim.Remove(DormantRemoteStationClaimsSaveKey);
+                RetainDormantRemoteStationClaim(liveClaim);
             }
-            if (tag.ContainsKey("infiniPendingStationEscrow"))
-            {
-                TagCompound pending = tag.GetCompound("infiniPendingStationEscrow");
-                string operationId = (pending.GetString("operationId") ?? "").Trim().ToLowerInvariant();
-                int action = pending.GetInt("action");
-                int index = pending.GetInt("index");
-                if (operationId.Length == 32 && operationId.All(Uri.IsHexDigit) && action is >= 1 and <= 4 && index is >= -1 and <= 5)
-                {
-                    _pendingStationEscrowOperationId = operationId;
-                    _pendingStationEscrowAction = (byte)action;
-                    _pendingStationEscrowIndex = index;
-                    _pendingStationEscrowWaitTicks = 0;
-                    _pendingStationEscrowItem = pending.ContainsKey("item") ? ItemIO.Load(pending.GetCompound("item")) : null;
-                    _stationEscrowUsesRemoteAuthority = true;
-                }
-            }
-            if (tag.ContainsKey("infiniPendingRemoteCrafts"))
-                RestorePendingRemoteCrafts(tag.GetList<TagCompound>("infiniPendingRemoteCrafts"));
+            // Unknown old origin is retained literally, never assigned to the
+            // currently opened world and never hydrated into material slots.
+            if (remoteClaim)
+                return;
             foreach (var itemTag in tag.GetList<TagCompound>("infiniPendingCraftRefunds"))
             {
                 try
@@ -390,8 +539,15 @@ public sealed partial class InfiniCraftPlayer
         ApplyGeneratedUtilityBuffEffects();
     }
 
+    public override bool PreItemCheck()
+    {
+        Common.Systems.GeneratedPlacementLedgerSystem.RefreshPlacementInput(Player);
+        return true;
+    }
+
     public override void PostUpdate()
     {
+        RefreshRemoteStationAuthority();
         TickCraftAudioGuard();
         TickGeneratedUtilityBuff();
         TickGeneratedRegistryCatchup();
@@ -559,6 +715,11 @@ public sealed partial class InfiniCraftPlayer
 
     public void AbortTransientCraftForWorldExit()
     {
+        if (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server)
+        {
+            ParkRemoteStationClaim();
+            return;
+        }
         // World exit/unload must not eat station inputs or in-flight craft ingredients.
         // If SaveData already persisted a refund bundle, do not also put the same items
         // into inventory here; they will be restored by LoadData/OnEnterWorld.

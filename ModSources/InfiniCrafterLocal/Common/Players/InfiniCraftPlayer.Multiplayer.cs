@@ -24,6 +24,21 @@ namespace InfiniCrafterLocal.Common.Players;
 // Never add a client-authored GeneratedItemData commit path here.
 public sealed partial class InfiniCraftPlayer
 {
+    private const int RemoteStationProtocolVersion = 1;
+
+    private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
+    {
+        writer.Write(RemoteStationProtocolVersion);
+        writer.Write(_stationEscrowOriginScope);
+    }
+
+    private static string ReadRemoteStationScope(System.IO.BinaryReader reader)
+    {
+        if (reader.ReadInt32() != RemoteStationProtocolVersion)
+            throw new System.IO.InvalidDataException("Unsupported remote station protocol");
+        return reader.ReadString();
+    }
+
     private enum StationEscrowAction : byte
     {
         Deposit = 1,
@@ -108,7 +123,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void ResendPendingRemoteCrafts()
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient)
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority())
             return;
         if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
             SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
@@ -149,7 +164,7 @@ public sealed partial class InfiniCraftPlayer
 
     private bool SendStationEscrowRequest(StationEscrowAction action, int index, Item item)
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || HasPendingStationEscrowOperation)
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || HasPendingStationEscrowOperation)
             return false;
         if (action == StationEscrowAction.ReturnAll ? HasAnyCraftLanePending : IsCraftLanePending(index / 2))
             return false;
@@ -191,12 +206,13 @@ public sealed partial class InfiniCraftPlayer
 
     private bool FlushPendingStationEscrowRequest()
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || !HasPendingStationEscrowOperation)
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !HasPendingStationEscrowOperation)
             return false;
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketRequestStationEscrow);
+            WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(_pendingStationEscrowOperationId);
             packet.Write(_pendingStationEscrowAction);
@@ -360,6 +376,7 @@ public sealed partial class InfiniCraftPlayer
 
     public static void HandleStationEscrowResultPacket(System.IO.BinaryReader reader, int whoAmI)
     {
+        string scope = ReadRemoteStationScope(reader);
         string operationId = reader.ReadString();
         StationEscrowAction action = (StationEscrowAction)reader.ReadByte();
         int index = reader.ReadSByte();
@@ -367,17 +384,23 @@ public sealed partial class InfiniCraftPlayer
         string message = reader.ReadString();
         if (Main.netMode != NetmodeID.MultiplayerClient || Main.LocalPlayer is null)
             return;
-        Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>().ApplyStationEscrowResult(operationId, action, index, success, message);
+        var modPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)
+            || !string.Equals(modPlayer._stationEscrowOriginScope, scope, StringComparison.Ordinal)
+            || !modPlayer.EnsureRemoteStationAuthority()) return;
+        modPlayer.ApplyStationEscrowResult(operationId, action, index, success, message);
     }
 
     public static void HandleStationEscrowRequestPacket(System.IO.BinaryReader reader, int whoAmI)
     {
+        string scope = ReadRemoteStationScope(reader);
         string clientId = reader.ReadString();
         string operationId = reader.ReadString();
         StationEscrowAction action = (StationEscrowAction)reader.ReadByte();
         int index = reader.ReadSByte();
         CraftItemRef itemRef = action == StationEscrowAction.Deposit ? ReadCraftItemRef(reader) : default;
-        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
+        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers
+            || !GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope))
             return;
 
         Player player = Main.player[whoAmI];
@@ -400,6 +423,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
         modPlayer._stationEscrowClientId = clientId;
+        modPlayer._stationEscrowOriginScope = scope;
         modPlayer._stationEscrowUsesRemoteAuthority = true;
         if (!GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
         {
@@ -771,11 +795,16 @@ public sealed partial class InfiniCraftPlayer
         if (Main.netMode != NetmodeID.MultiplayerClient)
             return;
 
+        string scope = ReadRemoteStationScope(reader);
         string requestId = reader.ReadString();
         bool success = reader.ReadBoolean();
         string itemName = reader.ReadString();
         string message = reader.ReadString();
-        Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>().HandleCraftCommitResult(requestId, success, itemName, message);
+        var modPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)
+            || !string.Equals(modPlayer._stationEscrowOriginScope, scope, StringComparison.Ordinal)
+            || !modPlayer.EnsureRemoteStationAuthority()) return;
+        modPlayer.HandleCraftCommitResult(requestId, success, itemName, message);
     }
 
     public static void HandleRequestServerCraftPacket(System.IO.BinaryReader reader, int whoAmI)
@@ -785,6 +814,8 @@ public sealed partial class InfiniCraftPlayer
         if (whoAmI < 0 || whoAmI >= Main.maxPlayers)
             return;
 
+        string scope = ReadRemoteStationScope(reader);
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)) return;
         string clientId = reader.ReadString();
         string requestId = reader.ReadString();
         int laneIndex = Math.Clamp((int)reader.ReadByte(), 0, 2);
@@ -814,6 +845,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
         modPlayer._stationEscrowClientId = clientId;
+        modPlayer._stationEscrowOriginScope = scope;
         modPlayer._stationEscrowUsesRemoteAuthority = true;
         if (GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out GeneratedStationEscrowStateSystem.CraftReplayOutcome replay))
         {
@@ -904,8 +936,10 @@ public sealed partial class InfiniCraftPlayer
         if (whoAmI < 0 || whoAmI >= Main.maxPlayers)
             return;
 
+        string scope = ReadRemoteStationScope(reader);
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)) return;
         string requestId = reader.ReadString();
-        try { _ = reader.ReadString(); } catch { } // optional cancel reason, protocol v0.4.218
+        _ = reader.ReadString();
         if (!HasCraftRequestId(requestId))
             return;
 
@@ -921,12 +955,13 @@ public sealed partial class InfiniCraftPlayer
 
     private void SendRemoteServerCraftCancel(string reason)
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || !_awaitingServerCommit || !HasCraftRequestId(_serverRequestId))
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !_awaitingServerCommit || !HasCraftRequestId(_serverRequestId))
             return;
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketCancelServerCraft);
+            WriteRemoteStationScope(packet);
             packet.Write(_serverRequestId);
             packet.Write(reason ?? "client_cancel");
             packet.Send();
@@ -1231,6 +1266,8 @@ public sealed partial class InfiniCraftPlayer
             return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(PacketStationEscrowResult);
+        packet.Write(RemoteStationProtocolVersion);
+        packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
         packet.Write(operationId ?? "");
         packet.Write((byte)action);
         packet.Write((sbyte)index);
@@ -1245,6 +1282,8 @@ public sealed partial class InfiniCraftPlayer
             return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(PacketCraftCommitResult);
+        packet.Write(RemoteStationProtocolVersion);
+        packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
         packet.Write(requestId ?? "");
         packet.Write(success);
         packet.Write(itemName ?? "");

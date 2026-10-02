@@ -25,4 +25,6 @@ public static class InfiniNetPacketIds
     public const byte NotifyGeneratedPlacement = 19;
     public const byte SetMultiDevCraftMode = 20;
     public const byte GeneratedHitNpcPull = 21;
+    public const byte RequestGeneratedPlacementIntent = 22;
+    public const byte GeneratedPlacementIntentReady = 23;
 }

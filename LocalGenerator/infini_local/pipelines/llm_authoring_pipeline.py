@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
+    assert_bounded_author_input,
     strict_repair_structure_report,
 )
 from infini_local.core.vfx_manifest import (
@@ -115,6 +116,7 @@ def _effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any
 def _prepare_parsed_author_item(
     parsed: Mapping[str, Any], *, response_format: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    assert_bounded_author_input(parsed, authored_only=False)
     canonical = project_provider_author_item_to_local(dict(parsed), response_format=response_format)
     if not isinstance(canonical, dict):
         raise PlannerUnavailable("Gameplay Author returned a non-object after provider projection")
@@ -355,12 +357,22 @@ def try_llm_plan(
 
 
 def _repair_error_rows(failure_report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    validation = failure_report.get("validation")
+    canonical = (
+        [copy.deepcopy(row) for row in validation["errors"] if isinstance(row, dict)]
+        if isinstance(validation, Mapping) and isinstance(validation.get("errors"), list) else []
+    )
     rows = failure_report.get("errors")
     if isinstance(rows, list):
-        return [copy.deepcopy(row) for row in rows if isinstance(row, dict)][:40]
-    validation = failure_report.get("validation")
+        exact = [copy.deepcopy(row) for row in rows if isinstance(row, dict)]
+        # A failure envelope may carry a display-only prefix alongside the full
+        # same-pass Author report. Recover that exact report, never combine or
+        # replace distinct compiler-owned provenance with broader permissions.
+        if exact and len(exact) < len(canonical) and exact == canonical[:len(exact)]:
+            return canonical
+        return exact
     if isinstance(validation, Mapping) and isinstance(validation.get("errors"), list):
-        return [copy.deepcopy(row) for row in validation["errors"] if isinstance(row, dict)][:40]
+        return canonical
     return [{
         "path": str(failure_report.get("path") or "$"),
         "code": str(failure_report.get("code") or "runtime_program_rejected"),
@@ -389,6 +401,7 @@ def build_gameplay_repair_dossier(
     """
 
     _ = (ca, cb)
+    assert_bounded_author_input(current)
     exact_errors = _repair_error_rows(failure_report)
     scope = build_runtime_repair_scope(current, exact_errors)
     fragments = runtime_repair_fragments(current, scope)

@@ -21,19 +21,24 @@ Remote presets: `json_object` + `chat_completions`; local сохраняют sch
 
 | Событие | Policy |
 |---|---|
-| Chat 400 + sent `json_schema` | Один same-stage повтор с `json_object`; только envelope меняется, messages/model/sampling/reasoning сохранены |
+| Chat 400 + sent `json_schema` + явное schema/format rejection | Один same-stage повтор с `json_object`; только envelope меняется, messages/model/sampling/reasoning сохранены |
 | Повторный 400 с `json_object` | Второго schema downgrade нет; ошибка идёт higher-level policy |
-| Responses 400/404/405/415/422/501 | Same-profile stateless Chat, если ошибка не распознана auth/budget; не network/timeout downgrade |
+| Responses 400/404/405/415/422/501 | Same-profile stateless Chat при распознанной API incompatibility; content/context/model errors не дают downgrade. Для 400/422 нужны явные признаки неподдержанного API/параметра; не network/timeout downgrade |
 | 401/402/403/429 | Auth/billing/quota/rate-limit, не schema cure; 429 также transport-class с provider cooldown |
-| 408/409/425/429/500/502/503/504, network/timeout | Bounded transport retry и/или настроенный pool/fallback |
+| 408/409/425/429/500/502/503/504, network/timeout | Bounded transport retry и/или настроенный pool/fallback только в оставшемся logical deadline |
+| HTTP redirect 301/302/303/307/308 | Отказ с исходным 3xx; нет follow даже на тот же origin. Headers/body не пересылаются на новый адрес |
 
-Schema guard проверяет только status/format: **не доказывает причину каждого 400**. Profile/context capability memory действует на процесс; `config.env` не меняется. Debug: `strictSchemaDowngraded=true`, cause `json_schema_to_json_object_fallback`; API downgrade cause `responses_to_chat_fallback`. Content/length retry и profile failover отдельно учитываются в `transportRetryCount/Causes`: один envelope retry ≠ один суммарный HTTP.
+Один 400 или generic `INVALID_ARGUMENT` **не доказывает schema rejection**. Отрицательная capability запоминается только после релевантного отказа и успешного same-request recovery с пригодным JSON; неудачный/malformed recovery cache не отравляет. Scope: provider/base URL, фактически выбранная model, API и exact case-sensitive OpenRouter pin; complexity/invalid-schema evidence дополнительно привязана к digest конкретной schema envelope. Responses learning также требует успешного Chat recovery. Cache действует на процесс, не меняет `config.env`.
+
+Debug: `strictSchemaDowngraded=true`, cause `json_schema_to_json_object_fallback`; API downgrade cause `responses_to_chat_fallback`. Применение уже известного cache evidence не выдумывает новый retry. Content/length retry и profile failover отдельно учитываются в `transportRetryCount/Causes`: один envelope retry ≠ один суммарный HTTP.
+
+У logical call один абсолютный `time.monotonic()` deadline: rate wait, открытие/headers, body/error reads, negotiation, retry/backoff и разрешённый failover расходуют общий остаток, а не получают новый timeout. Непрерывная выдача малых порций не продлевает budget. Общий [HTTP I/O owner](../LocalGenerator/infini_local/core/http_io.py) не выбирает provider, не делает retries и не заменяет отдельный Codex/SSE adapter. Отмена блокирующего системного DNS resolver не реализована.
 
 [OpenRouter pin](OPENROUTER_ROUTING_RU.md#строгая-семантика) запрещает другой профиль/legacy fallback, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Unpinned pool/lease/cooldown и legacy резерв — отдельная явно настроенная policy; пустой `INFINI_LLM_FALLBACK_MODEL` выключает резерв.
 
 ## Диагностика
 
-`request_shape_rejection_diagnosis`: только Chat 400 + `json_schema`, без изменения payload/retry. Повтор делает caller, событие `LLM strict json_schema rejected; retrying same stage with json_object for this run` (`was/now/status/repairedFor/schemaChars`).
+`request_shape_rejection_diagnosis`: только релевантный Chat schema rejection, без изменения payload/retry. До успешного recovery `knownWorkingResponseFormat/ApiMode` пусты; `candidateResponseFormat/ApiMode` — предложение, не доказательство работоспособности. Повтор делает caller; `LLM schema negotiation accepted` фиксирует состоявшийся usable recovery.
 
 | Где | Что смотреть |
 |---|---|
@@ -41,7 +46,11 @@ Schema guard проверяет только status/format: **не доказы�
 | `pipeline_trace.ndjson`, craft error | Stage `requestShapeRejection` / hint |
 | `LLM usage`/debug | Retry count/causes, [cache counters](LLM_PROMPT_CACHE_AND_LATENCY_RU.md#наблюдаемость) |
 
-`knownWorking*` и hint «модель ещё не получила задание» — локальная подсказка, **не remote billing proof**. Generic 400 не доказывает нулевой расход. Проверяй status/body/model/baseUrl.
+`knownWorking*` относится только к наблюдённому recovery, **не remote billing proof**. Generic 400 не доказывает, что модель не получила задание или что расход равен нулю. Проверяй status/body/model/baseUrl.
+
+События `LLM physical attempt`, `LLM transport wait` и logical-call finish/failure связаны через `logicalCallId`, `stage`, `leaseId`. `physicalAttemptCount` считает generation POST network-open attempts, не accepted/billed requests; discovery GET и auth/control-plane в этот счёт не входят. Сохраняется до 16 attempt/wait events, с отдельным dropped count; диагностика не меняет retry policy. Несостоявшаяся из-за rate wait отправка имеет ноль attempts.
+
+Requested и effective API/format/reasoning различаются: effective — последняя попытка wire, не подтверждение поддержки provider. `openMs` включает connect/TLS/status/headers, `readMs` — чтение; `connectMs=null`, отдельного измерителя connection нет. Supplement не содержит raw headers/body/prompts; legacy providerBody diagnostics — отдельное поле. При wrapped failure существующий [failure snapshot owner](../LocalGenerator/infini_local/storage/failure_state.py) извлекает ближайший пригодный supplement из явной `__cause__` chain и сохраняет `transportDebug` в том же snapshot/summary. Обход ограничен и защищён от cycles; fixed field/type/size projection не копирует provider extras или неизвестные объекты. Если supplement отсутствует, прежняя форма snapshot сохраняется. Для native Codex `physicalAttemptCount=null` и scope=`codex_owner_unobserved`, а не выдуманные generic POST. Эти изменения текущего дерева не входят в опубликованный архив 0.4.246.
 
 ## Исторический Gemini reproducer
 

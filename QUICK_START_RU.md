@@ -22,7 +22,7 @@ python LocalGenerator/settings_gui.py
 
 ## Настройки
 
-GUI сохраняет `LocalGenerator/config.env`. [config.example.env](LocalGenerator/config.example.env) — шаблон с примерными Windows-путями/старыми комментариями, не рабочий профиль. Существующий process environment имеет приоритет. Не перезаписывай личный конфиг обновлением; после изменений **Save → restart server**.
+GUI сохраняет `LocalGenerator/config.env`. [config.example.env](LocalGenerator/config.example.env) — шаблон с примерными Windows-путями/старыми комментариями, не рабочий профиль. При ручном запуске process environment имеет приоритет над config.env. GUI **Start** передаёт копию своего environment, поверх которой накладывает текущие поля `collect()`; для этих полей приоритет у GUI. Не перезаписывай личный конфиг обновлением; после изменений **Save → restart server**.
 
 LLM и PNG независимы:
 
@@ -35,19 +35,27 @@ LLM и PNG независимы:
 | `INFINI_IMAGE_BACKEND=sdcpp` | `INFINI_SDCPP_SERVER_URL`; autostart: `INFINI_SDCPP_SERVER_EXE`, `INFINI_SDCPP_MODEL`, нужные `INFINI_SDCPP_VAE`/`INFINI_SDCPP_LLM`, `INFINI_SDCPP_SERVER_AUTOSTART=1` |
 | `…=image_api` | `INFINI_IMAGE_API_BASE_URL`, `INFINI_IMAGE_API_KEY`, `INFINI_IMAGE_API_MODEL` |
 
-Внешний sd.cpp: autostart=0. LoRA GUI принимает конкретный `INFINI_SDCPP_LORA_FILE`, каталог выводит из него. Другие image adapters — в GUI; неизвестный backend не превращается в готовый PNG. Ключи/сессии вне Git.
+Внешний sd.cpp: autostart=0; ему нужны доступный HTTP endpoint и уже работающий сервер, не локальные exe/model. `/visual_doctor.json` различает внешний и управляемый autostart, а при другом выбранном backend не требует sd.cpp. Без `probe=1` этот route не запускает image generation. LoRA GUI принимает конкретный `INFINI_SDCPP_LORA_FILE`, каталог выводит из него. Другие image adapters — в GUI; неизвестный backend не превращается в готовый PNG. Ключи/сессии вне Git.
 
 [Transport settings](docs/LLM_TRANSPORT_REQUEST_SHAPE_RU.md#настройки): `INFINI_LLM_RESPONSE_FORMAT`/`INFINI_LLM_API_MODE` управляют конвертом, не gameplay. Remote presets используют `json_object` + `chat_completions`, без гарантии для любого endpoint/model.
 
 ## Запуск и проверка
 
-GUI **Start server** сначала сохраняет настройки; либо из корня:
+GUI **Start server** сохраняет настройки при принятом запуске; занятый или непроверенный сервер не останавливает и настройки для такого restart не сохраняет. Либо запусти из корня:
 
 ```console
 python LocalGenerator/server.py
 ```
 
 Default bind `INFINI_HOST=127.0.0.1`, `INFINI_PORT=5055`. [Health](http://127.0.0.1:5055/health): сверить `version`, `serverRoot`, `configPath`, `llmProvider`, `imageBackend`, `imageBackendConfigError`. `ok=true` — ответ сервиса, **не** quota/model/generation proof. [Trace](http://127.0.0.1:5055/trace), `cache/events.ndjson` — stage errors; `INFINI_CONSOLE_EVENT_LEVEL=warn|error|info|debug|off` (default warn). Не публикуй личные raw prompts/config/traces.
+
+В текущем дереве `/health` дополнительно возвращает `generationActivity` (`active`, `waiting`, `accepting`) и частичный `effectiveConfig`: cache/world roots, image backend, основной LLM provider/model, exact OpenRouter upstream и sd.cpp autostart. Это явный allowlist без ключей, secret-derived hash или запроса разрешения `auto` model; он не подтверждает равенство всех pool/secret настроек. `/shutdown` атомарно отказывает с 409 при active/queued `/combine`; после согласованного shutdown новые генерации получают 503. `/shutdown?force=1` — явное принудительное прерывание, не resume/recovery protocol. Эти изменения ещё не входят в опубликованный архив 0.4.246.
+
+В текущем GUI **Start / Stop** работают безопасно по умолчанию. **Force restart…** требует отдельного подтверждения и обходит только busy-проверку, не проверку root/PID и наличия корректного `effectiveConfig`. После HTTP 409 нет скрытого kill или повторного запуска; timeout/непонятный ответ не считаются свободным портом. Если старый сервер не отдаёт нужную projection, останови его прежним владельцем/через `Ctrl+C`, а не принудительным уничтожением неизвестного PID.
+
+**Check applied config** асинхронно сравнивает только семь названных полей с текущими настройками запуска; расхождения показываются именами полей, без значений и ключей. **Save** сам по себе не применяет конфигурацию к работающему серверу. Изменение полей после проверки снимает устаревшее совпадение; `auto` не разрешается дополнительным запросом к модели.
+
+Trace refresh выполняется вне Tk-потока; повторные обновления объединяются до последнего запроса. Отмена/закрытие запрещает показ позднего ответа, но не обещает принудительно прервать системный DNS или файловую блокировку. Offline trace, открытие папки и очистка используют cache root фактического GUI launch environment; относительный путь отсчитывается от `LocalGenerator`. Очистка затрагивает только три trace NDJSON, не recipes/PNG; чужой/непроверенный сервер, другой live cache или символические ссылки вместо trace/lock файлов — отказ без локальной подмены цели.
 
 Мод использует `http://127.0.0.1:5055/combine` (`GeneratorClient.Endpoint`), без публичного GUI/env selector. Смена адреса/порта требует согласования endpoint в исходниках мода; обычную установку оставь на 5055. GUI-owned сервер: **Stop server**, ручной: `Ctrl+C`; один процесс на порт.
 

@@ -380,7 +380,8 @@ internal static partial class EngineRuntimeChecks
                             ((RuntimeEventActionSpec)p.GetType().GetProperty("Action")!.GetValue(p)!).Id));
                         Equal("delayed_a,delayed_b,delayed_a,delayed_b,delayed_c", ids, "authored scheduler enqueue order unchanged");
                         Equal("2,3,2,3,4", string.Join(",", pending.Cast<object>().Select(p =>
-                            (int)p.GetType().GetProperty("Ticks")!.GetValue(p)!)), "authored delays unchanged");
+                            unchecked((uint)p.GetType().GetProperty("DueTick")!.GetValue(p)!
+                                - (uint)p.GetType().GetProperty("EnqueuedTick")!.GetValue(p)!))), "authored delays unchanged");
                     }
                     // Exact event lanes remain independent after removing only the periodic relay.
                     data.VfxManifest.Slots = new[] { RuntimeEventKind.OnHit, RuntimeEventKind.OnCrit,

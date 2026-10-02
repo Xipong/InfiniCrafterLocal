@@ -467,6 +467,10 @@ class SettingsGuiUiMixin:
         tk.Label(status_bar, text="●", bg=CARD_BG, fg=ACCENT_BG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 6))
         tk.Label(status_bar, text="Состояние", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
         tk.Label(status_bar, textvariable=self.status_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left").pack(side="left", fill="x", expand=True)
+        applied_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=5)
+        applied_bar.pack(fill="x", side="bottom")
+        self._modern_button(applied_bar, "Check applied config", self._delayed_health_check, variant="ghost").pack(side="right", padx=(8, 0))
+        tk.Label(applied_bar, textvariable=self.applied_config_var, bg=CARD_BG, fg=MUTED_FG, font=("Segoe UI", 9), anchor="w", justify="left", wraplength=850).pack(side="left", fill="x", expand=True)
 
         self.tabs = ttk.Notebook(shell, style="Hidden.TNotebook")
         self.general_tab = ScrollFrame(self.tabs)
@@ -668,6 +672,12 @@ class SettingsGuiUiMixin:
         self.row(server_card, "Craft HTTP timeout", "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS", width=16, hint="240 секунд: если крафт не готов, tModLoader попробует retry.")
         self.row(server_card, "Craft attempts", "INFINI_CRAFT_HTTP_ATTEMPTS", width=16)
         self.row(server_card, "Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", width=16, hint="Сколько секунд параллельный /combine ждёт текущий craft/cache вместо немедленного busy response. Для обычной игры: 210.")
+        restart_bar = ttk.Frame(server_card, padding=(10, 5))
+        restart_bar.pack(fill="x")
+        force_button = self._modern_button(restart_bar, "Force restart…", self.force_restart_server, variant="danger")
+        force_button.pack(side="left")
+        self._attach_static_help(force_button, "Start/Stop по умолчанию SAFE: busy/unknown server не прерывается. Force требует отдельного подтверждения; чужой root/PID всё равно защищён.")
+        ttk.Label(restart_bar, text="Start / Stop: safe; Force прерывает текущий craft только после подтверждения.", style="Hint.TLabel").pack(side="left", padx=10)
 
         debug_card = self._card(
             parent,

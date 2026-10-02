@@ -346,15 +346,28 @@ def _health_payload() -> dict[str, Any]:
     visual_director_active = bool(USE_LLM and visual_config.VISUAL_DIRECTOR_LLM)
     vfx_llm_director_configured = bool(VFX_LLM_DIRECTOR_ENABLED)
     vfx_llm_director_active = bool(USE_LLM and VFX_LLM_DIRECTOR_ENABLED)
+    auth = llm_auth_snapshot()
     return {
         "ok": True,
         "version": APP_VERSION,
+        "generationActivity": combine_endpoint.generation_activity_snapshot(),
+        # Explicit partial acknowledgement: no secret values, endpoint query
+        # strings or secret-derived hashes; 'auto' stays unresolved here.
+        "effectiveConfig": {
+            "cacheDir": str(CACHE_DIR.resolve()),
+            "worldRecipesDir": str(WORLD_RECIPES_DIR.resolve()),
+            "imageBackend": visual_config.IMAGE_BACKEND,
+            "llmProvider": str(auth.get("provider") or ""),
+            "llmModel": str(auth.get("model") or ""),
+            "openrouterProvider": str(auth.get("openrouterProvider") or ""),
+            "sdcppAutostart": bool(sdcpp["autostart"]),
+        },
         "serverRoot": str(ROOT),
         "configPath": str(CONFIG_PATH),
         "pid": os.getpid(),
         "useLLM": USE_LLM,
         "llmProvider": active_llm_provider(),
-        "llmAuth": llm_auth_snapshot(),
+        "llmAuth": auth,
         "llmRuntimeAuthoring": LLM_RUNTIME_AUTHORING,
         "llmRuntimePlanRequired": LLM_RUNTIME_PLAN_REQUIRED,
         "llmRuntimeStrictValidation": LLM_RUNTIME_STRICT_VALIDATION,

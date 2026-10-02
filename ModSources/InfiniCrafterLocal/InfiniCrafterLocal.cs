@@ -105,6 +105,16 @@ public sealed class InfiniCrafterLocalMod : Mod
             InfiniCraftPlayer.HandleSetMultiDevCraftModePacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedPlacementIntent)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedPlacementIntentReady)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementReadyPacket(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.NotifyGeneratedPlacement)
         {
             Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, whoAmI);

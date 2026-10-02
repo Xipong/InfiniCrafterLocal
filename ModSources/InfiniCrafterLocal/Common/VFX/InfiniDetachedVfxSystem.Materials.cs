@@ -45,16 +45,13 @@ internal readonly record struct VfxSourceFrame(Vector2 Position,Vector2 Forward,
 public sealed partial class InfiniDetachedVfxSystem
 {
     private const int MaxMaterialParticles=2048;
-    private static readonly Dictionary<(string Source,string Slot,ulong Occurrence),ulong> MaterialOccurrences=new();
-    private static ulong NextLocalMaterialOccurrence;
-    internal static ulong NewMaterialOccurrence()=>++NextLocalMaterialOccurrence;
-    internal static bool TryAdmitMaterialOccurrence(string source,string slot,ulong occurrence)
-    {
-        ulong now=Main.GameUpdateCount;
-        foreach(var key in MaterialOccurrences.Where(p=>now<p.Value||now-p.Value>1200).Select(p=>p.Key).ToArray())MaterialOccurrences.Remove(key);
-        var id=(source,slot,occurrence);if(MaterialOccurrences.ContainsKey(id)||MaterialOccurrences.Count>=4096)return false;
-        MaterialOccurrences[id]=now;return true;
-    }
+    // Replay admission belongs to the existing ordered-stream owner, once per
+    // event before slot fanout. Attachment generations are not transport cursors
+    // and retired events must not consume a global historical admission budget.
+    private static readonly VfxOrderedPeerStream MaterialEventStream=new();
+    internal static ulong NewMaterialOccurrence()=>MaterialEventStream.NewLocalOccurrence();
+    internal static bool TryAdmitMaterialOccurrence(ulong occurrence,bool relay)
+        =>relay?MaterialEventStream.AcceptRelay(occurrence):MaterialEventStream.AcceptLocal(occurrence);
     private sealed record ElementDesign(string TexturePath,string Layer,string Blend,float Alpha,int Duration,int Count,
         bool Attached,Vector2 Offset,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,Vector2 Acceleration,
         float Rotation,float Spin,float Width,float Height,VfxNumberRamp WidthRamp,VfxNumberRamp HeightRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,

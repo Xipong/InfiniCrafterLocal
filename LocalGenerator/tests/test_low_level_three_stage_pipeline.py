@@ -390,6 +390,152 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         assert any(row["reason"] == "independent_valid_node_frozen" for row in repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"])
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", [
+    "malformed-head", "malformed-tail", "malformed-noop",
+    "huge-buff-first", "huge-buff-later", "huge-placeable", "huge-accessory",
+    "empty-healing-life", "empty-healing-mana",
+])
+def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monkeypatch, mode, case):
+    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    responses, requests = wire_transport
+    numeric_cases = {
+        "huge-buff-first": ("apply_generated_buff_on_use", "miningSpeedMultiplier"),
+        "huge-buff-later": ("apply_generated_buff_on_use", "manaRegenBonusPoints"),
+        "huge-placeable": ("configure_placeable", "tileId"),
+        "huge-accessory": ("configure_accessory", "lightStrength"),
+    }
+    good = build_capability_witness(numeric_cases[case][0] if case in numeric_cases else "restore_resources_on_use")
+    if case == "huge-accessory":
+        next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")["params"].update(lightStrength=0, lightColor="white")
+    if case == "empty-healing-mana":
+        next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use")["params"].update(healLife=0, healMana=20)
+    current = copy.deepcopy(good)
+    calls = current["runtimeProgram"]["calls"]
+    patch = {"note": "repair only the exact authored defect", "realizationReplacement": good["realization"]}
+    expected_call_permissions = []
+    expected_broken_indices = []
+    if case.startswith("malformed"):
+        malformed_index = len(calls) if case == "malformed-tail" else 0
+        calls.insert(malformed_index, None)
+        expected_broken_indices = [{"index": malformed_index, "value": None}]
+        if case != "malformed-noop":
+            patch["callIndicesDelete"] = [malformed_index]
+    elif case in numeric_cases:
+        fn, param = numeric_cases[case]
+        node = next(row for row in calls if row["fn"] == fn)
+        node["params"][param] = 10**400
+        expected_call_permissions = [{"id": node["id"], "paths": ["params." + param]}]
+        patch["callsUpsert"] = [copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn))]
+    else:
+        healing = next(row for row in calls if row["fn"] == "restore_resources_on_use")
+        healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
+        expected_call_permissions = [{"id": healing["id"], "paths": ["params.healLife", "params.healMana"]}]
+        fixed = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use"))
+        fixed["params"]["usesPotionRules"] = True  # Valid frozen control, not an effective healing leaf.
+        patch["callsUpsert"] = [fixed]
+    if case != "malformed-noop":
+        stats = copy.deepcopy(next(row for row in calls if isinstance(row, dict) and row["fn"] == "configure_item_stats"))
+        stats["params"]["damage"] = 100
+        patch.setdefault("callsUpsert", []).append(stats)
+    original = copy.deepcopy(current)
+    responses.extend([json.dumps(current, allow_nan=False), json.dumps(patch, allow_nan=False)])
+    planned = gameplay_stage.try_llm_plan({}, {}, {}, {}, "scoped-author-repair")
+    assert planned is not None
+    assert planned["runtimeProgram"] == original["runtimeProgram"]
+    before_pass = copy.deepcopy(planned)
+    phases = []
+
+    def observe(label, fn, *args, **kwargs):
+        phases.append(label)
+        return fn(*args, **kwargs)
+
+    match = "leaves a reported repair error open" if case == "malformed-noop" else None
+    with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
+        result = combine_stage.compile_and_validate_authored_runtime(planned, {}, {}, {}, {}, "scoped-author-repair", run_stage=observe)
+        assert validate_runtime_wire(result)["ok"]
+        expected = compile_runtime_program(good)
+        assert result["runtimeProgram"] == expected["runtimeProgram"]
+        assert result["gameplay"] == expected["gameplay"]
+        audit = result["debug"]["gameplayRepairFilterAudit"]
+        assert audit["ok"] and audit["ignoredChanges"]
+        assert result["debug"]["llmStageAccounting"]["gameplayAuthorCalls"] == 1
+        assert result["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
+        assert phases[-1] == "02r_wire_boundary"
+    # The validators attach debug reports in place; authored values stay literal.
+    assert {k: v for k, v in planned.items() if k != "debug"} == {k: v for k, v in before_pass.items() if k != "debug"}
+    assert current == original
+    assert [r["_infini_stage"] for r in requests] == ["planner", "author_repair"]
+    assert all(r["response_format"]["type"] == mode for r in requests)
+    dossier = json.loads(requests[1]["messages"][1]["content"])
+    assert dossier["exactValidationErrors"] == validate_runtime_program(current)["errors"]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == expected_call_permissions
+    assert dossier["readOnlySourceFragments"]["brokenFragmentsByIndex"]["calls"] == expected_broken_indices
+    assert not responses
+
+
+@pytest.mark.parametrize("fields", [("durationTicks",), ("buffId", "durationTicks")], ids=["single-leaf", "saturated-multi-leaf"])
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire_transport, monkeypatch, mode, fields):
+    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from test_pipeline_repair_contract import _bounded_invalid_buff_calls
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    responses, requests = wire_transport
+    current, good = _bounded_invalid_buff_calls(fields)
+    assert validate_runtime_program(good)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(good))["ok"]
+    original = copy.deepcopy(current)
+    canonical_errors = validate_runtime_program(current)["errors"]
+    broken = [row for row in good["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    candidates = copy.deepcopy(good["runtimeProgram"]["calls"])
+    candidates[0]["params"]["damage"] = 100
+    patch = {"note": "repair every diagnosed duration", "realizationReplacement": good["realization"], "callsUpsert": candidates}
+    responses.extend([json.dumps(current, allow_nan=False), json.dumps(patch, allow_nan=False)])
+    planned = gameplay_stage.try_llm_plan({}, {}, {}, {}, "complete-bounded-diagnostics")
+    assert planned is not None
+    result = combine_stage.compile_and_validate_authored_runtime(planned, {}, {}, {}, {}, "complete-bounded-diagnostics", run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
+    assert validate_runtime_wire(result)["ok"]
+    expected = compile_runtime_program(good)
+    assert result["runtimeProgram"] == expected["runtimeProgram"]
+    assert result["gameplay"] == expected["gameplay"]
+    assert current == original
+    assert [r["_infini_stage"] for r in requests] == ["planner", "author_repair"]
+    assert all(r["response_format"]["type"] == mode for r in requests)
+    assert result["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
+    dossier = json.loads(requests[1]["messages"][1]["content"])
+    assert len(canonical_errors) == len(broken) * (len(fields) + 1)
+    assert dossier["exactValidationErrors"] == canonical_errors
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == sorted(
+        [{"id": row["id"], "paths": ["params." + field for field in fields]} for row in broken], key=lambda row: row["id"])
+    assert result["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert not responses
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("oversized_surface", ["calls", "unknown-root"])
+def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire_transport, monkeypatch, mode, oversized_surface):
+    from infini_local.core.runtime_authoring import program_schema
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    responses, requests = wire_transport
+    current = build_runtime_fixture("workbench_blade")
+    nodes, _, _, _ = program_schema._author_schema_work_bounds(program_schema.author_item_response_schema())
+    if oversized_surface == "calls":
+        current["runtimeProgram"]["calls"] = [current["runtimeProgram"]["calls"][0]] * (nodes + 1)
+    else:
+        current["not_pipeline_metadata"] = [None] * (nodes + 1)
+    responses.append(json.dumps(current))
+    with pytest.raises(PlannerUnavailable, match="Author input exceeds schema-derived work bounds"):
+        gameplay_stage.try_llm_plan({}, {}, {}, {}, "oversized-author-input")
+    assert [request["_infini_stage"] for request in requests] == ["planner"]
+    assert requests[0]["response_format"]["type"] == mode
+    assert not responses
+
+
 @pytest.mark.parametrize("patch,ok", [
     pytest.param({"note": "targeted", "callsUpsert": []}, True, id="sparse-valid"),
     pytest.param({"note": "targeted", "callsUpsert": {}}, False, id="wrong-container"),

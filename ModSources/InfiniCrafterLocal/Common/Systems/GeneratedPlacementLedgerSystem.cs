@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -32,17 +34,20 @@ internal readonly record struct GeneratedPlacementKey(GeneratedPlacementLayer La
 public sealed class GeneratedPlacementLedgerSystem : ModSystem
 {
     private const int PayloadVersion = 2;
+    private const int PlacementProtocolVersion = 4;
     private const string SaveKey = "infiniGeneratedPlacementLedgerV2";
     private const string PendingSaveKey = "infiniGeneratedPlacementReturnsV2";
+    private const string QuarantineSaveKey = "infiniGeneratedPlacementReturnQuarantineV1";
+    private const string RawQuarantineEnvelopeSaveKey = "infiniGeneratedPlacementRawQuarantineEnvelopesV1";
     private const int MaxGroups = 8192;
     private const int MaxCells = 32768;
     private const int MaxCellsPerGroup = 256;
     private const int AuthorizationRadiusTiles = 16;
-    // Commit detection only needs the immediate neighborhood of the announced
-    // target.  A wide scan would absorb same-type tiles another player placed
-    // nearby into this group, so keep the committed-cell window tight.
+    // Commit detection stays in the immediate neighborhood of the announced
+    // target; it must never widen to every cell captured in the before snapshot.
     private const int CommitScanRadiusTiles = 3;
     private const int AuthorizationLifetimeTicks = 30;
+    private const int RemoteIntentLifetimeTicks = 120;
     private const int PlacementReceiptLifetimeTicks = 8;
     private const int MaxPendingAttemptsPerTick = 8;
 
@@ -61,15 +66,33 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public string DefinitionJson { get; init; } = "";
         public int X { get; init; }
         public int Y { get; init; }
-        // Failed spawn attempts (runtime ticks).  Not persisted: a fresh load
-        // grants a fresh budget, which is safe because the record itself is
-        // durable and each tick re-attempts before quarantining.
+        // Transient attempt count is diagnostic only. World pressure retries
+        // durably; deterministic permanent failures leave the retry queue once
+        // their raw claim and cause have been retained in world quarantine.
         public int FailedAttempts { get; set; }
+        public string FailureCause { get; set; } = "";
+        public TagCompound? RawClaim { get; init; }
+    }
+
+    private sealed class QuarantinedReturnRecord
+    {
+        public TagCompound Claim { get; init; } = new();
+        public TagCompound? RawEnvelope { get; init; }
+        public string Cause { get; init; } = "";
+        // Retain the original raw claim even after a validated requeue. This is an
+        // idempotence receipt, not another retryable/material owner.
+        public bool Requeued { get; set; }
+        public string RequeueDefinitionJson { get; set; } = "";
+        public string LastFailureCause { get; set; } = "";
     }
 
     private sealed class PlacementAuthorization
     {
         public int PlayerIndex { get; init; }
+        public Player? SourcePlayer { get; init; }
+        public GeneratedItemData? SourceData { get; init; }
+        public ulong Sequence { get; set; }
+        public bool NotifyReceived { get; set; }
         public GeneratedPlacementLayer Layer { get; init; }
         public int TargetX { get; init; }
         public int TargetY { get; init; }
@@ -78,12 +101,44 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public string GeneratedItemId { get; init; } = "";
         public string DefinitionJson { get; init; } = "";
         public HashSet<long> BeforeExpectedTiles { get; init; } = new();
+        public string DefinitionHash { get; init; } = "";
         public int BeforeWallType { get; init; }
     }
+
+    private sealed class ClientPlacementIntent
+    {
+        public Player Player { get; init; } = null!;
+        public Item Item { get; init; } = null!;
+        public GeneratedItemData Data { get; init; } = null!;
+        public RuntimePlacementSpec Placement { get; init; } = null!;
+        public byte Input { get; init; }
+        public int X { get; init; }
+        public int Y { get; init; }
+        public int ExpiresAtTick { get; init; }
+        public ulong Sequence { get; init; }
+        public string DefinitionHash { get; init; } = "";
+        public bool Ready { get; set; }
+        public bool NativeRetrySpent { get; set; }
+        public bool UseAdmitted { get; set; }
+    }
+
+    private sealed class PlacementPeerCursor
+    {
+        public Player Player { get; init; } = null!;
+        public ulong Sequence { get; set; }
+        public int LastIntentTick { get; set; } = int.MinValue;
+    }
+
+    private static readonly Dictionary<int, ClientPlacementIntent> ClientPlacementIntents = new();
+    private static readonly Dictionary<int, ClientPlacementIntent> RetiredClientPlacementIntents = new();
+    private static readonly Dictionary<int, PlacementPeerCursor> PlacementPeerCursors = new();
+    private static ulong _nextPlacementSequence;
 
     private static readonly Dictionary<GeneratedPlacementKey, string> Placements = new();
     private static readonly Dictionary<string, PlacementGroup> Groups = new(StringComparer.Ordinal);
     private static readonly List<PendingReturnRecord> PendingReturns = new();
+    private static readonly List<QuarantinedReturnRecord> QuarantinedReturns = new();
+    private static readonly List<TagCompound> RawQuarantineEnvelopes = new();
     private static readonly Dictionary<int, PlacementAuthorization> PendingAuthorizations = new();
     private static readonly Dictionary<int, int> PlacementReceiptExpiryByPlayer = new();
 
@@ -92,8 +147,14 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         Placements.Clear();
         Groups.Clear();
         PendingReturns.Clear();
+        QuarantinedReturns.Clear();
+        RawQuarantineEnvelopes.Clear();
         PendingAuthorizations.Clear();
         PlacementReceiptExpiryByPlayer.Clear();
+        ClientPlacementIntents.Clear();
+        RetiredClientPlacementIntents.Clear();
+        PlacementPeerCursors.Clear();
+        _nextPlacementSequence = 0;
     }
 
     public override void SaveWorldData(TagCompound tag)
@@ -112,14 +173,20 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                     ["y"] = cell.Y,
                 }).ToList(),
             }).ToList();
-        tag[PendingSaveKey] = PendingReturns.Select(pending => new TagCompound
-        {
-            ["groupId"] = pending.GroupId,
-            ["generatedItemId"] = pending.GeneratedItemId,
-            ["definitionJson"] = pending.DefinitionJson,
-            ["x"] = pending.X,
-            ["y"] = pending.Y,
-        }).ToList();
+        tag[PendingSaveKey] = PendingReturns.Select(ReturnClaim).ToList();
+        tag[QuarantineSaveKey] = QuarantinedReturns.Select(QuarantineEnvelope).ToList();
+        tag[RawQuarantineEnvelopeSaveKey] = RawQuarantineEnvelopes.Select(row => (TagCompound)row.Clone()).ToList();
+    }
+
+    private static TagCompound QuarantineEnvelope(QuarantinedReturnRecord record)
+    {
+        TagCompound row = record.RawEnvelope is null ? new TagCompound() : (TagCompound)record.RawEnvelope.Clone();
+        row["claim"] = record.Claim.Clone();
+        row["cause"] = record.Cause;
+        row["requeued"] = record.Requeued;
+        row["requeueDefinitionJson"] = record.RequeueDefinitionJson;
+        row["lastFailureCause"] = record.LastFailureCause;
+        return row;
     }
 
     public override void LoadWorldData(TagCompound tag)
@@ -158,23 +225,97 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 Cells = cells,
             };
         }
-        foreach (TagCompound row in tag.GetList<TagCompound>(PendingSaveKey).Take(MaxGroups))
+        foreach (TagCompound row in tag.GetList<TagCompound>(PendingSaveKey))
         {
-            string id = (row.GetString("generatedItemId") ?? "").Trim();
-            string json = row.GetString("definitionJson") ?? "";
-            int x = row.GetInt("x");
-            int y = row.GetInt("y");
-            if (id.Length == 0 || json.Length == 0 || !WorldGen.InWorld(x, y, 1))
-                continue;
-            PendingReturns.Add(new PendingReturnRecord
+            try
             {
-                GroupId = (row.GetString("groupId") ?? Guid.NewGuid().ToString("N")).Trim(),
-                GeneratedItemId = id,
-                DefinitionJson = json,
-                X = x,
-                Y = y,
-            });
+                string id = row.GetString("generatedItemId") ?? "";
+                string json = row.GetString("definitionJson") ?? "";
+                string groupId = row.GetString("groupId") ?? "";
+                int x = row.GetInt("x"), y = row.GetInt("y");
+                if (groupId.Length == 0 || id.Length == 0 || json.Length == 0 || !WorldGen.InWorld(x, y, 1)
+                    || PendingReturns.Count >= MaxGroups || PendingReturns.Any(p => p.GroupId == groupId) || Groups.ContainsKey(groupId))
+                {
+                    QuarantinedReturns.Add(new QuarantinedReturnRecord { Claim = (TagCompound)row.Clone(), Cause = "claim_invalid" });
+                    continue;
+                }
+                PendingReturns.Add(new PendingReturnRecord
+                {
+                    GroupId = groupId, GeneratedItemId = id, DefinitionJson = json, X = x, Y = y,
+                    RawClaim = (TagCompound)row.Clone(),
+                });
+            }
+            catch
+            {
+                QuarantinedReturns.Add(new QuarantinedReturnRecord { Claim = (TagCompound)row.Clone(), Cause = "claim_invalid" });
+            }
         }
+        foreach (TagCompound row in tag.GetList<TagCompound>(QuarantineSaveKey))
+        {
+            try
+            {
+                if (!row.ContainsKey("claim") || row["claim"] is not TagCompound)
+                    throw new InvalidDataException("Quarantine envelope has no compound claim");
+                // Publish only after every canonical getter succeeded. A corrupt
+                // legal NBT row cannot abort or partially admit its healthy tail.
+                var record = new QuarantinedReturnRecord
+                {
+                    Claim = (TagCompound)row.GetCompound("claim").Clone(),
+                    Cause = row.GetString("cause"),
+                    Requeued = row.GetBool("requeued"),
+                    RequeueDefinitionJson = row.GetString("requeueDefinitionJson"),
+                    LastFailureCause = row.GetString("lastFailureCause"),
+                    RawEnvelope = (TagCompound)row.Clone(),
+                };
+                QuarantinedReturns.Add(record);
+            }
+            catch { RawQuarantineEnvelopes.Add((TagCompound)row.Clone()); }
+        }
+        // This separate versioned raw bucket is never interpreted as recovery
+        // authority, including after any number of native save/reload cycles.
+        foreach (TagCompound row in tag.GetList<TagCompound>(RawQuarantineEnvelopeSaveKey))
+            RawQuarantineEnvelopes.Add((TagCompound)row.Clone());
+    }
+
+    private static TagCompound ReturnClaim(PendingReturnRecord pending)
+        => pending.RawClaim is not null ? (TagCompound)pending.RawClaim.Clone() : new TagCompound
+        {
+            ["groupId"] = pending.GroupId,
+            ["generatedItemId"] = pending.GeneratedItemId,
+            ["definitionJson"] = pending.DefinitionJson,
+            ["x"] = pending.X,
+            ["y"] = pending.Y,
+        };
+
+    internal static bool TryRequeueQuarantinedReturn(string groupId, string definitionJson)
+    {
+        if (Main.netMode == NetmodeID.MultiplayerClient || string.IsNullOrEmpty(groupId))
+            return false;
+        QuarantinedReturnRecord[] matches = QuarantinedReturns.Where(q => q.Claim.ContainsKey("groupId") && q.Claim["groupId"] is string exactGroupId && exactGroupId == groupId).ToArray();
+        if (matches.Length != 1)
+            return false;
+        QuarantinedReturnRecord record = matches[0];
+        if (!record.Claim.ContainsKey("generatedItemId") || record.Claim["generatedItemId"] is not string id
+            || !record.Claim.ContainsKey("x") || record.Claim["x"] is not int x
+            || !record.Claim.ContainsKey("y") || record.Claim["y"] is not int y)
+            return false;
+        GeneratedItemData? data = GeneratedItemData.FromJson(definitionJson);
+        if (data is null || id.Length == 0 || !string.Equals(data.Id, id, StringComparison.Ordinal)
+            || !IsMaterialPlacementDefinition(data)
+            || !GeneratedItemRegistryService.IsCurrentWorldData(data) || !WorldGen.InWorld(x, y, 1))
+            return false;
+        if (record.Requeued)
+            return string.Equals(record.RequeueDefinitionJson, definitionJson, StringComparison.Ordinal);
+        if (Groups.Count + PendingReturns.Count >= MaxGroups
+            || Groups.ContainsKey(groupId) || PendingReturns.Any(p => p.GroupId == groupId))
+            return false;
+        PendingReturns.Add(new PendingReturnRecord
+        {
+            GroupId = groupId, GeneratedItemId = id, DefinitionJson = definitionJson, X = x, Y = y,
+        });
+        record.Requeued = true;
+        record.RequeueDefinitionJson = definitionJson;
+        return true;
     }
 
     public override void NetSend(BinaryWriter writer)
@@ -245,10 +386,13 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 PendingAuthorizations.Remove(playerIndex);
                 continue;
             }
-            if (playerIndex >= 0 && playerIndex < Main.maxPlayers && Main.player[playerIndex].active)
-                TryCommitAuthorizedPlacement(Main.player[playerIndex]);
+            if (playerIndex >= 0 && playerIndex < Main.maxPlayers && Main.player[playerIndex] is { active: true } player
+                && (authorization.Sequence == 0 || authorization.NotifyReceived))
+                TryCommitAuthorizedPlacement(player);
         }
 
+        foreach (int playerIndex in ClientPlacementIntents.Where(p => p.Value.ExpiresAtTick < now).Select(p => p.Key).ToArray())
+            ClientPlacementIntents.Remove(playerIndex);
         foreach (int playerIndex in PlacementReceiptExpiryByPlayer.Where(x => x.Value < now).Select(x => x.Key).ToArray())
             PlacementReceiptExpiryByPlayer.Remove(playerIndex);
 
@@ -277,15 +421,27 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 PendingReturns.Add(pending);
                 continue;
             }
-            // Deterministically broken record (unparseable definition, missing id).
-            // Quarantine it so it cannot starve the rest of the queue; the placed
-            // item is lost but the world log keeps the reason.
+            // Retire retry ownership only after retaining the exact raw claim and
+            // diagnosed cause in world save. Never substitute a vanilla/proxy item.
+            QuarantinedReturnRecord? priorQuarantine = QuarantinedReturns.FirstOrDefault(q => q.Requeued
+                && q.Claim.ContainsKey("groupId") && q.Claim["groupId"] is string exactGroupId
+                && string.Equals(exactGroupId, pending.GroupId, StringComparison.Ordinal));
+            if (priorQuarantine is not null)
+            {
+                priorQuarantine.Requeued = false;
+                priorQuarantine.LastFailureCause = pending.FailureCause;
+            }
+            else
+                QuarantinedReturns.Add(new QuarantinedReturnRecord
+                {
+                    Claim = ReturnClaim(pending), Cause = pending.FailureCause,
+                });
             PendingReturns.RemoveAt(index);
             try
             {
                 global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger?.Warn(
                     $"[GeneratedPlacementLedger] pending return quarantined after {pending.FailedAttempts} failed attempts: "
-                    + $"item='{pending.GeneratedItemId}' at ({pending.X}, {pending.Y})");
+                    + $"item='{pending.GeneratedItemId}' at ({pending.X}, {pending.Y}) cause='{pending.FailureCause}'");
             }
             catch { }
         }
@@ -309,7 +465,8 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             return false;
         bool replacesExistingAuthorization = PendingAuthorizations.ContainsKey(player.whoAmI);
         int reservedAuthorizationCount = PendingAuthorizations.Count + (replacesExistingAuthorization ? 0 : 1);
-        if (Groups.Count > MaxGroups - reservedAuthorizationCount
+        if ((long)Groups.Count + PendingReturns.Count + QuarantinedReturns.Count(record => !record.Requeued)
+                + RawQuarantineEnvelopes.Count > MaxGroups - reservedAuthorizationCount
             || Placements.Count > MaxCells - reservedAuthorizationCount * MaxCellsPerGroup)
             return false;
 
@@ -317,9 +474,24 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         int expectedType = tile ? placement.TileId : placement.WallId;
         if (!WorldGen.InWorld(targetX, targetY, AuthorizationRadiusTiles) || !WithinPlacementReach(player, targetX, targetY))
             return false;
+        if (PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? existing)
+            && (int)Main.GameUpdateCount <= existing.ExpiresAtTick)
+        {
+            if (ReferenceEquals(existing.SourcePlayer, player) && ReferenceEquals(existing.SourceData, data)
+                && existing.TargetX == targetX && existing.TargetY == targetY
+                && existing.Layer == layer && string.Equals(existing.GeneratedItemId, data.Id, StringComparison.Ordinal)) return true;
+            // Nonzero remote activations require explicit ordered supersession at
+            // the server packet boundary below. Local abandoned uses may retire
+            // only while their native before-state is still unchanged.
+            if (existing.Sequence != 0 || !CanSupersedeAuthorization(existing, player)) return false;
+        }
+        if (layer == GeneratedPlacementLayer.Wall && Main.tile[targetX, targetY].WallType == expectedType)
+            return false;
         try
         {
             string definitionJson = data.ToNetworkJson();
+            string definitionHash = PlacementDefinitionHash(definitionJson);
+            if (definitionHash.Length == 0) return false;
             var before = new HashSet<long>();
             if (layer == GeneratedPlacementLayer.Tile)
             {
@@ -333,13 +505,17 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             PendingAuthorizations[player.whoAmI] = new PlacementAuthorization
             {
                 PlayerIndex = player.whoAmI,
+                SourcePlayer = player,
+                SourceData = data,
                 Layer = layer,
                 TargetX = targetX,
                 TargetY = targetY,
                 ExpectedType = expectedType,
-                ExpiresAtTick = (int)Main.GameUpdateCount + AuthorizationLifetimeTicks,
+                ExpiresAtTick = (int)Main.GameUpdateCount
+                    + (Main.netMode == NetmodeID.Server ? RemoteIntentLifetimeTicks : AuthorizationLifetimeTicks),
                 GeneratedItemId = data.Id,
                 DefinitionJson = definitionJson,
+                DefinitionHash = definitionHash,
                 BeforeExpectedTiles = before,
                 BeforeWallType = Main.tile[targetX, targetY].WallType,
             };
@@ -354,13 +530,41 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     internal static bool TryCommitAuthorizedPlacement(Player player)
         => TryCommitAuthorizedPlacement(player, announcedLayer: null, announcedX: 0, announcedY: 0);
 
+    private static bool CanSupersedeAuthorization(PlacementAuthorization authorization, Player player)
+    {
+        if (!ReferenceEquals(authorization.SourcePlayer, player) || authorization.NotifyReceived) return false;
+        if (authorization.Layer == GeneratedPlacementLayer.Wall)
+            return Main.tile[authorization.TargetX, authorization.TargetY].WallType == authorization.BeforeWallType;
+        bool unchanged = true;
+        ForEachAuthorizationCell(authorization.TargetX, authorization.TargetY, (x, y) =>
+        {
+            Tile cell = Main.tile[x, y];
+            if ((cell.HasTile && cell.TileType == authorization.ExpectedType)
+                != authorization.BeforeExpectedTiles.Contains(Pack(x, y))) unchanged = false;
+        });
+        return unchanged;
+    }
+
+    private static string PlacementDefinitionHash(string definitionJson)
+    {
+        GeneratedItemData? snapshot = GeneratedItemData.FromJson(definitionJson);
+        if (snapshot is null) return "";
+        // Use the registry's canonical definition identity: peer-specific asset
+        // transport URLs/roster ordering are not authored binding differences.
+        snapshot.RecipeMeta.AssetBaseUrl = "";
+        snapshot.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(snapshot).ToArray();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(snapshot.ToNetworkJson()))).ToLowerInvariant();
+    }
+
     private static bool TryCommitAuthorizedPlacement(
         Player player,
         GeneratedPlacementLayer? announcedLayer,
         int announcedX,
         int announcedY)
     {
-        if (player is null || !PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? authorization))
+        if (player is null || !PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? authorization)
+            || !ReferenceEquals(authorization.SourcePlayer, player)
+            || (Main.netMode == NetmodeID.Server && authorization.Sequence != 0 && !authorization.NotifyReceived))
             return false;
         if ((int)Main.GameUpdateCount > authorization.ExpiresAtTick)
         {
@@ -396,7 +600,8 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         PendingAuthorizations.Remove(player.whoAmI);
         RecordPlacementReceipt(player);
         if (Main.netMode == NetmodeID.MultiplayerClient)
-            SendPlacementToServer(authorization.Layer, authorization.TargetX, authorization.TargetY);
+            SendPlacementToServer(authorization.Sequence, authorization.Layer, authorization.TargetX, authorization.TargetY);
+        ClientPlacementIntents.Remove(player.whoAmI);
         return true;
     }
 
@@ -481,7 +686,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         return component;
     }
 
-    private static void SendPlacementToServer(GeneratedPlacementLayer layer, int x, int y)
+    private static void SendPlacementToServer(ulong sequence, GeneratedPlacementLayer layer, int x, int y)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient)
             return;
@@ -489,63 +694,197 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         if (packet is null)
             return;
         packet.Write(Common.InfiniNetPacketIds.NotifyGeneratedPlacement);
-        packet.Write(PayloadVersion);
+        packet.Write(PlacementProtocolVersion);
+        packet.Write(sequence);
         packet.Write((byte)layer);
         packet.Write(x);
         packet.Write(y);
         packet.Send();
     }
 
-    internal static void HandlePlacementPacket(BinaryReader reader, int whoAmI)
+    internal static bool PreparePlacement(Player player, GeneratedItemData data, RuntimePlacementSpec placement)
     {
-        int version = reader.ReadInt32();
-        if (version != PayloadVersion)
-            throw new InvalidDataException($"Unsupported generated placement packet {version}");
-        var layer = (GeneratedPlacementLayer)reader.ReadByte();
-        int x = reader.ReadInt32();
-        int y = reader.ReadInt32();
-        if (Main.netMode != NetmodeID.Server
-            || !Enum.IsDefined(typeof(GeneratedPlacementLayer), layer)
-            || whoAmI < 0
-            || whoAmI >= Main.maxPlayers
-            || !Main.player[whoAmI].active)
-            return;
-        Player player = Main.player[whoAmI];
-        if (TryCommitAuthorizedPlacement(player, layer, x, y))
-            return;
-        // Dedicated server: the authorization lives in the client's process, so the
-        // first notification arrives without server-local state. Establish it from
-        // the server's own view of the player's held item - the packet never carries
-        // the item identity, the server derives everything it accepts.
-        TryAuthorizePlacementFromHeldItem(player, layer, x, y);
-        TryCommitAuthorizedPlacement(player, layer, x, y);
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            return AuthorizePlacement(player, data, placement);
+        int x = Player.tileTargetX, y = Player.tileTargetY, now = (int)Main.GameUpdateCount;
+        if (player.whoAmI != Main.myPlayer || player.HeldItem is null || player.HeldItem.IsAir
+            || !WorldGen.InWorld(x, y, AuthorizationRadiusTiles) || !WithinPlacementReach(player, x, y)) return false;
+        byte input = (byte)(player.altFunctionUse == 2 ? 1 : 0);
+        if (ClientPlacementIntents.TryGetValue(player.whoAmI, out ClientPlacementIntent? intent))
+        {
+            if (!ReferenceEquals(intent.Player, player) || !ReferenceEquals(intent.Item, player.HeldItem)
+                || !ReferenceEquals(intent.Data, data) || !ReferenceEquals(intent.Placement, placement)
+                || intent.Input != input || intent.X != x || intent.Y != y || now > intent.ExpiresAtTick)
+            {
+                if (PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? prior)
+                    && !CanSupersedeAuthorization(prior, player)) return false;
+                RetiredClientPlacementIntents[player.whoAmI] = intent;
+                ClientPlacementIntents.Remove(player.whoAmI);
+                PendingAuthorizations.Remove(player.whoAmI);
+                return false;
+            }
+            if (intent.Ready && !string.Equals(intent.DefinitionHash, PlacementDefinitionHash(data.ToNetworkJson()), StringComparison.Ordinal))
+            {
+                RetiredClientPlacementIntents[player.whoAmI] = intent;
+                ClientPlacementIntents.Remove(player.whoAmI);
+                return false;
+            }
+            if (!intent.Ready || !AuthorizePlacement(player, data, placement, x, y)) return false;
+            PendingAuthorizations[player.whoAmI].Sequence = intent.Sequence;
+            intent.UseAdmitted = true;
+            return true;
+        }
+        if (_nextPlacementSequence == ulong.MaxValue) return false;
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
+        if (packet is null) return false;
+        ulong sequence = ++_nextPlacementSequence;
+        string definitionHash = PlacementDefinitionHash(data.ToNetworkJson());
+        if (definitionHash.Length == 0) return false;
+        ulong supersedes = RetiredClientPlacementIntents.Remove(player.whoAmI, out ClientPlacementIntent? retired)
+            && ReferenceEquals(retired.Player, player) ? retired.Sequence : 0;
+        ClientPlacementIntents[player.whoAmI] = new ClientPlacementIntent
+        {
+            Player = player, Item = player.HeldItem, Data = data, Placement = placement,
+            Input = input, X = x, Y = y, Sequence = sequence, ExpiresAtTick = now + RemoteIntentLifetimeTicks,
+            DefinitionHash = definitionHash,
+        };
+        packet.Write(Common.InfiniNetPacketIds.RequestGeneratedPlacementIntent);
+        packet.Write(PlacementProtocolVersion); packet.Write(sequence); packet.Write(input); packet.Write(x); packet.Write(y);
+        packet.Write(supersedes);
+        try { packet.Send(); }
+        catch { ClientPlacementIntents.Remove(player.whoAmI); return false; }
+        // Do not let vanilla mutate/consume until the server captured real before-state.
+        return false;
     }
 
-    private static void TryAuthorizePlacementFromHeldItem(Player player, GeneratedPlacementLayer layer, int x, int y)
+    internal static void RefreshPlacementInput(Player player)
     {
-        if (player.HeldItem?.ModItem is not GeneratedItem held || held.Data is null)
-            return;
-        GeneratedItemData data = held.Data;
-        bool isTile = layer == GeneratedPlacementLayer.Tile;
-        Tile cell = Main.tile[x, y];
-        int observedType = isTile ? cell.TileType : cell.WallType;
-        if (observedType < 0)
-            return;
-        foreach (RuntimeBindingSpec binding in data.RuntimeProgram.Bindings)
+        if (Main.netMode != NetmodeID.MultiplayerClient || player.whoAmI != Main.myPlayer
+            || !ClientPlacementIntents.TryGetValue(player.whoAmI, out ClientPlacementIntent? intent)) return;
+        var held = player.HeldItem?.ModItem as GeneratedItem;
+        RuntimeBindingSpec? binding = held?.Data.RuntimeProgram.BindingForInput(intent.Input == 1
+            ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
+        if (!ReferenceEquals(intent.Player, player) || !ReferenceEquals(Main.player[player.whoAmI], player)
+            || !player.active || player.dead || !ReferenceEquals(intent.Item, player.HeldItem)
+            || !ReferenceEquals(intent.Data, held?.Data) || !ReferenceEquals(intent.Placement, binding?.UsePolicy.Action.Placement)
+            || intent.Input != (byte)(player.altFunctionUse == 2 ? 1 : 0)
+            || intent.X != Player.tileTargetX || intent.Y != Player.tileTargetY
+            || (int)Main.GameUpdateCount > intent.ExpiresAtTick
+            || !WithinPlacementReach(player, intent.X, intent.Y)
+            || (!intent.UseAdmitted && !player.controlUseItem))
         {
-            if (binding.UsePolicy?.Action?.Kind != RuntimeBindingAction.PlaceItem)
-                continue;
-            RuntimePlacementSpec? placement = binding.UsePolicy.Action.Placement;
-            if (placement is null)
-                continue;
-            int authoredType = isTile ? placement.TileId : placement.WallId;
-            if (authoredType != observedType)
-                continue;
-            if (!AuthorizePlacement(player, data, placement, x, y))
-                return;
-            // One placement authorization per player; the first matching binding wins.
+            ClientPlacementIntents.Remove(player.whoAmI);
+            // An admitted completion retains its original before-state. Only an
+            // unstarted/finished-empty activation can be explicitly superseded.
+            if ((!intent.UseAdmitted || (player.itemAnimation == 0 && player.itemTime == 0))
+                && (!PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? prior)
+                    || CanSupersedeAuthorization(prior, player)))
+            {
+                RetiredClientPlacementIntents[player.whoAmI] = intent;
+                PendingAuthorizations.Remove(player.whoAmI);
+            }
             return;
         }
+        // ItemCheck consumes releaseUseItem even when CanUseItem refused the
+        // first press. Re-arm only this unchanged, still-held unstarted intent
+        // once after Ready, never authored autoReuse or a released activation.
+        if (intent.Ready && !intent.UseAdmitted && !intent.NativeRetrySpent
+            && player.controlUseItem && player.itemAnimation == 0 && player.itemTime == 0 && player.reuseDelay == 0
+            && string.Equals(intent.DefinitionHash, PlacementDefinitionHash(intent.Data.ToNetworkJson()), StringComparison.Ordinal))
+        {
+            intent.NativeRetrySpent = true;
+            player.releaseUseItem = true;
+        }
+    }
+
+    internal static void HandlePlacementReadyPacket(BinaryReader reader, int whoAmI)
+    {
+        if (reader.ReadInt32() != PlacementProtocolVersion) throw new InvalidDataException("Unsupported placement ready protocol");
+        ulong sequence = reader.ReadUInt64(); bool accepted = reader.ReadBoolean();
+        string definitionHash = accepted ? reader.ReadString() : "";
+        if (Main.netMode != NetmodeID.MultiplayerClient
+            || !ClientPlacementIntents.TryGetValue(Main.myPlayer, out ClientPlacementIntent? intent)
+            || intent.Sequence != sequence || (int)Main.GameUpdateCount > intent.ExpiresAtTick) return;
+        if (accepted && string.Equals(definitionHash, intent.DefinitionHash, StringComparison.Ordinal)
+            && string.Equals(definitionHash, PlacementDefinitionHash(intent.Data.ToNetworkJson()), StringComparison.Ordinal)) intent.Ready = true;
+        else
+        {
+            RetiredClientPlacementIntents[Main.myPlayer] = intent;
+            ClientPlacementIntents.Remove(Main.myPlayer);
+        }
+    }
+
+    internal static void HandlePlacementIntentPacket(BinaryReader reader, int whoAmI)
+    {
+        if (reader.ReadInt32() != PlacementProtocolVersion) throw new InvalidDataException("Unsupported placement intent protocol");
+        ulong sequence = reader.ReadUInt64(); byte input = reader.ReadByte(); int x = reader.ReadInt32(), y = reader.ReadInt32();
+        ulong supersedes = reader.ReadUInt64();
+        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers
+            || Main.player[whoAmI] is not { active: true } player || input > 1 || sequence == 0
+            || !WorldGen.InWorld(x, y, AuthorizationRadiusTiles) || !WithinPlacementReach(player, x, y)) return;
+        if (!PlacementPeerCursors.TryGetValue(whoAmI, out PlacementPeerCursor? cursor) || !ReferenceEquals(cursor.Player, player))
+            PlacementPeerCursors[whoAmI] = cursor = new PlacementPeerCursor { Player = player };
+        if (sequence <= cursor.Sequence) return;
+        cursor.Sequence = sequence;
+        int now = (int)Main.GameUpdateCount;
+        bool accepted = false;
+        PendingAuthorizations.TryGetValue(whoAmI, out PlacementAuthorization? prior);
+        if (cursor.LastIntentTick != now)
+        {
+            cursor.LastIntentTick = now;
+            // Input chooses only a registered binding on the server-observed held
+            // instance. No client id, definition, type or before-state is admitted.
+            if (player.HeldItem is { IsAir: false, stack: > 0 } item && item.ModItem is GeneratedItem held
+                && held.Data is not null)
+            {
+                RuntimeBindingSpec? binding = held.Data.RuntimeProgram.BindingForInput(input == 1
+                    ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
+                RuntimePlacementSpec? placement = binding?.UsePolicy?.Action?.Placement;
+                if (binding?.UsePolicy?.Action?.Kind == RuntimeBindingAction.PlaceItem
+                    && binding.UsePolicy.StackCost == 1 && placement is not null
+                    && string.IsNullOrEmpty(GeneratedItem.UseBlockedReason(player, held.Data.Gameplay)))
+                {
+                    // A newer ordered request names the exact abandoned intent.
+                    // Never discard a notify or a native mutation, and never let
+                    // a late old notify reconstruct the retired snapshot.
+                    bool mayAuthorize = prior is null || now > prior.ExpiresAtTick || prior.Sequence == 0;
+                    if (!mayAuthorize && supersedes == prior!.Sequence && sequence > prior.Sequence
+                        && CanSupersedeAuthorization(prior, player))
+                    {
+                        PendingAuthorizations.Remove(whoAmI);
+                        mayAuthorize = true;
+                    }
+                    if (mayAuthorize && AuthorizePlacement(player, held.Data, placement, x, y))
+                    {
+                        PendingAuthorizations[whoAmI].Sequence = sequence;
+                        accepted = true;
+                    }
+                }
+            }
+        }
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
+        if (packet is null) return;
+        packet.Write(Common.InfiniNetPacketIds.GeneratedPlacementIntentReady);
+        packet.Write(PlacementProtocolVersion); packet.Write(sequence); packet.Write(accepted);
+        if (accepted) packet.Write(PendingAuthorizations[whoAmI].DefinitionHash);
+        packet.Send(whoAmI);
+    }
+
+    internal static void HandlePlacementPacket(BinaryReader reader, int whoAmI)
+    {
+        if (reader.ReadInt32() != PlacementProtocolVersion) throw new InvalidDataException("Unsupported placement notify protocol");
+        ulong sequence = reader.ReadUInt64(); var layer = (GeneratedPlacementLayer)reader.ReadByte();
+        int x = reader.ReadInt32(), y = reader.ReadInt32();
+        if (Main.netMode != NetmodeID.Server || !Enum.IsDefined(typeof(GeneratedPlacementLayer), layer)
+            || whoAmI < 0 || whoAmI >= Main.maxPlayers || Main.player[whoAmI] is not { active: true } player
+            || !WorldGen.InWorld(x, y, AuthorizationRadiusTiles) || !WithinPlacementReach(player, x, y)
+            || !PendingAuthorizations.TryGetValue(whoAmI, out PlacementAuthorization? authorization)
+            || authorization.Sequence == 0 || authorization.Sequence != sequence
+            || authorization.Layer != layer || authorization.TargetX != x || authorization.TargetY != y) return;
+        authorization.NotifyReceived = true;
+        // A late notify can only finish an already server-owned before snapshot.
+        // It can never synthesize a new authorization from an existing cell.
+        TryCommitAuthorizedPlacement(player, layer, x, y);
     }
 
     private static bool WithinPlacementReach(Player player, int x, int y)
@@ -631,18 +970,33 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         catch { return PendingSpawnOutcome.TransientFailure; }
     }
 
+    private static bool IsMaterialPlacementDefinition(GeneratedItemData data)
+        => data.SourceMode is not ("player_save_ref" or "corrupt_reference")
+            && data.Id != "placeholder"
+            && data.RuntimeProgram.Bindings.Any(binding => binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem
+                && binding.UsePolicy.StackCost == 1 && binding.UsePolicy.Action.Placement is not null);
+
     private static PendingSpawnOutcome TrySpawnPendingReturnCore(PendingReturnRecord pending)
     {
-        GeneratedItemData? data = null;
-        GeneratedItemRegistryService? registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-        if (registry is not null
-            && registry.TryGet(pending.GeneratedItemId, out GeneratedItemData canonical)
-            && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
-            data = canonical;
-        data ??= GeneratedItemData.FromJson(pending.DefinitionJson);
-        if (data is null || !string.Equals(data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
+        // The raw durable definition owns this claim. Do not borrow a registry
+        // definition merely because its id matches a permanently broken record.
+        GeneratedItemData? data = GeneratedItemData.FromJson(pending.DefinitionJson);
+        if (data is null)
+        {
+            pending.FailureCause = "definition_invalid";
             return PendingSpawnOutcome.PermanentFailure;
+        }
+        if (!string.Equals(data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
+        {
+            pending.FailureCause = "identity_mismatch";
+            return PendingSpawnOutcome.PermanentFailure;
+        }
 
+        if (!IsMaterialPlacementDefinition(data))
+        {
+            pending.FailureCause = "definition_not_material_placement";
+            return PendingSpawnOutcome.PermanentFailure;
+        }
         bool asArmorProxy = GeneratedArmorItemTypes.CanRepresent(data);
         int itemType = asArmorProxy
             ? GeneratedArmorItemTypes.ItemTypeFor(data)
@@ -663,10 +1017,18 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         // stale whoAmI and skip vanilla spawn initialization.
         Item spawned = Main.item[index];
         if (spawned.ModItem is not GeneratedItem generated)
+        {
+            spawned.TurnToAir();
+            pending.FailureCause = "proxy_invalid";
             return PendingSpawnOutcome.PermanentFailure;
+        }
         generated.SetData(data);
         if (!string.Equals(generated.Data.Id, pending.GeneratedItemId, StringComparison.Ordinal))
+        {
+            spawned.TurnToAir();
+            pending.FailureCause = "projection_identity_mismatch";
             return PendingSpawnOutcome.PermanentFailure;
+        }
         spawned.stack = 1;
         if (Main.netMode == NetmodeID.Server)
         {

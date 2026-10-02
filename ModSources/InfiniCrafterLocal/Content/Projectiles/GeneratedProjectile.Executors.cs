@@ -145,8 +145,12 @@ public sealed partial class GeneratedProjectile
             _released = true;
             float ratio = Math.Clamp(_chargeTicks / (float)chargeDuration, 0f, 1f);
             float multiplier = MathHelper.Lerp(1f, Math.Max(1f, p.PowerMultiplier), ratio);
-            Projectile.damage = Math.Max(0, (int)MathF.Round(_entity.Damage.Damage * multiplier));
-            Projectile.knockBack = _entity.Damage.Knockback * multiplier;
+            // NewProjectileDirect/live state already includes the event-spawn
+            // multiplier and any combat modifications. _released makes this one
+            // application per generation; received released ExtraAI never scales
+            // a peer's already-scaled combat state a second time.
+            Projectile.damage = Math.Max(0, (int)MathF.Round(Projectile.damage * multiplier));
+            Projectile.knockBack *= multiplier;
             Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
             Projectile.velocity = direction * Math.Max(1f, _entity.Spawn.SpeedPxPerTick) * multiplier;
             Projectile.tileCollide = _entity.Collision.TileCollide;

@@ -24,6 +24,38 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
     private const int MaxOutcomes = 65536;
     private const int MaxCraftTransactions = 65536;
     private const int SlotCount = 6;
+    private const string AuthorityScopeSaveKey = "infiniStationEscrowAuthorityScopeV1";
+    private static string _authorityScope = "";
+
+    // An opaque world-owned authority identity, never a guessed world name/id or
+    // endpoint. Old player claims without this exact token remain read-only.
+    internal static string AuthorityScope => _authorityScope;
+
+    internal static bool IsExactAuthorityScope(string? scope)
+        => ValidAuthorityScope(scope) && string.Equals(scope, _authorityScope, StringComparison.Ordinal);
+
+    private static bool ValidAuthorityScope(string? scope)
+        => scope is not null && scope.Length == 32 && scope.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static void EnsureAuthorityScope()
+    {
+        if (_authorityScope.Length == 0 && Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient)
+            _authorityScope = Guid.NewGuid().ToString("N");
+    }
+
+    public override void NetSend(System.IO.BinaryWriter writer)
+    {
+        EnsureAuthorityScope();
+        writer.Write(_authorityScope);
+    }
+
+    public override void NetReceive(System.IO.BinaryReader reader)
+    {
+        string scope = reader.ReadString();
+        if (!ValidAuthorityScope(scope))
+            throw new System.IO.InvalidDataException("Invalid station authority scope");
+        _authorityScope = scope;
+    }
 
     internal readonly record struct ReplayOutcome(byte Action, int Index, bool Success, string Message);
     internal readonly record struct CraftReplayOutcome(bool Success, string ItemName, string Message);
@@ -48,6 +80,7 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
 
     public override void ClearWorld()
     {
+        _authorityScope = "";
         Owners.Clear();
         Outcomes.Clear();
         CraftTransactions.Clear();
@@ -55,6 +88,8 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
 
     public override void SaveWorldData(TagCompound tag)
     {
+        EnsureAuthorityScope();
+        tag[AuthorityScopeSaveKey] = _authorityScope;
         tag[OwnersSaveKey] = Owners.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair =>
         {
             var slots = new List<TagCompound>();
@@ -97,6 +132,11 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
     public override void LoadWorldData(TagCompound tag)
     {
         ClearWorld();
+        string scope = tag.GetString(AuthorityScopeSaveKey);
+        if (ValidAuthorityScope(scope)) _authorityScope = scope;
+        // Mint scope for this world's future operations only; never attach an
+        // unscoped historical player claim to it.
+        EnsureAuthorityScope();
         foreach (TagCompound row in tag.GetList<TagCompound>(OwnersSaveKey).Take(MaxOwners))
         {
             string clientId = NormalizeClientId(row.GetString("clientId"));

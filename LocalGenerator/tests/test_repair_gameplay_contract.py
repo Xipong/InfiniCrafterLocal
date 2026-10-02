@@ -6,11 +6,173 @@ import pytest
 
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
-    compile_runtime_program, filter_repair_patch_scope, validate_runtime_program,
+    compile_runtime_program, filter_repair_patch_scope, runtime_repair_fragments,
+    validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_repair_structure_report, strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+
+@pytest.mark.parametrize("namespace,position", [(n, p) for n in ("entities", "bindings", "calls") for p in ("head", "tail")])
+def test_malformed_row_owns_only_its_original_index(namespace, position):
+    doc = build_capability_witness("restore_resources_on_use")
+    original = copy.deepcopy(doc)
+    rows = doc["runtimeProgram"][namespace]
+    index = 0 if position == "head" else len(rows)
+    rows.insert(index, None)
+    before = copy.deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    index_key = {"entities": "entityIndices", "bindings": "bindingIndices", "calls": "callIndices"}[namespace]
+    assert scope["deletable"][index_key] == [index], "diagnostics must keep original array coordinates"
+    assert all(not paths for paths in scope["fieldPermissions"].values()), "a malformed row cannot unfreeze its valid sibling"
+    assert runtime_repair_fragments(doc, scope)["brokenByIndex"][namespace] == [{"index": index, "value": None}]
+
+    patch = {"note": "no node operations", "realizationReplacement": doc["realization"]}
+    filtered, audit = filter_repair_patch_scope(doc, patch, scope)
+    assert not audit["ok"], "a no-op must leave the original malformed row RED"
+    assert apply_repair_patch(doc, filtered) == doc, "omission cannot silently sanitize malformed rows"
+    assert not validate_runtime_program(apply_repair_patch(doc, filtered))["ok"]
+
+    candidate = copy.deepcopy(original["runtimeProgram"][namespace][0])
+    if namespace == "entities":
+        candidate["kind"] = "field"
+    elif namespace == "bindings":
+        candidate["input"] = "alternate_use"
+    else:
+        candidate["params"]["damage"] = 100
+    patch.update({namespace + "Upsert": [candidate], index_key + "Delete": [index]})
+    filtered, audit = filter_repair_patch_scope(doc, patch, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    assert filtered[namespace + "Upsert"] == []
+    assert filtered[index_key + "Delete"] == [index]
+    repaired = apply_repair_patch(doc, filtered)
+    assert repaired == original
+    assert validate_runtime_program(repaired)["ok"]
+    compiled = compile_runtime_program(repaired)
+    assert validate_runtime_wire(compiled)["ok"]
+    assert doc == before
+
+
+@pytest.mark.parametrize("malformed", [None, False, "broken", {}, {"params": {"damage": 999}}])
+def test_sparse_patch_preserves_every_original_occurrence(malformed):
+    doc = build_capability_witness("configure_item_stats")
+    rows = doc["runtimeProgram"]["calls"]
+    rows.insert(0, copy.deepcopy(malformed))
+    rows.append(copy.deepcopy(malformed))
+    before = copy.deepcopy(doc)
+    assert apply_repair_patch(doc, {"note": "no node edits"}) == before
+    assert doc == before
+
+
+@pytest.mark.parametrize("namespace", ["entities", "bindings", "calls"])
+def test_duplicate_occurrences_require_exact_index_deletion(namespace):
+    doc = build_capability_witness("restore_resources_on_use")
+    original = copy.deepcopy(doc)
+    rows = doc["runtimeProgram"][namespace]
+    duplicate = copy.deepcopy(rows[0])
+    if namespace == "entities":
+        duplicate["kind"] = "field"
+    elif namespace == "bindings":
+        duplicate["input"] = "alternate_use"
+    else:
+        duplicate["params"]["damage"] = 100
+    duplicate_index = len(rows)
+    rows.append(duplicate)
+    before = copy.deepcopy(doc)
+    assert apply_repair_patch(doc, {"note": "no edits"}) == doc, "duplicates must retain their distinct original values"
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    shared_id = duplicate["id"]
+    scope_key = {"entities": "entityIds", "bindings": "bindingIds", "calls": "callIds"}[namespace]
+    index_key = {"entities": "entityIndices", "bindings": "bindingIndices", "calls": "callIndices"}[namespace]
+    assert not any(row["id"] == shared_id for row in scope["fieldPermissions"][namespace]), "ID-only permissions cannot identify one duplicate occurrence"
+    assert shared_id not in scope["deletable"][scope_key]
+    assert duplicate_index in scope["deletable"][index_key]
+    patch = {"note": "drop only the duplicate", "realizationReplacement": doc["realization"],
+             index_key + "Delete": [duplicate_index], scope_key + "Delete": [shared_id], namespace + "Upsert": [duplicate]}
+    filtered, audit = filter_repair_patch_scope(doc, patch, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    assert filtered[namespace + "Upsert"] == [] and filtered[scope_key + "Delete"] == []
+    assert apply_repair_patch(doc, filtered) == original
+    assert validate_runtime_wire(compile_runtime_program(original))["ok"]
+    assert doc == before
+
+
+@pytest.mark.parametrize("fn,param", [
+    ("apply_generated_buff_on_use", "miningSpeedMultiplier"),
+    ("apply_generated_buff_on_use", "manaRegenBonusPoints"),
+    ("configure_placeable", "tileId"),
+    ("configure_accessory", "lightStrength"),
+])
+@pytest.mark.parametrize("value", [10**400, 65536], ids=["huge-json-integer", "bounded-range-error"])
+def test_large_json_numbers_keep_exact_shape_repair(fn, param, value):
+    good = build_capability_witness(fn)
+    if fn == "configure_accessory":
+        next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(lightStrength=0, lightColor="white")
+    doc = copy.deepcopy(good)
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    node["params"][param] = value
+    # Exercise valid JSON numeric transport, not NaN/Infinity or changed limits.
+    doc = json.loads(json.dumps(doc, allow_nan=False))
+    before = copy.deepcopy(doc)
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    index = doc["runtimeProgram"]["calls"].index(node)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert any(row["code"].startswith("shape_") and row["path"] == f"$.runtimeProgram.calls[{index}].params.{param}" for row in report["errors"]), report
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": ["params." + param]}]
+    candidate = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn))
+    filtered, audit = filter_repair_patch_scope(doc, {"note": "restore the exact invalid number", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(doc, filtered)
+    assert repaired == good
+    assert validate_runtime_program(repaired)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert doc == before
+
+
+@pytest.mark.parametrize("companion_fn", [None, "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use"])
+@pytest.mark.parametrize("chosen_heal", ["healLife", "healMana"])
+def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chosen_heal):
+    doc = build_capability_witness("restore_resources_on_use")
+    calls = doc["runtimeProgram"]["calls"]
+    healing = next(row for row in calls if row["fn"] == "restore_resources_on_use")
+    healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
+    if companion_fn:
+        companion = copy.deepcopy(next(row for row in build_capability_witness(companion_fn)["runtimeProgram"]["calls"] if row["fn"] == companion_fn))
+        companion.update(id="active_companion", target=healing["target"])
+        calls.append(companion)
+    before = copy.deepcopy(doc)
+    report = validate_runtime_program(doc)
+    if companion_fn:
+        assert report["ok"], "intentional neutral healing remains valid with another active use effect"
+        assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
+        return
+    assert not report["ok"], "empty effective-use composition must fail while authored paths still exist"
+    assert report["errors"] == [{
+        "path": f"$.runtimeProgram.calls[{calls.index(healing)}].params", "code": "empty_component",
+        "message": CAPABILITY_REGISTRY[healing["fn"]].requirements[-1].message,
+        "allowed": ["healLife > 0", "healMana > 0"], "relatedIds": [],
+    }]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert not scope["nonRepairableErrors"]
+    assert scope["fieldPermissions"]["calls"] == [{"id": healing["id"], "paths": ["params.healLife", "params.healMana"]}]
+    assert not scope["fieldPermissions"]["bindings"]
+    candidate = copy.deepcopy(healing)
+    candidate["params"].update({chosen_heal: 20, "usesPotionRules": True})
+    stats = copy.deepcopy(next(row for row in calls if row["fn"] == "configure_item_stats"))
+    stats["params"]["damage"] = 100
+    filtered, audit = filter_repair_patch_scope(doc, {"note": "choose one explicit healing effect", "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    expected = copy.deepcopy(doc)
+    expected["runtimeProgram"]["calls"][calls.index(healing)]["params"][chosen_heal] = 20
+    repaired = apply_repair_patch(doc, filtered)
+    assert repaired == expected
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert doc == before
 
 
 @pytest.mark.parametrize("case", [

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.env_utils import env_float, env_int, env_str
+from infini_local.core.http_io import HttpDeadlineExceeded, remaining_seconds, read_with_deadline, urlopen_no_redirect
 from urllib import request as urlrequest
 from urllib import error as urlerror
 from urllib.parse import urlencode
@@ -122,10 +123,11 @@ from infini_local.pipelines.visual_prompt_contracts import (
 
 
 
-def http_binary_get(url: str, timeout: int = 30) -> bytes:
+def http_binary_get(url: str, timeout: float = 30, *, deadline: float | None = None) -> bytes:
+    deadline = time.monotonic() + timeout if deadline is None else deadline
     req = urlrequest.Request(url, headers={"Accept": "image/png,*/*"}, method="GET")
-    with urlrequest.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    with urlopen_no_redirect(req, deadline=deadline) as resp:
+        return read_with_deadline(resp, deadline=deadline)
 
 def json_deep_replace(obj: Any, mapping: dict[str, Any]) -> Any:
     """Replace {{PLACEHOLDER}} tokens in a ComfyUI workflow while preserving numeric types.
@@ -259,10 +261,11 @@ def sdcpp_effective_extra_arg_list() -> list[str]:
 def sdcpp_server_is_configured() -> bool:
     return sdcpp_backend.server_is_configured(_sdcpp_config(), SDCPP_SERVER_COMMAND_TEMPLATE)
 
-def http_json_get(url: str, timeout: int = 5) -> Any:
+def http_json_get(url: str, timeout: float = 5, *, deadline: float | None = None) -> Any:
+    deadline = min(time.monotonic() + timeout, deadline) if deadline is not None else time.monotonic() + timeout
     req = urlrequest.Request(url, headers={"Accept": "application/json,*/*"}, method="GET")
-    with urlrequest.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
+    with urlopen_no_redirect(req, deadline=deadline) as resp:
+        raw = read_with_deadline(resp, deadline=deadline)
         ctype = resp.headers.get("Content-Type", "")
         if "json" in ctype:
             return json.loads(raw.decode("utf-8"))
@@ -339,12 +342,12 @@ def sdcpp_server_payload(prompt: str, negative: str, width: int, height: int, se
         positive_only=zimage_positive_only_enabled(),
     )
 
-def extract_image_from_server_response(raw: bytes, ctype: str, out_path: Path) -> bool:
+def extract_image_from_server_response(raw: bytes, ctype: str, out_path: Path, *, deadline: float | None = None) -> bool:
     return sdcpp_backend.extract_image_from_response(
         raw,
         ctype,
         out_path,
-        fetch_url=http_binary_get,
+        fetch_url=lambda url, timeout: http_binary_get(url, timeout=timeout, deadline=deadline),
         timeout=SDCPP_SERVER_REQUEST_TIMEOUT,
     )
 
@@ -352,14 +355,18 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
     if not ensure_sdcpp_server():
         log_event("warn", "stable-diffusion.cpp server is not available; image asset generation will fail/retry", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
         return []
+    deadline = time.monotonic() + SDCPP_SERVER_REQUEST_TIMEOUT
     if _effective_sdcpp_lora_prompt_tags():
         try:
-            catalog = http_json_get(SDCPP_SERVER_URL.rstrip("/") + "/sdapi/v1/loras", timeout=5)
+            catalog = http_json_get(SDCPP_SERVER_URL.rstrip("/") + "/sdapi/v1/loras", timeout=5, deadline=deadline)
             trace_event("step", "SDCPP:lora", "refreshed sd.cpp LoRA cache", {
                 "spriteId": sprite_id,
                 "available": len(catalog) if isinstance(catalog, list) else None,
             })
         except Exception as exc:
+            # Catalog refresh has its own shorter subdeadline. Only exhaustion
+            # of the original image budget is terminal; never reset that budget.
+            remaining_seconds(deadline)
             # The refresh is advisory: the LoRA tag still travels inside the txt2img
             # payload, and the server is already verified alive. A transient catalog
             # failure must not cancel the whole generation attempt.
@@ -384,6 +391,7 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
         for path in paths:
             url = SDCPP_SERVER_URL + (path if path.startswith("/") else "/" + path)
             for style in styles:
+                remaining_seconds(deadline)
                 payload = sdcpp_server_payload(prompt, str(negative or ""), width, height, seed, style)
                 trace_event("step", "SDCPP:txt2img", "trying sd.cpp txt2img endpoint", {
                     "spriteId": sprite_id, "url": url, "style": style, "seed": seed, "width": width, "height": height,
@@ -392,19 +400,26 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
                 try:
                     req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Content-Type": "application/json", "Accept": "application/json,image/png,*/*"}, method="POST")
                     t0 = time.time()
-                    with urlrequest.urlopen(req, timeout=SDCPP_SERVER_REQUEST_TIMEOUT) as resp:
-                        raw = resp.read()
+                    with urlopen_no_redirect(req, deadline=deadline) as resp:
+                        raw = read_with_deadline(resp, deadline=deadline)
                         ctype = resp.headers.get("Content-Type", "")
-                    if extract_image_from_server_response(raw, ctype, out_path) and out_path.exists():
+                    if extract_image_from_server_response(raw, ctype, out_path, deadline=deadline) and out_path.exists():
                         out.append(str(out_path))
                         trace_event("step", "SDCPP:txt2img", "sd.cpp image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed, "contentType": ctype})
                         log_event("info", "stable-diffusion.cpp server image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed})
                         ok = True
                         break
                     last_err = f"no image in response from {url} style={style} contentType={ctype} bodyPrefix={raw[:200]!r}"
-                except ImageOutputIOError:
+                except (ImageOutputIOError, HttpDeadlineExceeded):
                     raise
+                except urlerror.HTTPError as e:
+                    # The adapter owns every rejected physical response too;
+                    # close it before negotiation continues, independent of GC.
+                    with e:
+                        last_err = repr(e)
+                    remaining_seconds(deadline)
                 except Exception as e:
+                    remaining_seconds(deadline)
                     last_err = repr(e)
             if ok:
                 break
@@ -434,7 +449,7 @@ def image_api_url() -> str:
         return path
     return IMAGE_API_BASE_URL.rstrip("/") + (path if path.startswith("/") else "/" + path)
 
-def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, timeout: int) -> bool:
+def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, timeout: float, *, deadline: float | None = None) -> bool:
     if raw[:8] == b"\x89PNG\r\n\x1a\n" or "image/png" in (ctype or ""):
         write_image_bytes(out_path, raw)
         return True
@@ -457,7 +472,7 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
                 return True
             url = first.get("url") or first.get("image_url")
             if url:
-                write_image_bytes(out_path, http_binary_get(str(url), timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(str(url), timeout=timeout, deadline=deadline))
                 return True
 
     # Some OpenAI-compatible gateways use {images:[...]} or {image:"..."}.
@@ -468,7 +483,7 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
             val = val.get("b64_json") or val.get("url") or val.get("image")
         if isinstance(val, str):
             if val.startswith("http://") or val.startswith("https://"):
-                write_image_bytes(out_path, http_binary_get(val, timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(val, timeout=timeout, deadline=deadline))
                 return True
             if val.startswith("data:") and "," in val:
                 val = val.split(",", 1)[1]
@@ -479,7 +494,7 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
         val = obj.get(key) if isinstance(obj, dict) else None
         if isinstance(val, str) and len(val) > 64:
             if val.startswith("http://") or val.startswith("https://"):
-                write_image_bytes(out_path, http_binary_get(val, timeout=timeout))
+                write_image_bytes(out_path, http_binary_get(val, timeout=timeout, deadline=deadline))
                 return True
             if val.startswith("data:") and "," in val:
                 val = val.split(",", 1)[1]
@@ -516,6 +531,7 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
     if not IMAGE_API_KEY:
         log_event("warn", "image API backend has no API key", {"backend": IMAGE_BACKEND, "baseUrl": IMAGE_API_BASE_URL})
         return []
+    deadline = time.monotonic() + IMAGE_API_TIMEOUT
     variants = max(1, int(GENERATE_VARIANTS))
     out: list[str] = []
     url = image_api_url()
@@ -524,6 +540,7 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
     if negative:
         full_prompt = full_prompt + ", avoid: " + str(negative)[:700]
     for i in range(variants):
+        remaining_seconds(deadline)
         payload = {
             "model": IMAGE_API_MODEL,
             "prompt": full_prompt,
@@ -535,40 +552,49 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
         try:
             req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
             t0 = time.time()
-            with urlrequest.urlopen(req, timeout=IMAGE_API_TIMEOUT) as resp:
-                raw = resp.read()
+            with urlopen_no_redirect(req, deadline=deadline) as resp:
+                raw = read_with_deadline(resp, deadline=deadline)
                 ctype = resp.headers.get("Content-Type", "")
-            if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT) and out_path.exists():
+            if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
                 out.append(str(out_path))
                 log_event("info", "image API generated sprite", {"spriteId": sprite_id, "model": IMAGE_API_MODEL, "url": url, "ms": int((time.time()-t0)*1000), "path": str(out_path)})
                 continue
             log_event("warn", "image API response had no usable image", {"spriteId": sprite_id, "contentType": ctype, "bodyPrefix": raw[:300].decode("utf-8", "replace")})
-        except ImageOutputIOError:
+        except (ImageOutputIOError, HttpDeadlineExceeded):
             raise
         except urlerror.HTTPError as e:
             body = ""
             try:
-                body = e.read().decode("utf-8", "replace")[:2000]
+                with e:
+                    body = read_with_deadline(e, deadline=deadline).decode("utf-8", "replace")[:2000]
+            except HttpDeadlineExceeded:
+                raise
             except Exception:
-                pass
+                remaining_seconds(deadline)
             # Some gateways reject response_format. Retry once without it.
             if e.code in {400, 404, 422}:
                 try:
                     retry = dict(payload)
                     retry.pop("response_format", None)
                     req = urlrequest.Request(url, data=json.dumps(retry, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
-                    with urlrequest.urlopen(req, timeout=IMAGE_API_TIMEOUT) as resp:
-                        raw = resp.read()
+                    with urlopen_no_redirect(req, deadline=deadline) as resp:
+                        raw = read_with_deadline(resp, deadline=deadline)
                         ctype = resp.headers.get("Content-Type", "")
-                    if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT) and out_path.exists():
+                    if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
                         out.append(str(out_path))
                         continue
-                except ImageOutputIOError:
+                except (ImageOutputIOError, HttpDeadlineExceeded):
                     raise
+                except urlerror.HTTPError as e2:
+                    with e2:
+                        log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
+                    remaining_seconds(deadline)
                 except Exception as e2:
+                    remaining_seconds(deadline)
                     log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
             log_event("warn", "image API HTTP error", {"spriteId": sprite_id, "status": e.code, "body": body})
         except Exception as e:
+            remaining_seconds(deadline)
             log_event("warn", "image API generation failed", {"spriteId": sprite_id, "error": repr(e)})
     return out
 

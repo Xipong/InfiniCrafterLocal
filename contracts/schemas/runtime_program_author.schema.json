@@ -1222,6 +1222,7 @@
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "life_points"
                   },
                   "healMana": {
@@ -1229,6 +1230,7 @@
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "mana_points"
                   },
                   "usesPotionRules": {
@@ -1516,7 +1518,7 @@
                     "x-infini-semanticType": "terraria_hammer_power"
                   },
                   "miningSpeedScale": {
-                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
+                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
                     "maximum": 4,
                     "minimum": 0.1,
                     "type": "number",

@@ -100,7 +100,9 @@ def strict_validate_authored_item(
             "Gameplay Author low-level runtime rejected: "
             + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report["errors"][:16])
         )
-        setattr(exc, "author_repair_targets", copy.deepcopy(report["errors"][:48]))
+        # Human-readable exception text is a preview; Repair authority is the
+        # complete same-pass canonical report, including later identity errors.
+        setattr(exc, "author_repair_targets", copy.deepcopy(report["errors"]))
         raise exc
     return data
 

@@ -41,6 +41,8 @@
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
     <Compile Include="EngineRuntimeChecks.AssetIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
+    <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
+    <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />

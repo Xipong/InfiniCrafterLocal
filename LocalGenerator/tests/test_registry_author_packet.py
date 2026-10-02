@@ -216,6 +216,38 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("pick_power", [0, 50], ids=["intentional-inactive-tool", "active-tool"])
+def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeypatch, mode, pick_power):
+    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    request, user, _ = build_initial_author_request({}, {}, {}, {}, "tool-applicability", model_name="offline-test")
+    assert request["response_format"]["type"] == mode
+    card = cards_from(json.loads(user)["runtimeCapabilityContract"]["catalog"])["configure_tool"]
+    meaning = CAPABILITY_REGISTRY["configure_tool"].params["miningSpeedScale"].description
+    assert card["params"]["miningSpeedScale"]["meaning"] == meaning
+    for fact in ("while held", "pickPower", "axePowerTooltipPercent", "hammerPower", "> 0", "0.001", "all-zero powers", "no mining-speed effect"):
+        assert fact in meaning, "the packet must explain the consumer's joint activation gate"
+
+    doc = build_capability_witness("configure_tool")
+    tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
+    tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedScale=2)
+    light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
+    light.update(id="independent_light", target=tool["target"])
+    doc["runtimeProgram"]["calls"].append(light)
+    before = copy.deepcopy(doc)
+    assert validate_runtime_program(doc)["ok"], "advisory non-effect explanation must not ban intentional inactive composition"
+    compiled = compile_runtime_program(doc)
+    assert validate_runtime_wire(compiled)["ok"]
+    assert compiled["gameplay"]["pickPower"] == pick_power
+    assert compiled["gameplay"]["axePower"] == compiled["gameplay"]["hammerPower"] == 0
+    assert compiled["gameplay"]["miningSpeedScale"] == 2
+    assert compiled["gameplay"]["holdLightStrength"] > 0
+    assert doc == before
+
+
 @pytest.mark.parametrize(
     "fn,key,expected",
     [

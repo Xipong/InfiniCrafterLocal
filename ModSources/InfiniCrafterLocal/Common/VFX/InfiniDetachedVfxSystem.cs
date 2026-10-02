@@ -270,7 +270,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
 
     private static void Clear()
     {
-        MaterialOccurrences.Clear();
+        MaterialEventStream.Clear();
         InfiniItemVfxRuntime.ClearUseEventCaches();
         Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
         MaterialPaths.Clear();

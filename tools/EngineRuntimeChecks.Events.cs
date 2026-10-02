@@ -29,6 +29,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ItemPeriodicDelayedActionRetainsDeclaredMiscSource()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         Player oldOwner = Terraria.Main.player[0];
         NPC oldTarget = Terraria.Main.npc[0];
         int oldMode = Terraria.Main.netMode;
@@ -56,8 +57,8 @@ internal static partial class EngineRuntimeChecks
                     Vector2.UnitX, 0, new RuntimeSpawnBudget(0), source });
             Equal(1, PendingActions(), "item periodic action with its real source is queued");
             Equal(Vector2.Zero, owner.velocity, "periodic action not run before due tick");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(true, owner.velocity.X > 0f, "item periodic action executes after delay");
             Equal(0, PendingActions(), "periodic action retires");
             var spawn = new RuntimeEventActionSpec {
@@ -115,6 +116,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ProjectileGenerationRejectsSameIdentityReuse()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         Player oldOwner = Terraria.Main.player[0];
         Projectile oldProjectile = Terraria.Main.projectile[0];
         NPC oldTarget = Terraria.Main.npc[0];
@@ -150,8 +152,8 @@ internal static partial class EngineRuntimeChecks
             var nextGeneration = Attach(projectile);
             typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, nextGeneration);
             Equal(93, projectile.identity, "same-slot reuse keeps identity");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(3, budget.Remaining, "same-slot/type/identity new ModProjectile releases reservation");
             Equal(0, PendingActions(), "old projectile generation retires");
             Equal(Vector2.Zero, owner.velocity, "new generation cannot inherit old terminal impulse");
@@ -160,8 +162,8 @@ internal static partial class EngineRuntimeChecks
             Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
                 new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, pull,
                 owner, terminalSource, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), "retired original queues terminal action");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(true, owner.velocity.X > 0, "inactive same-generation projectile dispatches terminal action");
         }
         finally
@@ -177,6 +179,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ConsumedItemKeepsDelayedUseSourceSnapshot()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         Player oldOwner = Terraria.Main.player[0];
         NPC oldTarget = Terraria.Main.npc[0];
         int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
@@ -218,8 +221,8 @@ internal static partial class EngineRuntimeChecks
             Equal(immediateChild.OriginalCritChance, delayedChild.OriginalCritChance, "tML original crit parity");
             Equal(immediateChild.OriginalArmorPenetration, delayedChild.OriginalArmorPenetration, "tML original armor penetration parity");
             Equal(immediateChild.originalDamage, delayedChild.originalDamage, "tML original damage parity");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(true, owner.velocity.X > 0, "consumed item action dispatches after slot replacement");
             Equal(0, PendingActions(), "consumed item action retires");
 
@@ -239,8 +242,8 @@ internal static partial class EngineRuntimeChecks
             Equal(17, saved.crit, "SetDefaults does not change snapshot crit");
             Equal(11, saved.ArmorPenetration, "SetDefaults does not change snapshot armor penetration");
             Equal(58, saved.damage, "SetDefaults does not change snapshot damage");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(true, owner.velocity.X > 0, "same-object SetDefaults does not cancel queued use");
         }
         finally
@@ -257,6 +260,7 @@ internal static partial class EngineRuntimeChecks
     // projectile still requires registered content/world; no NewProjectileDirect here.
     private static void DelayedEventSourceProvenance()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         var oldOwner = Terraria.Main.player[0];
         var oldProjectile = Terraria.Main.projectile[0];
         int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
@@ -323,10 +327,10 @@ internal static partial class EngineRuntimeChecks
             Equal(true, queued is EntitySource_Parent, "queued projectile is parent source");
             Equal(true, ReferenceEquals(projectile, ((EntitySource_Parent)queued).Entity), "queued projectile parent is original");
             projectile.active = false; // terminal event can outlive its parent
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(1, projectileBudget.Remaining, "dead original retains reservation before due tick");
             projectile.identity = 85; // same object reused in slot (no active requirement)
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(3, projectileBudget.Remaining, "reused projectile identity returns reservation");
             Equal(0, PendingActions(), "reused projectile source retired");
             projectile.identity = 86;
@@ -334,8 +338,8 @@ internal static partial class EngineRuntimeChecks
             Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
                 owner, replacedSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "projectile slot guard queued");
             Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 86, active = true };
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(3, projectileBudget.Remaining, "same-identity slot replacement releases reservation");
             Equal(0, PendingActions(), "replaced projectile retired");
             Terraria.Main.projectile[0] = projectile;
@@ -363,16 +367,16 @@ internal static partial class EngineRuntimeChecks
             var terminalSource = projectile.GetSource_FromThis();
             Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, terminal,
                 owner, terminalSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "inactive original queues terminal event");
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(0, PendingActions(), "terminal source dispatches despite inactivity");
             Equal(3, projectileBudget.Remaining, "nonspawn terminal preserves budget");
             Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn,
                 owner, terminalSource, Vector2.Zero, Vector2.UnitX, null, 0, 0, projectileBudget), "remote authority probe queued");
             Terraria.Main.netMode = NetmodeID.MultiplayerClient;
             Terraria.Main.myPlayer = 1;
-            RuntimeDelayedActionScheduler.Update();
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
+            AdvanceRuntimeWorldTick();
             Equal(3, projectileBudget.Remaining, "nonlocal owner does not spend delayed reservation");
             Equal(0, PendingActions(), "nonlocal action retired");
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
@@ -460,6 +464,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void EventDamageUsesAuthoredSource()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         var oldMetrics = Terraria.Main.SceneMetrics;
         NPC[] oldNpcs = (NPC[])Terraria.Main.npc.Clone();
         Player[] oldPlayers = (Player[])Terraria.Main.player.Clone();
@@ -617,7 +622,7 @@ internal static partial class EngineRuntimeChecks
                         projectile.damage = 1;
                         for (int tick = 1; tick <= Math.Max(delay, killDelay) + 1; tick++)
                         {
-                            RuntimeDelayedActionScheduler.Update();
+                            AdvanceRuntimeWorldTick();
                             CheckPairTick(tick);
                         }
                         checkedCases++;
@@ -629,15 +634,15 @@ internal static partial class EngineRuntimeChecks
                         projectile.active = false; // delayed action outlives its projectile
                         projectile.damage = 1;
                         projectile.Center = outside.Center; // queued position must not follow the retired host
-                        RuntimeDelayedActionScheduler.Update();
+                        AdvanceRuntimeWorldTick();
                         Equal(1000, nearby.life, label + " not early");
-                        RuntimeDelayedActionScheduler.Update();
+                        AdvanceRuntimeWorldTick();
                     }
                     int expectedLife = delivery.ExpectedHit ? control.life : 1000;
                     Equal(expectedLife, nearby.life, label + " authored damage exactly once, or no premature expiry");
                     Equal(terminal ? expectedLife : 1000, direct.life, label + " terminal AoE has no excluded hit target");
                     Equal(1000, outside.life, label + " excludes out-of-range target");
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Equal(expectedLife, nearby.life, label + " no delayed replay");
                     Equal(0, PendingActions(), label + " queue fully retired");
                     checkedCases++;
@@ -675,8 +680,8 @@ internal static partial class EngineRuntimeChecks
                 if (proximityDelay > 0)
                 {
                     Equal(1000, detonatedAt.life, "delayed proximity AoE does not strike early");
-                    RuntimeDelayedActionScheduler.Update();
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
+                    AdvanceRuntimeWorldTick();
                 }
                 Equal(true, splashNeighbor.life < 1000, "proximity AoE damages neighboring NPC");
                 Equal(true, detonatedAt.life < 1000, "proximity AoE damages its trigger NPC without a direct hit");
@@ -697,6 +702,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DelayedStatusKeepsOriginalNpc()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         NPC[] oldNpcs = (NPC[])Terraria.Main.npc.Clone();
         Player[] oldPlayers = (Player[])Terraria.Main.player.Clone();
         int oldMode = Terraria.Main.netMode;
@@ -731,7 +737,7 @@ internal static partial class EngineRuntimeChecks
                     int budget = 8;
                     Equal(true, ScheduleTestItemAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
                         owner, original.Center, Vector2.UnitX, state == "absent" ? null : original, 10, 0, ref budget), state + " queued");
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Equal(false, original.HasBuff(BuffID.OnFire), state + " not early");
                     bool sameEntity = state is "same" or "transform";
                     if (!sameEntity && state != "absent") original.active = false;
@@ -752,14 +758,14 @@ internal static partial class EngineRuntimeChecks
                         Equal(false, ReferenceEquals(original, Terraria.Main.npc[slot]), state + " real NewNPC replaces the instance");
                         Equal(type, Terraria.Main.npc[slot].type, state + " actual replacement type");
                     }
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Equal(sameEntity, Terraria.Main.npc[slot].HasBuff(BuffID.OnFire), state + " only original hit target gets status");
                     if (sameEntity)
                     {
                         int index = original.FindBuffIndex(BuffID.OnFire);
                         Equal(90, original.buffTime[index], "authored duration reaches real NPC.AddBuff");
                         original.buffTime[index] = 17;
-                        RuntimeDelayedActionScheduler.Update();
+                        AdvanceRuntimeWorldTick();
                         Equal(17, original.buffTime[index], "retired delayed status does not refresh again");
                     }
                 }
@@ -794,6 +800,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DelayedQueueHonorsLimits()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         var oldOwner = Terraria.Main.player[0];
         var oldTarget = Terraria.Main.npc[0];
         int oldMode = Terraria.Main.netMode;
@@ -827,16 +834,16 @@ internal static partial class EngineRuntimeChecks
             Equal(false, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "full queue rejects spawn before reserving budget");
             Equal(5, budget, "rejection and non-spawn actions leave budget unchanged");
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(Vector2.Zero, target.velocity, "no early queue execution");
             int executed = 0;
             while (executed < capacity)
             {
-                RuntimeDelayedActionScheduler.Update();
+                AdvanceRuntimeWorldTick();
                 executed = Math.Min(capacity, executed + perTick);
                 Equal(new Vector2(-2f * executed, 0f), target.velocity, "real executor effects respect per-tick limit");
             }
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(new Vector2(-2f * capacity, 0f), target.velocity, "all accepted actions execute exactly once");
             Equal(true, ScheduleTestItemAction(data, new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner, Vector2.Zero, Vector2.UnitX,
                 null, 0, 0, ref budget), "drained queue accepts reservation");
@@ -863,6 +870,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DelayedActionsKeepOriginalOwner()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         var oldOwner = Terraria.Main.player[0];
         var oldTarget = Terraria.Main.npc[0];
         var oldBuffer = NetMessage.buffer[0];
@@ -895,7 +903,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(true, ScheduleTestItemAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
                         owner, Vector2.Zero, Vector2.UnitX, target, 0, 0, ref budget), label + " queued");
                     Equal(8, budget, label + " non-spawn action preserves budget");
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Equal(Vector2.Zero, target.velocity, label + " not before authored tick");
                     if (state == "inactive") owner.active = false;
                     if (state == "reset")
@@ -912,14 +920,14 @@ internal static partial class EngineRuntimeChecks
                     }
                     if (state == "world_unload") new RuntimeDelayedActionSystem().OnWorldUnload();
                     if (state == "mod_unload") new RuntimeDelayedActionSystem().Unload();
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Vector2 expected = state == "same" ? new Vector2(-2f, 0f) : Vector2.Zero;
                     Equal(expected, target.velocity, label + " effect belongs only to original owner");
                     Equal(Vector2.Zero, owner.velocity, label + " no player impulse in NPC mode");
                     // Reviving the original owner must not re-execute a retired entry.
                     owner.active = true;
                     Terraria.Main.player[0] = owner;
-                    RuntimeDelayedActionScheduler.Update();
+                    AdvanceRuntimeWorldTick();
                     Equal(expected, target.velocity, label + " executes once or is permanently retired");
                 }
                 catch (Exception error) { failures.Add(label + ": " + error.Message); }

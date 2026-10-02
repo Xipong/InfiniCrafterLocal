@@ -17,9 +17,21 @@ internal sealed class VfxOrderedPeerStream
     private readonly OwnerCursor?[] owners = new OwnerCursor?[Main.maxPlayers];
     private object? relaySocket;
     private ulong relaySequence, nextOwnerOccurrence, nextRelayOccurrence;
+    private ulong localSequence, nextLocalOccurrence;
 
     internal ulong NewOwnerOccurrence() => checked(++nextOwnerOccurrence);
     internal ulong NewRelayOccurrence() => checked(++nextRelayOccurrence);
+
+    // In-process producers are synchronous and ordered too. Keep their cursor
+    // separate from wire relay sequences: equal numbers do not mean equal events.
+    internal ulong NewLocalOccurrence() => checked(++nextLocalOccurrence);
+    internal bool AcceptLocal(ulong sequence)
+    {
+        if (sequence == 0 || sequence <= localSequence) return false;
+        localSequence = sequence;
+        nextLocalOccurrence = Math.Max(nextLocalOccurrence, sequence);
+        return true;
+    }
 
     internal bool AcceptOwner(int owner, ulong sequence)
     {
@@ -48,5 +60,6 @@ internal sealed class VfxOrderedPeerStream
     {
         Array.Clear(owners); relaySocket = null; relaySequence = 0;
         nextOwnerOccurrence = nextRelayOccurrence = 0;
+        localSequence = nextLocalOccurrence = 0;
     }
 }

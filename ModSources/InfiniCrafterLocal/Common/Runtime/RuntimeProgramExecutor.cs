@@ -41,6 +41,22 @@ internal static class RuntimeProgramExecutor
             ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
             : InfiniRuntimeAuthority.ShouldRunNpcGameplay();
 
+    // One authority decision for immediate dispatch and delayed admission.
+    // Admission does not grant lasting authority: ExecuteAction rechecks it.
+    // Effect preconditions (targets, depth, damage, cooldown) stay with consumers.
+    internal static bool HasActionAuthority(RuntimeEventActionSpec action, Player owner)
+        => action.ActionCode switch
+        {
+            RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
+                => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
+            RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage
+                => ShouldRunNpcEvent(action, owner),
+            RuntimeEventActionCode.Pull => action.Mode == "owner_to_target"
+                ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
+                : InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
+            _ => false,
+        };
+
     public static void ExecuteAction(
         GeneratedItemData data,
         RuntimeEntitySpec sourceEntity,
@@ -74,13 +90,18 @@ internal static class RuntimeProgramExecutor
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget = 0)
     {
+        if (!HasActionAuthority(action, owner))
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
         switch (action.ActionCode)
         {
             case RuntimeEventActionCode.SpawnEntity:
                 SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
-                if (ShouldRunNpcEvent(action, owner) && directTarget is { active: true })
+                if (directTarget is { active: true })
                     directTarget.AddBuff(action.BuffId, action.DurationTicks);
                 break;
             case RuntimeEventActionCode.DamageArea:
@@ -122,8 +143,7 @@ internal static class RuntimeProgramExecutor
         int reservedSpawnBudget)
     {
         int available = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Remaining;
-        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
-            || childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
+        if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
             || available <= 0)
         {
             budget.Return(reservedSpawnBudget);
@@ -163,7 +183,7 @@ internal static class RuntimeProgramExecutor
 
     private static void DamageArea(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
-        if (!ShouldRunNpcEvent(action, owner) || action.RadiusPx <= 0)
+        if (action.RadiusPx <= 0)
             return;
         var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
         baseDamage = Math.Max(1, baseDamage);
@@ -182,8 +202,6 @@ internal static class RuntimeProgramExecutor
 
     private static void ChainDamage(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? directTarget)
     {
-        if (!ShouldRunNpcEvent(action, owner))
-            return;
         float range = Math.Max(16f, action.RangeTiles * 16f);
         var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
         int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, baseDamage) * Math.Max(0.05f, action.DamageMultiplier)));
@@ -210,12 +228,11 @@ internal static class RuntimeProgramExecutor
         float radius = Math.Max(16f, action.RadiusTiles * 16f);
         if (action.Mode == "owner_to_target")
         {
-            if (directTarget is { active: true } && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+            if (directTarget is { active: true })
                 owner.velocity += (directTarget.Center - owner.Center).SafeNormalize(Vector2.Zero) * strength;
             return;
         }
-        if (!InfiniRuntimeAuthority.ShouldRunNpcGameplay())
-            return;
+
         Vector2 destination = action.Mode == "target_to_owner" ? owner.Center : eventPosition;
         if (directTarget is { active: true })
         {
@@ -242,7 +259,7 @@ internal static class RuntimeProgramExecutor
     {
         // Lifesteal follows owner-local projectile proc authority. Running it on both
         // the server and owning client applies one authored hit heal twice in multiplayer.
-        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner) || damageDone <= 0)
+        if (damageDone <= 0)
             return;
         int heal = Math.Clamp((int)MathF.Round(damageDone * action.DamageFraction), 0, action.MaxHeal);
         if (heal <= 0)
@@ -253,8 +270,6 @@ internal static class RuntimeProgramExecutor
 
     private static void MoveOwner(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition)
     {
-        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
-            return;
         Vector2 delta = eventPosition - owner.Center;
         float maxDistance = Math.Max(16f, action.RangeTiles * 16f);
         if (delta.LengthSquared() > maxDistance * maxDistance)

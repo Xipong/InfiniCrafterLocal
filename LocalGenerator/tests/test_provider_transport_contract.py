@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
 import copy
 from email.message import Message
 import io
@@ -45,6 +47,14 @@ def packet(stage="planner", *, schema=False):
 
 def http_error(url, code, body="provider rejected request"):
     return urllib.error.HTTPError(url, code, "synthetic failure", Message(), io.BytesIO(body.encode()))
+
+
+def schema_error(url):
+    body = json.dumps({"error": {"code": "unsupported_response_format", "param": "response_format",
+                               "message": "INVALID_ARGUMENT: json_schema response_format is not supported"}})
+    error = http_error(url, 400, body)
+    error._infini_body = body
+    return error
 
 
 class Wire:
@@ -95,6 +105,354 @@ def wire(monkeypatch):
     monkeypatch.setattr(transport, "http_get_json", lambda *_args, **_kwargs: pytest.fail("unexpected model discovery"))
     yield recorder
     transport._reset_llm_pool_runtime_for_tests()
+
+
+@pytest.fixture
+def loopback_transport(monkeypatch):
+    """Actual urllib I/O; replies describe bytes/status, not assertion callbacks."""
+    events = []
+    recorder = Wire(monkeypatch)
+    recorder.configure(
+        LLM_PROVIDER="openrouter", LLM_API_MODE="chat_completions",
+        OPENROUTER_MODEL="vendor/model", OPENROUTER_API_KEY="synthetic-loopback-key",
+        OPENROUTER_PROVIDER=PIN, LLM_POOL_PROFILES=(), LLM_FALLBACK_MODEL="",
+        LLM_FALLBACK_NETWORK_FAILS=2,
+    )
+    monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
+    monkeypatch.setenv("no_proxy", "127.0.0.1,localhost")
+    monkeypatch.setattr(transport, "log_event", lambda level, message, data=None:
+                        events.append((message, copy.deepcopy(data or {}))))
+
+    @contextmanager
+    def endpoint(replies=()):
+        observed, remaining = [], deque(replies)
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+            def respond(self):
+                raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                body = json.loads(raw) if raw else None
+                observed.append((self.command, self.path, body, self.headers.get("Authorization")))
+                reply = remaining.popleft() if remaining else {}
+                if self.path.endswith("/models"):
+                    default = {"data": [{"id": "vendor/advertised:free"}]}
+                elif self.path.endswith("/responses"):
+                    default = {"id": "response-loopback", "output_text": "{}", "status": "completed"}
+                else:
+                    default = {"choices": [{"finish_reason": "stop", "message": {"content": "{}"}}]}
+                encoded = reply["raw_body"].encode() if "raw_body" in reply else json.dumps(reply.get("body", default)).encode()
+                try:
+                    time.sleep(reply.get("before_headers", 0.0))
+                    self.send_response(reply.get("status", 200))
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(encoded)))
+                    for name, value in reply.get("headers", {}).items():
+                        self.send_header(name, value)
+                    if reply.get("header_trickle"):
+                        # Every idle gap is below timeout, while the complete header is not.
+                        buffered = b"".join(self._headers_buffer)
+                        self._headers_buffer = []
+                        for octet in buffered + b"\r\n":
+                            self.wfile.write(bytes([octet]))
+                            self.wfile.flush()
+                            time.sleep(reply["header_trickle"])
+                    else:
+                        self.end_headers()
+                    if reply.get("trickle"):
+                        for octet in encoded:
+                            self.wfile.write(bytes([octet]))
+                            self.wfile.flush()
+                            time.sleep(reply["trickle"])
+                    else:
+                        self.wfile.write(encoded)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+            do_POST = do_GET = respond
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.01), daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}", observed
+        finally:
+            server.shutdown()
+            thread.join(timeout=3)
+            server.server_close()
+
+    with ExitStack() as stack:
+        def make_endpoint(replies=()):
+            return stack.enter_context(endpoint(replies))
+        yield make_endpoint, events
+    transport._reset_llm_pool_runtime_for_tests()
+
+
+@pytest.mark.parametrize("kind", ["chat_completions", "responses", "models"])
+@pytest.mark.parametrize("status", [200, 301, 302, 303, 307, 308])
+def test_real_http_redirects_fail_closed_without_forwarding_bearer_or_adopting_foreign_reply(
+    loopback_transport, monkeypatch, kind, status,
+):
+    endpoint, _events = loopback_transport
+    foreign_url, foreign = endpoint()
+    redirected_path = "/v1/models" if kind == "models" else (
+        "/v1/responses" if kind == "responses" else "/v1/chat/completions")
+    source_url, observed = endpoint([{"status": status, "headers": {"Location": foreign_url + redirected_path}}])
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", source_url)
+    monkeypatch.setattr(transport, "LLM_API_MODE", "chat_completions" if kind == "models" else kind)
+    if kind == "models":
+        monkeypatch.setattr(transport, "OPENROUTER_MODEL", "auto")
+        resolved = transport.resolve_llm_model()
+        assert resolved == ("vendor/advertised:free" if status == 200 else "")
+        assert len(transport._RESOLVED_LLM_MODELS) == (1 if status == 200 else 0)
+    else:
+        with transport.llm_item_lease("redirect-policy") as lease:
+            if status == 200:
+                result = transport.llm_chat_json(packet(), timeout=1)
+                assert result["choices"][0]["message"]["content"] == "{}"
+            else:
+                with pytest.raises(urllib.error.HTTPError) as caught:
+                    transport.llm_chat_json(packet(), timeout=1)
+                assert caught.value.code == status
+            assert lease.profile_id == "llm_1" and not lease.failovers
+            assert lease.call_count == 1
+    assert foreign == []
+    assert len(observed) == 1
+    method, path, body, auth = observed[0]
+    assert method == ("GET" if kind == "models" else "POST")
+    assert auth == "Bearer synthetic-loopback-key"
+    if body is not None:
+        assert body["provider"] == {"only": [PIN], "allow_fallbacks": False}
+
+
+@pytest.mark.parametrize("phase", ["fast", "body", "headers", "error_body", "retry"])
+def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback_transport, monkeypatch, phase):
+    endpoint, _events = loopback_transport
+    budget = 0.18
+    replies = {
+        "fast": [{}], "body": [{"trickle": 0.005}], "headers": [{"header_trickle": 0.003}],
+        "error_body": [{"status": 400, "body": {"error": {"message": "synthetic message rejection"}}, "trickle": 0.005}],
+        "retry": [{"status": 503, "before_headers": 0.11}, {"before_headers": 0.11}],
+    }[phase]
+    base, observed = endpoint(replies)
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    started = time.monotonic()
+    with transport.llm_item_lease("whole-call-deadline") as lease:
+        if phase == "fast":
+            result = transport.llm_chat_json(packet(), timeout=budget)
+            assert result["choices"][0]["message"]["content"] == "{}"
+        else:
+            with pytest.raises(TimeoutError):
+                transport.llm_chat_json(packet(), timeout=budget)
+        elapsed = time.monotonic() - started
+        assert elapsed < budget + 0.15
+        assert lease.call_count == 1 and not lease.failovers
+    assert len(observed) == 1  # A spent budget must not start another physical request.
+
+
+@pytest.mark.parametrize("reason", ["pacing", "provider_429"])
+def test_real_http_deadline_prevents_sending_after_rate_wait(loopback_transport, monkeypatch, reason):
+    endpoint, _events = loopback_transport
+    base, observed = endpoint()
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
+    now = time.monotonic()
+    transport._LLM_RATE_STATE["synthetic-rate-key"] = {
+        "events": [], "lastRequest": now if reason == "pacing" else -1.0e30,
+        "blockedUntil": now + 10 if reason == "provider_429" else 0,
+    }
+    started = time.monotonic()
+    with pytest.raises(TimeoutError) as caught:
+        transport.llm_chat_json(packet(), timeout=0.18)
+    assert caught.value._infini_transport_debug["physicalAttemptCount"] == 0
+    assert caught.value._infini_transport_debug["physicalAttempts"] == []
+    assert time.monotonic() - started < 0.33
+    assert observed == []
+    assert transport._LLM_RATE_STATE["synthetic-rate-key"]["events"] == []
+
+
+@pytest.mark.parametrize("oversized", [False, True])
+def test_shared_http_read_returns_exact_bytes_or_refuses_byte_overflow(loopback_transport, oversized):
+    from infini_local.core import http_io
+    endpoint, _events = loopback_transport
+    base, observed = endpoint([{"body": {"value": "loopback"}}])
+    deadline = time.monotonic() + 1
+    with http_io.urlopen_no_redirect(transport.urlrequest.Request(base), deadline=deadline) as response:
+        if oversized:
+            with pytest.raises(http_io.HttpResponseTooLarge):
+                http_io.read_with_deadline(response, deadline=deadline, max_bytes=3)
+        else:
+            raw = http_io.read_with_deadline(response, deadline=deadline, max_bytes=100)
+            assert raw == json.dumps({"value": "loopback"}).encode()
+    assert len(observed) == 1
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure", "bounded", "escaped_secret", "provider_debug"])
+def test_real_http_physical_attempt_timeline_is_bounded_safe_and_survives_failure(
+    loopback_transport, monkeypatch, outcome,
+):
+    endpoint, events = loopback_transport
+    secret = "synthetic-loopback-key"
+    rejected = {"error": {"code": "unsupported_response_format", "param": "response_format",
+                          "message": "json_schema response_format is not supported: " + secret}}
+    final = {"status": 400, "body": {"error": {"code": "context_length_exceeded", "param": "messages"}}} if outcome == "failure" else {}
+    rejection_reply = {"status": 400, "body": rejected}
+    if outcome == "escaped_secret":
+        rejection_reply = {"status": 400, "raw_body": json.dumps(rejected).replace("synthetic-loopback-key", r"\u0073ynthetic-loopback-key")}
+    if outcome == "provider_debug":
+        final = {"body": {"choices": [{"message": {"content": "{}"}}],
+                          "_debug": {"providerDebugKey": secret, "promptEcho": "PRIVATE_AUTHOR_PACKET"}}}
+    base, observed = endpoint([{"status": 404}, rejection_reply, final])
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(transport, "LLM_API_MODE", "auto")
+    if outcome == "bounded":
+        monkeypatch.setattr(transport, "_LLM_MAX_DIAGNOSTIC_ATTEMPTS", 2, raising=False)
+    request = packet(schema=True)
+    request["messages"][1]["content"] = "PRIVATE_AUTHOR_PACKET"
+    request["reasoning"] = {"max_tokens": 123, "exclude": True}
+    with transport.llm_item_lease("physical-attribution") as lease:
+        if outcome == "failure":
+            with pytest.raises(urllib.error.HTTPError) as caught:
+                transport.llm_chat_json(request, timeout=1)
+            debug = caught.value._infini_transport_debug
+        else:
+            result = transport.llm_chat_json(request, timeout=1)
+            debug = result["_debug"]
+        assert lease.call_count == 1 and not lease.failovers
+    assert len(observed) == 3
+    attempts = [data for message, data in events if message == "LLM physical attempt"]
+    assert len(attempts) == (2 if outcome == "bounded" else 3)
+    assert debug["physicalAttemptCount"] == 3
+    assert debug["physicalAttemptsDropped"] == (1 if outcome == "bounded" else 0)
+    assert len(debug["physicalAttempts"]) == len(attempts)
+    assert len({row["logicalCallId"] for row in attempts}) == 1
+    assert [row["physicalAttemptIndex"] for row in attempts] == list(range(1, len(attempts) + 1))
+    assert [row["httpStatus"] for row in attempts] == ([404, 400] if outcome == "bounded" else [404, 400, 400 if outcome == "failure" else 200])
+    assert [row["effectiveApiMode"] for row in attempts] == (["responses", "chat_completions"] if outcome == "bounded" else ["responses", "chat_completions", "chat_completions"])
+    assert attempts[0]["requestedResponseFormat"] == attempts[0]["effectiveResponseFormat"] == "json_schema"
+    assert attempts[0]["requestedReasoning"] == {"max_tokens": 123, "exclude": True}
+    assert attempts[0]["effectiveReasoning"] == {}
+    assert attempts[0]["unsupportedReasoningFields"] == ["exclude", "max_tokens"]
+    assert debug["requestedResponseFormat"] == "json_schema"
+    assert debug["effectiveResponseFormat"] == "json_object"
+    assert debug["requestedApiMode"] == "auto" and debug["effectiveApiMode"] == "chat_completions"
+    if outcome != "bounded":
+        assert [row["reason"] for row in attempts] == ["initial", "responses_to_chat_fallback", "json_schema_to_json_object_fallback"]
+    for row in attempts:
+        assert row["rateWaitMs"] >= 0 and row["openMs"] >= 0 and row["readMs"] >= 0
+        assert row["connectMs"] is None  # urllib cannot honestly isolate DNS/TCP/TLS here.
+        assert 0 <= row["deadlineRemainingMs"] <= 1000
+    serialized = json.dumps([events, debug])
+    assert secret not in serialized and "PRIVATE_AUTHOR_PACKET" not in serialized
+    assert r"\u0073ynthetic-loopback-key" not in serialized
+    assert "Authorization" not in serialized and "messages" not in json.dumps(attempts)
+
+
+def test_real_http_429_timeline_distinguishes_one_send_from_unsent_cooldown(loopback_transport, monkeypatch):
+    endpoint, events = loopback_transport
+    base, observed = endpoint([{"status": 429, "headers": {"Retry-After": "60"}}])
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
+    with pytest.raises(TimeoutError) as caught:
+        transport.llm_chat_json(packet(), timeout=0.45)
+    debug = caught.value._infini_transport_debug
+    assert len(observed) == debug["physicalAttemptCount"] == len(debug["physicalAttempts"]) == 1
+    assert debug["physicalAttempts"][0]["httpStatus"] == 429
+    assert debug["rateWaitReason"] == "provider_cooldown" and debug["rateWaitMsTotal"] > 0
+    physical = [data for message, data in events if message == "LLM physical attempt"]
+    waits = [data for message, data in events if message == "LLM transport wait"]
+    assert len(physical) == len(waits) == 1
+    assert waits[0]["networkStarted"] is False and waits[0]["physicalAttemptIndex"] is None
+    assert waits[0]["logicalCallId"] == physical[0]["logicalCallId"]
+
+
+@pytest.mark.parametrize("rejection", ["messages", "endpoint_recovered", "endpoint_failed"])
+def test_real_http_responses_learning_does_not_cache_content_failure_or_failed_recovery(loopback_transport, rejection):
+    endpoint, _events = loopback_transport
+    if rejection == "messages":
+        replies = [{"status": 400, "body": {"error": {"code": "context_length_exceeded", "param": "input"}}}, {}]
+    else:
+        replies = [{"status": 404, "body": {"error": {"message": "Responses endpoint not supported"}}}]
+        replies += ([{"status": 400, "body": {"error": {"code": "context_length_exceeded", "param": "messages"}}}] if rejection == "endpoint_failed" else [{}])
+        replies.append({})
+    base, observed = endpoint(replies)
+    context = {"provider": "openrouter", "openrouter_provider": PIN, "model": "vendor/model",
+               "base_url": base, "api_mode": "auto", "api_key": "synthetic-loopback-key"}
+    if rejection == "endpoint_recovered":
+        transport._llm_json_single_context(packet(), 1, context)
+        assert False in transport._RESPONSES_CAPABILITY.values()
+    else:
+        with pytest.raises(urllib.error.HTTPError):
+            transport._llm_json_single_context(packet(), 1, context)
+        assert transport._RESPONSES_CAPABILITY == {}
+    transport._llm_json_single_context(packet(), 1, context)
+    assert [path.rsplit("/", 1)[-1] for _, path, _, _ in observed] == {
+        "messages": ["responses", "responses"],
+        "endpoint_recovered": ["responses", "completions", "completions"],
+        "endpoint_failed": ["responses", "completions", "responses"],
+    }[rejection]
+
+
+@pytest.mark.parametrize("expired", [False, True], ids=["valid-failover-control", "deadline-does-not-switch-lease"])
+def test_real_http_failover_keeps_one_budget_and_does_not_escape_after_expiry(loopback_transport, monkeypatch, expired):
+    endpoint, events = loopback_transport
+    secondary, secondary_calls = endpoint()
+    source, source_calls = endpoint([{"status": 503, **({"trickle": 0.005} if expired else {})}])
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", source)
+    monkeypatch.setattr(transport, "OPENROUTER_PROVIDER", "")
+    monkeypatch.setattr(transport, "LLM_POOL_PROFILES", ({"id": "llm_2", "enabled": True,
+        "provider": "openrouter", "base_url": secondary, "model": "vendor/secondary",
+        "api_mode": "chat_completions", "api_key": "synthetic-loopback-key", "openrouter_provider": PIN},))
+    with transport.llm_item_lease("deadline-failover") as lease:
+        if expired:
+            with pytest.raises(TimeoutError) as caught:
+                transport.llm_chat_json(packet(), timeout=0.18)
+            assert lease.profile_id == "llm_1" and lease.failovers == []
+            debug = caught.value._infini_transport_debug
+            assert debug["physicalAttemptCount"] == 1
+        else:
+            result = transport.llm_chat_json(packet(), timeout=1)
+            assert result["_debug"]["physicalAttemptCount"] == 2
+            assert lease.profile_id == "llm_2" and len(lease.failovers) == 1
+            attempts = [data for message, data in events if message == "LLM physical attempt"]
+            assert [row["reason"] for row in attempts] == ["initial", "profile_failover"]
+        assert lease.call_count == 1
+    assert len(source_calls) == 1 and len(secondary_calls) == (0 if expired else 1)
+
+
+@pytest.mark.parametrize("failure", [False, True], ids=["subscription-success", "subscription-failure"])
+def test_codex_stream_boundary_reports_only_owned_observations_without_generic_http_or_fallback(wire, monkeypatch, failure):
+    from infini_local.services import codex_text_backend as codex
+    from infini_local.services.codex_auth import CodexError
+    wire.configure(LLM_PROVIDER="openai_codex", CODEX_LLM_MODEL="gpt-5.4", LLM_API_MODE="responses",
+                   LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="must-not-be-used")
+    seen = []
+    def generate(prepared, *, timeout):
+        seen.append((copy.deepcopy(prepared), timeout))
+        if failure:
+            raise CodexError("synthetic subscription quota error")
+        return {"choices": [{"message": {"content": "{}"}}], "_debug": {"apiMode": "codex_subscription_sse", "provider": "openai_codex"}}
+    monkeypatch.setattr(codex, "generate_chat", generate)
+    request = packet()
+    request["reasoning"] = {"effort": "high", "exclude": True}
+    before = copy.deepcopy(request)
+    with transport.llm_item_lease("codex-boundary") as lease:
+        if failure:
+            with pytest.raises(CodexError) as caught:
+                transport.llm_chat_json(request, timeout=1)
+            debug = caught.value._infini_transport_debug
+        else:
+            debug = transport.llm_chat_json(request, timeout=1)["_debug"]
+        assert lease.call_count == 1 and lease.profile_id == "llm_1" and lease.failovers == []
+    assert len(seen) == 1 and 0 < seen[0][1] <= 1
+    assert wire.calls == [] and request == before
+    assert debug["effectiveApiMode"] == "codex_subscription_sse"
+    assert debug["effectiveResponseFormat"] == "json_object"
+    assert debug["effectiveReasoning"] == {"effort": "high"}
+    assert debug["physicalAttemptCount"] is None  # Subscription/auth I/O is another owner's observation.
+    assert debug["physicalAttempts"] == []
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -433,7 +791,7 @@ def test_transient_retry_budget_never_changes_selected_route(wire, provider, mod
 ] + [pytest.param("openai_compat", "auto", False, id="stateless-full-dossier")])
 def test_api_negotiation_preserves_authored_request_and_learns_capability(wire, provider, mode, schema):
     wire.configure(LLM_PROVIDER=provider, LLM_API_MODE=mode)
-    wire.replies.extend([404, 400] if schema else [404])
+    wire.replies.extend([404, schema_error("https://primary.example/v1/chat/completions")] if schema else [404])
     request = packet("visual_director", schema=schema)
     request["reasoning"] = {"effort": "low"}
     request[transport.LLM_MODEL_OVERRIDE_KEY] = "override/author"
@@ -478,7 +836,7 @@ def test_capability_learning_is_case_sensitive_and_scoped_to_upstream_pin(wire, 
         monkeypatch.setattr(transport, "http_get_json", lambda url, **kw: discovered.append(url) or {"data": [{"id": f"vendor/advertised-{len(discovered)}:free"}]})
         assert transport.resolve_llm_model(first) == "vendor/advertised-1:free"
     else:
-        wire.replies.append(404 if capability == "responses" else 400)
+        wire.replies.append(404 if capability == "responses" else schema_error("https://primary.example/v1/chat/completions"))
         transport.llm_chat_json(packet(schema=capability == "schema"), timeout=1)
     monkeypatch.setattr(transport, "OPENROUTER_PROVIDER", "OtherVendor/Exact-Endpoint")
     second = transport._primary_llm_context()
@@ -514,7 +872,7 @@ def test_pin_diagnostics_report_routing_not_credentials(wire, monkeypatch, mode)
         result = transport.llm_chat_json(packet(), timeout=1)
         snapshot = lease.snapshot()
         assert snapshot["openrouterProvider"] == result["_debug"]["openrouterProvider"] == PIN
-    diagnosis = transport.request_shape_rejection_diagnosis(http_error("https://primary.example/api/v1/chat/completions", 400), packet(schema=True), transport._primary_llm_context())
+    diagnosis = transport.request_shape_rejection_diagnosis(schema_error("https://primary.example/api/v1/chat/completions"), packet(schema=True), transport._primary_llm_context())
     assert diagnosis is not None and diagnosis["openrouterProvider"] == PIN
     # The historical operator-error log contract belongs to Chat Completions.
     wire.configure(LLM_API_MODE="chat_completions")

@@ -294,6 +294,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DelayedHitNeverRetargetsReplacedNpc()
     {
+        using var worldClock = new RuntimeWorldClockScope();
         var previousOwner = Terraria.Main.player[0]; var previousNpc = Terraria.Main.npc[0];
         var previousOther = Terraria.Main.npc[1]; var previousProjectile = Terraria.Main.projectile[0];
         int previousMode = Terraria.Main.netMode, previousLocal = Terraria.Main.myPlayer;
@@ -329,7 +330,7 @@ internal static partial class EngineRuntimeChecks
             Equal(1, PendingActions(), "server queues exact authored delay");
             Equal(Vector2.Zero, target.velocity, "delayed pull waits");
             Terraria.Main.npc[0] = new NPC { whoAmI = 0, active = true, position = target.position };
-            RuntimeDelayedActionScheduler.Update(); RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick(); AdvanceRuntimeWorldTick();
             Equal(Vector2.Zero, other.velocity, "invalid direct target cannot become area pull");
             Equal(Vector2.Zero, Terraria.Main.npc[0].velocity, "reused NPC slot cannot inherit hit");
             Terraria.Main.npc[0] = target;
@@ -340,9 +341,9 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.netMode = NetmodeID.Server; second.Position = 0;
             using (var reader = new BinaryReader(second, System.Text.Encoding.UTF8, true))
                 RuntimeHitPullBridge.HandlePacket(reader, 0);
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(Vector2.Zero, target.velocity, "delay still pending at tick one");
-            RuntimeDelayedActionScheduler.Update();
+            AdvanceRuntimeWorldTick();
             Equal(true, target.velocity.X < 0, "delayed server pull executes at tick two");
             Equal(true, target.netUpdate, "delayed NPC velocity is synced");
         }

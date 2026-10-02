@@ -218,10 +218,9 @@ public partial class GeneratedItem : ModItem
     }
 
     /// <summary>
-    /// Consumes the one-shot receipt written by <see cref="GeneratedPlacementLedgerTile.PlaceInWorld"/>.
-    /// Vanilla runs item consumption and tile placement in separate phases of the same
-    /// use, so this deliberately does not assume an ordering: it only confirms that a
-    /// placement by this player was actually accepted by Terraria.
+    /// Consumes the one-shot receipt written by the exact-identity placement ledger.
+    /// Only a changed native cell covered by a before-mutation authorization can
+    /// create that receipt; multiplayer first waits for the server intent fence.
     /// </summary>
     private static bool ConsumeAcceptedPlacementReceipt(Player player)
         => global::InfiniCrafterLocal.Common.Systems.GeneratedPlacementLedgerSystem.TryConsumePlacementReceipt(player);
@@ -271,7 +270,7 @@ public partial class GeneratedItem : ModItem
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
         {
             RuntimePlacementSpec? placement = binding.UsePolicy.Action.Placement;
-            if (placement is null || !GeneratedPlacementLedgerSystem.AuthorizePlacement(player, Data, placement))
+            if (placement is null || !GeneratedPlacementLedgerSystem.PreparePlacement(player, Data, placement))
                 return false;
         }
         _itemEventBudget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);

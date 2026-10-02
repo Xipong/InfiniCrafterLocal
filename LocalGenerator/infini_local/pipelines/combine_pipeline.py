@@ -56,7 +56,6 @@ from infini_local.storage.world_recipe_runtime import (
     cache_put,
     is_deliverable_recipe_payload,
     normalize_world_id_from_payload,
-    quarantine_world_recipe_cache,
     recipe_key,
     sanitize_recipe_for_delivery,
     world_recipe_dir,
@@ -104,7 +103,9 @@ def _vfx_manifest_report(data: Mapping[str, Any]) -> dict[str, Any]:
 
 def _cached_payload_report(data: Any) -> dict[str, Any]:
     errors: list[dict[str, Any]] = []
-    if not is_deliverable_recipe_payload(data):
+    # Structural precheck only: the mandatory visual report below owns the one
+    # operation-scoped PNG assessment. Other storage callers stay strict by default.
+    if not is_deliverable_recipe_payload(data, check_assets=False):
         errors.append({"path": "$", "message": "payload is not deliverable"})
         return {"ok": False, "errors": errors}
     assert isinstance(data, dict)
@@ -121,15 +122,6 @@ def _cached_payload_report(data: Any) -> dict[str, Any]:
     vfx = _vfx_manifest_report(data)
     errors.extend(copy.deepcopy(vfx.get("errors") or []))
     return {"ok": not errors, "errors": errors, "runtime": wire, "visual": visual, "vfx": vfx}
-
-
-def _quarantine_cached_recipe(*, world_id: str, recipe_key_value: str, reason: str, details: dict[str, Any] | None = None) -> None:
-    try:
-        path = quarantine_world_recipe_cache(recipe_key_value, world_id, reason, details=details)
-        if path:
-            trace_event("warn", "COMBINE:cache", "invalid low-level runtime recipe quarantined", {"recipeKey": recipe_key_value, "worldId": world_id, "reason": reason, "path": path})
-    except (OSError, ValueError, TypeError) as exc:
-        trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {"recipeKey": recipe_key_value, "worldId": world_id, "reason": reason, "error": repr(exc)})
 
 
 def _multi_dev_profile_id(payload: dict[str, Any]) -> str:
@@ -150,14 +142,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
     profile_id = _multi_dev_profile_id(payload)
     key = recipe_key(a, b, world_id, identity_version, profile_id)
-    cached = cache_get(key, world_id, world_name)
-    if not isinstance(cached, dict):
-        return key, None
-    report = _cached_payload_report(cached)
-    if not report["ok"]:
-        _quarantine_cached_recipe(world_id=world_id, recipe_key_value=key, reason="low_level_runtime_contract_invalid", details={"errors": report["errors"][:24]})
-        return key, None
-    return key, sanitize_recipe_for_delivery(cached)
+    cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
+    return key, sanitize_recipe_for_delivery(cached) if isinstance(cached, dict) else None
 
 
 def _failure_report(item: Mapping[str, Any], exc: BaseException, stage: str) -> dict[str, Any]:
@@ -173,7 +159,7 @@ def _failure_report(item: Mapping[str, Any], exc: BaseException, stage: str) -> 
         "stage": stage,
         "errorType": type(exc).__name__,
         "error": str(exc)[:2000],
-        "errors": errors[:48],
+        "errors": errors,
         "validation": validation,
     }
 
@@ -237,13 +223,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     profile_id = _multi_dev_profile_id(payload)
     key = recipe_key(a, b, world_id, identity_version, profile_id)
 
-    cached = cache_get(key, world_id, world_name)
+    cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
     if isinstance(cached, dict):
-        report = _cached_payload_report(cached)
-        if report["ok"]:
-            generation_debug.clear_combine_failure("cache_hit_delivered")
-            return sanitize_recipe_for_delivery(cached)
-        _quarantine_cached_recipe(world_id=world_id, recipe_key_value=key, reason="low_level_runtime_contract_invalid", details={"errors": report["errors"][:24]})
+        generation_debug.clear_combine_failure("cache_hit_delivered")
+        return sanitize_recipe_for_delivery(cached)
 
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None

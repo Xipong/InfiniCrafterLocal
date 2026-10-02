@@ -11,7 +11,12 @@ UTILITY_ROUTES = ROOT / "infini_local" / "web" / "server_utility_routes.py"
 
 
 def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
-    # Config-only boundary: never resolve credentials or contact a provider.
+    # Config-only boundary: exercise actual health shaping, not a source literal.
+    from infini_local.web import server
+
+    monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **kwargs: {"autostart": False, "command": []})
+    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: None)
     primary = {"provider": "openrouter", "base_url": "https://openrouter.ai/api/v1",
                "model": "test-model", "api_key": ""}
     monkeypatch.setattr(llm_transport, "_legacy_primary_llm_context", lambda: primary)
@@ -23,15 +28,18 @@ def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     assert snapshot["status"] == "missing_api_key"
     assert "INFINI_OPENROUTER_API_KEY" in snapshot["hint"]
     assert "api_key" not in snapshot
+    assert server._health_payload()["llmAuth"] == snapshot
     with pytest.raises(RuntimeError, match="INFINI_OPENROUTER_API_KEY"):
         llm_transport.ensure_llm_auth_configured(primary)
     primary["api_key"] = "test-key-not-real"
-    assert llm_transport.llm_auth_snapshot()["status"] == "configured"
+    configured = llm_transport.llm_auth_snapshot()
+    assert configured["status"] == "configured"
     llm_transport.ensure_llm_auth_configured(primary)
+    health = server._health_payload()
+    assert health["llmAuth"] == configured
+    assert "api_key" not in health["llmAuth"]
+    assert primary["api_key"] not in repr(health)
 
-    # Server wiring and pipeline phrasing remain source checks until safe
-    # isolated web/pipeline integration observers exist.
-    assert '"llmAuth": llm_auth_snapshot()' in SERVER.read_text(encoding="utf-8")
     assert "OpenRouter auth failed" in LLM_TRANSPORT.read_text(encoding="utf-8")
 
 

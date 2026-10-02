@@ -26,7 +26,7 @@ Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair у�
 <a id="authority"></a>
 ## Authority и hit trust
 
-Основные guards — [`InfiniRuntimeAuthority.cs`](../ModSources/InfiniCrafterLocal/Common/Services/InfiniRuntimeAuthority.cs); различие NPC event roles — `RuntimeProgramExecutor.ShouldRunNpcEvent`.
+Основные guards — [`InfiniRuntimeAuthority.cs`](../ModSources/InfiniCrafterLocal/Common/Services/InfiniRuntimeAuthority.cs); различие NPC event roles — `RuntimeProgramExecutor.ShouldRunNpcEvent`. Общий `HasActionAuthority` используется перед delayed admission и при immediate/delayed dispatch. Enqueue не выдаёт вечное разрешение: execution перепроверяет роль и при отказе возвращает spawn reservation. Phase/peer authority остаётся обязанностью runtime, не новым выбором LLM; target/damage/depth preconditions сохраняются у effect consumers.
 
 | Путь | Исполнитель | Чего не делать |
 |---|---|---|
@@ -61,7 +61,7 @@ Consumers: `GeneratedItem.RootBindingSpawnCapacity/Shoot`, `GeneratedProjectile.
 | Child depth / event allowance | 3 / 32 на activation |
 | Одна spawn group / активные generated projectiles | 12 / 96 на owner |
 | Runtime lifetime / range | 21 600 world ticks / 120 tiles |
-| Pending delayed actions / due executions | 256 в общей очереди / 64 за scheduler update |
+| Pending delayed actions / due dispatch | 256 в общей очереди / 64 за world tick, совместно для всех scheduler visits |
 | Delay / receipt subset | 1…600 world ticks при scheduling / 32 pending owner-hit actions на owner |
 | Periodic action loop | Constant 16 ограничивает due-action loop projectile producer; это не доказательство общего per-owner rate limit |
 
@@ -70,7 +70,7 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 <a id="delay"></a>
 ## Delayed actions: identity, source lineage и terminal events
 
-Владелец — [`RuntimeDelayedActionScheduler.cs`](../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), обновление через `PostUpdateEverything`; `OnWorldUnload`/`Unload` очищают очередь и возвращают reservations.
+Владелец — [`RuntimeDelayedActionScheduler.cs`](../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), обновление через `PostUpdateEverything`; `OnWorldUnload`/`Unload` очищают очередь и возвращают reservations. Enqueue сохраняет `Main.GameUpdateCount` и authored due tick с wrap-safe сравнением bounded delay. Повторный scheduler visit в том же world tick не продвигает delay и не пополняет dispatch allowance. При pressure исходный due tick сохраняется, а не заменяется новым countdown.
 
 | Captured fact | Проверка / сохранённая семантика |
 |---|---|
@@ -82,6 +82,8 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 | Position / damage source | Captured event center/direction и точная authored source entity; новый held item или движение retired host не выбирают источник заново. |
 
 `RuntimeProgramExecutor.AuthoredEventDamage`: item body использует canonical Gameplay damage/class, projectile — свой Damage component. Это не live `Projectile.damage`, не `damageDone`, не primary entity и не категория. Hit/crit AoE исключает уже поражённую direct target; proximity/terminal AoE её не исключает, потому что proximity не является нанесённым contact hit. Lifesteal, напротив, использует фактический `damageDone` по своему контракту.
+
+Charge-release controller — другая операция: один раз масштабирует **текущие** `Projectile.damage` и `knockBack`, уже включающие spawn/combat modifiers, не восстанавливает их из definition/`originalDamage`. Нулевая база остаётся нулевой; released-generation guard не допускает повторного scaling после AI/ExtraAI hydration.
 
 [`GeneratedProjectile.RuntimeEvents.cs`](../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs) разделяет `on_expire` и `on_kill`: natural/final-AI expiry не должна повторить expire при OnKill; early kill не создаёт expiry. Два authored terminal actions с разными delay сохраняются независимо. Прежние headless матрицы проходили **последовательности mod hooks**, не vanilla `Projectile.Kill`/collision-driven game loop и не modded damage hooks.
 
@@ -131,7 +133,11 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 - Для tracked tile/wall `CanDrop/Drop` подавляет vanilla drop и ставит generated return. Group/cells снимаются из placement map, но **возврат не исчезает**: `PendingReturnRecord` содержит GeneratedItemId и `DefinitionJson`, сохраняется в world data и повторяется при временном spawn failure.
 - `TrySpawnPendingReturnCore` использует подходящий current-world canonical registry record; при registry miss восстанавливает definition из сохранённого JSON. Настраивается именно Item, созданный `Item.NewItem`, а не новый объект вместо него; successful return снимает pending запись.
 - Full item slots/мировая нагрузка и caught spawn exceptions — `TransientFailure`: запись ротируется и пробуется снова, не quarantined по числу попыток.
-- Невалидная definition, mismatch ID или неправильный generated proxy — `PermanentFailure`. `PostUpdateWorld` **удаляет pending запись с warning; предмет теряется**. Это логируемая quarantine/removal, не durable хранилище quarantined records и **не vanilla replacement**. Инвариант возврата valid placement нельзя расширять на corrupted record.
+- Невалидная definition, mismatch ID или неправильный generated proxy — `PermanentFailure`: raw claim/definition/cause сохраняются в world quarantine, а не удаляются и не превращаются в vanilla replacement. Повреждённый quarantine envelope сохраняется целиком в отдельном versioned raw bucket и не прерывает загрузку корректных соседей. `TryRequeueQuarantinedReturn` допускает только явно предоставленную валидную definition с той же identity; повтор idempotent. Requeued forensic receipt остаётся историей, не вторым material owner и не второй занятой capacity. Raw history пока не имеет compaction policy; её сохранность не обещает автоматическое восстановление неизвестной definition.
+
+Перед MP placement сервер фиксирует native before-state по intent **до** разрешения vanilla mutation. Protocol **v4** возвращает Ready с fingerprint server-owned canonical definition; чужой binding/style или изменённые данные не принимаются по одному совпадению sequence. Peers требуют одинаковую версию, v3 отвергается без migration. Runtime `PreItemCheck` один раз восстанавливает consumed input latch только для неизменённого, всё ещё удерживаемого и ещё не начатого intent; authored `autoReuse` не меняется. Отпускание, смена item/input/target, expiry или потеря identity не создают отложенное действие. Новый target может явно заменить точный старый sequence лишь до notify и при неизменённом before-state; поздний notify не восстанавливает старую authorization.
+
+Remote station mirror не является локальным material/refund authority. Foreign/unscoped raw claims сохраняются отдельно от текущей работы и не блокируют свежие inputs другого мира. Hydration разрешена только для одного буквально совпавшего origin; ambiguous claims не выбираются/не сливаются, origin не угадывается. Save/reload/park сохраняют неизвестные расширения, не перезаписывая claim другого мира.
 
 Strict player-save references — [`GeneratedItemData.cs`](../ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.cs): обязательные kind/version/runtime markers, exact current version; reference-only save не получает gameplay из DTO defaults и не мигрируется догадкой. Hook/JSON round trip не доказывает реальную `.plr` запись, binary ItemIO/TagIO, hydration или перенос world scope.
 
@@ -143,7 +149,7 @@ Craft lanes: [`InfiniCraftPlayer.MultiDev.cs`](../ModSources/InfiniCrafterLocal/
 [`GeneratedAssetSyncService.cs`](../ModSources/InfiniCrafterLocal/Common/Services/GeneratedAssetSyncService.cs) отвечает за declared byte identity, manifest/descriptors, bounded delivery и verified commit; [`RuntimeSpriteCache.cs`](../ModSources/InfiniCrafterLocal/Common/Services/RuntimeSpriteCache.cs) — за выбранный local key, GPU texture и retirement. Нельзя смешивать existence, byte certification, texture readiness и successful craft.
 
 1. **Два transport paths.** HTTP bounded stream и server→client bounded PNG bundle/chunks существуют отдельно. Asset-request handler на сервере сверяет запрос с server-owned definition, проверяет length/PNG/SHA и вызывает `EnqueueAssetBundles`; chunk handler собирает bounded payload, проверяет bundle SHA и declared entries до commit. Client не авторитизует definition/PNG своими байтами. `assetTransport=http` не принимается chunk consumer. Packet transport не означает socket-match proof.
-2. **Dispose publication fence.** Общий lock и disposed flag запрещают новый download/late retry-state и file commit после Dispose. Это не cancellation зависшего body read, не автоматическое освобождение HttpSlots до его завершения и не retirement уже queued main-thread callbacks.
+2. **Dispose и HTTP cancellation.** Общий lock/disposed flag сохраняет запрет нового download, late retry и file commit. Per-service cancellation завершает ожидание `HttpSlots`, HTTP и body read; worker освобождает только реально полученный permit, соседний service не отменяется. CTS освобождается после workers и завершения Cancel callbacks, cancellation не записывается как offline retry. Это не retirement уже queued main-thread callbacks и не общий job/resume manager.
 3. **Canonical bytes.** `ResolveCertifiedLocalPath` использует certification существующего descriptor после full lifecycle PNG/length/hash validation или verified commit. Local shadow не outranks этот же declared certified asset. При conflicting filename length/SHA priority снимается; map order не выбирает владельца. Без certification сохраняется healthy local-only behavior.
 4. **Hot-path boundary.** Freshness проверяется по file length/write timestamp, без decode/hash в Draw. Это не защита от adversarial same-stat mutation. Source selection не меняет authored path/visual design. Load failure и backoff адресуют exact selected normalized key.
 5. **Texture borrowing.** Invalidate/LRU/Clear/Dispose снимают lookup authority сразу, но admitted Texture2D уходит в instance-owned retirement queue. Освобождение — через owner callback `Main.QueueMainThreadAction` на Update boundary вне Draw, а не немедленно в loader/download worker. Resident + retired учитываются при admission (ceiling — двойной effective resident capacity); pressure отказ не записывается как bad-file backoff. Доказательство quiescent boundary относится к проверенному installed API, при обновлении его надо перепроверить.
@@ -160,6 +166,7 @@ Mandatory item-body baked PNG и PNG зависимость реально вы�
 - Client quality multiplier меняет effective allowance, не serialized authored budgets и не hard engine ceiling. Fractional Dust counts используют существующий RNG; короткая серия не гарантирует точную долю. LightCue client intensity не изменяет отдельный gameplay equipment light.
 - Detached draws вне vanilla-owned SpriteBatch требуют собственного lazy Begin и finally-End только после успешного Begin; failed Begin не закрывает чужой batch. CPU FNA queues доказывают этот protocol, не GPU appearance.
 - Detached retirement должен идти на all-client update без новых emissions/Draw; persistent item binding требует живого owner lifecycle, не одного `Player.active`. Death/replacement/generation и world snapshots имеют различные lifetime semantics.
+- Material event admission выполняется один раз до immediate/delayed slot fanout через [`VfxOrderedPeerStream`](../ModSources/InfiniCrafterLocal/Common/VFX/VfxOrderedPeerStream.cs): synchronous-local и wire-relay sequences раздельны, replay cursors привязаны к transport session. История retired generations не является глобальным лимитом допуска новых source/owners. Live record/particle/source budgets сохраняются. Это контракт ordered transport, не поддержка произвольной перестановки пакетов.
 - Remote Try-pattern rejection обязан не отдавать отвергнутую pose в out payload. Accessory hide-флаг использует реальный armor index. Это не proof dye/gravity/vanity precedence всех modded slots.
 - Наличие config field/backend name само по себе не доказывает reachable consumption. Старые `EnableScreenCulling`/`ParticleAlphaMultiplier` observations и ParticleLibrary backend не объявляются исправленными одним light/particle/budget pass; нужен trace до update/draw consumer. Не подключать legacy BestAvailable с semantic fallback как «lossless» замену.
 
@@ -194,13 +201,13 @@ Custom output paths требуют запуска точной построен�
 
 | Что остаётся отдельной проверкой | Почему прежний GREEN не заменяет её |
 |---|---|
-| World placement → save/reload → break/explosion → ровно один return, multi-tile и MP ordering | Ledger JSON/hook observer не является полной world chain; permanently corrupt return может быть удалён с потерей Item. |
+| World placement → save/reload → break/explosion → ровно один return, multi-tile и MP ordering | Native ledger/NBT/hook observer не является полной world chain; durable quarantine сохраняет corrupt claim, но не создаёт отсутствующую валидную definition. |
 | Craft/escrow lost ACK, reconnect, dedupe/cancel/refund и post-spawn exceptions | Prepared refund copies и lane source reads не доказывают фактический inventory возврат. |
 | Delayed in-place reset и reuse terminal lineage | Player/NPC replacement fences не универсальны; cancelled reused projectile generation не является immutable terminal snapshot. |
 | Mobility safe destination, solid/lava, recall, camera/biome и intent packets | Реальный Teleport completion/position observer на ограниченном fixture не покрывает все world branches. |
 | Save/hydration, world-scope spoofing, load-order переносимость content IDs | Strict DTO/version и network JSON не равны binary persistence или разрешению отсутствующей definition. |
 | Movement/controller/collision combinations, group spawn и сторонние mods | Method anchors/AST и entry interception не доказывают registered world spawn или всю vanilla hook последовательность. |
-| HTTP reads, queued callbacks, world/endpoint switch, PNG corruption matrix | Dispose commit fence не отменяет reads; обычный PNG positive/negative не исчерпывает format/parser matrix. |
+| HTTP reads, queued callbacks, world/endpoint switch, PNG corruption matrix | Held-body/slot tests доказывают bounded HTTP retirement и permit restoration, не всю queued-callback/world-switch цепь; обычный PNG positive/negative не исчерпывает format/parser matrix. |
 | Asset textures и VFX GPU/art acceptance, capture/camera/frame pacing | CPU queues, native offscreen material proof и in-game appearance — разные слои; отдельно требуются assets/body integration и visual review. |
 | MP sockets, lag/reconnect, hit/VFX/tag replication и anti-cheat | Memory serialization/NetMessage observer не доставляют пакет; owner trust не становится независимым hit witness. |
 | Export commands и performance | Applied field/JSON/hash observer не проверяет chat renderer, real dumps, export collision, allocation cost или frame-time. |

@@ -11,7 +11,9 @@ from urllib.parse import urlparse
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_PNG_BYTES = 32 * 1024 * 1024
-_MAX_PNG_DIMENSION = 8192
+# Final gameplay/sync PNG ceiling matches GeneratedAssetSyncService in C#.
+# Raw provider canvases are processed independently and do not use this gate.
+_MAX_PNG_DIMENSION = 512
 
 
 def _png_expected_scanline_bytes(width: int, height: int, bits_per_pixel: int, interlace: int) -> tuple[int, list[tuple[int, int]]]:

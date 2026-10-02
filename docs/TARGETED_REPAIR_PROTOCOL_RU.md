@@ -9,12 +9,20 @@ Exact shape — `program_schema.py`; permissions/filter — `repair_scope.py`; r
 
 Conditional Repair получает `path/code/allowed/relatedIds` validator errors, invalid fragments, exact missing dependencies, valid dependency context и компактный immutable index. Gameplay capability subset состоит из direct blockers, обязательных supporting capabilities и existing-broken calls. Полный valid item/stage response, planner/chat history и весь catalog в Gameplay Repair не отправляются; Repair не второй Author и не weapon-family router.
 
+Canonical список ошибок ограниченного графа не обрезается для досье или failure envelope: поздняя ошибка должна попасть в тот же единственный Repair. Compiler-owned `author_repair_targets` сохраняют свой приоритет; downstream-only rejection не превращается в широкое разрешение менять Author. Это полнота diagnostics, не доказательство качества live-модели или достаточности её context window.
+
+Author shape owner выводит конечный diagnostic ceiling из канонической schema, а не использует общий предел сбора 128. Отдельный итеративный guard ограничивает nodes/depth/text: сырой provider object проверяется до projection/copy, Author surface — до schema walk и построения Repair fragments. Превышение work bounds — явный отказ, не усечение входа, не частичный список с неполными правами и не новый Format/Gameplay Repair. Общий `strict_schema_errors` и его explicit `limit` для других consumers не изменены; preview текста исключения не ограничивает authoritative error list.
+
 <a id="frozen-first"></a>
 ## Frozen-first merge
 
 Уже принятые существующие значения **и принятое отсутствие** frozen. Возвращённый полный broken call/entity/binding/Visual row/VFX slot не открывает полный rewrite. Filter принимает лишь exact `fieldPermissions`, missing mandatory leaves, create-policy blocker/dependency nodes и policy-разрешённые удаления.
 
 Scope escape (valid damage/target/kind, соседний call, motif/magnitude, необязательное unreported поле) игнорируется с сохранением прежнего значения и `ignoredChanges` audit; полезное exact исправление не отменяется. `old valid state + accepted leaves + allowed missing nodes = repaired state`. Пропуск в patch означает **не менять**, не материализовать default. Новые узлы подчиняются полному capability contract.
+
+Индексы diagnostics, broken fragments и index-delete относятся к исходному массиву, включая malformed/ID-less строки. No-op не очищает их и не схлопывает duplicate occurrences; неоднозначный ID не открывает rewrite/delete всех совпадений. Удаление требует exact policy-разрешения на исходный индекс, валидный сосед остаётся frozen.
+
+Невалидные числа, включая JSON integer вне float range, дают structured refusal по точной leaf, а не исключение преобразования. Нулевое healing-only `apply_item_effects` требует исправления healing leaves; тот же нейтральный вызов с другим активным разрешённым use-effect допустим. Runtime не выбирает недостающий эффект за модель.
 
 Malformed provider/patch shape фатален: код не угадывает структуру. После tolerant filter всегда full stage validation; оставшаяся обязательная ошибка завершает единственный Repair неуспехом. Нет рекурсивного/бесконечного loop, hidden repair API или разрешения переносить авторство в compiler.
 

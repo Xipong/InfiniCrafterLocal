@@ -50,7 +50,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool CanStartStationCraftLane(int laneIndex)
     {
-        if (!IsCraftLaneVisible(laneIndex) || IsCraftLanePending(laneIndex) || HasPendingStationEscrowOperation)
+        if (!CanMutateStationInputs() || !IsCraftLaneVisible(laneIndex) || IsCraftLanePending(laneIndex) || HasPendingStationEscrowOperation)
             return false;
         int first = laneIndex * 2;
         return HasInputAt(first) && HasInputAt(first + 1);
@@ -393,12 +393,13 @@ public sealed partial class InfiniCraftPlayer
 
     private void SendExtraCraftCancel(MultiDevCraftJob job, string reason)
     {
-        if (Main.netMode != NetmodeID.MultiplayerClient || string.IsNullOrWhiteSpace(job.RequestId))
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || string.IsNullOrWhiteSpace(job.RequestId))
             return;
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketCancelServerCraft);
+            WriteRemoteStationScope(packet);
             packet.Write(job.RequestId);
             packet.Write(reason ?? "client_cancel");
             packet.Send();
@@ -408,10 +409,12 @@ public sealed partial class InfiniCraftPlayer
 
     private bool SendServerCraftRequest(string requestId, int laneIndex, Item a, Item b)
     {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority()) return false;
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketRequestServerCraft);
+            WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(requestId ?? "");
             packet.Write((byte)Math.Clamp(laneIndex, 0, 2));

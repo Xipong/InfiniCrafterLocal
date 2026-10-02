@@ -493,6 +493,28 @@ class CapabilitySpec:
             card["budget"] = self.performance_budget
         return card
 
+    def has_non_neutral_effect(self, params: Mapping[str, Any]) -> bool:
+        """Registry-owned effect predicate; shape/range acceptance stays separate.
+
+        An operation without declared neutral effect params is unconditional
+        once valid (for example a concrete vanilla buff or mobility action).
+        No value is coerced or materialized by this predicate.
+        """
+        effect_params = {name: spec for name, spec in self.params.items() if spec.neutral is not None}
+        if not effect_params:
+            return True
+        for name, spec in effect_params.items():
+            value = params.get(name)
+            if spec.kind == "boolean":
+                if isinstance(value, bool) and value is not spec.neutral:
+                    return True
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                if isinstance(value, float) and not math.isfinite(value):
+                    continue
+                if value != spec.neutral:
+                    return True
+        return False
+
     def author_prompt_card(self) -> dict[str, Any]:
         """Compact only repeated presentation metadata, never the authored contract.
 
@@ -876,8 +898,8 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "healLife": _p("integer", "Life restored", minimum=0, maximum=500),
-            "healMana": _p("integer", "Mana restored", minimum=0, maximum=500),
+            "healLife": _p("integer", "Life restored", minimum=0, maximum=500, neutral=0),
+            "healMana": _p("integer", "Mana restored", minimum=0, maximum=500, neutral=0),
             "usesPotionRules": _p("boolean", "Set Terraria Item.potion rules including Quick Heal eligibility and potion-sickness use gating; not a duration; false allows non-potion healing", wire_name="potion"),
         },
         py=_COMPILER_OWNER,
@@ -936,7 +958,7 @@ _CAPS: list[CapabilitySpec] = [
             "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
             "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
             "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
-            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
+            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -1943,6 +1965,13 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             kind="binding_action_present", target="item_body", any_of=("apply_item_effects",),
             message="This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
         )]
+        if cap.name == "restore_resources_on_use":
+            requirements.append(RequirementSpec(
+                "capability_group_present",
+                any_of=BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of,
+                nonzero_params=tuple(name for name, spec in cap.params.items() if spec.neutral is not None),
+                message="An apply_item_effects lane needs at least one effective use effect: positive healing or another active registered item-use effect. Potion rules alone are not an effect.",
+            ))
         if cap.name == "apply_generated_buff_on_use":
             requirements.append(RequirementSpec(
                 "non_neutral_param", message="at least one generated-buff effect must be non-neutral",

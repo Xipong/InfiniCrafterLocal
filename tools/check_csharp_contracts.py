@@ -148,9 +148,9 @@ def check_network_boundaries() -> None:
         (net, "SendExtraAI", ("writer.Write(_generatedItemId", "writer.Write(_entityId"), ()),
         (net, "ReceiveExtraAI", ("reader.ReadByte() != RuntimeNetVersion", "_generatedItemId.Length > 96", "_entityId.Length > 48", "Projectile.friendly = false", "Projectile.velocity = Vector2.Zero", "TryHydrate()", "_preserveSyncedStateOnHydrate = true"), ()),
         (projectile, "Configure", ("preserveSyncedState", "Projectile.timeLeft = Math.Max(1, syncedTimeLeft)", "_remainingBounces = Math.Clamp(syncedBounces", "_activationDelayTicks = Math.Max(0, syncedActivationDelay)"), ()),
-        (runtime, "HealOwner", ("ShouldRunLocalPlayerAction(owner)", "owner.Heal(heal)"), ("ShouldRunPlayerGameplay(owner)",)),
-        (runtime, "DamageArea", ("ShouldRunNpcEvent(action, owner)",), ()),
-        (runtime, "ChainDamage", ("ShouldRunNpcEvent(action, owner)",), ()),
+        (runtime, "HealOwner", ("owner.Heal(heal)",), ("ShouldRunPlayerGameplay(owner)",)),
+        (runtime, "DamageArea", ("AuthoredEventDamage(data, sourceEntity)", "owner.ApplyDamageToNPC"), ()),
+        (runtime, "ChainDamage", ("AuthoredEventDamage(data, sourceEntity)", "owner.ApplyDamageToNPC"), ()),
         (runtime, "ShouldRunNpcEvent", ("RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit", "ShouldRunLocalPlayerAction(owner)", "ShouldRunNpcGameplay()"), ()),
         (net, "HandleVfxEventSyncPacket", ("Main.netMode != NetmodeID.MultiplayerClient", "GeneratedItemRegistryService", "HasExactVfxSlot(data, entity.Id, payload.EventName)", "InfiniVfxRuntime.OnDetachedEvent"), ("remote?._data",)),
         (net, "BroadcastAuthoritativeVfxEvent", ("Main.netMode != NetmodeID.Server", "packet.Send(-1, Projectile.owner)"), ()),
@@ -166,6 +166,23 @@ def check_network_boundaries() -> None:
         for token in forbidden:
             if re.sub(r"\s+", "", token) in code:
                 fail(f"{name}: forbidden code obligation `{token}`")
+    # Native candidate coverage validates the shared decision; the source gate
+    # must bind both real callers to it, not demand obsolete inline duplicates.
+    scheduler = read("Common/Runtime/RuntimeDelayedActionScheduler.cs")
+    for source, name, overload, tokens in (
+        (runtime, "HasActionAuthority", 0, (
+            "RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)",
+            "RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage => ShouldRunNpcEvent(action, owner)",
+            "_ => false",
+        )),
+        (runtime, "ExecuteAction", -1, ("if (!HasActionAuthority(action, owner))", "budget.Return(reservedSpawnBudget)")),
+        (scheduler, "TrySchedule", 0, ("if (!RuntimeProgramExecutor.HasActionAuthority(action, owner)) return false;",)),
+    ):
+        code = re.sub(r"\s+", "", stripped(method_body(source, name, overload=overload)))
+        for token in tokens:
+            require(code, re.sub(r"\s+", "", token), name)
+    pull_authority = re.sub(r"\s+", "", stripped(method_body(runtime, "HasActionAuthority"), keep_strings=True))
+    require(pull_authority, 'action.Mode=="owner_to_target"?InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner):InfiniRuntimeAuthority.ShouldRunNpcGameplay()', "HasActionAuthority:Pull")
     # Bounded request state cannot evict authoritative definitions.
     for token in ("MaxInFlightDownloads", "MaxKnownMissing", "SemaphoreSlim"):
         require(stripped(asset), token, "asset request bounds")
@@ -253,8 +270,11 @@ def check_world_transactions() -> None:
         (ledger, "AuthorizePlacement", ("PendingAuthorizations.Count", "MaxCellsPerGroup", "MaxGroups", "data.ToNetworkJson()"), ()),
         (ledger, "TryCommitAuthorizedPlacement", ("MaxCells - committedCells.Count", "Groups.Count >= MaxGroups"), ()),
         (ledger, "TryQueueReturn", ("Placements.Remove", "PendingReturns.Add", "PendingReturns.Remove", "PendingSpawnOutcome.Spawned"), ()),
-        (ledger, "TrySpawnPendingReturnCore", ("GeneratedItemRegistryService", "GeneratedItemData.FromJson(pending.DefinitionJson)", "PendingSpawnOutcome.TransientFailure"), ("ItemID.",)),
-        (ledger, "PostUpdateWorld", ("PendingReturns", "TrySpawnPendingReturn"), ()),
+        (ledger, "TrySpawnPendingReturnCore", ("GeneratedItemData.FromJson(pending.DefinitionJson)", "IsMaterialPlacementDefinition(data)", "string.Equals(data.Id, pending.GeneratedItemId, StringComparison.Ordinal)", "PendingSpawnOutcome.TransientFailure"), ("ItemID.", "registry.TryGet")),
+        (ledger, "PostUpdateWorld", ("PendingReturns", "TrySpawnPendingReturn", "QuarantinedReturns.Add", "Claim = ReturnClaim(pending)"), ()),
+        (ledger, "SaveWorldData", ("QuarantineSaveKey", "QuarantinedReturns.Select(QuarantineEnvelope)", "RawQuarantineEnvelopeSaveKey", "RawQuarantineEnvelopes.Select"), ()),
+        (ledger, "QuarantineEnvelope", ("record.RawEnvelope.Clone()", "record.Claim.Clone()", "record.Cause", "record.Requeued"), ()),
+        (ledger, "TryRequeueQuarantinedReturn", ("GeneratedItemRegistryService.IsCurrentWorldData(data)", "IsMaterialPlacementDefinition(data)", "record.Requeued", "record.RequeueDefinitionJson", "PendingReturns.Add"), ()),
         (ledger, "SendPlacementToServer", ("InfiniNetPacketIds.NotifyGeneratedPlacement",), ("generatedItemId",)),
         (ledger, "HandlePlacementPacket", ("Main.netMode != NetmodeID.Server", "TryCommitAuthorizedPlacement"), ("ReadString",)),
         (ledger, "CanDrop", ("TryQueueReturn(GeneratedPlacementLayer.Tile, i, j)", "return false"), ()),
@@ -262,7 +282,9 @@ def check_world_transactions() -> None:
         (journal, "LoadWorldData", ("GetList<TagCompound>(CraftTransactionsSaveKey).Take(MaxCraftTransactions)",), ()),
         (journal, "RememberOutcome", ("Outcomes.Count >= MaxOutcomes",), ("Remove(",)),
         (state, "SaveData", ("infiniStationEscrowClientId", "infiniStationEscrowMirror", "infiniPendingStationEscrow", "ItemIO.Save(_pendingStationEscrowItem)", "infiniPendingRemoteCrafts", "SavePendingRemoteCrafts"), ()),
-        (state, "LoadData", ("RestorePendingRemoteCrafts",), ()),
+        (state, "LoadData", ("_readOnlyRemoteStationClaim", "tag.Clone()", "if (remoteClaim) return;"), ("RestorePendingRemoteCrafts(",)),
+        (state, "EnsureRemoteStationAuthority", ("IsExactAuthorityScope(current)", "StringComparison.Ordinal", "RestoreScopedRemoteStationClaim(retained)"), ()),
+        (state, "RestoreScopedRemoteStationClaim", ("RestorePendingRemoteCrafts", "_stationEscrowUsesRemoteAuthority = true"), ()),
         (state, "OnEnterWorld", ("ResendPendingRemoteCrafts",), ("ClearPendingStationEscrowOperation",)),
         (mp, "FlushPendingStationEscrowRequest", ("packet.Write(_stationEscrowClientId)", "packet.Write(_pendingStationEscrowOperationId)"), ()),
         (mp, "HandleStationEscrowRequestPacket", ("string clientId = reader.ReadString()", "GeneratedStationEscrowStateSystem.RestoreOwnerState", "GeneratedStationEscrowStateSystem.TryReplay"), ()),

@@ -32,7 +32,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryPutMouseItemIntoInput(int index)
     {
-        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
+        if (!CanMutateStationInputs() || IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
             return false;
 
         ref Item target = ref InputSlot(index);
@@ -74,7 +74,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryTakeInputToMouse(int index)
     {
-        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || !Main.mouseItem.IsAir)
+        if (!CanMutateStationInputs() || IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || !Main.mouseItem.IsAir)
             return false;
 
         ref Item slot = ref InputSlot(index);
@@ -91,7 +91,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryClearInputToInventory(int index)
     {
-        if (IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation)
+        if (!CanMutateStationInputs() || IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation)
             return false;
         ref Item slot = ref InputSlot(index);
         if (slot is null || slot.IsAir)
@@ -105,7 +105,7 @@ public sealed partial class InfiniCraftPlayer
 
     public bool TryClearAllInputsToInventory()
     {
-        if (HasAnyCraftLanePending || HasPendingStationEscrowOperation)
+        if (!CanMutateStationInputs() || HasAnyCraftLanePending || HasPendingStationEscrowOperation)
             return false;
         if (Main.netMode == NetmodeID.MultiplayerClient)
             return HasAnyInput && SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
@@ -205,9 +205,11 @@ public sealed partial class InfiniCraftPlayer
 
     public void ReturnStationInputs()
     {
-        if (Main.netMode == NetmodeID.MultiplayerClient)
+        if (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server
+            || Main.netMode == NetmodeID.MultiplayerClient)
         {
-            if (HasAnyInput && !HasPendingStationEscrowOperation)
+            if (Main.netMode == NetmodeID.MultiplayerClient && EnsureRemoteStationAuthority()
+                && HasAnyInput && !HasPendingStationEscrowOperation)
                 SendStationEscrowRequest(StationEscrowAction.ReturnAll, -1, NewAirItem());
             return;
         }
@@ -223,7 +225,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void RefundIngredients()
     {
-        if (_request is null)
+        if (_request is null || (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server))
             return;
 
         RefundOne(_request.RefundA);

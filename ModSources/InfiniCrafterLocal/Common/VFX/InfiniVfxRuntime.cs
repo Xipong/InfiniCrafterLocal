@@ -138,6 +138,7 @@ public static class InfiniVfxRuntime
         InfiniVfxProjectileSnapshot snapshot = InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId);
         if (!snapshot.IsValid) return false;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
+        bool admitMaterials=includeMaterialElements&&InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay:false);
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
@@ -148,8 +149,7 @@ public static class InfiniVfxRuntime
                 continue;
             }
             if (slot.Element is not null) {
-                if(!includeMaterialElements)continue;
-                if(!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor)||!InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(state.SourceKey,slot.Id,occurrence))continue;
+                if(!admitMaterials||!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
                 emitted |= InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,state.SourceKey,new(anchor,
                     slot.Anchor=="velocity"?projectile.velocity.SafeNormalize(snapshot.Forward):snapshot.Forward,snapshot.MaterialVelocity){SourceCenter=snapshot.Center},VfxSourceBinding.Capture(projectile));
                 continue;
@@ -334,7 +334,9 @@ public static class InfiniVfxRuntime
         if (Main.dedServ || data is null || manifest is null || !manifest.HasSlots || string.IsNullOrWhiteSpace(sourceKey))
             return false;
         var state = new InfiniVfxState { Tick = (int)Main.GameUpdateCount, SourceKey = sourceKey };
+        bool relay=occurrence!=0;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
+        bool admitMaterials=InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay);
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
@@ -343,7 +345,7 @@ public static class InfiniVfxRuntime
             if (snapshot is { } captured && !captured.TryAnchor(slot.Anchor, center, out anchor)) continue;
             emitted = true;
             if (slot.Element is not null && snapshot is {} materialSnapshot) {
-                if(!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor)||!InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(sourceKey,slot.Id,occurrence))continue;
+                if(!admitMaterials||!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
                 InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,sourceKey,new(anchor,
                     slot.Anchor=="velocity"?inheritedVelocity.SafeNormalize(materialSnapshot.Forward):materialSnapshot.Forward,materialSnapshot.MaterialVelocity){SourceCenter=materialSnapshot.Center},binding);
                 continue;
