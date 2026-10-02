@@ -1,13 +1,10 @@
-# Репозиторий v0.4.241
+# Корень репозитория
 
-- `LocalGenerator/` — Gameplay/Visual/VFX authoring, validation, storage and QA.
-- `ModSources/InfiniCrafterLocal/` — typed tModLoader runtime.
-- `contracts/` — generated strict schemas/manifests.
-- `docs/` — current low-level architecture/inventory/research.
-- `tools/` — parity, mutation, build, packaging and verification.
+Начало работы — [README_RU.md](README_RU.md); все руководства — [docs/README_RU.md](docs/README_RU.md); переход от задачи к коду — [AGENT_INDEX_RU.md](AGENT_INDEX_RU.md).
 
-Source-of-truth navigation: `AGENTS.md`, `PROJECT_ARCHITECTURE_RU.md`, `PROJECT_MAP_RU.md`, `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`.
+- [LocalGenerator](LocalGenerator/FOLDER_DOCS_RU.md) — Python authoring, validation, assets/storage и QA.
+- [ModSources](ModSources/FOLDER_DOCS_RU.md) — typed tModLoader executor.
+- [contracts](contracts/FOLDER_DOCS_RU.md) — generated schemas/manifests; [lowery.md](lowery.md) — generated boundary/mappings.
+- [tools](tools/FOLDER_DOCS_RU.md) — audits/build/replay; [toolbox](toolbox/README.md) — отдельно разрешаемая live acceptance.
 
-Не считать source: `.pytest_cache`, `__pycache__`, `bin`, `obj`, `.tml-build-cache`, temporary reports or generated packaging directories.
-- `lowery.md` — конечный перечень canonical mappings и сохранённых non-gameplay aliases.
-- `TERRARIA_TMODLOADER_STANDARDIZATION_REPORT_RU.md` — отчёт v0.4.241 и граница vanilla/custom runtime.
+`bin`, `obj`, cache, workspace indexes и отчёты запусков не являются source of truth. История решений отделена от текущих инструкций в [HISTORY_RU.md](docs/HISTORY_RU.md).

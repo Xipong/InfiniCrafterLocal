@@ -1,70 +1,54 @@
-# Объявленные нейтральные пропуски в Gameplay Author
+# Объявленные нейтральные пропуски Gameplay Author
 
-## Изменение контракта
+[Author](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Transformation classes](TECHNICAL_LOWERING_POLICY_RU.md#transformations) · [Frozen Repair](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first)
 
-Это сознательно разрешённая семантика полного Author JSON: только перечисленные registry-поля с `required=False`, `default` и равным ему `neutral` могут отсутствовать как точный выбор этой нейтрали. Это не восстановление неизвестного замысла, не исправление неправильного присутствующего значения и не новая классификация оружия.
+<a id="contract"></a>
+## Условие разрешения
 
-После полной проверки программы compiler материализует объявленную нейтраль в прежний полный wire. Исходный Author JSON не переписывается. Ненейтральное явное значение сохраняется, а `null`, неверный тип и выход за диапазон остаются ошибкой. `default` в JSON Schema — переданная аннотация контракта, а не обещание provider-enforced constrained decoding; `json_object` получает смысл через реальные карточки.
+Только optional `ParamSpec` с объявленным `default`, **тем же типом** и равным `neutral` разрешает отсутствие как точный выбор этой нейтрали. Owner — [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py); точный predicate — [declared_neutral_omissions](../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py#L138). `neutral` без `default`, допустимый ноль и C# constructor default права не дают.
 
-Уточнение после аудита: в фактически применённом `json_schema` только объявленная provider-схемой nullable-обёртка optional object property может кодировать omission через null. В `json_object`/off такой эквивалентности нет. Unknown keys и null-элементы массивов не удаляются. Точная production-проекция, C# precision и Repair исправлены в [пакете исправлений аудита](AUDIT_81509E2_FIXES_RU.md).
+Это семантика **полного** Author JSON, не ремонт невалидного ответа и не classifier. После полной композиционной проверки compiler материализует объявленную нейтраль в прежний полный wire, не переписывая исходный Author. Explicit non-neutral value сохраняется; неверный type/range и недостающая dependency остаются RED.
 
-## Узкий список изменений
+Schema `default` — аннотация, не обещание provider constrained decoding. Только nullable-обёртка optional object property в **фактически применённом `json_schema`** кодирует omission через null перед local validation. В `json_object/off` null такой эквивалентности не имеет. Unknown keys, required non-null fields и null array elements не удаляются; provider relaxation не разрешает broader projection. Детали precision/null fixes — [исторический audit fixes](HISTORY_RU.md#audit-81509e2).
 
-Всего девять параметров в трёх capabilities:
+<a id="fields"></a>
+## Узкое разрешение registry
 
-- `configure_item_stats.manaCost`: отсутствие равно `0` при любом явно выбранном `damageClass`. Меч может иметь явный расход маны; магический предмет может иметь нулевой.
-- `configure_item_use.holdoutOffsetX` и `holdoutOffsetY`: отсутствие каждой координаты равно `0`, независимо от другой координаты.
-- `apply_generated_buff_on_use.miningSpeedMultiplier`: отсутствие равно `1`, а не `0`.
-- `apply_generated_buff_on_use.oreSenseEnabled`: отсутствие равно `false` (прежний wire `oreSenseRadiusTiles=0`).
-- `apply_generated_buff_on_use.moveSpeedBonusFactor`, `jumpSpeedBonusPxPerTick`, `manaRegenBonusPoints`, `lifeRegenHpPerSecond`: отсутствие равно `0`. Единицы и точные существующие wire conversions не менялись.
+| Capability | Поля → объявленная нейтраль |
+|---|---|
+| `configure_item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
+| `configure_item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
+| `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusFactor/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
 
-Owner — существующий `capability_registry.ParamSpec`. Compiler использует только явно объявленный `default`, не любой `neutral` и не C# constructor defaults. Receipt `declared_neutral_omission` отличает выбранное контрактом отсутствие от `delivered` присутствующего значения; аудит проверяет происхождение и точный wire output.
+Это девять параметров в трёх capabilities текущего узкого изменения, не blanket optionality. Units и старые wire conversions не меняются; актуальный executable перечень — registry.
 
-## Зависимости важнее optionality
+<a id="dependencies"></a>
+## Совместные зависимости важнее optionality
 
-Для generated buff по-прежнему обязателен хотя бы один ненейтральный эффект. Если всё отсутствует/нейтрально и свет выключен, программа отклоняется. Сохраняются явные `durationTicks`, `lightStrength`, `lightColor` и executable binding `apply_item_effects`. Цвет без включённого света не считается эффектом.
+Generated buff требует хотя бы один **ненейтральный исполняемый** эффект. Полностью отсутствующий/нейтральный набор с выключенным light — RED; цвет без light не эффект. `durationTicks/lightStrength/lightColor` и executable `apply_item_effects` binding остаются явными. Код не выбирает цвет.
 
-Световая пара специально не переведена на optional: код не выбирает цвет. Широкое обнуление не распространяется на `damageClass`, damage, useStyle, channel, геометрию, target/reference, события, сроки, cooldown и immunity. `channel_beam`/`charge_then_release` по-прежнему требуют явно включённый `channel`.
+Не распространять разрешение на damageClass/damage/useStyle/channel, геометрию, refs/target, events, lifetime, cooldown/immunity. `channel_beam/charge_then_release` всё ещё требуют explicit channel. Необъявленные группы требуют отдельного совместного доказательства:
 
-Отдельно просмотрены группы, которые остаются без расширения:
+- healLife/healMana: sparse вызов должен отдельно гарантировать ненулевое восстановление;
+- pick/axe/hammer + mining multiplier: скорость без working tool power инертна;
+- local immunity/cooldown: `0`, `-1`, owner mode не взаимозаменяемы;
+- spawn/movement/lifetime: ноль скорости/count/range/timing не универсальная нейтраль;
+- sparse equipment: требования active effect, light color и head/setKey для set bonus сохраняются.
 
-- `healLife`/`healMana`: для безопасного разреженного вызова нужно отдельно гарантировать ненулевое восстановление, а не просто разрешить отсутствие обоих.
-- pick/axe/hammer + mining scale: speed multiplier без рабочей силы инструмента может быть инертным.
-- локальная NPC immunity + cooldown: ноль, `-1` и режим owner не взаимозаменяемы.
-- spawn/движение/срок жизни: ноль скорости, count, дальности или тайминга нельзя объявить универсальной нейтралью.
-- equipment уже имеет разреженные статы; существующие требования ненулевого эффекта, цвета для света и `slot=head`/`setKey` для set bonus сохраняются.
+Repair omission — **не менять**; accepted absence frozen. Repair соседнего damage не разрешает добавить manaCost. После exact merge снова валидируется **вся** программа; лишь тогда compile может материализовать defaults. Новый node проходит полный capability contract.
 
-Это намеренно не массовый перевод всех чисел с допустимым нулём в optional.
+<a id="receipts"></a>
+## Receipt provenance и coverage
 
-## Repair — другая семантика пропуска
+`declared_neutral_omission` отличается от `delivered`: аудит проверяет declared default, точный output и происхождение. С исходным Author он доказывает факт отсутствия; standalone wire без Author лишь проверяет declaration/mapping/value и coverage присутствующих default fields, но не восстанавливает исходный omission. Если `runtimeContract` присутствует, пустой/повреждённый contract не освобождает от аудита. Delivery намеренно удаляет internal runtimeContract, поэтому final DTO не обязан содержать receipts.
 
-В patch для существующего узла пропуск означает «не менять», а не «подставить default». Принятое отсутствие также frozen: Repair не может добавить расход маны только потому, что исправляет соседний damage. Нейтраль материализуется лишь при компиляции полной программы после frozen-first merge и повторной валидации. Для новых узлов действуют все требования полного capability.
+Regressions из [registry/test owners](TEST_CONTRACT_OWNERS_RU.md): все absent/zero/negative/positive XY combinations; 64 modifier-presence masks со working light и 64 полностью neutral masks (reject); каждый sole active effect; invalid-present/type/range boundaries; sparse/explicit-neutral wire equality; unapproved optional groups/dependencies; altered status/value/path, lost output/receipt и numeric type подмены (`0` ≠ `false` ≠ `0.0`).
 
-## Проверяемые комбинации
+<a id="history"></a>
+## Историческая проверка, не текущая гарантия
 
-- Все сочетания отсутствия/нулевого/отрицательного/положительного X/Y.
-- Все 64 набора присутствия шести модификаторов бафа при рабочем световом эффекте и ещё 64 при полностью нейтральном бафе (последние должны отказать).
-- Каждый модификатор как единственный активный эффект, остальные отсутствуют.
-- Неверные присутствующие значения и границы диапазонов; sparse и explicit-neutral имеют одинаковые gameplay/runtime/equipment wire-поля.
-- Пары/группы, не включённые в разрешение, не получают optional-права; обязательные producer/binding dependencies сохраняются.
-- Подмена статуса/value/path и потеря omission receipt не должны проходить аудит.
+Исходная запись `81509e2`: Python 1110 passed, Ruff clean, Pyright 0/0; headless C# 67/0 на tModLoader 2026.6.3.6; DLL-only build 0 errors/warnings (`.tmod` packaging и игра не запускались). Replay против `8f2252f`: 52 witnesses + 18 accepted Gameplay docs, compiled structures/прежние receipts 70/70 без rewrite captured Author/Repair; 12 offline gates exit 0. Numeric-type/provenance adversarial checks были RED до fix; independent review дополнительно проверял 52 witnesses/2926 JSON-round-trip receipts, historical replay отдельно parent.
 
-## Найденный соседний дефект
+Соседний wire defect существовал и на explicit JSON: общий neutral set ошибочно считал `1` всегда нейтралью и любой non-white color эффектом; ore/jump/regen `1` исполняемы, color без light — нет. Разница C# epsilon около `0.001f` закрыта позже A5, `meteor_spacegun` Repair scope — позже A2 с offline replay в [audit fixes](HISTORY_RU.md#audit-81509e2). Эти поздние fixes не меняют исходные counts/captured Live20.
 
-Старый `wire_validator` проверял ненейтральность generated buff общим набором значений, где `1` всегда считалось нейтралью, а любой не-белый цвет — эффектом. Это неверно: ore sense `1`, jump bonus `1` и regen `1` являются рабочими эффектами, а один цвет без света — нет. Проверка выявлена на полном явном ответе тоже, то есть не создана новым optional-контрактом. Исправление и отдельные регрессии входят в эту работу. Существовавшее отличие C#-порогов около нейтрали (`0.001f`) от Author-предиката в исходном neutral-omission коммите не менялось; теперь оно закрыто [отдельным исправлением A5](AUDIT_81509E2_FIXES_RU.md). Приведённые ниже числа относятся к исходной проверке `81509e2`, не к последующему пакету исправлений.
-
-## Выполненная проверка
-
-- Полный Python suite: **1110 passed**; Ruff — без замечаний, Pyright — **0 errors / 0 warnings**.
-- Headless C# runner на установленных tModLoader 2026.6.3.6 references: **67 passed, 0 failed**. Два новых именованных check проходят реальные `FromJson` → `ApplyToItem`/`HoldoutOffset` и `InfiniCraftPlayer.ApplyGeneratedUtilityBuff` → `PostUpdateEquips`; проверены melee/magic, ненулевой расход маны, независимые offsets, каждый единственный активный эффект и отказ применять полностью нейтральный баф.
-- Обычная DLL-only сборка через Windows `dotnet.exe`: **0 errors, 0 warnings**. `.tmod` packaging отключён явно; игра не запускалась.
-- Replay относительно `8f2252f`: **52 capability witnesses + 18 исторически принятых Gameplay документов**, полное равенство compiled JSON-структур **70/70**, включая прежние receipts. Сохранённые Author/Repair ответы не переписывались.
-- Все 12 проверок registry/generated schema/docs, targeted Repair, Terraria standardization, delivery, contract parity, mutation gate, C# contracts, hygiene и sandbox завершились с exit 0.
-- При adversarial-проверке закрыты исчезновение одновременно omission output и receipt (при наличии исходного Author) и подмена целочисленного нуля на `false` или `0.0`. Проверки проходили RED до исправления.
-- Независимое финальное ревью после исправления numeric-type gap: **passed**, без logic/security замечаний. Reviewer дополнительно проверил 52 witnesses и 2926 receipts после JSON round-trip; историческое сравнение 70/70 выполнено отдельно родительским проверяющим по сохранённому baseline `8f2252f`.
-
-Аудит с исходным Author подтверждает именно отсутствие поля и его точное происхождение. Standalone wire-аудит без Author проверяет допустимость декларации, mapping/value и покрытие присутствующих default-полей, но не может восстановить факт исходного отсутствия из одного wire. Delivery намеренно удаляет внутренний `runtimeContract`: такой DTO не обязан содержать receipts. Если ключ `runtimeContract` присутствует, пустой/повреждённый контракт не освобождает от аудита.
-
-## Границы доказательства
-
-Новый Live20/provider вызов не запускался. Офлайн parity и headless проверки не измеряют качество будущей генерации, GPU, мир Terraria или доставку MP-пакетов. Исходная панель `cf503d4` остаётся историческими 18/20 RED; повторное применение нового контракта не меняет её результаты. Отдельный Gameplay Repair scope defect `meteor_spacegun` не входил в исходный neutral-omission коммит; теперь он закрыт [исправлением A2 и точным offline replay](AUDIT_81509E2_FIXES_RU.md), без изменения captured Live20.
+Нового Live20/provider/game/MP/GPU измерения здесь нет. `cf503d4` остаётся историческими 18/20 RED; offline/headless parity не улучшает сохранённую acceptance панель и не доказывает качество будущей генерации.

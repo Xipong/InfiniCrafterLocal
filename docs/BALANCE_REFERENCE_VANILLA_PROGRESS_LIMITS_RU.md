@@ -1,122 +1,22 @@
-# Balance architecture — explicit modes, one policy owner
+# Balance corridor — текущий owner и архив legacy policy
 
-Текущий баланс не является вторым автором предмета. LLM пишет числа и механику; Python всегда держит shape/hard numeric bounds, а soft normalization включается только явно.
+<a id="current"></a>
+## Текущая архитектура
 
-## Один владелец режима
+[combine_balance.stat_profile_for](../LocalGenerator/infini_local/pipelines/combine_balance.py#L60) вычисляет broad **numeric parent guidance**, а [llm_authoring_prompt._balance_corridor](../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py#L182) проецирует его в Author packet. Источники: damage/useTime, tool power, sustain/defense, rarity/value и explicit generated generationDepth. Names/tags/category/tooltip/knowledge не читаются для corridor. Формулы не копируются в prose или новые modules.
 
-`LocalGenerator/infini_local/core/balance_mode.py` хранит только exact policy:
+`authority=source_numeric_facts_only`, `gameplayRouter=false`: suggestedDamage, powerBudget и broadEnvelope не разрешают коду выбрать mechanic/kind/input/asset или переписать design. Author пишет программу/числа; schema/validator/runtime применяют hard contract/safety bounds, не «идеальный балансер». Current combine path не содержит post-Author `report|safety|normalize` mode policy. Terraria progression guide — human reference, не активный helper/prompt ontology.
 
-```text
-INFINI_BALANCE_MODE=report | safety | normalize
-```
+Active flow: numeric parent facts → one Author packet → [strict compile/conditional Repair](THREE_STAGE_LLM_PIPELINE_RU.md#flow) → exact wire → C# hard safety. Sparse explicit zero/default сохраняет provenance; [declared omission](DECLARED_NEUTRAL_OMISSIONS_RU.md#contract) — отдельная семантика, не soft balance clamp. Limits/packet IDs принадлежат `InfiniRuntimeLimits.cs`/`InfiniNetPacketIds.cs` ([map](../PROJECT_MAP_RU.md#csharp)), не баланс-документу.
 
-В этом файле нет DPS-формул, progression tables или category routing. Числовые envelopes остаются в `balance_policy.py`; отчёт остаётся в `balance_report.py`; callers явно решают, применять ли soft clamps.
+<a id="legacy"></a>
+## Legacy v0.4.220–0.4.226 — не действующий contract
 
-## Режимы
+Старые `balance_mode.py/balance_policy.py/balance_report.py` отсутствуют в текущем дереве. Перечень ниже сохранён как объяснение исторических отчётов, **не команды включения и не обещание сохранённых knobs**:
 
-### `safety` — default
+- `INFINI_BALANCE_MODE=report|safety|normalize`: safety сохранял authored numbers от soft envelopes, применял Python technical corridor и писал suggestions `applied=false`; normalize применял weapon DPS/equipment envelopes + corridor с provenance; report оставлял advice без Python clamps. C# hard safety во всех случаях не отключался.
+- Taxonomy: `balance/balanceClamp` — advice или soft normalization; `safety/safetyClamp/runtime compiler clamps` — FPS/network/runtime caps; `contract/contractClamp` — shape/unsupported/validation. `debug.balanceReport.balanceMode`, advice `applied=false`, mutation `applied=true` и explicit equipment `apply_clamps` относились к этому пути, не новой v5 гарантии.
+- v0.4.220 narrow patch surface: runtimePlan/engineCalls, attack и explicit repairPatch.gameplay; name/tooltip/concept/visual/tags/parents/ids frozen, rejected rewrites шли в `debug.runtimePlanRepairPatchContract` / balanceReport.clamps.contract. Эти **legacy fields не принимаются** нынешним [leaf-local Repair](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first).
+- v0.4.226 единые power bands/envelopes тогда принадлежали balance_policy; report/pipeline только использовали их. `accessoryBudgetReport/armorBudgetReport` и сравнение authored engineCalls с compiler defaults были legacy provenance, не reason to restore a parallel scorer.
 
-- сохраняет authored weapon/equipment numbers против soft normalization;
-- применяет технический Python corridor для projectile count/depth/range/lifetime/network pressure;
-- вычисляет soft suggestions и записывает их как `applied=false`;
-- C# hard clamps остаются последней защитой.
-
-### `normalize` — opt-in legacy behavior
-
-- применяет существующие weapon DPS/equipment soft envelopes;
-- применяет технический safety corridor;
-- все реальные изменения попадают в provenance/balance report.
-
-### `report` — diagnostics
-
-- не применяет Python soft normalization;
-- не применяет Python runtime safety corridor;
-- сохраняет advice/report для анализа;
-- C# hard safety всё равно не отключается.
-
-## Граница ответственности
-
-Термины, которые используются в contract tests и debug taxonomy:
-
-- `Python post-authoring balance` — существующие soft envelopes и advice после LLM authoring; они применяются только в `normalize`.
-- `balanceClamp` — реально применённая soft normalization.
-- `safetyClamp` — техническая защита runtime/FPS/network.
-- `contractClamp` — shape/validation/unsupported repair.
-- `Runtime compiler clamps` — bounded projectile/runtime safety после authoring.
-
-Это **не category-routing**: режим и формулы не выбирают тип оружия по prompt/name/tooltip. Terraria progression guide — human reference, **не активный helper** и не prompt payload. Balance doc **не должен превращаться** в таблицу оружия, progression ontology или активный gameplay-helper.
-
-```text
-LLM author
-  → structured repair/compile
-  → exact balance mode policy
-  → existing numeric envelopes or advice
-  → runtime compiler safety (если mode=safety|normalize)
-  → C# hard safety always
-```
-
-Режим не выбирается LLM и не добавляет ей полей. Sparse-output policy не меняется: явно authored zero/default не удаляется и сохраняет provenance.
-
-## Что считается балансом, safety и contract repair
-
-- `balance`: soft DPS/equipment advice или применённая normalization;
-- `safety`: технические caps, которые защищают FPS/network/runtime;
-- `contract`: shape repair, unsupported promise, validation failure.
-
-`debug.balanceReport` всегда содержит `balanceMode`. Advice помечается `applied=false`, фактические clamps — `applied=true`.
-
-## Почему не переписываем scorer в «идеальный балансер»
-
-Текущие формулы полезны как диагностика, но не должны тихо становиться геймдизайнером. Поэтому v10 меняет policy применения, а не строит новую progression ontology, таблицу оружия или второй LLM judge.
-
-## Инварианты
-
-Removed prompt-only dynamic cap fields **больше не передаются** в LLM payload and remain forbidden; they are mentioned here only as non-active history: `softDamageCapPerHit`, `softAoeTilesCap`, `softActiveProjectileCap`, `sourceEnvelope`, `terrariaProgressionReference`.
-
-- Никакого category routing по prompt/name/tooltip.
-- Не копировать mode strings и формулы в новые модули.
-- `balance_mode.py` не должен разрастаться в scorer.
-- Equipment callers явно передают `apply_clamps`; скрытого global mutation нет.
-- C# не становится soft-balance designer.
-
-## v0.4.220 — targeted repair patch contract
-
-Targeted runtime repair is not a second item author.  If the repair LLM returns a full item JSON, Python reduces it to the same narrow patch surface:
-
-- `runtimePlan` may be replaced to fix executable `engineCalls`;
-- `attack` may be patched for compiled runtime fields;
-- explicit `repairPatch.gameplay` may adjust only narrow executable/stat fields;
-- identity/prose/visual fields (`name`, `tooltip`, `concept`, `visual`, `tags`, parents, ids) are preserved;
-- rejected full-rewrite fields are recorded in `debug.runtimePlanRepairPatchContract` and surfaced through `debug.balanceReport.clamps.contract`.
-
-This keeps the boundary clean: LLM authoring creates the item, code-only repair fixes obvious shape problems, targeted retry fixes executable contract problems, Python soft balance clamps numbers, and C#/tML remains hard safety.
-
-
-## v0.4.226 — architecture homogeneity cleanup
-
-Цель этой правки — не добавить ещё один чистый блок сбоку, а убрать расхождение архитектурных словарей между подсистемами.
-
-Что теперь считается каноном:
-
-- `LocalGenerator/infini_local/core/balance_policy.py` — единственный Python-файл с coarse power bands и weapon envelope numbers.
-- `balance_report.py` только отображает `powerBand`/`label` через `balance_policy.py`; он не хранит свою копию таблицы.
-- `combine_pipeline.py` применяет weapon envelope через `weapon_envelope_for_bucket(...)`; он не держит свою копию `VANILLA_LIKE_WEAPON_ENVELOPES`.
-- `InfiniNetPacketIds.cs` — единственный C#-файл с числовыми packet ids.
-- `InfiniRuntimeLimits.cs` — единственный C#-файл с текущим runtime API и общими opcode limits.
-
-Это сохраняет прежнюю идеологию:
-
-```text
-LLM author
-→ code-only structural repair
-→ targeted retry before C# only when needed
-→ Python post-authoring soft balance
-→ runtime compiler safety clamps
-→ C# hard safety
-```
-
-То есть теперь блоки не просто аккуратные отдельно: они используют общий словарь границ и констант.
-
-## v0.4.226 — equipment budget / provenance note
-
-Armor/accessory balance now reports total soft-budget pressure through `accessoryBudgetReport` / `armorBudgetReport` and feeds balance clamps into `debug.balanceReport`. Runtime provenance is tracked separately so authored engineCalls can be compared with compiler defaults without exposing dynamic soft caps to the prompt.
+Removed prompt fields `softDamageCapPerHit/softAoeTilesCap/softActiveProjectileCap/sourceEnvelope/terrariaProgressionReference` остаются неактивной историей. Не возвращать category routing, dynamic caps, progression ontology или второй judge под видом balance guidance.

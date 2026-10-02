@@ -1,57 +1,26 @@
 # InfiniCrafterLocal v0.4.246
 
-InfiniCrafterLocal генерирует предмет Terraria из двух parent items. Gameplay Author за один LLM-вызов составляет bounded low-level `runtimeProgram`; Python проверяет и компилирует точные entities/components/events; C# tModLoader исполняет только typed v5 DTO.
+Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 
-## Архитектурный принцип
+## Начать
 
-```text
-parents
-→ Gameplay Author: entities + inputs + capabilities + events
-→ deterministic validation/technical compile
-→ Visual Director: exact entity roles/assets
-→ VFX Director: exact entity/event slots + explicit effect-image ingredients
-→ image generation: accepted body/impact/VFX asset requests
-→ strict world storage
-→ C# bounded runtime
-```
+**[Документация по задачам — центральный индекс](docs/README_RU.md)**
 
-Код не выбирает weapon family и не выводит gameplay из name/tooltip/category/prose. Старые `AttackSpec`, `runtimeFamily`, whole-weapon macros, schema/cache migration и fallback удалены.
+- [Установка, настройки, запуск и MP — единый runbook](QUICK_START_RU.md).
+- [Команды игрового чата и результаты диагностики](command.md).
+- [Сборка мода и внешние DLL](BUILD_QOL_RU.md).
+- [LocalGenerator: файлы, границы сервиса и offline QA](LocalGenerator/README_RU.md).
 
-## Поставка 0.4.246
+## Версия и обновление
 
-Обновляй **мод и LocalGenerator вместе**. В 0.4.246 один исполнитель владеет image-attempt lifecycle, промежуточные файлы изолированы, а все новые итоговые PNG публикуются атомарно под immutable именами. Validation/delivery/cache используют одну проекцию выбранного VFX PNG producer; неисполняемые ссылки отвергаются без изменения Visual или механики. Включены безопасное deferred освобождение текстур, retirement Item-эффектов при смерти и exact-leaf Repair пустого asset-domain.
+**Опубликованная поставка — 0.4.246:** обновляй мод и LocalGenerator вместе. Image-attempt lifecycle имеет одного владельца; промежуточные файлы приватны, итоговые PNG публикуются атомарно под immutable именами. Общая VFX PNG dependency projection проверяет исполнимые ссылки, не меняя механику/Visual. Включены deferred disposal текстур, retirement Item-эффектов при смерти и exact-leaf Repair пустого asset-domain.
 
-Модели, личная конфигурация, cache и внешние `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Старые корректные recipes/PNG не мигрируют и не перерисовываются автоматически. VFX Director/условный Repair сохраняют лимит ответа 8000 по умолчанию и приоритет явной настройки. Native/контрактные проверки не заменяют Terraria/MP, live image campaign или художественную приёмку.
+Модели, личный `config.env`, cache и `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Корректные старые recipes/PNG не мигрируют и не перерисовываются автоматически. Default лимит ответа VFX Director/Repair — 8000; явная настройка имеет приоритет.
 
-## Документы
+**Текущий unreleased LocalGenerator:** [OpenRouter provider pin](docs/OPENROUTER_ROUTING_RU.md) фиксирует upstream без обхода через другой профиль/fallback. Это не часть опубликованного ZIP 0.4.246 и не требует изменения мода 0.4.246.
 
-- `docs/IMAGE_ASSET_LIFECYCLE_RU.md` — единый image executor, private output ownership, immutable publication, failure phases и общая VFX PNG dependency projection;
+## Контракты и приёмка
 
-- `docs/VFX_MATERIAL_ELEMENTS_RU.md` — индивидуальные VFX-ассеты, spriteElement/texturedPath, механический read-only context; исправленные item-periodic budgets, nonowner lifecycle, ordered replay, unresolved Item forwarding, точная readiness, conflict-safe PNG byte authority, O(1) descriptor-reference lookup и backoff по selected canonical key;
-- `AGENTS.md` — hard rules;
-- `PROJECT_ARCHITECTURE_RU.md` / `PROJECT_MAP_RU.md` — архитектура и карта;
-- `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md` — generated inventory 52 capabilities;
-- `lowery.md` — generated canonical Author/Repair/Lowery boundary, owner routing и finite mappings;
-- `docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md` — граница official tModLoader mappings и custom runtime;
-- `docs/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md` — machine-readable quality audit;
-- `docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` — короткая projection канонического Author contract;
-- `docs/THREE_STAGE_LLM_PIPELINE_RU.md` — baseline 3 calls;
-- `TECHNICAL_LOWERING_AUDIT_RU.md` — lossless lowering proof.
+[Архитектура](PROJECT_ARCHITECTURE_RU.md) · [карта кода](PROJECT_MAP_RU.md) · [правила изменений](AGENTS.md) · [generated Author/Repair boundary](lowery.md) · [generated capabilities](docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [lossless lowering](TECHNICAL_LOWERING_AUDIT_RU.md) · [tModLoader mappings](docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md).
 
-## LLM и PNG через подписку ChatGPT / Codex
-
-В GUI нажми **Sign in with ChatGPT**, выбери независимо `LLM provider = openai_codex` и/или `Image backend = openai_codex`, обнови каталог текстовых моделей, сохрани настройки и перезапусти LocalGenerator. OAuth-сессия принадлежит InfiniCrafter: Platform API key, Hermes и Codex CLI не требуются. Текстовый каталог не подтверждает доступность image-моделей; quality управляет image-запросом, а отдельный reasoning — только текстовым Visual Director. [Инструкция, расходы, ограничения и хранение сессии](docs/CODEX_IMAGE_OAUTH_RU.md).
-
-## Portable validation
-
-```bash
-python tools/validate_sandbox.py
-```
-
-Полный Python QA:
-
-```bash
-PYTHONPATH=LocalGenerator pytest -q
-```
-
-C# build требует .NET 8, stable tModLoader SDK и реальные `ParticleLibrary.dll`/`Luminance.dll`.
+[Три LLM-стадии](docs/THREE_STAGE_LLM_PIPELINE_RU.md), [image lifecycle](docs/IMAGE_ASSET_LIFECYCLE_RU.md), [VFX](docs/VFX_MATERIAL_ELEMENTS_RU.md) и [владельцы тестов](docs/TEST_CONTRACT_OWNERS_RU.md) — специализированные контракты. Offline/native gates не доказывают успешный live craft, качество рисунка, Terraria/GPU или multiplayer.

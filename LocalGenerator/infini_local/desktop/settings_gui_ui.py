@@ -747,6 +747,7 @@ class SettingsGuiUiMixin:
         self.row(other, "LM Studio model", "INFINI_LMSTUDIO_MODEL")
         self.row(other, "OpenRouter API key", "INFINI_OPENROUTER_API_KEY", secret=True)
         self.row(other, "OpenRouter model", "INFINI_OPENROUTER_MODEL", hint="auto или slug модели с OpenRouter.")
+        self.row(other, "OpenRouter provider slug", "INFINI_OPENROUTER_PROVIDER", hint="Пусто = auto. Точный slug из OpenRouter фиксирует площадку; при её недоступности нет перехода на другой profile/fallback.")
         self.row(other, "OpenRouter referer", "INFINI_OPENROUTER_HTTP_REFERER")
         self.row(other, "OpenRouter title", "INFINI_OPENROUTER_APP_TITLE")
         self.row(other, "Compat base URL", "INFINI_OPENAI_COMPAT_BASE_URL")
@@ -756,6 +757,7 @@ class SettingsGuiUiMixin:
         fallback = self._card(parent, "04 · Fallback LLM", "Необязательный резерв для локальных/API провайдеров.", icon="↳")
         self.row(fallback, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
         self.row(fallback, "Fallback model", "INFINI_LLM_FALLBACK_MODEL", hint="Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.")
+        self.row(fallback, "OpenRouter provider slug", "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER", hint="Отдельная фиксация upstream для OpenRouter fallback. Пусто = auto, не наследует основной slug. При фиксации основного профиля переход сюда запрещён.")
         self.row(fallback, "Fallback base URL", "INFINI_LLM_FALLBACK_BASE_URL", hint="Пусто = взять base URL от fallback provider по умолчанию/из основных полей.")
         self.row(fallback, "Fallback API key", "INFINI_LLM_FALLBACK_API_KEY", secret=True, hint="Пусто = использовать основной ключ выбранного fallback provider.")
         self.row(fallback, "Fallback after transport fails", "INFINI_LLM_FALLBACK_NETWORK_FAILS", width=16, hint="Сколько сетевых/timeout падений подряд терпеть на основной модели, прежде чем уходить на fallback. По умолчанию 2.")
@@ -814,6 +816,7 @@ class SettingsGuiUiMixin:
             self.row(card, "Base URL", f"{prefix}_BASE_URL", hint="Можно оставить пустым для стандартного OpenRouter URL или основного LM Studio URL.")
             self.row(card, "API key", f"{prefix}_API_KEY", secret=True)
             self.row(card, "Модель", f"{prefix}_MODEL", hint="Для lane 2/3 пустая модель означает честный отказ этого окна и refund.")
+            self.row(card, "OpenRouter provider slug", f"{prefix}_OPENROUTER_PROVIDER", hint="Независимый exact upstream slug для этого профиля; пусто = auto. При фиксации нет provider/profile failover.")
             self.row(card, "Режим API", f"{prefix}_API_MODE", values=["auto", "responses", "chat_completions"])
 
     def _build_zimage_guide(self, parent):

@@ -1,17 +1,9 @@
-# Индивидуальные VFX-элементы — контракт 0.4.246
+# VFX material elements — активный контракт 0.4.246
 
-Это спецификация расширения существующего VFX-контракта, а не заявление о художественном качестве всех сгенерированных предметов. Native/CPU-проверки подтверждают свои исполнительные границы; разнообразие и качество реальной генерации проверяются отдельно на model-authored результатах.
+Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures.
 
-## Что изменяется
-
-Существующие rendererKinds сохраняются. В том же `vfxManifest.slots` добавляются:
-
-- `spriteElement` с payload `element`: изображение с независимыми параметрами движения, привязки и изменения по времени;
-- `texturedPath` с payload `path`: текстура на связной истории движения либо на реальной текущей геометрии beam/whip.
-
-Это не weapon presets, не выбор дизайна по имени/категории и не произвольный исполняемый код. Нет новой VM, shader generation, второго effect graph или четвёртой текстовой LLM-роли.
-
-## Стадии и владельцы
+<a id="owners"></a>
+## Владельцы и handoff
 
 `Gameplay Author → Visual Director → VFX Director → image generation → strict delivery → C#`.
 
@@ -21,7 +13,12 @@ VFX владеет своими image requests и временно-простр�
 
 Лимит ответа VFX Director и его условного Repair по умолчанию — 8000 токенов (`INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS`). Явная настройка пользователя сохраняет приоритет; новая LLM-роль или дополнительные Repair-попытки не добавляются.
 
-## Собственные изображения
+Источники: [VFX owner](../LocalGenerator/infini_local/core/vfx_manifest.py) — schema/surface/diagnostics/Repair; [material payloads](../LocalGenerator/infini_local/core/vfx_material_contract.py) — поля и нейтрали; [C# DTO](../ModSources/InfiniCrafterLocal/Common/Models/VfxManifestSpec.cs) и [material executor](../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Materials.cs). Image/byte/texture ownership вынесен в [жизненный цикл ассетов](IMAGE_ASSET_LIFECYCLE_RU.md).
+
+<a id="assets"></a>
+## Ингредиенты и selectors
+
+`rendererKind=spriteElement` требует только payload `element`; `texturedPath` — только `path`. Legacy renderers не принимают эти payload. Material renderers не используют channel `light`/`sound`; renderer/event/entity applicability задаётся accepted surface, не независимым декартовым произведением enum.
 
 Optional `assets` в Director/manifest содержит до четырёх самостоятельных ингредиентов. Отсутствие означает отсутствие новых запросов и остаётся отсутствием в старом wire; явный null не является отсутствием.
 
@@ -36,17 +33,10 @@ Optional `assets` в Director/manifest содержит до четырёх са
 
 Одна декларация даёт одну image job; несколько слотов могут ссылаться на тот же ID. Дубликаты, dangling references и неиспользованные новые requests не принимаются. Runtime path/URL/status/score пишет image pipeline, не LLM. Серверные descriptors/PNG hashes и передача остаются у существующего AssetSync.
 
-Delivery/cache проверяют безопасное PNG-имя и реальные файлы из тех же roots, которые обслуживает `/get_asset`, а не только существование произвольного локального пути. Проверяется весь непустой runtime PNG-roster, включая сохранённые overlay/entity/impact entries: complete PNG, до 8 МиБ на файл, до 16 МиБ суммарно и не более 32 файлов. Необязательное отсутствие картинки отличается от присутствующего, но неготового пути.
+Texture selector обоих payload — `{source, assetId}`: `source=item|entity|impact|asset`, `assetId=""` для первых трёх; `asset` требует exact declared ID. Пути/URL модель не авторит. `entity` требует принятую `baked_sprite|reuse_item_icon` image role, `impact` — same-entity `impactSprite` producer; `no_asset|runtime_geometry` не является незагруженным PNG. Все producer/dependency правила и различие fresh/cache/network admission — [единая PNG projection](IMAGE_ASSET_LIFECYCLE_RU.md#dependencies).
 
-ID сохраняется буквально, включая регистр. Конечное имя PNG не строится из raw ID: `Glow`/`glow` и `spark`/`spark_refit` не должны сталкиваться после case-insensitive sync или refit. Временные jobs отделены namespace/digest, финальная атомарная публикация использует ASCII digest от exact recipe/asset identity и окончательных PNG bytes. Изменение изображения не перезаписывает ранее распределённый filename. Это техническое именование, не второй механизм проверки целостности.
-
-Texture selector новых payload: `{source, assetId}`. source = `item`, `entity`, `impact`, `asset`; assetId пуст для первых трёх и ссылается на объявленный ID для asset. Существующий impact dependency сохраняется. Пути файлов или URL модель не авторит.
-
-У `entity` должна быть принятая `baked_sprite`/`reuse_item_icon` image role; `no_asset`/`runtime_geometry` — несовместимый выбор, а не временно незагруженная текстура. У `impact` обязателен тот же entity и существующий `impactSprite`-producer. Эти зависимости относятся и к вложенным texture selectors, видны в Director/Repair и не разрешают менять уже принятую Visual-часть.
-
-Fresh requests требуют непустого prompt. Полный локальный cache сохраняет captions; network projection обнуляет обе строки prompt/negativePrompt и оставляет asset identity, размер/layout, render references и готовые технические metadata. Runtime admission принимает этот объявленный stripped-вид, не применяет к нему правило нового image-запроса. Storage/delivery отдельно проверяют готовность ассетов, даже если проверка промежуточного compiled wire допускает pending records. Полный C# `GeneratedItemData.FromJson` принимает каждый объявленный VFX-ассет только с непустым PNG-path и точным `spriteStatus=generated|generated_warn_invalid` — и с captions, и в stripped network-виде. `pending`, `skipped`, `not_required`, `failed`, `prompt_only`, иной регистр или произвольный status не означают готовность. Это admission metadata; реальные PNG bytes по-прежнему проверяет существующий AssetSync.
-
-## Поведение spriteElement
+<a id="element"></a>
+## SpriteElement: время, привязка, движение
 
 - `attachment=world`: положение/направление захватывается в момент события; собственное движение дальше независимо от источника.
 - `attachment=source`: локальное состояние преобразуется текущим forward/normal того же живого источника; при его исчезновении эффект заканчивается, не перепривязывается к переиспользованному slot и не превращается автоматически в world effect.
@@ -63,7 +53,22 @@ Fresh requests требуют непустого prompt. Полный локал
 
 Два настоящих одноимённых события в одном tick (например, два попадания в разные точки) также различаются у новых веток: runtime/relay несёт техническую occurrence identity. Повтор того же occurrence подавляется. Историческое dedup-поведение старых renderers не расширяется молча. Live attachment требует конкретный Item/projectile generation; равенства definition ID или номера переиспользованного slot недостаточно. Item event snapshots тоже сохраняют положение/направление/скорость в момент события, а не восстанавливают их из текущего Player после получения пакета.
 
-## Профили
+Все payload keys обязательны, конечны и явно authored. Полные ranges/schema остаются у `element_schema`, не у отдельного ручного реестра.
+
+| Поля | Единицы / граница |
+|---|---|
+| `count` | integer 0..64 за emission; 0 — тишина; расход при emission, не Draw |
+| `offsetForwardPx`, `offsetSidePx` | −128..128 px в captured forward/normal |
+| `speedMinPxPerTick`, `speedMaxPxPerTick` | 0..24 px/world tick; max ≥ min |
+| `spreadRadians` | 0..2π, полный угол конуса, не half-angle |
+| `inheritVelocity` | 0..1 доля captured engine velocity после одного перевода в world-tick units |
+| `drag` | 0..1 множитель сохранения скорости/world tick: 1 сохраняет, 0 обнуляет |
+| `accelerationXPxPerTickSquared`, `accelerationYPxPerTickSquared` | −2..2 px/world tick² в выбранной attachment frame |
+| `rotationRadians`, `rotationSpeedRadiansPerTick` | −2π..2π относительно captured forward; spin −1..1 rad/world tick |
+| `widthPx`, `heightPx` | независимые 0..128 px по буквальным texture X/Y; 0 сохраняется |
+
+<a id="profiles"></a>
+## Profiles и exact Repair
 
 Width/height/opacity/color profiles — объекты `{start,middle,end,curve}` для нормализованных позиций 0, 0.5 и 1. `curve` = `linear`, `easeIn`, `easeOut`, `smoothStep`, применяется отдельно к каждому интервалу. Это фиксированная математика, не выражения/код модели.
 
@@ -73,7 +78,12 @@ Width/height/opacity/color profiles — объекты `{start,middle,end,curve}
 
 Validator-diagnosed foreign/additional fields допускают точное удаление через существующие delete-path permissions: например, лишний `path` у spriteElement. Только для этих диагностированных leaves omission означает delete; остальные omissions остаются no-change. Дублирующая asset-строка удаляется по ошибочному индексу, не вместе с корректной строкой того же ID.
 
-## TexturedPath
+Color tokens: `white`, `gray`, `brown`, `tan`, `red`, `orange`, `yellow`, `gold`, `green`, `cyan`, `blue`, `purple`, `pink`, `black`, `effect`. На каждом полуинтервале для локального t: linear=t; easeIn=t²; easeOut=1−(1−t)²; smoothStep=t²(3−2t). Sprite profiles используют normalized age; path — выбранный age/length. Отсутствие, explicit null и ноль не взаимозаменяемы.
+
+При пустом asset-domain ошибка относится и к `texture.source`, и к `texture.assetId`: допустимую замену явно выбирает Repair, не код. При непустом домене меняется только сломанная ссылка; source и requests frozen. Unknown target сначала требует identity Repair, а не размораживания валидного selector без контекста. Общая процедура — [frozen-first Repair](TARGETED_REPAIR_PROTOCOL_RU.md).
+
+<a id="path"></a>
+## TexturedPath: реальные geometry/UV
 
 `source=anchorHistory` хранит действительные timestamped позиции выбранного anchor, до 32 samples; identical points не образуют фиктивных segments. `historyTicks` задаёт retention, `minDistancePx` — порог записи.
 
@@ -85,41 +95,42 @@ Validator-diagnosed foreign/additional fields допускают точное у
 
 Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником. StartTick управляет началом sampling; repeatEvery=0 и duration=3 — нейтральные значения неиспользуемых здесь common controls.
 
-## Старые поля, безопасность и доставка
+| Поля | Единицы / обязательные сочетания |
+|---|---|
+| `historyTicks`, `minDistancePx` | history: integer 2..32 world ticks и 0..16 px; beam/whip: оба 0 |
+| `maxSegmentLengthPx` | 1..4096 px; разрыв пропускается, не мостится |
+| `widthPx` | 0..96 decorative px; 0 сохраняется, collision width не меняется |
+| `profileDomain` | history: `age\|length`; beam/whip: только `length` и `anchor=self` |
+| `uvMode` | `stretch\|repeat`; stretch требует `repeatLengthPx=1`, `scrollPxPerTick=0` |
+| `repeatLengthPx`, `scrollPxPerTick` | 1..512 px/repeat; −32..32 UV px/world tick |
 
-Новые payload условно обязательны лишь для своего renderer. Непотребляемые common knobs должны иметь явно нейтральные значения, чтобы старые scale/density/fade/particle поля не притворялись вторыми владельцами нового поведения. Свет/звук/Dust остаются отдельными существующими возможностями с честными ограничениями, а не автоматически добавленными слоями.
+<a id="runtime"></a>
+## Нейтрали, бюджеты и transport identity
+
+Непотребляемые common поля для обоих material renderers **обязаны** быть нейтральными: `scale=1`, `density=spread=jitter=fadeIn=fadeOut=signatureWeight=visualCost=0`, `budgetWeight=1`, `emissionMode=particleRole=particleSystemId=textureRole=none`. `spriteElement.backend=Sprite`; `texturedPath.backend=Primitive`, `repeatEvery=0`, `duration=3`. Это не автоматически достроенные defaults и не вторые владельцы поведения. `alpha` применяется с opacityProfile один раз; звук/свет/Dust — отдельные возможности, не незапрошенные слои.
 
 Сохраняются event/entity producer validation, frozen-first Repair, лимиты source/tick/draw, работа после source retirement для world effects, finite checks и controlled Begin/End. Симуляция не живёт в Draw. Dedicated server не исполняет presentation. Networking использует проверенную definition/asset identity, не пересылает произвольные image paths/bytes в VFX-event packet.
 
 Незапрошенный/отсутствующий PNG не заменяется stock маской, белым quad или Dust. Требуемый PNG блокирует delivery при ошибке; ещё не загруженная клиентом текстура временно не рисуется. Старые слоты без новых fields не получают новые значения автоматически.
 
-## Исправленные исполнительные границы 0.4.245
-
-| Граница | Канонический владелец и текущая семантика |
+| Исполнительная граница | Каноническая семантика |
 |---|---|
 | Periodic item budget | `InfiniDetachedVfxSystem.Materials.StartMaterialEmission`: без per-Item activation clock положительный `maxParticlesTotal` не превращается ни в бессрочный item lifetime cap, ни в cap одной periodic-группы. Действуют общий source/world-tick allowance и существующие resource/draw caps; явный total=0 остаётся запретом. Для одного nonperiodic item event `MaterialEventAllowance` общий между material/legacy слотами; projectile lifetime ledger не меняется. |
 | Nonowner lifecycle | `GeneratedProjectile.EmitAndSyncVfxEvent`: owner исполняет свои element events локально; у другого MP-клиента их единственный event-producer — validated server relay. Локальные legacy callbacks и регистрация live `texturedPath` не отключены. `on_spawn`, release/channel-complete, tile-collision, expire/kill не складываются второй раз при local-before-relay или relay-before-local. |
 | Ordered replay | `VfxOrderedPeerStream`: отдельно для projectile/item event lane один monotone owner stream охватывает все source generations; сервер даёт каждому принятому claim свой sequence из одного outbound stream этой lane. Generation остаётся attachment identity, не replay/admission bucket. Нет rolling generation cap, TTL-replay window или eviction живых claims. Owner cursor ограничен `Main.maxPlayers` и сбрасывается при замене Player/socket; relay cursor — при замене server socket. World-exit/unload очищают состояние. Это контракт упорядоченного ModPacket/TCP transport, не независимое доказательство collision или anti-cheat. |
 | Unresolved Item forwarding | `GeneratedItem.NetSend/NetReceive` и `GeneratedItem.Presentation`: полученный material token/capability сохраняется до registry hydration и при дальнейшей пересылке compact reference (item payload v6). Отсутствие уже загруженных material slots не понижает его до legacy v5; точный instance/generation не заменяется definition ID. |
-| Runtime readiness | `GeneratedItemData.ValidateVfxEntityEventReferences`: точный ready-domain `generated\|generated_warn_invalid` применяется одинаково к full/cache/network VFX asset records. Обязательные authored keys остаются обязательными; наличие path без ready-status не проходит полный runtime admission. |
-| PNG byte authority | `GeneratedAssetSyncService` сертифицирует canonical cache bytes по PNG/length/SHA на lifecycle boundary; proof остаётся на существующем descriptor. `RuntimeSpriteCache.TryGet` предпочитает этот путь существующему local shadow только при непротиворечивой declared identity: любой retained descriptor того же filename с другим length/hash отменяет certificate priority независимо от registration order и наличия у него proof. Equal identities могут разделять proof; без приоритета сохраняется прежний local-only путь. Derived filename → descriptor-reference index обновляется на manifest replacement, validation/commit и disposal; Draw делает O(1) lookup и обычную length/mtime freshness-проверку, без roster scan, PNG decode или SHA ради выбора owner. Изменённые file stats или disposal лишают proof приоритета; DTO paths/captions и сетевой definition hash не переписываются. |
-| Texture-load backoff | `RuntimeSpriteCache.TryGet` сохраняет окончательный normalized selected key вне try; catch, retry admission и lifecycle invalidation используют один и тот же ключ выбранного canonical cache path, а не исходный authored alias. После неудачного load повторный вызов не открывает файл до истечения backoff либо явной invalidation. |
 
-Версии technical transport не совпадают с runtime ABI: projectile event v5, material item event v5, compact material Item v6 и genuine legacy Item v5; это не новая model-authored схема. Для этих границ зарегистрированы headless regression checks. Их PASS подтверждает именно вызванные CPU/packet/byte-owner seams; он не означает native/GPU, socket delivery, Terraria multiplayer-матч, художественную или model/image-generation приёмку.
+Technical transport: projectile event v5, material item event v5, compact material Item v6; genuine legacy Item v5. Это не новая model-authored schema. Token/capability сохраняется до registry hydration и дальнейшей пересылки: unloaded material slots не понижают compact Item до legacy.
 
-## Исправления жизненного цикла в 0.4.246
+`VfxSourceBinding.ItemBinding.IsLive` требует живого игрока. После смерти periodic-регистрация и source-attached effects завершаются без нового Draw/producer; captured world events сохраняют delay/duration. Respawn допускает новую регистрацию только через настоящий producer, без ослабления instance/generation fences.
 
-Эти изменения входят в 0.4.246; опубликованный тег 0.4.245 ими не переписан.
-
-- **Время жизни текстур.** `RuntimeSpriteCache` остаётся единственным владельцем GPU-текстур, а AssetSync — владельцем подтверждённых PNG bytes. Invalidation использует тот же selected key, что lookup/backoff, и сразу отзывает старую запись из выдачи. Invalidation, LRU, Clear и Dispose передают ранее выданные ресурсы в одну очередь освобождения конкретного экземпляра кеша. Callback выполняется в конце `Main.Update`, после текущего Draw: worker/download/unload не освобождает текстуру, которую ещё использует SpriteBatch/DrawData. Повторный Dispose не воскрешает кеш и не освобождает ресурс дважды.
-- **Ограничение владения.** При неизменном эффективном лимите N resident cache содержит не более N записей; сумма resident и ожидающих освобождения textures ограничена 2N. При исчерпании этого технического бюджета новая загрузка временно не допускается, без выдачи stale texture и без записи missing/bad backoff. Незатронутые hot hits доступны; после owner callback загрузка снова разрешена. Понижение настройки не освобождает уже заимствованные ресурсы посреди Draw; до безопасного освобождения может сохраняться ранее допущенный объём. Неизвестные invalidation keys не создают записи.
-- **Смерть владельца Item.** Канонический `ItemBinding.IsLive` требует живого игрока. Periodic-регистрация и source-attached экземпляры завершаются после смерти, даже без нового producer/Draw. Уже захваченные world events сохраняют delay/duration. После respawn тот же Item регистрируется заново только через настоящий producer; identity/generation fences не ослаблены.
-- **Repair при пустом asset-domain.** Если `source=asset` не может сослаться ни на один объявленный корректный ID, диагностика помечает и `texture.source`, и `texture.assetId`. Модель явно выбирает допустимую замену; код не выбирает её и не создаёт artwork. При непустом домене исправляется только сломанная ссылка, а source и существующие image requests остаются frozen. Остальные поля, gameplay и Visual не размораживаются.
-
-## Проверка
+<a id="verification"></a>
+## Проверка и доказательные границы
 
 Проверять не только отдельные поля, но комбинации: texture source × applicability × attachment × event × profiles × zero/delay/cadence. Реальные составные файлы проходят Director validation → compile → asset generation boundary → storage/delivery → C# FromJson → executor/transport.
 
 Offline native fixtures должны явно называться hand-authored test inputs. Структурно разные stamp/particles/delayed scatter/history/beam/whip сцены, отсутствующие слои, реальные разные texture bytes и negative controls доказывают доступные способы исполнения, но не качество LLM/image-model.
 
 Проверять source replacement/retirement, immutable event snapshots, exact beam/whip centerline, repeated Draw/frozen clock, alpha/additive на тёмном/светлом, zero budgets/missing texture, общий расход caps, unload и восстановление batch/device state. Не выдавать headless/native за Terraria game-loop или сетевой матч.
+
+Текущие Python owners: `test_vfx_packet_contracts.py`, `test_vfx_material_admission_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_vfx_dependency_delivery_contracts.py`, `test_vfx_ingredient_generation_contracts.py`; реальные C# seams — зарегистрированные checks `tools/EngineRuntimeChecks.csproj`. Команды/изоляция — [test owners](TEST_CONTRACT_OWNERS_RU.md). Тестовый PASS не переносится на socket delivery, game-loop, GPU или новую художественную/model/image приёмку. История .243–.246 — [audit provenance](VISUAL_AUDIT_HISTORY_RU.md#rollback), не актуальный список открытых дефектов.

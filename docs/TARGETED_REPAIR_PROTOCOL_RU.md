@@ -1,128 +1,65 @@
-# Targeted Repair Protocol — InfiniCrafterLocal v0.4.241
+# Targeted Repair — leaf-local frozen-first protocol
 
-> Это protocol projection, а не второй owner. Каноническая граница и edit-routing: [`../lowery.md`](../lowery.md). Exact repair shape принадлежит `program_schema.py`; permissions/filter — `repair_scope.py`; requirement closure — `validator.py`; event alternatives — `capability_registry.py`.
+[Generated boundary](../lowery.md) · [Author construction](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Stage accounting](THREE_STAGE_LLM_PIPELINE_RU.md#repairs-accounting)
 
-## Цель
+Exact shape — `program_schema.py`; permissions/filter — `repair_scope.py`; requirement closure — `validator.py`; event alternatives — `capability_registry.py`; shared leaf merge — `core/repair_merge.py`. [Owner paths](../PROJECT_MAP_RU.md#python) не заменяются facade/shadow contracts.
 
-Conditional Repair не переавторивает предмет и не возвращается к weapon-family архитектуре. Он получает только:
+<a id="context"></a>
+## Досье Repair
 
-1. точные `path + code + allowed + relatedIds` ошибки deterministic validator;
-2. сломанные fragments, к которым относятся эти ошибки;
-3. уже валидные dependency fragments и компактный immutable index для контекста;
-4. exact create/retarget/delete permissions, выведенные из ошибок;
-5. минимальный blocker capability subset: direct blockers, обязательные supporting capabilities и уже существующие сломанные capabilities.
+Conditional Repair получает `path/code/allowed/relatedIds` validator errors, invalid fragments, exact missing dependencies, valid dependency context и компактный immutable index. Gameplay capability subset состоит из direct blockers, обязательных supporting capabilities и existing-broken calls. Полный valid item/stage response, planner/chat history и весь catalog в Gameplay Repair не отправляются; Repair не второй Author и не weapon-family router.
 
-Полный предыдущий Gameplay response, прежняя chat history и весь capability catalog в Gameplay Repair не отправляются.
-
+<a id="frozen-first"></a>
 ## Frozen-first merge
 
-Источник истины — уже принятый stage output. Все существующие корректные значения **заморожены**.
+Уже принятые существующие значения **и принятое отсутствие** frozen. Возвращённый полный broken call/entity/binding/Visual row/VFX slot не открывает полный rewrite. Filter принимает лишь exact `fieldPermissions`, missing mandatory leaves, create-policy blocker/dependency nodes и policy-разрешённые удаления.
 
-Модель может для удобства вернуть полный объект сломанного call/entity/binding/claim, Visual-row или VFX-slot. Deterministic filter применяет только:
+Scope escape (valid damage/target/kind, соседний call, motif/magnitude, необязательное unreported поле) игнорируется с сохранением прежнего значения и `ignoredChanges` audit; полезное exact исправление не отменяется. `old valid state + accepted leaves + allowed missing nodes = repaired state`. Пропуск в patch означает **не менять**, не материализовать default. Новые узлы подчиняются полному capability contract.
 
-- exact leaf paths из `fieldPermissions`;
-- exact missing mandatory fields, указанные validator/schema;
-- новые blocker/dependency nodes, явно разрешённые `create` policy;
-- удаления только для ошибок, чья machine-readable policy допускает удаление узла.
+Malformed provider/patch shape фатален: код не угадывает структуру. После tolerant filter всегда full stage validation; оставшаяся обязательная ошибка завершает единственный Repair неуспехом. Нет рекурсивного/бесконечного loop, hidden repair API или разрешения переносить авторство в compiler.
 
-Попытки модели изменить валидный damage, target, entity kind, соседний call, Visual motif, VFX magnitude либо добавить необязательное поле вне scope **не отменяют полезный Repair**. Они игнорируются, старые значения сохраняются, а попытка записывается в `ignoredChanges` audit.
-
-Итоговая семантика:
-
-```text
-old valid values
-+ exact accepted repair leaves
-+ exact allowed missing blocker/dependency nodes
-= repaired stage output
-```
-
-Malformed provider/patch shape остаётся фатальным: deterministic code не угадывает структуру ответа. После tolerant filter всегда запускается полная валидация stage output. Если обязательная ошибка не исправлена, один условный Repair считается неуспешным; бесконечного Repair-loop нет.
-
+<a id="format"></a>
 ## Синтаксический Repair первоначального ответа
 
-Если JSON первоначального Gameplay Author или Visual Director не разбирается, единственный условный Format Repair видит исходный текст. Его результат не становится новым источником игровых или визуальных решений. Для доказательства сохранности исходных значений технический scanner устраняет **только завершающие запятые вне JSON-строк**; восстановленный объект сравнивается с результатом Repair после объявленной lossless-проекции/Visual-нормализации. Изменение даже валидного `damage` или `visualIdentity` отклоняется. Если восстановить целый объект и проверить его семантику нельзя, Repair fail-closed, а не достраивает отсутствующий замысел. Этот узкий scanner не обещает произвольного JSON5 или второго авторства.
+Для initial Gameplay/Visual JSON parse failure единственный conditional format pass видит исходный текст. Его output не новый design source. Scanner восстанавливает **только trailing commas вне JSON strings**; восстановленный целый объект сравнивается с Repair output после объявленной lossless projection / Visual normalization. Изменение valid damage или visualIdentity отклоняется. Невозможность восстановить целый объект и доказать сохранность — fail closed, не произвольный JSON5 и не дописывание missing design.
 
-## Gameplay Repair
+<a id="gameplay"></a>
+## Gameplay scope и patch shape
 
-`build_runtime_repair_scope()` строит:
+`build_runtime_repair_scope()` выводит:
 
-- `fieldPermissions` — точные mutable leaf paths;
-- `mutable` — IDs существующих сломанных узлов;
-- `deletable` — только policy-разрешённые IDs/indices;
-- `identityChanges` — точные разрешения на retarget/fn/input/action/event/reference;
-- `create` — ограниченный шаблон нового missing entity/binding/call;
-- `blockerPlan` — direct/supporting/existing-broken capabilities;
-- `capabilitySubset` — только эти capabilities;
-- `nonRepairableErrors` — внутренние registry/runtime defects, которые нельзя скрывать LLM-ремонтом.
+| Поле scope | Разрешение |
+|---|---|
+| `fieldPermissions`, `mutable`, `deletable` | Exact leaf paths, IDs broken nodes, policy-разрешённые IDs/indices удаления |
+| `identityChanges` | Exact retarget/fn/input/action/event/reference changes |
+| `create` | Bounded шаблоны доказанных missing entity/binding/call |
+| `blockerPlan`, `capabilitySubset` | Direct/supporting/existing-broken closure и выданные cards |
+| `nonRepairableErrors` | Registry/runtime defects: не маскируются LLM Repair |
 
-Все machine validator codes из `VALIDATION_ERROR_CODES` обязаны иметь явную запись в `REPAIR_ERROR_POLICY`. Число не дублируется в prose: добавление/удаление кода без parity краснит тесты.
+Каждый `VALIDATION_ERROR_CODES` имеет явный `REPAIR_ERROR_POLICY`; добавление/удаление без parity краснит gate, фиксированное число в prose не контракт.
 
-Особый случай `missing_movement_component`: deterministic code не выбирает movement за модель. Repair получает только совместимые position drivers, которые могут замкнуть программу за один проход с frozen context. Несовместимые варианты отфильтровываются; если остаётся несколько честных вариантов, выбор делает модель.
+- `missing_movement_component`: только совместимые position drivers, замыкающие программу за один проход с frozen context; code не выбирает movement, честный выбор между вариантами принадлежит модели.
+- `add_equipment_damage_bonus(phase=matching_armor_set)` + пустой `setKey`: открывается только `configure_armor.params.setKey`, не валидная bonus phase. Для body/legs policy может удалить ровно неисполняемый bonus call; перенос slot на head разрешён только явным scope, не автоматической миграцией.
+- Missing `configure_item_use` не разрешает добавить light/projectile или изменить damage.
+- `primaryEntitySelection` / `exclusiveInputSelections` — schema-owned repair transactions, не выбор primary/input кодом. Создание/retarget/deletion применяются только при выданных permissions.
 
-Для `add_equipment_damage_bonus(phase=matching_armor_set)` ошибка пустого `setKey` открывает только `configure_armor.params.setKey`: менять фазу уже валидного class-бонуса не требуется. Если бонус помещён на body/legs, scope допускает удаление ровно этого неисполняемого бонусного call, сохраняя slot предмета; смену slot/head модель может выбрать только через явно разрешённое поле. Никакой автоматической миграции нагрудника в шлем нет.
+Root patch разрежен: отсутствующие upsert/delete arrays и `metadataPatch` — no change. Каждый присутствующий upsert — полный типизированный node. `note` обязателен в local patch shape; model-facing Repair также требует полный non-null `realizationReplacement` как проверяемый report после merge. Nullable provider wrappers optional object properties кодируют omission только в фактически применённом `json_schema`; unknown keys, required non-null fields и null array elements не удаляются. В `json_object/off` явный null не такой эквивалент. [Transport/null rules](DECLARED_NEUTRAL_OMISSIONS_RU.md#contract).
 
-Новый call разрешён только при доказанном blocker/dependency. Например, отсутствие `configure_item_use` не открывает создание света, нового projectile или переписывание damage.
+Порядок: provider envelope → local strict patch → exact deterministic scope → tolerant frozen merge/audit → full runtime validation → normal compile/receipts/final-wire gates. Сужение provider envelope не сужает local validation.
 
-Корневые поля Gameplay Repair patch могут быть разреженными: отсутствующие `entitiesUpsert`/`bindingsUpsert`/`callsUpsert`, delete arrays и `metadataPatch` означают отсутствие изменения, а не ошибку или разрешение создать механику. `note` обязателен в shape; модельный Repair также обязан дать `realizationReplacement` для проверки итогового дизайна. Присутствующие поля по-прежнему проходят строгую типизацию и scope filter; каждый upsert — полный узел. В provider JSON Schema необязательные поля представлены nullable, при локальной проверке `null` отбрасывается как отсутствие поля.
-
-Порядок:
-
-```text
-provider strict schema
-→ local strict patch shape
-→ build exact deterministic scope
-→ tolerant frozen merge
-→ scope/filter audit
-→ full runtimeProgram validation
-→ normal compile/final-wire gates
-```
-
+<a id="visual"></a>
 ## Visual Repair
 
-Visual Repair получает только невалидный item/entity/animation fragment, accepted runtime entity context, parent facts и read-only index валидных rows.
+Input: invalid item/entity/animation fragments, accepted runtime entity context, parent facts и read-only valid-row index. Valid fields frozen; exact missing required visual fields доступны. Независимые rewrites игнорируются. Одна плохая leaf не разрешает удалить required entity row; malformed/duplicate technical rows удаляются только по policy. Missing required asset остаётся честным failure; placeholder не создаётся. Post-image failure не даёт дополнительного reauthor budget.
 
-- существующие валидные поля frozen;
-- exact missing required visual fields разрешены;
-- независимые entity rewrites игнорируются;
-- удаление целой required runtime-entity row не разрешается из-за одного плохого поля;
-- malformed/duplicate technical rows могут быть удалены по policy;
-- отсутствующий обязательный PNG остаётся честным failure/Repair, placeholder не создаётся.
-
+<a id="vfx"></a>
 ## VFX Repair
 
-VFX Repair получает exact invalid global fields/slots, accepted visual kit и реальный `entityId + event` inventory.
+Input: exact invalid globals/slots, accepted visual kit и реальный `entityId + event` inventory. Valid globals/соседние slots frozen; entity/event retarget открывается только их ошибкой. Missing required slot leaves — exact scope; optional unreported design additions игнорируются. Invalid optional slot удаляется лишь при policy permission. Gameplay read-only; material/PNG dependencies — [VFX owner](VFX_MATERIAL_ELEMENTS_RU.md).
 
-- валидные global fields и соседние slots frozen;
-- retarget разрешён только когда ошибка относится к `entityId/event`;
-- missing required slot fields разрешены exact leaf paths;
-- optional unreported VFX design additions игнорируются;
-- invalid optional VFX slot можно удалить, если scope это допускает.
+<a id="checks"></a>
+## Проверяемые seams
 
-## Stage topology
+Stage limit и happy path определены в [pipeline](THREE_STAGE_LLM_PIPELINE_RU.md#repairs-accounting), не копируются здесь. Regressions (`test_repair_*_contract.py`, `test_pipeline_repair_contract.py`, `test_low_level_three_stage_pipeline.py`) проверяют полезное исправление со scope escape, frozen absence/values, typed patch/nulls, exact dependency creation, minimal blocker cards, error-policy parity, registry-defect rejection, syntax-only preservation и finite transport stages `author_repair/visual_repair/vfx_repair`.
 
-Happy path остаётся:
-
-```text
-1 Gameplay Author
-1 Visual Director
-1 VFX Director
-0 Repairs
-```
-
-Каждая стадия имеет не более одного conditional Repair. Repair одной стадии не перезапускает уже валидные предыдущие стадии.
-
-## Проверки
-
-`test_low_level_three_stage_pipeline.py` проверяет:
-
-- baseline `1/0/1/0/1/0`;
-- conditional Gameplay/Visual/VFX Repair;
-- frozen valid values при одновременном полезном исправлении;
-- игнорирование scope escape вместо отмены Repair;
-- запрет необязательных unreported additions;
-- exact missing dependency creation/repair;
-- minimal blocker capability subset и совпадение model-facing requirement с реально выданными cards;
-- отсутствие полного valid-node payload в prompt;
-- 33/33 validator-code → Repair-policy parity;
-- запрет LLM Repair для registry/runtime defect;
-- доступность finite transport stages `author_repair`, `visual_repair`, `vfx_repair`.
+Offline audit: `PYTHONPATH=LocalGenerator python tools/audit_targeted_repair.py --check`; это projection/contract proof, не новая live/game/MP acceptance.

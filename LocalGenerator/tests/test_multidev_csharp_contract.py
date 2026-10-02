@@ -55,7 +55,7 @@ def test_multiplayer_lane_identity_authority_and_refunds_are_request_scoped() ->
     assert "!modPlayer.IsCraftLaneVisible(laneIndex)" in mp
     assert "modPlayer.IsCraftLanePending(laneIndex)" in mp
     # Request-slot reservation is checked inside HandleRequestServerCraftPacket
-    # by test_240_csharp_multiplayer_boundary_bugfixes, not globally here.
+    # by the canonical C# network-boundary gate, not globally here.
     assert "TryHandleExtraCraftCommit(requestId" in mp
     assert "TryCancelExtraServerCraft(requestId" in mp
     assert "AddMultiDevPendingRefunds(refunds, includeRemoteAwaiting: !_stationEscrowUsesRemoteAuthority);" in craft_state

@@ -130,30 +130,35 @@ def test_shard_inventory_rejects_symlink_outside_supported_root(tmp_path: Path, 
     assert shards._test_files() == []
 
 
+@pytest.mark.parametrize("local_count", [1, 4], ids=["single-batch", "bounded-batches"])
 def test_shard_sandbox_executes_both_roots_with_repo_relative_paths(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, local_count: int
 ) -> None:
     repo = tmp_path / "repo"
     local = repo / "LocalGenerator/tests/test_local_selection.py"
     toolbox = repo / "toolbox/tests/test_toolbox_selection.py"
-    for test_file in (local, toolbox):
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("import os\n\ndef test_offline():\n    assert os.environ['INFINI_TEST_USE_PROJECT_CONFIG'] == '0'\n", encoding="utf-8")
+    for metadata in (repo / ".gitnexus/index.db", repo / ".gitnexusrc"):
+        metadata.parent.mkdir(parents=True, exist_ok=True)
+        metadata.write_text("workspace index is not a test dependency", encoding="utf-8")
+    locals_ = [local, *[local.with_name(f"test_local_selection_{i}.py") for i in range(1, local_count)]]
+    files = [*locals_, toolbox]
+    for test_file in files:
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("import os\nfrom pathlib import Path\n\ndef test_offline():\n    assert os.environ['INFINI_TEST_USE_PROJECT_CONFIG'] == '0'\n    assert not (Path.cwd().parent / '.gitnexus').exists()\n    assert not (Path.cwd().parent / '.gitnexusrc').exists()\n", encoding="utf-8")
     (repo / "toolbox/__init__.py").write_text("OFFLINE_MARKER = 1\n", encoding="utf-8")
     toolbox.write_text("from toolbox import OFFLINE_MARKER\n\ndef test_offline():\n    assert OFFLINE_MARKER == 1\n", encoding="utf-8")
     monkeypatch.setenv("INFINI_TEST_USE_PROJECT_CONFIG", "1")
     monkeypatch.setattr(shards, "ROOT", repo)
-    monkeypatch.setattr(shards, "_test_files", lambda: [local, toolbox])
+    monkeypatch.setattr(shards, "_test_files", lambda: files)
     monkeypatch.setattr(shards, "missing_full_test_dependencies", lambda: [])
     report = shards.run(shard_count=1, timeout_seconds=30)
-    assert report["status"] == "passed", report
-    assert report["passed"] == 2
-    assert report["shards"][0]["files"] == [
-        "LocalGenerator/tests/test_local_selection.py", "toolbox/tests/test_toolbox_selection.py"
-    ]
-    assert report["shards"][0]["commandResults"][0]["files"] == [
-        "tests/test_local_selection.py", "../toolbox/tests/test_toolbox_selection.py"
-    ]
+    assert report["status"] == "passed", json.dumps(report, ensure_ascii=False)
+    assert report["passed"] == len(files)
+    assert report["shards"][0]["files"] == [path.relative_to(repo).as_posix() for path in files]
+    expected = ["tests/" + path.name for path in locals_] + ["../toolbox/tests/test_toolbox_selection.py"]
+    commands = report["shards"][0]["commandResults"]
+    assert [command["files"] for command in commands] == [expected[start:start + 4] for start in range(0, len(expected), 4)]
+    assert all(command["mode"] == "batched" and not command["timedOut"] for command in commands)
 
 
 def test_default_pytest_discovery_includes_both_supported_roots(pytestconfig: pytest.Config) -> None:

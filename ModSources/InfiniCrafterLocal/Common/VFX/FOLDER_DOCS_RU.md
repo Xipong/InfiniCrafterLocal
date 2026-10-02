@@ -1,13 +1,12 @@
 # Common/VFX
 
-Runtime VFX execution layer for `VfxManifestSpec`.
+Исполнение принятого [VfxManifestSpec](../Models/VfxManifestSpec.cs), не интерпретация style/prose:
 
-- `InfiniVfxRuntime.cs` — executes slots on tick/hit/kill/draw, applies renderer/channel budgets.
-- `VfxFoundation.cs` — backend abstraction and command structs; vanilla Dust + ParticleLibrary backend.
-- `VfxParticleSystemRegistry.cs` — ParticleLibrary systems and particle behavior.
-- `VfxRendererRegistry.cs` — renderer kind normalization and draw-cost estimates.
-- `VfxParticleAddress.cs` — canonical ParticleLibrary particle system addresses.
-- `VfxContext.cs` — projectile context snapshot.
-- `InfiniVfxClientOptions.cs` — client config-derived multipliers/options.
+- [InfiniVfxRuntime.cs](InfiniVfxRuntime.cs) — active slot events/draw и общий budget.
+- [InfiniItemVfxRuntime.cs](InfiniItemVfxRuntime.cs), [InfiniItemVfxRuntime.MaterialEvents.cs](InfiniItemVfxRuntime.MaterialEvents.cs) — Item producers/material events.
+- [InfiniDetachedVfxSystem.cs](InfiniDetachedVfxSystem.cs) и partials — bounded detached simulation/draw; [VfxSourceBinding.cs](VfxSourceBinding.cs) — attachment/lifecycle identity.
+- [VfxOrderedPeerStream.cs](VfxOrderedPeerStream.cs) — bounded ordered peer sequence ownership.
+- [VfxRendererRegistry.cs](VfxRendererRegistry.cs), [VfxCanonicalVocabulary.cs](VfxCanonicalVocabulary.cs) — конечные renderer/token domains.
+- [VfxFoundation.cs](VfxFoundation.cs), [VfxParticleSystemRegistry.cs](VfxParticleSystemRegistry.cs), [VfxParticleAddress.cs](VfxParticleAddress.cs) — command/particle backends; [InfiniVfxClientOptions.cs](InfiniVfxClientOptions.cs) — client quality controls.
 
-VFX manifests are frozen data. Runtime should not parse `EffectName`/style prose as mechanics.
+[Материалы и авторский контракт](../../../../docs/VFX_MATERIAL_ELEMENTS_RU.md). Наличие context-типа внутри foundation не означает существование отдельного `VfxContext.cs`.

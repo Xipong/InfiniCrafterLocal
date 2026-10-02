@@ -1,76 +1,77 @@
-# Terraria 1.4.5+: полный гайд в одном документе
+# Terraria: внешний справочник оружия и прогрессии
 
-> **Формат:** вики-простыня / единый справочник для прохождения, моддинга, генерации прогрессии и LLM-пайплайна.  
-> **База:** Desktop / Console / Mobile 1.4.5.x, Bigger and Boulder и новее.  
-> **Дата ревизии:** 2026-07-05.  
-> **Основные источники для сверки:** Official Terraria Wiki на wiki.gg: `Weapons`, `Guide:Class setups`, `Guide:Game progression`, `Guide:Walkthrough`, `Bosses`, `Armor`, `Accessories`, `Potions`, `Shimmer`, `Pylons`, `NPC Happiness`, `Zenith`, страницы отдельных предметов/боссов.  
-> **Важно:** этот документ не пытается заменить сортируемые таблицы Wiki по всем 6000+ предметам. Он собирает прохождение, ключевые предметы, классы, боссов, биомы, события, крафты и правила прогрессии в один файл. Для точного урона каждого редкого предмета всегда можно сверить конкретную страницу предмета.
+> **Статус:** сохранённый gameplay reference, не runtime/schema/Repair contract InfiniCrafterLocal и не перечень реально exposed capabilities.
+> **Provenance:** исходная редакция помечена `2026-07-05`, Desktop/Console/Mobile `1.4.5.x / Bigger and Boulder`; эти labels не подтверждают установленную версию Terraria/tModLoader и не означают актуальность каждого drop/recipe. В этой консолидации игровые факты **не перепроверялись**; исправлены навигация, повторные таблицы и границы использования.
+> **Как читать:** stages — ориентиры обычного мира; loadout/арена/фарм — советы, не единственно допустимая прогрессия. Patch/platform/mode/seed и mods способны изменить loot, NPC unlocks, recipes и thresholds. Перед кодом или балансным решением проверяй exact item/version по Wiki или installed content.
+
+Основные upstream страницы для сверки (это citation index, не новые audit receipts): [Weapons](https://terraria.wiki.gg/wiki/Weapons), [Class setups](https://terraria.wiki.gg/wiki/Guide:Class_setups), [Game progression](https://terraria.wiki.gg/wiki/Guide:Game_progression), [Walkthrough](https://terraria.wiki.gg/wiki/Guide:Walkthrough), [Bosses](https://terraria.wiki.gg/wiki/Bosses), [Armor](https://terraria.wiki.gg/wiki/Armor), [Accessories](https://terraria.wiki.gg/wiki/Accessories), [Potions](https://terraria.wiki.gg/wiki/Potions), [Shimmer](https://terraria.wiki.gg/wiki/Shimmer), [Pylons](https://terraria.wiki.gg/wiki/Pylons), [Zenith](https://terraria.wiki.gg/wiki/Zenith). Для конкретного numeric stat, drop probability или material count нужна страница конкретного предмета и история версии.
+
+Runtime decisions: [registry inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md), [balance corridor](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md), [engine boundaries](ENGINE_RUNTIME_BOUNDARIES_RU.md). История редакции — [HISTORY_RU](HISTORY_RU.md#reference).
+
+## Навигация
+
+- [0. Частые ошибки сверки](#s0)
+- [1. Базовая модель Terraria](#s1)
+- [2. Создание мира и ранние решения](#s2)
+- [3. Главная дорожная карта прохождения](#s3)
+- [4. Workstations, руды, инструменты](#s4)
+- [5. Боссы: порядок, ворота, награды](#s5)
+- [6. Арены и подготовка к боссам](#s6)
+- [7. Классовая прогрессия: быстрые сетапы](#s7)
+- [8. Pre-Hardmode weapon encyclopedia](#s8)
+- [9. Hardmode weapon encyclopedia](#s9)
+- [10. Armor progression](#s10)
+- [11. Accessories progression](#s11)
+- [12. Ammo, arrows, bullets, rockets, darts](#s12)
+- [13. Potions, flasks, food, stations](#s13)
+- [14. NPCs, housing, pylons](#s14)
+- [15. Biomes: что где искать](#s15)
+- [16. Fishing, crates, Angler](#s16)
+- [17. Shimmer / Aether](#s17)
+- [18. Events: подробная карта](#s18)
+- [19. Crafting trees](#s19)
+- [20. Zenith](#s20)
+- [21. Moon Lord и Lunar progression](#s21)
+- [22. Подробная progression-памятка по этапам](#s22)
+- [23. Биомные сундуки Dungeon](#s23)
+- [24. Reforging и модификаторы](#s24)
+- [25. Деньги, фарм, экономика](#s25)
+- [26. Building / QoL / база](#s26)
+- [27. Completion checklist](#s27)
+- [28. LLM-safe rules для генерации предметов/прогрессии](#s28)
+- [29. Optional reference-guide expansion](#s29)
+- [30. Быстрый one-page route](#s30)
+- [31. Короткие “не забыть”](#s31)
 
 ---
 
-## 0. Что изменено относительно исходного документа
+<a id="s0"></a>
+## 0. Частые ошибки сверки
 
-Документ оставлен в стиле большого справочника, но расширен из “оружие + прогрессия” в **единый фулл-гайд**.
+Таблица сохранена из прежней редакции как список различий для проверки по точной версии; это не новый фактологический аудит Wiki.
 
-### 0.1. Исправлены критичные ошибки фактов
+### 0.1. Loot, craft и progression gates
 
-| Было / риск | Исправлено |
+| Риск | Различие из исходного справочника |
 |---|---|
-| Лунные оружия Solar / Vortex / Nebula / Stardust могли выглядеть как дропы Moon Lord | Они **крафтятся из Lunar Fragments** после столпов. Moon Lord дропает Luminite и собственный пул оружия/предметов. |
-| Lunatic Cultist указан как этап “после Plantera” | Реальный обычный порядок: **Plantera → Golem → Lunatic Cultist → Celestial Pillars → Moon Lord**. |
-| Spider Staff попал в Pre-Hardmode | Spider Staff — **early Hardmode summon**, делается из Spider Fangs. |
-| Vampire Knives указаны как Crimson Mimic | Vampire Knives — **Crimson Chest в Dungeon post-Plantera**, нужен Crimson Key. Crimson Mimic даёт другой пул. |
-| Ice Rod в Pre-Hardmode | Ice Rod — **Hardmode**, продаётся Wizard. |
-| Flower of Fire как дроп Lava Slimes | Flower of Fire — Shadow Chest / Obsidian Lock Box в Underworld. |
-| Phaseblade через Crystal Shards | Phaseblade = Meteorite Bars + gems. Crystal Shards нужны для Phasesaber. |
-| Flamarang через Molten Fury | Flamarang = Enchanted Boomerang + Hellstone Bars. |
-| Ball O' Hurt как Hellstone | Ball O' Hurt — Shadow Orb / Corrupt crates. |
-| Uzi / Chain Gun от Arms Dealer | Uzi — Angry Trapper; Chain Gun — Santa-NK1 в Frost Moon. |
-| “Storm Staff” в summoner HM | В ваниле ключевой предмет — **Tempest Staff** от Duke Fishron. |
-| Meteor armor как ranged-прогрессия | Meteor armor — в первую очередь magic/Space Gun сетап, не ranged-сет. |
+| Lunar weapon vs Moon Lord drop | Solar/Vortex/Nebula/Stardust weapons указаны как fragment craft; Luminite и собственный loot Moon Lord — отдельно. |
+| Cultist gate | Обычный маршрут в справочнике: Plantera → Golem → Cultist → Pillars → Moon Lord, не просто «после Plantera». |
+| Spider Staff / Ice Rod в Pre-HM | Spider Staff указан как early-HM craft из Spider Fangs; Ice Rod — покупка Wizard в HM. |
+| Vampire Knives vs Crimson Mimic | Biome Chest в post-Plantera Dungeon с Crimson Key, не Mimic pool. |
+| Flower of Fire vs Lava Slime | Shadow Chest / Obsidian Lock Box, не enemy drop. |
+| Phaseblade / Phasesaber | Meteorite + gems для Phaseblade; Crystal Shards относятся к Phasesaber. |
+| Flamarang / Ball O' Hurt | Flamarang — Enchanted Boomerang + Hellstone; Ball O' Hurt — Shadow Orb/crates, не Hellstone. |
+| Uzi / Chain Gun vs NPC purchase | Angry Trapper / Santa-NK1 соответственно, не Arms Dealer. |
+| «Storm Staff» / Meteor armor | В summon route указан Tempest Staff; Meteor armor связан с magic/Space Gun, не ranged set. |
 
-### 0.2. Добавлено
+Полные stage/source таблицы — [оружие Pre-HM](#s8), [Hardmode](#s9), [crafting](#s19). Старый список editorial additions и reference expansion provenance — [HISTORY_RU](HISTORY_RU.md#reference).
 
-- Полная дорожная карта прохождения от спавна до Moon Lord / Zenith.
-- Разделы по миру, сложности, биомам, NPC, pylons, happiness, housing.
-- Разделы по баффам, аренам, алхимии, еде, фласкам, станциям.
-- Оружие не просто списком, а по **стадиям доступности**.
-- Сводки по классам: Melee / Ranged / Magic / Summoner.
-- Чеклисты перед каждым major gate: Skeletron, Wall of Flesh, Mechs, Plantera, Golem, Cultist, Moon Lord.
-- Раздел “LLM-safe rules”: что нельзя придумывать при генерации предметов/прогрессии.
-- Ссылка на единый корневой backlog для optional Wiki-like expansion документа.
-
----
-
+<a id="s1"></a>
 ## 1. Базовая модель Terraria
 
 Terraria — это не линейная RPG, а progression sandbox. У игры есть мягкая свобода маршрута, но есть жёсткие ворота:
 
-```text
-Старт мира
-  ↓
-Pre-Hardmode exploration
-  ↓
-Evil boss / Queen Bee / Skeletron
-  ↓
-Wall of Flesh
-  ↓
-Hardmode
-  ↓
-Hardmode ores + mechanical bosses
-  ↓
-Plantera
-  ↓
-Golem
-  ↓
-Lunatic Cultist
-  ↓
-Celestial Pillars
-  ↓
-Moon Lord
-  ↓
-Endgame farming / Zenith / completion
-```
+Маршрут без повторной схемы: [макро-этапы](#s3), [подробный checklist](#s22), [one-page route](#s30).
 
 ### 1.1. Формальных классов нет
 
@@ -106,6 +107,7 @@ Endgame farming / Zenith / completion
 
 ---
 
+<a id="s2"></a>
 ## 2. Создание мира и ранние решения
 
 ### 2.1. Размер мира
@@ -134,10 +136,11 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 | Drunk world | смешивает evil, меняет генерацию | нельзя считать стандартом |
 | For the worthy | сильно усложняет мир | отдельная балансировка |
 | Get fixed boi / Zenith seed | комбинирует много special rules | не baseline вообще |
-| Skyblock 1.4.5 | особый limited-resource сценарий | отдельная экономика прогрессии |
+| Skyblock (пометка 1.4.5 исходной редакции, требует сверки) | limited-resource сценарий | отдельная экономика, не обычный seed baseline |
 
 ---
 
+<a id="s3"></a>
 ## 3. Главная дорожная карта прохождения
 
 ### 3.1. Макро-этапы
@@ -169,6 +172,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s4"></a>
 ## 4. Workstations, руды, инструменты
 
 ### 4.1. Базовые станции
@@ -222,6 +226,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s5"></a>
 ## 5. Боссы: порядок, ворота, награды
 
 ### 5.1. Pre-Hardmode bosses
@@ -266,6 +271,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s6"></a>
 ## 6. Арены и подготовка к боссам
 
 ### 6.1. Базовая арена
@@ -310,6 +316,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s7"></a>
 ## 7. Классовая прогрессия: быстрые сетапы
 
 ### 7.1. Melee progression snapshot
@@ -368,6 +375,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s8"></a>
 ## 8. Pre-Hardmode weapon encyclopedia
 
 Раздел не дублирует вообще все декоративные/слабые варианты, но закрывает основную progression-матрицу и важные исключения.
@@ -462,6 +470,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s9"></a>
 ## 9. Hardmode weapon encyclopedia
 
 ### 9.1. Early Hardmode weapons
@@ -574,6 +583,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s10"></a>
 ## 10. Armor progression
 
 ### 10.1. Universal / early armor
@@ -631,6 +641,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s11"></a>
 ## 11. Accessories progression
 
 ### 11.1. Movement
@@ -696,6 +707,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s12"></a>
 ## 12. Ammo, arrows, bullets, rockets, darts
 
 ### 12.1. Arrows
@@ -747,6 +759,7 @@ Terraria поддерживает secret/special seeds. Они меняют ми
 
 ---
 
+<a id="s13"></a>
 ## 13. Potions, flasks, food, stations
 
 ### 13.1. Combat potion pack by class
@@ -782,6 +795,7 @@ Flasks apply to melee attacks and whips. For summoner this matters because whips
 
 ---
 
+<a id="s14"></a>
 ## 14. NPCs, housing, pylons
 
 ### 14.1. Housing минимум
@@ -833,10 +847,11 @@ Pylons — телепорт-сеть между биомами. Удобная �
 | Mushroom | Mushroom | Truffle + chosen neighbor |
 | Universal | any | rare/universal pylon, late utility |
 
-**Важно для 1.4.5.x:** условия продажи/работы pylons и happiness нужно сверять по актуальной Wiki, потому что эти правила менялись патчами. Для практического гайда достаточно помнить: pylon требует правильный биом и живых NPC рядом, а happiness влияет на цены/доступность и часть наград.
+**Version-sensitive:** условия продажи/работы pylons и happiness нужно сверять по точному patch на [Pylons](https://terraria.wiki.gg/wiki/Pylons) и [NPC happiness](https://terraria.wiki.gg/wiki/NPCs#Happiness). Для практического гайда достаточно помнить: pylon требует правильный биом и живых NPC рядом, а happiness влияет на цены/доступность и часть наград.
 
 ---
 
+<a id="s15"></a>
 ## 15. Biomes: что где искать
 
 ### 15.1. Surface / Forest
@@ -935,6 +950,7 @@ Corruption/Crimson/Hallow spread ускоряется в Hardmode. Практи�
 
 ---
 
+<a id="s16"></a>
 ## 16. Fishing, crates, Angler
 
 Fishing — альтернативная прогрессия, особенно если не хочется ломать много алтарей.
@@ -972,6 +988,7 @@ Pre-HM crates, открытые в Hardmode, historically were abused for HM ore
 
 ---
 
+<a id="s17"></a>
 ## 17. Shimmer / Aether
 
 Shimmer — особая жидкость из mini-biome Aether, генерируется один раз на мир.
@@ -982,7 +999,7 @@ Shimmer — особая жидкость из mini-biome Aether, генерир
 - Decrafting некоторых crafted items.
 - Превращение critters/enemies/NPC sprites.
 - Получение permanent upgrades из некоторых предметов.
-- Обратные evil-пары/альтернативы для части предметов после 1.4.5.x expanded transmutations.
+- Evil-пары/альтернативы были отмечены в старой 1.4.5.x редакции; конкретную transmutation и availability перепроверь на [Shimmer](https://terraria.wiki.gg/wiki/Shimmer), не выводи её из парности предметов.
 
 ### 17.2. Практические применения
 
@@ -998,6 +1015,7 @@ Shimmer — особая жидкость из mini-biome Aether, генерир
 
 ---
 
+<a id="s18"></a>
 ## 18. Events: подробная карта
 
 ### 18.1. Blood Moon
@@ -1058,6 +1076,7 @@ Shimmer — особая жидкость из mini-biome Aether, генерир
 
 ---
 
+<a id="s19"></a>
 ## 19. Crafting trees
 
 ### 19.1. Night's Edge
@@ -1152,6 +1171,7 @@ Cell Phone
 
 ---
 
+<a id="s20"></a>
 ## 20. Zenith
 
 Zenith — post-Moon Lord melee weapon и финальный символ sword progression.
@@ -1173,27 +1193,7 @@ Zenith — post-Moon Lord melee weapon и финальный символ sword 
 
 ### 20.2. Zenith tree summary
 
-```text
-Zenith
-├── Copper Shortsword
-├── Enchanted Sword
-├── Starfury
-├── Bee Keeper
-├── Seedler
-├── The Horseman's Blade
-├── Influx Waver
-├── Star Wrath
-├── Meowmere
-└── Terra Blade
-    ├── True Excalibur
-    │   └── Excalibur
-    └── True Night's Edge
-        └── Night's Edge
-            ├── Evil sword
-            ├── Muramasa
-            ├── Blade of Grass
-            └── Volcano
-```
+Полный состав — [таблица компонентов](#s20); ветка Terra Blade → True swords → Excalibur/Night's Edge и исходные swords раскрыта в [crafting trees](#s19). Второй одинаковый список десяти компонентов не поддерживается отдельно.
 
 ### 20.3. Практическая проблема Zenith
 
@@ -1207,203 +1207,46 @@ Zenith
 
 ---
 
+<a id="s21"></a>
 ## 21. Moon Lord и Lunar progression
 
 ### 21.1. Правильный порядок
 
-```text
-Golem defeated
-  ↓
-Cultists spawn near Dungeon
-  ↓
-Kill cultists → Lunatic Cultist
-  ↓
-Kill Lunatic Cultist → Celestial Pillars
-  ↓
-Destroy Solar / Vortex / Nebula / Stardust Pillars
-  ↓
-Moon Lord spawns
-```
+Golem → cultists у Dungeon → Lunatic Cultist → четыре Pillars → Moon Lord. Полная дорожная карта и подготовка не повторяются: [one-page route](#s30), [checklist](#s22). Точные условия trigger/summon нужно сверять с версией.
 
 ### 21.2. Celestial Pillars
 
-| Pillar | Class theme | Fragments craft |
-|---|---|---|
-| Solar | Melee | Solar Eruption, Daybreak, Solar armor |
-| Vortex | Ranged | Phantasm, Vortex Beater, Vortex armor |
-| Nebula | Magic | Nebula Blaze, Nebula Arcanum, Nebula armor |
-| Stardust | Summoner | Stardust Dragon, Stardust Cell, Stardust armor |
+Solar/melee, Vortex/ranged, Nebula/magic, Stardust/summoner — тематические группы. Weapons из fragments перечислены в [Lunar encyclopedia](#s9), final armor с fragments + Luminite — в [armor](#s10). Armor и pillar weapon не считаются одинаково доступными до Moon Lord.
 
 ### 21.3. Moon Lord drops
 
-Moon Lord даёт:
+Luminite и основной weapon pool сведены в [Lunar/post-ML таблице](#s9). Solar Eruption, Daybreak, Phantasm, Vortex Beater, Nebula Blaze/Arcanum, Stardust Dragon/Cell в справочнике являются **fragment craft**, не Moon Lord drops.
 
-- Luminite.
-- Meowmere.
-- Star Wrath.
-- S.D.M.G.
-- Celebration Mk2.
-- Last Prism.
-- Lunar Flare.
-- Lunar Portal Staff.
-- Rainbow Crystal Staff.
-- Meowmere Minecart / portal gun / vanity / expert loot depending version and mode.
-
-**Не путать:** Solar Eruption, Daybreak, Phantasm, Vortex Beater, Nebula Blaze, Nebula Arcanum, Stardust Dragon и Stardust Cell — это **не Moon Lord drops**, а fragment craft.
+Прочие rewards зависят от версии/режима: строки прежнего списка о Meowmere Minecart, Portal Gun, vanity и expert loot требуют отдельной сверки на [Moon Lord](https://terraria.wiki.gg/wiki/Moon_Lord). Они не подтверждены этой редакционной чисткой.
 
 ---
 
+<a id="s22"></a>
 ## 22. Подробная progression-памятка по этапам
 
-### 22.1. Day 1–2
+Числа, gear и порядок optional bosses ниже — практические рекомендации старой редакции, не engine bounds и не обязательный маршрут каждого мира.
 
-Цели:
-
-- shelter;
-- wood armor or cactus armor;
-- basic bow/sword;
-- torches;
-- rope/platforms;
-- first cave trip.
-
-Не тратить время на:
-
-- идеальную базу;
-- полный сет copper/tin;
-- бессмысленное копание без Spelunker/целей.
-
-### 22.2. До первого босса
-
-Цели:
-
-- 200+ HP;
-- 8–12 defense;
-- mobility accessory;
-- hook;
-- 2–3 ряда platforms;
-- Ironskin/Regeneration/Swiftness.
-
-Кандидаты на первого босса:
-
-- Eye of Cthulhu;
-- King Slime;
-- evil boss, если оружие уже хорошее.
-
-### 22.3. До Skeletron
-
-Цели:
-
-- 300–400 HP;
-- evil boss beaten;
-- decent weapon: Bee's Knees / Phoenix Blaster / Night's Edge path / Space Gun / Imp Staff;
-- arena at Dungeon entrance.
-
-После победы:
-
-- loot Dungeon;
-- find Mechanic;
-- Cobalt Shield;
-- Muramasa;
-- Handgun;
-- Water Bolt / Magic Missile / Aqua Scepter.
-
-### 22.4. До Wall of Flesh
-
-Цели:
-
-- 400 HP;
-- Hellstone gear or class equivalent;
-- long Underworld bridge / arena;
-- Obsidian Skin for mining Hellstone;
-- Beenades if ranged/hybrid cheese route;
-- class emblem target после WoF.
-
-WoF важен не только как босс, а как **переключатель мира**.
-
-### 22.5. Первые 30 минут Hardmode
-
-Цели:
-
-- не умереть от новых врагов;
-- разбить ограниченное число алтарей или выбрать fishing route;
-- добыть first HM ore tier;
-- сделать wings ASAP;
-- получить weapon spike: Daedalus / Onyx / Spider / Crystal Serpent / Shadowflame.
-
-Опасности:
-
-- world evil spread;
-- Wyverns;
-- Mimics;
-- ночные mech boss spawns.
-
-### 22.6. До mechanical bosses
-
-Цели:
-
-- Adamantite/Titanium/Frost/Forbidden/Spider armor;
-- wings;
-- reforges хотя бы на weapons;
-- potions;
-- arena с Heart Lantern/Campfire/Bast.
-
-Самый частый первый mech:
-
-- Destroyer, если есть Daedalus Stormbow / piercing / Nimbus Rod / good arena.
-- Twins, если хорошая mobility и single target DPS.
-- Prime, если есть endurance и контроль дистанции.
-
-### 22.7. После mechanical bosses
-
-Цели:
-
-- Hallowed gear;
-- Drax/Pickaxe Axe;
-- Chlorophyte mining;
-- Plantera arena;
-- upgrade class accessories.
-
-### 22.8. До Plantera
-
-Цели:
-
-- arena в Underground Jungle;
-- не ломать bulb случайно без подготовки;
-- movement по арене;
-- Chlorophyte/Hallowed/Turtle/Summon gear.
-
-После Plantera:
-
-- Temple Key;
-- Dungeon upgrade;
-- Biome Chests;
-- Spectre/Shroomite/Tiki/Turtle progression.
-
-### 22.9. До Golem
-
-Цели:
-
-- Lihzahrd Temple clear;
-- traps осторожно;
-- Power Cells;
-- Golem arena адаптировать, если возможно.
-
-Golem часто проще Plantera, но это gate к Cultist/Martians.
-
-### 22.10. Post-Golem до Moon Lord
-
-Цели:
-
-- Martian Madness farm;
-- Duke Fishron / Empress if needed;
-- Pumpkin/Frost Moon farm;
-- Beetle/Spectre/Shroomite/Spooky/Tiki optimization;
-- Cultist fight;
-- Pillar weapons craft;
-- Moon Lord arena/strategy.
+| Этап | Подготовка / полезный результат | Предостережение / следующий шаг |
+|---|---|---|
+| Day 1–2 | Shelter, wood/cactus armor, basic bow/sword, torches, rope/platforms, первая cave trip | Не тратить старт на идеальную базу, полный copper/tin set или бесцельное копание без Spelunker/цели. |
+| До первого босса | 200+ HP, примерно 8–12 defense, mobility accessory, hook, 2–3 ряда platforms, Ironskin/Regeneration/Swiftness | Eye/King Slime либо evil boss, если оружие подходит; это рекомендации, не spawn conditions. |
+| До Skeletron | 300–400 HP, evil boss beaten, Bee's Knees / Phoenix Blaster / Night's Edge **path** / Space Gun / Imp Staff, арена у Dungeon | После победы — Mechanic, Cobalt Shield, Muramasa, Handgun, Water Bolt/Magic Missile/Aqua Scepter. |
+| До Wall of Flesh | 400 HP, Hellstone gear/class equivalent, длинная Underworld арена, Obsidian Skin для Hellstone; Beenades — optional route | Подготовить базу к world switch; выбрать желаемый class emblem после WoF. |
+| Первые 30 минут HM | Ограниченное число алтарей **или fishing**, first ore tier, wings; weapon spike Daedalus/Onyx/Spider/Crystal Serpent/Shadowflame | Evil spread, Wyverns, Mimics и ночные mech spawns; не паниковать и не ломать все алтари автоматически. |
+| До mechs | Adamantite/Titanium/Frost/Forbidden/Spider, wings, weapon reforges, potions, Heart Lantern/Campfire/Bast arena | Destroyer — piercing/Daedalus/Nimbus route; Twins — mobility/single-target; Prime — endurance/distance. Выбор не обязателен. |
+| После mechs | Hallowed gear, Drax/Pickaxe Axe, Chlorophyte, class accessories | Подготовить Jungle arena для Plantera. |
+| До Plantera | Underground Jungle arena, Chlorophyte/Hallowed/Turtle/summon gear и movement | Не ломать bulb случайно; после победы — Temple Key, Dungeon upgrade, biome chests, Spectre/Shroomite/Tiki progression. |
+| До Golem | Lihzahrd Temple, traps осторожно, Power Cells, доступная адаптация арены | Golem — gate для обычного Cultist/Martian route, независимо от субъективной сложности относительно Plantera. |
+| Post-Golem → ML | Fishron/Empress optional, Martians/Pumpkin/Frost Moon farm, Beetle/Spectre/Shroomite/Spooky/Tiki optimization | Cultist → Pillars → pillar weapons → Moon Lord arena/strategy; final armor требует Luminite. |
 
 ---
 
+<a id="s23"></a>
 ## 23. Биомные сундуки Dungeon
 
 Post-Plantera можно открыть biome chests, если есть соответствующий key.
@@ -1421,6 +1264,7 @@ Keys редкие и фармятся с врагов соответствующ
 
 ---
 
+<a id="s24"></a>
 ## 24. Reforging и модификаторы
 
 ### 24.1. Общая логика
@@ -1449,6 +1293,7 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ---
 
+<a id="s25"></a>
 ## 25. Деньги, фарм, экономика
 
 ### 25.1. Early money
@@ -1482,84 +1327,40 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ---
 
+<a id="s26"></a>
 ## 26. Building / QoL / база
 
 ### 26.1. Базовая структура
 
-Хорошая база:
-
-- storage room;
-- crafting hall;
-- potion/herb farm;
-- NPC housing separated by pylons;
-- arena nearby;
-- hellevator;
-- fishing ponds;
-- shimmer access route;
-- boss/event arena.
+Storage/crafting hall, herb/potion farm, NPC hubs по pylons, nearby arena, hellevator, fishing ponds, путь к Shimmer и отдельная boss/event arena — организационный checklist, не recipe.
 
 ### 26.2. Storage naming
 
-Пример категорий:
-
-- Ores / Bars.
-- Gems / Crystals.
-- Potions / Herbs.
-- Fish / Bait.
-- Weapons.
-- Armor.
-- Accessories.
-- Blocks.
-- Furniture.
-- Boss Summons.
-- Souls / Fragments / Endgame.
+Пример названий сундуков: Ores/Bars; Gems/Crystals; Potions/Herbs; Fish/Bait; Weapons; Armor; Accessories; Blocks; Furniture; Boss Summons; Souls/Fragments/Endgame. Это пользовательская организация, не gameplay categories runtime.
 
 ### 26.3. Useful permanent stations
 
-- Crystal Ball.
-- Ammo Box.
-- Bewitching Table.
-- Sharpening Station.
-- War Table.
-- Slice of Cake.
-- Bast Statue.
-- Campfire / Heart Lantern / Star in a Bottle.
+Crystal Ball, Ammo Box, Bewitching Table, Sharpening Station, War Table, Slice of Cake, Bast Statue, Campfire/Heart Lantern/Star in a Bottle. Их стадии доступности и effects сверяются отдельно.
 
 ---
 
+<a id="s27"></a>
 ## 27. Completion checklist
 
 ### 27.1. Main completion
 
-- Defeat all main bosses.
-- Defeat event bosses.
-- Craft Zenith.
-- Build endgame armor for all classes.
-- Complete Bestiary.
-- Get all NPCs.
-- Build pylon network.
-- Obtain Cell Phone / Shellphone.
-- Obtain Ankh Shield.
-- Obtain Terraspark Boots.
-- Clear Old One's Army tier 3.
-- Farm Moon Lord drops.
+Main/event bosses; Zenith; final armor всех классов; Bestiary/NPCs; pylon network; Cell Phone/Shellphone; Ankh Shield; Terraspark; Old One's Army tier 3; Moon Lord farming. Это optional цели прохождения, не требования успешного generated craft.
 
 ### 27.2. Collection goals
 
-- All armor sets.
-- All boss masks/trophies/relics.
-- All biome chest weapons.
-- All paintings / banners.
-- All town slimes/pets.
-- All music boxes.
-- All mounts.
-- All wings.
+Armor; boss masks/trophies/relics; biome chest weapons; paintings/banners; town slimes/pets; music boxes; mounts; wings — отдельные collection goals, зависящие от платформы/версии.
 
 ---
 
+<a id="s28"></a>
 ## 28. LLM-safe rules для генерации предметов/прогрессии
 
-Этот раздел нужен, если документ скармливается модели для Terraria-мода, генерации оружия или автопроверки прогрессии.
+Это справочные правила рассуждения о vanilla progression, **не контракт InfiniCrafterLocal и не реализованный validator**. Не передавай весь guide вместо source-backed parent facts/registry. Рабочий [balance corridor](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md) и [engine boundaries](ENGINE_RUNTIME_BOUNDARIES_RU.md) имеют отдельных владельцев.
 
 ### 28.1. Нельзя нарушать progression gates
 
@@ -1588,7 +1389,7 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ### 28.3. Для генератора оружия
 
-Каждый сгенерированный предмет должен иметь:
+Пример optional аналитической карточки внешнего справочника. Следующие labels **не объявляют обязательные поля Author, не добавляют allowed enum и не выбирают механику**:
 
 - stage: `pre_boss`, `pre_skeletron`, `pre_wof`, `early_hm`, `post_mech`, `post_plantera`, `post_golem`, `lunar`, `post_moon_lord`;
 - class: `melee`, `ranged`, `magic`, `summon`, `hybrid`, `tool`;
@@ -1613,12 +1414,14 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ---
 
+<a id="s29"></a>
 ## 29. Optional reference-guide expansion
 
-Документ не владеет отдельным ToDo. Опциональный план расширения до Wiki-like reference поглощён в корневой `../TODO_ROADMAP_VERY_LATER_RU.md`; выполнять его только по отдельному запросу пользователя.
+Документ не владеет отдельным ToDo. Optional Wiki-like expansion находится в [корневом backlog](../TODO_ROADMAP_VERY_LATER_RU.md); выполнять только по отдельному запросу.
 
 ---
 
+<a id="s30"></a>
 ## 30. Быстрый one-page route
 
 ```text
@@ -1638,6 +1441,7 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 
 ---
 
+<a id="s31"></a>
 ## 31. Короткие “не забыть”
 
 - Guide can show crafting recipes from materials.
@@ -1649,4 +1453,3 @@ Goblin Tinkerer позволяет reforging. Это денежная яма, н
 - Do not confuse biome Mimics with biome Dungeon Chests.
 - Do not confuse Lunar Fragment weapons with Moon Lord drops.
 - For exact item stats, source-of-truth is current wiki/code, not memory.
-

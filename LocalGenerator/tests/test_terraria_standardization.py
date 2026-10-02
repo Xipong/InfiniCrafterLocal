@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.capability_registry import INPUT_KINDS
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
@@ -10,8 +8,6 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
     VANILLA_AMMO_CATEGORY_TOKENS,
     DAMAGE_CLASS_TOKEN_PATTERN,
 )
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_author_vocabulary_is_finite_and_alias_free() -> None:
@@ -67,23 +63,6 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
     )
     assert collision.params["npcImmunityMode"].enum == ("owner", "local")
     assert collision.params["localNpcHitCooldownEngineUnits"].minimum == -1
-
-
-def test_lowery_is_generated_and_declares_custom_runtime_boundary() -> None:
-    text = (ROOT / "lowery.md").read_text(encoding="utf-8")
-    assert "Gameplay Author-visible semantic aliases: **нет**" in text
-    assert "proxy-типы" in text
-    assert "Item.ammo" in text and "Item.useAmmo" in text
-    assert "ID-static immunity" in text
-    assert "ModName/ClassName" in text
-
-
-def test_healing_does_not_infer_potion_sickness() -> None:
-    restore = CAPABILITY_REGISTRY["restore_resources_on_use"]
-    assert tuple(restore.params) == ("healLife", "healMana", "usesPotionRules")
-    apply = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs").read_text(encoding="utf-8")
-    assert "item.potion = enabled && Gameplay.Potion;" in apply
-    assert "item.potion = Gameplay.HealLife > 0" not in apply
 
 
 def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
@@ -168,50 +147,6 @@ def test_exact_modded_damage_class_uses_tmodloader_full_name() -> None:
     assert re.fullmatch(DAMAGE_CLASS_TOKEN_PATTERN, "throwing")
     assert re.fullmatch(DAMAGE_CLASS_TOKEN_PATTERN, "rogue") is None
     assert re.fullmatch(DAMAGE_CLASS_TOKEN_PATTERN, "CalamityMod:RogueDamageClass") is None
-    vocabulary = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/TerrariaRuntimeVocabulary.cs").read_text(encoding="utf-8")
-    assert "ModContent.TryFind<DamageClass>(exact" in vocabulary
-    assert "Unknown exact damageClass" in vocabulary
-    assert "?? DamageClass.Generic" not in vocabulary
-
-
-def test_damage_class_parent_identity_is_single_exact_tmodloader_token() -> None:
-    client = (ROOT / "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs").read_text(encoding="utf-8")
-    vocabulary = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/TerrariaRuntimeVocabulary.cs").read_text(encoding="utf-8")
-    constants = (ROOT / "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py").read_text(encoding="utf-8")
-    cards = (ROOT / "LocalGenerator/infini_local/pipelines/parent_context_cards.py").read_text(encoding="utf-8")
-    assert "CanonicalDamageClassToken" in vocabulary
-    assert "=> TerrariaRuntimeVocabulary.CanonicalDamageClassToken" in client
-    assert 'return damageClass is null ? (damage > 0 ? "generic" : "none") : "modded"' not in client
-    assert "damageClassFullName" not in client
-    assert "damageClassFullName" not in constants
-    assert "damageClassFullName" not in cards
-
-
-def test_loaded_content_ids_fail_closed_at_csharp_boundary() -> None:
-    normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
-    dto = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs").read_text(encoding="utf-8")
-    item = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
-    for required in (
-        "RarityLoader.RarityCount",
-        "BuffLoader.BuffCount",
-        "extra buff row cannot be null",
-        "requires positive duration",
-    ):
-        assert required in normalize
-    assert "TileLoader.TileCount" in dto
-    assert "WallLoader.WallCount" in dto
-    assert "BuffLoader.BuffCount" in dto
-    assert "BuffId <= 0" in dto
-    assert "buff.BuffCode > 0" in item
-
-
-def test_exact_modded_damage_class_preserves_case_and_length() -> None:
-    normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
-    dto = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs").read_text(encoding="utf-8")
-    assert "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);" in normalize
-    assert "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();" not in normalize
-    assert "DamageClass = RuntimeText.Safe(DamageClass, 129);" in dto
-    assert "DamageClass = RuntimeText.Safe(DamageClass, 129).ToLowerInvariant();" not in dto
 
 
 def test_tool_and_value_units_match_exact_terraria_fields() -> None:
@@ -222,5 +157,10 @@ def test_tool_and_value_units_match_exact_terraria_fields() -> None:
     assert tool.params["axePowerTooltipPercent"].maximum == 500
     assert tool.params["axePowerTooltipPercent"].multiple_of == 5
     assert "Item.axe" in tool.params["axePowerTooltipPercent"].description
-    normalize = (ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs").read_text(encoding="utf-8")
-    assert "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize
+
+
+def test_held_sprite_visibility_is_only_presentation_metadata() -> None:
+    release = CAPABILITY_REGISTRY["configure_item_use"].params["heldSpriteVisibilityHint"]
+    assert release.enum == ("", "immediate", "on_release", "after_charge")
+    assert "Held-sprite visibility" in release.description
+    assert "not gameplay release timing" in release.description

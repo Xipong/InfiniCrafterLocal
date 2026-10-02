@@ -1,12 +1,17 @@
 # TECHNICAL LOWERING AUDIT
 
-> Generated projection. Каноническая политика и owner routing находятся в `lowery.md`.
+> Generated: [`tools/generate_low_level_runtime_docs.py`](tools/generate_low_level_runtime_docs.py) из [technical_lowering.py](LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; [refresh/check всех трёх outputs](docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
+> Policy/owners: [Lowery](lowery.md). Полные wire outputs каждого lowerer: [manifest](lowery.md#lowering).
 
 Schema: `infini.technical-lowering-manifest.v1`.
 
 Lowering разрешён только как семантически без потерь технический перевод. Ни один lowerer не выбирает entity kind, movement, attachment, delivery, input, lifecycle, targeting или visual topology.
 
 Authoring compression: только `exact_repetition`, минимум `5` literally equal placements, requiresLiteralEquality=`true`, mayAddDesignChoice=`false`. Mandatory wire projection уже authored identity не является compression.
+
+**Навигация:** [lowerers](#lowerers) · [receipts/proof](#receipts) · [удалённый lowering](#retired).
+
+<a id="lowerers"></a>
 
 ## Global lowerers
 
@@ -20,10 +25,15 @@ Authoring compression: только `exact_repetition`, минимум `5` liter
 
 `item_fields_to_tml_projection` имеет конечный автоматически выведенный список output-path; broad `gameplay.*`/`accessory.*`/`armor.*` запрещены.
 
+<a id="receipts"></a>
+
 ## Capability-level proof
 
-Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. `audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.
-Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.
+- **Receipt shape.** Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`.
+- **Exact delivery.** `audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.
+- **Declared omission.** Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.
+
+<a id="retired"></a>
 
 ## Решение по старому lowering
 

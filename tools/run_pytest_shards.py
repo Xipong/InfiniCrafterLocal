@@ -39,15 +39,11 @@ FULL_TEST_MODULES = {
 # files remain batched. New files should only be added after reproducing shared-
 # process pollution.
 ISOLATED_TEST_FILES = {
-    "test_239_golden_runtime_proof_contract.py",
-    "test_240_http_boundary_bugfixes.py",
-    "test_240_python_runtime_bugfixes.py",
+    "test_provider_http_contract.py",
+    "test_provider_runtime_contract.py",
     "test_csharp_compile_surface_contract.py",
     "test_environment_access_contract.py",
-    "test_planner_prompt_usability_contract.py",
     "test_sdcpp_command_contract.py",
-    "test_v18_contract_safety_stack.py",
-    "test_zimage_prompt_contract.py",
 }
 
 
@@ -197,6 +193,8 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
                 temp_root,
                 ignore=shutil.ignore_patterns(
                     ".git",
+                    ".gitnexus",
+                    ".gitnexusrc",
                     ".hermes",
                     "__pycache__",
                     ".pytest_cache",
@@ -214,9 +212,11 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
             env["PYTHONPATH"] = os.pathsep.join((str(temp_root / "LocalGenerator"), str(temp_root)))
             normal = [path for path in shard if path.name not in ISOLATED_TEST_FILES]
             isolated = [path for path in shard if path.name in ISOLATED_TEST_FILES]
-            commands: list[tuple[str, list[Path]]] = []
-            if normal:
-                commands.append(("batched", normal))
+            # Keep one finite command timeout meaningful as parameterized
+            # corpora grow; never omit cases or give a hung test an unlimited run.
+            commands: list[tuple[str, list[Path]]] = [
+                ("batched", normal[start:start + 4]) for start in range(0, len(normal), 4)
+            ]
             commands.extend(("isolated", [path]) for path in isolated)
 
             for command_index, (mode, command_files) in enumerate(commands, 1):

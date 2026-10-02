@@ -1,28 +1,28 @@
-# Трёхстадийный LLM pipeline
+# Трёхстадийный LLM pipeline — 0.4.246
 
-## Happy path
+[System authority](../PROJECT_ARCHITECTURE_RU.md#authority) · [Author](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Repair](TARGETED_REPAIR_PROTOCOL_RU.md)
 
-| стадия | baseline calls | результат |
+<a id="flow"></a>
+## Happy path и handoffs
+
+| Стадия fresh LLM craft | Baseline calls | Принятый output / следующий consumer |
 |---|---:|---|
-| Gameplay Author | 1 | validated low-level runtime program |
-| Visual Director | 1 | canonical visual kit + required entity assets |
-| VFX Director | 1 | finite slots over exact entity/event inventory |
-| Repairs | 0 | не нужны при валидном output |
+| Gameplay Author | 1 | Strict validation → technical compile → typed wire; entities/visual roles и raw parent facts → Visual |
+| Visual Director | 1 | Entity-based visual kit; accepted gameplay + visual context → VFX |
+| VFX Director | 1 | Finite slots над exact `entityId + event`; самостоятельные image ingredients → общий image pass |
+| Repairs | 0 | Нет при валидных outputs |
 
-Итого: **3 LLM-вызова**.
+После **трёх текстовых стадий**: asset runtime gates → image generation → visual delivery → parent summary → final normalize/runtime/VFX gates → stage accounting → world metadata/health → sanitize → final cached-payload check → atomic recipe commit. VFX asset ID, общий нескольким элементам, не требует отдельной image job на каждый элемент. Required PNG нельзя заменить placeholder. Visual/VFX не добавляют gameplay и не выбирают weapon family.
 
-## Conditional repairs
+Owner — [combine_pipeline.combine](../LocalGenerator/infini_local/pipelines/combine_pipeline.py#L265); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
-- Gameplay invalid → только Gameplay Repair;
-- Visual invalid/missing required PNG → только Visual Repair;
-- VFX invalid → только VFX Repair.
+<a id="repairs-accounting"></a>
+## Conditional repairs и accounting
 
-Repair не является обязательным judge-pass и не перезапускает предыдущую валидную стадию без причины.
+Gameplay rejection открывает только Gameplay Repair; Visual contract rejection — Visual Repair; VFX rejection — VFX Repair. Невалидный initial Author/Visual JSON может израсходовать тот же единственный Repair как format pass. Ошибка image generation/final delivery не разрешает новый бесконечный reauthor loop.
 
-Все три Repair используют leaf-local frozen patch protocol. Модель видит invalid fragments, exact missing dependencies, минимальный relevant capability subset и уже валидные детали как read-only context; полный ответ заново не генерируется. Даже если модель меняет frozen-поля, deterministic filter сохраняет старые значения, принимает только точные исправления и записывает лишние изменения в audit. Подробности: `TARGETED_REPAIR_PROTOCOL_RU.md`.
+[Frozen-first protocol](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) применяется во всех трёх доменах: exact invalid leaves/dependencies, read-only accepted context, audit проигнорированных лишних правок, полная повторная валидация. Repair предыдущий валидный stage не перезапускает; обязательного judge/critic нет.
 
-## Handoffs
+`llmStageAccounting`: `gameplayAuthorCalls`, `gameplayRepairCalls`, `visualDirectorCalls`, `visualRepairCalls`, `vfxDirectorCalls`, `vfxRepairCalls`. Fresh happy path — `1/0/1/0/1/0`; каждый repair count не более одного. [Topology gate](../LocalGenerator/infini_local/pipelines/combine_pipeline.py#L66) проверяет это перед commit. Это logical stage calls, не обещание ровно трёх HTTP attempts: transport compatibility retries считают отдельно.
 
-Gameplay→Visual передаёт accepted entities/visual roles и parent facts, но не weapon family. Gameplay+Visual→VFX передаёт exact runtime event inventory и visual kit. C# получает только accepted final contracts.
-
-Stage accounting хранит `gameplayAuthorCalls`, `gameplayRepairCalls`, `visualDirectorCalls`, `visualRepairCalls`, `vfxDirectorCalls`, `vfxRepairCalls`; tests проверяют happy path `1/0/1/0/1/0`.
+Transport retries/continuation — [отдельная boundary](../PROJECT_ARCHITECTURE_RU.md#pipeline), не новые authoring stages. Offline tests: `test_low_level_three_stage_pipeline.py`, `test_pipeline_repair_contract.py` из [test owners](TEST_CONTRACT_OWNERS_RU.md); green не означает live/game/MP прогон.

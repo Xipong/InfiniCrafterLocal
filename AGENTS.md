@@ -1,4 +1,6 @@
-# AGENTS.md — InfiniCrafterLocal v0.4.241
+# AGENTS.md — InfiniCrafterLocal
+
+Правила архитектуры и изменений; номер релиза и статус локальных обновлений — в [README_RU.md](README_RU.md).
 
 ## Архитектурный инвариант
 

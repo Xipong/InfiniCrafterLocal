@@ -222,6 +222,148 @@ def check_internal_import_boundaries() -> None:
         fail("runtime_authoring public API is missing or exports private internals")
 
 
+def python_source_issues(sources: dict[str, str]) -> list[str]:
+    """AST lint with one parser/owner for literal, import and environment contracts.
+
+    Pure source inputs let the gate's tests inject mistakes without modifying the
+    checkout or importing potentially side-effectful application modules.
+    """
+    issues: list[str] = []
+    trees = {path: ast.parse(text, filename=path) for path, text in sources.items()}
+    package = "LocalGenerator/infini_local/"
+    modules = {path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", "."): path
+               for path in trees if path.startswith(package)}
+    edges: dict[str, set[str]] = {name: set() for name in modules}
+    owners: list[str] = []
+    for path, tree in trees.items():
+        module = path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", ".")
+        os_names, environ_names, getenv_names = {"os"}, set(), set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                os_names.update(alias.asname or alias.name for alias in node.names if alias.name == "os")
+                if module in edges:
+                    edges[module].update(alias.name for alias in node.names if alias.name in modules)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module == "os":
+                    environ_names.update(alias.asname or alias.name for alias in node.names if alias.name == "environ")
+                    getenv_names.update(alias.asname or alias.name for alias in node.names if alias.name == "getenv")
+                if module in edges and node.module in modules:
+                    edges[module].add(node.module)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                seen: set[object] = set()
+                for key in node.keys:
+                    if isinstance(key, ast.Constant):
+                        if key.value in seen:
+                            issues.append(f"duplicate_dict_key:{path}:{key.lineno}:{key.value!r}")
+                        seen.add(key.value)
+            # All statement blocks, including else/finally, not only `.body`.
+            for _, statements in ast.iter_fields(node):
+                if isinstance(statements, list):
+                    for previous, current in zip(statements, statements[1:]):
+                        if isinstance(current, (ast.Assign, ast.AnnAssign)) and isinstance(previous, type(current)):
+                            if ast.dump(previous) == ast.dump(current):
+                                issues.append(f"duplicate_assignment:{path}:{current.lineno}")
+            if not path.startswith(package) or path == package + "core/env_utils.py":
+                continue
+            def is_environment(value: ast.AST) -> bool:
+                return (isinstance(value, ast.Name) and value.id in environ_names) or (
+                    isinstance(value, ast.Attribute) and value.attr == "environ"
+                    and isinstance(value.value, ast.Name) and value.value.id in os_names)
+            raw = isinstance(node, ast.Subscript) and is_environment(node.value)
+            if isinstance(node, ast.Call):
+                func = node.func
+                raw = (isinstance(func, ast.Name) and func.id in getenv_names) or (
+                    isinstance(func, ast.Attribute) and (
+                        isinstance(func.value, ast.Name) and func.value.id in os_names and func.attr == "getenv"
+                        or is_environment(func.value) and func.attr not in {"copy", "setdefault"}))
+            if raw:
+                issues.append(f"raw_environment_read:{path}:{node.lineno}")
+        for node in tree.body:
+            if not path.startswith(package) or not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            names = {target.id for target in targets if isinstance(target, ast.Name)}
+            if "BAD_NAME_PATTERNS" in names:
+                owners.append(path)
+            if "__all__" in names and any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+                                         and child.func.id == "globals" for child in ast.walk(node)):
+                issues.append(f"dynamic_exports:{path}:{node.lineno}")
+    if modules and owners != [package + "pipelines/pipeline_runtime_constants.py"]:
+        issues.append(f"constant_owner:BAD_NAME_PATTERNS:{sorted(owners)}")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    def visit(module: str) -> None:
+        if module in visiting:
+            issues.append(f"import_cycle:{module}")
+            return
+        if module in visited:
+            return
+        visiting.add(module)
+        for dependency in sorted(edges[module]):
+            visit(dependency)
+        visiting.remove(module)
+        visited.add(module)
+    for module in sorted(modules):
+        visit(module)
+    return issues
+
+
+def check_python_source_integrity() -> None:
+    sources = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8-sig")
+               for directory in (ROOT / "LocalGenerator/infini_local", ROOT / "tools")
+               for path in sorted(directory.rglob("*.py"))}
+    issues = python_source_issues(sources)
+    if issues:
+        fail("Python source integrity:\n" + "\n".join(issues))
+
+
+# These are forbidden authored-language fields, not implementation snapshots.
+AUTHOR_TEXT_POLICY = {
+    "runtime_program_author.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "author_item_response.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "author_item_repair.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "capability_inventory.generated.json": ({"tooltip", "setBonusText"}, set()),
+    "technical_lowering.generated.json": ({"tooltip", "setBonusText"}, set()),
+    "visual_runtime_entities.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
+    "visual_repair_patch.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
+    "vfx_runtime_events.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
+    "vfx_repair_patch.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
+}
+
+
+def authored_contract_issues(sources: dict[str, str]) -> list[str]:
+    issues: list[str] = []
+    def strings(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | set().union(*(strings(child) for child in value.values()))
+        if isinstance(value, list):
+            return set().union(*(strings(child) for child in value))
+        return {value} if isinstance(value, str) else set()
+    for path, source in sources.items():
+        name = Path(path).name
+        if name in AUTHOR_TEXT_POLICY:
+            forbidden, required = AUTHOR_TEXT_POLICY[name]
+            tokens = strings(json.loads(source))
+            for token in sorted(tokens & forbidden):
+                code = "foreign_visual_prompt" if token.startswith("impact") else "forbidden_author_field"
+                issues.append(f"{code}:{path}:{token}")
+            for token in sorted(required - tokens):
+                issues.append(f"missing_vfx_prompt:{path}:{token}")
+        elif path == "LocalGenerator/infini_local/core/runtime_authoring/compiler.py":
+            if any(isinstance(node, ast.Constant) and node.value == "setBonusText" for node in ast.walk(ast.parse(source))):
+                issues.append(f"forbidden_author_field:{path}:setBonusText")
+    return issues
+
+
+def check_authored_contract_policy() -> None:
+    paths = ["contracts/schemas/" + name for name in AUTHOR_TEXT_POLICY]
+    paths.append("LocalGenerator/infini_local/core/runtime_authoring/compiler.py")
+    issues = authored_contract_issues({path: read(path) for path in paths})
+    if issues:
+        fail("Authored language policy:\n" + "\n".join(issues))
+
+
 def check_agent_metadata() -> None:
     manifest_path = ROOT / ".agent" / "manifest.json"
     rules_path = ROOT / ".agent" / "impact_rules.json"
@@ -334,6 +476,8 @@ def main() -> int:
     check_python_exception_hygiene()
     check_no_flat_helper_shims()
     check_internal_import_boundaries()
+    check_python_source_integrity()
+    check_authored_contract_policy()
     check_agent_metadata()
     check_release_docs_version()
     check_architecture_split_markers()

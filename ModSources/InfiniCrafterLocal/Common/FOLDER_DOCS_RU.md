@@ -11,6 +11,6 @@ Subfolders:
 - `Models/` — `GeneratedItemData` and `VfxManifestSpec` DTO/normalize/apply/debug contracts.
 - `Services/` — generator HTTP boundary, generated registry, asset sync, sprite cache, runtime authority.
 - `Players/` — station/player transaction state, refunds, MP craft protocol, utility buffs/mobility, held draw sync.
-- `VFX/`, `Audio/`, `Commands/`, `Config/`, `UI/`, `Systems/` — runtime subsystems.
+- `VFX/`, `Commands/`, `Config/`, `UI/`, `Systems/` — runtime subsystems; sound cues use the existing VFX/audio-call consumers, not a separate `Common/Audio` directory.
 
 Before changing a field or capability, trace both directions: Python authoring emits it, C# normalizes/applies/executes it, tests/docs cover it.

@@ -1,7 +1,5 @@
-# `.agent` 0.4.239
+# .agent
 
-Machine-readable карта ownership и impact-checks для low-level runtime v5.
+Машиночитаемая карта ownership и impact-checks: [manifest.json](manifest.json) задаёт владельцев, [impact_rules.json](impact_rules.json) — затронутые проверки. Это developer metadata, не игровой runtime.
 
-- `manifest.json` указывает canonical owners нового capability registry, strict wire и C# executors.
-- `impact_rules.json` связывает изменённые поверхности с актуальными v5 gates.
-- historical weapon-IR replay/fingerprint owners намеренно отсутствуют.
+Правила изменений: [AGENTS.md](../AGENTS.md); навигация по задачам: [AGENT_INDEX_RU.md](../AGENT_INDEX_RU.md). Удалённые weapon-family/root-lowering owners не восстанавливаются.

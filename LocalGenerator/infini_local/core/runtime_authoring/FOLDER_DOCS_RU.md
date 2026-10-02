@@ -8,7 +8,7 @@
 - `repair_scope.py`: exact mutable IDs/indices, missing-dependency create policy, immutable context and scope rejection.
 - `validator.py`: deterministic checks, no authorship.
 - `compiler.py`: explicit component projection, numeric opcode and receipts.
-- `technical_lowering.py`: единственный owner exact lossless adapters, receipts и minimum exact-repetition compression threshold = 5.
+- `technical_lowering.py`: единственный owner exact lossless adapters, receipts и порога exact-repetition compression; точное значение публикуется из canonical constants в [lowery.md](../../../../lowery.md).
 - `wire_validator.py`: strict final wire.
 
 Нельзя возвращать deleted `root_lowering`, family macros, semantic reducers или compatibility importer.

@@ -46,7 +46,8 @@ EXTERNAL_REFERENCES = {
 
 
 def esc(value: Any) -> str:
-    return str(value).replace("|", "\\|").replace("\n", "<br>")
+    return (str(value).replace("\r\n", "\n").replace("\r", "\n")
+            .replace("|", "\\|").replace("\n", "<br>"))
 
 
 def params_cell(cap: Any) -> str:
@@ -63,6 +64,14 @@ def params_cell(cap: Any) -> str:
             shape += f"; optional, omitted = {json.dumps(spec.default)}"
         if spec.reference is not None:
             shape += " -> entity:" + ",".join(spec.reference.target_kinds)
+        if not spec.required and spec.default is None:
+            shape += "; required=false"
+        if spec.multiple_of is not None:
+            shape += f"; multipleOf={spec.multiple_of}"
+        if spec.pattern:
+            shape += f"; pattern=`{spec.pattern}`"
+        if spec.consumer_storage:
+            shape += f"; consumer={spec.consumer_storage}, neutral={json.dumps(spec.neutral)}"
         rows.append(f"`{name}`: {shape}")
     return "<br>".join(rows) if rows else "—"
 
@@ -83,9 +92,10 @@ def inventory_markdown() -> str:
     lines = [
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
-        "> Этот файл генерируется `python tools/generate_low_level_runtime_docs.py`. Не редактировать таблицы вручную.",
-        "> Каноническая граница Author/Repair/Lowery и edit-routing: `lowery.md`. Этот файл — registry projection.",
-        "> Полная матрица исторического Author ↔ C# executable ↔ model-visible, единицы и исключения: [`PRIMITIVE_PARITY_RU.md`](PRIMITIVE_PARITY_RU.md).",
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
+        "> Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[capability_library_audit.py](../LocalGenerator/infini_local/qa/capability_library_audit.py). "
+        "[Lowery](../lowery.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -94,12 +104,19 @@ def inventory_markdown() -> str:
         f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
         f"errors={audit['errorCount']}, warnings={audit['warningCount']}.",
         "",
+        "**Навигация:** [классификация](#classification) · [entities](#entities) · [inputs/actions](#bindings) · "
+        "[events](#events) · [capabilities](#capabilities) · [полнота](#coverage) · [обновление](#refresh).",
+        "",
+        '<a id="classification"></a>',
+        "",
         "## Классификация",
         "",
         "- **expose** — Gameplay Author видит capability и сам выбирает её.",
         "- **internal** — техническая реализация одной точной capability, не отдельное дизайнерское решение.",
         "- **split** — механика извлечена из старого high-level macro и доступна отдельно.",
         "- **delete** — мёртвое/дублирующее поведение удалено.",
+        "",
+        '<a id="entities"></a>',
         "",
         "## Entity kinds",
         "",
@@ -114,6 +131,8 @@ def inventory_markdown() -> str:
         )
     lines += [
         "",
+        '<a id="bindings"></a>',
+        "",
         "## Inputs и binding actions",
         "",
         "| input | exclusive | actions | requires item capability any of | смысл |",
@@ -125,6 +144,8 @@ def inventory_markdown() -> str:
     for row in BINDING_ACTION_REGISTRY.values():
         lines.append(f"| `{row.name}` | {esc(', '.join(row.target_kinds))} | {esc(', '.join(row.allowed_inputs))} | {esc(', '.join(row.required_item_capabilities_any_of) or '—')} | {esc(row.summary)} |")
     lines += [
+        "",
+        '<a id="events"></a>',
         "",
         "## Events",
         "",
@@ -155,7 +176,13 @@ def inventory_markdown() -> str:
         )
     lines += [
         "",
+        '<a id="capabilities"></a>',
+        "",
         "## Capability catalog",
+        "",
+        "Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. "
+        "`required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. "
+        "Пропуски полного Author и Repair различаются: [boundary](../lowery.md#boundary).",
         "",
         "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | prompt | status | external reference | решение |",
         "|---|---|---|---|---|---|---|---|---|---:|---|---|---|",
@@ -189,10 +216,28 @@ def inventory_markdown() -> str:
         "Внутренними остались только: numeric opcode dispatch, DTO field projection, entity-kind → visual-role и технические tModLoader adapters. "
         "Они не выбирают movement, attachment, delivery, input, lifecycle или topology.",
         "",
+        '<a id="coverage"></a>',
+        "",
         "## Полнота",
         "",
         "Каждая public capability имеет Python compiler callable, конкретные C# method symbols, exact final-wire paths и автоматически исполняемый vertical witness. "
         "Структурная полнота registry не означает поддержку всего Terraria API: каталог намеренно конечный и включает только реализованные bounded executors.",
+        "",
+        '<a id="refresh"></a>',
+        "",
+        "## Обновление и проверка",
+        "",
+        "Из корня репозитория, с Python окружения проекта:",
+        "",
+        "```bash",
+        "PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py",
+        "PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py --check",
+        "```",
+        "",
+        "Без `--check` generator записывает ровно три Markdown-файла: этот inventory, "
+        "[machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) и "
+        "[technical lowering audit](../TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. "
+        "`--check` сравнивает все три projections без записи; [Lowery](../lowery.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.",
         "",
     ]
     return "\n".join(lines)
@@ -204,8 +249,16 @@ def audit_markdown() -> str:
     lines = [
         "# Аудит машиночитаемости библиотеки компонентов",
         "",
-        "> Генерируется `python tools/generate_low_level_runtime_docs.py` из live registry и audit-кода.",
-        "> Каноническая архитектурная граница и owner routing: `lowery.md`; этот файл только измеряет projection.",
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py) из "
+        "[registry](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[audit-кода](../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
+        "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
+        "> Architecture/owners: [Lowery](../lowery.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).",
+        "",
+        "**Навигация:** [вердикт/критерии](#verdict) · [измерения](#metrics) · [проверяемость](#proof) · "
+        "[ограничения](#limits) · [практическая оценка](#assessment).",
+        "",
+        '<a id="verdict"></a>',
         "",
         f"## Вердикт: {audit['score']}/{audit['scoreMax']}",
         "",
@@ -222,6 +275,8 @@ def audit_markdown() -> str:
         lines.append(f"| `{key}` | {weight} | {'PASS' if audit['criteria'][key] else 'FAIL'} |")
     lines += [
         "",
+        '<a id="metrics"></a>',
+        "",
         "## Измеренные свойства",
         "",
         f"- capabilities: **{m['capabilities']}**; parameters: **{m['parameters']}**; numeric: **{m['numericParameters']}/{m['boundedNumericParameters']} bounded**;",
@@ -230,6 +285,8 @@ def audit_markdown() -> str:
         f"- exact wire paths: **{m['exactWirePaths']}**; global technical lowerer outputs: **{m['globalTechnicalLowererOutputs']}**;",
         f"- Python↔C# range parity rows: **{m['rangeParityRows']}**; vertical witnesses: **{m['verticalSliceCount']}**;",
         f"- errors: **{audit['errorCount']}**; warnings: **{audit['warningCount']}**.",
+        "",
+        '<a id="proof"></a>',
         "",
         "## Почему библиотека действительно машиночитаема",
         "",
@@ -241,14 +298,20 @@ def audit_markdown() -> str:
         "6. Owner — не просто имя файла: audit импортирует Python callable и ищет конкретные C# method symbols.",
         "7. Для каждой capability исполняется author→validate→compile→strict-wire witness; неизвестные поля/refs/opcodes fail closed.",
         "",
+        '<a id="limits"></a>',
+        "",
         "## Честные ограничения",
         "",
         "- На entity допускается один movement slot и один controller slot. Это намеренная bounded-композиция, не arbitrary ECS/VM.",
         "- Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).",
         "- Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.",
         "- Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.",
-        "- Prompt catalog крупный, но self-contained: около 71k символов на обычных parents и до 83k на rich generated-parent fixture при hard limit 96k; retrieval/tool loop не используется.",
+        "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
+        "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
+        "[`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.",
         f"- Каталог покрывает реализованные {len(CAPABILITY_REGISTRY)} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
+        "",
+        '<a id="assessment"></a>',
         "",
         "## Практическая оценка",
         "",
@@ -269,13 +332,20 @@ def lowering_markdown() -> str:
     lines = [
         "# TECHNICAL LOWERING AUDIT",
         "",
-        "> Generated projection. Каноническая политика и owner routing находятся в `lowery.md`.",
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](tools/generate_low_level_runtime_docs.py) из "
+        "[technical_lowering.py](LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
+        "[refresh/check всех трёх outputs](docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
+        "> Policy/owners: [Lowery](lowery.md). Полные wire outputs каждого lowerer: [manifest](lowery.md#lowering).",
         "",
         f"Schema: `{manifest['schema']}`.",
         "",
         "Lowering разрешён только как семантически без потерь технический перевод. Ни один lowerer не выбирает entity kind, movement, attachment, delivery, input, lifecycle, targeting или visual topology.",
         "",
         f"Authoring compression: только `{compression['kind']}`, минимум `{compression['minimumRepeatedPlacements']}` literally equal placements, requiresLiteralEquality=`{str(compression['requiresLiteralEquality']).lower()}`, mayAddDesignChoice=`{str(compression['mayAddDesignChoice']).lower()}`. Mandatory wire projection уже authored identity не является compression.",
+        "",
+        "**Навигация:** [lowerers](#lowerers) · [receipts/proof](#receipts) · [удалённый lowering](#retired).",
+        "",
+        '<a id="lowerers"></a>',
         "",
         "## Global lowerers",
         "",
@@ -290,11 +360,15 @@ def lowering_markdown() -> str:
         "",
         "`item_fields_to_tml_projection` имеет конечный автоматически выведенный список output-path; broad `gameplay.*`/`accessory.*`/`armor.*` запрещены.",
         "",
+        '<a id="receipts"></a>',
+        "",
         "## Capability-level proof",
         "",
-        "Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`. "
-        "`audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
-        "Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.",
+        "- **Receipt shape.** Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`.",
+        "- **Exact delivery.** `audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
+        "- **Declared omission.** Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.",
+        "",
+        '<a id="retired"></a>',
         "",
         "## Решение по старому lowering",
         "",

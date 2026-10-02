@@ -1,6 +1,11 @@
 # Parity примитивов Author ↔ Terraria/tModLoader
 
-> Generated: `tools/generate_primitive_parity.py`. Источник имён, единиц, диапазонов, wire и фаз — `capability_registry.py`; C# executable-поля читаются из AST `primitive_loss_audit.py`. Не редактировать таблицы вручную.
+> Generated: [`tools/generate_primitive_parity.py`](../tools/generate_primitive_parity.py). Не редактировать вручную; [refresh/check](#refresh).
+> Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — имена, единицы, диапазоны, wire и фазы; [primitive_loss_audit.py](../LocalGenerator/infini_local/qa/primitive_loss_audit.py) — C# executable-поля из AST. [Lowery](../lowery.md) — boundary/owners; [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) — полный каталог.
+
+**Навигация:** [история](#history) · [machine audit](#audit) · [equipment](#equipment) · [events/runtime](#events) · [невосстановленное](#unsupported) · [extraUpdates units](#units) · [границы проверки](#limits) · [обновление](#refresh).
+
+<a id="history"></a>
 
 ## Историческое сопоставление
 
@@ -8,45 +13,51 @@
 - `25caddf` (импорт v5): явные item/entity/binding/event calls вместо оружейных macros. Часть executable-полей `AccessorySpec`/`ArmorSpec` осталась в C#, но была потеряна из model-visible каталога.
 - Сейчас один registry выдаёт Author JSON schema, компактные карточки, validator-параметры, exact wire paths, технические receipts, C# safety bounds и таблицы ниже. Legacy C# DTO — цель проекции, а не второе описание механики.
 
+<a id="audit"></a>
+
 ## Результат machine loss audit
 
-- `equipment`: PASS; C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
-- `events`: PASS; C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
-- `runtime components`: PASS; C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
-- `item gameplay`: PASS; C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
-- `structural runtime/visual`: PASS; C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
+Для каждой поверхности ниже C# DTO/исполняемые поля классифицированы. Исключения с причинами поддерживаются в `primitive_loss_audit.py`, не в LLM prompt.
+
+- `equipment`: **PASS**.
+- `events`: **PASS**.
+- `runtime components`: **PASS**.
+- `item gameplay`: **PASS**.
+- `structural runtime/visual`: **PASS**.
+
+<a id="equipment"></a>
 
 ## Equipment — значения, phase и authority
 
 `additive_percent` — авторский процент прибавки к additive компоненте StatModifier (15 → +0.15), не итоговый множитель урона. `percentage_points` — сдвиг шанса в п.п.; `probability_percent` — вероятность/100. `defense_points`, `life_points`, `slots` и `pixels_per_tick` не масштабируются. Отрицательные значения разрешены только там, где указан отрицательный минимум. Ноль/false/пустая строка — нейтральны, если не оговорено иначе. Item.defense проектируется в `ApplyToItem`: Terraria сама применяет защиту, equip-hook не удваивает её.
 
-Author schema ограничивает новые значения всех примитивов; C# Normalize сохраняет **только исторические DTO clamps**, перечисленные в `runtime_minimum`/`runtime_maximum` registry и `GeneratedEquipmentBounds.g.cs`. Поля без такого исторического clamp не сужаются для уже сохранённых legacy recipes. Это не разрешение Author выбирать значения вне своей схемы.
+Author schema ограничивает новые значения всех примитивов; C# Normalize сохраняет **только исторические DTO clamps**, перечисленные в `runtime_minimum`/`runtime_maximum` registry и `GeneratedEquipmentBounds.g.cs`. В таблицах они обозначены `legacy clamp`; отсутствие этой пометки означает отсутствие такого исторического clamp. Поля без него не сужаются для уже сохранённых legacy recipes. Это не разрешение Author выбирать значения вне своей схемы.
 
 ### `configure_accessory`
 
 | Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |
 |---|---|---|---|---|---|---|
-| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | -50…200 | accessory.defense | ModItem.UpdateAccessory |
-| maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | accessory.maxLife | ModItem.UpdateAccessory |
-| maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | accessory.maxMana | ModItem.UpdateAccessory |
-| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100 | accessory.lifeRegen | ModItem.UpdateAccessory |
-| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200 | accessory.manaRegen | ModItem.UpdateAccessory |
-| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | accessory.movementSpeed /100 | ModItem.UpdateAccessory |
+| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | -50…200<br>legacy clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
+| maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>legacy clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
+| maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>legacy clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
+| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100<br>legacy clamp: -120…200 | accessory.lifeRegen | ModItem.UpdateAccessory |
+| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200<br>legacy clamp: -120…200 | accessory.manaRegen | ModItem.UpdateAccessory |
+| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300<br>legacy clamp: -0.9…3 | accessory.movementSpeed /100 | ModItem.UpdateAccessory |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | accessory.maxRunSpeed | ModItem.UpdateAccessory |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | accessory.jumpSpeed | ModItem.UpdateAccessory |
-| genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100 | accessory.genericCrit | ModItem.UpdateAccessory |
+| genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100<br>legacy clamp: -100…100 | accessory.genericCrit | ModItem.UpdateAccessory |
 | genericAttackSpeedBonusPercent | Add percent/100 to generic attack speed | additive_percent | 0 | -90…300 | accessory.attackSpeed /100 | ModItem.UpdateAccessory |
 | genericKnockbackBonusPercent | Add percent/100 to generic StatModifier knockback; not flat points | additive_percent | 0 | -90…300 | accessory.knockback /100 | ModItem.UpdateAccessory |
-| minionSlotsBonus | Add minion slots | slots | 0 | 0…20 | accessory.minionSlots | ModItem.UpdateAccessory |
-| sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20 | accessory.sentrySlots | ModItem.UpdateAccessory |
+| minionSlotsBonus | Add minion slots | slots | 0 | 0…20<br>legacy clamp: 0…20 | accessory.minionSlots | ModItem.UpdateAccessory |
+| sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20<br>legacy clamp: 0…20 | accessory.sentrySlots | ModItem.UpdateAccessory |
 | manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | accessory.manaCostReduction /100 | ModItem.UpdateAccessory |
 | ammoSaveChancePercent | Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | accessory.ammoSaveChance /100 | ModItem.UpdateAccessory |
 | aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | engine units: aggro points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
-| damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | accessory.endurance /100 | ModItem.UpdateAccessory |
+| damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75<br>legacy clamp: 0…0.75 | accessory.endurance /100 | ModItem.UpdateAccessory |
 | genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | accessory.armorPenetration | ModItem.UpdateAccessory |
 | whipRangeBonusPercent | Add percent/100 to Player.whipRangeMultiplier | additive_percent | 0 | -90…300 | accessory.whipRange /100 | ModItem.UpdateAccessory |
 | taggedSummonSourceDamageBonusPercent | Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | accessory.summonTagDamage /100 | ModItem.UpdateAccessory |
-| lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | engine units: RGB coefficient | 0 | 0…1.5 | accessory.lightStrength | ModItem.UpdateAccessory |
+| lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | engine units: RGB coefficient | 0 | 0…1.5<br>legacy clamp: 0…1.5 | accessory.lightStrength | ModItem.UpdateAccessory |
 | lightColor | Explicit equipped light color | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | accessory.lightColorName | ModItem.UpdateAccessory |
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
@@ -60,15 +71,15 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 |---|---|---|---|---|---|---|
 | slot | Armor equip slot | bounded_text | None | head/body/legs | armor.slot | C# normalized item projection |
 | setKey | Exact authored set key (empty when no matching set is intended) | bounded_text |  | ^[a-z0-9_]{0,48}$ | armor.setKey | C# normalized item projection |
-| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | 0…200 | armor.defense | ModItem.UpdateEquip |
-| maxLifePoints | Add maximum life | life_points | 0 | -200…1000 | armor.maxLife | ModItem.UpdateEquip |
-| maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000 | armor.maxMana | ModItem.UpdateEquip |
+| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | 0…200<br>legacy clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
+| maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>legacy clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
+| maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>legacy clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |
 | lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100 | armor.lifeRegen | ModItem.UpdateEquip |
 | manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
-| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.movementSpeed /100 | ModItem.UpdateEquip |
+| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300<br>legacy clamp: -0.9…3 | armor.movementSpeed /100 | ModItem.UpdateEquip |
 | maxRunSpeedBonusPxPerTick | Add to Player.maxRunSpeed, subject to other Terraria movement limits | pixels_per_tick | 0 | -5…20 | armor.maxRunSpeed | ModItem.UpdateEquip |
 | jumpSpeedBonusPxPerTick | Add to Player.jumpSpeedBoost (positive raises jump speed) | pixels_per_tick | 0 | -5…20 | armor.jumpSpeed | ModItem.UpdateEquip |
-| genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100 | armor.genericCrit | ModItem.UpdateEquip |
+| genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100<br>legacy clamp: -100…100 | armor.genericCrit | ModItem.UpdateEquip |
 | genericAttackSpeedBonusPercent | Add percent/100 to generic attack speed | additive_percent | 0 | -90…300 | armor.attackSpeed /100 | ModItem.UpdateEquip |
 | genericKnockbackBonusPercent | Add percent/100 to generic StatModifier knockback; not flat points | additive_percent | 0 | -90…300 | armor.knockback /100 | ModItem.UpdateEquip |
 | minionSlotsBonus | Add minion slots | slots | 0 | 0…20 | armor.minionSlots | ModItem.UpdateEquip |
@@ -86,8 +97,8 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | armor.lavaImmune | ModItem.UpdateEquip |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | armor.waterWalk | ModItem.UpdateEquip |
 | setBonusGenericCritChancePercentagePoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance | percentage_points | 0 | -100…100 | armor.setBonusGenericCrit | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusMoveSpeedBonusPercent | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300 | armor.setBonusMovementSpeed /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
-| setBonusLifeRegenHpPerSecond | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100 | armor.setBonusLifeRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusMoveSpeedBonusPercent | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300<br>legacy clamp: -0.9…3 | armor.setBonusMovementSpeed /100 | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
+| setBonusLifeRegenHpPerSecond | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100<br>legacy clamp: -120…200 | armor.setBonusLifeRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusManaRegenBonusPoints | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200 | armor.setBonusManaRegen | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusMinionSlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots | slots | 0 | 0…20 | armor.setBonusMinionSlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
 | setBonusSentrySlotsBonus | Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots | slots | 0 | 0…20 | armor.setBonusSentrySlots | ModItem.UpdateArmorSet; exact setKey on head, body and legs |
@@ -124,6 +135,8 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 
 Legacy C# DTO/Normalize-поля и выборочные исторические clamps сохранены; Author больше не видит пять class-specific полей как независимые primitives. Сохранённый wire v5 загружается без повторной компиляции Author.
 
+<a id="events"></a>
+
 ## Event/runtime и намеренно скрытое
 
 - Все `RuntimeEventActionSpec` поля, включая `DelayTicks`, сверяются с exact wire paths. Каждый event action допускает `delayTicks=0…600`; C# scheduler проверяет spawn budget/authority и переносит действие, не создавая новый дизайн.
@@ -133,14 +146,33 @@ Legacy C# DTO/Normalize-поля и выборочные исторически�
 - Legacy `GameplaySpec.BuffCode`/`BuffTime` (`Item.buffType`/`buffTime`) сохраняются для старого wire. Новый Author использует явный многобафовый `ExtraBuffs` и не смешивает эти два пути; различие vanilla Item hook и пользовательского AddBuff не доказано эквивалентным.
 - `Archetype`, `Kind`, `Stage`, `PowerBudget` — исторические display/plan поля, не семантические маршрутизаторы. `Enabled`, opcodes, роли, `UseStyle` и DTO IDs выводятся из явно авторских calls.
 
+<a id="unsupported"></a>
+
 ## Исторические возможности вне нынешнего executable surface
 
 До v5 Author мог выбирать held generatedBuff, отдельные эффекты alternate use, вероятностное расходование стека, Item.useAmmo/PickAmmo, точный sound catalog и target-biased child spawn. `extractinator_output` раньше исполнялся отдельным `GeneratedExtractinatorMaterial` proxy с type-wide `ItemID.Sets.ExtractinatorMode`, но этот C# тип удалён: нынешний `GeneratedItem` не может честно восстановить его одним instance-полем. Исторический `Attack.ShotCount` исполнялся в первичном Shoot; отдельный прежний sentry per-volley executor не доказан, а нынешний `target_and_fire` всегда выпускает одну сущность за interval. Эти решения **не восстановлены** equipment-проекцией и не входят в утверждение об AST parity. Новая поддержка требует отдельных низкоуровневых vertical slices с engine semantics, а не возврата whole-weapon macros или угадывания из parent prose.
+
+<a id="units"></a>
 
 ## Единицы при extraUpdates > 0
 
 `set_projectile_collision.extraUpdates=n` даёт `n+1` AI/physics-обновлений снаряда за мировой тик. В Author-карточках исходная `Projectile.velocity`, гравитация, поворот, ускорение и скорость возврата обозначены **за projectile update**, а не как гарантированные пиксели за мировой тик. Длительности и event-периоды остаются в мировых тиках; C# переводит их через `AuthoredTicksToProjectileUpdates`. Это точное описание существующего wire/v5 поведения без смены старых рецептов и без приблизительного пересчёта нелинейного движения в px/сек.
 
+<a id="limits"></a>
+
 ## Границы проверки
 
 AST audit анализирует DTO и названные C# executor seams; он не заменяет полноценный compiler/semantic analysis всех tML API. Headless C# тесты покрывают projection/equip и cooldown, но не Terraria world loop, GPU или multiplayer. Live20 проверяет Author pipeline на внешней модели, а не выполнение в игре.
+
+<a id="refresh"></a>
+
+## Обновление и проверка
+
+Из корня репозитория, с Python окружения проекта. Без `--check` generator записывает **только этот Markdown**, не JSON, DTO или bounds:
+
+```bash
+PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py
+PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
+```
+
+Generation/check исполняют все пять surface audits выше и завершаются ошибкой при loss; freshness доказывает совпадение projection с owners, а не игровой smoke. Affected regressions: [test_registry_vertical_contract.py](../LocalGenerator/tests/test_registry_vertical_contract.py), [test_registry_author_packet.py](../LocalGenerator/tests/test_registry_author_packet.py).

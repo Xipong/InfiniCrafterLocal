@@ -1,96 +1,60 @@
-# Terraria/tModLoader standardization — InfiniCrafterLocal v0.4.241
+# Terraria/tModLoader standardization — точная граница 0.4.246
 
-## Цель
+[Generated vocabulary/lowerings](../lowery.md) · [Primitive parity/units](PRIMITIVE_PARITY_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
 
-При возможности runtime использует точные понятия и значения stable tModLoader 1.4.4: `DamageClass`, `ItemUseStyleID`, `AmmoID`, обычные поля `Item`/`Projectile`, `Projectile.NewProjectileDirect`, стандартные immunity/collision semantics и ModProjectile hooks. Собственный bounded runtime сохраняется только там, где dynamic generated content нельзя выразить статической регистрацией `ModItem`/`ModProjectile` без потери функций.
+<a id="boundary"></a>
+## Принцип и canonical owners
 
-Главное правило: стандартизация не имеет права превращаться в semantic router. Vanilla mapping переводит один authored token в одно точное tModLoader-значение; он не выбирает за Gameplay Author movement, delivery, attachment, lifecycle или weapon family.
+Используются точные stable tModLoader 1.4.4 понятия: DamageClass/ItemUseStyleID/AmmoID, Item/Projectile fields, NewProjectileDirect и обычные hooks. Mapping переводит **один authored token в одно engine value**, не выбирает movement/delivery/attachment/lifecycle/family. Точный установленный patch определяется build references, не названием stable.
 
-Таблица конкретных `UpdateAccessory`/`UpdateEquip`/`UpdateArmorSet` additive процентов, percentage points, flat points, диапазонов, нейтральных значений и C# wire projection генерируется из одного registry в [`PRIMITIVE_PARITY_RU.md`](PRIMITIVE_PARITY_RU.md). Пять исполняемых классов `GetDamage` не являются пятью Author knobs: `add_equipment_damage_bonus` принимает explicit `damageClass`, `phase` и `bonusPercent`, а compiler one-to-one материализует сохранённые scalar DTO-поля. Generic-only crit/attack speed/knockback/armor penetration **не** подразумевают поддержку иных классов. Нормализация выборочных числовых DTO safety bounds генерируется в `GeneratedEquipmentBounds.g.cs` из registry, включая pre-IR clamps для сохранённых generic damage полей; lifecycle/authority выбирает runtime, не модель.
+Python vocabulary — `core/runtime_authoring/terraria_vocabulary.py`; mechanical facts — capability registry; C# mapping — `Common/Models/TerrariaRuntimeVocabulary.cs`; strict DTO — RuntimeProgramSpec/GeneratedItemData.Normalize; item projection — GeneratedItemData.Apply; projectile defaults/spawn — GeneratedProjectile. [Source map](../PROJECT_MAP_RU.md) и `tools/audit_terraria_standardization.py` связывают owners. Новое canonical spelling требует совместного Python/C#/registry/schema/wire/tests/generated-audit изменения, не второго mapping.
 
-## Что приведено к tModLoader
+<a id="vocabulary"></a>
+## Finite vocabulary и loaded IDs
 
-### Канонический finite vocabulary
+- DamageClass: exact built-in token либо зарегистрированный `ModType.FullName=ModName/ClassName`, взятый именно из parent `damageClass`; `item.fullName`/`Terraria/<ItemName>` не класс урона. Unknown/unloaded reject, не Generic. `none/modded/rogue`, отдельный damageClassFullName и loose search не gameplay spellings; отсутствие damage — `damage=0`.
+- UseStyle: точные ItemUseStyleID spellings; loose drink/eat, DrinkOld/None не exposed. Input `passive` не alias для equipped. Удалённые effect_catalog/effect_archetypes и whole-pattern aliases spear/beam/slash не восстанавливать.
+- Rarity/buff/tile/wall IDs C# проверяет по текущим RarityLoader/BuffLoader/TileLoader/WallLoader counts, не произвольным clamps. Special negative rarity не заменяет expert/master/quest flags. Author получает exact parent IDs/names и не угадывает их.
+- Parent packets содержат canonical useStyleName/ammoCategoryName/potion/notAmmo и damage-class content ID; это source facts, не semantic helper.
 
-- `damageClass` имеет одну identity-форму: точный built-in token либо загруженный tModLoader `ModType.FullName` (`ModName/ClassName`). Псевдотокены `none`/`modded`, отдельное `damageClassFullName`, `rogue` и loose lookup удалены. Отсутствие урона выражается `damage=0`, а не выдуманным классом.
-- `useStyle` соответствует конкретным `ItemUseStyleID`; свободные `drink`, `eat` и другие удобные spellings удалены.
-- author input `passive` удалён как дубль; остаётся `equipped`.
-- физически удалены мёртвые `effect_catalog.py`/`effect_archetypes.json` с whole-pattern aliases (`spear → spear_thrust`, `beam → laser_beam`, `slash → slash_holdout`), чтобы будущий агент не воскресил скрытый archetype router.
-- loose lookup произвольного modded `DamageClass` удалён. Вместо него разрешён только точный registered `ModName/ClassName`; неизвестное/выгруженное содержимое отклоняется, а не превращается в `Generic`.
+Author-visible gameplay aliases отсутствуют. Конечные technical/config/UI/VFX aliases перечислены в generated Lowery; internal migration normalization вне gameplay не означает разрешение legacy recipe importer.
 
-### Ammo semantics
+<a id="ammo-healing"></a>
+## Ammo и healing: независимые решения
 
-`configure_vanilla_ammo_item` явно задаёт:
+`configure_vanilla_ammo_item`: Item.ammo через finite AmmoID, authored Item.shoot (stable ProjectileID 1..1021), отдельный `shootSpeedContributionPxPerUpdate`, Item.notAmmo и обязательный consumable=true. Это **ammo-item identity**, не weapon ammo consumption.
 
-- `Item.ammo` через canonical `AmmoID` category;
-- `Item.shoot` через authored vanilla `ProjectileID` в точном диапазоне stable `1..1021`;
-- ammo-вклад `Item.shootSpeed` через отдельный `shootSpeedContributionPxPerUpdate`, не связанный со скоростью direct runtime entity;
-- `Item.notAmmo` как отдельный authored флаг;
-- обязательный `consumable=true`.
+Item.useAmmo не выводится из ammo-item; PickAmmo меняет projectile type/speed/damage/knockback, поэтому weapon support требует полного отдельного slice. Sand не exposed: type-wide ItemID.Sets.SandgunAmmoProjectileData несовместим с независимой семантикой generated items, разделяющих proxy Item.type.
 
-`Item.useAmmo` не выводится автоматически: это отдельная механика оружия и не должна возникать из факта, что предмет сам является боеприпасом. Один флаг здесь недостаточен: стандартный `PickAmmo` также меняет projectile type, скорость, урон и knockback, поэтому weapon-ammo support требует отдельного полного vertical slice. Каталог охватывает finite stable `AmmoID` категории, которые безопасно задаются per-item; Sand намеренно не exposed, потому что полная vanilla-семантика использует type-wide `ItemID.Sets.SandgunAmmoProjectileData`, а generated items разделяют один proxy `Item.type`.
+`restore_resources_on_use.usesPotionRules` напрямую задаёт Item.potion; healLife/healMana сами не включают potion sickness. Food/нестандартный heal не получает скрытые potion rules.
 
-### Healing/potion semantics
+<a id="projectiles"></a>
+## Projectile/lifecycle semantics
 
-`healLife` и `healMana` больше не означают автоматически potion sickness. `restore_resources_on_use.usesPotionRules` напрямую задаёт `Item.potion`: healing food, аксессуарный эффект или другая нестандартная лечилка могут восстанавливать ресурсы без скрытого potion-флага.
+Primary/use ownership определяется [authored primary contract](LOW_LEVEL_RUNTIME_AUTHORING_RU.md#primary-use), не классом оружия. C# по exact primaryOwner ограничивает contact/noMelee/heldProj; secondary projectile не захватывает body ownership.
 
-### Projectile semantics
+Proxy starts: ignoreWater=false, netImportant=false. Liquid/tile collision, penetrate, extraUpdates и immunity задаются явно. Owner и per-projectile local immunity поддерживаются; ID-static immunity скрыта, иначе делилась бы между всеми entities одного proxy type. NewProjectileDirect возвращает созданный instance для direct hydrate, не повторного поиска. Held proxy uses HeldProjDoesNotUsePlayerGfxOffY; owner aim sync bounded по изменению/интервалу, не arbitrary per-frame packet.
 
-Primary executable ownership is authored explicitly per runtime row. For normal swords, pickaxes, axes and hammers the `item_body` is primary; a projectile on the same use is secondary unless the authored mechanic is explicitly projectile-owned (throw/flail/yoyo/whip/laser drill/held beam and similar). Final wire carries `primaryEntityId` and `primaryOwner`; C# gates `Item.noMelee`, contact hitbox and `Player.heldProj` writes from these fields. Entity/input/category names are never ownership classifiers.
+<a id="units"></a>
+## Units и exact conversions
 
-- proxy projectile начинает с Terraria defaults: `ignoreWater=false`, `netImportant=false`;
-- liquid collision, tile collision, penetrate, extra updates и NPC immunity задаются явно;
-- поддерживаются owner immunity и per-projectile local immunity;
-- ID-static immunity не exposed, потому что она разделялась бы всеми generated entities одного proxy type;
-- spawn использует `Projectile.NewProjectileDirect`, чтобы не искать созданный instance повторно;
-- held proxy type использует `ProjectileID.Sets.HeldProjDoesNotUsePlayerGfxOffY`;
-- owner aim/vector sync отправляется только при значимом изменении и с bounded interval.
+[Model-facing units](MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated parity](PRIMITIVE_PARITY_RU.md) — full roster. Не копировать все ranges/cards сюда.
 
-### Loaded content IDs
+Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Старый DTO остаётся; Author `axePower` не alias. Generated buff `lifeRegenHpPerSecond` — 0..60, шаг .5 → прежний integer lifeRegen 0..120 через ×2; Author `lifeRegen` не alias. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
 
-Rarity, buff, tile и wall IDs больше не clamp-ятся в произвольный диапазон. C# проверяет их против `RarityLoader.RarityCount`, `BuffLoader.BuffCount`, `TileLoader.TileCount` и `WallLoader.WallCount`. Author получает точные IDs/имена из parent facts и не должен угадывать. Special negative rarity flags не exposed как обычная rarity: expert/master/quest требуют отдельных Terraria flags, а не одного числа.
+Проценты `15` и `0.15` — разные authored значения, не interchangeable spelling; движение/скорость — projectile updates, длительности — world ticks, raw local-immunity cooldown — engine units (`-1` one hit per NPC). Если биекция не доказана, units не переводятся в удобную prose единицу. Полное объяснение — canonical units owner выше.
 
-Parent packets дополнительно содержат canonical `useStyleName`, `ammoCategoryName`, `potion`, `notAmmo` и точный damage-class content ID, чтобы следующая LLM не переводила числовые Terraria поля по памяти.
+`add_equipment_damage_bonus(phase,damageClass,bonusPercent)` — один explicit operation с пятью executable damage selectors; compiler пишет прежние scalar DTO без выбора класса/фазы. Generic-only crit/speed/knockback/penetration не произвольный DamageClass support. UpdateAccessory/UpdateEquip/UpdateArmorSet phase, neutral/ranges и additive units принадлежат registry/parity. GeneratedEquipmentBounds.g.cs сохраняет выборочные historical DTO clamps, включая generic/set damage; новые Author bounds всё равно обязательны. Authority/lifecycle — runtime ownership, не authored network switch.
 
-### Неочевидные Terraria units
+Author-valid value не должно тихо меняться на C# boundary: несовпадение — contract defect и range-parity regression. Legacy safety envelope может быть шире Author, не уже; отсутствующая доказанная биекция не разрешает удобный approximate conversion. Event producer/timing units — [Author events](LOW_LEVEL_RUNTIME_AUTHORING_RU.md#validation-events).
 
-- `valueCopper` — точное поле `Item.value` в copper. Это base/shop value, а не гарантированная сумма обратной продажи игроком.
-- Author `axePowerTooltipPercent` — точный tooltip percent (0..500, шаг 5); compiler делит на 5 до прежнего целого `gameplay.axePower`/`Item.axe` 0..100. Старый wire и C# не меняются; `axePower` как Author alias не принимается.
-- Author generated buff `lifeRegenHpPerSecond` — 0..60 HP/s с шагом 0.5; compiler умножает на 2 до прежнего целого `gameplay.generatedBuff.lifeRegen` 0..120 (2 engine units = 1 HP/s до иных эффектов). Старый wire/C# не меняется; `lifeRegen` как имя Author-параметра этого capability не принимается.
+<a id="custom"></a>
+## Намеренно custom runtime
 
-### Range parity
+1. Proxy GeneratedItem/GeneratedProjectile types: tModLoader регистрирует types при load, а generated definitions появляются во время игры.
+2. Dynamic movement/controller/event composition: статический ProjectileID/aiStyle не сохраняет authored topology.
+3. Per-instance assets: generated item ID + entity ID, не type-wide texture/static sets.
+4. Bounded event graph через обычные ModItem/ModProjectile hooks, не VM.
+5. Hydration/network: authored entityId выбирает spec; Projectile.identity/whoAmI идентифицирует Terraria instance, не заменяет definition ID.
 
-Author ranges и C# clamps согласованы для spawn/collision/tool fields. Авторское допустимое значение не должно молча меняться на C#-границе. Расхождение является contract defect и проверяется `audit_terraria_standardization.py` вместе с общим capability audit.
-
-## Где остаётся собственный движок
-
-1. **Proxy types.** tModLoader регистрирует content types при загрузке, а UnlimitedCraft создаёт сущности во время игры. Поэтому используется общий `GeneratedItem`/`GeneratedProjectile` и локальный authored `entityId`.
-2. **Dynamic component composition.** Movement/controller/event combinations собираются после загрузки. Их нельзя превратить в статические `ProjectileID`/`aiStyle` без потери authored topology.
-3. **Per-instance assets.** Один proxy type не может иметь разные type-wide texture/static sets; visual assets адресуются generated item ID + entity ID.
-4. **Bounded event graph.** Typed entity/event links остаются проектным runtime, но исполняются через обычные ModItem/ModProjectile hooks и Terraria fields.
-5. **Dynamic hydration/network packet.** `entityId` выбирает authored spec; `Projectile.identity/whoAmI` по-прежнему идентифицируют конкретный Terraria instance.
-
-## Canonical owners
-
-- Python vocabulary: `LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py`;
-- gameplay registry: `LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py`;
-- alias/lowering inventory: `lowery.md`;
-- C# vocabulary: `ModSources/InfiniCrafterLocal/Common/Models/TerrariaRuntimeVocabulary.cs`;
-- C# DTO validation: `Common/Models/RuntimeProgramSpec.cs` и `GeneratedItemData.Normalize.cs`;
-- item projection: `GeneratedItemData.Apply.cs`;
-- projectile defaults/spawn: `Content/Projectiles/GeneratedProjectile.cs`;
-- machine gate: `tools/audit_terraria_standardization.py`.
-
-Новая модель не должна создавать второй mapping рядом с этими owners. Изменение canonical token требует одновременно обновить Python/C# mapping, registry/schema, final wire, tests, `lowery.md` и standardization audit.
-
-## Alias policy
-
-Полный перечень сохранённых aliases находится в корневом `lowery.md`. Author-visible gameplay aliases отсутствуют. Сохраняются только конечные config/UI/VFX aliases, которые не выбирают механику. Любой новый alias должен быть либо внутренней migration-нормализацией вне gameplay, либо удалён в пользу одного canonical spelling.
-
-## References
-
-- stable release line: https://github.com/tModLoader/tModLoader/releases?q=stable
-- `ItemUseStyleID`: https://docs.tmodloader.net/docs/stable/class_item_use_style_i_d.html
-- `DamageClass`: https://docs.tmodloader.net/docs/stable/class_damage_class.html
-- `Projectile`: https://docs.tmodloader.net/docs/stable/class_projectile.html
-- official ExampleMod branch: https://github.com/tModLoader/tModLoader/tree/1.4.4/ExampleMod
+External stable/ExampleMod/Calamity links и patterns — [reference owner](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md); текущие behavior/trust и proof limits — [architecture](../PROJECT_ARCHITECTURE_RU.md#runtime-trust).

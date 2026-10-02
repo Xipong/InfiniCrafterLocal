@@ -96,7 +96,7 @@ def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
     dynamic_pool_rows = {
         f"INFINI_LLM_POOL_{slot}_{suffix}"
         for slot in (2, 3, 4)
-        for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE")
+        for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "OPENROUTER_PROVIDER", "API_MODE")
     }
     intentionally_hidden = {
         "INFINI_GUI_PIPELINE_PRESET",  # top-level preset combobox, not a normal row

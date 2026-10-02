@@ -1,12 +1,11 @@
 # infini_local
 
-Active Python package for LocalGenerator. Architecture is transitional: some god-files remain, but seam modules exist.
+Активный Python-пакет LocalGenerator. [Карта кода](../../PROJECT_MAP_RU.md) показывает entrypoints; [архитектура](../../PROJECT_ARCHITECTURE_RU.md) — ownership и поток данных.
 
-- `core/` contracts/runtime compiler/balance/VFX/env.
-- `pipelines/` combine/authoring/visual/final-normalize flows.
-- `services/` endpoint helpers, assets, SD.cpp, runtime dumps.
-- `storage/` world storage/traces/failure state.
-- `web/` HTTP server/routes/debug dashboards.
-- `desktop/` settings GUI.
+- [core](core/FOLDER_DOCS_RU.md): контракты, registry/compiler, VFX и config.
+- [pipelines](pipelines/FOLDER_DOCS_RU.md): Author → Visual → VFX → images.
+- [services](services/FOLDER_DOCS_RU.md), [web](web/FOLDER_DOCS_RU.md): внешние границы и HTTP.
+- [storage](storage/FOLDER_DOCS_RU.md): world recipes/traces; [desktop](desktop/FOLDER_DOCS_RU.md): GUI.
+- [qa](qa/FOLDER_DOCS_RU.md): только offline witnesses/proofs.
 
-Do not route gameplay from prose/name strings; emit explicit contracts for C# to execute.
+Gameplay выбирает Author, не prose/name/category routing.

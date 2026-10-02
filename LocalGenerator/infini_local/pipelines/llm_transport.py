@@ -26,6 +26,7 @@ from infini_local.core.llm_config import (
     LLM_FALLBACK_BASE_URL,
     LLM_FALLBACK_MODEL,
     LLM_FALLBACK_NETWORK_FAILS,
+    LLM_FALLBACK_OPENROUTER_PROVIDER,
     LLM_FALLBACK_PROVIDER,
     LLM_API_MODE,
     LLM_LOCAL_REASONING_PROMPT,
@@ -47,6 +48,7 @@ from infini_local.core.llm_config import (
     OPENROUTER_BASE_URL,
     OPENROUTER_HTTP_REFERER,
     OPENROUTER_MODEL,
+    OPENROUTER_PROVIDER,
 )
 from infini_local.storage.trace_runtime import log_event
 
@@ -232,6 +234,7 @@ class LlmItemLease:
             "baseUrl": self.context.get("base_url"),
             "model": self.context.get("model"),
             "apiMode": self.context.get("api_mode"),
+            "openrouterProvider": _openrouter_provider(self.context),
             "poolSize": self.pool_size,
             "callCount": self.call_count,
             "stages": list(self.stages),
@@ -274,14 +277,22 @@ def _normalized_api_mode(value: Any) -> str:
     return "auto"
 
 
+def _openrouter_provider(context: dict[str, Any]) -> str:
+    if active_llm_provider(context) != "openrouter":
+        return ""
+    return str(context.get("openrouter_provider") or "").strip()
+
+
 def _llm_context_key(context: dict[str, Any] | None) -> str:
     ctx = context or {}
-    return "|".join([
+    key = "|".join([
         str(ctx.get("provider") or "local"),
         str(ctx.get("base_url") or ""),
         str(ctx.get("model") or "auto"),
         str(ctx.get("api_mode") or "chat_completions"),
     ])
+    upstream = _openrouter_provider(ctx)
+    return f"{key}|{upstream}" if upstream else key
 
 
 def _legacy_primary_llm_context() -> dict[str, Any]:
@@ -301,6 +312,7 @@ def _legacy_primary_llm_context() -> dict[str, Any]:
             "provider": provider,
             "base_url": OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1",
             "model": OPENROUTER_MODEL or "auto",
+            "openrouter_provider": OPENROUTER_PROVIDER,
             "api_key": OPENROUTER_API_KEY,
             "http_referer": OPENROUTER_HTTP_REFERER,
             "app_title": OPENROUTER_APP_TITLE,
@@ -367,6 +379,7 @@ def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         "api_mode": "responses" if provider == "openai_codex" else _normalized_api_mode(raw.get("api_mode")),
         "http_referer": OPENROUTER_HTTP_REFERER if provider == "openrouter" else "",
         "app_title": OPENROUTER_APP_TITLE if provider == "openrouter" else "",
+        "openrouter_provider": str(raw.get("openrouter_provider") or "").strip() if provider == "openrouter" else "",
     }
 
 
@@ -485,6 +498,7 @@ def _fallback_llm_context() -> dict[str, Any] | None:
         ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENROUTER_API_KEY
         ctx["http_referer"] = OPENROUTER_HTTP_REFERER
         ctx["app_title"] = OPENROUTER_APP_TITLE
+        ctx["openrouter_provider"] = LLM_FALLBACK_OPENROUTER_PROVIDER
     elif provider == "openai_compat":
         ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
         ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENAI_COMPAT_API_KEY
@@ -548,6 +562,7 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "baseUrl": context.get("base_url"),
             "model": context.get("model"),
             "apiMode": context.get("api_mode"),
+            "openrouterProvider": _openrouter_provider(context),
             "apiKeyConfigured": (
                 bool(context.get("api_key"))
                 if context.get("provider") in {"openrouter", "openai_compat"}
@@ -566,12 +581,14 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "model": fallback.get("model"),
             "apiKeyConfigured": bool(fallback.get("api_key")) if fallback.get("provider") in {"openrouter", "openai_compat"} else None,
             "networkFailsBeforeSwitch": LLM_FALLBACK_NETWORK_FAILS,
+            "openrouterProvider": _openrouter_provider(fallback),
         }
     if provider == "openrouter":
         configured = bool(primary.get("api_key"))
         return {
             "provider": provider,
             "baseUrl": primary.get("base_url") or "https://openrouter.ai/api/v1",
+            "openrouterProvider": _openrouter_provider(primary),
             "model": primary.get("model") or "auto",
             "apiKeyConfigured": configured,
             "status": "configured" if configured else "missing_api_key",
@@ -1230,6 +1247,7 @@ def request_shape_rejection_diagnosis(
         "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
         "sentResponseFormat": response_mode,
         "configuredApiMode": api_mode,
+        "openrouterProvider": _openrouter_provider(context or _primary_llm_context()),
         "schemaChars": schema_chars,
         "knownWorkingResponseFormat": "json_object",
         "knownWorkingApiMode": "chat_completions",
@@ -1251,6 +1269,11 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     out = _clean_llm_payload(payload)
+    # Routing belongs to the selected profile, not a stale caller payload.
+    out.pop("provider", None)
+    upstream = _openrouter_provider(context)
+    if upstream:
+        out["provider"] = {"only": [upstream], "allow_fallbacks": False}
     model_override = str(out.pop(LLM_MODEL_OVERRIDE_KEY, "") or "").strip()
     model_name = model_override or resolve_llm_model(context)
     out["model"] = model_name
@@ -1379,6 +1402,8 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
     }
     if instructions:
         out["instructions"] = "\n\n".join(instructions)
+    if context is not None and active_llm_provider(context) == "openrouter" and isinstance(payload.get("provider"), dict):
+        out["provider"] = copy.deepcopy(payload["provider"])
     if previous_response_id:
         out["previous_response_id"] = previous_response_id
     if payload.get("temperature") is not None:
@@ -1458,6 +1483,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: int, co
             "usage": result.get("usage") or {},
             "_debug": {
                 "apiMode": "responses",
+                "openrouterProvider": _openrouter_provider(context),
                 "requestMode": "exact",
                 "provider": active_llm_provider(context),
                 "profileId": context.get("profile_id"),
@@ -1648,6 +1674,7 @@ def _llm_chat_json_exact_context(
             **debug,
             "requestMode": "exact",
             "provider": active_llm_provider(context),
+            "openrouterProvider": _openrouter_provider(context),
             "responseFormatRequested": bool(response_format),
             "responseFormatUsed": bool(response_format),
             "responseFormatType": str(response_format.get("type") or "") if isinstance(response_format, dict) else "",
@@ -1669,9 +1696,9 @@ def _llm_chat_json_exact_context(
         provider = active_llm_provider(context)
         if provider == "openrouter" and error.code == 401:
             message = "OpenRouter auth failed: API key is missing/invalid or was not saved in config.env (401 Unauthorized)."
-            log_event("warn", "OpenRouter auth failed", {"provider": provider, "status": error.code, "body": body, "hint": message, "label": context.get("label")})
+            log_event("warn", "OpenRouter auth failed", {"provider": provider, "openrouterProvider": _openrouter_provider(context), "status": error.code, "body": body, "hint": message, "label": context.get("label")})
             raise RuntimeError(message) from error
-        log_event("warn", "LLM HTTP error", {"provider": provider, "status": error.code, "body": body, "label": context.get("label")})
+        log_event("warn", "LLM HTTP error", {"provider": provider, "openrouterProvider": _openrouter_provider(context), "status": error.code, "body": body, "label": context.get("label")})
         diagnosis = request_shape_rejection_diagnosis(error, candidate, context)
         if diagnosis is not None:
             setattr(error, "_infini_shape_diagnosis", diagnosis)
@@ -1704,6 +1731,9 @@ def _mark_profile_failed(context: dict[str, Any], error: Exception) -> None:
 
 
 def _next_lease_profile(lease: LlmItemLease, attempted: set[str]) -> dict[str, Any] | None:
+    # A strict upstream selection may retry in place, never leave its profile.
+    if _openrouter_provider(lease.context):
+        return None
     profiles = list(lease.profiles)
     if len(profiles) <= 1:
         return None
@@ -1931,7 +1961,11 @@ def llm_chat_json(payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
                 _switch_lease_profile(lease, next_context, profile_error)
 
     primary = _primary_llm_context()
-    fallback = _fallback_llm_context() if lease is None or lease.legacy_fallback_allowed else None
+    fallback = (
+        _fallback_llm_context()
+        if not _openrouter_provider(primary) and (lease is None or lease.legacy_fallback_allowed)
+        else None
+    )
     primary_payload = payload
     if lease is not None and lease.profile_id != lease.initial_profile_id:
         primary_payload = _payload_without_model_override(payload)

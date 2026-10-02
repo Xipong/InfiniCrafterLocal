@@ -1,11 +1,14 @@
 # No-image Live20 harness
 
-`live-generation/generate_20_items_without_images.py` runs the frozen 20-case LLM campaign against a **configured** text provider. It hard-blocks image backends and uses a deterministic test PNG only to exercise delivery paths. It does not test generated sprites, Terraria gameplay, or multiplayer. Its default parent dump is the bundled `fixtures/items.jsonl` (exact Terraria runtime rows); an alternate dump must be supplied explicitly with `--runtime-dump`. The campaign manifest records the dump SHA-256.
+[`live-generation/generate_20_items_without_images.py`](live-generation/generate_20_items_without_images.py) runs the frozen 20-case campaign against a **real configured text provider**. It hard-blocks image backends and substitutes a deterministic test PNG only for delivery checks; it does not accept generated sprites, Terraria gameplay or MP. Parent rows default to [`fixtures/items.jsonl`](fixtures/items.jsonl); `--runtime-dump` selects another dump, whose SHA-256 is recorded in the manifest.
 
-From the repository root, use the project Python environment and `PYTHONPATH=LocalGenerator`:
+## Offline checks / preflight
+
+From the repository root, in the prepared [project environment](../LocalGenerator/QUICK_START_RU.md):
 
 ```bash
 PYTHONPATH=LocalGenerator python -m pytest toolbox/tests -q
+PYTHONPATH=LocalGenerator python toolbox/live-generation/generate_20_items_without_images.py --help
 PYTHONPATH=LocalGenerator python toolbox/live-generation/generate_20_items_without_images.py \
   --project "$PWD" --output artifacts/tool-runs/live20-preflight \
   --expected-provider openai_compat --expected-model gemini-3.5-flash-lite \
@@ -15,4 +18,12 @@ PYTHONPATH=LocalGenerator python toolbox/live-generation/generate_20_items_witho
   --preflight-only
 ```
 
-Configure the existing account/route outside Git before running. Explicitly set the requested API mode and response format in the environment; pass the same frozen arguments (without `--preflight-only`) and a **new output directory** for the actual campaign. To bind a released clean checkout, also pass `--expected-head "$(git rev-parse HEAD)"`. For stronger configuration checks, pass the temperature and token-budget `--expected-*` flags shown by `--help`; the runner checks stage-specific effective requests. Do not commit output traces, provider config, or credentials. The example allows up to ten **case-level** repeats after confirmed network failures, at least 60 seconds apart; it never retries malformed JSON, invalid gameplay, or other nontransport failures. Every attempt, network error, scheduled wait, and completed wait is retained in the ledger. Require `summary.json` `ok=true`, 20 distinct successful result rows, at least 10 first-Author successes, no unaccounted transport errors or hidden fast HTTP retries, and complete image-boundary coverage; report `caseTransportRetryCount` separately rather than requiring zero infrastructure retries. Replay all 20 no-image recipes through the headless C# contract separately; neither check replaces in-game acceptance.
+Provider/model above are **examples**, not availability claims. Configure the exact route/API mode/response format outside Git first; matching `--expected-*` validates, not configures, the effective requests. `--preflight-only` makes no network calls. Temperature, stage token limits and reasoning expectation flags are in `--help`; add them to freeze effective requests. For a clean released checkout also use `--expected-head "$(git rev-parse HEAD)"` (rejects dirty/wrong HEAD).
+
+## Authorized live campaign
+
+Only after approval for text calls/cost, rerun the same frozen arguments **without `--preflight-only`**, with a **new output directory**. Never commit provider config, credentials or raw traces. No login/install/model/game/publish step is implicit.
+
+The example allows ten **case-level** repeats after confirmed network failures, at least 60 seconds apart. It does not retry malformed JSON/gameplay/domain failure at case level. This mode forces the low-level attempt budget to one; `--require-zero-transport-retries` can explicitly reject hidden logical-call retries, not the separately ledgered case repeats. Every attempt/error/scheduled and completed wait stays in the ledger.
+
+Acceptance requires `summary.json` `ok=true`, 20 distinct successful rows, at least 10 first-Author successes, complete image-boundary coverage, no unaccounted transport errors/hidden fast HTTP retries. Report `caseTransportRetryCount` separately, not a blanket “zero infrastructure retries”. Replay all 20 recipes through the [headless C# contract](../docs/TEST_CONTRACT_OWNERS_RU.md#запуск-и-сила-доказательства); neither result replaces in-game acceptance.

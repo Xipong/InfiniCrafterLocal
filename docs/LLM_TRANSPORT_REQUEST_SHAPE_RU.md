@@ -1,155 +1,63 @@
-# Транспорт LLM: форма запроса и лимиты провайдера
+# LLM transport: форма запроса и ошибки
 
-Документ фиксирует одно проверенное ограничение: **strict JSON Schema для Gameplay
-Author не принимается Google Gemini**, поэтому форма запроса — это осознанная
-настройка, а не деталь реализации. Ownership: `llm_transport.py` (транспорт),
-`settings_schema.py` (пресеты/подсказки GUI), `author_item_contract.py` (схема).
+[Transport owner](../LocalGenerator/infini_local/pipelines/llm_transport.py), [GUI presets](../LocalGenerator/infini_local/desktop/settings_schema.py), [setup/restart](../QUICK_START_RU.md#настройки). Локальный serializer и прежний live probe — не универсальные capabilities provider/model.
 
-## Короткий вывод
+## Настройки
 
-| Настройка | Значение | Статус на Gemini |
-| --- | --- | --- |
-| `INFINI_LLM_RESPONSE_FORMAT` | `json_object` | работает |
-| `INFINI_LLM_RESPONSE_FORMAT` | `json_schema` | **отклоняется**: `400 INVALID_ARGUMENT`, транспорт сам повторяет стадию с `json_object` и пишет об этом в лог |
-| `INFINI_LLM_RESPONSE_FORMAT` | `auto` | для удалённых API разворачивается в `json_schema`, поэтому проходит через тот же авто-переход |
-| `INFINI_LLM_API_MODE` | `chat_completions` | работает |
-| `INFINI_LLM_API_MODE` | `responses` | у Gemini эндпоинта нет: `404`, затем downgrade в chat |
+| Поле | Текущая семантика |
+|---|---|
+| `INFINI_LLM_RESPONSE_FORMAT=json_object` | JSON hint; shape в prompt, local validator/compiler/wire gate обязательны |
+| `…=json_schema` | Provider schema; endpoint/model имеет собственный complexity budget |
+| `…=auto` | **Remote → json_object, local → json_schema**, если stage не задал `auto_preference`; explicit choice сохраняется |
+| `…=off` | Нет provider format, но local validation остаётся |
+| `INFINI_LLM_API_MODE=chat_completions` | Stateless `/chat/completions` |
+| `…=auto`/`responses` | Пробует `/responses`, допускает same-profile Chat compatibility downgrade |
 
-Пресеты с удалённым провайдером (`openai_compat`, `openrouter`) явно закрепляют
-`json_object` + `chat_completions`. Локальные пресеты (LM Studio) не тронуты:
-локальные серверы strict schema держат, и она там полезна.
+Remote presets: `json_object` + `chat_completions`; local сохраняют schema. Это starting point, не availability guarantee. Codex — отдельный subscription Responses adapter: [auth/limits](CODEX_IMAGE_OAUTH_RU.md#модели-качество-и-расход).
 
-## Что именно происходит
+`json_object` не semantic fallback: `requiredJsonShape`, `runtimeProgramInvariants`, `selfCheck` остаются в prompt; invalid response → условный Repair/RED. Без constrained grammar синтаксического брака **может стать больше**, но provider schema не gameplay authority.
 
-`400 INVALID_ARGUMENT` возвращается **до чтения промпта**: провайдер отклоняет
-форму запроса, модель задание не получает, токены не расходуются. Из-за этого
-ошибка выглядит как «генерация не запустилась» без объяснения причины.
+## Retries и границы ошибок
 
-Причина — не одно запрещённое ключевое слово и не объём промпта, а бюджет
-сложности грамматики constrained decoding. Замеры на реальной схеме Author:
+| Событие | Policy |
+|---|---|
+| Chat 400 + sent `json_schema` | Один same-stage повтор с `json_object`; только envelope меняется, messages/model/sampling/reasoning сохранены |
+| Повторный 400 с `json_object` | Второго schema downgrade нет; ошибка идёт higher-level policy |
+| Responses 400/404/405/415/422/501 | Same-profile stateless Chat, если ошибка не распознана auth/budget; не network/timeout downgrade |
+| 401/402/403/429 | Auth/billing/quota/rate-limit, не schema cure; 429 также transport-class с provider cooldown |
+| 408/409/425/429/500/502/503/504, network/timeout | Bounded transport retry и/или настроенный pool/fallback |
 
-```
-схема Author целиком        85 579 символов, 4043 узла, глубина 16, 519 ограничений
-runtimeProgram.calls        51 вариант в oneOf, maxItems 48
-```
+Schema guard проверяет только status/format: **не доказывает причину каждого 400**. Profile/context capability memory действует на процесс; `config.env` не меняется. Debug: `strictSchemaDowngraded=true`, cause `json_schema_to_json_object_fallback`; API downgrade cause `responses_to_chat_fallback`. Content/length retry и profile failover отдельно учитываются в `transportRetryCount/Causes`: один envelope retry ≠ один суммарный HTTP.
 
-Изоляция по частям (живые запросы к Gemini, chat completions):
+[OpenRouter pin](OPENROUTER_ROUTING_RU.md#строгая-семантика) запрещает другой профиль/legacy fallback, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Unpinned pool/lease/cooldown и legacy резерв — отдельная явно настроенная policy; пустой `INFINI_LLM_FALLBACK_MODEL` выключает резерв.
 
-```
-name + category + concept                        200 OK
-+ runtimeProgram                                 400        <- граница
-runtimeProgram.entities                          200 OK
-runtimeProgram.calls (51 вариант)                400
-одиночный вариант capability как items           200 OK
-oneOf[2 реальных варианта]                       200 OK
-oneOf[32 синтетических объекта]                  200 OK
-items = реальный вариант, maxItems 8             200 OK
-items = реальный вариант, maxItems 48            400
-items = string,            maxItems 48           200 OK
-```
+## Диагностика
 
-По отдельности допустимы и `pattern`, и `const`, и `minItems`/`maxItems`, и
-`oneOf`, и неизвестные ключи `x-infini-*`, и `$schema`. Отклоняется их
-произведение: широкий `oneOf` капабилити × большой `maxItems` × сотни
-ограничений. Снятие отдельных ключей не помогает — проверено на вариантах
-`minus pattern`, `minus minimum/maximum`, `minus все ограничения`.
+`request_shape_rejection_diagnosis`: только Chat 400 + `json_schema`, без изменения payload/retry. Повтор делает caller, событие `LLM strict json_schema rejected; retrying same stage with json_object for this run` (`was/now/status/repairedFor/schemaChars`).
 
-Официальная документация Google описывает это только качественно: «Very large or
-deeply nested schemas may be rejected», без числовых порогов. Поэтому лимит
-нельзя выразить как «уменьшить схему до N символов».
+| Где | Что смотреть |
+|---|---|
+| `cache/events.ndjson` | `LLM provider rejected the configured request shape`: configured/sent format, API mode, schemaChars, `knownWorkingResponseFormat/ApiMode`, bounded providerBody |
+| `pipeline_trace.ndjson`, craft error | Stage `requestShapeRejection` / hint |
+| `LLM usage`/debug | Retry count/causes, [cache counters](LLM_PROMPT_CACHE_AND_LATENCY_RU.md#наблюдаемость) |
 
-## Почему json_object безопасен по архитектуре
+`knownWorking*` и hint «модель ещё не получила задание» — локальная подсказка, **не remote billing proof**. Generic 400 не доказывает нулевой расход. Проверяй status/body/model/baseUrl.
 
-`json_object` — не fallback в смысле `AGENTS.md` и не подмена авторства:
+## Исторический Gemini reproducer
 
-- форму ответа модель уже получает из промпта: `requiredJsonShape`
-  (`author_item_prompt_shape_card`), плюс `runtimeProgramInvariants` и `selfCheck`;
-- авторитетными остаются локальные владельцы: валидатор, компилятор и wire-гейт;
-- механику по-прежнему выбирает модель, код не достраивает содержание;
-- невалидный ответ идёт в единственный условный Repair, как и раньше.
+Прежний конкретный Gemini Chat endpoint отклонял полную Author schema (400), Responses дал 404: **не запрет strict output всех нынешних Gemini**. Schema тогда: 85579 chars, 4043 nodes, depth 16, 519 constraints; calls `oneOf` 51 вариантов, maxItems 48.
 
-Провайдерская strict schema была подстраховкой транспорта, а не источником
-истины. Её отсутствие снижает вероятность синтаксического брака, но не меняет,
-кто владеет смыслом.
+| Изоляция | Прежний ответ |
+|---|---|
+| name/category/concept; entities; одиночный capability; oneOf 2 real / 32 synthetic objects | 200 |
+| Полный runtimeProgram; calls 51 вариантов | 400 |
+| Real variant maxItems 8 / 48 | 200 / 400 |
+| String items maxItems 48 | 200 |
 
-## Диагностика вместо голого 400 и починка на прогон
+`pattern`, `const`, array bounds, `oneOf`, `$schema`, `x-infini-*` отдельно проходили; снятие pattern/min/max/всех constraints полную форму не исправляло. Complexity комбинации, не правило «до N chars»: [Google limitations](https://ai.google.dev/gemini-api/docs/structured-output).
 
-Транспорт делает две разные вещи, и их важно не путать.
-
-**1. Диагноз.** `request_shape_rejection_diagnosis` в `llm_transport.py` объясняет
-отказ в терминах настроек пользователя. Вызывается только при `HTTP 400` с
-отправленным `json_schema`, ничего не выбирает, не повторяет запрос и не меняет
-payload. Результат попадает в три места:
-
-1. `cache/events.ndjson` — событие `LLM provider rejected the configured request shape`
-   с полями `configuredResponseFormat`, `configuredApiMode`, `schemaChars`,
-   `knownWorkingResponseFormat`, `knownWorkingApiMode`, `providerBody`;
-2. `pipeline_trace.ndjson` — в payload ошибки стадии как `requestShapeRejection`;
-3. текст ошибки крафта — пользователь видит, что промпт не оценивался и какая
-   комбинация настроек проходит.
-
-**2. Починка на прогон.** По той же модели, что уже работает для
-`responses -> chat_completions`, транспорт повторяет **ту же самую стадию** с
-`response_format: json_object` и пишет об этом отдельное событие:
-
-```
-LLM strict json_schema rejected; retrying same stage with json_object for this run
-    was: json_schema
-    now: json_object
-    status: 400
-    repairedFor: this run only; config.env is not modified
-    schemaChars: 85093
-    configuredResponseFormat: json_schema
-```
-
-Свойства этого перехода:
-
-- меняется **только конверт ответа**; `messages`, `model`, сэмплирование и
-  reasoning копируются без изменений, то есть промпт остаётся тем же;
-- `config.env` не правится — настройка пользователя остаётся его решением, а лог
-  прямо говорит, что починка действует только на текущий прогон;
-- результат помечается как транспортный ретрай:
-  `transportRetryCauses: ["json_schema_to_json_object_fallback"]` и
-  `strictSchemaDowngraded: true`, поэтому acceptance-прогоны с
-  `--require-zero-transport-retries` его видят и не считают бесплатным;
-- профиль запоминается на процесс: после первого отказа следующие стадии сразу
-  уходят с `json_object`, без повторной платы отклонённым запросом;
-- ровно одна повторная попытка. Если провайдер отклоняет и `json_object`, ошибка
-  доходит до вызывающего — маскировки настоящей поломки нет.
-
-Разграничение владельцев сохранено: `401/403/429` остаются auth/quota, `404` —
-несовместимость эндпоинта, таймауты и `5xx` — транспорт и pool failover. И диагноз,
-и переход формата срабатывают только для `400` с отправленным `json_schema`.
-
-Это не `Fallback` в смысле запрета из `AGENTS.md`: смысл предмета никто не
-достраивает, деградации авторства нет. Отклонена форма конверта, и заменяется
-именно она — на ту, которая доказанно принимается тем же провайдером.
-
-## Отдельно: 400 под параллельной нагрузкой
-
-Существует второй, независимый источник `400` — параллельные тяжёлые запросы даже
-с `json_object`. В прогоне Live20 (`json_object` + `chat_completions`,
-`parallelCrafts 3`) три кейса получили `400` на запросах ~94k символов при
-`activeHttp 3`, рядом с живыми `Connection refused` и `RemoteDisconnected`.
-Прошедшие кейсы имели такие же промпты, поэтому дело в одновременности, а не в
-размере. Это транспортная нагрузка, а не форма запроса, и она не лечится сменой
-`response_format`.
-
-Практическое следствие: `json_object` разблокирует одиночный крафт полностью, но
-для параллельных кампаний надо учитывать лимиты провайдера (у бесплатного Gemini
-это в том числе 15 запросов в минуту — минутное окно, а не исчерпание квоты).
+Другой старый Live20 (json_object/Chat/parallel=3): три ~94k-char 400 при activeHttp=3 рядом с Connection refused/RemoteDisconnected. Concurrency — гипотеза, не доказанная причина; format не лечит network/rate-limit. Прежние free-tier 15 RPM — та конфигурация, не общий лимит новых моделей/аккаунтов.
 
 ## Проверка
 
-```bash
-PYTHONPATH=LocalGenerator pytest -q LocalGenerator/tests/test_llm_request_shape_diagnostics_contract.py
-PYTHONPATH=LocalGenerator pytest -q LocalGenerator/tests/test_settings_gui_contract.py
-```
-
-Контракт закрепляет: диагноз выдаётся только для `400` + `json_schema`, содержит
-обе конфигурации, не мутирует payload, не несёт готовый `response_format`;
-авто-переход меняет только конверт ответа, сохраняет `messages`/`model`, помечает
-результат как транспортный ретрай, запоминает профиль на процесс, делает ровно
-одну повторную попытку и не маскирует ни повторный `400`, ни `429`; API-пресеты
-закрепляют рабочий транспорт; `json_schema` остаётся выбираемым вариантом с
-честной пометкой.
+[Request contracts](../LocalGenerator/tests/test_provider_request_contract.py), [transport](../LocalGenerator/tests/test_provider_transport_contract.py), [GUI](../LocalGenerator/tests/test_settings_gui_contract.py): envelopes/diagnosis/one-time downgrade/profile memory/pin/failure boundaries. [Offline QA](../LocalGenerator/QUICK_START_RU.md); [Live20](../toolbox/README.md) — отдельно разрешаемый запуск, не fixture-based billing/availability proof.

@@ -1,7 +1,11 @@
 # Аудит машиночитаемости библиотеки компонентов
 
-> Генерируется `python tools/generate_low_level_runtime_docs.py` из live registry и audit-кода.
-> Каноническая архитектурная граница и owner routing: `lowery.md`; этот файл только измеряет projection.
+> Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py) из [registry](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [audit-кода](../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; [refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
+> Architecture/owners: [Lowery](../lowery.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).
+
+**Навигация:** [вердикт/критерии](#verdict) · [измерения](#metrics) · [проверяемость](#proof) · [ограничения](#limits) · [практическая оценка](#assessment).
+
+<a id="verdict"></a>
 
 ## Вердикт: 100/100
 
@@ -18,6 +22,8 @@
 | `projectionParity` | 10 | PASS |
 | `verticalSlices` | 10 | PASS |
 
+<a id="metrics"></a>
+
 ## Измеренные свойства
 
 - capabilities: **52**; parameters: **229**; numeric: **180/180 bounded**;
@@ -26,6 +32,8 @@
 - exact wire paths: **312**; global technical lowerer outputs: **149**;
 - Python↔C# range parity rows: **77**; vertical witnesses: **52**;
 - errors: **0**; warnings: **0**.
+
+<a id="proof"></a>
 
 ## Почему библиотека действительно машиночитаема
 
@@ -37,14 +45,18 @@
 6. Owner — не просто имя файла: audit импортирует Python callable и ищет конкретные C# method symbols.
 7. Для каждой capability исполняется author→validate→compile→strict-wire witness; неизвестные поля/refs/opcodes fail closed.
 
+<a id="limits"></a>
+
 ## Честные ограничения
 
 - На entity допускается один movement slot и один controller slot. Это намеренная bounded-композиция, не arbitrary ECS/VM.
 - Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).
 - Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.
 - Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.
-- Prompt catalog крупный, но self-contained: около 71k символов на обычных parents и до 83k на rich generated-parent fixture при hard limit 96k; retrieval/tool loop не используется.
+- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет [`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.
 - Каталог покрывает реализованные 52 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
+
+<a id="assessment"></a>
 
 ## Практическая оценка
 

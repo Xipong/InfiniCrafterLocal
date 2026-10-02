@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 123,
+  "documentedFieldCount": 128,
   "entries": [
     {
       "declarations": [
@@ -1965,6 +1965,30 @@
       "gui": true,
       "maximum": null,
       "minimum": null,
+      "name": "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_LLM_FALLBACK_PROVIDER",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py"
@@ -2168,6 +2192,30 @@
     {
       "declarations": [
         {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_POOL_2_OPENROUTER_PROVIDER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
           "default": "openai_compat",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -2312,6 +2360,30 @@
     {
       "declarations": [
         {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_POOL_3_OPENROUTER_PROVIDER",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
           "default": "openai_compat",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -2446,6 +2518,30 @@
       "maximum": null,
       "minimum": null,
       "name": "INFINI_LLM_POOL_4_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_LLM_POOL_4_OPENROUTER_PROVIDER",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py"
       ],
@@ -3234,6 +3330,30 @@
       "maximum": null,
       "minimum": null,
       "name": "INFINI_OPENROUTER_MODEL",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": true,
+      "example": "",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_OPENROUTER_PROVIDER",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py"
       ],
@@ -5471,15 +5591,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 225,
-  "fingerprint": "b55075e2f340b6a174ec47139ba02741242e70e586f69967c12aa88243d9a491",
+  "fieldCount": 230,
+  "fingerprint": "858c7dfdd315333c818b7780e636681e6e95b53292731e2583d7ab483a6e73b6",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 125,
+  "guiFieldCount": 130,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

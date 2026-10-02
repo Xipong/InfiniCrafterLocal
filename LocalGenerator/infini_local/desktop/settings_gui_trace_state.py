@@ -220,7 +220,7 @@ class SettingsGuiTraceStateMixin:
 
         local_llm = ["INFINI_LMSTUDIO_URL", "INFINI_LMSTUDIO_MODEL"]
         openrouter_llm = [
-            "INFINI_OPENROUTER_API_KEY", "INFINI_OPENROUTER_MODEL",
+            "INFINI_OPENROUTER_API_KEY", "INFINI_OPENROUTER_MODEL", "INFINI_OPENROUTER_PROVIDER",
             "INFINI_OPENROUTER_HTTP_REFERER", "INFINI_OPENROUTER_APP_TITLE",
         ]
         compat_llm = ["INFINI_OPENAI_COMPAT_BASE_URL", "INFINI_OPENAI_COMPAT_API_KEY", "INFINI_OPENAI_COMPAT_MODEL"]
@@ -255,6 +255,18 @@ class SettingsGuiTraceStateMixin:
                     enabled,
                     f"LLM {slot} выключен; сначала установи Enabled = 1.",
                 )
+
+            set_field_enabled(
+                f"INFINI_LLM_POOL_{slot}_OPENROUTER_PROVIDER",
+                enabled and self._value(f"INFINI_LLM_POOL_{slot}_PROVIDER", "openai_compat").lower() == "openrouter",
+                "Фиксация upstream доступна только для включённого OpenRouter профиля.",
+            )
+        fallback_provider = (self._value("INFINI_LLM_FALLBACK_PROVIDER", "") or provider).lower()
+        set_field_enabled(
+            "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER",
+            fallback_provider == "openrouter" and bool(self._value("INFINI_LLM_FALLBACK_MODEL", "")),
+            "Нужны fallback model и OpenRouter в качестве fallback provider.",
+        )
 
         off_modes = {"", "off", "false", "0", "disabled", "disable", "none", "no_reasoning"}
         prompt_modes = {"prompt", "prompt_light", "prompt_strong", "local_prompt", "local_light", "local_strong"}

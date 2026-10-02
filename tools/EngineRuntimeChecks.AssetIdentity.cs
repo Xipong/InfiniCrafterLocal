@@ -15,10 +15,24 @@ using InfiniMod = InfiniCrafterLocal.InfiniCrafterLocalMod;
 
 internal static partial class EngineRuntimeChecks
 {
-    private delegate FileStream AssetOpenOriginal(string path);
-    private delegate FileStream AssetOpenHook(AssetOpenOriginal original, string path);
     private delegate bool AssetValidateOriginal(string path, GeneratedAssetWireDescriptor? descriptor);
     private delegate bool AssetValidateHook(AssetValidateOriginal original, string path, GeneratedAssetWireDescriptor? descriptor);
+
+    private static IDisposable ObserveRuntimeSpriteFileOpen(Action<string> observe)
+    {
+        // Observe the caller's exact IL site: optimized JIT code may inline File.OpenRead.
+        return new MonoMod.RuntimeDetour.ILHook(typeof(RuntimeSpriteCache).GetMethod("TryGet",
+            new[] { typeof(string), typeof(float).MakeByRefType() })!, il => {
+            var sites = il.Body.Instructions.Where(ins => ins.OpCode == Mono.Cecil.Cil.OpCodes.Call
+                && ins.Operand is Mono.Cecil.MethodReference method && method.DeclaringType.FullName == typeof(File).FullName
+                && method.Name == nameof(File.OpenRead) && method.Parameters.Count == 1
+                && method.Parameters[0].ParameterType.FullName == typeof(string).FullName
+                && method.ReturnType.FullName == typeof(FileStream).FullName).ToArray();
+            Equal(1, sites.Length, "one instrumented runtime sprite File.OpenRead call site");
+            var cursor = new MonoMod.Cil.ILCursor(il); cursor.Goto(sites[0]);
+            cursor.EmitDelegate<Func<string, string>>(path => { observe(path); return path; });
+        });
+    }
 
     private static readonly byte[] AssetOwnerCanonical = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAP0lEQVR4nGNgGAWjYKQDRlwS1zMlJ1DTIs3pzwuwiTNR0xJywKgDRh0w6oBRB4w6YNQBow4YdcCoA0bBKBgFAKl2BChncJIaAAAAAElFTkSuQmCC");
     private static readonly byte[] AssetOwnerOtherColor = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAP0lEQVR4nGNgGAWjYKQDRlwSkvsCJlDToudOGwqwiTNR0xJywKgDRh0w6oBRB4w6YNQBow4YdcCoA0bBKBgFAJnWBCigX3ypAAAAAElFTkSuQmCC");
@@ -50,14 +64,14 @@ internal static partial class EngineRuntimeChecks
             object? priorSprites = sprites.GetValue(null), priorSync = assetSync.GetValue(null);
             string sandbox = Path.Combine(Terraria.Program.SavePath, "asset-conflicts"); Directory.CreateDirectory(sandbox);
             bool observing = false; string? opened = null; byte[]? bytes = null;
-            AssetOpenHook open = (original, path) => {
-                if (!observing) return original(path);
+            Action<string> open = path => {
+                if (!observing) return;
                 opened = Path.GetFullPath(path);
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using var memory = new MemoryStream(); stream.CopyTo(memory); bytes = memory.ToArray();
                 throw new InvalidOperationException("CPU inventory observer stops before GPU decode");
             };
-            using var hook = new MonoMod.RuntimeDetour.Hook(typeof(File).GetMethod("OpenRead", new[] { typeof(string) })!, open);
+            using var hook = ObserveRuntimeSpriteFileOpen(open);
             try {
                 foreach (bool reverse in new[] { false, true }) {
                     using var sync = new GeneratedAssetSyncService(); using var cache = new RuntimeSpriteCache();
@@ -175,12 +189,12 @@ internal static partial class EngineRuntimeChecks
             string originalPath = Path.Combine(Terraria.Program.SavePath, file), canonicalPath = Path.GetFullPath(Path.Combine(sync.CacheRoot, file));
             File.WriteAllBytes(originalPath, AssetOwnerOtherColor);
             bool observing = false; int fileAttempts = 0;
-            AssetOpenHook open = (original, path) => {
-                if (!observing) return original(path);
+            Action<string> open = path => {
+                if (!observing) return;
                 fileAttempts++; Equal(canonicalPath, Path.GetFullPath(path), "failed read uses the selected normalized owner");
                 throw new InvalidOperationException("controlled file/decode failure before GPU work");
             };
-            using var hook = new MonoMod.RuntimeDetour.Hook(typeof(File).GetMethod("OpenRead", new[] { typeof(string) })!, open);
+            using var hook = ObserveRuntimeSpriteFileOpen(open);
             try {
                 sprites.SetValue(null, cache); assetSync.SetValue(null, sync);
                 var data = AssetOwnerData("selected_retry", originalPath);
@@ -606,15 +620,15 @@ internal static partial class EngineRuntimeChecks
             var priorSprites = spriteProperty.GetValue(null); var priorSync = syncProperty.GetValue(null);
             string sandbox = Path.Combine(Terraria.Program.SavePath, "asset-owner-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(sandbox);
             bool observing = false; string? opened = null; byte[]? openedBytes = null; int validationsDuringDraw = 0;
-            AssetOpenHook open = (original, path) => {
-                if (!observing) return original(path);
+            Action<string> open = path => {
+                if (!observing) return;
                 opened = Path.GetFullPath(path);
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using var memory = new MemoryStream(); stream.CopyTo(memory); openedBytes = memory.ToArray();
                 throw new InvalidOperationException("CPU path observer stops before GPU decoding");
             };
             AssetValidateHook validate = (original, path, descriptor) => { if (observing) validationsDuringDraw++; return original(path, descriptor); };
-            using var openHook = new MonoMod.RuntimeDetour.Hook(typeof(File).GetMethod("OpenRead", new[] { typeof(string) })!, open);
+            using var openHook = ObserveRuntimeSpriteFileOpen(open);
             using var validationHook = new MonoMod.RuntimeDetour.Hook(typeof(GeneratedAssetSyncService).GetMethod("IsValidCachedAsset", BindingFlags.Static | BindingFlags.NonPublic)!, validate);
             try {
                 foreach (string scenario in new[] { "canonical", "other-color-shadow", "corrupt-shadow", "same-byte-alias", "stale-windows", "url", "no-sync-local", "unverified-sync-local", "corrupt-sync-local", "stale-sync-local", "changed-certified-corrupt", "changed-certified-stale", "changed-descriptor-local" }) {

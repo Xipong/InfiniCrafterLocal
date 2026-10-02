@@ -15,6 +15,7 @@ LMSTUDIO_MODEL = env_first(("INFINI_LMSTUDIO_MODEL", "OPENAI_MODEL"), "auto")
 OPENROUTER_BASE_URL = env_str("INFINI_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 OPENROUTER_API_KEY = env_first(("INFINI_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"), "")
 OPENROUTER_MODEL = env_first(("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL"), "auto")
+OPENROUTER_PROVIDER = env_str("INFINI_OPENROUTER_PROVIDER", "")
 OPENROUTER_HTTP_REFERER = env_str("INFINI_OPENROUTER_HTTP_REFERER", "https://github.com/InfiniCrafterLocal")
 OPENROUTER_APP_TITLE = env_str("INFINI_OPENROUTER_APP_TITLE", "InfiniCrafterLocal")
 
@@ -25,6 +26,7 @@ CODEX_LLM_MODEL = env_str("INFINI_CODEX_LLM_MODEL", "")
 CODEX_VISUAL_REASONING = env_str("INFINI_CODEX_VISUAL_REASONING", "inherit").strip().lower()
 
 LLM_FALLBACK_PROVIDER = env_str("INFINI_LLM_FALLBACK_PROVIDER", "").lower()
+LLM_FALLBACK_OPENROUTER_PROVIDER = env_str("INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER", "")
 LLM_FALLBACK_MODEL = env_str("INFINI_LLM_FALLBACK_MODEL", "")
 LLM_FALLBACK_BASE_URL = env_str("INFINI_LLM_FALLBACK_BASE_URL", "").rstrip("/")
 LLM_FALLBACK_API_KEY = env_str("INFINI_LLM_FALLBACK_API_KEY", "")
@@ -37,6 +39,7 @@ LLM_POOL_PROFILES = (
         "id": "llm_2",
         "enabled": env_bool("INFINI_LLM_POOL_2_ENABLED", False),
         "provider": env_str("INFINI_LLM_POOL_2_PROVIDER", "openai_compat").lower(),
+        "openrouter_provider": env_str("INFINI_LLM_POOL_2_OPENROUTER_PROVIDER", ""),
         "base_url": env_str("INFINI_LLM_POOL_2_BASE_URL", "").rstrip("/"),
         "api_key": env_str("INFINI_LLM_POOL_2_API_KEY", ""),
         "model": env_str("INFINI_LLM_POOL_2_MODEL", ""),
@@ -46,6 +49,7 @@ LLM_POOL_PROFILES = (
         "id": "llm_3",
         "enabled": env_bool("INFINI_LLM_POOL_3_ENABLED", False),
         "provider": env_str("INFINI_LLM_POOL_3_PROVIDER", "openai_compat").lower(),
+        "openrouter_provider": env_str("INFINI_LLM_POOL_3_OPENROUTER_PROVIDER", ""),
         "base_url": env_str("INFINI_LLM_POOL_3_BASE_URL", "").rstrip("/"),
         "api_key": env_str("INFINI_LLM_POOL_3_API_KEY", ""),
         "model": env_str("INFINI_LLM_POOL_3_MODEL", ""),
@@ -55,6 +59,7 @@ LLM_POOL_PROFILES = (
         "id": "llm_4",
         "enabled": env_bool("INFINI_LLM_POOL_4_ENABLED", False),
         "provider": env_str("INFINI_LLM_POOL_4_PROVIDER", "openai_compat").lower(),
+        "openrouter_provider": env_str("INFINI_LLM_POOL_4_OPENROUTER_PROVIDER", ""),
         "base_url": env_str("INFINI_LLM_POOL_4_BASE_URL", "").rstrip("/"),
         "api_key": env_str("INFINI_LLM_POOL_4_API_KEY", ""),
         "model": env_str("INFINI_LLM_POOL_4_MODEL", ""),

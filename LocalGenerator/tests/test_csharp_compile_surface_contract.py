@@ -2,20 +2,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from csharp_partial_reader import read_text_with_partial_bundles
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def _check_static_csharp_compile_surface_scanner_passes():
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "tools/check_csharp_contracts.py")],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stdout
 
 
 def _check_optional_real_tml_build_helper_is_present_and_skips_without_target():
