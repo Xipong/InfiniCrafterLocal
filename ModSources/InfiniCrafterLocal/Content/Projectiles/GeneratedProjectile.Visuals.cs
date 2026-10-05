@@ -34,15 +34,16 @@ public sealed partial class GeneratedProjectile
             DrawRuntimeGeometry(lightColor);
             return;
         }
-        string path = mode == "reuse_item_icon" ? _data!.Visual.SpritePath : visual.SpritePath;
+        SpritePresentationSelection selected = SpritePresentation.Entity(_data!, _entity!);
+        string path = selected.Path;
         if (string.IsNullOrWhiteSpace(path)) return; // missing required PNG fails closed; never draw a placeholder.
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(path);
         if (texture is null) return;
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() * 0.5f;
-        float scale = Math.Clamp(Projectile.scale, 0.1f, 8f);
+        float scale = Math.Clamp(Projectile.scale, 0.1f, 8f) * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), Projectile.rotation, origin, scale, effects, 0f);
+        Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), selected.ProjectileRotation(_entity, Projectile.rotation, effects), origin, scale, effects, 0f);
     }
 
     private void DrawRuntimeGeometry(Color lightColor)

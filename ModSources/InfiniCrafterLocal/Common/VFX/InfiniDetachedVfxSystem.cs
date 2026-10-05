@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.Models;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
@@ -26,6 +27,8 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         public string SourceKey { get; init; } = "";
         public string TexturePath { get; init; } = "";
+        // Immutable selected main-body size, never q*P and never a wire field.
+        public int? RenderSizePx { get; init; }
         public InfiniVfxRendererKind PrimitiveKind { get; init; }
         public Vector2 Forward { get; init; }
         public float Density { get; init; }
@@ -92,7 +95,8 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         Color color,
         int duration,
         int maxDrawCalls,
-        InfiniVfxSpritePose? pose = null)
+        InfiniVfxSpritePose? pose = null,
+        int? renderSizePx = null)
     {
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(texturePath))
             return;
@@ -102,6 +106,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         {
             SourceKey = sourceKey,
             TexturePath = texturePath,
+            RenderSizePx = renderSizePx,
             Layer = layer == "AfterProjectiles" ? "AfterProjectiles" : "BeforeProjectiles",
             Center = center,
             Rotation = rotation,
@@ -224,7 +229,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                     emission.Color * (emission.Alpha * (1f - progress)),
                     emission.Rotation - (emission.HasCapturedPose ? 0f : localForwardRadians),
                     new Vector2(texture.Width * 0.5f, texture.Height * 0.5f),
-                    emission.Scale,
+                    emission.Scale * SpritePresentation.FrameScale(emission.RenderSizePx, texture.Width, texture.Height),
                     emission.Effects,
                     0f);
             }

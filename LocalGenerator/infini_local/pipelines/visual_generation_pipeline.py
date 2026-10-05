@@ -18,7 +18,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_stage_messages import stage_chat_message
-from infini_local.core.repair_merge import json_path_child, json_path_relative, merge_frozen_subtree
+from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.pipelines.llm_transport import (
     apply_llm_common_options,
@@ -45,8 +45,8 @@ from infini_local.pipelines.visual_asset_modes import (
 )
 
 
-VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v1"
-VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v1"
+VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v2"
+VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v2"
 _ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
 _VISUAL_STATIC_PREFIX_KEYS = ("task", "assetModeCatalog", "rules")
 
@@ -117,6 +117,20 @@ def attach_visual(
     return data
 
 
+def _sprite_presentation_properties() -> dict[str, Any]:
+    # Direct authored projection, never inferred from hitbox, canvas or prose.
+    return {
+        "renderSizePx": {
+            "type": "integer", "minimum": 1, "maximum": 512,
+            "description": "Base world-pixel length of the larger side of the complete final PNG frame, before rotation/camera and independent draw multipliers. Not alpha-bbox, collision, inventory fit or bake resolution. Runtime uses q=renderSizePx/max(actual final frame width,height).",
+        },
+        "forwardAngleDegrees": {
+            "type": "number", "minimum": -180, "maximum": 180,
+            "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
+        },
+    }
+
+
 def _visual_item_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -128,6 +142,7 @@ def _visual_item_schema() -> dict[str, Any]:
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 48}, "minItems": 1, "maxItems": 8},
             "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
+            **_sprite_presentation_properties(),
             "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
             "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
             "effectColor": {
@@ -145,7 +160,7 @@ def _visual_item_schema() -> dict[str, Any]:
                 "required": ["normalizedX", "normalizedY"],
             },
         },
-        "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "inventoryScale", "worldScale"],
+        "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "renderSizePx", "forwardAngleDegrees", "inventoryScale", "worldScale"],
     }
 
 
@@ -167,7 +182,7 @@ def _visual_equip_overlay_schema() -> dict[str, Any]:
     }
 
 
-def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
+def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None) -> dict[str, Any]:
     entity_id = {"type": "string", "enum": entity_ids}
     scale = {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _ENTITY_SCALE_DESCRIPTION}
     authored = {
@@ -176,7 +191,7 @@ def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
         "properties": {
             "entityId": copy.deepcopy(entity_id),
             "assetMode": {"const": "baked_sprite"},
-            "visualProjectRef": {"type": "string", "enum": ["item", "entity"]},
+            "visualProjectRef": {"const": "item"},
             "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
@@ -184,11 +199,22 @@ def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
         },
         "required": ["entityId", "assetMode", "visualProjectRef", "prompt", "silhouette", "visualIdentity", "scale"],
     }
+    if item_body_id is not None:
+        authored["properties"]["entityId"]["enum"] = [item_body_id]
+    distinct = copy.deepcopy(authored)
+    distinct["properties"]["visualProjectRef"] = {"const": "entity"}
+    distinct["properties"]["entityId"]["enum"] = [value for value in entity_ids if value != item_body_id]
+    distinct["properties"].update({
+        "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION.replace("item PNG", "independent entity PNG")},
+        **_sprite_presentation_properties(),
+    })
+    distinct["required"].extend(["preferredCanvasSize", "renderSizePx", "forwardAngleDegrees"])
+    nonitem_id = {"type": "string", "enum": [value for value in entity_ids if value != item_body_id]}
     reuse = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "entityId": copy.deepcopy(entity_id),
+            "entityId": copy.deepcopy(nonitem_id),
             "assetMode": {"const": "reuse_item_icon"},
             "visualProjectRef": {"const": "item"},
             "scale": copy.deepcopy(scale),
@@ -201,17 +227,17 @@ def _visual_entity_schema(entity_ids: list[str]) -> dict[str, Any]:
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "entityId": copy.deepcopy(entity_id),
+                "entityId": copy.deepcopy(nonitem_id),
                 "assetMode": {"const": mode},
                 "visualProjectRef": {"const": "none"},
                 "scale": copy.deepcopy(scale),
             },
             "required": ["entityId", "assetMode", "visualProjectRef", "scale"],
         })
-    return {"oneOf": [authored, reuse, *non_sprite_branches]}
+    return {"oneOf": [authored, distinct, reuse, *non_sprite_branches]} if nonitem_id["enum"] else authored
 
 
-def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False) -> dict[str, Any]:
+def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
     # itemPatch is partial: Repair returns only the visual fields it is fixing.
     # Omitted fields stay frozen - the deterministic merge completes the patch from
     # the previous kit before applying, mirroring the gameplay parentSynthesis rule.
@@ -225,7 +251,7 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_REPAIR_PATCH_SCHEMA},
         "itemPatch": {"anyOf": [partial_item, {"type": "null"}]},
-        "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids), "maxItems": len(entity_ids)},
+        "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "maxItems": len(entity_ids)},
         "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
         "entityIndicesDelete": {"type": "array", "description": "Zero-based array index values into the previous entities array to delete; structural positions, not time or size.", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
         "animationPlan": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 1200}, {"type": "null"}]},
@@ -243,11 +269,11 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
     }
 
 
-def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False) -> dict[str, Any]:
+def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_KIT_SCHEMA},
         "item": _visual_item_schema(),
-        "entities": {"type": "array", "items": _visual_entity_schema(entity_ids), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
+        "entities": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
         "animationPlan": {"type": "string", "minLength": 1, "maxLength": 1200},
     }
     required = ["schema", "item", "entities", "animationPlan"]
@@ -263,6 +289,7 @@ def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = F
 
 
 def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, CONTROLLER_OPCODE, MOVEMENT_OPCODE
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
     events_by_entity: dict[str, list[str]] = {}
     for row in runtime_event_inventory(data):
@@ -272,18 +299,98 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     for entity in runtime.get("entities") or []:
         if not isinstance(entity, Mapping):
             continue
-        movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
-        controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+        movement = dict(entity["movement"]) if isinstance(entity.get("movement"), Mapping) else {}
+        controller = dict(entity["controller"]) if isinstance(entity.get("controller"), Mapping) else {}
+        # Explain exact accepted drivers from their canonical owner, not a
+        # name/category classifier or a second geometry/representation registry.
+        driver_meanings = {}
+        for slot, driver, opcodes in (("movement", movement, MOVEMENT_OPCODE), ("controller", controller, CONTROLLER_OPCODE)):
+            name = driver.get("name")
+            capability = CAPABILITY_REGISTRY.get(name) if type(name) is str else None
+            if capability is not None and capability.component_slot == slot and type(driver.get("code")) is int and opcodes.get(capability.name) == driver["code"]:
+                driver_meanings[slot] = capability.summary
         rows.append({
             "id": str(entity.get("id") or ""),
             "kind": str(entity.get("kind") or ""),
             "visualRole": str(entity.get("visualRole") or ""),
-            "movement": str(movement.get("name") or ""),
-            "controller": str(controller.get("name") or ""),
+            "movement": copy.deepcopy(dict(movement)),
+            "controller": copy.deepcopy(dict(controller)),
+            "driverMeaningReadOnly": driver_meanings,
             "events": sorted(set(events_by_entity.get(str(entity.get("id") or ""), []))),
             "hitbox": copy.deepcopy(entity.get("hitbox") or {}),
         })
     return rows
+
+
+def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    from infini_local.pipelines.sprite_contracts import sprite_contract_for
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
+    gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
+    mechanics = {
+        "gameplay": {field: copy.deepcopy(gameplay[field]) for field in ("itemScale", "width", "height") if field in gameplay},
+        **{field: copy.deepcopy(runtime[field]) for field in ("itemEntityId", "primaryEntityId", "primaryOwner", "itemUse", "itemContact", "bindings") if field in runtime},
+    }
+    canvases = _visual_item_schema()["properties"]["preferredCanvasSize"]["enum"]
+    roles = {"item", *("runtime:" + row["visualRole"] for row in runtime_rows if row["kind"] != "item_body")}
+    fill_fields = ("targetFill", "minFill", "maxFill", "marginPx", "cropPadPx", "targetLongAxisPx", "alphaMode")
+    fill = {}
+    for role in sorted(roles):
+        fill[role] = {}
+        for canvas in canvases:
+            contract = sprite_contract_for(role, canvas)
+            fill[role][str(canvas)] = {field: copy.deepcopy(contract[field]) for field in fill_fields}
+    return {
+        "acceptedPresentationMechanicsReadOnly": mechanics,
+        "spritePresentationReadOnly": {
+            "units": "R=renderSizePx is the larger complete final frame side in base world pixels, not alpha-bbox, hitbox, requested canvas or physical shaft/tip length. C is the actual loaded final frame max-side. G=gameplay.itemScale, W=item.worldScale, I=item.inventoryScale, D=hitbox.drawScale, E=entity.scale and current P=Projectile.scale are independent dimensionless multipliers; Visual cannot edit G or D.",
+            "axis": "forwardAngleDegrees is the final PNG local forward-axis in degrees: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. It describes pixels, not AI movement. Describe this pose in the same authored prompt; reuse inherits root pixels and axis, never a second inferred axis.",
+            "heldRootVisibility": {
+                "hideUseGraphic": CAPABILITY_REGISTRY["configure_item_use"].params["hideUseGraphic"].description,
+                "heldSpriteVisibilityHint": CAPABILITY_REGISTRY["configure_item_use"].params["heldSpriteVisibilityHint"].description,
+                "wireHint": "runtimeProgram.itemUse.releaseTiming",
+            },
+            "formulas": {
+                "q": "R / max(actual final PNG frame width, height)",
+                "inventory": "s_inventory * min(1, caller inventory frame max-side / C) * I; unchanged, no q",
+                "world": "q_item * s_world * W",
+                "held": "q_item * player.GetAdjustedItemScale(held) (G already included once)",
+                "heldRegistryOnly": "q_item * baseScale * clamp(G, .25, 4)",
+                "body": "q_selected * clamp(P, .1, 8); initial P=D*E, growth remains independent",
+                "liveBodyCopy": "q_selected * clamp(P, .1, 8) * slot.Scale; absent R retains historical max(.05, P*slot.Scale)",
+                "detachedBodyCopy": "q_selected * existing dimensionless pose/slot multiplier; capture/network pose remains dimensionless",
+                "visibleAlphaExtent": "alpha-bbox pixels * q_selected * independent draw multipliers",
+                "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8). Never change accepted gameplay to force equality.",
+            },
+            "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
+            "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
+            "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon may instead represent only a terminal body with a separately chosen texturedPath for the path. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
+            "bakeFillByProcessingRole": fill,
+            "legacy": "Already delivered metadata absence preserves exact historical rendering; newly authored v2 projects must explicitly choose required fields. No defaults, clamps, migration or rebake.",
+        },
+    }
+
+
+def _known_baked_project_target_schema(
+    row: Any, entity_ids: list[str], item_body_id: str,
+) -> Mapping[str, Any] | None:
+    """Diagnose only an exact known baked ownership transition, never infer one."""
+    if not isinstance(row, Mapping) or not item_body_id or item_body_id not in entity_ids:
+        return None
+    entity_id = row.get("entityId")
+    if type(entity_id) is not str or entity_id not in entity_ids or row.get("assetMode") != "baked_sprite":
+        return None
+    target_ref = "item" if entity_id == item_body_id else "entity"
+    source_ref = "entity" if target_ref == "item" else "item"
+    if row.get("visualProjectRef") != source_ref:
+        return None
+    schema = _visual_entity_schema(entity_ids, item_body_id)
+    branches = schema.get("oneOf") or [schema]
+    selected = [branch for branch in branches
+                if branch["properties"]["assetMode"].get("const") == "baked_sprite"
+                and branch["properties"]["visualProjectRef"].get("const") == target_ref
+                and entity_id in branch["properties"]["entityId"]["enum"]]
+    return selected[0] if len(selected) == 1 else None
 
 
 def _validate_kit(
@@ -301,6 +408,8 @@ def _validate_kit(
     # Declared lossless normalization: the exact asset mode plus exact entity id
     # uniquely determines project ownership. The only missing-mode Fix remains
     # the complete item-body design -> baked inventory project case.
+    source_rows_raw = raw.get("entities")
+    source_rows = source_rows_raw if isinstance(source_rows_raw, list) else []
     candidate = copy.deepcopy(raw)
     candidate_rows_raw = candidate.get("entities")
     candidate_rows: list[Any] = candidate_rows_raw if isinstance(candidate_rows_raw, list) else []
@@ -320,7 +429,22 @@ def _validate_kit(
                 else "none"
             )
     raw = candidate
-    for schema_error in strict_schema_errors(raw, _response_schema(entity_ids, equipment_overlay_required)):
+    schema_errors = strict_schema_errors(raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id))
+    for index, source_row in enumerate(source_rows):
+        target_schema = _known_baked_project_target_schema(source_row, entity_ids, item_body_id)
+        if target_schema is None:
+            continue
+        # The authored ref is still invalid and must be chosen by Repair. The
+        # accepted identity/mode fixes its ownership domain, so diagnose against
+        # that exact schema: old inapplicable leaves or new missing leaves, not
+        # a false entityId error from the opposite project branch. No values are
+        # corrected/materialized here; unknown/missing discriminators stay on
+        # the ordinary strict path above.
+        row_path = f"$.entities[{index}]"
+        schema_errors = [error for error in schema_errors
+                         if json_path_relative(str(error.get("path") or ""), row_path) is None]
+        schema_errors.extend(strict_schema_errors(source_row, target_schema, path=row_path))
+    for schema_error in schema_errors:
         errors.append({
             "path": str(schema_error.get("path") or "$"),
             "message": f"schema {schema_error.get('kind')}: expected {schema_error.get('expected')!r}",
@@ -395,7 +519,12 @@ def _build_visual_repair_scope(
     *,
     equipment_overlay_required: bool = False,
 ) -> dict[str, Any]:
-    rows = raw.get("entities") if isinstance(raw, Mapping) and isinstance(raw.get("entities"), list) else []
+    rows_raw = raw.get("entities") if isinstance(raw, Mapping) else None
+    rows = rows_raw if isinstance(rows_raw, list) else []
+    original_indices: dict[str, int] = {}
+    for index, row in enumerate(rows):
+        if isinstance(row, Mapping) and row.get("entityId") in entity_ids:
+            original_indices.setdefault(row["entityId"], index)
     entity_child_error_indices: set[int] = set()
     for diagnostic in errors:
         diagnostic_path = str(diagnostic.get("path") or "")
@@ -455,6 +584,12 @@ def _build_visual_repair_scope(
             if 0 <= index < len(rows) and isinstance(rows[index], Mapping):
                 entity_id = str(rows[index].get("entityId") or "")
                 if entity_id in entity_ids:
+                    if original_indices[entity_id] != index:
+                        # The first occurrence owns ID-keyed leaf repairs. A
+                        # later duplicate's errors grant only original-index
+                        # deletion, never permissions on the first row.
+                        delete_indices.add(index)
+                        continue
                     grant_entity(entity_id, relative)
                 else:
                     delete_indices.add(index)
@@ -561,7 +696,23 @@ def _drop_schema_forbidden_mutable_fields(
 
     out: dict[str, Any] = copy.deepcopy(dict(candidate))
     branches = [row for row in schema.get("oneOf") or [] if isinstance(row, Mapping)]
-    strict_shapes = branches or [schema]
+    if branches:
+        # Select only a unique exact literal discriminator branch. Never use the
+        # union of fields or a smallest-error guess to authorize deletion.
+        selected = []
+        for branch in branches:
+            constants = {field: spec["const"] for field, spec in (branch.get("properties") or {}).items()
+                         if isinstance(spec, Mapping) and "const" in spec}
+            # candidate has already passed frozen merge; only permitted repairs
+            # can change its discriminator. Select that effective branch, not
+            # the source branch whose dependent fields may now be inapplicable.
+            if constants and all(field in out and type(out[field]) is type(value) and out[field] == value
+                                 for field, value in constants.items()):
+                selected.append(branch)
+        if len(selected) != 1:
+            return out
+        schema = selected[0]
+    strict_shapes = [schema]
     if not strict_shapes or any(row.get("additionalProperties") is not False for row in strict_shapes):
         return out
     valid_fields = {
@@ -706,7 +857,8 @@ def _filter_visual_repair_patch(
             accepted.append(path)
         else:
             ignored.append(_visual_filter_ignored(path, entity_id, entity_id, "valid_entity_delete_ignored"))
-    rows = source.get("entities") if isinstance(source.get("entities"), list) else []
+    rows_raw = source.get("entities")
+    rows = rows_raw if isinstance(rows_raw, list) else []
     for index, source_index in enumerate(patch.get("entityIndicesDelete") or []):
         path = f"$.entityIndicesDelete[{index}]"
         numeric = int(source_index)
@@ -717,7 +869,10 @@ def _filter_visual_repair_patch(
             preserved = rows[numeric] if 0 <= numeric < len(rows) else None
             ignored.append(_visual_filter_ignored(path, numeric, preserved, "valid_entity_index_delete_ignored"))
 
-    by_id = {str(row.get("entityId") or ""): row for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "")}
+    by_id: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        if isinstance(row, Mapping) and str(row.get("entityId") or ""):
+            by_id.setdefault(str(row["entityId"]), row)
     replacement_indices: dict[str, int] = {}
     for transaction in scope.get("entityReplacementTransactions") or []:
         if not isinstance(transaction, Mapping):
@@ -731,7 +886,7 @@ def _filter_visual_repair_patch(
         path = f"$.entitiesUpsert[{index}]"
         original = by_id.get(entity_id)
         if entity_id not in mutable_ids:
-            if original is None or dict(candidate) != dict(original):
+            if original is None or not json_values_equal(dict(candidate), dict(original)):
                 ignored.append(_visual_filter_ignored(path, candidate, original, "independent_valid_entity_frozen"))
             continue
         if original is None:
@@ -757,7 +912,7 @@ def _filter_visual_repair_patch(
             audit_path=path,
             accepted=accepted,
         )
-        if merged != original:
+        if not json_values_equal(merged, original):
             filtered["entitiesUpsert"].append(merged)
 
     filtered["entityIndicesDelete"] = sorted(set(filtered["entityIndicesDelete"]))
@@ -795,14 +950,21 @@ def _apply_visual_repair_patch(
     rows = [row for index, row in enumerate(rows) if index not in set(filtered.get("entityIndicesDelete") or [])]
     doomed = set(str(value) for value in filtered.get("entityIdsDelete") or [])
     rows = [row for row in rows if not isinstance(row, Mapping) or str(row.get("entityId") or "") not in doomed]
-    by_id = {str(row.get("entityId") or ""): copy.deepcopy(row) for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "")}
-    order = [str(row.get("entityId") or "") for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "")]
+    original_indices: dict[str, int] = {}
+    for index, row in enumerate(rows):
+        if isinstance(row, Mapping) and str(row.get("entityId") or ""):
+            original_indices.setdefault(str(row["entityId"]), index)
     for row in filtered.get("entitiesUpsert") or []:
         entity_id = str(row.get("entityId") or "")
-        if entity_id not in by_id:
-            order.append(entity_id)
-        by_id[entity_id] = copy.deepcopy(row)
-    out["entities"] = [by_id[entity_id] for entity_id in order if entity_id in by_id]
+        index = original_indices.get(entity_id)
+        if index is None:
+            original_indices[entity_id] = len(rows)
+            rows.append(copy.deepcopy(row))
+        else:
+            rows[index] = copy.deepcopy(row)
+    # Keep every other original slot, including undeleted malformed/duplicate
+    # rows. An ID-keyed upsert repairs only its first surviving occurrence.
+    out["entities"] = rows
     return (out, audit) if return_audit else out
 
 
@@ -820,14 +982,15 @@ def _request_visual_kit(
 ) -> dict[str, Any] | MalformedVisualDirectorOutput:
     runtime_rows = _runtime_card(data)
     entity_ids = [row["id"] for row in runtime_rows]
+    item_body_id = next((row["id"] for row in runtime_rows if row["kind"] == "item_body"), "")
     equipment_overlay = equipment_overlay_requirement(data)
     equipment_overlay_required = bool(equipment_overlay["required"])
     _ = (ca, cb)
     repair = repair_errors is not None
     schema = (
-        _visual_repair_schema(entity_ids, equipment_overlay_required)
+        _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
         if repair
-        else _response_schema(entity_ids, equipment_overlay_required)
+        else _response_schema(entity_ids, equipment_overlay_required, item_body_id)
     )
     response_format = llm_json_response_format(
         "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",
@@ -858,8 +1021,8 @@ def _request_visual_kit(
             "brokenFragments": context["broken"],
             "validGeneratedContext": context["validReadOnly"],
             "parentFactsReadOnly": {
-                "parentA": {"packet": raw_parent_card_for_llm(a)},
-                "parentB": {"packet": raw_parent_card_for_llm(b)},
+                "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
+                "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
             },
             "runtimeEntitiesReadOnly": runtime_rows,
             "itemReadOnly": {
@@ -898,8 +1061,8 @@ def _request_visual_kit(
                 "realization": copy.deepcopy(data.get("realization") or {}),
             },
             "parents": {
-                "parentA": {"packet": raw_parent_card_for_llm(a)},
-                "parentB": {"packet": raw_parent_card_for_llm(b)},
+                "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
+                "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
             },
             "runtimeEntities": runtime_rows,
             "requiredEntityIds": entity_ids,
@@ -923,6 +1086,10 @@ def _request_visual_kit(
             ],
             "responseSchema": sent_schema,
         }
+    response_schema = payload.pop("responseSchema")
+    payload.update(_presentation_packet_context(data, runtime_rows))
+    payload["rules"].append("Explicitly choose required renderSizePx and forwardAngleDegrees for item and those plus preferredCanvasSize for each distinct baked project; item_body/reuse inherit root and must not duplicate them. Canvas is resolution, not world size; do not use gameplay hitbox dimensions as a bake canvas chooser.")
+    payload["responseSchema"] = response_schema
     # Ordering only: keep every field/value in the same complete JSON object.
     # Entity-specific responseSchema (including its exact ID enums) remains after
     # the boundary, as do all parent, item, error, and Repair context fields.
@@ -986,7 +1153,7 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
         "inventoryScale": float(item.get("inventoryScale") or 1.0),
         "worldScale": float(item.get("worldScale") or 1.0),
     })
-    for field in ("grip", "effectColor"):
+    for field in ("grip", "effectColor", "renderSizePx", "forwardAngleDegrees"):
         if field in item:
             visual[field] = copy.deepcopy(item[field])
         else:
@@ -1018,6 +1185,12 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
             entity_visual.pop(stale_impact_field, None)
         project_ref = str(row.get("visualProjectRef") or "")
         project = item if project_ref == "item" else row
+        # Only distinct baked projects own these metadata; item/reuse select root.
+        for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"):
+            if project_ref == "entity" and field in row:
+                entity_visual[field] = copy.deepcopy(row[field])
+            else:
+                entity_visual.pop(field, None)
         entity_visual.update({
             "role": str(entity.get("visualRole") or ""),
             "assetMode": str(row.get("assetMode") or ""),
@@ -1143,22 +1316,22 @@ def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
     return str(visual.get("imagePrompt") or "")[:1400]
 
 
-def visual_response_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None) -> dict[str, Any]:
+def visual_response_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None, *, item_body_id: str | None = None) -> dict[str, Any]:
     """Public schema; ``None`` exports the capability-neutral optional superset."""
 
     if equipment_overlay_required is not None:
-        return _response_schema(entity_ids, equipment_overlay_required)
-    schema = _response_schema(entity_ids, False)
+        return _response_schema(entity_ids, equipment_overlay_required, item_body_id)
+    schema = _response_schema(entity_ids, False, item_body_id)
     schema["properties"]["equipOverlay"] = _visual_equip_overlay_schema()
     return schema
 
 
-def visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None) -> dict[str, Any]:
+def visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None, *, item_body_id: str | None = None) -> dict[str, Any]:
     """Public Repair schema; ``None`` exports the optional capability superset."""
 
     if equipment_overlay_required is not None:
-        return _visual_repair_schema(entity_ids, equipment_overlay_required)
-    schema = _visual_repair_schema(entity_ids, False)
+        return _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
+    schema = _visual_repair_schema(entity_ids, False, item_body_id)
     schema["properties"]["equipOverlayPatch"] = {"anyOf": [_visual_equip_overlay_schema(), {"type": "null"}]}
     return schema
 

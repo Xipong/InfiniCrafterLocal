@@ -45,6 +45,7 @@ _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
+    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"})
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
@@ -189,9 +190,28 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
     return errors
 
 
+def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
+    """Additive DTO compatibility: omission stays omitted, present choices are strict."""
+    from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
+    from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
+    fields = ("renderSizePx", "forwardAngleDegrees") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize")
+    properties = _visual_item_schema()["properties"]
+    for field in fields:
+        if field not in visual:
+            continue
+        leaf_path = f"{path}.{field}"
+        if entity_kind is not None and (entity_kind == "item_body" or visual.get("assetMode") != "baked_sprite"):
+            errors.append({"path": leaf_path, "code": "nonowning_sprite_presentation", "message": "Only a distinct baked entity owns main-sprite presentation; item_body/reuse select the root and non-PNG branches have none."})
+        for error in strict_schema_errors(visual[field], properties[field], path=leaf_path):
+            errors.append({"path": error["path"], "code": "invalid_sprite_presentation", "message": "Present presentation metadata must have the declared non-null type and finite bounded domain without coercion."})
+
+
 def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the final Python -> C# low-level runtime wire without authoring defaults."""
     errors: list[dict[str, Any]] = []
+    root_visual = data.get("visual")
+    if isinstance(root_visual, Mapping):
+        _validate_sprite_presentation(root_visual, "$.visual", errors)
     runtime_raw = data.get("runtimeProgram")
     runtime = runtime_raw if isinstance(runtime_raw, Mapping) else {}
     if isinstance(runtime_raw, Mapping):
@@ -256,6 +276,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if component_name not in entity:
                 continue
             component = _validate_component_shape(entity.get(component_name), allowed_keys, f"{entity_path}.{component_name}", errors)
+            if component_name == "visual" and component is not None:
+                _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
             if component_name == "spawn" and component is not None and "overTarget" in component:
                 _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:

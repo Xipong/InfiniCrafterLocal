@@ -171,7 +171,20 @@ def test_captured_gameplay_repair_replay(section, case):
 
 
 @pytest.mark.parametrize("case", list(_REPLAY["visualApplyCases"]))
-def test_captured_visual_repair_replay(case):
+def test_captured_visual_repair_replay(case, monkeypatch):
+    # Declared test-only historical schema projection, not fresh v1 admission.
+    # Saved RAW/patch bytes and all authored choices remain untouched. The v1
+    # replay verifies its old frozen deletion only; no new sizing is invented.
+    current_item_schema = visual._visual_item_schema
+    def historical_item_schema():
+        schema = current_item_schema()
+        for field in ("renderSizePx", "forwardAngleDegrees"):
+            del schema["properties"][field]
+            schema["required"].remove(field)
+        return schema
+    monkeypatch.setattr(visual, "_visual_item_schema", historical_item_schema)
+    monkeypatch.setattr(visual, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
+    monkeypatch.setattr(visual, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
     replay = copy.deepcopy(_REPLAY["visualApplyCases"][case])
     raw, entity_ids, item_id = replay["visualRaw"], replay["entityIds"], replay["itemBodyId"]
     kit_before, errors = visual._validate_kit(raw, entity_ids, item_id)

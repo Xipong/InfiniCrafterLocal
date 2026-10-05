@@ -1188,20 +1188,32 @@ def _prompt_cache_boundary(payload: dict[str, Any]) -> tuple[int, int] | None:
         return None
     return index, chars
 
-def _prompt_cache_identity(payload: dict[str, Any], model: str) -> str:
+def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict[str, Any] | None = None) -> str:
     """Content-derived routing hint, never a receipt of provider cache reuse."""
     boundary = _prompt_cache_boundary(payload)
     if boundary is None:
         raise ValueError("prompt cache identity requires a valid static boundary")
     index, chars = boundary
     messages = payload["messages"]
-    stable = {
-        "model": model,
-        "messages": [*messages[:index], {**messages[index], "content": messages[index]["content"][:chars]}],
-        "response_format": payload.get("response_format"),
-        "reasoning": payload.get("reasoning"),
-        "reasoning_effort": payload.get("reasoning_effort"),
-    }
+    if context is not None and active_llm_provider(context) == "openai_codex":
+        from infini_local.services.codex_text_backend import _request_payload
+        # Hash exactly what this provider consumes, not client-only message names
+        # or ignored reasoning.exclude. The adapter is the canonical projection
+        # owner; other providers retain their existing identity semantics.
+        prefix_packet = _clean_llm_payload(payload)
+        prefix_packet["model"] = model
+        prefix_packet.pop("prompt_cache_key", None)  # Never hash our own routing hint.
+        prefix_packet["messages"] = prefix_packet["messages"][:index + 1]
+        prefix_packet["messages"][index]["content"] = messages[index]["content"][:chars]
+        stable = {"provider": "openai_codex", "wire": _request_payload(prefix_packet)}
+    else:
+        stable = {
+            "model": model,
+            "messages": [*messages[:index], {**messages[index], "content": messages[index]["content"][:chars]}],
+            "response_format": payload.get("response_format"),
+            "reasoning": payload.get("reasoning"),
+            "reasoning_effort": payload.get("reasoning_effort"),
+        }
     digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
     return "infini-" + digest[:32]
@@ -1740,7 +1752,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
         prepared = _payload_for_context(payload, context)
         if _prompt_cache_boundary(payload) is not None:
             identity_source = {**prepared, PROMPT_CACHE_METADATA_KEY: payload[PROMPT_CACHE_METADATA_KEY]}
-            prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]))
+            prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]), context=context)
         state = _CURRENT_LLM_DIAGNOSTICS.get()
         if state is not None:
             state["physicalAttemptCount"] = None  # Subscription/auth network I/O belongs to the Codex owner.

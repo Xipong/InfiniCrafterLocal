@@ -255,10 +255,10 @@ public static class InfiniVfxRuntime
                 case InfiniVfxRendererKind.ProjectileAfterimage:
                 case InfiniVfxRendererKind.SpriteStampTrail:
                 case InfiniVfxRendererKind.ActorAfterimage:
-                    string texturePath = ResolveTexturePath(data, entityId, slot.TextureRole);
-                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(texturePath);
+                    SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole);
+                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(selected.Path);
                     if (texture is not null)
-                        DrawSpriteTrail(texture, projectile, manifest, ref state, color, slot.Scale);
+                        DrawSelectedSpriteTrail(texture, projectile, data.RuntimeProgram.TryGetEntity(entityId), selected, manifest, ref state, color, slot.Scale);
                     break;
                 case InfiniVfxRendererKind.TipTrail:
                     DrawHistory(pixel, manifest, ref state, state.TipHistory, state.TipHistoryCount, color, Math.Max(1f, slot.Scale * 2f));
@@ -291,30 +291,7 @@ public static class InfiniVfxRuntime
     }
 
     internal static string ResolveTexturePath(GeneratedItemData data, string entityId, string textureRole)
-    {
-        string role = (textureRole ?? "").Trim().ToLowerInvariant();
-        if (role == "none" || data is null) return "";
-        if (role == "item") return data.Visual.SpritePath ?? "";
-
-        RuntimeEntitySpec? entity = null;
-        foreach (RuntimeEntitySpec candidate in data.RuntimeProgram.Entities)
-        {
-            if (string.Equals(candidate.Id, entityId, StringComparison.Ordinal))
-            {
-                entity = candidate;
-                break;
-            }
-        }
-        if (entity is null) return "";
-        if (role == "impact") return entity.Visual.ImpactSpritePath ?? "";
-        if (role != "entity" && !string.Equals(entity.VisualRole, role, StringComparison.Ordinal)) return "";
-        return entity.Visual.AssetMode switch
-        {
-            "reuse_item_icon" => data.Visual.SpritePath ?? "",
-            "baked_sprite" => entity.Visual.SpritePath ?? "",
-            _ => "",
-        };
-    }
+        => data is null ? "" : SpritePresentation.Resolve(data, entityId, textureRole).Path;
 
     public static bool OnDetachedEvent(
         GeneratedItemData data,
@@ -423,17 +400,39 @@ public static class InfiniVfxRuntime
         if (VfxRendererRegistry.Resolve(slot) is not (InfiniVfxRendererKind.ImpactSprite
             or InfiniVfxRendererKind.ProjectileAfterimage or InfiniVfxRendererKind.SpriteStampTrail
             or InfiniVfxRendererKind.ActorAfterimage)) return false;
-        if (pose is { } captured && VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
+        if (VfxRendererRegistry.Resolve(slot) == InfiniVfxRendererKind.ImpactSprite)
         {
-            string path = ResolveTexturePath(data, entityId, slot.TextureRole);
-            if (string.IsNullOrWhiteSpace(path)) return false;
-            InfiniDetachedVfxSystem.Enqueue(sourceKey, path, slot.Layer, center + new Vector2(0, captured.GfxOffY),
-                captured.Rotation, captured.Scale * slot.Scale, slot.Alpha,
-                ApplyBlend(PresentationColor(data, LegacyPresentationColor(manifest, Color.White)), slot.Blend),
-                slot.Duration, manifest.Budget.MaxDrawCalls, captured);
-        }
-        else // Existing item callers retain their directional presentation convention.
+            // Dedicated impacts retain their own old units and directional convention.
             EmitImpactSprite(data, entityId, center, inheritedVelocity, slot, manifest, sourceKey);
+            return true;
+        }
+        SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole);
+        if (string.IsNullOrWhiteSpace(selected.Path)) return !pose.HasValue; // legacy directional callers report kind admission
+        Color color = ApplyBlend(PresentationColor(data, LegacyPresentationColor(manifest, Color.White)), slot.Blend);
+        if (pose is { } captured)
+        {
+            // Snapshot/network remains raw native pose + dimensionless clamp(P).
+            // Capture the selected texture's corrected pose and base size only here.
+            var selectedPose = captured with { Rotation = selected.ProjectileRotation(data.RuntimeProgram.TryGetEntity(entityId), captured.Rotation, captured.Effects) };
+            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer, center + new Vector2(0, captured.GfxOffY),
+                selectedPose.Rotation, captured.Scale * slot.Scale, slot.Alpha, color,
+                slot.Duration, manifest.Budget.MaxDrawCalls, selectedPose, selected.RenderSizePx);
+        }
+        else
+        {
+            float rotation = inheritedVelocity.LengthSquared() > 0.01f ? inheritedVelocity.ToRotation() : 0f;
+            InfiniVfxSpritePose? selectedPose = null;
+            if (selected.ForwardAngleDegrees is { } axis)
+            {
+                rotation = SpritePresentation.AlignForward(rotation, axis, SpriteEffects.None);
+                selectedPose = new(rotation, 1f, SpriteEffects.None, 0f);
+            }
+            // No pose was authored/captured by the item caller. Preserve its old
+            // directional/clamp convention; declared axis only replaces PCA metadata.
+            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer, center, rotation,
+                Math.Clamp(slot.Scale, 0.05f, 8f), slot.Alpha, color, slot.Duration, manifest.Budget.MaxDrawCalls,
+                selectedPose, selected.RenderSizePx);
+        }
         return true;
     }
 
@@ -503,6 +502,29 @@ public static class InfiniVfxRuntime
         if (state.DrawCallsThisFrame + cost > InfiniVfxClientOptions.EffectiveDrawBudget(manifest.Budget.MaxDrawCalls)) return false;
         if(state.SourceKey.Length>0&&!InfiniDetachedVfxSystem.TrySpendSourceDraw(state.SourceKey,manifest.Budget.MaxDrawCalls,cost))return false;
         state.DrawCallsThisFrame += cost; return true;
+    }
+
+    private static void DrawSelectedSpriteTrail(Texture2D texture, Projectile projectile, RuntimeEntitySpec? entity,
+        SpritePresentationSelection selected, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale)
+    {
+        if (!selected.RenderSizePx.HasValue && !selected.ForwardAngleDegrees.HasValue)
+        {
+            DrawSpriteTrail(texture, projectile, manifest, ref state, color, scale);
+            return; // literal legacy live-copy floor, including unclamped P
+        }
+        SpriteEffects effects = projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        float rotation = selected.ProjectileRotation(entity, projectile.rotation, effects);
+        float drawScale = selected.RenderSizePx.HasValue
+            ? Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height)
+            : Math.Max(0.05f, projectile.scale * scale);
+        Vector2 origin = new(texture.Width * 0.5f, texture.Height * 0.5f);
+        for (int i = 2; i < state.HistoryCount; i += 3)
+        {
+            if (!SpendDraw(manifest, ref state, 1)) break;
+            float fade = 1f - i / (float)state.CenterHistory.Length;
+            Main.spriteBatch.Draw(texture, state.CenterHistory[i] - Main.screenPosition + new Vector2(0f, projectile.gfxOffY),
+                null, color * fade, rotation, origin, drawScale, effects, 0f);
+        }
     }
 
     private static void DrawSpriteTrail(Texture2D texture, Projectile projectile, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale)

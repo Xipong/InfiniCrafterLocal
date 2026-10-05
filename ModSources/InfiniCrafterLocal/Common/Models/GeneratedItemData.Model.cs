@@ -413,6 +413,22 @@ public sealed class ItemGripSpec
 
 public sealed class VisualSpec
 {
+    private int? renderSizePx;
+    private float? forwardAngleDegrees;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RenderSizePx
+    {
+        get => renderSizePx;
+        set => renderSizePx = SpritePresentation.RequireRenderSize(value);
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(SpritePresentation.ForwardAngleJsonConverter))]
+    public float? ForwardAngleDegrees
+    {
+        get => forwardAngleDegrees;
+        set => forwardAngleDegrees = SpritePresentation.RequireForwardAngle(value);
+    }
+
     private ItemGripSpec? grip;
     private string? accessoryMount;
     private string? effectColor;

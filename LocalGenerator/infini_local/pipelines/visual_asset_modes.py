@@ -7,9 +7,9 @@ from typing import Mapping
 
 
 VISUAL_ASSET_MODE_DESCRIPTIONS: Mapping[str, str] = MappingProxyType({
-    "baked_sprite": "Generate and deliver a distinct PNG for this exact runtime entity.",
+    "baked_sprite": "Generate and deliver a distinct PNG for this exact runtime entity. item_body owns the root item project; a distinct entity owns its renderSizePx, preferredCanvasSize and forwardAngleDegrees.",
     "no_asset": "Deliver no PNG and draw no entity body; independent runtime VFX may still draw.",
-    "reuse_item_icon": "Deliver no separate PNG; resolve this entity to the item_body generated PNG with identical pixels.",
+    "reuse_item_icon": "Deliver no separate PNG; resolve this entity to the item_body generated PNG with identical pixels, root base renderSizePx, canvas and forwardAngleDegrees. No own prompt/size/canvas/axis; entity scale remains independent.",
     "runtime_geometry": "Deliver no PNG; draw the built-in bounded runtime primitive from entity hitbox and light fields.",
 })
 VISUAL_ASSET_MODES = tuple(VISUAL_ASSET_MODE_DESCRIPTIONS)

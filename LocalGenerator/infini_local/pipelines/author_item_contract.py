@@ -76,14 +76,37 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         "name": "non-empty string",
         "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "concept": {
-            "literalSynthesis": "non-empty string",
-            "coreMechanic": "non-empty string",
-            "parentAContribution": "non-empty string",
-            "parentBContribution": "non-empty string",
-            "playerExperience": "non-empty string",
+            "literalSynthesis": (
+                "non-empty string: preserve the actual parents' concrete appearance/identity, including "
+                "deliberately surreal physical combinations. Use only supplied parent identities; "
+                "illustrative examples are not additional parents. Literal appearance does not require "
+                "inheriting every parent capability."
+            ),
+            "coreMechanic": (
+                "non-empty string: choose one clear core gameplay loop with purposeful mechanics. "
+                "Prefer simple, immediately useful play at the supplied progression; add complexity "
+                "only when it serves that loop. This is design guidance, not a capability restriction."
+            ),
+            "parentAContribution": (
+                "non-empty string: explain this actual parent's appearance/identity and purposeful "
+                "mechanical contribution; copying every parent capability is not required."
+            ),
+            "parentBContribution": (
+                "non-empty string: explain this actual parent's appearance/identity and purposeful "
+                "mechanical contribution; copying every parent capability is not required."
+            ),
+            "playerExperience": "non-empty string: explain practical player value and deliberate costs of the selected mechanics",
             "plannedPlayerActions": [{
                 "input": "primary_use|alternate_use|hold|equipped|passive_or_event",
-                "intent": "non-binding initial player-facing intent",
+                "intent": (
+                    "non-binding initial player-facing intent: include extra control modes only for "
+                    "meaningful utility. A parent createTile fact permits placement; it does not require it. "
+                    "For alternate placement, identify the placed target's meaningful utility worth "
+                    "escrowing the same generated item: accepted placement removes it from inventory "
+                    "and makes it unavailable until the tile breaks and returns it. Explicit useful "
+                    "placement and multiple purposeful actions remain legal. These preferences do not "
+                    "authorize Repair to redesign existing authored choices."
+                ),
             }],
         },
         "runtimeProgram": {

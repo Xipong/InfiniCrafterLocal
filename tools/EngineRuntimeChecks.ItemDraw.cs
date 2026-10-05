@@ -83,6 +83,7 @@ internal static partial class EngineRuntimeChecks
             foreach (float uiScale in new[] { 0.65f, 1f, 1.4f })
             foreach (float visualScale in new[] { 0.5f, 1f, 1.75f })
             foreach (bool tinted in new[] { false, true })
+            foreach (int? renderSize in new int?[] { null, 1, 40, 512 })
             {
                 typeof(Texture2D).GetProperty("Width")!.SetValue(texture, size.X);
                 typeof(Texture2D).GetProperty("Height")!.SetValue(texture, size.Y);
@@ -95,6 +96,8 @@ internal static partial class EngineRuntimeChecks
                 Color drawColor = item.GetAlpha(light), itemColor = item.GetColor(environment);
                 var center = new Vector2(110, 90);
                 var offset = new Vector2(3, -5);
+                generated.Data.Visual = new InfiniCrafterLocal.Common.Models.VisualSpec { SpritePath = path, DrawOffsetX = 3, DrawOffsetY = -5 };
+                if (renderSize.HasValue) generated.Data.Visual.RenderSizePx = renderSize.Value;
                 generated.Data.Visual.InventoryScale = visualScale;
                 bool vanilla = generated.PreDrawInInventory(batch, center, frame, drawColor, itemColor, frame.Size() / 2f, scale);
                 Check(!vanilla, "cached inventory replaces vanilla");
@@ -121,7 +124,7 @@ internal static partial class EngineRuntimeChecks
                         "unrotated world canvas bottom stays on the hitbox bottom plus authored offset");
                 }
                 actualCount = (int)count.GetValue(batch)!;
-                float finalScale = uiScale * visualScale;
+                float finalScale = uiScale * visualScale * (renderSize.HasValue ? renderSize.Value / (float)Math.Max(size.X, size.Y) : 1f);
                 Vector2 origin = texture.Bounds.Size() / 2f;
                 Vector2 position = item.Bottom - Terraria.Main.screenPosition + offset - new Vector2(0, size.Y * finalScale / 2f);
                 new DrawData(texture, position, texture.Bounds, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f).Draw(batch);

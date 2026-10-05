@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Serialization;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Models;
@@ -494,6 +495,11 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' has too many event actions");
 
         Visual.Normalize();
+        // New metadata has exactly one texture owner. Alias/item-body rows may
+        // not create a second authority; absent fields remain saved-v5 compatible.
+        if ((Visual.RenderSizePx.HasValue || Visual.PreferredCanvasSize.HasValue || Visual.ForwardAngleDegrees.HasValue)
+            && (Kind == RuntimeEntityKind.ItemBody || Visual.AssetMode != "baked_sprite"))
+            throw new InvalidDataException($"entity '{Id}' presentation size/canvas/axis belongs only to a distinct baked body");
         string expectedVisualRole = RuntimeEntityKind.VisualRoleFor(Kind);
         if (!string.Equals(VisualRole, expectedVisualRole, StringComparison.Ordinal)
             || !string.Equals(Visual.Role, expectedVisualRole, StringComparison.Ordinal))
@@ -538,6 +544,30 @@ public sealed class RuntimeEntitySpec
 
 public sealed class RuntimeEntityVisualSpec
 {
+    private int? renderSizePx;
+    private float? forwardAngleDegrees;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RenderSizePx
+    {
+        get => renderSizePx;
+        set => renderSizePx = SpritePresentation.RequireRenderSize(value);
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(SpritePresentation.ForwardAngleJsonConverter))]
+    public float? ForwardAngleDegrees
+    {
+        get => forwardAngleDegrees;
+        set => forwardAngleDegrees = SpritePresentation.RequireForwardAngle(value);
+    }
+    private int? preferredCanvasSize;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PreferredCanvasSize
+    {
+        get => preferredCanvasSize;
+        set => preferredCanvasSize = value is 24 or 32 or 48 or 64 or 96 or 128
+            ? value : throw new InvalidDataException("entity.visual.preferredCanvasSize must be 24/32/48/64/96/128 when present");
+    }
+
     public string Role { get; set; } = "";
     public string AssetMode { get; set; } = "";
     public string Prompt { get; set; } = "";

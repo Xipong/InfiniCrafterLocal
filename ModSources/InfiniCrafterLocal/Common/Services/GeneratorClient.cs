@@ -12,6 +12,8 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading;
 using Terraria;
 using Terraria.ID;
@@ -492,7 +494,7 @@ public sealed class GeneratorClient
         var nameTokens = NameTokens(craftItem).ToArray();
         string sourceMod = SourceModName(craftItem);
         string internalName = InternalName(craftItem);
-        return new
+        var snapshot = new
         {
             id = craftItem.type,
             name = existing?.Name ?? craftItem.Name,
@@ -566,6 +568,76 @@ public sealed class GeneratorClient
                 note = "Terraria reforges/prefixes are intentionally ignored for InfiniCraft recipes; original items/refunds keep their prefix."
             }
         };
+        ParentSpriteReference? spriteReference = TryCaptureNativeSpriteReference(craftItem, existing);
+        if (spriteReference is null)
+            return snapshot;
+        // Preserve every historical field/null; only an observed request-local fact
+        // opts this one parent into structured insertion. No global null omission.
+        var wire = (JsonObject)JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!;
+        wire["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
+        return wire;
+    }
+
+    private sealed record ParentSpriteFrameReference(string Source,
+        [property: JsonPropertyName("xPx")] int XPx,
+        [property: JsonPropertyName("yPx")] int YPx, int WidthPx, int HeightPx);
+
+    private sealed record ParentSpriteReference(string Source, int TextureWidthPx, int TextureHeightPx,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ParentSpriteFrameReference? CurrentFrame);
+
+    private static ParentSpriteReference? TryCaptureNativeSpriteReference(Item? item, GeneratedItemData? existing)
+    {
+        // This is a loaded native texture/UI-frame observation, not alpha bounds,
+        // held/world display size or a child-size prescription. Absence is unknown.
+        // Generated parents own different PNGs; their shared native host is not art.
+        if (item is null || item.IsAir || existing is not null || item.ModItem is GeneratedItem
+            || Main.dedServ || Main.netMode == NetmodeID.Server)
+            return null;
+        try
+        {
+            var assets = Terraria.GameContent.TextureAssets.Item;
+            if (assets is null || item.type < ItemID.None || item.type >= assets.Length)
+                return null;
+            var asset = assets[item.type];
+            // Installed ReLogic returns a default 1px Value for unloaded assets.
+            // Accept genuine loaded 1px textures, but never touch unloaded Value.
+            if (asset is null || asset.IsDisposed || !asset.IsLoaded)
+                return null;
+            var texture = asset.Value;
+            if (texture is null || texture.IsDisposed)
+                return null;
+            int width = texture.Width, height = texture.Height;
+            if (width <= 0 || height <= 0)
+                return null;
+            ParentSpriteFrameReference? frame = null;
+            try
+            {
+                // Installed tML 2026.6.3.6 has itemAnimations, not drawAnimations.
+                // GetFrame(Texture2D, int frameCounterOverride=-1) reads current
+                // native state without Update; copy its literal returned rectangle.
+                var animations = Main.itemAnimations;
+                if (animations is not null && item.type < animations.Length)
+                {
+                    var animation = animations[item.type];
+                    Rectangle rectangle = animation is null ? texture.Bounds : animation.GetFrame(texture);
+                    if (rectangle.X >= 0 && rectangle.Y >= 0 && rectangle.Width > 0 && rectangle.Height > 0
+                        && (long)rectangle.X + rectangle.Width <= width
+                        && (long)rectangle.Y + rectangle.Height <= height)
+                        frame = new ParentSpriteFrameReference(animation is null ? "texture_bounds" : "draw_animation",
+                            rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
+                }
+            }
+            catch
+            {
+                // An unavailable/malformed frame cannot invalidate observed dimensions.
+            }
+            return new ParentSpriteReference("TextureAssets.Item", width, height, frame);
+        }
+        catch
+        {
+            // A retired/missing native resource is optional context, never a recipe failure.
+            return null;
+        }
     }
 
     private static RuntimePlacementSpec? CanonicalParentPlacement(GeneratedItemData? definition)

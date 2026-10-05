@@ -103,6 +103,135 @@ def cards_from(catalog):
     return {r["fn"]: r for r in catalog["capabilities"]}
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabilities(monkeypatch, mode):
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    a = {"name": "A", "damage": 16, "useTime": 20}
+    b = {"name": "B", "createTile": 239, "placeStyle": 8}
+    parents_before = copy.deepcopy((a, b))
+    request, user, _ = build_initial_author_request(a, b, a, b, "coherence", model_name="offline-test")
+    assert request["response_format"]["type"] == mode
+    assert request["messages"][1]["content"] == user
+    payload = json.loads(request["messages"][1]["content"])
+    concept = payload["requiredJsonShape"]["concept"]
+    for field, phrases in {
+        "literalSynthesis": ("actual parents", "appearance/identity", "deliberately surreal", "illustrative examples are not additional parents", "every parent capability"),
+        "coreMechanic": ("one clear core gameplay loop", "purposeful mechanics", "simple, immediately useful", "supplied progression", "not a capability restriction"),
+        "parentAContribution": ("actual parent", "appearance/identity", "purposeful mechanical contribution", "not required"),
+        "parentBContribution": ("actual parent", "appearance/identity", "purposeful mechanical contribution", "not required"),
+    }.items():
+        for phrase in phrases:
+            assert phrase in concept[field]
+    intent = concept["plannedPlayerActions"][0]["intent"]
+    for phrase in (
+        "non-binding", "extra control modes", "meaningful utility", "createTile", "does not require",
+        "placed target", "worth escrowing", "same generated item", "removes it from inventory",
+        "unavailable until", "tile breaks", "returns it", "placement and multiple purposeful actions remain legal",
+        "do not authorize Repair to redesign",
+    ):
+        assert phrase in intent
+    catalog = payload["runtimeCapabilityContract"]["catalog"]
+    expected = {r["fn"]: r for r in compact_capability_catalog()}
+    assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
+    assert set(expected) == set(CAPABILITY_REGISTRY)
+    assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (52, 229)
+    assert (a, b) == parents_before
+
+
+@pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])
+def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(monkeypatch, fixture_name):
+    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    item = build_runtime_fixture(fixture_name)
+    before = copy.deepcopy(item)
+    compiled_before = compile_runtime_program(item)
+    # Constructing the new advisory packet must neither edit an existing design
+    # nor turn guidance into a validator prohibition or deterministic selection.
+    request, user, _ = build_initial_author_request(item, {}, item, {}, "preserve-design", model_name="offline-test")
+    intent = json.loads(user)["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
+    assert "placement and multiple purposeful actions remain legal" in intent
+    assert request["messages"][1]["content"] == user
+    prepared = pipeline._prepare_parsed_author_item(item, response_format=request["response_format"])
+    assert prepared == before and item == before
+    assert validate_runtime_program(prepared)["ok"]
+    compiled_after = compile_runtime_program(prepared)
+    assert validate_runtime_wire(compiled_after)["ok"]
+    assert compiled_after == compiled_before
+    placement = [row for row in prepared["runtimeProgram"]["bindings"] if row["usePolicy"]["action"]["kind"] == "place_item"]
+    if fixture_name == "fishing_platform_tool":
+        assert placement == [{
+            "id": "alternate_place", "input": "alternate_use",
+            "usePolicy": {
+                "action": {"kind": "place_item", "targetId": "item", "placementCallId": "platform_result"},
+                "stackCost": 1, "contactDamage": False,
+            },
+        }]
+        assert next(row["params"] for row in prepared["runtimeProgram"]["calls"] if row["id"] == "platform_result") == {
+            "tileId": 19, "wallId": -1, "placeStyle": 0,
+        }
+    else:
+        assert placement == []
+
+
+def test_format_repair_with_coherence_advice_preserves_existing_placement(monkeypatch):
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    item = build_runtime_fixture("fishing_platform_tool")
+    before = copy.deepcopy(item)
+    content = json.dumps(item)
+    _, recipe_context, _ = build_initial_author_request({}, {}, {}, {}, "syntax-only", model_name="offline-test")
+    requests = []
+
+    def respond(request, **kwargs):
+        requests.append(request)
+        return {"choices": [{"message": {"content": content}}]}
+
+    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
+    prepared, raw = pipeline._repair_malformed_author_json(
+        malformed_raw_text=content[:-1] + ",}", parse_error=ValueError("trailing comma"),
+        original_recipe_context=recipe_context, model_name="offline-test",
+    )
+    context = json.loads(requests[0]["messages"][1]["content"])
+    intent = context["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
+    assert "do not authorize Repair to redesign" in intent
+    assert any("Do not redesign, add, drop" in rule for rule in context["rules"])
+    assert context["malformedRawText"] == content[:-1] + ",}"
+    assert prepared == before and item == before and raw == content
+
+
+def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(monkeypatch):
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(pipeline, "USE_LLM", True)
+    monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-test")
+    item = build_runtime_fixture("fishing_platform_tool")
+    before = copy.deepcopy(item)
+    stats = _stats(item)
+    stats["params"]["damage"] = -1
+    replacement = copy.deepcopy(stats)
+    replacement["params"]["damage"] = 8
+    patch = {
+        "note": "Repair only invalid damage", "realizationReplacement": copy.deepcopy(item["realization"]),
+        "callsUpsert": [replacement], "bindingIdsDelete": ["alternate_place"], "callIdsDelete": ["platform_result"],
+    }
+    requests = []
+
+    def respond(request, **kwargs):
+        requests.append(request)
+        return {"choices": [{"message": {"content": json.dumps(patch)}}]}
+
+    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
+    repaired = pipeline.repair_author_item_after_failure(
+        item, {}, {}, {}, {}, "frozen-placement", failure_report=validate_runtime_program(item),
+    )
+    context = json.loads(requests[0]["messages"][1]["content"])
+    assert "concept" not in context["requiredJsonShape"]
+    assert "one clear core gameplay loop" not in requests[0]["messages"][1]["content"]
+    assert validate_runtime_program(repaired)["ok"]
+    assert repaired["runtimeProgram"] == before["runtimeProgram"]
+    assert repaired["concept"] == before["concept"]
+    assert _stats(item)["params"]["damage"] == -1, "repair does not mutate its input"
+
+
 def test_author_prompt_shape_card_matches_root_object_cardinality_without_provider_schema() -> None:
     card = author_item_prompt_shape_card()
     expected_model_order = ["name", "category", "concept", "runtimeProgram", "realization"]

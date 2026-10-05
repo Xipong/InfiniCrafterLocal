@@ -26,7 +26,7 @@ namespace InfiniCrafterLocal.Content.Items;
 /// </summary>
 public partial class GeneratedItem : ModItem
 {
-    private const int GeneratedItemNetPayloadVersion = 5;
+    private const int GeneratedItemNetPayloadVersion = 7;
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
@@ -50,6 +50,7 @@ public partial class GeneratedItem : ModItem
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
+        CopyNativePrefixLifecycleTo(clone);
         return clone;
     }
 
@@ -60,12 +61,12 @@ public partial class GeneratedItem : ModItem
         _itemEventBudget = new RuntimeSpawnBudget(0);
         if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
         Data = data ?? GeneratedItemData.Placeholder();
-        try { Data.ApplyToItem(Item); }
+        try { ApplyDataWithNativePrefix(); }
         catch (Exception ex)
         {
             Warn($"ApplyToItem failed for '{Data.Id}'", ex);
             Data = GeneratedItemData.Placeholder();
-            try { Data.ApplyToItem(Item); } catch { }
+            try { ApplyDataWithNativePrefix(); } catch { }
         }
         if (registerLocal)
         {
@@ -78,12 +79,13 @@ public partial class GeneratedItem : ModItem
 
     public override void SetDefaults()
     {
+        ResetNativePrefixLifecycle();
         Data ??= GeneratedItemData.Placeholder();
-        try { Data.ApplyToItem(Item); }
+        try { ApplyDataWithNativePrefix(); }
         catch
         {
             Data = GeneratedItemData.Placeholder();
-            try { Data.ApplyToItem(Item); } catch { }
+            try { ApplyDataWithNativePrefix(); } catch { }
         }
     }
 
@@ -91,6 +93,7 @@ public partial class GeneratedItem : ModItem
     {
         try { tag["infiniJson"] = (Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson(); }
         catch { tag["infiniJson"] = GeneratedItemData.Placeholder().ToPlayerSaveJson(); }
+        SaveNativePrefixLifecycle(tag);
     }
 
     public override void LoadData(TagCompound tag)
@@ -98,7 +101,15 @@ public partial class GeneratedItem : ModItem
         try
         {
             string json = tag is not null && tag.ContainsKey("infiniJson") ? tag.GetString("infiniJson") ?? "" : "";
-            SetData(GeneratedItemData.FromPlayerSaveJson(json) ?? GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false);
+            GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(json) ?? GeneratedItemData.Placeholder();
+            try { if (tag is not null) LoadNativePrefixLifecycle(tag); }
+            catch (InvalidDataException ex)
+            {
+                // Bad/unavailable instance metadata cannot replace a valid recipe reference.
+                Warn("Native prefix metadata refused", ex);
+                RetainNativePrefixForHydration(0);
+            }
+            SetData(reference, ensureAssets: false, registerLocal: false, notifyNetState: false);
         }
         catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
     }
@@ -106,10 +117,11 @@ public partial class GeneratedItem : ModItem
     public override void NetSend(BinaryWriter writer)
     {
         bool materialTransport=HasMaterialTransportIdentity;
-        writer.Write(materialTransport?6:GeneratedItemNetPayloadVersion);
+        writer.Write(materialTransport?8:GeneratedItemNetPayloadVersion);
         try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
         catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
         if(materialTransport)writer.Write(PresentationToken);
+        writer.Write(ValidateNativePrefixToken(InstanceNativePrefix));
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -117,11 +129,16 @@ public partial class GeneratedItem : ModItem
         try
         {
             int version = reader.ReadInt32();
-            if (version != GeneratedItemNetPayloadVersion && version!=6)
+            if (version != 5 && version != 6 && version != GeneratedItemNetPayloadVersion && version != 8)
                 throw new InvalidDataException($"Unsupported generated item payload {version}");
             GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
-            long token=version==6?reader.ReadInt64():0;
-            if(version==6&&token==0)throw new InvalidDataException("missing generated item presentation generation");
+            bool materialTransport = version == 6 || version == 8;
+            long token = materialTransport ? reader.ReadInt64() : 0;
+            if (materialTransport && token == 0) throw new InvalidDataException("missing generated item presentation generation");
+            // ItemIO already attempted Prefix on the native defaults before this hook.
+            // New payloads carry the token separately; legacy hydrated hosts still
+            // contribute their actual native Item.prefix (lost old tokens cannot be invented).
+            RetainNativePrefixForHydration(version >= 7 ? reader.ReadInt32() : Item.prefix);
             GeneratedItemData resolved = reference;
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
             if (!string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
@@ -144,7 +161,8 @@ public partial class GeneratedItem : ModItem
         {
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
             if (registry is null) return;
-            if (registry.TryGet(id, out var canonical))
+            if (registry.TryGet(id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical)
+                && !GeneratedItemData.IsPlayerSaveReferenceOnly(canonical))
             {
                 if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
                     SetData(canonical, ensureAssets: false, registerLocal: false, notifyNetState: false);
@@ -184,6 +202,7 @@ public partial class GeneratedItem : ModItem
 
     private void ApplyActiveUseProjection(RuntimeBindingSpec binding)
     {
+        int nativePrefix = BeginNativePrefixProjection();
         RuntimeBindingActionSpec action = binding.UsePolicy.Action;
         bool placing = action.Kind == RuntimeBindingAction.PlaceItem;
         RuntimePlacementSpec? placement = action.Placement;
@@ -198,7 +217,7 @@ public partial class GeneratedItem : ModItem
         // direct use is still governed by the binding stackCost via ConsumeItem.
         Item.consumable = binding.UsePolicy.StackCost == 1
             || Data.Gameplay.AmmoCategory.Length > 0;
-        Item.damage = placing ? 0 : Math.Max(0, Data.Gameplay.Damage);
+        Item.damage = Math.Max(0, Data.Gameplay.Damage); // zero placement damage only after native prefix application
         // manaCost is the authored item-use cost for every active use binding.
         Item.mana = Math.Max(0, Data.Gameplay.ManaCost);
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
@@ -215,6 +234,7 @@ public partial class GeneratedItem : ModItem
             Item.shoot = Data.Gameplay.AmmoProjectileId;
             Item.shootSpeed = Data.Gameplay.AmmoShootSpeedPxPerTick;
         }
+        FinishNativePrefixProjection(nativePrefix, placing);
     }
 
     /// <summary>
@@ -372,8 +392,12 @@ public partial class GeneratedItem : ModItem
                     }
                 }
             }
-            if (!exists && entity is not null)
-                GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, RootBindingSpawnCapacity(entity));
+            if (!exists && entity is not null && CanSpawnRoot(player, entity))
+            {
+                var combat = CalculateHoldRootCombat(player, entity);
+                GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, player.GetSource_ItemUse(Item), player.Center, new Vector2(player.direction, 0f), 0, RootBindingSpawnCapacity(entity),
+                    rootDamageOverride: combat.Damage, rootKnockbackOverride: combat.Knockback);
+            }
         }
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         RunPeriodicItemEvents(player, itemEntity);
@@ -462,12 +486,14 @@ public partial class GeneratedItem : ModItem
 
     public override bool Shoot(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity, int type, int damage, float knockback)
     {
+        RestoreRootCombatSource(player);
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.SpawnEntity) return false;
         if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)) return false;
         RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
         if (entity is null) return false;
-        GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, RootBindingSpawnCapacity(entity), activationBudget: _itemEventBudget);
+        GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, RootBindingSpawnCapacity(entity), activationBudget: _itemEventBudget,
+            rootDamageOverride: damage, rootKnockbackOverride: knockback);
         return false;
     }
 
@@ -624,7 +650,7 @@ public partial class GeneratedItem : ModItem
         if (texture is null) return true;
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() / 2f;
-        float finalScale = scale * data.Visual.WorldScale;
+        float finalScale = scale * data.Visual.WorldScale * SpritePresentation.FrameScale(data.Visual.RenderSizePx, source.Width, source.Height);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);
         // Match Main.DrawItem's separate Item.color pass; alphaColor already includes

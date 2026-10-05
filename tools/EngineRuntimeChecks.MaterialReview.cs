@@ -169,22 +169,22 @@ internal static partial class EngineRuntimeChecks
             var data = ParseMaterialElement(MaterialElementWire()); data.Id = "forward_material"; peers.Register(data);
             var owner = ReviewItem(data);
             using var first = new MemoryStream(); owner.NetSend(new BinaryWriter(first));
-            first.Position = 0; Equal(6, new BinaryReader(first).ReadInt32(), "hydrated material item uses v6");
+            first.Position = 0; Equal(8, new BinaryReader(first).ReadInt32(), "hydrated material item uses v8 with native prefix");
             var registryProperty = typeof(InfiniMod).GetProperty("GeneratedItems")!; registryProperty.SetValue(null, null);
             var unresolved = ReviewItem(GeneratedItemData.Placeholder()); first.Position = 0; unresolved.NetReceive(new BinaryReader(first));
             Equal(true, GeneratedItemData.IsPlayerSaveReferenceOnly(unresolved.Data), "middle peer has only compact definition reference");
             using var forwarded = new MemoryStream(); unresolved.NetSend(new BinaryWriter(forwarded));
-            forwarded.Position = 0; Equal(6, new BinaryReader(forwarded).ReadInt32(), "unresolved item keeps received material transport capability");
+            forwarded.Position = 0; Equal(8, new BinaryReader(forwarded).ReadInt32(), "unresolved item keeps received material transport capability");
             registryProperty.SetValue(null, peers.Registry);
             var onward = ReviewItem(GeneratedItemData.Placeholder()); forwarded.Position = 0; onward.NetReceive(new BinaryReader(forwarded));
             Equal(data.Id, onward.Data.Id, "onward receiver hydrates exact canonical definition");
             Equal(owner.PresentationToken, onward.PresentationToken, "original token survives unresolved forwarding and late hydration");
             var legacy = ReviewItem(GeneratedItemData.Placeholder()); Equal(true, legacy.PresentationToken != 0, "legacy local token exists");
             using var oldWire = new MemoryStream(); legacy.NetSend(new BinaryWriter(oldWire)); oldWire.Position = 0;
-            Equal(5, new BinaryReader(oldWire).ReadInt32(), "genuinely legacy items remain v5 even after local token allocation");
+            Equal(7, new BinaryReader(oldWire).ReadInt32(), "non-material items use v7 after local token allocation");
             oldWire.Position = 0; unresolved.NetReceive(new BinaryReader(oldWire));
             using var replacedWire = new MemoryStream(); unresolved.NetSend(new BinaryWriter(replacedWire)); replacedWire.Position = 0;
-            Equal(5, new BinaryReader(replacedWire).ReadInt32(), "receiving a legacy replacement clears old material capability");
+            Equal(7, new BinaryReader(replacedWire).ReadInt32(), "receiving a non-material replacement clears old material capability");
         });
     }
 

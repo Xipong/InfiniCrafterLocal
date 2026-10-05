@@ -810,6 +810,7 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
         "assetMode": "baked_sprite", "visualProjectRef": "entity",
         "prompt": "baked chained door", "silhouette": "chained door",
         "visualIdentity": "door on chain",
+        "preferredCanvasSize": 64, "renderSizePx": 48, "forwardAngleDegrees": 0,
     })
     previous["entities"][1]["prompt"] = ""
     del previous["entities"][1]["scale"]

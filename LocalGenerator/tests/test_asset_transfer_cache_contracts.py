@@ -358,7 +358,7 @@ def _equipment_data() -> dict:
 
 def _equipment_kit(*, include_overlay: bool) -> dict:
     kit = {
-        "schema": "infini.visual-kit.runtime-entities.v1",
+        "schema": "infini.visual-kit.runtime-entities.v2",
         "item": {
             "prompt": "literal inventory icon",
             "negativePrompt": "authored negative exact",
@@ -366,6 +366,7 @@ def _equipment_kit(*, include_overlay: bool) -> dict:
             "visualIdentity": "literal item",
             "palette": ["steel", "amber"],
             "preferredCanvasSize": 32,
+            "renderSizePx": 40, "forwardAngleDegrees": 45,
             "inventoryScale": 1.0,
             "worldScale": 1.0,
         },
@@ -386,6 +387,7 @@ def _equipment_kit(*, include_overlay: bool) -> dict:
                 "prompt": "literal projectile",
                 "silhouette": "compact projectile",
                 "visualIdentity": "literal shot",
+                "preferredCanvasSize": 64, "renderSizePx": 32, "forwardAngleDegrees": 0,
                 "scale": 1.0,
             },
         ],

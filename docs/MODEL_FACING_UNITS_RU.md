@@ -63,7 +63,7 @@ Existing /100 или bool→0/1 projection доказана только на с
 <a id="visual"></a>
 ## Visual числа и schema transport
 
-[Visual guide](VISUAL_PRESENTATION_METADATA.md) содержит canvas enums, inventory/world/entity scale, final-canvas normalized grip и mount offsets. Canvas не гарантирует physical footprint и schema descriptions не меняют числовой wire. Ordinary entity branches/Repair fields читаются у `_response_schema`/`_visual_repair_schema`, не из старой universal entity table.
+[Visual guide](VISUAL_PRESENTATION_METADATA.md#size-axis) содержит required fresh v2 `renderSizePx` (integer 1..512, complete final-frame max-side world px), `forwardAngleDegrees` (finite −180..180, 0=+X, clockwise y-down final-PNG axis), independent canvas enums, inventory/world/entity multipliers, final-canvas normalized grip и mount offsets. Item-body/reuse inherit root size/canvas/axis; distinct baked owns свои choices. Canvas/fill не задают world footprint; `q=R/max(actual final frame)` применяется только при render, не в stats/hitbox/pose/network. Сохранённая wire absence остаётся historical без defaults/migration. Director и Repair получают exact G/itemUse/primary IDs, drivers, draw formulas и canonical fill/padding read-only; Visual не меняет mechanics/held visibility hints. Ordinary entity branches/Repair fields читаются у `_response_schema`/`_visual_repair_schema`, не из старой universal entity table.
 
 Optional-null inverse допустим только для объявленных optional properties на **фактическом json_schema** transport. json_object/off/downgrade не получает этот alias; required coordinate null остаётся invalid. Zero-based deletion indices и текстовые длины — transport, не visual units.
 

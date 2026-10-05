@@ -930,7 +930,7 @@
                     "x-infini-semanticType": "loaded_rarity_id"
                   },
                   "scale": {
-                    "description": "Item display scale multiplier (1 unchanged)",
+                    "description": "Dimensionless held Item scale via ModifyItemScale (1 unchanged/neutral); multiplies the presentation base size, not bake resolution. Independent of dropped worldScale and projectile hitbox.drawScale/visual.scale",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
@@ -1049,7 +1049,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "heldSpriteVisibilityHint": {
-                    "description": "Held-sprite visibility only, not gameplay release timing; immediate hides it, empty/on_release/after_charge keep it while use is active; latter tokens do not schedule different releases",
+                    "description": "Custom held-root visibility only, not gameplay release timing: immediate hides; on_release/after_charge explicitly keep while use is active (no different scheduling). Empty/omitted follows hideUseGraphic for declared-size presentations (visual.renderSizePx), and preserves historical keep behavior when that metadata is absent",
                     "enum": [
                       "",
                       "immediate",
@@ -1060,7 +1060,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "hideUseGraphic": {
-                    "description": "Hide inventory sprite during use",
+                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), empty/omitted heldSpriteVisibilityHint also hides the custom generated root; explicit on_release/after_charge keep it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless immediate is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },

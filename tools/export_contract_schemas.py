@@ -22,8 +22,8 @@ def render()->dict[Path,str]:
       "author_item_response.schema.json":_doc("author_item_response.schema.json",author_item_response_schema()),
       "author_item_repair.schema.json":_doc("author_item_repair.schema.json",author_item_repair_schema()),
       "runtime_repair_scope.schema.json":_doc("runtime_repair_scope.schema.json",runtime_repair_scope_schema()),
-      "visual_runtime_entities.schema.json":_doc("visual_runtime_entities.schema.json",visual_response_schema(ids)),
-      "visual_repair_patch.schema.json":_doc("visual_repair_patch.schema.json",visual_repair_schema(ids)),
+      "visual_runtime_entities.schema.json":_doc("visual_runtime_entities.schema.json",visual_response_schema(ids, item_body_id=sample["runtimeProgram"]["itemEntityId"])),
+      "visual_repair_patch.schema.json":_doc("visual_repair_patch.schema.json",visual_repair_schema(ids, item_body_id=sample["runtimeProgram"]["itemEntityId"])),
       "vfx_runtime_events.schema.json":_doc("vfx_runtime_events.schema.json",vfx_director_schema(sample)),
       "vfx_repair_patch.schema.json":_doc("vfx_repair_patch.schema.json",vfx_repair_schema(sample)),
       "capability_inventory.generated.json":{"schema":"infini.low-level-capability-inventory.v1","capabilities":capability_inventory_rows()},
@@ -44,7 +44,8 @@ def render()->dict[Path,str]:
     return rows
 
 def main()->int:
-    ap=argparse.ArgumentParser(); ap.add_argument("--check",action="store_true"); a=ap.parse_args(); rows=render(); bad=[]
+    ap=argparse.ArgumentParser(); ap.add_argument("--check",action="store_true"); ap.add_argument("--only", action="append", choices=[p.name for p in render()], help="Export/check only these canonical artifacts (repeatable)"); a=ap.parse_args(); rows=render(); bad=[]
+    if a.only: rows={p:t for p,t in rows.items() if p.name in a.only}
     if a.check:
       for p,t in rows.items():
         if not p.exists() or p.read_text(encoding="utf-8")!=t: bad.append(p.relative_to(ROOT).as_posix())
@@ -52,7 +53,8 @@ def main()->int:
         print("[FAIL] stale/missing generated contracts:",", ".join(bad)); return 1
       print(f"[OK] {len(rows)} v5 contract artifacts are current"); return 0
     OUT.mkdir(parents=True,exist_ok=True)
-    for old in OUT.glob("*.json"): old.unlink()
+    if not a.only:
+      for old in OUT.glob("*.json"): old.unlink()
     for p,t in rows.items(): p.write_text(t,encoding="utf-8"); print("[write]",p.relative_to(ROOT))
     return 0
 if __name__=="__main__": raise SystemExit(main())

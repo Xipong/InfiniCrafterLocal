@@ -69,6 +69,7 @@ def _visual_kit(data: dict) -> dict:
         "prompt": "literal Terraria item", "negativePrompt": "placeholder",
         "silhouette": "readable", "visualIdentity": "literal composition",
         "palette": ["brown", "steel"], "preferredCanvasSize": 32,
+        "renderSizePx": 40, "forwardAngleDegrees": 45,
         "inventoryScale": 1.0, "worldScale": 1.0,
     }
     return {

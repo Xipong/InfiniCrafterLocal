@@ -286,7 +286,10 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
         assert url == CODEX + "/responses" and body["model"] == (override or "test-model")
         assert body["reasoning"] == {"effort": "low"}
         assert body["instructions"] == request["messages"][0]["content"]
-        assert body["input"][0]["content"][0]["text"] == request["messages"][1]["content"]
+        assert body["input"] == [
+            {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]},
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": request["messages"][1]["content"]}]},
+        ]
         assert "provider" not in body and llm.LLM_MODEL_OVERRIDE_KEY not in body
     assert len(calls) == len(prepared_calls) == 1
     assert "provider" not in prepared_calls[0] and llm.LLM_MODEL_OVERRIDE_KEY not in prepared_calls[0]
@@ -319,7 +322,7 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
     url, body, options = calls[0]
     assert url == CODEX + "/responses" and body["model"] == "test-codex-model"
     assert body["instructions"] == "Literal system contract"
-    assert body["input"] == [{"type": "message", "role": item["role"], "content": [{
+    assert body["input"] == [{"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]}] + [{"type": "message", "role": item["role"], "content": [{
         "type": "output_text" if item["role"] == "assistant" else "input_text", "text": item["content"]}]} for item in request["messages"][1:]]
     assert body["reasoning"] == {"effort": "low"} and body["text"]["format"] == {"type": "json_object"}
     assert body["stream"] is True and body["store"] is False and body["tools"] == []
@@ -579,3 +582,68 @@ def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
     assert result[3] == "failed"
     assert len(calls) == 2
     assert not fallbacks
+
+
+@pytest.mark.parametrize("mode,marker_role", [
+    ("json_object", "system"), ("json_object", None),
+    ("json_object", "user"), ("json_object", "developer"),
+    ("json_object", "assistant"), ("json_schema", "system"),
+    (None, "system"),
+])
+def test_subscription_json_input_framing_preserves_all_authored_messages(mode, marker_role):
+    messages = [{"role": "system", "content": "JSON result." if marker_role == "system" else "Keep authored facts."},
+                {"role": "user", "content": "Return Json." if marker_role == "user" else '{"exactFact":14}'}]
+    if marker_role in {"developer", "assistant"}:
+        messages.append({"role": marker_role, "content": "Json protocol marker."})
+    request = {"model": "test-model", "messages": messages, "reasoning": {"effort": "medium"},
+               "prompt_cache_key": "exact-authored-key"}
+    if mode:
+        request["response_format"] = {"type": mode}
+        if mode == "json_schema":
+            request["response_format"]["json_schema"] = {"name": "test_json", "strict": True, "schema": {"type": "object"}}
+    before = copy.deepcopy(request)
+    actual = backend._request_payload(request)
+    authored = [{"type": "message", "role": message["role"],
+                 "content": [{"type": "output_text" if message["role"] == "assistant" else "input_text", "text": message["content"]}]}
+                for message in messages if message["role"] != "system"]
+    needed = mode == "json_object"
+    marker = {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]}
+    assert actual["input"] == ([marker, *authored] if needed else authored)
+    assert actual["instructions"] == messages[0]["content"]
+    assert actual["model"] == request["model"]
+    assert actual["reasoning"] == request["reasoning"]
+    assert actual["prompt_cache_key"] == request["prompt_cache_key"]
+    assert request == before
+    assert backend._request_payload(request) == actual
+
+
+@pytest.mark.parametrize("cache_key", [None, "infini-static-prefix", "unicode-кэш", "key\r\nextra: value"])
+def test_subscription_cache_affinity_reaches_native_session_header(subscription, monkeypatch, cache_key):
+    from urllib.parse import quote
+    response, credentials = subscription
+    sent = []
+    monkeypatch.setattr(auth, "post_sse", lambda url, body, **kw: sent.append((url, copy.deepcopy(body), kw)) or copy.deepcopy(response))
+    packet = {"model": "test-model", "messages": [{"role": "user", "content": "recipe one"}]}
+    if cache_key is not None:
+        packet["prompt_cache_key"] = cache_key
+    original = copy.deepcopy(packet)
+    for content in ("recipe one", "recipe two"):
+        packet["messages"][0]["content"] = content
+        backend.generate_chat(packet, timeout=3)
+    assert len(sent) == 2 and sent[0][1] != sent[1][1]
+    for url, body, options in sent:
+        assert url == backend.RESPONSES_URL and options["timeout"] == 3
+        headers = options["headers"]
+        assert headers["Authorization"] == "Bearer " + credentials.access_token
+        assert headers["ChatGPT-Account-Id"] == credentials.account_id
+        assert headers["originator"] == "infinicrafter"
+        assert "thread-id" not in headers  # No fabricated conversation identity.
+        if cache_key is None:
+            assert "session-id" not in headers and "prompt_cache_key" not in body
+        else:
+            assert headers["session-id"] == quote(cache_key, safe="")
+            assert "\r" not in headers["session-id"] and "\n" not in headers["session-id"]
+            assert headers["session-id"].isascii()
+            assert body["prompt_cache_key"] == cache_key
+    packet["messages"][0]["content"] = original["messages"][0]["content"]
+    assert packet == original

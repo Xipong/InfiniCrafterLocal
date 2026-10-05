@@ -78,6 +78,40 @@ Mods: {
 	}
 }
 
+// The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
+RuntimeTooltip: {
+	InputPrimary: "Use (left-click)"
+	InputAlternate: "Alternate use (right-click)"
+	InputHold: "While selected (no use-button press)"
+	InputEquipped: "While equipped"
+	ActiveBinding: "{0}: {1}; item cost: {2}; base mana: {3}"
+	PassiveBinding: "{0}: {1}; no item or mana cost"
+	Spawn: "activate {0} projectile(s)"
+	UseItem: "use the item body"
+	ApplyEffects: "apply use effects"
+	Place: "place the item"
+	Equip: "apply equipment effects"
+	PlacementAvailability: "{0}: only accepted placement removes 1 copy from inventory; that copy is unavailable until the tile/wall is broken and the item is returned."
+	Time: "{0} s ({1} ticks)"
+	HealLife: "{0}: base healing {1} life"
+	HealMana: "{0}: base restoration {1} mana"
+	Buff: "{0}: {1} for {2}"
+	Mining: "{0}: mining speed ×{1} for {2}"
+	Movement: "{0}: movement-speed modifier {1}% for {2}"
+	Jump: "{0}: jump-speed bonus {1} px/tick for {2}"
+	ManaRegen: "{0}: mana-regeneration bonus {1} engine units for {2}"
+	LifeRegen: "{0}: life-regeneration bonus {1} engine units for {2}"
+	Light: "{0}: light strength {1} for {2}"
+	OreSense: "{0}: highlights ore and treasure for {1}"
+	Recall: "{0}: recall home; cooldown after success: {1}"
+	Blink: "{0}: blink toward cursor, up to {1} tiles; cooldown after success: {2}{3}"
+	SafeDestination: "; requires a safe destination"
+	Grounded: "{0}: requires no vertical movement"
+	NotWet: "{0}: cannot be used while wet"
+	MinimumLife: "{0}: requires at least {1} life"
+	MinimumMana: "{0}: requires at least {1} mana"
+}
+
 Items: {
 	GeneratedBodyArmor: {
 		DisplayName: Generated Body Armor

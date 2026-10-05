@@ -120,6 +120,21 @@ def finalize_visual_asset_runtime_gates(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _canvas_for(entity: Mapping[str, Any], data: Mapping[str, Any]) -> int:
+    raw_visual = entity.get("visual")
+    visual = raw_visual if isinstance(raw_visual, Mapping) else {}
+    root = data.get("visual") if isinstance(data.get("visual"), Mapping) else {}
+    if entity.get("kind") == "item_body" or visual.get("assetMode") == "reuse_item_icon":
+        return int(root.get("preferredCanvasSize") or 32)
+    if visual.get("assetMode") == "baked_sprite":
+        if "preferredCanvasSize" in visual:
+            return visual["preferredCanvasSize"]
+        if "renderSizePx" in root or "renderSizePx" in visual:
+            raise ValueError("A new distinct baked project requires authored preferredCanvasSize")
+    # Delivered legacy DTOs have no new choices and retain the historical policy.
+    return _impact_canvas_for(entity, data)
+
+
+def _impact_canvas_for(entity: Mapping[str, Any], data: Mapping[str, Any]) -> int:
     if entity.get("kind") == "item_body":
         visual = data.get("visual") if isinstance(data.get("visual"), Mapping) else {}
         return int(visual.get("preferredCanvasSize") or 32)
@@ -200,6 +215,16 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
             "url": url,
             "technicalScore": score,
         })
+        if is_item or mode == "reuse_item_icon":
+            presentation_owner = item_visual
+            owner_id = str(_runtime(data).get("itemEntityId") or "")
+        else:
+            presentation_owner = entity_visual if mode == "baked_sprite" else {}
+            owner_id = entity_id
+        # Diagnostic projection only; no second authored authority or draw logic.
+        if any(field in presentation_owner for field in ("renderSizePx", "forwardAngleDegrees")):
+            plan[-1].update({field: copy.deepcopy(presentation_owner[field]) for field in ("renderSizePx", "forwardAngleDegrees") if field in presentation_owner})
+            plan[-1]["presentationOwnerEntityId"] = owner_id
         impact_slot = impact_slots.get(entity_id)
         if isinstance(impact_slot, Mapping):
             plan.append({
@@ -212,7 +237,7 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "assetId": f"{str(data.get('id') or 'generated')}_{entity_id}_impact",
                 "prompt": str(entity_visual.get("impactPrompt") or "")[:1400],
                 "negativePrompt": str(entity_visual.get("impactNegativePrompt") or "")[:700],
-                "canvas": _canvas_for(entity, data),
+                "canvas": _impact_canvas_for(entity, data),
                 "required": True,
                 "status": str(entity_visual.get("impactSpriteStatus") or "pending"),
                 "path": str(entity_visual.get("impactSpritePath") or ""),

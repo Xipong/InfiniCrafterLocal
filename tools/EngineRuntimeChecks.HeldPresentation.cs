@@ -20,6 +20,135 @@ internal static partial class EngineRuntimeChecks
     // Engine reference: tML v2026.06.3.6, 29bf9785f5f4de8cd305be002c4cc48aa1177b20,
     // PlayerDrawLayers.DrawPlayer_27_HeldItem: GetAdjustedItemScale, ItemLocation minus
     // screenPosition, itemRotation verbatim (including inverted gravity).
+    private static void HeldRenderSizeUsesFinalFrameAndAdjustedScale(Func<Vector2, DrawData> render, GeneratedItemData data, Player player, Item item, Texture2D texture)
+    {
+        var previousVisual = data.Visual;
+        float previousScale = item.scale, previousAuthored = data.Gameplay.ItemScale;
+        try
+        {
+            foreach (int size in new[] { 1, 40, 512 })
+            foreach (int canvas in new[] { 64, 128 })
+            foreach (float authored in new[] { 0.25f, 1f, 4f })
+            {
+                typeof(Texture2D).GetProperty("Width")!.SetValue(texture, canvas);
+                typeof(Texture2D).GetProperty("Height")!.SetValue(texture, canvas * 5 / 8);
+                data.Visual = new VisualSpec { SpritePath = previousVisual.SpritePath, RenderSizePx = size, ForwardAngleDegrees = 45f };
+                item.scale = 1.2f; data.Gameplay.ItemScale = authored;
+                float adjusted = player.GetAdjustedItemScale(item);
+                DrawData result = render(new Vector2(140, 260));
+                Equal(new Vector2(adjusted * (size / (float)canvas)), result.scale, "root q multiplies exact adjusted G once, no new clamp");
+                Equal(player.itemRotation, result.rotation, "root declared axis never redesigns native held pose");
+                Equal(1.2f, item.scale, "presentation never changes Item.scale physics");
+                Equal(authored, data.Gameplay.ItemScale, "presentation never changes authored G");
+            }
+        }
+        finally
+        {
+            data.Visual = previousVisual; item.scale = previousScale; data.Gameplay.ItemScale = previousAuthored;
+            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 64); typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 40);
+        }
+    }
+
+    private static void HeldRootVisibilityUsesExplicitPresentationOptIn()
+    {
+        HeldRootVisibilityObligations(false); // observer ABI and literal legacy control first
+        HeldRootVisibilityObligations(false, true); // axis alone is NOT the visibility opt-in
+        HeldRootVisibilityObligations(true);
+    }
+
+    private static void HeldRootVisibilityObligations(bool newPresentation, bool axisOnly = false)
+    {
+        const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
+        var remote = (IDictionary)typeof(GeneratedHeldItemDrawLayer).GetField("RemoteHeldPresentations", statics)!.GetValue(null)!;
+        var savedRemote = new List<DictionaryEntry>();
+        foreach (DictionaryEntry entry in remote) savedRemote.Add(entry);
+        var registryProperty = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
+        object? savedRegistry = registryProperty.GetValue(null);
+        int savedLocal = Terraria.Main.myPlayer, savedMode = Terraria.Main.netMode;
+        var failures = new List<string>();
+        int checkedCases = 0;
+        using var registry = new GeneratedItemRegistryService();
+        void Check(string label, Action check)
+        {
+            checkedCases++;
+            try { check(); }
+            catch (Exception error) { failures.Add(label + ": " + error.Message); }
+        }
+        try
+        {
+            Terraria.Main.myPlayer = 0;
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer; // decoder only, never sends sockets
+            registryProperty.SetValue(null, registry);
+            var byId = (IDictionary)typeof(GeneratedItemRegistryService).GetField("_byId", instance)!.GetValue(registry)!;
+            foreach (string owner in new[] { RuntimeProgramSpec.ItemBodyOwner, RuntimeProgramSpec.ProjectileOwner })
+            foreach (bool hide in new[] { false, true })
+            foreach (string hint in new[] { "", "immediate", "on_release", "after_charge" })
+            {
+                var data = GeneratedItemData.Placeholder();
+                data.Id = "visibility_contract_probe";
+                data.Visual.SpritePath = System.IO.Path.Combine(Terraria.Program.SavePath, "visibility_probe.png");
+                data.RuntimeProgram.PrimaryOwner = owner;
+                data.RuntimeProgram.ItemUse.UseStyle = "thrust";
+                data.RuntimeProgram.ItemUse.HideUseGraphic = hide;
+                data.RuntimeProgram.ItemUse.ReleaseTiming = hint;
+                if (newPresentation) data.Visual.RenderSizePx = 40;
+                if (axisOnly) data.Visual.ForwardAngleDegrees = 0f;
+                byId[data.Id] = data;
+                var player = new Player { whoAmI = 0, itemAnimation = 8, itemAnimationMax = 20 };
+                var item = new Item { type = 1, stack = 1, noUseGraphic = true, useStyle = Terraria.ID.ItemUseStyleID.Thrust };
+                // noUseGraphic is deliberately true even when authored hide=false:
+                // static proxy suppression is NOT semantic root visibility.
+                var generated = new GeneratedItem();
+                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
+                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
+                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                player.inventory[0] = item;
+                var layer = new GeneratedHeldItemDrawLayer();
+                var info = new PlayerDrawSet { drawPlayer = player, heldItem = item };
+                bool expected = hint == "immediate" ? false : hint is "on_release" or "after_charge" ? true : !newPresentation || !hide;
+                string label = $"owner={owner} hide={hide} hint='{hint}' modern={newPresentation}";
+                string unchanged = System.Text.Json.JsonSerializer.Serialize(data);
+                remote.Clear();
+                Check(label + " local", () => Equal(expected, layer.GetDefaultVisibility(info), "public held layer visibility"));
+                Check(label + " local inactive", () => {
+                    player.itemAnimation = 0;
+                    Equal(false, layer.GetDefaultVisibility(info), "inactive remains hidden");
+                    player.itemAnimation = 8;
+                });
+                player.whoAmI = 1;
+                player.inventory[0] = new Item(); // registry-only remote fallback
+                void Receive(bool active)
+                {
+                    using var packet = new System.IO.MemoryStream();
+                    using (var writer = new System.IO.BinaryWriter(packet, System.Text.Encoding.UTF8, true))
+                    {
+                        writer.Write(4); writer.Write((byte)1); writer.Write((byte)0); writer.Write(data.Id);
+                        writer.Write(120f); writer.Write(180f); writer.Write(0.4f);
+                        writer.Write(1); writer.Write(1f); writer.Write(active); writer.Write((byte)200);
+                    }
+                    packet.Position = 0;
+                    using var reader = new System.IO.BinaryReader(packet);
+                    GeneratedHeldItemDrawLayer.HandleHeldItemPresentationSyncPacket(reader, 0);
+                }
+                Receive(true);
+                Check(label + " remote", () => Equal(expected, layer.GetDefaultVisibility(info), "real v4 decoder + registry-only visibility"));
+                Receive(false);
+                Check(label + " remote inactive", () => Equal(false, layer.GetDefaultVisibility(info), "inactive packet remains hidden"));
+                Check(label + " immutability", () => Equal(unchanged, System.Text.Json.JsonSerializer.Serialize(data), "visibility must not change gameplay/identity/hints"));
+            }
+        }
+        finally
+        {
+            remote.Clear();
+            foreach (DictionaryEntry entry in savedRemote) remote.Add(entry.Key, entry.Value);
+            registryProperty.SetValue(null, savedRegistry);
+            Terraria.Main.myPlayer = savedLocal; Terraria.Main.netMode = savedMode;
+        }
+        Console.WriteLine($"Visibility obligations modern={newPresentation}: {checkedCases - failures.Count}/{checkedCases}");
+        if (failures.Count != 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
+    }
+
     public static void HeldPresentationGeometryMatchesEngine()
     {
         WithLighting((_, _) =>
@@ -125,6 +254,7 @@ internal static partial class EngineRuntimeChecks
                     Vector2 expectedOrigin = new(64 * (direction < 0 ? 1f - 0.20f : 0.20f), 40 * (gravity < 0 ? 1f - 0.62f : 0.62f));
                     Check(label + " grip", () => Equal(expectedOrigin, result.origin, "existing grip is not redesigned"));
                 }
+                HeldRenderSizeUsesFinalFrameAndAdjustedScale(Render, data, player, item, texture);
                 data.Gameplay.ItemScale = 1f;
                 item.scale = 1f;
                 player.direction = 1;
@@ -207,6 +337,18 @@ internal static partial class EngineRuntimeChecks
                     Check("remote rotation", () => Equal(-0.37f, result.rotation, "decoded rotation not re-inverted"));
                     Check("remote effects", () => Equal((int)(SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically), (int)result.effect, "decoded facing/gravity override local state"));
                 }
+                var legacyRemoteVisual = data.Visual;
+                foreach (int canvas in new[] { 64, 128 })
+                foreach (int size in new[] { 1, 40, 512 })
+                foreach (float scale in new[] { 0.25f, 1f, 4f })
+                {
+                    typeof(Texture2D).GetProperty("Width")!.SetValue(texture, canvas); typeof(Texture2D).GetProperty("Height")!.SetValue(texture, canvas * 5 / 8);
+                    data.Visual = new VisualSpec { SpritePath = path, RenderSizePx = size }; data.Gameplay.ItemScale = scale;
+                    Receive(Vector2.Zero);
+                    Equal(new Vector2(scale * (size / (float)canvas)), Render(Vector2.Zero).scale, "registry-only decoded pose uses canonical root R and G");
+                }
+                data.Visual = legacyRemoteVisual;
+                typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 64); typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 40);
                 foreach (float invalid in new[] { float.NaN, float.PositiveInfinity, 2_000_001f })
                 {
                     Receive(new Vector2(invalid, 0));
@@ -218,6 +360,10 @@ internal static partial class EngineRuntimeChecks
                 var compact = GeneratedItemData.FromPlayerSaveJson(data.ToPlayerSaveJson())!;
                 typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, compact);
                 player.inventory[0] = item;
+                var beforeCompactSizing = data.Visual;
+                data.Visual = new VisualSpec { SpritePath = path, Grip = beforeCompactSizing.Grip!, RenderSizePx = 40 };
+                Equal(new Vector2(player.GetAdjustedItemScale(item) * (40f / 64f)), Render(Vector2.Zero).scale, "compact held reference borrows canonical root size, not inert reference metadata");
+                data.Visual = beforeCompactSizing;
                 Equal(new Vector2(48, 10), Render(Vector2.Zero).origin, "compact held save reference resolves registry grip");
                 typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
                 Equal(true, ReferenceEquals(data, registry.TryGet(data.Id, out var resolved) ? resolved : null), "registry definition identity retained");

@@ -114,8 +114,8 @@ def test_entity_texture_requires_that_exact_accepted_image_tuple(mode: str, vali
     assert report["ok"] is valid, report["errors"]
     for repair in (False, True):
         packet = _sent(data, repair)
-        surface = packet["runtimeSurfaceReadOnly"] if repair else packet["runtimeSurface"]
-        assert surface["textureDependencyTuples"]
+        vocabulary = packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]
+        assert vocabulary["textureDependencyTuples"]
         schema = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
         assert bool(strict_schema_errors(raw["slots"][0], schema)) is not valid
     if not valid:
@@ -292,7 +292,7 @@ def test_renderer_companion_admission(renderer, field, neutral, repair):
     schema = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
     assert not strict_schema_errors(raw["slots"][0], schema)
     assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    assert packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]["rendererRequirements"][renderer] == required
+    assert packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]["rendererRequirements"][renderer] == required
     broken = copy.deepcopy(raw)
     broken["slots"][0][field] = "Auto" if field == "backend" else ("item" if isinstance(neutral, str) else neutral + 1)
     if renderer in {"lightCue", "soundCue"}:

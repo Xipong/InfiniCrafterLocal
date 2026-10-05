@@ -25,6 +25,8 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 2 && args[0] == "--check-filter")
+                return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
                 return ReplayGeneratedContracts(args[1]);
             if (args.Length == 2 && args[0] == "--capture-vfx-preview")
@@ -39,7 +41,7 @@ internal static partial class EngineRuntimeChecks
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
     }
 
-    private static int RunChecks()
+    private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
             ("persistence RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial", RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial),
@@ -58,6 +60,14 @@ internal static partial class EngineRuntimeChecks
             ("persistence PendingRawMalformedAndOverflowRowsKeepValidNeighbors", PendingRawMalformedAndOverflowRowsKeepValidNeighbors),
             ("persistence UnmutatedAbandonedPlacementDoesNotStallNewTarget", UnmutatedAbandonedPlacementDoesNotStallNewTarget),
             ("persistence PlacementReadyCannotApproveDifferentServerResolvedBinding", PlacementReadyCannotApproveDifferentServerResolvedBinding),
+            ("dynamic projectile pierce preserves native maximum and immunity", RuntimeDynamicPierceKeepsNativeMaximumAndImmunity),
+            ("generated tooltips describe exact executable bindings", GeneratedTooltipsDescribeExactExecutableBindings),
+            ("generated native prefix survives active use", GeneratedItemNativePrefixSurvivesActiveUse),
+            ("generated native prefix placement and ammo independence", GeneratedItemNativePrefixPlacementAndAmmoStayIndependent),
+            ("generated native prefix compact hydration", GeneratedItemNativePrefixCompactHydration),
+            ("generated root combat native lane contexts and query counts", GeneratedRootCombatNativeLanesAndQueryCounts),
+            ("generated root combat terminal hold and source fence", GeneratedRootCombatTerminalHoldAndSourceFence),
+            ("dynamic collision preserves authored choice and return phase", RuntimeCollisionKeepsAuthoredChoiceAndReturnPhase),
             ("swarm charge keeps actual combat basis exactly once", SwarmChargeKeepsCombatBasisOnce),
             ("swarm charge received released ExtraAI never rescales", SwarmChargeReleasedExtraAiDoesNotRescale),
             ("swarm delayed hooks honor world clock and wrap", SwarmDelayedHooksHonorWorldClock),
@@ -149,6 +159,9 @@ internal static partial class EngineRuntimeChecks
             ("cache-only flag preserves request", CacheOnlyFlagPreservesRequest),
             ("generator delivery requires identity", GeneratorDeliveryRequiresIdentity),
             ("generated parent prefix is request-only", GeneratedParentPrefixIsRequestOnly),
+            ("parent native sprite reference reaches prepared request", ParentNativeSpriteReferenceReachesPreparedRequest),
+            ("parent native sprite reference absence is honest", ParentNativeSpriteReferenceAbsenceIsHonest),
+            ("generated parent sprite reference never uses native proxy", ParentGeneratedSpriteReferenceNeverUsesNativeProxy),
             ("craft identity rejects failed defaults", CraftIdentityRejectsFailedDefaults),
             ("inventory ammo keeps generated definition", InventoryAmmoKeepsGeneratedDefinition),
             ("parent placement facts reach craft snapshot", ParentPlacementFactsReachCraftSnapshot),
@@ -193,6 +206,11 @@ internal static partial class EngineRuntimeChecks
             ("small generated buffs reach real item/player hooks", SmallGeneratedBuffsReachRealHooks),
             ("item impact sprite uses real detached sprite renderer", ItemImpactSpriteUsesDetachedRenderer),
             ("presentation metadata round trips strictly", PresentationMetadataRoundTrips),
+            ("sprite size and axis metadata round trip strictly", SpritePresentationMetadataStrictRoundTrips),
+            ("held root visibility uses explicit presentation opt-in", HeldRootVisibilityUsesExplicitPresentationOptIn),
+            ("textured body uses declared axis and preserves native spin", TexturedBodyUsesDeclaredAxisAndPreservesNativeSpin),
+            ("body copies capture selected size and axis without changing network pose", BodyCopiesCaptureSelectedSizeAndAxisWithoutChangingNetworkPose),
+            ("item body copies use root size and impact stays independent", ItemBodyCopyUsesRootSizeAndDedicatedImpactStaysIndependent),
             ("held presentation matches engine geometry", HeldPresentationGeometryMatchesEngine),
             ("inventory/world draw preserves geometry and tint", GeneratedItemDrawPreservesEngineGeometryAndTint),
             ("runtime sprite cache premultiplies decoded pixels once", RuntimeSpriteAlphaChecksAtOwnerBoundary),
@@ -225,6 +243,14 @@ internal static partial class EngineRuntimeChecks
             ("field pulse queues expanding ring", ActiveFieldPulseQueuesExpandingRing),
             ("wavy strip queues animated curve", ActiveWavyStripQueuesAnimatedCurve),
         };
+        if (filter is not null)
+        {
+            int fullCount = checks.Length;
+            checks = Array.FindAll(checks, entry => entry.Name.Contains(filter, StringComparison.Ordinal));
+            if (string.IsNullOrWhiteSpace(filter) || checks.Length == 0)
+                throw new ArgumentException("Check filter must select at least one canonical named check");
+            Console.WriteLine($"FILTERED RUN: {checks.Length}/{fullCount} canonical checks selected");
+        }
         int failed = 0;
         foreach (var (name, check) in checks)
         {

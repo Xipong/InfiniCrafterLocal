@@ -3731,7 +3731,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "whip movement extracted from the retired melee macro",
-      "purpose": "Execute the bounded owner-attached lash curve.",
+      "purpose": "Execute the bounded owner-attached curved polyline from hand to tip; collision checks every segment, while Projectile.Center is the terminal point. A baked/reused PNG draws once at that tip, not along the curve. runtime_geometry draws the exact collision curve; a separately authored VFX texturedPath source=whip can accompany a baked tip. A channel_beam controller takes collision/geometry precedence. No automatic sprite stretching or representation selection.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3862,7 +3862,7 @@
       "positionOwnership": "owns_position_while_active",
       "promptVisibility": true,
       "provenance": "beam scan/channel extracted from the retired magic macro",
-      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam line.",
+      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

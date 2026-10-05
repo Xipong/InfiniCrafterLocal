@@ -826,7 +826,7 @@ _CAPS: list[CapabilitySpec] = [
             "craftYield": _p("integer", "Requested items per craft; actual granted stack is capped by maxStack", minimum=1, maximum=9999),
             "widthPx": _p("integer", "Inventory/world hitbox width", minimum=8, maximum=256, units="pixels", wire_name="width"),
             "heightPx": _p("integer", "Inventory/world hitbox height", minimum=8, maximum=256, units="pixels", wire_name="height"),
-            "scale": _p("number", "Item display scale multiplier (1 unchanged)", minimum=0.25, maximum=4, wire_name="itemScale"),
+            "scale": _p("number", "Dimensionless held Item scale via ModifyItemScale (1 unchanged/neutral); multiplies the presentation base size, not bake resolution. Independent of dropped worldScale and projectile hitbox.drawScale/visual.scale", minimum=0.25, maximum=4, wire_name="itemScale"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -844,13 +844,13 @@ _CAPS: list[CapabilitySpec] = [
             "useStyle": _p("string", "Named Terraria ItemUseStyleID", enum=_USE_STYLE, wire_name="useStyleName"),
             "autoReuse": _p("boolean", "Allow repeated use while input is held"),
             "useTurn": _p("boolean", "Allow facing turn during use"),
-            "hideUseGraphic": _p("boolean", "Hide inventory sprite during use"),
+            "hideUseGraphic": _p("boolean", "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), empty/omitted heldSpriteVisibilityHint also hides the custom generated root; explicit on_release/after_charge keep it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless immediate is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag"),
             "disableMeleeHitbox": _p("boolean", "Disable vanilla item melee hitbox"),
             "channel": _p("boolean", "Keep use active while input is held"),
             "holdoutOffsetX": _p("integer", "Held draw offset X", minimum=-96, maximum=96, units="pixels", required=False, default=0, neutral=0),
             "holdoutOffsetY": _p("integer", "Held draw offset Y", minimum=-96, maximum=96, units="pixels", required=False, default=0, neutral=0),
             "handPose": _p("string", "Exact renderer hint", required=False, enum=("", "one_handed", "two_handed", "overhead", "forward")),
-            "heldSpriteVisibilityHint": _p("string", "Held-sprite visibility only, not gameplay release timing; immediate hides it, empty/on_release/after_charge keep it while use is active; latter tokens do not schedule different releases", required=False, enum=("", "immediate", "on_release", "after_charge"), wire_name="releaseTiming"),
+            "heldSpriteVisibilityHint": _p("string", "Custom held-root visibility only, not gameplay release timing: immediate hides; on_release/after_charge explicitly keep while use is active (no different scheduling). Empty/omitted follows hideUseGraphic for declared-size presentations (visual.renderSizePx), and preserves historical keep behavior when that metadata is absent", required=False, enum=("", "immediate", "on_release", "after_charge"), wire_name="releaseTiming"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem/UseStyle",
@@ -1261,7 +1261,7 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro"),
-    _movement("move_whip_lash", "Execute the bounded owner-attached lash curve.", 18, {
+    _movement("move_whip_lash", "Execute the bounded owner-attached curved polyline from hand to tip; collision checks every segment, while Projectile.Center is the terminal point. A baked/reused PNG draws once at that tip, not along the curve. runtime_geometry draws the exact collision curve; a separately authored VFX texturedPath source=whip can accompany a baked tip. A channel_beam controller takes collision/geometry precedence. No automatic sprite stretching or representation selection.", 18, {
         "rangeTiles": _p("number", "Lash reach", minimum=2, maximum=60, units="tiles"),
         "segments": _p("integer", "Collision curve segments", minimum=3, maximum=48),
     }, targets=("owner_attached_projectile",), provenance="whip movement extracted from the retired melee macro"),
@@ -1274,7 +1274,7 @@ _CAPS.extend([
 _CAPS.extend([
     _cap(
         "channel_beam",
-        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam line.",
+        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
         "controller",
         ("owner_attached_projectile",),
         {

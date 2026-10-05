@@ -27,12 +27,12 @@ def visual_data(mode: str) -> dict:
     data = _data([])
     item = {"prompt": "one literal amber inventory fixture", "negativePrompt": "text, watermark",
             "silhouette": "compact ring", "visualIdentity": "amber ring", "palette": ["amber"],
-            "preferredCanvasSize": 32, "inventoryScale": 1.0, "worldScale": 1.0}
+            "preferredCanvasSize": 32, "renderSizePx": 40, "forwardAngleDegrees": 45, "inventoryScale": 1.0, "worldScale": 1.0}
     entity = {"entityId": "orb", "assetMode": mode,
               "visualProjectRef": "item" if mode == "reuse_item_icon" else "none", "scale": 1.0}
     if mode == "baked_sprite":
-        entity.update(visualProjectRef="entity", prompt="one exact separate amber orb", silhouette="orb", visualIdentity="amber orb")
-    kit = {"schema": "infini.visual-kit.runtime-entities.v1", "item": item,
+        entity.update(visualProjectRef="entity", prompt="one exact separate amber orb", silhouette="orb", visualIdentity="amber orb", preferredCanvasSize=64, renderSizePx=24, forwardAngleDegrees=0)
+    kit = {"schema": "infini.visual-kit.runtime-entities.v2", "item": item,
            "entities": [{"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
                          **{key: item[key] for key in ("prompt", "silhouette", "visualIdentity")}, "scale": 1.0}, entity],
            "animationPlan": "Keep accepted movement, do not add gameplay."}

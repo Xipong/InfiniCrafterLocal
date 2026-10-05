@@ -110,7 +110,7 @@ public sealed partial class GeneratedProjectile
         Projectile.velocity = direction;
         Projectile.rotation = direction.ToRotation();
         Projectile.timeLeft = 2;
-        Projectile.tileCollide = false;
+        Projectile.tileCollide = _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner, keepAnimation: true);
         int warmup = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
         Projectile.friendly = warmup <= 0 || _age >= warmup;
@@ -139,6 +139,7 @@ public sealed partial class GeneratedProjectile
             if (!release)
             {
                 Projectile.timeLeft = Math.Max(Projectile.timeLeft, 2);
+                Projectile.tileCollide = false;
                 Projectile.friendly = false;
                 return true;
             }
@@ -415,7 +416,7 @@ public sealed partial class GeneratedProjectile
             target = owner.MountedCenter + offset;
         }
         Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(target) * Math.Min(Math.Max(1f, p.ReturnSpeed), Projectile.Distance(target)), 0.28f);
-        Projectile.tileCollide = false;
+        Projectile.tileCollide = !_returning && _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner);
         Projectile.rotation += 0.35f;
         if (_returning && Projectile.Distance(owner.MountedCenter) < 20f) Projectile.Kill();
@@ -431,7 +432,7 @@ public sealed partial class GeneratedProjectile
         Projectile.velocity = direction.SafeNormalize(_initialDirection);
         Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
         Projectile.timeLeft = 2;
-        Projectile.tileCollide = false;
+        Projectile.tileCollide = _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner, matchAnimation: true);
     }
 

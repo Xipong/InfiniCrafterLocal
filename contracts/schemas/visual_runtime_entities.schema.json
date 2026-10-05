@@ -19,9 +19,7 @@
               },
               "entityId": {
                 "enum": [
-                  "item",
-                  "workbench_blade",
-                  "nail"
+                  "item"
                 ],
                 "type": "string"
               },
@@ -47,11 +45,7 @@
                 "type": "string"
               },
               "visualProjectRef": {
-                "enum": [
-                  "item",
-                  "entity"
-                ],
-                "type": "string"
+                "const": "item"
               }
             },
             "required": [
@@ -69,11 +63,86 @@
             "additionalProperties": false,
             "properties": {
               "assetMode": {
+                "const": "baked_sprite"
+              },
+              "entityId": {
+                "enum": [
+                  "workbench_blade",
+                  "nail"
+                ],
+                "type": "string"
+              },
+              "forwardAngleDegrees": {
+                "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
+                "maximum": 180,
+                "minimum": -180,
+                "type": "number"
+              },
+              "preferredCanvasSize": {
+                "description": "Requested square independent entity PNG target canvas, in pixels per side; not the item's world size or a guaranteed on-screen display size.",
+                "enum": [
+                  24,
+                  32,
+                  48,
+                  64,
+                  96,
+                  128
+                ],
+                "type": "integer"
+              },
+              "prompt": {
+                "maxLength": 1400,
+                "minLength": 1,
+                "type": "string"
+              },
+              "renderSizePx": {
+                "description": "Base world-pixel length of the larger side of the complete final PNG frame, before rotation/camera and independent draw multipliers. Not alpha-bbox, collision, inventory fit or bake resolution. Runtime uses q=renderSizePx/max(actual final frame width,height).",
+                "maximum": 512,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "scale": {
+                "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
+                "maximum": 4.0,
+                "minimum": 0.25,
+                "type": "number"
+              },
+              "silhouette": {
+                "maxLength": 700,
+                "minLength": 1,
+                "type": "string"
+              },
+              "visualIdentity": {
+                "maxLength": 700,
+                "minLength": 1,
+                "type": "string"
+              },
+              "visualProjectRef": {
+                "const": "entity"
+              }
+            },
+            "required": [
+              "entityId",
+              "assetMode",
+              "visualProjectRef",
+              "prompt",
+              "silhouette",
+              "visualIdentity",
+              "scale",
+              "preferredCanvasSize",
+              "renderSizePx",
+              "forwardAngleDegrees"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "assetMode": {
                 "const": "reuse_item_icon"
               },
               "entityId": {
                 "enum": [
-                  "item",
                   "workbench_blade",
                   "nail"
                 ],
@@ -105,7 +174,6 @@
               },
               "entityId": {
                 "enum": [
-                  "item",
                   "workbench_blade",
                   "nail"
                 ],
@@ -137,7 +205,6 @@
               },
               "entityId": {
                 "enum": [
-                  "item",
                   "workbench_blade",
                   "nail"
                 ],
@@ -238,6 +305,12 @@
           ],
           "type": "string"
         },
+        "forwardAngleDegrees": {
+          "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
+          "maximum": 180,
+          "minimum": -180,
+          "type": "number"
+        },
         "grip": {
           "additionalProperties": false,
           "description": "Optional atomic hand pivot on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units. Replaces legacy grip and artistic forward offset, not authored HoldoutOffset.",
@@ -296,6 +369,12 @@
           "minLength": 1,
           "type": "string"
         },
+        "renderSizePx": {
+          "description": "Base world-pixel length of the larger side of the complete final PNG frame, before rotation/camera and independent draw multipliers. Not alpha-bbox, collision, inventory fit or bake resolution. Runtime uses q=renderSizePx/max(actual final frame width,height).",
+          "maximum": 512,
+          "minimum": 1,
+          "type": "integer"
+        },
         "silhouette": {
           "maxLength": 700,
           "minLength": 1,
@@ -320,13 +399,15 @@
         "visualIdentity",
         "palette",
         "preferredCanvasSize",
+        "renderSizePx",
+        "forwardAngleDegrees",
         "inventoryScale",
         "worldScale"
       ],
       "type": "object"
     },
     "schema": {
-      "const": "infini.visual-kit.runtime-entities.v1"
+      "const": "infini.visual-kit.runtime-entities.v2"
     }
   },
   "required": [

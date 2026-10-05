@@ -2,6 +2,12 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using MonoMod.Cil;
+using ReLogic.Content;
+using Terraria.DataStructures;
+using Terraria.GameContent;
 using InfiniCrafterLocal.Common.Services;
 
 internal static partial class EngineRuntimeChecks
@@ -252,6 +258,256 @@ internal static partial class EngineRuntimeChecks
             Equal(id == "recipe_identity_probe", accepted, "delivery identity: '" + id + "'");
             Equal(id.Trim(), parsed!.Id, "delivery gate does not invent identity");
         }
+    }
+
+    // Synthetic metadata on real installed FNA/Asset types, no GPU or native PNG measurement.
+    private static void WithParentSpriteMetadata(Action<Terraria.Item, Texture2D, Asset<Texture2D>> check)
+    {
+        var oldAssets = TextureAssets.Item;
+        var oldAnimations = Terraria.Main.itemAnimations;
+        bool oldServer = Terraria.Main.dedServ;
+        int oldMode = Terraria.Main.netMode;
+        var texture = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
+        var asset = (Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Asset<Texture2D>));
+        GC.SuppressFinalize(texture);
+        GC.SuppressFinalize(asset);
+        typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 40);
+        typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 68);
+        typeof(Asset<Texture2D>).GetField("ownValue", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(asset, texture);
+        typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.Loaded);
+        var item = new Terraria.Item();
+        item.SetDefaults(Terraria.ID.ItemID.WoodenSword);
+        item.stack = 3;
+        item.favorited = true;
+        try
+        {
+            Terraria.Main.dedServ = false;
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            TextureAssets.Item = new Asset<Texture2D>[item.type + 1];
+            TextureAssets.Item[item.type] = asset;
+            Terraria.Main.itemAnimations = new DrawAnimation[item.type + 1];
+            check(item, texture, asset);
+        }
+        finally
+        {
+            TextureAssets.Item = oldAssets;
+            Terraria.Main.itemAnimations = oldAnimations;
+            Terraria.Main.dedServ = oldServer;
+            Terraria.Main.netMode = oldMode;
+        }
+    }
+
+    private static JsonElement CaptureParentSpriteMetadata(Terraria.Item? item,
+        InfiniCrafterLocal.Common.Models.GeneratedItemData? definition = null)
+    {
+        var capture = typeof(GeneratorClient).GetMethod("TryCaptureNativeSpriteReference", BindingFlags.Static | BindingFlags.NonPublic)!;
+        return JsonSerializer.SerializeToElement(capture.Invoke(null, new object?[] { item, definition }),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+
+    private sealed class ParentFrameProbe : DrawAnimation
+    {
+        public Rectangle Rectangle;
+        public bool Throw;
+        public int Reads;
+        public int Updates;
+        public override Rectangle GetFrame(Texture2D texture, int frameCounterOverride = -1)
+        {
+            Reads++;
+            Equal(-1, frameCounterOverride, "observe the current state, not a frame override");
+            if (Throw) throw new InvalidOperationException("fixture frame unavailable");
+            return Rectangle;
+        }
+        public override void Update() { Updates++; throw new InvalidOperationException("snapshot cannot update animation"); }
+    }
+
+    private static void ParentNativeSpriteReferenceReachesPreparedRequest()
+    {
+        WithParentSpriteMetadata((source, texture, asset) =>
+        {
+            var owner = new Terraria.Player { name = "sprite_reference_probe" };
+            var client = new GeneratorClient();
+            string Stats(Terraria.Item item) => JsonSerializer.Serialize(new {
+                item.type, item.prefix, item.damage, item.width, item.height, item.scale, item.favorited,
+            });
+            source.width = 999; source.height = 777; source.scale = 3.5f;
+            string original = Stats(source);
+            Terraria.Main.dedServ = true;
+            var older = client.Prepare(source, source, owner);
+            Terraria.Main.dedServ = false;
+            var prepared = client.Prepare(source, source, owner);
+            using var expected = JsonDocument.Parse(older.PayloadJson);
+            using var actual = JsonDocument.Parse(prepared.PayloadJson);
+            foreach (string side in new[] { "itemA", "itemB" })
+            {
+                var prior = expected.RootElement.GetProperty(side);
+                var parent = actual.RootElement.GetProperty(side);
+                Equal(false, prior.TryGetProperty("spriteReferenceRaw", out _), "absence is omission, not null");
+                Equal(prior.EnumerateObject().Count() + 1, parent.EnumerateObject().Count(), "only one root fact added");
+                foreach (var field in prior.EnumerateObject())
+                    Equal(field.Value.GetRawText(), parent.GetProperty(field.Name).GetRawText(), "old field/null preserved: " + field.Name);
+                var reference = parent.GetProperty("spriteReferenceRaw");
+                Equal("TextureAssets.Item", reference.GetProperty("source").GetString()!, "exact source");
+                Equal(40, reference.GetProperty("textureWidthPx").GetInt32(), "texture width, not item width");
+                Equal(68, reference.GetProperty("textureHeightPx").GetInt32(), "texture height, not item height");
+                var frame = reference.GetProperty("currentFrame");
+                Equal("texture_bounds", frame.GetProperty("source").GetString()!, "null animation slot is static");
+                Equal(0, frame.GetProperty("xPx").GetInt32(), "zero X preserved");
+                Equal(0, frame.GetProperty("yPx").GetInt32(), "zero Y preserved");
+                Equal(40, frame.GetProperty("widthPx").GetInt32(), "literal bounds width");
+                Equal(68, frame.GetProperty("heightPx").GetInt32(), "literal bounds height");
+                Equal(true, parent.GetProperty("generatedData").ValueKind == JsonValueKind.Null, "native top-level null retained");
+            }
+            Equal(original, Stats(source), "Prepare does not alter the source");
+            Equal(3, source.stack, "original quantity unchanged");
+            foreach (var refund in new[] { prepared.RefundA, prepared.RefundB })
+            {
+                Equal(false, ReferenceEquals(source, refund), "refund independent");
+                Equal(original, Stats(refund), "refund keeps original fields");
+                Equal(1, refund.stack, "one unit reserved");
+            }
+            var animation = new DrawAnimationVertical(7, 2, false) { Frame = 1, FrameCounter = 5 };
+            Terraria.Main.itemAnimations[source.type] = animation;
+            Rectangle observed = animation.GetFrame(texture); // Installed accessor excludes two separator pixels.
+            var animated = client.Prepare(source, source, owner);
+            using var animatedJson = JsonDocument.Parse(animated.PayloadJson);
+            var current = animatedJson.RootElement.GetProperty("itemA").GetProperty("spriteReferenceRaw").GetProperty("currentFrame");
+            Equal("draw_animation", current.GetProperty("source").GetString()!, "registered UI animation provenance");
+            Equal(observed.X, current.GetProperty("xPx").GetInt32(), "current frame X");
+            Equal(observed.Y, current.GetProperty("yPx").GetInt32(), "current frame Y");
+            Equal(observed.Width, current.GetProperty("widthPx").GetInt32(), "current frame width");
+            Equal(observed.Height, current.GetProperty("heightPx").GetInt32(), "current frame height, not atlas height");
+            Equal(1, animation.Frame, "snapshot did not update native Frame");
+            Equal(5, animation.FrameCounter, "snapshot did not update native FrameCounter");
+            var probe = new ParentFrameProbe { Rectangle = new Rectangle(3, 5, 11, 13) };
+            Terraria.Main.itemAnimations[source.type] = probe;
+            var literal = CaptureParentSpriteMetadata(source).GetProperty("currentFrame");
+            Equal(3, literal.GetProperty("xPx").GetInt32(), "exact custom accessor origin");
+            Equal(13, literal.GetProperty("heightPx").GetInt32(), "no atlas subdivision inference");
+            Equal(1, probe.Reads, "one current-frame sample");
+            Equal(0, probe.Updates, "no animation update");
+            string frozen = prepared.PayloadJson;
+            source.SetDefaults(Terraria.ID.ItemID.WorkBench); // In-place source reuse after capture.
+            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 9);
+            probe.Rectangle = new Rectangle(0, 0, 1, 1);
+            Equal(frozen, prepared.PayloadJson, "prepared observation is an immutable value snapshot");
+        });
+    }
+
+    private static void ParentNativeSpriteReferenceAbsenceIsHonest()
+    {
+        WithParentSpriteMetadata((source, texture, asset) =>
+        {
+            var roster = TextureAssets.Item;
+            var animations = Terraria.Main.itemAnimations;
+            var capture = typeof(GeneratorClient).GetMethod("TryCaptureNativeSpriteReference", BindingFlags.Static | BindingFlags.NonPublic)!;
+            int valueReads = 0;
+            using var valueObserver = new MonoMod.RuntimeDetour.ILHook(capture, il => {
+                var sites = il.Body.Instructions.Where(instruction =>
+                    (instruction.OpCode == Mono.Cecil.Cil.OpCodes.Callvirt || instruction.OpCode == Mono.Cecil.Cil.OpCodes.Call)
+                    && instruction.Operand is Mono.Cecil.MethodReference method && method.Name == "get_Value"
+                    && method.DeclaringType.FullName.StartsWith("ReLogic.Content.Asset`1", StringComparison.Ordinal)).ToArray();
+                Equal(1, sites.Length, "one exact loaded asset Value read site");
+                new ILCursor(il) { Index = il.Body.Instructions.IndexOf(sites[0]) }.EmitDelegate<Action>(() => valueReads++);
+            });
+            void Absent(string why)
+            {
+                int before = valueReads;
+                Equal(true, CaptureParentSpriteMetadata(source).ValueKind == JsonValueKind.Null, why);
+                Equal(before, valueReads, why + " avoids Value read");
+            }
+            Equal(true, CaptureParentSpriteMetadata(null).ValueKind == JsonValueKind.Null, "null item absent");
+            Equal(true, CaptureParentSpriteMetadata(new Terraria.Item()).ValueKind == JsonValueKind.Null, "air absent");
+            TextureAssets.Item = null!; Absent("missing texture roster");
+            TextureAssets.Item = Array.Empty<Asset<Texture2D>>(); Absent("out-of-range item type");
+            TextureAssets.Item = roster; roster[source.type] = null!; Absent("missing asset"); roster[source.type] = asset;
+            var defaultProperty = typeof(Asset<Texture2D>).GetProperty("DefaultValue", BindingFlags.Public | BindingFlags.Static)!;
+            object? oldDefault = defaultProperty.GetValue(null);
+            var pixel = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
+            GC.SuppressFinalize(pixel);
+            typeof(Texture2D).GetProperty("Width")!.SetValue(pixel, 1);
+            typeof(Texture2D).GetProperty("Height")!.SetValue(pixel, 1);
+            try
+            {
+                defaultProperty.SetValue(null, pixel);
+                typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.NotLoaded);
+                Equal(true, ReferenceEquals(pixel, asset.Value), "real unloaded Value exposes a 1px placeholder");
+                Absent("unloaded asset with 1px Value is not a reference");
+                typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.Loaded);
+            }
+            finally { defaultProperty.SetValue(null, oldDefault); }
+            Terraria.Main.dedServ = true; Absent("dedicated server"); Terraria.Main.dedServ = false;
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.Server; Absent("server mode"); Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            typeof(Asset<Texture2D>).GetField("<IsDisposed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(asset, true); Absent("disposed asset");
+            typeof(Asset<Texture2D>).GetField("<IsDisposed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(asset, false);
+            typeof(GraphicsResource).GetField("<IsDisposed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(texture, true);
+            Equal(true, CaptureParentSpriteMetadata(source).ValueKind == JsonValueKind.Null, "disposed texture absent");
+            typeof(GraphicsResource).GetField("<IsDisposed>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(texture, false);
+            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 1);
+            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 1);
+            int readsBeforeLoadedPixel = valueReads;
+            Equal(1, CaptureParentSpriteMetadata(source).GetProperty("textureWidthPx").GetInt32(), "real loaded 1px is accepted");
+            Equal(readsBeforeLoadedPixel + 1, valueReads, "loaded positive executes the exact Value observer once");
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.MultiplayerClient;
+            Equal(1, CaptureParentSpriteMetadata(source).GetProperty("textureHeightPx").GetInt32(), "ordinary multiplayer client may observe loaded art");
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 40);
+            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 68);
+            foreach (DrawAnimation[]? unknown in new DrawAnimation[]?[] { null, Array.Empty<DrawAnimation>() })
+            {
+                Terraria.Main.itemAnimations = unknown!;
+                Equal(false, CaptureParentSpriteMetadata(source).TryGetProperty("currentFrame", out _), "missing animation roster leaves frame unknown");
+            }
+            Terraria.Main.itemAnimations = animations;
+            var probe = new ParentFrameProbe { Throw = true };
+            animations[source.type] = probe;
+            Equal(false, CaptureParentSpriteMetadata(source).TryGetProperty("currentFrame", out _), "throwing accessor preserves dimensions only");
+            probe.Throw = false;
+            foreach (Rectangle invalid in new[] { new Rectangle(-1, 0, 3, 3), new Rectangle(0, 0, 0, 3),
+                new Rectangle(39, 0, 2, 1), new Rectangle(0, 67, 1, 2), new Rectangle(int.MaxValue, 0, int.MaxValue, 1) })
+            {
+                probe.Rectangle = invalid;
+                var fact = CaptureParentSpriteMetadata(source);
+                Equal(40, fact.GetProperty("textureWidthPx").GetInt32(), "bad frame cannot erase valid texture dimensions");
+                Equal(false, fact.TryGetProperty("currentFrame", out _), "bad frame omitted, not clamped");
+            }
+            Equal(0, probe.Updates, "unavailable frames do not trigger updates");
+        });
+    }
+
+    private static void ParentGeneratedSpriteReferenceNeverUsesNativeProxy()
+    {
+        WithParentSpriteMetadata((source, texture, asset) =>
+        {
+            var data = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+            data.Id = "parent_declared_size_probe"; data.Name = "Literal definition"; data.SourceMode = "test_fixture";
+            var generated = new InfiniCrafterLocal.Content.Items.GeneratedItem();
+            typeof(Terraria.ModLoader.ModType<Terraria.Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, source);
+            typeof(Terraria.Item).GetProperty("ModItem")!.SetValue(source, generated);
+            typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+            data.ApplyToItem(source);
+            var owner = new Terraria.Player { name = "declared_size_probe" };
+            foreach (int? size in new int?[] { null, 1, 47, 512 })
+            {
+                if (size.HasValue) data.Visual.RenderSizePx = size.Value;
+                string before = JsonSerializer.Serialize(data);
+                var prepared = new GeneratorClient().Prepare(source, source, owner);
+                using var json = JsonDocument.Parse(prepared.PayloadJson);
+                foreach (string side in new[] { "itemA", "itemB" })
+                {
+                    var parent = json.RootElement.GetProperty(side);
+                    Equal(false, parent.TryGetProperty("spriteReferenceRaw", out _), "loaded shared generated proxy is never reference art");
+                    var visual = parent.GetProperty("generatedData").GetProperty("visual");
+                    Equal(size.HasValue, visual.TryGetProperty("renderSizePx", out var declared), "accepted declaration is optional");
+                    if (size.HasValue) Equal(size.Value, declared.GetInt32(), "literal declared extent reaches request");
+                    foreach (string field in new[] { "createTile", "createWall", "placeStyle" })
+                        Equal(true, parent.GetProperty(field).ValueKind == JsonValueKind.Null, "generated old null preserved: " + field);
+                }
+                Equal(before, JsonSerializer.Serialize(data), "canonical declaration not mutated by request");
+                Equal(1, prepared.RefundA.stack, "refund reservation unchanged");
+            }
+            Equal(true, CaptureParentSpriteMetadata(source).ValueKind == JsonValueKind.Null, "generated ModItem excluded even without resolved argument");
+        });
     }
 
     private static void CacheOnlyFlagPreservesRequest()

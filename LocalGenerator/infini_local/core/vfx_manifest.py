@@ -32,9 +32,17 @@ from infini_local.core.vfx_manifest_config import (
 VFX_MANIFEST_SCHEMA = "infini.vfx.runtime-events.v15"
 VFX_DIRECTOR_SCHEMA = "infini.vfx-director.runtime-events.v2"
 VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
-# Exact pairs/roles and the output schema depend on the accepted runtime program.
-VFX_PROMPT_STATIC_KEYS = ("schema", "rules")
-VFX_REPAIR_PROMPT_STATIC_KEYS = ("task", "rules")
+# Project invariant vocabulary from the canonical surface, never a second catalog.
+# Unlisted fields stay dynamic, including exact pairs/roles, texture/path sources
+# and the output schema derived from the accepted runtime program.
+_VFX_RUNTIME_VOCABULARY_KEYS = (
+    "schema", "rendererKind", "rendererRequirements", "rendererSemantics",
+    "colorPolicy", "heldRootVisibility", "backend", "textureRole", "particleRole", "anchor", "channel",
+    "lane", "emissionMode", "blend", "layer", "particleSystemId",
+    "visualBudgetClass", "numericRanges", "textureDependencyTuples", "maxSlots",
+)
+VFX_PROMPT_STATIC_KEYS = ("schema", "rules", "runtimeVocabulary")
+VFX_REPAIR_PROMPT_STATIC_KEYS = ("task", "rules", "runtimeVocabularyReadOnly")
 
 
 @dataclass(frozen=True)
@@ -78,7 +86,7 @@ _RENDERER_SEMANTICS = {
     "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
     "soundCue": "SoundID.Item1 at the resolved anchor; alpha controls volume. No sound-library/name classifier.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
-    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
+    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. If the intended body covers that path, an explicit compatible source=whip/beam slot can coexist with a baked tip/body; runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
@@ -187,11 +195,16 @@ def _entity_texture_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     return {
         "schema": VFX_DIRECTOR_SCHEMA,
         "rendererKind": list(_RENDERERS),
         "rendererRequirements": copy.deepcopy(_RENDERER_REQUIREMENTS),
         "rendererSemantics": copy.deepcopy(_RENDERER_SEMANTICS),
+        "heldRootVisibility": {
+            field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
+            for field in ("hideUseGraphic", "heldSpriteVisibilityHint")
+        },
         "colorPolicy": "Explicit Visual effectColor is shared by item, projectile and detached VFX. Its absence preserves legacy color paths. Rich palette prose is not parsed into a color and motif does not override explicit effectColor.",
         "backend": list(_BACKENDS),
         "textureRole": list(_TEXTURE_ROLES),
@@ -727,6 +740,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
     for entity in mechanics.get("entities") or []:
         if isinstance(entity, dict):
             entity.pop("visual", None)
+    surface = vfx_director_surface(data)
     packet = {
         "schema": "infini.vfx-director-input.runtime-events.v1",
         "item": {
@@ -738,17 +752,18 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
-        "runtimeSurface": vfx_director_surface(data),
+        "runtimeVocabulary": {key: surface[key] for key in _VFX_RUNTIME_VOCABULARY_KEYS},
+        "runtimeSurface": {key: value for key, value in surface.items() if key not in _VFX_RUNTIME_VOCABULARY_KEYS},
         "outputSchema": _director_schema(data),
         "rules": [
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
-            "Legacy forms: choose from runtimeSurface.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
-            "Use only enum values and numeric ranges from runtimeSurface; each selected rendererKind also requires the exact companion fields in rendererRequirements (encoded in the slot schema).",
+            "Legacy forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
+            "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
             "projectileAfterimage, spriteStampTrail, and actorAfterimage consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match. impactSprite instead consumes its dedicated impact texture.",
             "Legacy Sprite renderers require a non-none textureRole. Legacy primitive and particle renderers do not consume a gameplay PNG.",
-            "spriteElement and texturedPath use only their explicit nested texture and textureDependencyTuples; textureRole=none is neutral, not a request to suppress the selected image. Respect their own timing, opacity profiles, neutral companions and read-only geometry sources in rendererSemantics and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
+            "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; textureRole=none is neutral, not a request to suppress the selected image. Respect their own timing, opacity profiles, neutral companions and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
             "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt describes one dedicated impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
             _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",
@@ -1194,6 +1209,7 @@ def _request(
             "item": copy.deepcopy(packet.get("item") or {}),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
             "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
+            "runtimeVocabularyReadOnly": copy.deepcopy(packet.get("runtimeVocabulary") or {}),
             "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
             "exactErrors": copy.deepcopy(repair_errors[:24]),
             "repairScope": copy.deepcopy(dict(repair_scope or {})),
@@ -1206,7 +1222,7 @@ def _request(
                 "already-valid fields and independent slots are frozen; extra rewrites are ignored",
                 "Only exact validator-diagnosed foreign/additional leaves listed in deletePaths may be deleted by omission from an upsert; all other omissions are no-change. Delete duplicate asset rows only by diagnosed original assetIndicesDelete, never by a shared asset ID.",
                 "schema and note are required; omit unchanged edit fields as no-ops, including assetsUpsert/assetIdsDelete/assetIndicesDelete. Present arrays may not be null. Valid asset prompts, layout, canvas, references and optional absence are frozen. Repair a bad reference only; never create compensating artwork.",
-                "bind only exact runtime entityId+event pairs",
+                "bind only exact runtimeSurfaceReadOnly.runtimePairs entityId+event pairs; runtimeVocabularyReadOnly owns the read-only enum values, numeric ranges, rendererRequirements, rendererSemantics and textureDependencyTuples",
                 "presentation only; gameplay is immutable",
             ],
         }

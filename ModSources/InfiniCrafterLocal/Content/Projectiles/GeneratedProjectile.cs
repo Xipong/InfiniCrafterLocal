@@ -181,6 +181,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.DamageType = TerrariaRuntimeVocabulary.ResolveDamageClass(entity.Damage.DamageClass);
         Projectile.ownerHitCheck = entity.Damage.OwnerHitCheck;
         Projectile.penetrate = entity.Collision.Pierce;
+        // Native Damage() uses maxPenetrate to decide whether owner NPC
+        // immunity applies. Dynamic admission must update both initial fields.
+        Projectile.maxPenetrate = entity.Collision.Pierce;
         Projectile.tileCollide = entity.Collision.TileCollide;
         Projectile.ignoreWater = entity.Collision.IgnoreWater;
         Projectile.extraUpdates = entity.Collision.ExtraUpdates;
@@ -193,7 +196,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             || entity.IsStationary
             || entity.Controller.Code != RuntimeControllerCode.None;
         Projectile.timeLeft = Math.Max(1, AuthoredTicksToProjectileUpdates(entity.LifetimeTicks) + _activationDelayTicks);
-        if (entity.IsOwnerAttached || entity.IsStationary || entity.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease)
+        // Charging is a lifecycle phase, not an entity-kind collision policy.
+        // Released peers retain their explicitly authored collision on hydration.
+        if (entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease && !_released)
             Projectile.tileCollide = false;
     }
 
@@ -209,7 +214,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int? requestedCount = null,
         float? spreadOverride = null,
         float damageMultiplier = 1f,
-        RuntimeSpawnBudget? activationBudget = null)
+        RuntimeSpawnBudget? activationBudget = null,
+        int? rootDamageOverride = null,
+        float? rootKnockbackOverride = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
             return 0;
@@ -264,14 +271,18 @@ public sealed partial class GeneratedProjectile : ModProjectile
             float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
             Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
             Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * entity.Spawn.SpeedPxPerTick;
-            int damage = entity.Damage.Enabled ? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f))) : 0;
+            // A supplied root value is the final native shooting result, including
+            // player/prefix/late hooks. Null retains the authored event-spawn lane.
+            int damage = entity.Damage.Enabled
+                ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
+                : 0;
             Projectile projectile = Projectile.NewProjectileDirect(
                 source,
                 position,
                 velocity,
                 ModContent.ProjectileType<GeneratedProjectile>(),
                 damage,
-                entity.Damage.Knockback,
+                rootKnockbackOverride ?? entity.Damage.Knockback,
                 owner.whoAmI);
             if (projectile.ModProjectile is not GeneratedProjectile generated)
                 continue;
@@ -283,7 +294,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         return spawned;
     }
 
-    private static int CountActiveGeneratedProjectiles(int ownerId)
+    internal static int CountActiveGeneratedProjectiles(int ownerId)
     {
         int count = 0;
         foreach (Projectile projectile in Main.ActiveProjectiles)

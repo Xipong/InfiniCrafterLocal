@@ -5,6 +5,7 @@ No Platform API key, tool execution, paid fallback or chat-completions downgrade
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from infini_local.services import codex_auth
 
@@ -78,6 +79,14 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
         kind = format_hint.get("type")
         if kind == "json_object":
             request["text"] = {"format": {"type": "json_object"}}
+            # The subscription endpoint checks JSON-mode framing in input, not
+            # in instructions after system messages have been projected there.
+            # Keep this transport-only prefix invariant: recipe text containing
+            # "JSON" must not remove a message before the shared static prefix.
+            # Every authored message remains verbatim and in its original order.
+            inputs.insert(0, {"type": "message", "role": "developer", "content": [
+                {"type": "input_text", "text": "JSON response."},
+            ]})
         elif kind == "json_schema" and isinstance(format_hint.get("json_schema"), dict):
             shape = format_hint["json_schema"]
             request["text"] = {"format": {"type": "json_schema", "name": str(shape.get("name") or "infini_json"), "strict": bool(shape.get("strict")), "schema": shape.get("schema")}}
@@ -113,11 +122,18 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
 def generate_chat(packet: dict[str, Any], *, timeout: int) -> dict[str, Any]:
     request = _request_payload(packet)
     credentials = codex_auth.get_credentials()
-    response = codex_auth.post_sse(RESPONSES_URL, request, headers={
+    headers = {
         "Authorization": "Bearer " + credentials.access_token,
         "ChatGPT-Account-Id": credentials.account_id,
         "originator": "infinicrafter",
-    }, timeout=timeout)
+    }
+    if "prompt_cache_key" in request:
+        # Native Codex root requests use the cache-affinity key as session-id.
+        # This is a routing identity, not a synthetic conversation/thread ID.
+        # Generated keys are ASCII; encode arbitrary keys without header injection
+        # while preserving the authoritative body value and stable affinity.
+        headers["session-id"] = quote(request["prompt_cache_key"], safe="")
+    response = codex_auth.post_sse(RESPONSES_URL, request, headers=headers, timeout=timeout)
     content = _output_text(response)
     decoded_content = codex_auth._decode_unicode_runs(content)
     if any(secret and len(secret) >= 8 and secret in decoded_content

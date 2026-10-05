@@ -42,6 +42,9 @@
     <Compile Include="EngineRuntimeChecks.AssetIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
+    <Compile Include="EngineRuntimeChecks.Tooltips.cs" />
+    <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
+    <Compile Include="EngineRuntimeChecks.RootCombat.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />

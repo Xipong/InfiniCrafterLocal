@@ -357,6 +357,60 @@ def test_cache_identity_is_stable_but_includes_contract_inputs(variant, equal):
         assert (identity == llm._prompt_cache_identity(second, model)) is equal
 
 
+@pytest.mark.parametrize("variant,equal", [
+    pytest.param("ignored-exclude", True, id="codex-ignored-reasoning-flag"),
+    pytest.param("message-name", True, id="codex-projects-away-message-name"),
+    pytest.param("dynamic-json", True, id="dynamic-json-cannot-toggle-leading-marker"),
+    pytest.param("effort-alias", True, id="same-effective-effort"),
+    pytest.param("effort-change", False, id="different-effective-effort"),
+    pytest.param("model", False, id="different-model"),
+    pytest.param("schema", False, id="different-wire-format"),
+])
+def test_codex_cache_identity_tracks_effective_static_wire(variant, equal):
+    from infini_local.services import codex_text_backend as codex
+    first = with_prompt_cache_prefix(cache_packet(), message_index=1, prefix_chars=15)
+    first["model"] = "gpt-6-sol"
+    first["reasoning"] = {"effort": "medium", "exclude": True}
+    second = copy.deepcopy(first)
+    model = first["model"]
+    if variant == "ignored-exclude":
+        second["reasoning"]["exclude"] = False
+    elif variant == "message-name":
+        second["messages"][0]["name"] = "client-only-trace-name"
+    elif variant == "dynamic-json":
+        second["messages"][1]["content"] = '{"catalog":[], {"recipeKey":"JSON specimen"}'
+    elif variant == "effort-alias":
+        second.pop("reasoning")
+        second["reasoning_effort"] = "medium"
+    elif variant == "effort-change":
+        second["reasoning"]["effort"] = "high"
+    elif variant == "model":
+        model = second["model"] = "gpt-6-luna"
+    else:
+        second["response_format"] = {"type": "json_schema", "json_schema": {
+            "name": "contract", "strict": True, "schema": {"type": "object"},
+        }}
+    context = {"provider": "openai_codex"}
+    before = copy.deepcopy((first, second))
+    key = llm._prompt_cache_identity(first, first["model"], context=context)
+    assert (key == llm._prompt_cache_identity(second, model, context=context)) is equal
+    if equal:
+        def static_wire(packet):
+            packet = copy.deepcopy(packet)
+            packet["messages"][1]["content"] = packet["messages"][1]["content"][:15]
+            return codex._request_payload(packet)
+        assert static_wire(first) == static_wire(second)
+    if variant == "ignored-exclude":
+        assert llm._prompt_cache_identity(first, model, context={"provider": "openai_compat"}) != llm._prompt_cache_identity(second, model, context={"provider": "openai_compat"})
+    if variant == "dynamic-json":
+        left, right = codex._request_payload(first), codex._request_payload(second)
+        assert left["input"][0] == right["input"][0] == {
+            "type": "message", "role": "developer",
+            "content": [{"type": "input_text", "text": "JSON response."}],
+        }
+    assert (first, second) == before
+
+
 @pytest.mark.parametrize("provider,base,model,mode,route", [
     pytest.param("openai_compat", "https://api.openai.com/v1", "gpt-5.6", "responses", "explicit", id="platform-responses"),
     pytest.param("openrouter", "https://openrouter.ai/api/v1", "openai/gpt-5.6", "responses", "explicit", id="router-responses"),
@@ -386,10 +440,15 @@ def test_cache_wire_fields_are_provider_model_and_api_scoped(wire, monkeypatch, 
         if route == "none":
             assert "prompt_cache_key" not in body and "prompt_cache_options" not in body
         else:
-            assert body["prompt_cache_key"] == llm._prompt_cache_identity(sources[ordinal], model)
+            assert body["prompt_cache_key"] == llm._prompt_cache_identity(sources[ordinal], model, context=context)
             assert bodies[0]["prompt_cache_key"] == bodies[1]["prompt_cache_key"]
         content = body["input"][0]["content"] if mode == "responses" else body["messages"][1]["content"]
         if provider == "openai_codex":
+            assert body["input"] == [
+                {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]},
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": sources[ordinal]["messages"][1]["content"]}]},
+            ]
+            content = body["input"][1]["content"]
             assert body["store"] is False and "prompt_cache_options" not in body
             assert "prompt_cache_breakpoint" not in str(body)
         elif route == "explicit":

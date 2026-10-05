@@ -42,11 +42,35 @@ def _strip_derived_packet_fields(value: Any) -> Any:
         return [_strip_derived_packet_fields(item) for item in value]
     return value
 
-def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
+def _native_sprite_reference_for_llm(value: Any) -> dict[str, Any]:
+    """Copy loaded texture/UI-frame facts, never a collider or inferred display size."""
+    if not isinstance(value, dict) or value.get("source") != "TextureAssets.Item":
+        return {}
+    width, height = value.get("textureWidthPx"), value.get("textureHeightPx")
+    if any(type(dimension) is not int or not 1 <= dimension <= 2_147_483_647 for dimension in (width, height)):
+        return {}
+    observation = {"source": value["source"], "textureWidthPx": width, "textureHeightPx": height}
+    frame = value.get("currentFrame")
+    if isinstance(frame, dict) and frame.get("source") in ("texture_bounds", "draw_animation"):
+        numbers: list[Any] = [frame.get(key) for key in ("xPx", "yPx", "widthPx", "heightPx")]
+        x, y, w, h = numbers
+        if (all(type(number) is int for number in (x, y, w, h))
+                and x >= 0 and y >= 0 and w > 0 and h > 0
+                and x + w <= width and y + h <= height
+                and (frame["source"] != "texture_bounds" or (x, y, w, h) == (0, 0, width, height))):
+            observation["currentFrame"] = {key: frame[key] for key in ("source", "xPx", "yPx", "widthPx", "heightPx")}
+    return copy.deepcopy(observation)
+
+
+def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: bool = False) -> dict[str, Any]:
     """Compact parent card for the LLM.
 
     The packet contains raw source fields or exact accepted generated runtime facts.
     It never adds code-derived semantics, behavior digests, categories or tags.
+    Visual consumers may opt into read-only calibration: loaded native texture and
+    sampled UI-frame pixels, or an explicit accepted generated world max-side size.
+    These are not alpha bounds/hitboxes or required child dimensions; missing is
+    unknown, never a canvas/scale/collider default. Gameplay's default is unchanged.
     """
     item_raw = compact_item_raw_for_llm(item)
     cross_mod_identity = {
@@ -67,6 +91,10 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     if vanilla_flags:
         card["raw"]["vanillaFlags"] = vanilla_flags
     gd = generated_data_of(item)
+    if include_visual_reference and not isinstance(item.get("generatedData"), dict):
+        sprite_reference = _native_sprite_reference_for_llm(item.get("spriteReferenceRaw"))
+        if sprite_reference:
+            card["raw"]["spriteReference"] = sprite_reference
     direct: dict[str, Any] = {}
     effective: dict[str, Any] = {}
     ammo: dict[str, Any] = {}
@@ -162,6 +190,11 @@ def raw_parent_card_for_llm(item: dict[str, Any]) -> dict[str, Any]:
                 "schema", "name", "identity", "description", "playerExperience", "notableEffects",
                 "runtimePrimaryEntityId", "runtimeEntityIds",
             ) if _compact_keep(summary.get(key))}
+        if include_visual_reference:
+            visual_raw = dict_get_ci(gd, "visual", {})
+            render_size = dict_get_ci(visual_raw, "renderSizePx")
+            if type(render_size) is int and 1 <= render_size <= 512:
+                generated_parent["visual"] = {"renderSizePx": render_size}
         card["raw"]["generatedParent"] = generated_parent
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.
     return _strip_derived_packet_fields({k: v for k, v in card.items() if _compact_keep(v)})

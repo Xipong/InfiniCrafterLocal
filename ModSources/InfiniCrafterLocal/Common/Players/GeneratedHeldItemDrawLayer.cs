@@ -109,7 +109,9 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
     private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
     {
         string releaseTiming = (data.RuntimeProgram?.ItemUse?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
-        return releaseTiming != "immediate";
+        if (releaseTiming != "" || data.Visual?.RenderSizePx.HasValue != true)
+            return releaseTiming != "immediate";
+        return data.RuntimeProgram?.ItemUse?.HideUseGraphic != true;
     }
 
     protected override void Draw(ref PlayerDrawSet drawInfo)
@@ -156,7 +158,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         // Match GeneratedItem.ModifyItemScale for a registry-only definition. Do not
         // cap the adjusted result: prefix/player/global hooks already own that scale.
         float payloadScale = heldHasGeneratedData ? 1f : Math.Clamp(registryScale, 0.25f, 4f);
-        float drawScale = baseScale * payloadScale;
+        float drawScale = baseScale * payloadScale * SpritePresentation.FrameScale(data!.Visual.RenderSizePx, source.Width, source.Height);
         Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir, data?.Visual?.Grip);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
         // ItemLocation is already the draw-set pose (not necessarily player.itemLocation).

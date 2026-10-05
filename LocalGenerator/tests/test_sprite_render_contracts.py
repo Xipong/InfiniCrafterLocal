@@ -325,3 +325,26 @@ def test_grip_image_boundary(monkeypatch, role, present, long):
         generation.generate_visual_asset(data, "item", authored, "", "grip_probe", 64)
         assert len(captured) == 1
         assert authored in captured[0]["prompt"] and '"normalizedX":0.123456789' in captured[0]["prompt"] and '"normalizedY":0.8' in captured[0]["prompt"]
+
+
+@pytest.mark.parametrize("canvas", [24, 64, 128])
+def test_main_canvas_and_presentation_do_not_leak_to_dedicated_impact(canvas):
+    data = {"id": "plan", "visual": {"preferredCanvasSize": 96, "renderSizePx": 40, "forwardAngleDegrees": 45},
+        "runtimeProgram": {"itemEntityId": "opaque_root", "entities": [
+            {"id": "opaque_root", "kind": "item_body", "visual": {"assetMode": "baked_sprite"}},
+            {"id": "opaque_body", "kind": "free_projectile", "visualRole": "projectile", "hitbox": {"widthPx": 21, "heightPx": 21},
+             "visual": {"assetMode": "baked_sprite", "preferredCanvasSize": canvas, "renderSizePx": 48, "forwardAngleDegrees": -30, "impactPrompt": "authored impact"}},
+            {"id": "alias", "kind": "free_projectile", "visual": {"assetMode": "reuse_item_icon"}},
+        ]}, "vfxManifest": {"slots": [{"entityId": "opaque_body", "rendererKind": "impactSprite"}]}}
+    before = copy.deepcopy(data)
+    plan = {row["role"]: row for row in build_visual_asset_plan(data)}
+    assert plan["entity:opaque_body"]["canvas"] == canvas
+    assert plan["entity:opaque_body"]["renderSizePx"] == 48
+    assert plan["entity:opaque_body"]["forwardAngleDegrees"] == -30
+    assert plan["item"]["renderSizePx"] == plan["entity:alias"]["renderSizePx"] == 40
+    assert plan["entity:alias"]["canvas"] == 96
+    assert plan["entity:alias"]["forwardAngleDegrees"] == 45
+    assert plan["entity:alias"]["presentationOwnerEntityId"] == "opaque_root"
+    assert plan["impact:opaque_body"]["canvas"] == 24
+    assert all(field not in plan["impact:opaque_body"] for field in ("renderSizePx", "forwardAngleDegrees", "presentationOwnerEntityId"))
+    assert data == before

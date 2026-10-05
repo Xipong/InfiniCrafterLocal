@@ -78,6 +78,71 @@ internal static partial class EngineRuntimeChecks
         return generated;
     }
 
+    private static void RuntimeDynamicPierceKeepsNativeMaximumAndImmunity()
+    {
+        using var scope = new SwarmRuntimeScope();
+        foreach(int pierce in new[]{-1,1,3})
+        foreach(string immunity in new[]{"owner","local"})
+        {
+            var data=SwarmGameplayFixture();var entity=data.RuntimeProgram.TryGetEntity("root")!;
+            entity.Collision.Pierce=pierce;entity.Collision.NpcImmunityMode=immunity;
+            var projectile=new Projectile();projectile.SetDefaults(ProjectileID.WoodenArrowFriendly);
+            Equal(1,projectile.maxPenetrate,"native default positive control");
+            projectile.owner=0;projectile.damage=100;projectile.knockBack=3;
+            var generated=Attach(projectile);generated.Configure(data,entity,0,8,Vector2.UnitX);
+            Equal(pierce,projectile.penetrate,"authored remaining penetration");
+            Equal(pierce,projectile.maxPenetrate,"native maximum follows authored initial penetration");
+            Equal(immunity=="local",projectile.usesLocalNPCImmunity,"immunity selection preserved");
+            Equal(false,projectile.usesIDStaticNPCImmunity,"no shared proxy-type immunity inferred");
+        }
+    }
+
+    private static void RuntimeCollisionKeepsAuthoredChoiceAndReturnPhase()
+    {
+        using var scope=new SwarmRuntimeScope(myPlayer:1);
+        foreach(string kind in new[]{RuntimeEntityKind.FreeProjectile,RuntimeEntityKind.OwnerAttachedProjectile,RuntimeEntityKind.StationaryProjectile})
+        foreach(bool authored in new[]{false,true})
+        {
+            var data=SwarmGameplayFixture();var entity=data.RuntimeProgram.TryGetEntity("root")!;
+            entity.Kind=kind;entity.Collision.TileCollide=authored;
+            var generated=SwarmHost(data,entity);
+            Equal(authored,generated.Projectile.tileCollide,"entity kind cannot erase authored tile collision");
+        }
+        var yoyoData=SwarmGameplayFixture();var yoyo=yoyoData.RuntimeProgram.TryGetEntity("root")!;
+        yoyo.Kind=RuntimeEntityKind.OwnerAttachedProjectile;yoyo.Movement.Name="move_yoyo_hover";yoyo.Movement.Code=17;
+        yoyo.Movement.Params.RangeTiles=8;yoyo.Movement.Params.ReturnSpeed=6;
+        foreach(bool authored in new[]{false,true})
+        {
+            yoyo.Collision.TileCollide=authored;var generated=SwarmHost(yoyoData,yoyo);
+            var owner=Terraria.Main.player[0];owner.channel=true;
+            typeof(GeneratedProjectile).GetMethod("Yoyo",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{yoyo.Movement.Params});
+            Equal(authored,generated.Projectile.tileCollide,"held yoyo respects authored collision");
+            owner.channel=false;
+            typeof(GeneratedProjectile).GetMethod("Yoyo",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{yoyo.Movement.Params});
+            Equal(false,generated.Projectile.tileCollide,"return phase remains able to recover through walls");
+        }
+        foreach(bool authored in new[]{false,true})
+        {
+            var data=SwarmGameplayFixture();var entity=data.RuntimeProgram.TryGetEntity("root")!;
+            entity.Kind=RuntimeEntityKind.OwnerAttachedProjectile;entity.Collision.TileCollide=authored;
+            entity.Movement.Name="move_whip_lash";entity.Movement.Code=18;
+            entity.Movement.Params.Segments=6;entity.Movement.Params.RangeTiles=8;
+            var generated=SwarmHost(data,entity);var owner=Terraria.Main.player[0];
+            owner.itemAnimation=10;owner.itemAnimationMax=20;
+            typeof(GeneratedProjectile).GetMethod("Whip",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{entity.Movement.Params});
+            Equal(authored,generated.Projectile.tileCollide,"path movement cannot erase authored collision");
+            entity.Controller.Name="channel_beam";entity.Controller.Code=RuntimeControllerCode.ChannelBeam;
+            generated=SwarmHost(data,entity);
+            Equal(authored,generated.Projectile.tileCollide,"beam controller admission keeps authored collision");
+            entity.Controller.Name="charge_then_release";entity.Controller.Code=RuntimeControllerCode.ChargeThenRelease;
+            generated=SwarmHost(data,entity);
+            Equal(false,generated.Projectile.tileCollide,"unreleased charge protects its lifecycle anchor");
+            typeof(GeneratedProjectile).GetField("_released",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(generated,true);
+            generated.Configure(data,entity,0,8,Vector2.UnitX,preserveSyncedState:true);
+            Equal(authored,generated.Projectile.tileCollide,"released hydration keeps authored collision");
+        }
+    }
+
     private static void SwarmChargeKeepsCombatBasisOnce()
     {
         int cases = 0;

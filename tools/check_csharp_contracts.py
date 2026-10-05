@@ -595,8 +595,10 @@ def check_visual_vfx_contract() -> None:
         require(stripped(manifest, keep_strings=True), guard, "authored texture role admission")
     require(stripped(read("Common/Models/GeneratedItemData.cs")), "entity.Visual.ImpactSpritePath = FileNameOnly", "impact wire path")
     require(stripped(read("Common/Services/GeneratedAssetSyncService.cs")), "yield return entity.Visual.ImpactSpritePath", "impact asset roster")
-    require(stripped(runtime, keep_strings=True), 'role == "impact"', "impact role resolver")
-    require(stripped(runtime), "entity.Visual.ImpactSpritePath", "impact role resolver")
+    presentation_selection = read("Common/Models/SpritePresentation.cs")
+    require(stripped(runtime), "SpritePresentation.Resolve(data, entityId, textureRole).Path", "paired impact resolver dispatch")
+    require(stripped(presentation_selection, keep_strings=True), 'role == "impact"', "impact role resolver")
+    require(stripped(presentation_selection), "entity.Visual.ImpactSpritePath", "impact role resolver")
     require(stripped(visual), "InfiniVfxRuntime.Draw(Projectile, _data, _entity.Id,", "entity VFX dispatch")
     require(
         runtime_dto,
