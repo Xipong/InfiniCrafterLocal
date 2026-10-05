@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.246
+# InfiniCrafterLocal v0.4.247
 
 Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 
@@ -13,11 +13,11 @@
 
 ## Версия и обновление
 
-**Опубликованная поставка — 0.4.246:** обновляй мод и LocalGenerator вместе. Image-attempt lifecycle имеет одного владельца; промежуточные файлы приватны, итоговые PNG публикуются атомарно под immutable именами. Общая VFX PNG dependency projection проверяет исполнимые ссылки, не меняя механику/Visual. Включены deferred disposal текстур, retirement Item-эффектов при смерти и exact-leaf Repair пустого asset-domain.
+**Поставка prerelease 0.4.247:** обновляй мод и LocalGenerator вместе, сохраняя личный `config.env`, cache, recipes/PNG и данные миров. В поставку входят принятые runtime-исправления: penetration/maxPenetrate, native root damage/knockback, явный tile collision и сохранение перековки; EN/RU tooltip показывает реальные bindings, цену и эффекты. Необычное `hold`-управление цепного шара сохранено. Также включены sprite-size/angle metadata для high-resolution PNG, обновление texture cache и Codex effective-wire cache/prefix refinements. Каталог остаётся **52 capabilities / 229 parameters**.
 
 Модели, личный `config.env`, cache и `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Корректные старые recipes/PNG не мигрируют и не перерисовываются автоматически. Default лимит ответа VFX Director/Repair — 8000; явная настройка имеет приоритет.
 
-**Текущий unreleased LocalGenerator:** [OpenRouter provider pin](docs/OPENROUTER_ROUTING_RU.md) фиксирует upstream без обхода через другой профиль/fallback. Это не часть опубликованного ZIP 0.4.246 и не требует изменения мода 0.4.246.
+**LocalGenerator 0.4.247:** [OpenRouter provider pin](docs/OPENROUTER_ROUTING_RU.md) включён в поставку и фиксирует upstream без обхода через другой профиль/fallback; в старом опубликованном ZIP 0.4.246 его нет. Новая guidance для held-body/collision помогает будущей генерации, но не переписывает исторические definitions/PNG и не означает, что прежние визуальные результаты исправлены.
 
 ## Контракты и приёмка
 

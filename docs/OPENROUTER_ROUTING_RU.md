@@ -1,6 +1,6 @@
 # OpenRouter: точный upstream provider
 
-**Текущий unreleased LocalGenerator**, не опубликованный ZIP 0.4.246. `LLM provider=openrouter` выбирает API; **OpenRouter provider slug** фиксирует upstream/endpoint за этим API. [Базовая настройка и restart](../QUICK_START_RU.md#настройки) общие.
+**LocalGenerator 0.4.247 — поставка:** upstream pin включён; старый опубликованный ZIP 0.4.246 его не содержит. `LLM provider=openrouter` выбирает API; **OpenRouter provider slug** фиксирует upstream/endpoint за этим API. [Базовая настройка и restart](../QUICK_START_RU.md#настройки) общие.
 
 ## Настройка
 

@@ -1,4 +1,4 @@
-# VFX material elements — активный контракт 0.4.246
+# VFX material elements — активный контракт 0.4.247
 
 Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures.
 

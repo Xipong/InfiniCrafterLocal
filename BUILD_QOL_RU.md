@@ -1,6 +1,6 @@
 # Сборка и runtime QoL InfiniCrafterLocal
 
-Установка и запуск принадлежат [runbook 0.4.246](QUICK_START_RU.md); здесь — зависимости C# и граница runtime cache.
+Установка и запуск принадлежат [runbook 0.4.247](QUICK_START_RU.md); здесь — зависимости C# и граница runtime cache.
 
 ## Сборка
 

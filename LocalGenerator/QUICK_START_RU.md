@@ -1,6 +1,6 @@
-# LocalGenerator v0.4.246 — offline QA
+# LocalGenerator v0.4.247 — offline QA
 
-Для установки/запуска используй [корневой runbook](../QUICK_START_RU.md). Здесь только проверка source checkout; runtime requirements и dev requirements различаются.
+Для установки/запуска парной поставки 0.4.247 используй [корневой runbook](../QUICK_START_RU.md): обновляй мод и генератор вместе, сохраняя личный конфиг, cache, recipes/PNG и данные миров. Здесь только проверка source checkout; runtime requirements и dev requirements различаются. Прежние offline/native результаты не заменяют проверку финальных release-байтов и не доказывают исправление старых визуальных результатов.
 
 ## Команды из корня репозитория
 

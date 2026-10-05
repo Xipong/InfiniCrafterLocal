@@ -1,2 +1,2 @@
-InfiniCrafterLocal 0.4.246 — unified image generation, isolated attempts, immutable PNG publication and exact VFX texture dependencies.
+InfiniCrafterLocal 0.4.247 — native root combat, penetration/collision and per-instance reforge fixes; binding tooltips, high-resolution sprite metadata and texture-cache refresh. Historical recipes/PNG and chain hold controls are preserved; visual guidance applies to future generation.
 Local infinite-crafting prototype for tModLoader. Gameplay Author composes a bounded low-level runtimeProgram from explicit entities, inputs, capabilities and events; Visual and VFX stages decorate only accepted runtime entities/events. C# executes strict v5 typed data without weapon-family routing or prose-derived gameplay.

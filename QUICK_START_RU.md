@@ -1,6 +1,6 @@
-# InfiniCrafterLocal v0.4.246 — setup/runbook
+# InfiniCrafterLocal v0.4.247 — setup/runbook
 
-Опубликованная поставка 0.4.246 — мод **и** LocalGenerator вместе. [OpenRouter pin](docs/OPENROUTER_ROUTING_RU.md) текущего дерева пока unreleased. Этот runbook владеет setup/run; остальные документы не повторяют его.
+Поставка 0.4.247 — мод **и** LocalGenerator вместе, включая [OpenRouter pin](docs/OPENROUTER_ROUTING_RU.md). При обновлении сохрани личный `config.env`, cache, recipes/PNG и данные миров; модели и внешние `ParticleLibrary`/`Luminance` не поставляются. Runtime-исправления не перерисовывают старые PNG, а guidance применяется к будущей генерации. Этот runbook владеет setup/run; остальные документы не повторяют его.
 
 ## Установка
 
@@ -49,7 +49,7 @@ python LocalGenerator/server.py
 
 Default bind `INFINI_HOST=127.0.0.1`, `INFINI_PORT=5055`. [Health](http://127.0.0.1:5055/health): сверить `version`, `serverRoot`, `configPath`, `llmProvider`, `imageBackend`, `imageBackendConfigError`. `ok=true` — ответ сервиса, **не** quota/model/generation proof. [Trace](http://127.0.0.1:5055/trace), `cache/events.ndjson` — stage errors; `INFINI_CONSOLE_EVENT_LEVEL=warn|error|info|debug|off` (default warn). Не публикуй личные raw prompts/config/traces.
 
-В текущем дереве `/health` дополнительно возвращает `generationActivity` (`active`, `waiting`, `accepting`) и частичный `effectiveConfig`: cache/world roots, image backend, основной LLM provider/model, exact OpenRouter upstream и sd.cpp autostart. Это явный allowlist без ключей, secret-derived hash или запроса разрешения `auto` model; он не подтверждает равенство всех pool/secret настроек. `/shutdown` атомарно отказывает с 409 при active/queued `/combine`; после согласованного shutdown новые генерации получают 503. `/shutdown?force=1` — явное принудительное прерывание, не resume/recovery protocol. Эти изменения ещё не входят в опубликованный архив 0.4.246.
+В текущем дереве `/health` дополнительно возвращает `generationActivity` (`active`, `waiting`, `accepting`) и частичный `effectiveConfig`: cache/world roots, image backend, основной LLM provider/model, exact OpenRouter upstream и sd.cpp autostart. Это явный allowlist без ключей, secret-derived hash или запроса разрешения `auto` model; он не подтверждает равенство всех pool/secret настроек. `/shutdown` атомарно отказывает с 409 при active/queued `/combine`; после согласованного shutdown новые генерации получают 503. `/shutdown?force=1` — явное принудительное прерывание, не resume/recovery protocol. Эти изменения включены в поставку 0.4.247; в старом опубликованном архиве 0.4.246 их нет.
 
 В текущем GUI **Start / Stop** работают безопасно по умолчанию. **Force restart…** требует отдельного подтверждения и обходит только busy-проверку, не проверку root/PID и наличия корректного `effectiveConfig`. После HTTP 409 нет скрытого kill или повторного запуска; timeout/непонятный ответ не считаются свободным портом. Если старый сервер не отдаёт нужную projection, останови его прежним владельцем/через `Ctrl+C`, а не принудительным уничтожением неизвестного PID.
 

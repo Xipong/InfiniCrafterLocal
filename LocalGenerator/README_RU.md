@@ -1,6 +1,6 @@
-# LocalGenerator v0.4.246
+# LocalGenerator v0.4.247
 
-Python HTTP-сервис генерации и Tk GUI настроек. [Единый setup/runbook](../QUICK_START_RU.md) владеет установкой, providers, запуском и MP; [offline QA](QUICK_START_RU.md) — проверкой checkout. OpenRouter upstream pin в текущем дереве unreleased, опубликованная версия — 0.4.246.
+Python HTTP-сервис генерации и Tk GUI настроек. [Единый setup/runbook](../QUICK_START_RU.md) владеет установкой, providers, запуском и MP; [offline QA](QUICK_START_RU.md) — проверкой checkout. Парная поставка 0.4.247 включает OpenRouter upstream pin, safe restart/effective-config diagnostics и Codex effective-wire cache/prefix refinements; старый опубликованный ZIP 0.4.246 их не содержит. Обновляй генератор вместе с модом, сохраняя `config.env`, cache, recipes/PNG и данные миров. Новая held-body/collision guidance относится к будущей генерации, а не к исправлению старых рисунков.
 
 ## Граница сервиса
 

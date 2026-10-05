@@ -1,4 +1,4 @@
-# Terraria/tModLoader standardization — точная граница 0.4.246
+# Terraria/tModLoader standardization — точная граница 0.4.247
 
 [Generated vocabulary/lowerings](../lowery.md) · [Primitive parity/units](PRIMITIVE_PARITY_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
 
