@@ -64,6 +64,7 @@ from infini_local.pipelines.sprite_contracts import (
     sprite_background_positive_clause,
     sprite_contract_for,
     sprite_uses_soft_alpha,
+    uses_key_background,
 )
 
 # AGENT MAP: sprite selection, alpha cleanup, resize/bake, validation/retry notes,
@@ -177,7 +178,7 @@ def defringe_chroma_edges(img: Any) -> Any:
     deliberately conservative: it only targets chroma-like pixels adjacent to already
     transparent background.
     """
-    if Image is None or not SPRITE_CHROMA_DEFRINGE:
+    if Image is None or not SPRITE_CHROMA_DEFRINGE or not uses_key_background():
         return img
     img = img.convert("RGBA")
     target = chroma_rgb()
@@ -216,7 +217,7 @@ def neutralize_chroma_edge_colors(img: Any) -> Any:
     first tries to recolor them from nearby non-chroma foreground pixels and deletes
     only orphan key leftovers with no trustworthy neighbor.
     """
-    if Image is None or not SPRITE_CHROMA_DEFRINGE:
+    if Image is None or not SPRITE_CHROMA_DEFRINGE or not uses_key_background():
         return img
     img = img.convert("RGBA")
     px = img.load()
@@ -725,7 +726,7 @@ def validate_processed_sprite(
             reasons.append(f"effect_extent_too_large:{effect_long}px")
         if edge_ratio > float(spec.get("maxEdgeTouch") or SPRITE_MAX_EDGE_TOUCH_PCT):
             reasons.append(f"object_touches_edges:{edge_ratio:.3f}")
-        key_ratio = magenta_key_pixel_ratio(img)
+        key_ratio = magenta_key_pixel_ratio(img) if uses_key_background() else 0.0
         if key_ratio > 0.025:
             reasons.append(f"magenta_key_background_left:{key_ratio:.3f}")
         if (role == "vfx_strip" and not stats.get("hasAlpha")) or (role != "vfx_strip" and stats.get("transparentPct", 0) < 0.03):
@@ -816,15 +817,22 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
     reasons = [str(x) for x in (validation.get("reasons") or []) if str(x).strip()]
     bbox = validation.get("bboxStats") if isinstance(validation.get("bboxStats"), dict) else {}
     notes: list[str] = []
+    keyed = uses_key_background()
+    key_left = (f"keep the {chroma_name()} perfectly flat and do not paint the key color into the object"
+                if keyed else "request native alpha on a transparent background, not a solid key")
+    missing_alpha = (f"keep the {chroma_name()} with a cleanly separated object"
+                     if keyed else "use native alpha with empty transparent space around the authored subject")
+    dense_area = ("remove any white/pink poster card or inner background; only the actual sprite body may remain outside the configured key"
+                  if keyed else "remove any opaque poster card or inner background; preserve only the authored sprite body and native alpha")
     mapping = [
         ("core_silhouette_too_small", "make the main subject noticeably larger inside the frame"),
         ("core_silhouette_too_large", "shrink the subject slightly so a thin safety border remains"),
         ("effect_extent_too_large", "keep glows or residue tighter to the subject"),
         ("object_touches_edges", "do not touch the image edges; leave a thin border"),
-        ("magenta_key_background_left", f"keep the {chroma_name()} perfectly flat and do not paint the key color into the object"),
-        ("almost_no_transparency_after_bg_removal", f"keep the {chroma_name()} with a cleanly separated object"),
+        ("magenta_key_background_left", key_left),
+        ("almost_no_transparency_after_bg_removal", missing_alpha),
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
-        ("very_dense_opaque_area", "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the configured key"),
+        ("very_dense_opaque_area", dense_area),
         ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
         ("projectile_forward_axis_misaligned", "use canonical local +X: leading tip/nose screen-right and tail/trail screen-left; runtime rotates this axis to world velocity"),
     ]
@@ -890,18 +898,20 @@ def postprocess_sprite(
         # Master-first pipeline: all destructive technical work happens before the
         # final downscale.  This does not change semantics; it only removes the
         # requested key background, normalizes the canvas and bakes a clean PNG.
-        key_profile = estimate_sprite_key_profile(raw)
+        keyed = uses_key_background()
+        key_profile = estimate_sprite_key_profile(raw) if keyed else None
         bg_removed = apply_background_removal(raw, preserve_alpha=sprite_uses_soft_alpha(role))
         # Single supported background-removal protocol: sprite_keyer.  The following
         # steps are technical cleanup only, not an alternate semantic/image mode.
         # Layer 2 removes key-colored pockets that are enclosed by the generated object
         # and therefore unreachable by contiguous border flood-fill.
-        bg_removed = remove_key_colored_holes(bg_removed, key_profile)
+        if keyed:
+            bg_removed = remove_key_colored_holes(bg_removed, key_profile)
         bg_removed = defringe_chroma_edges(bg_removed)
         bg_removed = cleanup_alpha(bg_removed, role)
         # Layer 3 removes AI-drawn white/pink poster cards inside the requested key.
         # This keeps retry pressure low and prevents opaque square sprites from reaching the game.
-        if role in {"item", "equip_overlay"}:
+        if keyed and role in {"item", "equip_overlay"}:
             bg_removed = remove_nested_poster_card_background(bg_removed, role)
         bg_removed = cleanup_alpha(bg_removed, role)
         if role in {"item", "equip_overlay"}:

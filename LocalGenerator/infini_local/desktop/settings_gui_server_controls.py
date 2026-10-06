@@ -9,6 +9,7 @@ from queue import Empty, Queue
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
@@ -330,7 +331,10 @@ class SettingsGuiServerControlsMixin:
         # Reuse the transport-owned monotonic/redirect/body boundary. A trickled
         # body must not retain a GUI task forever through idle-timeout resets.
         deadline = time.monotonic() + timeout
-        with http_io.urlopen_no_redirect(urllib.request.Request(url), deadline=deadline) as response:
+        # Windows system proxies need not bypass loopback. Local helper control
+        # must reach the helper directly; provider/LAN requests retain proxies.
+        loopback = urlsplit(url).hostname in {"127.0.0.1", "localhost", "::1"}
+        with http_io.urlopen_no_redirect(urllib.request.Request(url), deadline=deadline, use_proxy=not loopback) as response:
             body = http_io.read_with_deadline(response, deadline=deadline, max_bytes=max_bytes)
         value = json.loads(body.decode("utf-8", "replace"))
         if not isinstance(value, dict):

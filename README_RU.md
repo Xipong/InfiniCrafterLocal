@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.247
+# InfiniCrafterLocal v0.4.248
 
 Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 
@@ -13,11 +13,15 @@
 
 ## Версия и обновление
 
-**Поставка prerelease 0.4.247:** обновляй мод и LocalGenerator вместе, сохраняя личный `config.env`, cache, recipes/PNG и данные миров. В поставку входят принятые runtime-исправления: penetration/maxPenetrate, native root damage/knockback, явный tile collision и сохранение перековки; EN/RU tooltip показывает реальные bindings, цену и эффекты. Необычное `hold`-управление цепного шара сохранено. Также включены sprite-size/angle metadata для high-resolution PNG, обновление texture cache и Codex effective-wire cache/prefix refinements. Каталог остаётся **52 capabilities / 229 parameters**.
+**Поставка prerelease 0.4.248:** обновляй мод и LocalGenerator вместе, сохраняя личный `config.env`, cache, recipes/PNG и данные миров. В поставку входят принятые runtime-исправления: penetration/maxPenetrate, native root damage/knockback, явный tile collision и сохранение перековки; EN/RU tooltip показывает реальные bindings, цену и эффекты. Необычное `hold`-управление цепного шара сохранено. Также включены sprite-size/angle metadata для high-resolution PNG, обновление texture cache и Codex effective-wire cache/prefix refinements. Каталог остаётся **52 capabilities / 229 parameters**.
 
 Модели, личный `config.env`, cache и `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Корректные старые recipes/PNG не мигрируют и не перерисовываются автоматически. Default лимит ответа VFX Director/Repair — 8000; явная настройка имеет приоритет.
 
-**LocalGenerator 0.4.247:** [OpenRouter provider pin](docs/OPENROUTER_ROUTING_RU.md) включён в поставку и фиксирует upstream без обхода через другой профиль/fallback; в старом опубликованном ZIP 0.4.246 его нет. Новая guidance для held-body/collision помогает будущей генерации, но не переписывает исторические definitions/PNG и не означает, что прежние визуальные результаты исправлены.
+**LocalGenerator 0.4.248:** [OpenRouter provider pin](docs/OPENROUTER_ROUTING_RU.md) включён в поставку и фиксирует upstream без обхода через другой профиль/fallback; в старом опубликованном ZIP 0.4.246 его нет. Новая guidance для held-body/collision помогает будущей генерации, но не переписывает исторические definitions/PNG и не означает, что прежние визуальные результаты исправлены.
+
+В 0.4.248 снята ошибочная привязка root-combat bridge к версии/MVID DLL: загрузка проверяет реальные API/signatures и IL callsite, не номер сборки. Исправленный `.tmod` проверен на фактически установленной Steam tModLoader 2026.8.3.0; контрактные guards сохраняются. BOX + premultiplied resize — явная базовая настройка; GUI позволяет отдельно сбросить resize без смены модели/провайдера. `BG color=transparent` означает native-alpha промпт/request и отключает локальный chroma-keyer; opaque chroma-профили сохраняют прежнюю обработку. Проверка alpha-request здесь offline, не обещание entitlement или фактического alpha от текущего OAuth endpoint.
+
+Управляющие запросы GUI к loopback обходят системный прокси Windows; внешние provider-запросы сохраняют прежний прокси. `/health` больше не опрашивает отдельный sd.cpp сервер: его `serverAlive=null` означает «не проверялся», явный `/sdcpp_debug` сохраняет live probe. Несовпадающая ручная конфигурация отображается как «Свои настройки», а hover-подсказка не заменяет результат запуска и не раздувает панель состояния. `Alpha threshold` остаётся доступен для обработки item alpha и при `transparent`. Рабочий конфиг — `LocalGenerator/config.env`, не одноимённый файл в корне поставки.
 
 ## Контракты и приёмка
 

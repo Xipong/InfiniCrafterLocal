@@ -346,6 +346,8 @@ DEFAULTS = {
 
 PRESETS = {
     "OpenAI-compatible + FLUX.2 Klein 4B hybrid": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openai_compat",
         "INFINI_LLM_REASONING_MODE": "prompt_light",
@@ -375,6 +377,8 @@ PRESETS = {
         "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
     },
     "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
@@ -396,6 +400,8 @@ PRESETS = {
         "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
     },
     "Локалка: LM Studio + local Z-Image/sd.cpp": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
@@ -407,6 +413,8 @@ PRESETS = {
         "INFINI_SDCPP_SAMPLER": "euler",
     },
     "OpenRouter + local Z-Image/sd.cpp": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_LLM_RESPONSE_FORMAT": "json_object",
@@ -420,6 +428,8 @@ PRESETS = {
         "INFINI_SDCPP_SAMPLER": "euler",
     },
     "OpenRouter + Image API": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openrouter",
         "INFINI_LLM_RESPONSE_FORMAT": "json_object",
@@ -428,6 +438,8 @@ PRESETS = {
         "INFINI_SDCPP_SERVER_AUTOSTART": "0",
     },
     "API LLM only: без картинок": {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "0",
         "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND": "0",
         "INFINI_LLM_PROVIDER": "openrouter",
@@ -550,11 +562,11 @@ FIELD_HELP = {
     "INFINI_SPRITE_MASTER_CANVAS": "Промежуточный большой RGBA-canvas (обычно 256), на который спрайт сначала нормализуется после вырезания фона, а уже потом печётся в 32/48/64. Это нужно, чтобы high-res fake pixel-art не деградировал от прямого 512→32 resize.",
 
     "INFINI_VFX_LLM_DIRECTOR": "Разрешает LLM описывать VFX-слоты/намерение, но код всё равно валидирует контракт.",
-    "INFINI_REMOVE_BG": "Удалять фон у сырой картинки перед запеканием sprite PNG.",
-    "INFINI_BG_REMOVE_MODE": "Метод удаления фона. Оставлен только sprite_keyer — рабочий протокол для Terraria/fake pixel-art.",
-    "INFINI_BG_COLOR": "Ожидаемый chroma-key/фон. Для Z-Image пайплайна обычно magenta.",
+    "INFINI_REMOVE_BG": "Локально удалять chroma-фон перед запеканием PNG. При BG color=transparent модель запрашивается с alpha независимо от Remove BG; локальный keyer не применяется.",
+    "INFINI_BG_REMOVE_MODE": "Метод локального удаления chroma-фона: sprite_keyer. Не применяется при native alpha (transparent или Remove BG=0).",
+    "INFINI_BG_COLOR": "transparent = запрос native alpha без локального keyer. Остальные цвета — chroma-key только при Remove BG=1 и активном keyer; обычно magenta для sd.cpp.",
     "INFINI_SPRITE_RETRIES": "Сколько раз ретраить image gen, если техническая валидация PNG не прошла.",
-    "INFINI_SPRITE_DOWNSCALE_FILTER": "Фильтр финального downscale: box (дефолт), bilinear, bicubic или lanczos.",
+    "INFINI_SPRITE_DOWNSCALE_FILTER": "Фильтр финального downscale: box (базовый/reset), bilinear, bicubic или lanczos. Apply pipeline сохраняет явно выбранный фильтр; Reset BOX возвращает box и premultiplied=1.",
     "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "Premultiplied RGBA resize, чтобы прозрачный magenta не подтекал в края.",
     "INFINI_SPRITE_CHROMA_DEFRINGE": "Консервативно удаляет magenta/key-остатки на краях альфы.",
     "INFINI_PIXEL_POSTERIZE": "Сжимает видимую часть sprite в ограниченную палитру после resize.",
@@ -649,7 +661,7 @@ OPTION_HELP = {
     },
     "INFINI_BG_COLOR": {
         "magenta": "Классический #ff00ff chroma-key. Лучший дефолт для Z-Image sprite prompt.",
-        "transparent": "Ожидать уже прозрачный PNG от backend.",
+        "transparent": "Модель запрашивается с alpha; локальный keyer не применяется. Remove BG не меняет этот режим; выбор цвета не переписывается.",
         "white": "Белый фон; риск снести светлые детали предмета.",
         "black": "Чёрный фон; риск снести тёмные детали предмета.",
     },

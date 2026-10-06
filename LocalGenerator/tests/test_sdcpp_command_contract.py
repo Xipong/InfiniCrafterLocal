@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.web import server
@@ -177,6 +179,18 @@ def _check_sdcpp_canonical_state_cleanup_and_health_snapshot() -> None:
 
     utility_routes = server._utility_routes()
     assert utility_routes.cleanup_for_shutdown is server.cleanup_sdcpp_server_process
+
+
+@pytest.mark.parametrize("backend", ["openai_codex", "sdcpp"])
+def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "sdcpp_server_is_alive", lambda: pytest.fail("health performed a blocking image-server probe"))
+    monkeypatch.setattr(server.visual_config, "IMAGE_BACKEND", backend)
+    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "openai_codex", "model": "test-model"})
+    health = server._health_payload()
+    assert health["ok"] is True
+    assert health["sdcpp"]["serverAlive"] is None
+    assert health["sdcpp"]["serverAliveProbed"] is False
 
 
 def _check_sdcpp_health_reads_canonical_state_fields() -> None:

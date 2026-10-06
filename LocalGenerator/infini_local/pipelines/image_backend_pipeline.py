@@ -280,7 +280,7 @@ def build_sdcpp_server_command() -> tuple[list[str] | str, bool]:
 def _stringify_cmd(cmd: list[str] | str) -> str:
     return sdcpp_backend.stringify_cmd(cmd)
 
-def sdcpp_debug_snapshot(include_log_tail: bool = True) -> dict[str, Any]:
+def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = True) -> dict[str, Any]:
     snap = sdcpp_service.debug_snapshot(
         state=SDCPP_SERVER_STATE,
         app_version=APP_VERSION,
@@ -302,11 +302,12 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True) -> dict[str, Any]:
         effective_extra_args=sdcpp_effective_extra_args(),
         command=SDCPP_SERVER_STATE.last_command or _stringify_cmd(build_sdcpp_server_command()[0]),
         server_log_file=SDCPP_SERVER_LOG_FILE,
-        server_is_alive=sdcpp_server_is_alive(),
+        server_is_alive=sdcpp_server_is_alive() if probe_server else None,
         server_is_configured=sdcpp_server_is_configured(),
         tail_text_file=_tail_text_file,
         include_log_tail=include_log_tail,
     )
+    snap["serverAliveProbed"] = probe_server
     return snap
 
 def ensure_sdcpp_server() -> bool:
@@ -505,13 +506,15 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
 def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     from infini_local.services.codex_image_backend import generate_image
     from infini_local.pipelines import pipeline_visual_config as config
+    from infini_local.pipelines.sprite_contracts import uses_key_background
+    background_args = {} if uses_key_background() else {"background": "transparent"}
     paths = []
     for variant in range(max(1, int(GENERATE_VARIANTS))):
         path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
         try:
             generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
                            quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
-                           timeout=config.CODEX_IMAGE_TIMEOUT)
+                           timeout=config.CODEX_IMAGE_TIMEOUT, **background_args)
         except OSError as exc:
             raise ImageOutputIOError("Codex raw image write failed") from exc
         paths.append(str(path))

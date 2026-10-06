@@ -198,7 +198,7 @@ def debug_snapshot(
     effective_extra_args: str,
     command: str,
     server_log_file: str,
-    server_is_alive: bool,
+    server_is_alive: bool | None,
     server_is_configured: bool,
     tail_text_file: TailTextFile,
     include_log_tail: bool = True,

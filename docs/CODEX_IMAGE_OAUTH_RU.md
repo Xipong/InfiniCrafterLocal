@@ -54,6 +54,12 @@ Subscription `/responses` не отправляет temperature/`max_output_toke
 
 Positive prompt без дополнительной LLM; negative — suffix `\n\nAvoid: …`, отдельного field нет. Требуется одна base64 PNG, valid decoding/file bytes/dimensions, atomic publication; URL/повреждённый ответ не asset. [Image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md). Сервер может изменить внутренний API/entitlement.
 
+## Фон и уменьшение PNG
+
+В 0.4.248 `BG color=transparent` выбирает нативную alpha-ветку: Visual/VFX/image-промпты требуют прозрачный фон, Codex JSON отправляет `background=transparent`, локальный chroma-keyer/retry-key не применяется. При magenta/white и включённом Remove BG запрос имеет `background=opaque`; финальную прозрачность создаёт локальный keyer. Выключенный Remove BG также выбирает native alpha. Неподдерживаемый цвет не заменяется автоматически на magenta.
+
+Базовый resize — `INFINI_SPRITE_DOWNSCALE_FILTER=box`, `INFINI_SPRITE_PREMULTIPLIED_RESIZE=1`; **Reset BOX** сбрасывает только эти две настройки. Сохрани изменения и перезапусти server. Offline transport/PNG проверки подтверждают отправляемые параметры и обработку, но не текущую поддержку native alpha подписным endpoint: отказ сервера остаётся явной ошибкой, без paid/procedural/opaque подмены.
+
 ## Проверка реализации
 
 [Codex contracts](../LocalGenerator/tests/test_codex_subscription_contract.py), [image adapters](../LocalGenerator/tests/test_image_adapter_contracts.py), [GUI](../LocalGenerator/tests/test_settings_gui_contract.py), [offline QA](../LocalGenerator/QUICK_START_RU.md): PKCE/state/locks/privacy/SSE completion/dispatch/catalog/manual slug/quality/Visual reasoning, не live quota.

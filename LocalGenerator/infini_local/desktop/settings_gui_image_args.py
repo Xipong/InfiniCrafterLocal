@@ -4,6 +4,7 @@ from pathlib import Path, PureWindowsPath
 
 from infini_local.desktop.tk_compat import messagebox, tk, ttk
 from infini_local.desktop.settings_schema import (
+    DEFAULTS,
     SDCPP_DEFAULT_COMMAND_TEMPLATE,
     SDCPP_EXTRA_FLAG_SPECS,
     SDCPP_EXTRA_PROFILES,
@@ -260,6 +261,12 @@ class SettingsGuiImageArgsMixin:
         self._set_extra_args("")
         self.status_var.set("sd.cpp extra args cleared. VAE/Qwen/LoRA поля выше не тронуты.")
 
+    def reset_sprite_resize(self):
+        for key in ("INFINI_SPRITE_DOWNSCALE_FILTER", "INFINI_SPRITE_PREMULTIPLIED_RESIZE"):
+            self.vars[key].set(DEFAULTS[key])
+        self.status_var.set("Base resize: BOX, premultiplied RGBA=1. Нажми Save, чтобы сохранить.")
+        self._refresh_visibility()
+
     def _build_visual(self, parent):
         ttk.Label(parent, text="VFX / качество / авторство", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
         self.row(parent, "Visual asset mode", "INFINI_VISUAL_ASSET_MODE", values=["full", "projectile", "off"])
@@ -268,7 +275,7 @@ class SettingsGuiImageArgsMixin:
         self.row(parent, "VFX LLM director", "INFINI_VFX_LLM_DIRECTOR", values=["1", "0"])
         self.row(parent, "Remove BG", "INFINI_REMOVE_BG", values=["1", "0"])
         self.row(parent, "BG remove mode", "INFINI_BG_REMOVE_MODE", values=["sprite_keyer"], hint="Оставлен только sprite_keyer: Photoshop-like Magic Wand от краёв + refine/spill cleanup под Terraria sprites.")
-        self.row(parent, "BG color", "INFINI_BG_COLOR", values=["magenta", "transparent", "white", "black"])
+        self.row(parent, "BG color", "INFINI_BG_COLOR", values=["magenta", "transparent", "white", "black"], hint="transparent = модель запрашивается с alpha; локальный keyer не применяется. Chroma-цвет используется только при локальном удалении фона.")
         self.row(parent, "Chroma tolerance", "INFINI_CHROMA_TOLERANCE", width=16, hint="Допуск key-color удаления. Если белое/серое уносит — не повышать; обычно 34.")
         self.row(parent, "Alpha threshold", "INFINI_ALPHA_THRESHOLD", width=16, hint="Порог отсечения полупрозрачной альфы. Если края худеют — снизить до 20-24.")
         self.row(parent, "Sprite keyer spill radius", "INFINI_SPRITE_KEYER_SPILL_RADIUS", width=16, hint="sprite_keyer: radius узкой refine-edge зоны для подавления magenta spill. Обычно 3.")
@@ -276,7 +283,10 @@ class SettingsGuiImageArgsMixin:
         self.row(parent, "Sprite retries", "INFINI_SPRITE_RETRIES", width=16)
         self.row(parent, "Save sprite stages", "INFINI_SAVE_SPRITE_STAGES", values=["1", "0"], hint="1 = сохранять 00_raw / 10_bg_removed_fullres / 20_master_norm / 30_baked_final в cache\\sprites для дебага.")
         self.row(parent, "Master canvas", "INFINI_SPRITE_MASTER_CANVAS", width=16, hint="Большой промежуточный RGBA-canvas перед финальным 32/48/64 bake. Нужен для master-first нормализации: вырезали фон, вписали объект в 256x256, потом уже уменьшили в 32/48/64.")
-        self.row(parent, "Downscale filter", "INFINI_SPRITE_DOWNSCALE_FILTER", values=["box", "bilinear", "bicubic", "lanczos"], hint="box — дефолт для high-res fake pixel-art; bilinear мягче, bicubic/lanczos резче.")
+        resize_row = self.row(parent, "Downscale filter", "INFINI_SPRITE_DOWNSCALE_FILTER", values=["box", "bilinear", "bicubic", "lanczos"], hint="box — базовый фильтр; pipeline preset сохраняет выбранный фильтр. Reset BOX вернёт box и premultiplied=1.")
+        reset_resize = ttk.Button(resize_row, text="Reset BOX", command=self.reset_sprite_resize)
+        reset_resize.pack(side="left", padx=4)
+        self.field_widgets["INFINI_SPRITE_DOWNSCALE_FILTER"].append(reset_resize)
         self.row(parent, "Premultiplied resize", "INFINI_SPRITE_PREMULTIPLIED_RESIZE", values=["1", "0"], hint="Убирает magenta bleed по краям при resize RGBA.")
         self.row(parent, "Chroma defringe", "INFINI_SPRITE_CHROMA_DEFRINGE", values=["1", "0"], hint="Консервативно удаляет остатки magenta-key только на краях alpha.")
         self.row(parent, "Posterize", "INFINI_PIXEL_POSTERIZE", values=["1", "0"])

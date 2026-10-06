@@ -296,7 +296,8 @@ class SettingsGuiTraceStateMixin:
         visual_mode = (self._value("INFINI_VISUAL_ASSET_MODE", "full") or "full").lower()
         reasoning_mode = (self._value("INFINI_LLM_REASONING_MODE", "off") or "off").lower().replace("-", "_")
         remove_bg = self._value("INFINI_REMOVE_BG", "1") == "1"
-        bg_mode = (self._value("INFINI_BG_REMOVE_MODE", "sprite_keyer") or "sprite_keyer").lower()
+        bg_mode = (self._value("INFINI_BG_REMOVE_MODE", "sprite_keyer") or "sprite_keyer").lower().replace("-", "_")
+        transparent_bg = self._value("INFINI_BG_COLOR", "magenta").lower() == "transparent"
         posterize = self._value("INFINI_PIXEL_POSTERIZE", "1") == "1"
         strict_ai = self._value("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1") == "1"
         attack_consumable_debug = self._value("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", "0") == "1"
@@ -421,12 +422,19 @@ class SettingsGuiTraceStateMixin:
             "INFINI_PIXEL_POSTERIZE", "INFINI_VISUAL_STRICT_AI_AUTHORSHIP",
         ]:
             self._set_field_enabled(key, sprite_processing_active, "Image backend = off; PNG не генерируются, sprite postprocess не запускается.")
-        self._set_field_enabled("INFINI_BG_REMOVE_MODE", sprite_processing_active and remove_bg, "Remove BG выключен или image backend=off; режим удаления фона не используется.")
-        sprite_keyer_active = sprite_processing_active and remove_bg and bg_mode == "sprite_keyer"
-        for key in ["INFINI_SPRITE_KEYER_SPILL_RADIUS", "INFINI_SPRITE_KEYER_RESIDUE_STEPS"]:
-            self._set_field_enabled(key, sprite_keyer_active, "Поля sprite_keyer активны при BG remove mode = sprite_keyer.")
-        self._set_field_enabled("INFINI_BG_COLOR", sprite_processing_active and remove_bg and bg_mode not in {"off", "none", "transparent"}, "Фон не вырезается текущим sprite_keyer-пайплайном, цвет ключа не используется.")
-        self._set_field_enabled("INFINI_SPRITE_CHROMA_DEFRINGE", sprite_processing_active and remove_bg, "Defringe используется как безопасная edge-clean стадия после sprite_keyer; сейчас этот этап неактивен.")
+        alpha_reason = "Модель запрашивается с alpha; локальный keyer не применяется."
+        keyer_reason = alpha_reason if sprite_processing_active else "Image backend=off; sprite postprocess не запускается."
+        # Legacy enabled mode aliases still use the same local sprite_keyer.
+        sprite_keyer_active = sprite_processing_active and remove_bg and not transparent_bg and bg_mode not in {"off", "none"}
+        self._set_field_enabled("INFINI_REMOVE_BG", sprite_processing_active and not transparent_bg, keyer_reason)
+        self._set_field_enabled("INFINI_BG_REMOVE_MODE", sprite_keyer_active, keyer_reason)
+        for key in ["INFINI_CHROMA_TOLERANCE", "INFINI_SPRITE_KEYER_SPILL_RADIUS",
+                    "INFINI_SPRITE_KEYER_RESIDUE_STEPS", "INFINI_SPRITE_CHROMA_DEFRINGE"]:
+            self._set_field_enabled(key, sprite_keyer_active, keyer_reason)
+        # Keep the background selector available so native-alpha mode is escapable.
+        self._set_field_enabled("INFINI_BG_COLOR", sprite_processing_active, "Image backend=off; фон не запрашивается.")
+        # Hard-alpha item cleanup still uses this threshold with native alpha.
+        self._set_field_enabled("INFINI_ALPHA_THRESHOLD", sprite_processing_active, "Image backend=off; alpha cleanup не запускается.")
         self._set_field_enabled("INFINI_MAX_COLORS", sprite_processing_active and posterize, "Max colors используется только когда Posterize=1 и image backend не off.")
 
         if sprite_processing_active:
@@ -513,9 +521,19 @@ class SettingsGuiTraceStateMixin:
 
     def apply_preset(self):
         preset_name = self.preset_var.get().strip()
+        if preset_name not in PRESETS:
+            self.status_var.set("Свои настройки сохранены без изменений. Для применения выбери готовый профиль.")
+            return
         preset = PRESETS.get(preset_name, {})
+        resize_choices = {
+            "INFINI_SPRITE_DOWNSCALE_FILTER": {"box", "bilinear", "bicubic", "lanczos"},
+            "INFINI_SPRITE_PREMULTIPLIED_RESIZE": {"0", "1"},
+        }
         for key, value in preset.items():
             if key in self.vars:
+                # Pipeline selection does not discard explicit resize preferences.
+                if key in resize_choices and self._value(key).lower() in resize_choices[key]:
+                    continue
                 self.vars[key].set(value)
         self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name
         self.status_var.set("Pipeline applied. Нажми Save, чтобы сохранить выбранный preset в config.env. Radmin/LAN не менялся.")

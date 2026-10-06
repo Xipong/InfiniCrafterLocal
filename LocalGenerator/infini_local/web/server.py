@@ -330,7 +330,9 @@ def trace_snapshot_html() -> str:
 
 
 def _health_payload() -> dict[str, Any]:
-    sdcpp = sdcpp_debug_snapshot(include_log_tail=False)
+    # Helper readiness/config must not wait on a separate image service (which
+    # may be unused with Codex). Explicit /sdcpp_debug retains its live probe.
+    sdcpp = sdcpp_debug_snapshot(include_log_tail=False, probe_server=False)
     sdcpp.update({
         "mode": "server",
         "serverAutostart": sdcpp["autostart"],

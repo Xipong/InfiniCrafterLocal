@@ -27,7 +27,6 @@ public partial class GeneratedItem
     private static readonly NativePrefixStats ReadNativePrefixStats = BindNativePrefixStats();
     private static NativePrefixStats BindNativePrefixStats()
     {
-        GeneratedRootCombatSystem.RequireSupportedSource();
         Type floatRef = typeof(float).MakeByRefType();
         MethodInfo? method = typeof(Item).GetMethod("TryGetPrefixStatMultipliersForItem", BindingFlags.NonPublic | BindingFlags.Instance,
             null, new[] { typeof(int), floatRef, floatRef, floatRef, floatRef, floatRef, floatRef, typeof(int).MakeByRefType() }, null);

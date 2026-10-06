@@ -39,7 +39,6 @@ class SettingsGuiUiMixin:
 
     def _attach_static_help(self, widget, text):
         ToolTip(widget, text)
-        widget.bind("<Enter>", lambda _e: self.status_var.set(text() if callable(text) else str(text)), add="+")
 
     def _register_field_widgets(self, key: str, widgets: list[tk.Widget], hint: str | None = None, hint_label: ttk.Label | None = None):
         self.field_widgets.setdefault(key, []).extend([w for w in widgets if w is not None])
@@ -83,7 +82,7 @@ class SettingsGuiUiMixin:
         if changes:
             rendered = "\n".join(f"• {k}={v}" for k, v in changes.items())
             return f"{name}\n\n{text}\n\nЧто изменит Apply pipeline:\n{rendered}"
-        return text or name
+        return text or ("Свои настройки: текущие provider/backend не соответствуют готовому профилю. Выбор профиля ничего не меняет до нажатия Применить." if name == "Свои настройки" else name)
 
     def _show_preset_help(self):
         self.status_var.set(PRESET_HELP.get(self.preset_var.get(), "Выбран pipeline preset. Нажми Apply pipeline, чтобы применить."))
@@ -432,10 +431,10 @@ class SettingsGuiUiMixin:
         preset_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=5, highlightthickness=1, highlightbackground=BORDER_FG)
         preset_bar._infini_bg = CARD_BG
         preset_bar.pack(fill="x", pady=(0, 7))
-        preset_label = tk.Label(preset_bar, text="Профиль генерации", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
+        preset_label = tk.Label(preset_bar, text="Готовый профиль", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
         preset_label.pack(side="left", padx=(0, 10))
         self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data))
-        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=list(PRESETS), state="readonly", width=36)
+        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=["Свои настройки", *PRESETS], state="readonly", width=36)
         preset_combo.pack(side="left", padx=6, ipady=2)
         preset_combo.bind("<<ComboboxSelected>>", lambda _e: self._show_preset_help(), add="+")
         self._attach_static_help(preset_combo, lambda: self._preset_help_text())

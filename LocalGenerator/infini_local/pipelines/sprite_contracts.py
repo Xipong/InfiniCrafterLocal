@@ -53,7 +53,9 @@ def chroma_name() -> str:
 
 
 def uses_key_background() -> bool:
-    """Match apply_background_removal: legacy enabled modes use sprite_keyer."""
+    """One raw-background policy for prompts, adapters and postprocessing."""
+    if str(visual_config.BG_COLOR).strip().lower() == "transparent":
+        return False
     mode = (visual_config.BG_REMOVE_MODE or "sprite_keyer").strip().lower().replace("-", "_")
     return bool(visual_config.REMOVE_BG) and mode not in {"", "none", "off"}
 

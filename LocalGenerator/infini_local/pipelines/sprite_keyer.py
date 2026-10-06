@@ -16,7 +16,7 @@ from infini_local.pipelines.pipeline_visual_config import (
     SPRITE_KEYER_RESIDUE_STEPS,
     SPRITE_KEYER_SPILL_RADIUS,
 )
-from infini_local.pipelines.sprite_contracts import chroma_rgb
+from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background
 from infini_local.pipelines.sprite_geometry import alpha_bbox_threshold
 from infini_local.storage.trace_runtime import log_event
 
@@ -654,7 +654,7 @@ def apply_background_removal(img: Any, *, preserve_alpha: bool = False) -> Any:
         return img
     img = img.convert("RGBA")
     mode = (BG_REMOVE_MODE or "sprite_keyer").strip().lower().replace("-", "_")
-    if not REMOVE_BG or mode in {"", "none", "off"}:
+    if not uses_key_background():
         return img
     # v0.4.65: the runtime pipeline keeps a single supported background-removal
     # protocol. Old config.env values are accepted only as compatibility aliases and

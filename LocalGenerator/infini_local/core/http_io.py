@@ -97,7 +97,7 @@ class _HTTPSConnection(_HTTPConnection, http.client.HTTPSConnection):
     pass
 
 
-def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float):
+def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float, use_proxy: bool = True):
     """Open only the original request; preserve HTTPError for ALL redirects."""
     class HTTPHandler(urlrequest.HTTPHandler):
         def http_open(self, req):
@@ -107,7 +107,10 @@ def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float):
         def https_open(self, req):
             return self.do_open(partial(_HTTPSConnection, deadline=deadline), req, context=self._context)
 
-    return urlrequest.build_opener(_NoRedirect(), HTTPHandler(), HTTPSHandler()).open(
+    handlers = [_NoRedirect(), HTTPHandler(), HTTPSHandler()]
+    if not use_proxy:
+        handlers.append(urlrequest.ProxyHandler({}))
+    return urlrequest.build_opener(*handlers).open(
         req, timeout=remaining_seconds(deadline))
 
 

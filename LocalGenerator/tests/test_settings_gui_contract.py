@@ -871,6 +871,43 @@ def test_stop_server_is_also_busy_aware_without_direct_terminate(gui_workflow, m
     assert "busy" in gui.status_var.get().lower()
 
 
+def test_codex_settings_do_not_display_an_unrelated_flux_preset():
+    data = dict(settings_schema.DEFAULTS)
+    data.update({"INFINI_GUI_PIPELINE_PRESET": "OpenAI-compatible + FLUX.2 Klein 4B hybrid",
+                 "INFINI_LLM_PROVIDER": "openai_codex", "INFINI_IMAGE_BACKEND": "openai_codex"})
+    assert settings_gui.SettingsGui._pipeline_preset_from_config(data) == "Свои настройки"
+
+
+def test_static_hover_help_does_not_replace_runtime_status(monkeypatch):
+    from infini_local.desktop import settings_gui_ui as ui
+    bindings = []
+    class Widget:
+        def bind(self, *args, **kwargs):
+            bindings.append((args, kwargs))
+    monkeypatch.setattr(ui, "ToolTip", lambda *args: None)
+    gui = object.__new__(settings_gui.SettingsGui)
+    gui.status_var = _UiVar("Server failed: useful diagnostic")
+    gui._attach_static_help(Widget(), "Profile help\n" + "x" * 2000)
+    for args, _kwargs in bindings:
+        if args[0] == "<Enter>":
+            args[1](None)
+    assert gui.status_var.get() == "Server failed: useful diagnostic"
+
+
+def test_loopback_gui_health_bypasses_system_proxy(monkeypatch):
+    from infini_local.desktop import settings_gui_server_controls as controls
+    import urllib.request
+    with _gui_loopback_http({"/health": (200, {"ok": True})}) as (base, requests):
+        with _gui_loopback_http({"/health": (200, {"route": "proxy"})}) as (proxy, proxy_requests):
+            monkeypatch.setattr(urllib.request, "getproxies", lambda: {"http": proxy})
+            monkeypatch.setattr(urllib.request, "proxy_bypass", lambda host: False)
+            assert controls.SettingsGuiServerControlsMixin._read_gui_json(base + "/health", 2) == {"ok": True}
+            assert requests == ["/health"]
+            assert not proxy_requests
+            assert controls.SettingsGuiServerControlsMixin._read_gui_json("http://provider.invalid/health", 2) == {"route": "proxy"}
+            assert proxy_requests == ["http://provider.invalid/health"]
+
+
 @pytest.mark.parametrize("owned", [False, True])
 def test_start_on_refused_port_only_launches_when_no_owned_process_is_running(gui_workflow, monkeypatch, owned):
     from infini_local.desktop import settings_gui_server_controls as controls
@@ -1285,6 +1322,99 @@ def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, e
         server.server_close()
         worker.join(timeout=2)
         assert not worker.is_alive()
+
+
+@pytest.mark.parametrize("preset_name", list(settings_schema.PRESETS))
+def test_gui_base_and_pipeline_presets_make_box_resize_explicit(preset_name):
+    resize = {
+        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
+    }
+    for key, value in resize.items():
+        assert settings_schema.DEFAULTS[key] == value
+        assert settings_schema.PRESETS[preset_name][key] == value
+    example_path = GUI_PATH.parents[2] / "config.example.env"
+    example = settings_env.parse_env(example_path)
+    active_lines = example_path.read_text(encoding="utf-8").splitlines()
+    assert all(example[key] == value and f"{key}={value}" in active_lines for key, value in resize.items())
+
+
+class _SpriteGuiHarness(settings_trace_state.SettingsGuiTraceStateMixin):
+    """Recording UI seam: real callbacks without Tk, credentials or backend IO."""
+    def __init__(self, **overrides):
+        self.data = dict(settings_schema.DEFAULTS)
+        self.data.update(overrides)
+        self.vars = {key: _UiVar(value) for key, value in self.data.items()}
+        self.preset_var = _UiVar(next(iter(settings_schema.PRESETS)))
+        self.status_var = _UiVar()
+        self.radmin_enabled = _UiVar("")
+        self.field_widgets = {key: [] for key in self.vars}
+        self.extra_arg_buttons = []
+        self.sdcpp_debug_buttons = []
+        self.field_state = {}
+
+    def _refresh_secret_entries(self):
+        pass
+
+    def _set_widgets_enabled(self, _widgets, _enabled):
+        pass
+
+    def _set_field_enabled(self, key, enabled, reason=""):
+        self.field_state[key] = (enabled, reason)
+
+
+@pytest.mark.parametrize("filter_name,expected", [("", "box"), ("box", "box"), ("bilinear", "bilinear"), ("bicubic", "bicubic"), ("lanczos", "lanczos")])
+def test_apply_pipeline_preserves_explicit_resize_choices(filter_name, expected):
+    gui = _SpriteGuiHarness(INFINI_SPRITE_DOWNSCALE_FILTER=filter_name, INFINI_SPRITE_PREMULTIPLIED_RESIZE="0")
+    gui.apply_preset()
+    assert gui.vars["INFINI_SPRITE_DOWNSCALE_FILTER"].get() == expected
+    assert gui.vars["INFINI_SPRITE_PREMULTIPLIED_RESIZE"].get() == "0"
+
+
+@pytest.mark.parametrize("remove_bg,bg_color,bg_mode,backend,keyer", [
+    ("1", "transparent", "sprite_keyer", "openai_codex", False),
+    ("0", "transparent", "sprite_keyer", "image_api", False),
+    ("0", "magenta", "sprite_keyer", "image_api", False),
+    ("1", "magenta", "off", "image_api", False),
+    ("1", "magenta", "none", "image_api", False),
+    ("1", "magenta", "sprite_keyer", "sdcpp", True),
+    ("1", "green", "chroma", "sdcpp", True),
+    ("1", "greenscreen", "legacy-keyer", "sdcpp", True),
+    ("1", "unsupported-token", "sprite_keyer", "sdcpp", True),
+    ("1", "transparent", "sprite_keyer", "off", False),
+])
+def test_gui_native_alpha_disables_only_local_keyer_controls(remove_bg, bg_color, bg_mode, backend, keyer):
+    gui = _SpriteGuiHarness(INFINI_REMOVE_BG=remove_bg, INFINI_BG_COLOR=bg_color,
+                            INFINI_BG_REMOVE_MODE=bg_mode, INFINI_IMAGE_BACKEND=backend)
+    before = {key: var.get() for key, var in gui.vars.items()}
+    gui._refresh_visibility()
+    for key in ("INFINI_CHROMA_TOLERANCE", "INFINI_SPRITE_KEYER_SPILL_RADIUS",
+                "INFINI_SPRITE_KEYER_RESIDUE_STEPS", "INFINI_SPRITE_CHROMA_DEFRINGE"):
+        enabled, reason = gui.field_state[key]
+        assert enabled is keyer, key
+        if backend != "off" and not keyer:
+            assert "Модель запрашивается с alpha; локальный keyer не применяется" in reason
+    assert gui.field_state["INFINI_ALPHA_THRESHOLD"][0] is (backend != "off")
+    assert gui.field_state["INFINI_BG_COLOR"][0] is (backend != "off")
+    assert gui.field_state["INFINI_BG_REMOVE_MODE"][0] is keyer
+    if bg_color == "transparent":
+        assert gui.field_state["INFINI_REMOVE_BG"][0] is False
+    for key in ("INFINI_BG_COLOR", "INFINI_BG_REMOVE_MODE", "INFINI_REMOVE_BG", "INFINI_SPRITE_DOWNSCALE_FILTER"):
+        assert gui.vars[key].get() == before[key], "visibility rewrote an explicit choice"
+
+
+def test_gui_resize_reset_restores_box_without_changing_background():
+    gui = _SpriteGuiHarness(INFINI_SPRITE_DOWNSCALE_FILTER="lanczos", INFINI_SPRITE_PREMULTIPLIED_RESIZE="0", INFINI_BG_COLOR="transparent")
+    reset = getattr(settings_gui.SettingsGui, "reset_sprite_resize", None)
+    assert callable(reset), "GUI has no explicit base resize reset"
+    reset(gui)
+    assert gui.vars["INFINI_SPRITE_DOWNSCALE_FILTER"].get() == "box"
+    assert gui.vars["INFINI_SPRITE_PREMULTIPLIED_RESIZE"].get() == "1"
+    assert gui.vars["INFINI_BG_COLOR"].get() == "transparent"
+    assert "command=self.reset_sprite_resize" in GUI_SOURCE
+    assert "alpha" in settings_schema.FIELD_HELP["INFINI_BG_COLOR"]
+    assert "transparent" in settings_schema.FIELD_HELP["INFINI_REMOVE_BG"]
+    assert "Модель запрашивается с alpha; локальный keyer не применяется" in settings_schema.OPTION_HELP["INFINI_BG_COLOR"]["transparent"]
 
 
 # One collected item per contract module: the checks above keep source order and

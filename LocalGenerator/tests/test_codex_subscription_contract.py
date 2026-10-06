@@ -512,7 +512,19 @@ def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path)
     assert auth.auth_status(path) == {"authenticated": False, "expired": False}
 
 
-def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_path, monkeypatch):
+@pytest.mark.parametrize("color,remove_bg,mode,background", [
+    ("magenta", True, "sprite_keyer", "opaque"),
+    ("white", True, "sprite_keyer", "opaque"),
+    ("transparent", True, "sprite_keyer", "transparent"),
+    ("transparent", False, "sprite_keyer", "transparent"),
+    ("cyan", False, "sprite_keyer", "transparent"),
+    ("magenta", True, "off", "transparent"),
+])
+def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_path, monkeypatch, color, remove_bg, mode, background):
+    from infini_local.pipelines import pipeline_visual_config as visual_config
+    monkeypatch.setattr(visual_config, "BG_COLOR", color)
+    monkeypatch.setattr(visual_config, "REMOVE_BG", remove_bg)
+    monkeypatch.setattr(visual_config, "BG_REMOVE_MODE", mode)
     assert "openai_codex" in config.SUPPORTED_IMAGE_BACKENDS
     assert config.IMAGE_BACKEND_ALIASES.get("openai_codex", "openai_codex") != "image_api"
     import base64
@@ -552,7 +564,7 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     assert Image.open(paths[0]).format == "PNG"
     url, payload, options = calls[0]
     assert url == "https://chatgpt.com/backend-api/codex/images/generations"
-    assert payload == {"model": "gpt-image-2", "prompt": "Literal authored предмет\n\nAvoid: no text", "n": 1, "quality": "medium", "size": "1024x1024", "background": "opaque"}
+    assert payload == {"model": "gpt-image-2", "prompt": "Literal authored предмет\n\nAvoid: no text", "n": 1, "quality": "medium", "size": "1024x1024", "background": background}
     assert options["headers"]["Authorization"] == "Bearer " + credentials.access_token
     assert options["headers"]["ChatGPT-Account-Id"] == credentials.account_id
     assert "response_format" not in payload

@@ -15,7 +15,7 @@ IMAGE_URL = "https://chatgpt.com/backend-api/codex/images/generations"
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
 
-def generate_image(prompt: str, negative: str, output_path: Path, *, model: str, quality: str, size: str, timeout: int) -> None:
+def generate_image(prompt: str, negative: str, output_path: Path, *, model: str, quality: str, size: str, timeout: int, background: str = "opaque") -> None:
     if not isinstance(prompt, str) or not prompt.strip():
         raise codex_auth.CodexError("Codex image generation requires an authored prompt")
     if not model.strip() or quality not in {"low", "medium", "high", "auto"} or size not in {"1024x1024", "1536x1024", "1024x1536", "auto"}:
@@ -28,7 +28,7 @@ def generate_image(prompt: str, negative: str, output_path: Path, *, model: str,
     full_prompt = prompt + ("\n\nAvoid: " + negative if negative else "")
     response = codex_auth.post_json(IMAGE_URL, {
         "model": model, "prompt": full_prompt, "n": 1, "quality": quality,
-        "size": size, "background": "opaque",
+        "size": size, "background": background,
     }, headers={
         "Authorization": "Bearer " + credentials.access_token,
         "ChatGPT-Account-Id": credentials.account_id,

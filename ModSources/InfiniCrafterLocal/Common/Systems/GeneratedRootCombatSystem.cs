@@ -16,8 +16,8 @@ using Triple = InfiniCrafterLocal.Content.Items.GeneratedItem.RootCombatTriple;
 namespace InfiniCrafterLocal.Common.Systems;
 
 // Fix: exact authored binding target -> native combat context; no design choice.
-// Supported native source: tML 2026.6.3.6, independently inspected ItemCheck_Inner
-// early GetWeaponDamage, then native alternate selector/CanUse, then shoot stage.
+// Validate the native API and actual ItemCheck IL at installation; assembly
+// identity/version is not a gameplay contract. Query/selector/shoot order is.
 public sealed class GeneratedRootCombatSystem : ModSystem
 {
     private ILHook? _earlyHook;
@@ -26,7 +26,6 @@ public sealed class GeneratedRootCombatSystem : ModSystem
     [ThreadStatic] private static long _nextEpoch;
     [ThreadStatic] private static ShootScope? _shootScope;
     private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
-    private static readonly Guid SupportedModule = new("2dc689ad-ceed-4fd9-848d-e10218d2e473");
     private readonly record struct Context(Triple Triple, int Prefix, int Type, int UseAmmo, int InputSelector)
     {
         internal static Context Capture(Player player, Item item) => new(Triple.Capture(item), item.prefix, item.type, item.useAmmo, player.altFunctionUse);
@@ -37,9 +36,10 @@ public sealed class GeneratedRootCombatSystem : ModSystem
     public override void Load()
     {
         if (_earlyHook is not null || _shootHook is not null) throw Guard("already installed");
-        RequireSupportedSource();
         MethodInfo inner = typeof(Player).GetMethod("ItemCheck_Inner", PrivateInstance, null, Type.EmptyTypes, null) ?? throw Guard("ItemCheck_Inner signature missing");
         MethodInfo shoot = typeof(Player).GetMethod("ItemCheck_Shoot", PrivateInstance, null, new[]{typeof(int),typeof(Item),typeof(int)}, null) ?? throw Guard("ItemCheck_Shoot signature missing");
+        if (inner.ReturnType != typeof(void) || shoot.ReturnType != typeof(void))
+            throw Guard("native ItemCheck return contract mismatch");
         try {
             _earlyHook = new ILHook(inner, CaptureItemCheck);
             _shootHook = new Hook(shoot, (Action<Action<Player,int,Item,int>,Player,int,Item,int>)NativeShoot);
@@ -55,11 +55,6 @@ public sealed class GeneratedRootCombatSystem : ModSystem
         _frame = default; _nextEpoch = 0;
     }
 
-    internal static void RequireSupportedSource()
-    {
-        if (typeof(Player).Module.ModuleVersionId != SupportedModule || BuildInfo.tMLVersion != new Version(2026,6,3,6))
-            throw Guard("unsupported native module/version; re-inspect source before enabling");
-    }
     private static InvalidOperationException Guard(string reason)
         => new("Generated root combat native bridge: " + reason);
     private static Frame EnterFrame(Player player)

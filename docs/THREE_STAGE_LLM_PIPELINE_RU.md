@@ -1,4 +1,4 @@
-# Трёхстадийный LLM pipeline — 0.4.247
+# Трёхстадийный LLM pipeline — 0.4.248
 
 [System authority](../PROJECT_ARCHITECTURE_RU.md#authority) · [Author](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Repair](TARGETED_REPAIR_PROTOCOL_RU.md)
 

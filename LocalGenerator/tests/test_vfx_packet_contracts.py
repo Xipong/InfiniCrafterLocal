@@ -240,12 +240,12 @@ def test_transported_vfx_field_contract(container, field, terms, bounds, engine_
     if bounds: assert {key: schema[key] for key in ("type", "minimum", "maximum")} == dict(zip(("type", "minimum", "maximum"), bounds))
 
 @pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("keyed", [False, True])
-def test_transported_vfx_presentation_policy(monkeypatch, repair, keyed):
+@pytest.mark.parametrize("color,remove_bg,keyed", [("cyan", False, False), ("cyan", True, True), ("transparent", True, False)])
+def test_transported_vfx_presentation_policy(monkeypatch, repair, color, remove_bg, keyed):
     from infini_local.pipelines import pipeline_visual_config as config
-    monkeypatch.setattr(config, "REMOVE_BG", keyed)
+    monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(config, "BG_REMOVE_MODE", "sprite_keyer")
-    monkeypatch.setattr(config, "BG_COLOR", "cyan")
+    monkeypatch.setattr(config, "BG_COLOR", color)
     packet = _sent({}, repair)
     slot = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]["properties"]
     surface = packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]

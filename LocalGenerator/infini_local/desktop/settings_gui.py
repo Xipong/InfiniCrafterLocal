@@ -95,13 +95,9 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         if provider == "openrouter" and backend in {"off", "none", "disabled", "0"}:
             return "API LLM only: без картинок"
 
-        best_name = list(PRESETS)[0]
-        best_score = -1
-        for name, preset in PRESETS.items():
-            score = sum(1 for key, value in preset.items() if str(data.get(key, "")).strip() == str(value).strip())
-            if score > best_score:
-                best_name, best_score = name, score
-        return best_name
+        # Shared sprite controls do not establish provider/backend identity.
+        # Never present a nearest-score preset as the user's active pipeline.
+        return "Свои настройки"
 
 
 

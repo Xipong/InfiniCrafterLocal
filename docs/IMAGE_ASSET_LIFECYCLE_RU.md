@@ -1,4 +1,4 @@
-# Image/VFX asset lifecycle — активный контракт 0.4.247
+# Image/VFX asset lifecycle — активный контракт 0.4.248
 
 <a id="owners"></a>
 ## Канонический путь и владельцы
