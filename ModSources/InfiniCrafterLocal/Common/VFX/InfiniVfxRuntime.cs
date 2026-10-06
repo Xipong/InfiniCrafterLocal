@@ -122,7 +122,7 @@ public static class InfiniVfxRuntime
         if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (slot.Element is not null || slot.Path is not null) continue;
+            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot)) continue;
             if (!Matches(slot, entityId, RuntimeEventKind.Periodic) || !Cadence(slot, state.Tick)) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             if (!TryMarkSlotEmission(projectile, entityId, RuntimeEventKind.Periodic, slot, ref state)) continue;
@@ -148,9 +148,9 @@ public static class InfiniVfxRuntime
                 InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
                 continue;
             }
-            if (slot.Element is not null) {
+            if (InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!admitMaterials||!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
-                emitted |= InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,state.SourceKey,new(anchor,
+                emitted |= InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,state.SourceKey,new(anchor,
                     slot.Anchor=="velocity"?projectile.velocity.SafeNormalize(snapshot.Forward):snapshot.Forward,snapshot.MaterialVelocity){SourceCenter=snapshot.Center},VfxSourceBinding.Capture(projectile));
                 continue;
             }
@@ -238,6 +238,7 @@ public static class InfiniVfxRuntime
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal)) continue;
+            if (VfxLibraryValidation.HasPayload(slot)) continue;
             // Nonperiodic procedural/sprite effects have detached event lifetimes.
             // History renderers need live samples; retain their on_spawn trail path.
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
@@ -320,10 +321,10 @@ public static class InfiniVfxRuntime
             if (!Matches(slot, entityId, eventName)) continue;
             Vector2 anchor = center;
             if (snapshot is { } captured && !captured.TryAnchor(slot.Anchor, center, out anchor)) continue;
-            emitted = true;
-            if (slot.Element is not null && snapshot is {} materialSnapshot) {
-                if(!admitMaterials||!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
-                InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,sourceKey,new(anchor,
+            if (!VfxLibraryValidation.HasPayload(slot)) emitted = true;
+            if (slot.Element is not null && snapshot.HasValue || VfxLibraryValidation.HasPayload(slot)) {
+                if(!admitMaterials||snapshot is not {} materialSnapshot||!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
+                emitted |= InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,sourceKey,new(anchor,
                     slot.Anchor=="velocity"?inheritedVelocity.SafeNormalize(materialSnapshot.Forward):materialSnapshot.Forward,materialSnapshot.MaterialVelocity){SourceCenter=materialSnapshot.Center},binding);
                 continue;
             }

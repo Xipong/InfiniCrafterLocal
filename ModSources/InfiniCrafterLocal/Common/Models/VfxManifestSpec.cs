@@ -237,6 +237,13 @@ public sealed class VfxSlotSpec
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public VfxTexturedPathSpec? Path { get => _path; set => _path = value ?? throw new InvalidDataException("path cannot be null"); }
 
+    private VfxLibraryParticleSpec? _particle;
+    private VfxScreenShakeSpec? _screenShake;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxLibraryParticleSpec? Particle { get => _particle; set => _particle = value ?? throw new InvalidDataException("particle cannot be null"); }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxScreenShakeSpec? ScreenShake { get => _screenShake; set => _screenShake = value ?? throw new InvalidDataException("screenShake cannot be null"); }
+
     public void Normalize() => NormalizeAndValidate();
     public void NormalizeAndValidate()
     {
@@ -248,6 +255,7 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        VfxLibraryValidation.Validate(this,rendererKind);
         bool materialBranch = rendererKind is InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath;
         if (rendererKind == InfiniVfxRendererKind.SpriteElement) {
             if (Element is null || Path is not null) throw new InvalidDataException("spriteElement requires only element payload");
@@ -272,7 +280,9 @@ public sealed class VfxSlotSpec
             throw new InvalidDataException("sprite renderer requires a non-none textureRole");
         ParticleRole = ExactEnumText(ParticleRole, "particleRole", "item", "entity", "projectile", "field", "impact", "none");
         Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
-        Channel = ExactEnumText(Channel, "channel", "motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound");
+        Channel = rendererKind == InfiniVfxRendererKind.ScreenShakeCue
+            ? ExactEnumText(Channel,"channel","screenShake")
+            : ExactEnumText(Channel, "channel", "motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound");
         Lane = ExactEnumText(Lane, "lane", "primary", "support", "accent", "ornament", "cue");
         EmissionMode = ExactEnumText(EmissionMode, "emissionMode", "wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "none");
         Blend = ExactEnumText(Blend, "blend", "alpha", "additive");

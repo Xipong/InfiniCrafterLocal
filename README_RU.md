@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.248
+# InfiniCrafterLocal v0.4.249
 
 Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 
@@ -13,7 +13,9 @@
 
 ## Версия и обновление
 
-**Поставка prerelease 0.4.248:** обновляй мод и LocalGenerator вместе, сохраняя личный `config.env`, cache, recipes/PNG и данные миров. В поставку входят принятые runtime-исправления: penetration/maxPenetrate, native root damage/knockback, явный tile collision и сохранение перековки; EN/RU tooltip показывает реальные bindings, цену и эффекты. Необычное `hold`-управление цепного шара сохранено. Также включены sprite-size/angle metadata для high-resolution PNG, обновление texture cache и Codex effective-wire cache/prefix refinements. Каталог остаётся **52 capabilities / 229 parameters**.
+**0.4.249 — реальные библиотечные VFX:** новые явные `libraryParticle` / `particle` и `screenShakeCue` / `screenShake` используют ParticleLibrary V3 и Luminance. Модель выбирает движение, размеры, цвет, timing и событие; runtime применяет native lifecycle/authority и существующие budgets. Подробный контракт и настройки — [библиотечные primitives](docs/VFX_MATERIAL_ELEMENTS_RU.md#libraries). Старые `pl:*` остаются Terraria Dust, корректные recipes/PNG не переписываются. Сохранены hotfix.2, Default/Terraria Like, GUI-профили и прежняя механика. Обновляй мод и генератор вместе; пользовательская установка не меняется автоматически. Подтверждённый сбой texture origin старой установленной 0.4.248 уже исправлен в hotfix.2 и сохранён здесь; общий full-game flicker остаётся нерешённым, отдельного предположительного renderer patch нет.
+
+**Сохранённая основа prerelease 0.4.248:** обновляй мод и LocalGenerator вместе, сохраняя личный `config.env`, cache, recipes/PNG и данные миров. В поставку входят принятые runtime-исправления: penetration/maxPenetrate, native root damage/knockback, явный tile collision и сохранение перековки; EN/RU tooltip показывает реальные bindings, цену и эффекты. Необычное `hold`-управление цепного шара сохранено. Также включены sprite-size/angle metadata для high-resolution PNG, обновление texture cache и Codex effective-wire cache/prefix refinements. Каталог gameplay остаётся **52 capabilities / 229 parameters**.
 
 Модели, личный `config.env`, cache и `ParticleLibrary`/`Luminance` не входят в source-generator ZIP. Корректные старые recipes/PNG не мигрируют и не перерисовываются автоматически. Default лимит ответа VFX Director/Repair — 8000; явная настройка имеет приоритет.
 

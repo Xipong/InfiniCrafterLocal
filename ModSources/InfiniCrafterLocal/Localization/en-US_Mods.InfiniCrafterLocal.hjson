@@ -218,17 +218,22 @@ Configs: {
 
 		EnableParticleLibraryBackend: {
 			Label: Enable Particle Library Backend
-			Tooltip: ""
+			Tooltip: "Enable explicitly authored libraryParticle effects. Legacy pl:* Dust selectors are unchanged; disabling this does not substitute Dust."
+		}
+
+		EnableLuminanceScreenShakeBackend: {
+			Label: Luminance camera shake
+			Tooltip: "Enable explicitly authored screenShakeCue events. Luminance's own screenshake settings remain authoritative. No implicit hit shake is added."
 		}
 
 		EnableLuminanceSoundBackend: {
 			Label: Enable Luminance Sound Backend
-			Tooltip: ""
+			Tooltip: "Legacy compatibility setting; currently unused. Authored soundCue uses the existing Terraria sound path."
 		}
 
 		ForceVanillaDustFallback: {
 			Label: Force Vanilla Dust Fallback
-			Tooltip: ""
+			Tooltip: "Legacy compatibility setting; currently unused. Explicit libraryParticle effects never fall back to Dust."
 		}
 	}
 }

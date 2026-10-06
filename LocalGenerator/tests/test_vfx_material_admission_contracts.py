@@ -47,6 +47,185 @@ def test_standard_schema_and_local_gate_agree_on_exact_asset_ids(repair: bool, a
         assert (not strict_schema_errors(patch, schema)) is valid
 
 
+def _screen_shake(data: dict[str, Any]) -> dict[str, Any]:
+    raw = _legacy(data)
+    slot = raw["slots"][0]
+    from infini_local.core.vfx_material_contract import NEUTRAL_FIELDS
+    slot.update(NEUTRAL_FIELDS)
+    slot.update(id="local_camera_cue", rendererKind="screenShakeCue", backend="Realtime",
+                channel="screenShake", lane="cue", duration=3, alpha=1, startTick=0, repeatEvery=0)
+    slot["screenShake"] = {
+        "strengthPx": 3.0, "angularVarianceRadians": 1.0, "directionRadians": 0.5,
+        "dissipationPxPerFrame": 0.25, "taperStartDistancePx": 400.0, "taperEndDistancePx": 1200.0,
+    }
+    return raw
+
+
+def test_luminance_cue_reaches_director_compiler_wire_without_changing_gameplay() -> None:
+    data = _data()
+    raw = _screen_shake(data)
+    frozen = copy.deepcopy(data["runtimeProgram"])
+    admission = vfx.validate_vfx_director_output(raw, data)
+    assert admission["ok"], admission["errors"]
+    result = vfx.attach_hybrid_vfx_manifest(data, "library_cue", llm_director=lambda *_a, **_kw: raw)
+    slot = result["vfxManifest"]["slots"][0]
+    assert slot["screenShake"] == raw["slots"][0]["screenShake"]
+    assert slot["rendererKind"] == "screenShakeCue"
+    assert vfx.validate_vfx_manifest_wire(result) == {"ok": True, "errors": []}
+    assert result["runtimeProgram"] == frozen
+    assert "assets" not in result["vfxManifest"]
+    assert "element" not in slot and "path" not in slot
+
+
+@pytest.mark.parametrize("edits,valid", [
+    pytest.param({"screenShake.strengthPx": 0}, True, id="explicit-zero"),
+    pytest.param({"screenShake.taperEndDistancePx": 400}, False, id="equal-taper"),
+    pytest.param({"screenShake.taperEndDistancePx": 300}, False, id="inverted-taper"),
+    pytest.param({"screenShake.strengthPx": True}, False, id="boolean"),
+    pytest.param({"screenShake.strengthPx": float("nan")}, False, id="nan"),
+    pytest.param({"screenShake.strengthPx": float("inf")}, False, id="infinity"),
+    pytest.param({"screenShake.strengthPx": 10 ** 400}, False, id="huge-number"),
+    pytest.param({"screenShake": None}, False, id="null-payload"),
+    pytest.param({"screenShake.strengthPx": None}, False, id="null-control"),
+    pytest.param({"event": "periodic"}, False, id="periodic-forbidden"),
+    pytest.param({"element": {}}, False, id="foreign-payload"),
+    pytest.param({"rendererKind": "soundCue", "channel": "sound"}, False, id="payload-on-native-sound"),
+])
+def test_luminance_cue_bounds_are_shared_by_director_and_persisted_wire(edits: dict[str, Any], valid: bool) -> None:
+    data = _data()
+    raw = _screen_shake(data)
+    for path, value in edits.items():
+        target = raw["slots"][0]
+        parts = path.split(".")
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = value
+    assert vfx.validate_vfx_director_output(raw, data)["ok"] is valid
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "cue_admission")
+    assert vfx.validate_vfx_manifest_wire(data)["ok"] is valid
+
+
+def test_luminance_relation_repair_changes_only_diagnosed_endpoint() -> None:
+    data = _data()
+    raw = _screen_shake(data)
+    raw["slots"][0]["screenShake"]["taperEndDistancePx"] = 300
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert not report["ok"]
+    assert {row["path"] for row in report["errors"]} == {"$.slots[0].screenShake.taperEndDistancePx"}
+    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    hostile = copy.deepcopy(raw["slots"][0])
+    hostile["screenShake"].update(taperEndDistancePx=1200, strengthPx=12)
+    repaired = vfx._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[hostile]), scope)
+    expected = copy.deepcopy(raw)
+    expected["slots"][0]["screenShake"]["taperEndDistancePx"] = 1200
+    assert repaired == expected
+    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+
+
+def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
+    raw = _screen_shake(data)
+    slot = raw["slots"][0]
+    slot.pop("screenShake")
+    slot.update(id="library_star", rendererKind="libraryParticle", backend="Particle",
+                channel="impactParticles", lane="accent", duration=20, alpha=0.8, blend="additive")
+    slot["particle"] = {
+        "textureId": "star", "count": 3, "speedMinPxPerTick": 1.0, "speedMaxPxPerTick": 3.0,
+        "spreadRadians": 0.5, "inheritVelocity": 0.25, "drag": 0.9,
+        "accelerationXPxPerTickSquared": 0.0, "accelerationYPxPerTickSquared": 0.05,
+        "widthPx": 8.0, "heightPx": 2.0, "rotationRadians": 0.0,
+        "rotationSpeedRadiansPerTick": 0.1, "colorStart": "effect", "colorEnd": "gold",
+        "endScaleMultiplier": 0.0, "endOpacity": 0.0,
+    }
+    return raw
+
+
+@pytest.mark.parametrize("count", [0, 3, 64])
+def test_library_particle_director_wire_keeps_explicit_controls_and_no_png_job(count: int) -> None:
+    data = _data()
+    raw = _library_particle(data)
+    raw["slots"][0]["particle"]["count"] = count
+    frozen = copy.deepcopy(data["runtimeProgram"])
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert report["ok"], report["errors"]
+    result = vfx.attach_hybrid_vfx_manifest(data, "library_particles", llm_director=lambda *_a, **_kw: raw)
+    assert result["vfxManifest"]["slots"][0]["particle"] == raw["slots"][0]["particle"]
+    assert vfx.validate_vfx_manifest_wire(result) == {"ok": True, "errors": []}
+    assert result["runtimeProgram"] == frozen
+    assert "assets" not in result["vfxManifest"]
+    assert vfx.vfx_png_dependencies(result, result["vfxManifest"])["errors"] == []
+
+
+@pytest.mark.parametrize("edits,valid", [
+    pytest.param({"particle.speedMaxPxPerTick": 0}, False, id="inverted-speed"),
+    pytest.param({"particle.textureId": "smoke"}, False, id="unknown-texture"),
+    pytest.param({"particle.count": True}, False, id="boolean-count"),
+    pytest.param({"particle.count": 65}, False, id="overflow-count"),
+    pytest.param({"particle.widthPx": float("nan")}, False, id="nan-width"),
+    pytest.param({"particle.widthPx": 10 ** 400}, False, id="huge-width"),
+    pytest.param({"particle.widthPx": 0}, True, id="zero-width"),
+    pytest.param({"particle": None}, False, id="null-payload"),
+    pytest.param({"screenShake": {}}, False, id="foreign-payload"),
+    pytest.param({"event": "periodic"}, False, id="missing-periodic-cadence"),
+    pytest.param({"event": "periodic", "repeatEvery": 2}, True, id="item-periodic"),
+    pytest.param({"event": "periodic", "repeatEvery": 2, "startTick": 1}, False, id="item-unowned-clock"),
+])
+def test_library_particle_director_and_wire_share_typed_admission(edits: dict[str, Any], valid: bool) -> None:
+    data = _data()
+    raw = _library_particle(data)
+    for path, value in edits.items():
+        target = raw["slots"][0]
+        parts = path.split(".")
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = value
+    assert vfx.validate_vfx_director_output(raw, data)["ok"] is valid
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "particle_admission")
+    assert vfx.validate_vfx_manifest_wire(data)["ok"] is valid
+
+
+def test_library_particle_speed_repair_keeps_motion_color_and_gameplay_frozen() -> None:
+    data = _data()
+    raw = _library_particle(data)
+    raw["slots"][0]["particle"]["speedMaxPxPerTick"] = 0
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert not report["ok"]
+    assert {row["path"] for row in report["errors"]} == {"$.slots[0].particle.speedMaxPxPerTick"}
+    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    hostile = copy.deepcopy(raw["slots"][0])
+    hostile["particle"].update(speedMaxPxPerTick=3, drag=0.1, colorStart="black")
+    repaired = vfx._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[hostile]), scope)
+    expected = copy.deepcopy(raw)
+    expected["slots"][0]["particle"]["speedMaxPxPerTick"] = 3
+    assert repaired == expected
+    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+
+
+@pytest.mark.parametrize("repair", [False, True])
+@pytest.mark.parametrize("renderer,payload,factory", [
+    pytest.param("libraryParticle", "particle", _library_particle, id="particle"),
+    pytest.param("screenShakeCue", "screenShake", _screen_shake, id="camera"),
+])
+def test_library_choices_and_units_reach_actual_serialized_vfx_stage_packets(repair: bool, renderer: str, payload: str, factory: Any) -> None:
+    data = _data()
+    packet = _sent(data, repair)
+    schema = packet["outputSchema"]
+    Draft202012Validator.check_schema(schema)
+    slot_schema = schema["properties"]["slotsUpsert" if repair else "slots"]["items"]
+    authored = factory(data)["slots"][0]
+    assert renderer in slot_schema["properties"]["rendererKind"]["enum"]
+    assert Draft202012Validator(slot_schema).is_valid(authored)
+    assert set(authored[payload]) == set(slot_schema["properties"][payload]["required"])
+    assert all(field.get("description") for field in slot_schema["properties"][payload]["properties"].values())
+    vocabulary = packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]
+    assert renderer in vocabulary["rendererSemantics"]
+    assert "no" in vocabulary["rendererSemantics"][renderer].lower()
+    assert "startTick" in vocabulary["rendererSemantics"][renderer]
+    assert "delay" in vocabulary["rendererSemantics"][renderer]
+    if payload == "particle":
+        texture_description = slot_schema["properties"][payload]["properties"]["textureId"]["description"]
+        assert "opaque" in texture_description and "black" in texture_description
+
+
 def _compiled() -> dict[str, Any]:
     data = _data()
     raw = _with_asset(data)
@@ -259,6 +438,10 @@ COMPANION_FIELDS = [pytest.param(renderer, field, neutral, id=renderer + "-" + f
                     for renderer, requirements in ROUTE_SURFACE["rendererRequirements"].items() for field, neutral in requirements.items()]
 
 def _renderer_material(data, renderer):
+    if renderer == "libraryParticle":
+        return _library_particle(data)
+    if renderer == "screenShakeCue":
+        return _screen_shake(data)
     raw = _sprite(data) if renderer == "spriteElement" else _path(data) if renderer == "texturedPath" else _vfx_output(data)
     raw["slots"][0].update(rendererKind=renderer)
     if renderer == "impactSprite":
@@ -271,7 +454,12 @@ def test_renderer_route_admission(renderer, channel, lane):
     raw = _renderer_material(data, renderer)
     slot = raw["slots"][0]
     slot.update(channel=channel, lane=lane)
-    expected = channel not in {"light", "sound"} if renderer in {"spriteElement", "texturedPath"} else renderer not in {"lightCue", "soundCue"} or (channel, lane) == ("light" if renderer == "lightCue" else "sound", "cue")
+    if renderer == "screenShakeCue":
+        expected = (channel, lane) == ("screenShake", "cue")
+    elif renderer == "libraryParticle":
+        expected = channel in {"ambientParticles", "impactParticles", "decaySmoke"} and lane != "cue"
+    else:
+        expected = channel != "screenShake" and (channel not in {"light", "sound"} if renderer in {"spriteElement", "texturedPath"} else renderer not in {"lightCue", "soundCue"} or (channel, lane) == ("light" if renderer == "lightCue" else "sound", "cue"))
     before = copy.deepcopy(raw)
     schema = _sent(data, False)["outputSchema"]["properties"]["slots"]["items"]
     assert (not strict_schema_errors(slot, schema)) is expected

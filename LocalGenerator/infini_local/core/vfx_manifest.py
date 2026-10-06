@@ -19,7 +19,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import ENTITY_KIND_REGISTRY, runtime_event_inventory, runtime_visual_roles, strict_schema_errors
-from infini_local.core.vfx_material_contract import ASSET_ID_PATTERN, MATERIAL_RENDERERS, NEUTRAL_FIELDS, asset_schema, element_schema, material_slot_clauses, material_texture_clauses, path_schema, runtime_asset_schema
+from infini_local.core.vfx_material_contract import ASSET_ID_PATTERN, MATERIAL_RENDERERS, NEUTRAL_FIELDS, asset_schema, element_schema, library_particle_schema, material_slot_clauses, material_texture_clauses, path_schema, runtime_asset_schema, screen_shake_schema
 from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_MAX_SLOTS,
     VFX_LLM_DIRECTOR_MAX_TOKENS,
@@ -55,7 +55,7 @@ _RENDERERS = (
     "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
     "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
     "actorAfterimage", "impactRing", "impactSprite", "childMotes",
-    "lightCue", "soundCue", *MATERIAL_RENDERERS,
+    "lightCue", "soundCue", "screenShakeCue", "libraryParticle", *MATERIAL_RENDERERS,
 )
 SPRITE_TEXTURE_RENDERERS = frozenset({
     "projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite",
@@ -65,11 +65,15 @@ SPRITE_TEXTURE_RENDERERS = frozenset({
 _RENDERER_REQUIREMENTS = {
     "lightCue": {"channel": "light", "lane": "cue"},
     "soundCue": {"channel": "sound", "lane": "cue"},
+    "libraryParticle": {**NEUTRAL_FIELDS, "backend": "Particle"},
+    "screenShakeCue": {**NEUTRAL_FIELDS, "backend": "Realtime", "channel": "screenShake", "lane": "cue", "duration": 3, "repeatEvery": 0, "alpha": 1, "blend": "alpha", "layer": "BeforeProjectiles"},
     "impactSprite": {"textureRole": "impact"},
     "spriteElement": {**NEUTRAL_FIELDS, "backend": "Sprite"},
     "texturedPath": {**NEUTRAL_FIELDS, "backend": "Primitive", "repeatEvery": 0, "duration": 3},
 }
 _RENDERER_SEMANTICS = {
+    "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, not the legacy pl:* Terraria Dust selectors. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
+    "screenShakeCue": "Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks with repeatEvery=0; the captured anchor/forward survive source retirement. duration=3 is neutral, not camera lifetime. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
     "projectileAfterimage": "Periodic projectile: textured history samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
     "spriteStampTrail": "Periodic projectile: spaced textured history stamps, same history consumer as projectileAfterimage. Projectile event: one captured body-pose snapshot; item emission: one directional texture stamp.",
     "actorAfterimage": "Textured afterimages of the bound entity, not a copied player animation atlas. Periodic projectile uses history; projectile event freezes body pose; item emission is a directional texture stamp.",
@@ -93,7 +97,7 @@ _RENDERER_SEMANTICS = {
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
-_CHANNELS = ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound")
+_CHANNELS = ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound", "screenShake")
 _LANES = ("primary", "support", "accent", "ornament", "cue")
 _EMISSIONS = ("wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "none")
 _BLENDS = ("alpha", "additive")
@@ -118,7 +122,7 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "budgetWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
     "signatureWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
     "visualCost": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
-    "startTick": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick. spriteElement: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. texturedPath: projectile age gate for live sampling.",
+    "startTick": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Legacy item periodic and detached/event lifetimes ignore startTick. spriteElement/libraryParticle: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. screenShakeCue: nonperiodic event-relative delay in world ticks, not camera lifetime. texturedPath: projectile age gate for live sampling.",
     "repeatEvery": "Legacy world ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath: neutral=0; no repeated detached path emission.",
 }
 
@@ -301,6 +305,8 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "spriteNegativePrompt": {"type": "string", "maxLength": 700},
             "element": element_schema(),
             "path": path_schema(),
+            "screenShake": screen_shake_schema(),
+            "particle": library_particle_schema(),
         },
         "required": [
             "id", "entityId", "event", "rendererKind", "backend", "textureRole",
@@ -322,6 +328,22 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
     slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, list(_CHANNELS), _textured_path_sources(data)))
     slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data)))
+    slot["allOf"].extend([
+        {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}}, "required": ["rendererKind"]},
+         "then": {"required": ["particle"], "properties": {"channel": {"enum": ["ambientParticles", "impactParticles", "decaySmoke"]}, "lane": {"enum": ["primary", "support", "accent", "ornament"]}}}},
+        {"if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "libraryParticle"]}}, "required": ["rendererKind"]},
+         "then": {"properties": {"particle": {"enum": []}}}},
+        {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}, "event": {"const": "periodic"}}, "required": ["rendererKind", "event"]},
+         "then": {"properties": {"repeatEvery": {"minimum": 1}}}},
+        {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}, "event": {"enum": [event for event in events if event != "periodic"]}}, "required": ["rendererKind", "event"]},
+         "then": {"properties": {"repeatEvery": {"const": 0}}}},
+        {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}, "event": {"const": "periodic"}, "entityId": {"enum": item_ids}}, "required": ["rendererKind", "event", "entityId"]},
+         "then": {"properties": {"startTick": {"const": 0}}}},
+        {"if": {"properties": {"rendererKind": {"const": "screenShakeCue"}}, "required": ["rendererKind"]},
+         "then": {"required": ["screenShake"], "properties": {"event": {"enum": [event for event in events if event != "periodic"]}}}},
+        {"if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "screenShakeCue"]}}, "required": ["rendererKind"]},
+         "then": {"properties": {"screenShake": {"enum": []}, "channel": {"enum": [channel for channel in _CHANNELS if channel != "screenShake"]}}}},
+    ])
     schema: dict[str, Any] = {
         "type": "object", "additionalProperties": False,
         "properties": {
@@ -494,17 +516,28 @@ def vfx_png_dependencies(
 
 
 def _material_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
-    element = slot.get("element")
-    if slot.get("rendererKind") != "spriteElement" or not isinstance(element, Mapping):
+    relations = {
+        "spriteElement": ("element", element_schema, "speedMinPxPerTick", "speedMaxPxPerTick", False),
+        "libraryParticle": ("particle", library_particle_schema, "speedMinPxPerTick", "speedMaxPxPerTick", False),
+        "screenShakeCue": ("screenShake", screen_shake_schema, "taperStartDistancePx", "taperEndDistancePx", True),
+    }
+    relation = relations.get(str(slot.get("rendererKind") or ""))
+    if relation is None:
         return []
-    minimum, maximum = element.get("speedMinPxPerTick"), element.get("speedMaxPxPerTick")
-    properties = element_schema()["properties"]
-    # A scalar failure is not permission to redesign its valid sibling. Only
-    # compare operands that independently satisfy the canonical type/range gate.
+    payload_name, schema_factory, low_name, high_name, strictly_greater = relation
+    payload = slot.get(payload_name)
+    if not isinstance(payload, Mapping):
+        return []
+    minimum, maximum = payload.get(low_name), payload.get(high_name)
+    properties = schema_factory()["properties"]
+    # A scalar failure is not permission to redesign its valid sibling. Compare
+    # each operand through its canonical field gate, independently of other leaves.
     if (isinstance(minimum, (int, float)) and isinstance(maximum, (int, float))
-            and not strict_schema_errors(minimum, properties["speedMinPxPerTick"])
-            and not strict_schema_errors(maximum, properties["speedMaxPxPerTick"]) and maximum < minimum):
-        return [{"path": path + ".element.speedMaxPxPerTick", "message": "must be >= speedMinPxPerTick"}]
+            and not strict_schema_errors(minimum, properties[low_name])
+            and not strict_schema_errors(maximum, properties[high_name])
+            and (maximum < minimum or (strictly_greater and maximum == minimum))):
+        operator = ">" if strictly_greater else ">="
+        return [{"path": f"{path}.{payload_name}.{high_name}", "message": f"must be {operator} {low_name}"}]
     return []
 
 
@@ -612,6 +645,10 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["element"] = copy.deepcopy(slot["element"])
         if "path" in slot:
             clean["path"] = copy.deepcopy(slot["path"])
+        if "screenShake" in slot:
+            clean["screenShake"] = copy.deepcopy(slot["screenShake"])
+        if "particle" in slot:
+            clean["particle"] = copy.deepcopy(slot["particle"])
         errors.extend(_material_slot_errors(slot, path))
         for renderer in ("soundCue", "lightCue"):
             required = _RENDERER_REQUIREMENTS[renderer]
@@ -695,12 +732,12 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         renderer = slot.get("rendererKind")
         if not isinstance(renderer, str) or renderer not in _RENDERERS:
             errors.append({"path": path + ".rendererKind", "message": "unsupported renderer"})
-        if renderer in MATERIAL_RENDERERS:
+        if renderer in (*MATERIAL_RENDERERS, "screenShakeCue", "libraryParticle"):
             for error in strict_schema_errors(slot, slot_schema, path=path):
                 errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
             errors.extend(_material_slot_errors(slot, path))
         else:
-            for field in ("element", "path"):
+            for field in ("element", "path", "screenShake", "particle"):
                 if field in slot:
                     errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
     for error in vfx_png_dependencies(data, manifest)["errors"]:

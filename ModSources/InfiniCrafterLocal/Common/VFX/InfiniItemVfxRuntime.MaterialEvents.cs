@@ -44,7 +44,7 @@ public static partial class InfiniItemVfxRuntime
     }
     private static bool TrySendMaterialItemEvent(Player player,GeneratedItemData data,string entityId,string ev,Vector2 point)
     {
-        if(!data.VfxManifest.Slots.Any(s=>s.EntityId==entityId&&s.Event==ev&&s.Element is not null))return false;
+        if(!data.VfxManifest.Slots.Any(s=>s.EntityId==entityId&&s.Event==ev&&InfiniDetachedVfxSystem.HasSnapshotVfx(s)))return false;
         if(player.HeldItem?.ModItem is not GeneratedItem gi||gi.Data.Id!=data.Id)return true;
         var payload=new MaterialItemEvent(player.whoAmI,gi.PresentationToken,MaterialItemEventStream.NewOwnerOccurrence(),data.Id,entityId,ev,point,InfiniItemVfxSnapshot.Capture(player));
         if(!payload.Snapshot.Valid||InfiniCrafterLocalMod.Instance is null)return true;
@@ -52,8 +52,8 @@ public static partial class InfiniItemVfxRuntime
     }
     private static void EmitMaterialItemSnapshot(GeneratedItemData data,MaterialItemEvent payload,VfxSourceBinding? binding,MaterialEventAllowance allowance)
     {
-        foreach(var slot in data.VfxManifest.Slots)if(slot.EntityId==payload.EntityId&&slot.Event==payload.Event&&slot.Element is not null)
-            InfiniDetachedVfxSystem.EnqueueElement(data,payload.EntityId,slot,$"item:{payload.Owner}:{data.Id}:{payload.EntityId}",payload.Snapshot.Frame(slot.Anchor,payload.Point),binding,itemBudget:true,allowance:allowance);
+        foreach(var slot in data.VfxManifest.Slots)if(slot.EntityId==payload.EntityId&&slot.Event==payload.Event&&InfiniDetachedVfxSystem.HasSnapshotVfx(slot))
+            InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,payload.EntityId,slot,$"item:{payload.Owner}:{data.Id}:{payload.EntityId}",payload.Snapshot.Frame(slot.Anchor,payload.Point),binding,itemBudget:true,allowance:allowance);
     }
     private static void HandleMaterialItemEvent(BinaryReader reader,int sender)
     {

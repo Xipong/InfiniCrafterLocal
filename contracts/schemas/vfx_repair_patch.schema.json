@@ -227,6 +227,143 @@
             "if": {
               "properties": {
                 "rendererKind": {
+                  "const": "libraryParticle"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "backend": {
+                  "const": "Particle"
+                },
+                "budgetWeight": {
+                  "const": 1
+                },
+                "density": {
+                  "const": 0
+                },
+                "emissionMode": {
+                  "const": "none"
+                },
+                "fadeIn": {
+                  "const": 0
+                },
+                "fadeOut": {
+                  "const": 0
+                },
+                "jitter": {
+                  "const": 0
+                },
+                "particleRole": {
+                  "const": "none"
+                },
+                "particleSystemId": {
+                  "const": "none"
+                },
+                "scale": {
+                  "const": 1
+                },
+                "signatureWeight": {
+                  "const": 0
+                },
+                "spread": {
+                  "const": 0
+                },
+                "textureRole": {
+                  "const": "none"
+                },
+                "visualCost": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "screenShakeCue"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "alpha": {
+                  "const": 1
+                },
+                "backend": {
+                  "const": "Realtime"
+                },
+                "blend": {
+                  "const": "alpha"
+                },
+                "budgetWeight": {
+                  "const": 1
+                },
+                "channel": {
+                  "const": "screenShake"
+                },
+                "density": {
+                  "const": 0
+                },
+                "duration": {
+                  "const": 3
+                },
+                "emissionMode": {
+                  "const": "none"
+                },
+                "fadeIn": {
+                  "const": 0
+                },
+                "fadeOut": {
+                  "const": 0
+                },
+                "jitter": {
+                  "const": 0
+                },
+                "lane": {
+                  "const": "cue"
+                },
+                "layer": {
+                  "const": "BeforeProjectiles"
+                },
+                "particleRole": {
+                  "const": "none"
+                },
+                "particleSystemId": {
+                  "const": "none"
+                },
+                "repeatEvery": {
+                  "const": 0
+                },
+                "scale": {
+                  "const": 1
+                },
+                "signatureWeight": {
+                  "const": 0
+                },
+                "spread": {
+                  "const": 0
+                },
+                "textureRole": {
+                  "const": "none"
+                },
+                "visualCost": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
                   "const": "impactSprite"
                 }
               },
@@ -387,7 +524,8 @@
                     "ambientParticles",
                     "impactShape",
                     "impactParticles",
-                    "decaySmoke"
+                    "decaySmoke",
+                    "screenShake"
                   ]
                 }
               }
@@ -468,7 +606,9 @@
                     "impactSprite",
                     "childMotes",
                     "lightCue",
-                    "soundCue"
+                    "soundCue",
+                    "screenShakeCue",
+                    "libraryParticle"
                   ]
                 }
               },
@@ -900,6 +1040,241 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "libraryParticle"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "channel": {
+                  "enum": [
+                    "ambientParticles",
+                    "impactParticles",
+                    "decaySmoke"
+                  ]
+                },
+                "lane": {
+                  "enum": [
+                    "primary",
+                    "support",
+                    "accent",
+                    "ornament"
+                  ]
+                }
+              },
+              "required": [
+                "particle"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "projectileAfterimage",
+                    "spriteStampTrail",
+                    "historyRibbon",
+                    "tipTrail",
+                    "ghostArc",
+                    "wavyStrip",
+                    "beamLine",
+                    "fieldPulse",
+                    "orbitingMotes",
+                    "actorAfterimage",
+                    "impactRing",
+                    "impactSprite",
+                    "childMotes",
+                    "lightCue",
+                    "soundCue",
+                    "screenShakeCue",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "particle": {
+                  "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "libraryParticle"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_crit",
+                    "on_expire",
+                    "on_hit",
+                    "on_kill",
+                    "on_spawn",
+                    "on_tile_collision",
+                    "on_use"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "libraryParticle"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "enum": [
+                    "item"
+                  ]
+                },
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "libraryParticle"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "startTick": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "screenShakeCue"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_crit",
+                    "on_expire",
+                    "on_hit",
+                    "on_kill",
+                    "on_spawn",
+                    "on_tile_collision",
+                    "on_use"
+                  ]
+                }
+              },
+              "required": [
+                "screenShake"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "projectileAfterimage",
+                    "spriteStampTrail",
+                    "historyRibbon",
+                    "tipTrail",
+                    "ghostArc",
+                    "wavyStrip",
+                    "beamLine",
+                    "fieldPulse",
+                    "orbitingMotes",
+                    "actorAfterimage",
+                    "impactRing",
+                    "impactSprite",
+                    "childMotes",
+                    "lightCue",
+                    "soundCue",
+                    "libraryParticle",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "channel": {
+                  "enum": [
+                    "motionTrail",
+                    "coreGlow",
+                    "ambientParticles",
+                    "impactShape",
+                    "impactParticles",
+                    "decaySmoke",
+                    "light",
+                    "sound"
+                  ]
+                },
+                "screenShake": {
+                  "enum": []
+                }
+              }
+            }
           }
         ],
         "properties": {
@@ -955,7 +1330,8 @@
               "impactParticles",
               "decaySmoke",
               "light",
-              "sound"
+              "sound",
+              "screenShake"
             ],
             "type": "string"
           },
@@ -1443,6 +1819,164 @@
             ],
             "type": "string"
           },
+          "particle": {
+            "additionalProperties": false,
+            "properties": {
+              "accelerationXPxPerTickSquared": {
+                "description": "World X acceleration, pixels/world tick squared.",
+                "maximum": 2,
+                "minimum": -2,
+                "type": "number"
+              },
+              "accelerationYPxPerTickSquared": {
+                "description": "World Y acceleration, pixels/world tick squared.",
+                "maximum": 2,
+                "minimum": -2,
+                "type": "number"
+              },
+              "colorEnd": {
+                "description": "Final RGB token, linearly interpolated over individual lifetime.",
+                "enum": [
+                  "white",
+                  "gray",
+                  "brown",
+                  "tan",
+                  "red",
+                  "orange",
+                  "yellow",
+                  "gold",
+                  "green",
+                  "cyan",
+                  "blue",
+                  "purple",
+                  "pink",
+                  "black",
+                  "effect"
+                ],
+                "type": "string"
+              },
+              "colorStart": {
+                "description": "Initial opaque RGB token; effect captures accepted effect color; no palette-prose parsing.",
+                "enum": [
+                  "white",
+                  "gray",
+                  "brown",
+                  "tan",
+                  "red",
+                  "orange",
+                  "yellow",
+                  "gold",
+                  "green",
+                  "cyan",
+                  "blue",
+                  "purple",
+                  "pink",
+                  "black",
+                  "effect"
+                ],
+                "type": "string"
+              },
+              "count": {
+                "description": "Integer particles per emission; zero is silence; shares existing instance budgets.",
+                "maximum": 64,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "drag": {
+                "description": "Velocity retention per world tick; 1 preserves, 0 removes previous velocity before world acceleration.",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "endOpacity": {
+                "description": "Final opacity multiplier, linearly interpolated from 1 and multiplied by common alpha once.",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "endScaleMultiplier": {
+                "description": "Final width/height multiplier, linearly interpolated from 1; zero contracts to nothing.",
+                "maximum": 4,
+                "minimum": 0,
+                "type": "number"
+              },
+              "heightPx": {
+                "description": "Full initial height of the library unit quad in world pixels; zero stays zero.",
+                "maximum": 128,
+                "minimum": 0,
+                "type": "number"
+              },
+              "inheritVelocity": {
+                "description": "Fraction of captured world-tick engine velocity added once, Projectile.velocity*MaxUpdates or Player.velocity.",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "rotationRadians": {
+                "description": "Initial rotation relative to captured source forward, radians.",
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
+                "type": "number"
+              },
+              "rotationSpeedRadiansPerTick": {
+                "description": "Spin in radians/world tick.",
+                "maximum": 1,
+                "minimum": -1,
+                "type": "number"
+              },
+              "speedMaxPxPerTick": {
+                "description": "Maximum initial speed, must be >= speedMinPxPerTick.",
+                "maximum": 24,
+                "minimum": 0,
+                "type": "number"
+              },
+              "speedMinPxPerTick": {
+                "description": "Minimum initial speed in world pixels/world tick.",
+                "maximum": 24,
+                "minimum": 0,
+                "type": "number"
+              },
+              "spreadRadians": {
+                "description": "Full cone angle around captured source forward, radians.",
+                "maximum": 6.283185307179586,
+                "minimum": 0,
+                "type": "number"
+              },
+              "textureId": {
+                "description": "Exact ParticleLibrary built-in Star texture: opaque grayscale including black texels. Alpha blend includes its black rectangular footprint; additive makes black contribute zero. Choose blend explicitly. Not a motion/weapon preset; no PNG generation.",
+                "enum": [
+                  "star"
+                ],
+                "type": "string"
+              },
+              "widthPx": {
+                "description": "Full initial width of the library unit quad in world pixels, independent of texture native dimensions; zero stays zero.",
+                "maximum": 128,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "textureId",
+              "count",
+              "speedMinPxPerTick",
+              "speedMaxPxPerTick",
+              "spreadRadians",
+              "inheritVelocity",
+              "drag",
+              "accelerationXPxPerTickSquared",
+              "accelerationYPxPerTickSquared",
+              "widthPx",
+              "heightPx",
+              "rotationRadians",
+              "rotationSpeedRadiansPerTick",
+              "colorStart",
+              "colorEnd",
+              "endScaleMultiplier",
+              "endOpacity"
+            ],
+            "type": "object"
+          },
           "particleRole": {
             "enum": [
               "item",
@@ -1875,6 +2409,8 @@
               "childMotes",
               "lightCue",
               "soundCue",
+              "screenShakeCue",
+              "libraryParticle",
               "spriteElement",
               "texturedPath"
             ],
@@ -1891,6 +2427,56 @@
             "maximum": 5.0,
             "minimum": 0.15,
             "type": "number"
+          },
+          "screenShake": {
+            "additionalProperties": false,
+            "properties": {
+              "angularVarianceRadians": {
+                "description": "Random angular variance around the explicitly selected direction, in radians.",
+                "maximum": 6.283185307179586,
+                "minimum": 0,
+                "type": "number"
+              },
+              "directionRadians": {
+                "description": "Direction angle relative to captured source forward, in radians.",
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
+                "type": "number"
+              },
+              "dissipationPxPerFrame": {
+                "description": "Strength removed on each native ModifyScreenPosition visit, not a world-tick lifetime; passed explicitly to Luminance.",
+                "maximum": 16,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              "strengthPx": {
+                "description": "Luminance camera displacement strength in screen pixels before its client screenshake modifier; explicit zero emits no shake.",
+                "maximum": 16,
+                "minimum": 0,
+                "type": "number"
+              },
+              "taperEndDistancePx": {
+                "description": "Distance where attenuation reaches zero; must exceed taperStartDistancePx.",
+                "maximum": 8192,
+                "minimum": 1,
+                "type": "number"
+              },
+              "taperStartDistancePx": {
+                "description": "Distance from resolved event anchor to the viewing player where attenuation begins, in world pixels.",
+                "maximum": 4096,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "strengthPx",
+              "angularVarianceRadians",
+              "directionRadians",
+              "dissipationPxPerFrame",
+              "taperStartDistancePx",
+              "taperEndDistancePx"
+            ],
+            "type": "object"
           },
           "signatureWeight": {
             "description": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
@@ -1914,7 +2500,7 @@
             "type": "string"
           },
           "startTick": {
-            "description": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Item periodic and detached/event lifetimes ignore startTick. spriteElement: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. texturedPath: projectile age gate for live sampling.",
+            "description": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Legacy item periodic and detached/event lifetimes ignore startTick. spriteElement/libraryParticle: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. screenShakeCue: nonperiodic event-relative delay in world ticks, not camera lifetime. texturedPath: projectile age gate for live sampling.",
             "maximum": 120,
             "minimum": 0,
             "type": "integer"

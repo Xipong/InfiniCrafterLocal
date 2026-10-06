@@ -132,6 +132,39 @@ def element_schema() -> dict[str, Any]:
     })
 
 
+def library_particle_schema() -> dict[str, Any]:
+    return _object({
+        "textureId": {"type": "string", "enum": ["star"], "description": "Exact ParticleLibrary built-in Star texture: opaque grayscale including black texels. Alpha blend includes its black rectangular footprint; additive makes black contribute zero. Choose blend explicitly. Not a motion/weapon preset; no PNG generation."},
+        "count": _number(0, 64, "Integer particles per emission; zero is silence; shares existing instance budgets.", integer=True),
+        "speedMinPxPerTick": _number(0, 24, "Minimum initial speed in world pixels/world tick."),
+        "speedMaxPxPerTick": _number(0, 24, "Maximum initial speed, must be >= speedMinPxPerTick."),
+        "spreadRadians": _number(0, math.tau, "Full cone angle around captured source forward, radians."),
+        "inheritVelocity": _number(0, 1, "Fraction of captured world-tick engine velocity added once, Projectile.velocity*MaxUpdates or Player.velocity."),
+        "drag": _number(0, 1, "Velocity retention per world tick; 1 preserves, 0 removes previous velocity before world acceleration."),
+        "accelerationXPxPerTickSquared": _number(-2, 2, "World X acceleration, pixels/world tick squared."),
+        "accelerationYPxPerTickSquared": _number(-2, 2, "World Y acceleration, pixels/world tick squared."),
+        "widthPx": _number(0, 128, "Full initial width of the library unit quad in world pixels, independent of texture native dimensions; zero stays zero."),
+        "heightPx": _number(0, 128, "Full initial height of the library unit quad in world pixels; zero stays zero."),
+        "rotationRadians": _number(-math.tau, math.tau, "Initial rotation relative to captured source forward, radians."),
+        "rotationSpeedRadiansPerTick": _number(-1, 1, "Spin in radians/world tick."),
+        "colorStart": {"type": "string", "enum": list(COLOR_TOKENS), "description": "Initial opaque RGB token; effect captures accepted effect color; no palette-prose parsing."},
+        "colorEnd": {"type": "string", "enum": list(COLOR_TOKENS), "description": "Final RGB token, linearly interpolated over individual lifetime."},
+        "endScaleMultiplier": _number(0, 4, "Final width/height multiplier, linearly interpolated from 1; zero contracts to nothing."),
+        "endOpacity": _number(0, 1, "Final opacity multiplier, linearly interpolated from 1 and multiplied by common alpha once."),
+    })
+
+
+def screen_shake_schema() -> dict[str, Any]:
+    return _object({
+        "strengthPx": _number(0, 16, "Luminance camera displacement strength in screen pixels before its client screenshake modifier; explicit zero emits no shake."),
+        "angularVarianceRadians": _number(0, math.tau, "Random angular variance around the explicitly selected direction, in radians."),
+        "directionRadians": _number(-math.tau, math.tau, "Direction angle relative to captured source forward, in radians."),
+        "dissipationPxPerFrame": _number(0.01, 16, "Strength removed on each native ModifyScreenPosition visit, not a world-tick lifetime; passed explicitly to Luminance."),
+        "taperStartDistancePx": _number(0, 4096, "Distance from resolved event anchor to the viewing player where attenuation begins, in world pixels."),
+        "taperEndDistancePx": _number(1, 8192, "Distance where attenuation reaches zero; must exceed taperStartDistancePx."),
+    })
+
+
 def path_schema() -> dict[str, Any]:
     schema = _object({
         "texture": texture_schema(),

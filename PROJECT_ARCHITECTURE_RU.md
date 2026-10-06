@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.248 — архитектура и границы authority
+# InfiniCrafterLocal v0.4.249 — архитектура и границы authority
 
 [Карта исходников](PROJECT_MAP_RU.md) · [Author-контракт](docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Repair](docs/TARGETED_REPAIR_PROTOCOL_RU.md) · [Generated boundary](lowery.md)
 

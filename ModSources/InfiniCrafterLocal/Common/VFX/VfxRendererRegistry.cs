@@ -7,7 +7,7 @@ public enum InfiniVfxRendererKind
 {
     None, ProjectileAfterimage, SpriteStampTrail, HistoryRibbon, TipTrail, GhostArc, WavyStrip,
     BeamLine, FieldPulse, OrbitingMotes, ActorAfterimage, ImpactRing, ImpactSprite, ChildMotes,
-    LightCue, SoundCue, SpriteElement, TexturedPath
+    LightCue, SoundCue, SpriteElement, TexturedPath, LibraryParticle, ScreenShakeCue
 }
 
 /// <summary>Exact renderer registry. Runtime never classifies prose or fuzzy renderer text.</summary>
@@ -29,6 +29,8 @@ public static class VfxRendererRegistry
     {
         return value switch
         {
+            "libraryParticle" => InfiniVfxRendererKind.LibraryParticle,
+            "screenShakeCue" => InfiniVfxRendererKind.ScreenShakeCue,
             "spriteElement" => InfiniVfxRendererKind.SpriteElement,
             "texturedPath" => InfiniVfxRendererKind.TexturedPath,
             "projectileAfterimage" => InfiniVfxRendererKind.ProjectileAfterimage,
@@ -53,6 +55,8 @@ public static class VfxRendererRegistry
 
     public static string ToWireName(InfiniVfxRendererKind kind) => kind switch
     {
+        InfiniVfxRendererKind.LibraryParticle => "libraryParticle",
+        InfiniVfxRendererKind.ScreenShakeCue => "screenShakeCue",
         InfiniVfxRendererKind.SpriteElement => "spriteElement",
         InfiniVfxRendererKind.TexturedPath => "texturedPath",
         InfiniVfxRendererKind.ProjectileAfterimage => "projectileAfterimage",

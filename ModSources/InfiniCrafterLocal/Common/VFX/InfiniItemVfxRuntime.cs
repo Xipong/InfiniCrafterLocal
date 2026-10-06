@@ -193,8 +193,8 @@ public static partial class InfiniItemVfxRuntime
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
-            if(slot.Element is not null) {
-                if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueElement(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
+            if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
+                if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
                     VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,null,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }

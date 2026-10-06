@@ -27,6 +27,7 @@
     <Compile Include="EngineRuntimeChecks.VfxEventConsistency.cs" />
     <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
     <Compile Include="EngineRuntimeChecks.MaterialElements.cs" />
+    <Compile Include="EngineRuntimeChecks.LibraryVfx.cs" />
     <Compile Include="EngineRuntimeChecks.MaterialReview.cs" />
     <Compile Include="EngineRuntimeChecks.VfxShapes.cs" />
     <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />

@@ -64,7 +64,7 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
     assert repair["properties"]["motif"]["anyOf"][0] == normal["properties"]["motif"]
     assert repair["properties"]["effectMagnitude"]["anyOf"][0] == normal["properties"]["effectMagnitude"]
     # Additive payloads/asset requests are conditionally required, never legacy defaults.
-    assert set(original_slot["properties"]) - {"element", "path"} == set(original_slot["required"])
+    assert set(original_slot["properties"]) - {"element", "path", "particle", "screenShake"} == set(original_slot["required"])
     assert set(normal["properties"]) - {"assets"} == set(normal["required"])
     assert packet["runtimeVocabulary"]["numericRanges"] == {
         "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],

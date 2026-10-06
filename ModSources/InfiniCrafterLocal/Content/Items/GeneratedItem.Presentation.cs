@@ -17,7 +17,7 @@ public partial class GeneratedItem
             return _itemPresentationToken;
         }
     }
-    internal bool HasMaterialVfx=>Array.Exists(Data.VfxManifest.Slots,s=>s.Element is not null||s.Path is not null);
+    internal bool HasMaterialVfx=>Array.Exists(Data.VfxManifest.Slots,s=>InfiniDetachedVfxSystem.HasOwnedVfx(s));
     private void ApplyPresentationToken(long token)
     {
         _hasMaterialTransportIdentity=token!=0;

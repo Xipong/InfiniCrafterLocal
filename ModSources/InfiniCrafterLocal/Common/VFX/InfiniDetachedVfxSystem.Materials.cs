@@ -62,7 +62,8 @@ public sealed partial class InfiniDetachedVfxSystem
     }
     private sealed class MaterialEmission {
         internal required string SourceKey;
-        internal required ElementDesign Design;
+        internal ElementDesign? Design;
+        internal LibraryEmissionState? Library;
         internal VfxSourceFrame Frame,InitialFrame;
         internal ulong Due,Start;
         internal int IntegratedAge;
@@ -76,7 +77,8 @@ public sealed partial class InfiniDetachedVfxSystem
     private static readonly List<MaterialEmission> MaterialEmissions=new();
     private sealed class PeriodicElement {
         internal required VfxSourceBinding Binding;
-        internal required ElementDesign Design;
+        internal ElementDesign? Design;
+        internal LibraryEmissionState? Library;
         internal required string SourceKey,SlotId,Anchor;
         internal ulong FirstTick,LastTick=ulong.MaxValue;
         internal int StartTick,RepeatEvery,InitialAge;
@@ -87,10 +89,15 @@ public sealed partial class InfiniDetachedVfxSystem
     {
         if(Main.dedServ||binding is null||!binding.IsLive)return;
         foreach(var slot in data.VfxManifest.Slots) {
-            if(slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||slot.Element is null)continue;
+            if(slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null))continue;
             if(PeriodicElements.Any(e=>ReferenceEquals(e.Binding.Generation,binding.Generation)&&e.SlotId==slot.Id))continue;
             if(PeriodicElements.Count>=MaxEmissions)return;
-            string texture=ResolveMaterialTexture(data,entityId,slot.Element.Texture);
+            if(slot.Particle is not null) {
+                PeriodicElements.Add(new PeriodicElement{Binding=binding,Library=new LibraryEmissionState(CopyLibrary(data,slot,item),0),SourceKey=sourceKey,
+                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick,RepeatEvery=slot.RepeatEvery,Item=item});
+                continue;
+            }
+            string texture=ResolveMaterialTexture(data,entityId,slot.Element!.Texture);
             if(string.IsNullOrEmpty(texture))continue;
             PeriodicElements.Add(new PeriodicElement{Binding=binding,Design=CopyElement(data,slot,texture,item),SourceKey=sourceKey,
                 SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick,RepeatEvery=Math.Max(1,slot.RepeatEvery),Item=item});
@@ -104,7 +111,10 @@ public sealed partial class InfiniDetachedVfxSystem
             if(e.LastTick==now)continue;e.LastTick=now;
             ulong age=e.Item?now:now-e.FirstTick+(ulong)Math.Max(0,e.InitialAge);
             if(age<(ulong)e.StartTick||(age-(ulong)e.StartTick)%(ulong)e.RepeatEvery!=0)continue;
-            if(e.Binding.TryFrame(e.Anchor,out var frame)) EnqueueCopiedElement(e.Design,e.SourceKey,frame,e.Binding,e.Anchor,0);
+            if(e.Binding.TryFrame(e.Anchor,out var frame)) {
+                if(e.Library is {} library)EnqueueCopiedLibrary(library.Design,e.SourceKey,frame,0);
+                else EnqueueCopiedElement(e.Design!,e.SourceKey,frame,e.Binding,e.Anchor,0);
+            }
         }
     }
 
@@ -154,11 +164,11 @@ public sealed partial class InfiniDetachedVfxSystem
     }
     private static void StartMaterialEmission(MaterialEmission emission)
     {
-        var d=emission.Design;
+        var d=emission.Design!;
         if(d.Attached && (emission.Binding is null||!emission.Binding.TryFrame(emission.Anchor,out emission.Frame))) {emission.Started=true;return;}
         emission.Start=emission.Due; emission.Started=true;
         int count=Math.Min(64,InfiniVfxClientOptions.ScaleParticleCount(d.Count));
-        count=Math.Min(count,MaxMaterialParticles-MaterialEmissions.Sum(e=>e.Particles.Length));
+        count=Math.Min(count,MaxMaterialParticles-OwnedParticleCount);
         var particles=new List<MaterialParticle>(Math.Max(0,count));
         var random=new Random(d.Seed ^ unchecked((int)emission.Start));
         for(int i=0;i<count;i++) {
@@ -183,9 +193,10 @@ public sealed partial class InfiniDetachedVfxSystem
         UpdateMaterialPaths(now);
         UpdatePeriodicElements(now);
         foreach(var e in MaterialEmissions) {
+            if(e.Library is not null){UpdateLibraryEmission(e,now);continue;}
             if(now<e.Due) continue;
             if(!e.Started) StartMaterialEmission(e);
-            if(e.Design.Attached && (e.Binding is null||!e.Binding.TryFrame(e.Anchor,out e.Frame))) {e.Particles=Array.Empty<MaterialParticle>();continue;}
+            if(e.Design!.Attached && (e.Binding is null||!e.Binding.TryFrame(e.Anchor,out e.Frame))) {e.Particles=Array.Empty<MaterialParticle>();continue;}
             int age=(int)Math.Min((ulong)e.Design.Duration,now-e.Start);
             for(int t=e.IntegratedAge;t<age;t++) foreach(var p in e.Particles) {
                 p.Velocity=p.Velocity*e.Design.Drag+e.Design.Acceleration;
@@ -193,13 +204,15 @@ public sealed partial class InfiniDetachedVfxSystem
             }
             e.IntegratedAge=age;
         }
-        MaterialEmissions.RemoveAll(e=>e.Started&&(e.Particles.Length==0||now-e.Start>=(ulong)e.Design.Duration)
-            ||e.Design.Attached&&(e.Binding is null||!e.Binding.IsLive));
+        MaterialEmissions.RemoveAll(e=>e.Library is not null?LibraryEmissionExpired(e)
+            :e.Started&&(e.Particles.Length==0||now-e.Start>=(ulong)e.Design!.Duration)
+            ||e.Design!.Attached&&(e.Binding is null||!e.Binding.IsLive));
     }
     private static void DrawMaterialSprites(string layer,SpriteBatch batch,Action ensureBegin)
     {
         foreach(var e in MaterialEmissions) {
-            var d=e.Design;
+            if(e.Library is not null)continue;
+            var d=e.Design!;
             if(!e.Started||e.IntegratedAge>=d.Duration||d.Layer!=layer) continue;
             float age=e.IntegratedAge/(float)d.Duration;
             float width=d.Width*d.WidthRamp.At(age),height=d.Height*d.HeightRamp.At(age),opacity=d.Alpha*d.OpacityRamp.At(age);
@@ -221,7 +234,7 @@ public sealed partial class InfiniDetachedVfxSystem
     {
         if(OwnedRecordCount<MaxEmissions)return;
         if(Emissions.Count>0)Emissions.RemoveAt(0);
-        else if(MaterialEmissions.Count>0)MaterialEmissions.RemoveAt(0);
+        else if(MaterialEmissions.Count>0){if(MaterialEmissions[0].Library?.Shake is {} shake)shake.ShakeStrength=0;MaterialEmissions.RemoveAt(0);}
         else if(MaterialPaths.Count>0)MaterialPaths.RemoveAt(0);
     }
     private static int OwnedRecordCount=>Emissions.Count+MaterialEmissions.Count+MaterialPaths.Count;

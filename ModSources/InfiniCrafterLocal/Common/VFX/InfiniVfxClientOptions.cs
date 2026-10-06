@@ -56,6 +56,9 @@ public static class InfiniVfxClientOptions
     public static bool EnableParticleLibraryBackend
         => Config?.EnableParticleLibraryBackend ?? true;
 
+    public static bool EnableLuminanceScreenShakeBackend
+        => Config?.EnableLuminanceScreenShakeBackend ?? true;
+
     public static bool EnableLuminanceSoundBackend
         => Config?.EnableLuminanceSoundBackend ?? false;
 

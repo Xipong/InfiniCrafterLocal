@@ -217,18 +217,23 @@ Configs: {
 		}
 
 		EnableParticleLibraryBackend: {
-			// Label: Enable Particle Library Backend
-			// Tooltip: ""
+			Label: Частицы ParticleLibrary
+			Tooltip: "Включает явно выбранные libraryParticle. Старые pl:* выбирают Terraria Dust как раньше; отключение не подменяет новые эффекты Dust."
+		}
+
+		EnableLuminanceScreenShakeBackend: {
+			Label: Тряска камеры Luminance
+			Tooltip: "Включает явно выбранные screenShakeCue. Собственные настройки Luminance сохраняют приоритет; автоматическая тряска от попадания не добавляется."
 		}
 
 		EnableLuminanceSoundBackend: {
-			// Label: Enable Luminance Sound Backend
-			// Tooltip: ""
+			Label: Luminance sound (legacy)
+			Tooltip: "Сохранённая настройка совместимости, сейчас не используется. Явный soundCue работает через прежний Terraria sound path."
 		}
 
 		ForceVanillaDustFallback: {
-			// Label: Force Vanilla Dust Fallback
-			// Tooltip: ""
+			Label: Vanilla Dust fallback (legacy)
+			Tooltip: "Сохранённая настройка совместимости, сейчас не используется. Явный libraryParticle никогда не подменяется Dust."
 		}
 	}
 }

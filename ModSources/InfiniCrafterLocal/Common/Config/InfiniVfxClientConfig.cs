@@ -39,6 +39,9 @@ public sealed class InfiniVfxClientConfig : ModConfig
     [DefaultValue(true)]
     public bool EnableParticleLibraryBackend = true;
 
+    [DefaultValue(true)]
+    public bool EnableLuminanceScreenShakeBackend = true;
+
     [DefaultValue(false)]
     public bool EnableLuminanceSoundBackend = false;
 

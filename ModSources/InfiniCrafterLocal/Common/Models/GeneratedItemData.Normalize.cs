@@ -279,6 +279,8 @@ public sealed partial class GeneratedItemData
             var texture = slot.Element?.Texture ?? slot.Path?.Texture;
             if (slot.Element is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
                 throw new InvalidDataException("item spriteElement periodic requires startTick=0");
+            if (slot.Particle is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
+                throw new InvalidDataException("item libraryParticle periodic requires startTick=0");
             if (slot.Path is { } path) {
                 if (!entity.IsProjectileEntity) throw new InvalidDataException("texturedPath is projectile-only");
                 if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam

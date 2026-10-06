@@ -61,6 +61,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
 
     public override void Load()
     {
+        LoadLibrary();
         if (!Main.dedServ)
             On_Main.DrawProjectiles += DrawProjectiles;
     }
@@ -69,6 +70,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         if (!Main.dedServ)
             On_Main.DrawProjectiles -= DrawProjectiles;
+        ClearLibrary(unload:true);
         Clear();
     }
 
@@ -187,6 +189,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         }
         try
         {
+            DrawLibraryParticles(layer,batch.GraphicsDevice);
             if(MaterialPaths.Any(p=>p.Design.Layer==layer))DrawMaterialPaths(layer,batch.GraphicsDevice);
             // Authored PNG elements preserve texels, independent of vanilla's
             // configurable sampler. This batch is owned and ends before legacy.
@@ -275,6 +278,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
 
     private static void Clear()
     {
+        ClearLibrary();
         MaterialEventStream.Clear();
         InfiniItemVfxRuntime.ClearUseEventCaches();
         Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
