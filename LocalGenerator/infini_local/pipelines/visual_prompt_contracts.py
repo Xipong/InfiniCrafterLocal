@@ -10,6 +10,8 @@ import json
 import re
 from typing import Any, Mapping
 
+from infini_local.core.llm_stage_messages import generation_art_direction
+
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
 
@@ -91,6 +93,12 @@ def role_contract_prompt_clause(role: str, canvas: int) -> str:
     )
 
 
+def image_generation_prompt_suffix() -> str:
+    """Explicit target/style metadata outside the existing authored-art bound."""
+    direction = generation_art_direction()
+    return ". Terraria (tModLoader) game asset." + (f" {direction}" if direction else "")
+
+
 def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas: int) -> str:
     authored = compact_visual_words(prompt, 1400)
     clause = role_contract_prompt_clause(role, canvas)
@@ -104,7 +112,9 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             f". Place the handle/hand-contact point at normalized final canvas coordinates {grip}; "
             "upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips."
         )
-    return text
+    # Append outside the historical authored-art bound: style must not displace
+    # literal geometry, framing/background or the accepted hand-contact point.
+    return text + image_generation_prompt_suffix()
 
 
 def effective_projectile_canvas(data: Mapping[str, Any]) -> int:
@@ -126,4 +136,5 @@ __all__ = [
     "zimage_positive_only_enabled", "compact_visual_words", "sprite_contract_for",
     "role_contract_prompt_clause", "normalize_asset_prompt", "effective_projectile_canvas",
     "visual_background_transport_rule",
+    "image_generation_prompt_suffix",
 ]

@@ -36,7 +36,7 @@ from infini_local.desktop.settings_gui_theme import (
 
 
 _BASIC_FIELDS = frozenset({
-    "INFINI_HOST", "INFINI_PORT", "INFINI_LLM_PROVIDER", "INFINI_USE_LLM",
+    "INFINI_HOST", "INFINI_PORT", "INFINI_LLM_PROVIDER", "INFINI_USE_LLM", "INFINI_PROMPT_STYLE",
     "INFINI_CODEX_LLM_MODEL", "INFINI_LLM_REASONING_MODE", "INFINI_LMSTUDIO_URL", "INFINI_LMSTUDIO_MODEL",
     "INFINI_OPENROUTER_API_KEY", "INFINI_OPENROUTER_MODEL", "INFINI_OPENROUTER_PROVIDER",
     "INFINI_OPENAI_COMPAT_BASE_URL", "INFINI_OPENAI_COMPAT_API_KEY", "INFINI_OPENAI_COMPAT_MODEL",
@@ -792,6 +792,7 @@ class SettingsGuiUiMixin:
     def _build_llm(self, parent):
         primary = self._card(parent, "01 · Текстовый автор", "Выбери источник контракта предмета. Codex работает через аккаунт, остальные провайдеры сохраняют свои поля.", icon="◉")
         self.row(primary, "Use LLM", "INFINI_USE_LLM", values=["1", "0"], hint="Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.")
+        self.row(primary, "Стиль промпта", "INFINI_PROMPT_STYLE", width=20, values=["Default", "Terraria Like"], hint="Все режимы генерируют предметы для Terraria. Terraria Like — vanilla-like спрайты, палитра, читаемость и согласованные эффекты; не пресет механик.")
         self.row(primary, "Balance mode", "INFINI_BALANCE_MODE", values=["safety", "normalize", "report"])
         self.row(primary, "Deterministic dev fallback", "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", values=["0", "1"], hint="Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.")
         self.row(primary, "LLM provider", "INFINI_LLM_PROVIDER", values=["local", "openrouter", "openai_compat", "openai_codex"])

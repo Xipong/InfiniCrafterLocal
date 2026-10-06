@@ -10,6 +10,93 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import wire_transport
 
 
+def test_default_author_system_explicitly_targets_terraria(monkeypatch):
+    from infini_local.core import llm_config
+    from infini_local.pipelines import llm_authoring_pipeline as author
+
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default", raising=False)
+    request, user, system = author.build_initial_author_request({}, {}, {}, {}, "target-game", model_name="test-model")
+    assert "Target game: Terraria (tModLoader)" in system
+    assert request["messages"][0]["content"] == system
+    assert request["messages"][1]["content"] == user
+    assert "Terraria Like art direction" not in system
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_prompt_style_reaches_all_real_stage_requests_without_changing_contracts(wire_transport, monkeypatch, format_mode):
+    from infini_local.core import llm_config
+    from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport
+    from test_low_level_three_stage_pipeline import _accepted_visual_data
+
+    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    responses, sent = wire_transport
+    source = build_runtime_fixture("fishing_platform_tool")
+    frozen = copy.deepcopy(source)
+    snapshots = []
+    for style in ("Default", "Terraria Like"):
+        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style, raising=False)
+        sent.clear()
+        request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "style-proof", model_name="test-model")
+        sent.append(request)
+        raw = json.dumps(source)
+        responses.append(raw)
+        prepared, _ = author._repair_malformed_author_json(
+            malformed_raw_text=raw[:-1] + ",}", parse_error=ValueError("trailing comma"),
+            original_recipe_context=user, model_name="test-model",
+        )
+        assert prepared == frozen
+        broken = copy.deepcopy(source)
+        stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+        stats["params"]["damage"] = -1
+        replacement = copy.deepcopy(stats)
+        original_stats = next(row for row in source["runtimeProgram"]["calls"] if row["id"] == stats["id"])
+        replacement["params"]["damage"] = original_stats["params"]["damage"]
+        responses.append({"note": "exact damage repair", "realizationReplacement": copy.deepcopy(source["realization"]), "callsUpsert": [replacement]})
+        repaired = author.repair_author_item_after_failure(
+            broken, {}, {}, {}, {}, "style-proof", failure_report=author.validate_runtime_program(broken),
+        )
+        assert repaired["runtimeProgram"] == frozen["runtimeProgram"]
+        data = _accepted_visual_data("workbench_blade")
+        data_before = copy.deepcopy(data)
+        for repair in (False, True):
+            responses.append({})
+            visual._request_visual_kit(data, {}, {}, {}, {}, **({
+                "repair_errors": [{"path": "$.item.silhouette", "message": "required"}],
+                "previous": {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "literal frozen item"}, "entities": []},
+                "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["silhouette"]}},
+            } if repair else {}))
+            responses.append({})
+            vfx._request(author.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **({
+                "repair_errors": [{"path": "$.effectMagnitude", "message": "invalid"}],
+                "previous": {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 2.0, "slots": []},
+                "repair_scope": {"mutableGlobals": ["effectMagnitude"], "fieldPermissions": {"globals": {"effectMagnitude": [""]}}},
+            } if repair else {}))
+        assert data == data_before and source == frozen
+        assert len(sent) == 7
+        for request in sent:
+            system = request["messages"][0]["content"]
+            assert "Target game: Terraria (tModLoader)" in system
+            assert ("Terraria Like art direction" in system) == (style == "Terraria Like")
+            assert "frozen fields during Repair" in system
+            if style == "Terraria Like":
+                for phrase in ("compact coherent palette", "discrete shadow/highlight bands", "1x gameplay size", "soft-alpha"):
+                    assert phrase in system
+        snapshots.append(copy.deepcopy(sent))
+    for before, after in zip(*snapshots):
+        # The only setting-dependent bytes are advisory system instructions.
+        before["messages"][0]["content"] = after["messages"][0]["content"]
+        assert before == after
+
+
+def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
+    from infini_local.core import llm_config
+    from infini_local.pipelines import llm_authoring_pipeline as author
+
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
+    with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
+        author.build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
+
+
 def _craft(kind):
     data = compile_runtime_program(build_runtime_fixture(kind))
     data["name"] = f"different name: {kind}"

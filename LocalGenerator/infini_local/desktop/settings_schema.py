@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 FIELD_ORDER = [
     "INFINI_USE_LLM",
+    "INFINI_PROMPT_STYLE",
     "INFINI_BALANCE_MODE",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
     "INFINI_GUI_PIPELINE_PRESET",
@@ -213,6 +214,7 @@ def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
 
 DEFAULTS = {
     "INFINI_USE_LLM": "1",
+    "INFINI_PROMPT_STYLE": "Default",
     "INFINI_BALANCE_MODE": "safety",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
     "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + FLUX.2 Klein 4B hybrid",
@@ -464,6 +466,7 @@ PRESET_HELP = {
 }
 
 FIELD_HELP = {
+    "INFINI_PROMPT_STYLE": "Все режимы генерируют предметы для Terraria. Default — базовое направление промптов; Terraria Like добавляет акцент на vanilla-like спрайты, палитру, читаемость и согласованные эффекты. Это не пресет механик. Стиль независим от provider/backend pipeline preset; не меняет модели, ключи, resize, LoRA, схему контракта, инвентарь или установленную игру.",
     "INFINI_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
     "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
     "INFINI_LLM_POOL_2_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
@@ -576,6 +579,10 @@ FIELD_HELP = {
 }
 
 OPTION_HELP = {
+    "INFINI_PROMPT_STYLE": {
+        "Default": "Базовое направление промптов для предметов Terraria без дополнительных vanilla-like требований.",
+        "Terraria Like": "Предметы для Terraria с дополнительным акцентом на vanilla-like спрайты, палитру, читаемость и согласованные эффекты; без пресета механик.",
+    },
     "INFINI_MP_ASSET_TRANSPORT": {
         "native": "Рекомендуемый Host & Play режим: PNG bundles идут через Terraria/tModLoader packets. Public asset URL друзьям не нужен.",
         "http": "PNG скачиваются с host LocalGenerator /get_asset. Нужны доступный Public asset URL и Host=0.0.0.0 для LAN/Radmin.",

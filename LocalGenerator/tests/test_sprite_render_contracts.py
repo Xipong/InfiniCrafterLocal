@@ -13,6 +13,67 @@ from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_
 from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
 
 
+@pytest.mark.parametrize("role", ["item", "entity:literal_body", "equip_overlay", "impact", "vfx_cutout", "vfx_strip"])
+def test_image_prompt_styles_preserve_literal_art_and_role_contract(monkeypatch, role):
+    from infini_local.core import llm_config
+    from infini_local.pipelines import visual_prompt_contracts as prompts
+
+    authored = "literal copper oak joined blades " + "engraving " * 125
+    data = {"visual": {"grip": {"x": 0.3, "y": 0.7}, "palette": ["brown", "copper"]}}
+    frozen = copy.deepcopy(data)
+    results = []
+    for style in ("Default", "Terraria Like"):
+        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style, raising=False)
+        text = prompts.normalize_asset_prompt(data, role, authored, 64)
+        assert prompts.compact_visual_words(authored, 1400) in text
+        assert prompts.role_contract_prompt_clause(role, 64) in text
+        assert "Terraria (tModLoader) game asset" in text
+        assert ("Terraria Like art direction" in text) == (style == "Terraria Like")
+        if style == "Terraria Like":
+            assert "soft-alpha glows" in text and text.endswith("required texture layout.")
+        if role == "item":
+            assert '"x":0.3,"y":0.7' in text
+        assert data == frozen
+        results.append(text)
+    # Style adds only a brief; literal art, framing, background and grip survive.
+    assert results[1].startswith(results[0])
+
+
+@pytest.mark.parametrize("zimage", [True, False])
+def test_serialized_image_retry_retains_game_style_and_historical_core(monkeypatch, tmp_path, zimage):
+    from infini_local.core import llm_config
+    from infini_local.pipelines import pipeline_visual_config as config
+    from infini_local.services.sdcpp_backend import server_payload
+    import json
+
+    monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
+    monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
+    fixture = tmp_path / "synthetic_opaque_failed.png"
+    Image.new("RGBA", (64, 64), (180, 100, 50, 255)).save(fixture)
+    validation = post.validate_processed_sprite(str(fixture), "item")
+    assert not validation["ok"]
+    assert "almost_no_transparency_after_bg_removal" in validation["reasons"]
+    authored = ("literal copper oak joined blades " + "engraving " * 150)[:1400]
+    data = {"visual": {"grip": {"x": 0.3, "y": 0.7}}}
+    before = copy.deepcopy(data)
+    sent = []
+    for style in ("Default", "Terraria Like"):
+        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style)
+        base = normalize_asset_prompt(data, "item", authored, 64)
+        retry = post.build_retry_prompt_from_validation(base, validation, "item", 1, 64)
+        payload = server_payload(config._sdcpp_config(), retry, "", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
+        text = json.loads(json.dumps(payload))["prompt"]
+        assert "Terraria (tModLoader) game asset" in text
+        assert ("Terraria Like art direction" in text) == (style == "Terraria Like")
+        if style == "Terraria Like":
+            assert "compact coherent palette" in text and "required texture layout." in text
+        assert ("Technical correction:" if zimage else "fix these technical issues:") in text
+        assert data == before
+        sent.append(text)
+    assert sent[1].startswith(sent[0]), "style must not displace the pre-existing authored/technical retry core"
+    assert sent[0] != sent[1]
+
+
 CANVASES = (24, 32, 48, 64, 96, 128)
 
 CHROMA = {

@@ -288,19 +288,41 @@ def _check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() 
 
 
 def _check_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
+    import ast
+    key = "INFINI_PROMPT_STYLE"
+    assert settings_schema.DEFAULTS.get(key) == "Default"
+    assert key in settings_schema.FIELD_ORDER
+    assert list(settings_schema.OPTION_HELP[key]) == ["Default", "Terraria Like"]
+    style_rows = [
+        node for node in ast.walk(ast.parse(GUI_SOURCE))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "row" and len(node.args) >= 3
+        and isinstance(node.args[2], ast.Constant) and node.args[2].value == key
+    ]
+    assert len(style_rows) == 1
+    assert ast.literal_eval(style_rows[0].args[1]) == "Стиль промпта"
+    row_options = {option.arg: ast.literal_eval(option.value) for option in style_rows[0].keywords}
+    assert row_options["values"] == ["Default", "Terraria Like"]
+    assert not row_options.get("editable", False)
     assert settings_gui.parse_env is settings_env.parse_env
     assert settings_trace_state.parse_env is settings_env.parse_env
     assert settings_trace_state.write_env is settings_env.write_env
     path = tmp_path / "settings.env"
+    assert settings_gui.parse_env(path)[key] == "Default"
     settings_trace_state.write_env(path, {
         "INFINI_GUI_PIPELINE_PRESET": "OpenRouter + local Z-Image/sd.cpp",
+        key: "Terraria Like",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_MANUAL_KEY": "retained",
     })
     parsed = settings_gui.parse_env(path)
+    assert parsed[key] == "Terraria Like"
     assert parsed["INFINI_GUI_PIPELINE_PRESET"] == "OpenRouter + local Z-Image/sd.cpp"
     assert parsed["INFINI_IMAGE_BACKEND"] == "sdcpp"
     assert parsed["INFINI_MANUAL_KEY"] == "retained"
+    parsed[key] = "Default"
+    settings_trace_state.write_env(path, parsed)
+    assert settings_gui.parse_env(path)[key] == "Default"
 
 def _check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
     tag = settings_gui.SettingsGui._lora_tag_from_file(r"C:\\Models\\pixel_art.safetensors", "")
@@ -932,6 +954,7 @@ def test_gui_saves_named_profile_separately_and_restores_exact_settings(gui_work
     config.write_text("INFINI_MANUAL_KNOB=disk\n", encoding="utf-8")
     before = config.read_bytes()
     gui.data["INFINI_MANUAL_KNOB"] = "keep"
+    gui.vars["INFINI_PROMPT_STYLE"] = _TrackedUiVar("Terraria Like")
     gui.vars["INFINI_CODEX_IMAGE_QUALITY"] = _TrackedUiVar("high")
     gui.vars["INFINI_LLM_REASONING_MAX_TOKENS"] = _TrackedUiVar("7500")
     gui.vars["INFINI_OPENROUTER_API_KEY"] = _TrackedUiVar("test-only-credential")
@@ -946,14 +969,17 @@ def test_gui_saves_named_profile_separately_and_restores_exact_settings(gui_work
     path = config.with_name("gui_user_presets.json")
     profiles = load_user_presets(path)
     assert gui.preset_var.get() == "Мой: Мой GPU"
+    assert profiles["Мой GPU"]["INFINI_PROMPT_STYLE"] == "Terraria Like"
     assert profiles["Мой GPU"]["INFINI_LLM_REASONING_MAX_TOKENS"] == "7500"
     assert profiles["Мой GPU"]["INFINI_MANUAL_KNOB"] == "keep"
     assert "INFINI_OPENROUTER_API_KEY" not in profiles["Мой GPU"]
     assert config.read_bytes() == before
+    gui.vars["INFINI_PROMPT_STYLE"].set("Default")
     gui.vars["INFINI_CODEX_IMAGE_QUALITY"].set("low")
     assert gui.preset_var.get() == "Custom"
     gui.preset_var.set("Мой: Мой GPU")
     gui.apply_preset()
+    assert gui.vars["INFINI_PROMPT_STYLE"].get() == "Terraria Like"
     assert gui.vars["INFINI_CODEX_IMAGE_QUALITY"].get() == "high"
     assert gui.vars["INFINI_OPENROUTER_API_KEY"].get() == "test-only-credential"
     assert gui.preset_var.get() == "Мой: Мой GPU"
@@ -962,16 +988,19 @@ def test_gui_saves_named_profile_separately_and_restores_exact_settings(gui_work
     assert settings_gui.SettingsGui._pipeline_preset_from_config(
         {**profiles["Мой GPU"], "INFINI_GUI_PIPELINE_PRESET": "Мой: Мой GPU"}, profiles
     ) == "Мой: Мой GPU"
+    gui.save()
+    assert settings_gui.parse_env(config)["INFINI_PROMPT_STYLE"] == "Terraria Like"
 
 
 def test_simple_view_keeps_active_basics_and_preserves_hidden_values():
     from types import SimpleNamespace
     calls = {}
-    fields = {key: [object()] for key in ("INFINI_CODEX_IMAGE_MODEL", "INFINI_SDCPP_MODEL", "INFINI_LLM_REASONING_MAX_TOKENS")}
+    fields = {key: [object()] for key in ("INFINI_PROMPT_STYLE", "INFINI_CODEX_IMAGE_MODEL", "INFINI_SDCPP_MODEL", "INFINI_LLM_REASONING_MAX_TOKENS")}
     gui = SimpleNamespace(advanced_var=_UiVar(False), field_widgets=fields, field_hint_labels={},
                           field_disabled_reasons={"INFINI_SDCPP_MODEL": "Другой backend"}, _ui_sections=[])
     gui._set_packed_visible = lambda widget, visible: calls.update({widget: visible})
     settings_gui.SettingsGui._apply_view_mode(gui)
+    assert calls[fields["INFINI_PROMPT_STYLE"][0]] is True
     assert calls[fields["INFINI_CODEX_IMAGE_MODEL"][0]] is True
     assert calls[fields["INFINI_SDCPP_MODEL"][0]] is False
     assert calls[fields["INFINI_LLM_REASONING_MAX_TOKENS"][0]] is False
@@ -1435,6 +1464,18 @@ def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, e
 
 @pytest.mark.parametrize("preset_name", list(settings_schema.PRESETS))
 def test_gui_base_and_pipeline_presets_make_box_resize_explicit(preset_name):
+    style_key = "INFINI_PROMPT_STYLE"
+    assert style_key not in settings_schema.PRESETS[preset_name]
+    gui = _SpriteGuiHarness()
+    gui.preset_var.set(preset_name)
+    for style in ("Default", "Terraria Like"):
+        before = {key: var.get() for key, var in gui.vars.items()}
+        gui.vars[style_key].set(style)
+        gui._refresh_visibility()
+        assert {key: var.get() for key, var in gui.vars.items()} == {**before, style_key: style}
+        gui.apply_preset()
+        assert gui.vars[style_key].get() == style
+        assert gui.field_state[style_key][0] is True
     resize = {
         "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
         "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",

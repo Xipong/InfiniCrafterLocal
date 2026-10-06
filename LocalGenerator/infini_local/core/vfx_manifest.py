@@ -16,7 +16,7 @@ import re
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.llm_stage_messages import stage_chat_message
+from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import ENTITY_KIND_REGISTRY, runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.core.vfx_material_contract import ASSET_ID_PATTERN, MATERIAL_RENDERERS, NEUTRAL_FIELDS, asset_schema, element_schema, material_slot_clauses, material_texture_clauses, path_schema, runtime_asset_schema
@@ -1186,11 +1186,11 @@ def _director_system(*, repair: bool = False) -> str:
             "You are the conditional VFX Repair. Repair only the explicit broken VFX fields. You may return a complete "
             "broken slot; deterministic merge freezes already-valid old values and ignores extra rewrites. Bind only accepted "
             "runtime entity/event pairs. Gameplay is immutable. Return strict JSON only."
-        )
+        ) + generation_system_suffix()
     return (
         "You are the VFX Director. Author finite Terraria presentation only for accepted low-level runtime entity/event pairs. "
         "Gameplay is immutable. Do not infer or create weapon families. Return strict JSON only."
-    )
+    ) + generation_system_suffix()
 
 
 def _request(

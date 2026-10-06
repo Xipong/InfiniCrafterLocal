@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 128,
+  "documentedFieldCount": 129,
   "entries": [
     {
       "declarations": [
@@ -3537,6 +3537,30 @@
       "visibility": "internal"
     },
     {
+      "declarations": [
+        {
+          "default": "Default",
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "Default",
+      "documented": true,
+      "example": "Default",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PROMPT_STYLE",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "gui"
+    },
+    {
       "declarations": [],
       "default": [],
       "documented": false,
@@ -5591,15 +5615,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 230,
-  "fingerprint": "36537ff55da6cbdbedc4dba412d9b8f7aa7d12d2f3ac3ec378af05ed2752b4e9",
+  "fieldCount": 231,
+  "fingerprint": "29b496c5e6ba87d4622dc5efbc313224ac284be2b1c284b8b3e426091045867d",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 130,
+  "guiFieldCount": 131,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 13,

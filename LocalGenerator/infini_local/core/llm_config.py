@@ -6,6 +6,7 @@ from infini_local.core.env_utils import env_bool, env_first, env_int, env_str
 # LLM transport and generation policy configuration. This module owns env-derived
 # provider settings; pipelines consume them but do not re-export them.
 USE_LLM = env_bool("INFINI_USE_LLM", False)
+PROMPT_STYLE = env_str("INFINI_PROMPT_STYLE", "Default")
 ALLOW_DETERMINISTIC_DEV_FALLBACK = env_bool("INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", False)
 
 LLM_PROVIDER = env_str("INFINI_LLM_PROVIDER", "").lower()

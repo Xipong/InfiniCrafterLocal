@@ -17,7 +17,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
-from infini_local.core.llm_stage_messages import stage_chat_message
+from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.pipelines.llm_transport import (
@@ -1103,7 +1103,7 @@ def _request_visual_kit(
     request = {
         "model": model,
         "messages": [
-            stage_chat_message("system", "visual_repair_contract" if repair else "visual_director_contract", system + llm_reasoning_system_suffix(model)),
+            stage_chat_message("system", "visual_repair_contract" if repair else "visual_director_contract", system + generation_system_suffix() + llm_reasoning_system_suffix(model)),
             stage_chat_message("user", "visual_repair_context" if repair else "visual_director_context", json.dumps(payload, ensure_ascii=False, separators=(",", ":"))),
         ],
         "temperature": (

@@ -12,6 +12,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
+    generation_system_suffix,
     ATTRIBUTED_PLANNER_HISTORY_KIND,
     attributed_planner_history,
     stage_chat_message,
@@ -146,7 +147,7 @@ def build_initial_author_request(
 ) -> tuple[dict[str, Any], str, str]:
     payload = build_llm_author_payload(a, b, ca, cb, key)
     selected_model = model_name or resolve_llm_model()
-    system = _AUTHOR_SYSTEM + llm_reasoning_system_suffix(selected_model)
+    system = _AUTHOR_SYSTEM + generation_system_suffix() + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     request = {
         "model": selected_model,
@@ -208,7 +209,7 @@ def _repair_malformed_author_json(
         "Use allowedCallParamsReadOnly to check each call's fn. Return strict full Author JSON only."
     )
     messages = [
-        stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", system + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", user_content),
     ]
     request = apply_llm_common_options({
@@ -510,7 +511,7 @@ def repair_author_item_after_failure(
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. The final requiredJsonShape field of the user JSON is solely the output patch shape; emit only its listed root keys with your chosen values, never source-context keys or requiredJsonShape itself. Return strict patch JSON only."
     )
     messages = [
-        stage_chat_message("system", "author_repair_contract", repair_system + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", repair_system + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", repair_user),
     ]
     request = apply_llm_common_options({

@@ -14,6 +14,7 @@ from infini_local.storage.world_recipe_runtime import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output
 from infini_local.core.env_utils import env_int
+from infini_local.pipelines.visual_prompt_contracts import image_generation_prompt_suffix
 from infini_local.pipelines.pipeline_visual_config import (
     ALPHA_THRESHOLD,
     BG_REMOVE_MODE,
@@ -845,6 +846,13 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
     return "; ".join(dict.fromkeys(notes))[:700]
 
 def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] | None, role: str, attempt: int, canvas: int) -> str:
+    # Compact the same historical subject/technical core in both styles, then
+    # append the explicit brief. It must not consume the core's existing budget
+    # or disappear when the final technical diagnostic is reserved by Z-Image.
+    guidance = image_generation_prompt_suffix()
+    prompt = str(prompt or "")
+    if prompt.endswith(guidance):
+        prompt = prompt[:-len(guidance)]
     bg = sprite_background_positive_clause()
     contract = role_contract_prompt_clause(role, canvas)
     notes = validation_retry_notes(validation, role)
@@ -857,7 +865,7 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
             f"Background correction: {bg}.",
             ("Technical correction: " + notes) if notes else "",
         ]
-        return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200))
+        return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200)) + guidance
     extra = (
         f" STRICT RETRY {attempt}: draw the authored {role} physical arrangement, keep visible components within the sprite bounds, make it readable, "
         f"{contract}, {bg}, "
@@ -865,7 +873,7 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
     )
     if notes:
         extra += ", fix these technical issues: " + notes
-    return (str(prompt or "") + ", " + extra)[:2800]
+    return (str(prompt or "") + ", " + extra)[:2800] + guidance
 
 def strengthen_prompt_for_retry(prompt: str, role: str, attempt: int) -> str:
     return build_retry_prompt_from_validation(prompt, {}, role, attempt, 32)[:2600]
