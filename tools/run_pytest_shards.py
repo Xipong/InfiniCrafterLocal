@@ -296,6 +296,13 @@ def main() -> int:
 
     for row in report.get("shards", []):
         if row["status"] != "passed":
+            for command in row.get("commandResults", []):
+                if command["status"] != "passed":
+                    print(
+                        f"[PYTEST COMMAND] mode={command['mode']} exitCode={command['exitCode']} "
+                        f"timedOut={command['timedOut']} duration={command['durationSeconds']}s "
+                        f"files={','.join(command['files'])}"
+                    )
             print(row["output"])
     if report.get("status") == "unavailable":
         print(

@@ -21,7 +21,7 @@ jobs:
       - name: Offline tML CI control-flow regression
         run: python tools/test_tml_ci.py -v
       - name: Run pytest in isolated deterministic shards
-        run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --json-out artifacts/validation/pytest_shards.json
+        run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
       - name: Live20 harness contract tests (offline)
         run: INFINI_TEST_USE_PROJECT_CONFIG=0 PYTHONPATH=LocalGenerator python -m pytest toolbox/tests -q
       - name: Python compileall

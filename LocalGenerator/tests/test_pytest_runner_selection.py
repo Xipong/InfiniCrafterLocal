@@ -183,3 +183,45 @@ def test_shards_without_files_are_not_reported_as_passed(monkeypatch: pytest.Mon
     report = shards.run(shard_count=1)
     assert report["status"] == "not_selected"
     assert report["ok"] is False
+
+
+def test_hosted_shards_use_the_accepted_finite_command_budget() -> None:
+    import shlex
+
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    invocation = next(line.split("run:", 1)[1].strip() for line in workflow.splitlines()
+                      if "run:" in line and "tools/run_pytest_shards.py" in line)
+    arguments = shlex.split(invocation)
+    assert "--timeout-seconds" in arguments
+    assert int(arguments[arguments.index("--timeout-seconds") + 1]) == 300
+
+
+def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py"])
+    monkeypatch.setattr(shards, "run", lambda *args: {
+        "ok": False, "passed": 0, "durationSeconds": 1,
+        "shards": [{"status": "failed", "output": "partial progress without pytest summary",
+                    "commandResults": [{"status": "failed", "exitCode": 124, "timedOut": True,
+                                        "durationSeconds": 1, "mode": "batched", "files": ["tests/test_slow.py"]}]}],
+    })
+    assert shards.main() == 1
+    output = capsys.readouterr().out
+    assert "exitCode=124" in output and "timedOut=True" in output
+    assert "tests/test_slow.py" in output and "partial progress without pytest summary" in output
+
+
+@pytest.mark.parametrize("slow", [False, True], ids=["completed", "finite-timeout"])
+def test_native_pytest_command_timeout_has_a_distinct_receipt(tmp_path: Path, slow: bool) -> None:
+    import os
+
+    local = tmp_path / "repo/LocalGenerator"
+    local.mkdir(parents=True)
+    test = local / "test_command_timeout.py"
+    test.write_text("import time\ndef test_command():\n    time.sleep(5)\n" if slow else "def test_command():\n    assert True\n", encoding="utf-8")
+    env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+    receipt = shards._run_pytest_command(temp_root=local.parent, relatives=[test.name], env=env,
+                                          timeout_seconds=1 if slow else 30, log_path=tmp_path / "command.log", mode="batched")
+    assert receipt["timedOut"] is slow
+    assert receipt["exitCode"] == (124 if slow else 0)
+    assert receipt["status"] == ("failed" if slow else "passed")
+    assert receipt["passed"] == (None if slow else 1)
