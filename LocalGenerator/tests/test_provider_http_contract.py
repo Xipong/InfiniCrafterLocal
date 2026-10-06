@@ -773,6 +773,53 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
                for p in (path.parent.parent / "invalid").glob("*.json") if not p.name.endswith(".reason.json"))
 
 
+@pytest.mark.parametrize("source", ["snapshot", "exception"])
+def test_provider_schema_rejection_is_not_authored_output_or_retryable(source):
+    from infini_local.services.codex_auth import CodexError
+
+    diagnostic = (
+        "OpenAI HTTP 400: Invalid schema for response_format 'infini_low_level_runtime_author': "
+        "In context=('properties', 'runtimeProgram', 'properties', 'apiVersion'), "
+        "schema must have a 'type' key."
+    )
+    failure = {"stage": "01_gameplay_author", "error": f"Gameplay Author failed: {CodexError(diagnostic)!r}"}
+    error = "structured combine failure" if source == "snapshot" else CodexError(diagnostic)
+    status, code, retryable, friendly = _combine_failure_http_response(error, failure if source == "snapshot" else {})
+    payload = _combine_failure_payload(status, code, friendly, failure, retryable=retryable)
+
+    assert (status, code, retryable) == (424, "llm_request_rejected", False)
+    assert payload["lastFailure"] == failure
+    assert payload["cacheRecoveryAllowed"] is False and payload["manualRegenerateAllowed"] is False
+    assert "provider" in payload["playerMessage"].lower() and "request" in payload["playerMessage"].lower()
+    assert "schema" in payload["message"].lower()
+    assert "repair" not in payload["playerMessage"].lower() and "try crafting again" not in payload["playerMessage"].lower()
+    assert "update" in payload["playerMessage"].lower()
+
+
+@pytest.mark.parametrize("message", [
+    "Gameplay Author failed: schema validation rejected the authored runtimeProgram",
+    "Gameplay Author failed: invalid JSON output after repair",
+])
+def test_authored_schema_failure_remains_retryable_invalid_output(message):
+    failure = {"stage": "01_gameplay_author", "error": message}
+    assert _combine_failure_http_response("structured combine failure", failure)[:3] == (422, "llm_output_invalid", True)
+
+
+@pytest.mark.parametrize("flag", ["cacheOnly", "cacheOnlyIfReady"])
+def test_cache_probe_miss_returns_404_without_calling_planner(flag):
+    from infini_local.services import combine_endpoint
+
+    capture = Capture()
+    combine_endpoint.handle_combine_request(
+        {flag: True}, app_version="test", combine_cache_lookup=lambda _: ("saved-pair", None),
+        sanitize_recipe_for_delivery=lambda _: pytest.fail("cache miss has no recipe to sanitize"),
+        combine=lambda _: pytest.fail("cache probe must not invoke Planner"), trace_event=lambda *_a, **_k: None,
+        json=capture.json, json_status=capture.json_status,
+    )
+    assert capture.code == 404 and capture.payload["status"] == "cache_miss"
+    assert capture.payload["cacheRecoveryAllowed"] is True and capture.payload["recipeKey"] == "saved-pair"
+
+
 def test_authored_promise_exhaustion_reports_invalid_output() -> None:
     failure = {
         "stage": "01_author_llm_plan",

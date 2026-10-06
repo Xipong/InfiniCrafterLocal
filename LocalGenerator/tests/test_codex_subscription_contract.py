@@ -10,6 +10,7 @@ import json
 import os
 import stat
 import time
+from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
@@ -20,6 +21,457 @@ from infini_local.services import codex_auth as auth, codex_catalog as catalog, 
 from test_provider_transport_contract import PIN, packet, wire
 
 CODEX = "https://chatgpt.com/backend-api/codex"
+
+
+def _assert_structured_outputs_subset(schema):
+    """Offline wire gate, independent of the projector (not remote acceptance)."""
+    unsupported = {"oneOf", "allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else"}
+    types = {str: "string", int: "integer", bool: "boolean", float: "number", type(None): "null", list: "array", dict: "object"}
+
+    def visit(node, path=()):
+        assert not (unsupported & node.keys()), f"unsupported provider keyword at {path}: {unsupported & node.keys()}"
+        if "const" in node:
+            assert node.get("type") == types[type(node["const"])], f"untyped provider const at {path}"
+        if node.get("type") == "object":
+            assert node.get("additionalProperties") is False, path
+            assert set(node.get("required", [])) == set(node.get("properties", {})), path
+        for key in ("properties", "$defs"):
+            for name, child in node.get(key, {}).items():
+                visit(child, path + (key, name))
+        if isinstance(node.get("items"), dict):
+            visit(node["items"], path + ("items",))
+        for index, child in enumerate(node.get("anyOf", [])):
+            visit(child, path + ("anyOf", index))
+
+    visit(schema)
+
+
+@pytest.mark.parametrize("stage", ["author", "repair"])
+def test_subscription_author_schema_types_every_const_without_changing_literal_contract(monkeypatch, stage):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+
+    monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    if stage == "author":
+        local = contract.author_item_response_schema()
+        request, _, _ = author.build_initial_author_request(
+            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol",
+        )
+    else:
+        local = contract.author_item_repair_response_schema()
+        request = {
+            "model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
+            "response_format": llm.llm_json_response_format(
+                "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True,
+            ),
+        }
+    before = copy.deepcopy(request)
+    wire = json.loads(json.dumps(backend._request_payload(request)))
+    provider = wire["text"]["format"]["schema"]
+    _assert_structured_outputs_subset(provider)
+    types = {str: "string", int: "integer", bool: "boolean"}
+    seen = []
+
+    def compare(source, sent, path=()):
+        if isinstance(source, dict):
+            if "if" in source:
+                # Exact finite-event partition, before required+nullable encoding.
+                # The periodic case promotes periodTicks; other cases retain its
+                # optional wrapper. No function-name/weapon routing is involved.
+                selector = next(iter(source["if"]["properties"]))
+                expected = source["if"]["properties"][selector]["const"]
+                events = source["properties"][selector]["enum"]
+                assert set(sent) == {"anyOf"}
+                assert len(sent["anyOf"]) == len(events)
+                for event, remote in zip(events, sent["anyOf"]):
+                    case = copy.deepcopy({key: value for key, value in source.items() if key not in {"if", "then"}})
+                    case["properties"][selector]["enum"] = [event]
+                    if event == expected:
+                        case["required"] += [key for key in source["then"]["required"] if key not in case["required"]]
+                    compare(case, remote, path + ("event-case", event))
+                return
+            expected_keys = set(source)
+            if "oneOf" in source:
+                expected_keys = (expected_keys - {"oneOf"}) | {"anyOf"}
+            if "properties" in source:
+                expected_keys.add("required")
+                assert set(sent["properties"]) == set(source["properties"]), path
+            if "const" in source:
+                expected_keys.add("type")
+            assert set(sent) == expected_keys, path
+            if "const" in source:
+                expected = types[type(source["const"])]
+                assert sent.get("type") == expected, f"untyped provider const at {path}: {sent}"
+                assert sent == {**source, "type": expected}
+                candidates = [source["const"], "other", "", 0, 1, 2, False, True, None, {}, []]
+                for candidate in candidates:
+                    assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(sent).is_valid(candidate)
+                seen.append(path)
+            for key, value in source.items():
+                if key == "properties":
+                    for name, child in value.items():
+                        remote = sent[key][name]
+                        if name not in source.get("required", []):
+                            remote = remote["anyOf"][0]
+                        compare(child, remote, path + (key, name))
+                elif key == "oneOf":
+                    # Only disjoint discriminator/type unions may change spelling.
+                    assert "oneOf" not in sent
+                    compare(value, sent["anyOf"], path + ("anyOf",))
+                elif key != "required":
+                    if isinstance(value, (dict, list)):
+                        compare(value, sent[key], path + (key,))
+                    else:
+                        assert sent[key] == value, path + (key,)
+        elif isinstance(source, list):
+            assert len(source) == len(sent)
+            for index, (child, remote) in enumerate(zip(source, sent)):
+                compare(child, remote, path + (index,))
+        else:
+            assert source == sent, path
+
+    compare(local, provider)
+    assert seen  # No fixed count: lossless finite-case expansion duplicates leaves.
+    assert request == before
+    assert wire["model"] == "gpt-6-sol"
+    assert wire["text"]["format"]["type"] == "json_schema" and wire["text"]["format"]["strict"] is True
+    assert [item["content"][0]["text"] for item in wire["input"]] == [
+        item["content"] for item in request["messages"] if item["role"] != "system"
+    ]
+    assert local == (contract.author_item_response_schema() if stage == "author" else contract.author_item_repair_response_schema())
+
+
+def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
+    """Independent test encoder for valid sparse fixtures; never a production fallback."""
+    from jsonschema import Draft202012Validator
+
+    for union in ("oneOf", "anyOf"):
+        if union in local:
+            matches = [branch for branch in local[union] if Draft202012Validator(branch).is_valid(value)]
+            assert len(matches) == 1
+            return _encode_nullable_fixture(value, matches[0])
+    if isinstance(value, dict):
+        required = list(local.get("required", []))
+        if "if" in local and Draft202012Validator(local["if"]).is_valid(value):
+            required += local["then"]["required"]
+        return {
+            key: (_encode_nullable_fixture(value[key], child) if key in value else None)
+            for key, child in local["properties"].items()
+            if key in value or key not in required
+        }
+    if isinstance(value, list):
+        return [_encode_nullable_fixture(child, local["items"]) for child in value]
+    return copy.deepcopy(value)
+
+
+def _sparse_event_item(fn, event):
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+    item = build_runtime_fixture("workbench_blade")
+    calls = item["runtimeProgram"]["calls"]
+    spawn = next(row for row in calls if row["fn"] == "spawn_entity_on_event")
+    if fn == "spawn_entity_on_event":
+        selected = spawn
+    else:
+        selected = {"id": "pull_case", "fn": fn, "target": spawn["target"],
+                    "params": {"event": event, "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
+        calls.append(selected)
+    selected["params"]["event"] = event
+    if event == "periodic":
+        selected["params"]["periodTicks"] = 6
+    else:
+        selected["params"].pop("periodTicks", None)
+    next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
+    return item, selected
+
+
+@pytest.mark.parametrize("stage", ["author", "repair"])
+@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
+@pytest.mark.parametrize("event", ["on_hit", "periodic"])
+def test_subscription_nullable_roundtrip_uses_local_discriminators_across_subset_cases(stage, fn, event):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.core.runtime_authoring import validate_runtime_program
+
+    item, selected = _sparse_event_item(fn, event)
+    assert validate_runtime_program(item)["ok"]
+    if stage == "author":
+        local, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
+        sparse = item
+    else:
+        local, provider = contract.author_item_repair_response_schema(), contract.author_item_provider_repair_response_schema()
+        sparse = {"note": "exact event row", "callsUpsert": [selected], "realizationReplacement": item["realization"]}
+    source = json.dumps(sparse, sort_keys=True)
+    encoded = _encode_nullable_fixture(sparse, local)
+    before = copy.deepcopy(encoded)
+    assert Draft202012Validator(local).is_valid(sparse)
+    assert Draft202012Validator(provider).is_valid(encoded)
+    response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
+    restored = contract.project_provider_nullable_optionals_to_local(encoded, local, response_format=response_format)
+    assert json.dumps(restored, sort_keys=True) == source
+    assert json.dumps(sparse, sort_keys=True) == source and encoded == before
+
+
+@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
+def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptance(fn):
+    from jsonschema import Draft202012Validator
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+    from infini_local.pipelines import author_item_contract as contract
+
+    local = CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"]
+    provider = contract._provider_strict_projection(local)
+    _, selected = _sparse_event_item(fn, "on_hit")
+    missing = object()
+    for event in [*local["properties"]["event"]["enum"], "unknown_event", None, False]:
+        for period in [missing, None, False, 5, 6, 3600, 3601, 6.5, "6"]:
+            sparse = {**selected["params"], "event": event}
+            if period is not missing:
+                sparse["periodTicks"] = period
+            encoded = _encode_nullable_fixture(sparse, local)
+            # Explicit local null is invalid; provider optional null is exactly
+            # omission, so compare its declared inverse, not literal null.
+            expected = copy.deepcopy(sparse)
+            if period is None and event in local["properties"]["event"]["enum"] and event != "periodic":
+                expected.pop("periodTicks")
+            source_valid = Draft202012Validator(local).is_valid(expected)
+            sent_valid = Draft202012Validator(provider).is_valid(encoded)
+            assert source_valid == sent_valid, (fn, event, period)
+            if event == "periodic":
+                assert sent_valid is (type(period) is int and 6 <= period <= 3600), period
+            elif event in local["properties"]["event"]["enum"] and period in (missing, None):
+                assert source_valid and sent_valid
+    assert CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"] == local
+
+
+@pytest.mark.parametrize("domain", ["bindings", "calls"])
+def test_subscription_disjoint_union_preserves_registered_variants_and_adversarial_rejection(domain):
+    from jsonschema import Draft202012Validator
+    from infini_local.core.runtime_authoring.program_schema import binding_schema
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.pipelines import author_item_contract as contract
+
+    local = binding_schema() if domain == "bindings" else {"oneOf": [cap.provider_variant_schema() for cap in CAPABILITY_REGISTRY.values()]}
+    provider = contract._provider_strict_projection(local)
+    assert len(provider["anyOf"]) == len(local["oneOf"])
+    for branch in local["oneOf"]:
+        if domain == "calls":
+            fn = branch["properties"]["fn"]["const"]
+            item = build_capability_witness(fn)
+            row = next(call for call in item["runtimeProgram"]["calls"] if call["fn"] == fn)
+            selector = "fn"
+        else:
+            input_kind = branch["properties"]["input"]["const"]
+            action_kind = branch["properties"]["usePolicy"]["properties"]["action"]["properties"]["kind"]["const"]
+            row = {"id": "binding_probe", "input": input_kind, "usePolicy": {
+                "action": {"kind": action_kind, "targetId": "item"},
+                "stackCost": 1 if action_kind == "place_item" else 0, "contactDamage": False}}
+            if action_kind == "place_item":
+                row["usePolicy"]["action"]["placementCallId"] = "place_call"
+            selector = "input"
+        assert Draft202012Validator(local).is_valid(row)
+        encoded = _encode_nullable_fixture(row, branch)
+        assert Draft202012Validator(provider).is_valid(encoded)
+        controls = []
+        for name, value in [(selector, "unknown"), ("id", "INVALID\r"), ("foreign", None)]:
+            sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
+            sparse_bad[name] = sent_bad[name] = value
+            controls.append((sparse_bad, sent_bad))
+        sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
+        sparse_bad.pop(selector)
+        sent_bad.pop(selector)
+        controls.append((sparse_bad, sent_bad))
+        for sparse_bad, sent_bad in controls:
+            assert not Draft202012Validator(local).is_valid(sparse_bad), sparse_bad
+            assert not Draft202012Validator(provider).is_valid(sent_bad), sent_bad
+        if domain == "calls":
+            for key, child in branch["properties"]["params"]["properties"].items():
+                for limit, step in [("minimum", -1), ("maximum", 1)]:
+                    if limit not in child:
+                        continue
+                    sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
+                    sparse_bad["params"][key] = sent_bad["params"][key] = child[limit] + step
+                    assert not Draft202012Validator(local).is_valid(sparse_bad), (fn, key, limit)
+                    assert not Draft202012Validator(provider).is_valid(sent_bad), (fn, key, limit)
+
+
+@pytest.mark.parametrize("control", ["bad-neighbour", "required-null", "periodic-null", "unknown-event", "missing-event", "unknown-fn", "missing-fn", "array-null", "foreign-null", "different-wrapper", "reordered-provider"])
+def test_subscription_inverse_never_hides_invalid_values_or_guesses_a_branch(control):
+    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+
+    item, _ = _sparse_event_item("pull_on_event", "on_hit")
+    local, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
+    encoded = _encode_nullable_fixture(item, local)
+    call = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "pull_on_event")
+    params = call["params"]
+    if control == "bad-neighbour":
+        params["strength"] = "not a number"
+    elif control == "required-null":
+        params["strength"] = None
+    elif control == "periodic-null":
+        params["event"] = "periodic"
+    elif control == "unknown-event":
+        params["event"] = "unknown_event"
+    elif control == "missing-event":
+        params.pop("event")
+    elif control == "unknown-fn":
+        call["fn"] = "unknown_function"
+    elif control == "missing-fn":
+        call.pop("fn")
+    elif control == "array-null":
+        encoded["runtimeProgram"]["calls"].insert(0, None)
+    elif control == "foreign-null":
+        params["foreign"] = None
+    else:
+        branches = provider["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
+        if control == "reordered-provider":
+            branches.reverse()
+        else:
+            cases = next(branch for branch in branches if branch["properties"]["fn"]["const"] == "pull_on_event")["properties"]["params"]["anyOf"]
+            case = next(branch for branch in cases if branch["properties"]["event"]["enum"] == ["on_hit"])
+            case["properties"]["periodTicks"] = case["properties"]["periodTicks"]["anyOf"][0]
+    before = copy.deepcopy(encoded)
+    response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
+    restored = author._prepare_parsed_author_item(encoded, response_format=response_format)
+    rows = restored["runtimeProgram"]["calls"]
+    restored_call = next(row for row in rows if isinstance(row, dict) and row.get("id") == "pull_case")
+    if control in {"unknown-event", "missing-event", "unknown-fn", "missing-fn"}:
+        assert restored_call["params"] == params
+    elif control in {"periodic-null", "different-wrapper"}:
+        assert "periodTicks" in restored_call["params"] and restored_call["params"]["periodTicks"] is None
+        if control == "periodic-null":
+            assert "delayTicks" not in restored_call["params"]
+    else:
+        assert "periodTicks" not in restored_call["params"] and "delayTicks" not in restored_call["params"]
+        if control in {"bad-neighbour", "required-null"}:
+            assert restored_call["params"]["strength"] == params["strength"]
+        if control == "array-null":
+            assert rows[0] is None and len(rows) == len(encoded["runtimeProgram"]["calls"])
+        if control == "foreign-null":
+            assert restored_call["params"]["foreign"] is None
+    assert encoded == before
+    assert contract.project_provider_author_item_to_local(encoded, response_format={"type": "json_object"}) == before
+    from jsonschema import Draft202012Validator
+    if control == "reordered-provider":
+        assert json.dumps(restored, sort_keys=True) == json.dumps(item, sort_keys=True)
+        assert Draft202012Validator(local).is_valid(restored)
+    else:
+        assert not Draft202012Validator(local).is_valid(restored), "inverse must not conceal an invalid authored value"
+
+
+def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+    from infini_local.core.runtime_authoring import validate_runtime_program
+
+    item, selected = _sparse_event_item("pull_on_event", "periodic")
+    expected = copy.deepcopy(item)
+    selected["params"].pop("periodTicks")
+    before = copy.deepcopy(item)
+    failure = validate_runtime_program(item)
+    assert not failure["ok"]
+    corrected = copy.deepcopy(selected)
+    corrected["params"].update(periodTicks=6, strength=2)  # hostile valid sibling: must stay frozen at 1
+    patch = {"note": "exact missing period", "callsUpsert": [corrected], "realizationReplacement": item["realization"]}
+    encoded = _encode_nullable_fixture(patch, contract.author_item_repair_response_schema())
+    monkeypatch.setattr(author, "USE_LLM", True)
+    monkeypatch.setattr(author, "resolve_llm_model", lambda: "gpt-6-sol")
+    monkeypatch.setattr(author, "trace_event", lambda *_a, **_kw: None)
+    monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    requests, premerge = [], []
+    def respond(request, **_options):
+        requests.append(copy.deepcopy(backend._request_payload(request)))
+        assert Draft202012Validator(request["response_format"]["json_schema"]["schema"]).is_valid(encoded)
+        return {"choices": [{"message": {"content": json.dumps(encoded)}}], "_debug": {"responseFormatType": "json_schema"}}
+    original_filter = author.filter_repair_patch_scope
+    def observe(current, delta, scope):
+        premerge.append(copy.deepcopy(delta))
+        assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params.periodTicks"]}]
+        return original_filter(current, delta, scope)
+    monkeypatch.setattr(author, "llm_chat_json", respond)
+    monkeypatch.setattr(author, "filter_repair_patch_scope", observe)
+    repaired = author.repair_author_item_after_failure(item, {}, {}, {}, {}, "provider-offline", failure_report=failure)
+    assert len(requests) == len(premerge) == 1
+    _assert_structured_outputs_subset(requests[0]["text"]["format"]["schema"])
+    assert requests[0]["model"] == "gpt-6-sol" and requests[0]["text"]["format"]["strict"] is True
+    assert premerge == [patch]  # no null scaffolding reaches frozen-first Repair
+    repaired.pop("debug", None)
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert item == before and validate_runtime_program(repaired)["ok"]
+
+
+def test_subscription_primary_selection_type_union_keeps_string_constraints_and_null():
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.core.runtime_authoring.program_schema import PRIMARY_ENTITY_SELECTION_FIELD
+
+    local = contract.author_item_repair_response_schema()["properties"][PRIMARY_ENTITY_SELECTION_FIELD]
+    provider = contract._provider_strict_projection(local)
+    assert set(provider) == {"anyOf"}
+    for value in ["item", "blade_1", None, "", "Uppercase", "x" * 49, True, 1, 1.5, {}, []]:
+        source_valid = Draft202012Validator(local).is_valid(value)
+        assert source_valid is (value is None or value in ("item", "blade_1"))
+        assert Draft202012Validator(provider).is_valid(value) is source_valid
+
+
+@pytest.mark.parametrize("literal", [1, 1.0, 1.5, False, True, None, "exact", [1, "literal"], {"if": {"const": "not a schema"}}])
+def test_subscription_const_types_preserve_jsonschema_numeric_and_literal_domains(literal):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract
+
+    source = {"const": literal}
+    provider = contract._provider_strict_projection(source)
+    assert provider["const"] == literal and source == {"const": literal}
+    if type(literal) is float:
+        assert provider["type"] == "number"  # 1.5 must not be narrowed to integer
+    for candidate in [literal, 0, 1, 1.0, 1.5, False, True, None, "other", {}, []]:
+        assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(provider).is_valid(candidate)
+
+
+@pytest.mark.parametrize("shape", ["overlapping-union", "optional-selector", "optional-ancestor", "numeric-overlap", "type-overlap", "non-finite-const", "conditional-optional-selector", "conditional-unbounded-selector", "conditional-predicate", "conditional-consequent", "conditional-unknown-addition", "conditional-else", "allOf", "not", "dependentRequired", "dependentSchemas"])
+def test_subscription_projection_rejects_unproved_future_compositions(shape):
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+
+    branch = {"type": "object", "properties": {"tag": {"const": "a"}}, "required": ["tag"], "additionalProperties": False}
+    opposite = copy.deepcopy(branch)
+    opposite["properties"]["tag"]["const"] = "b"
+    source = {"oneOf": [branch, opposite]}
+    if shape == "overlapping-union":
+        opposite["properties"]["tag"]["const"] = "a"
+    elif shape == "optional-selector":
+        branch["required"] = opposite["required"] = []
+    elif shape == "optional-ancestor":
+        source = {"oneOf": [{"type": "object", "properties": {"nested": row}, "additionalProperties": False} for row in [branch, opposite]]}
+    elif shape == "numeric-overlap":
+        branch["properties"]["tag"]["const"] = 1
+        opposite["properties"]["tag"]["const"] = 1.0
+    elif shape == "type-overlap":
+        source = {"oneOf": [{"type": "integer"}, {"type": "number"}]}
+    elif shape == "non-finite-const":
+        source = {"const": float("nan")}
+    elif shape.startswith("conditional-"):
+        source = CAPABILITY_REGISTRY["pull_on_event"].provider_variant_schema()["properties"]["params"]
+        if shape == "conditional-optional-selector":
+            source["required"].remove("event")
+        elif shape == "conditional-unbounded-selector":
+            source["properties"]["event"].pop("enum")
+        elif shape == "conditional-predicate":
+            source["if"]["properties"]["event"] = {"pattern": "periodic"}
+        elif shape == "conditional-consequent":
+            source["then"]["properties"] = {"periodTicks": {"minimum": 10}}
+        elif shape == "conditional-unknown-addition":
+            source["then"]["required"] = ["new_mechanic"]
+        else:
+            source["else"] = {"required": ["delayTicks"]}
+    else:
+        source = {shape: {} if shape != "allOf" else [branch]}
+    before = copy.deepcopy(source)
+    with pytest.raises(ValueError, match="Unproved provider"):
+        contract._provider_strict_projection(source)
+    assert source.keys() == before.keys()
+    if shape != "non-finite-const":
+        assert source == before
 
 
 def message(text, *, phase=None, **extra):

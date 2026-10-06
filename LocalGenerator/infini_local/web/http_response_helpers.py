@@ -33,14 +33,20 @@ def _ascii_reason(value: Any, limit: int = 160) -> str:
 def _combine_failure_http_response(error: BaseException | str, failure: dict[str, Any]) -> tuple[int, str, bool, str]:
     """Classify a failed /combine into transport-visible HTTP semantics.
 
-    404 is reserved for cache-only misses. Authored/LLM output failures are
-    422, visual delivery dependency failures are 424, and generic planner
-    availability remains 424. `retryable` means the user may manually craft
+    404 is reserved for cache-only misses. Provider request-schema rejections
+    are non-retryable 424, not authored-output failures. Authored/LLM output
+    failures are 422, visual delivery dependency failures are 424, and generic
+    planner availability remains 424. `retryable` means the user may manually craft
     again; it does not mean C# should cache-poll the same failed attempt.
     """
     stage = str((failure or {}).get("stage") or "").lower()
     failure_error = str((failure or {}).get("error") or "")
     message = f"{error} {failure_error}".lower()
+
+    # This provider diagnostic rejects our outgoing schema before any authored
+    # output or Repair. Check it before generic "schema"/"json" output heuristics.
+    if "http 400:" in message and "invalid schema for response_format" in message:
+        return 424, "llm_request_rejected", False, "LLM provider rejected the request schema before generation; update the generator before retrying"
 
     if "09b_visual_delivery_gate" in stage or ("visual" in stage and any(token in message for token in ("asset", "sprite", "delivery"))):
         return 424, "visual_dependency_failed", True, "visual asset generation/delivery did not produce a deliverable item sprite"
@@ -66,6 +72,8 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
 
 
 def _combine_failure_player_message(status: int, code: str, message: str, failure: dict[str, Any], *, retryable: bool) -> str:
+    if code == "llm_request_rejected":
+        return "Generation failed: provider rejected the request schema before creating an item. Items were returned; update the generator before retrying."
     if code == "llm_output_invalid":
         return "Generation failed: LLM item plan was invalid after repair. Items were returned; try crafting again."
     if code == "visual_dependency_failed":

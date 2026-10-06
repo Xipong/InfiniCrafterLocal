@@ -678,7 +678,7 @@ def test_nullable_projection_requires_actual_schema_and_preserves_invalid_neighb
     before = copy.deepcopy(item)
     response_format = _response_format() if mode == "json_schema" else ({"type": mode} if mode != "off" else None)
     if mode == "json_schema" and not wrapper:
-        variants = response_format["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["oneOf"]
+        variants = response_format["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
         variant = next(r for r in variants if r["properties"]["fn"]["const"] == "configure_item_stats")
         params = variant["properties"]["params"]["properties"]
         params["manaCost"] = params["manaCost"]["anyOf"][0]

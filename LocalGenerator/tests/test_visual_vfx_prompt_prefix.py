@@ -305,7 +305,7 @@ def test_visual_schema_and_numeric_rules_reach_real_transport(wire_transport, mo
         assert all(token in field["description"].lower() for token in (label, "factor", "1"))
     assert "fit" in item["inventoryScale"]["description"].lower()
     assert "dropped" in item["worldScale"]["description"].lower()
-    branches = (props["entities"] if kind == "director" else props["entitiesUpsert"])["items"]["oneOf"]
+    branches = (props["entities"] if kind == "director" else props["entitiesUpsert"])["items"]["anyOf"]
     assert {b["properties"]["assetMode"]["const"] for b in branches} == {"baked_sprite", "reuse_item_icon", "runtime_geometry", "no_asset"}
     descriptions = {b["properties"]["scale"]["description"] for b in branches}
     assert len(descriptions) == 1
@@ -360,7 +360,8 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
         assert {"renderSizePx", "forwardAngleDegrees"}.issubset(item["required"])
     elif format_mode == "json_object":
         assert "required" not in item
-    branches = schema["properties"]["entitiesUpsert" if repair else "entities"]["items"]["oneOf"]
+    branch_key = "anyOf" if format_mode == "json_schema" else "oneOf"
+    branches = schema["properties"]["entitiesUpsert" if repair else "entities"]["items"][branch_key]
     item_branch = next(b for b in branches if b["properties"]["assetMode"]["const"] == "baked_sprite" and b["properties"]["visualProjectRef"]["const"] == "item")
     assert item_branch["properties"]["entityId"]["enum"] == [runtime["itemEntityId"]]
     distinct = next(b for b in branches if b["properties"]["assetMode"]["const"] == "baked_sprite" and b["properties"]["visualProjectRef"]["const"] == "entity")

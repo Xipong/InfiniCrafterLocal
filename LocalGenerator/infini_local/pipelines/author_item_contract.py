@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any, Mapping
 
 from infini_local.core.runtime_authoring import (
@@ -16,8 +17,6 @@ from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
-    _authored_const_matches,
-    _schema_const_paths,
     strict_schema_errors,
 )
 
@@ -171,25 +170,173 @@ def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) 
     )
 
 
-def _provider_strict_projection(schema: Any) -> Any:
-    """Make optional object properties required+nullable for strict providers.
+def _literal_equal(left: Any, right: Any) -> bool:
+    # JSON Schema numeric equality includes 1 == 1.0, never true == 1.
+    if type(left) in {int, float} and type(right) in {int, float}:
+        return left == right
+    return type(left) is type(right) and left == right
 
-    The local contract remains sparse where a capability parameter is genuinely
-    optional. Provider-only nulls are stripped before local validation; no semantic
-    value is invented.
+
+def _required_finite_domains(schema: Mapping[str, Any], prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], list[Any]]:
+    """Only required property paths can prove complete, disjoint selectors."""
+    domain = [schema["const"]] if "const" in schema else schema.get("enum")
+    result = {}
+    if isinstance(domain, list) and domain and all(type(value) in {str, bool, int, float, type(None)} for value in domain):
+        result[prefix] = domain
+    if schema.get("type") == "object":
+        properties = schema.get("properties") or {}
+        for key in schema.get("required") or []:
+            child = properties.get(key)
+            if isinstance(child, Mapping):
+                result.update(_required_finite_domains(child, (*prefix, key)))
+    return result
+
+
+def _union_discriminator_paths(branches: list[Mapping[str, Any]]) -> list[tuple[str, ...]]:
+    domains = [_required_finite_domains(branch) for branch in branches]
+    common = set.intersection(*(set(domain) for domain in domains)) if domains else set()
+    remaining = {(left, right) for left in range(len(branches)) for right in range(left + 1, len(branches))}
+    selected = []
+    for path in sorted(common):
+        distinguished = {
+            (left, right) for left, right in remaining
+            if not any(_literal_equal(a, b) for a in domains[left][path] for b in domains[right][path])
+        }
+        if distinguished:
+            selected.append(path)
+            remaining -= distinguished
+    return selected if not remaining else []
+
+
+def _union_branch_index(value: Any, branches: list[Mapping[str, Any]], paths: list[tuple[str, ...]] | None = None) -> int | None:
+    if paths is None:
+        paths = _union_discriminator_paths(branches)
+    candidates = []
+    for index, branch in enumerate(branches):
+        if paths:
+            domains = _required_finite_domains(branch)
+            matches = True
+            for path in paths:
+                actual = value
+                for key in path:
+                    if not isinstance(actual, Mapping) or key not in actual:
+                        matches = False
+                        break
+                    actual = actual[key]
+                if not matches or not any(_literal_equal(actual, expected) for expected in domains.get(path, [])):
+                    matches = False
+                    break
+        else:
+            # Only proven non-overlapping JSON types; never validate whole rows
+            # to choose a different capability because some parameter is invalid.
+            matches = _disjoint_union_types(branches) and not strict_schema_errors(value, {"type": branch["type"]})
+        if matches:
+            candidates.append(index)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _disjoint_union_types(branches: list[Mapping[str, Any]]) -> bool:
+    types = [branch.get("type") for branch in branches]
+    # integer and number overlap; these non-numeric JSON kinds do not.
+    return all(isinstance(kind, str) and kind in {"string", "null", "object", "array", "boolean"} for kind in types) and len(set(types)) == len(types)
+
+
+def _finite_required_cases(schema: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Expand only a required finite selector + required-only consequent.
+
+    Partition the original enum before nullable encoding: conditional additions
+    stay non-null in the matching case, optional in every other case.
     """
-    if isinstance(schema, list):
-        return [_provider_strict_projection(value) for value in schema]
-    if not isinstance(schema, dict):
+    condition, consequent = schema.get("if"), schema.get("then")
+    if (
+        schema.get("type") != "object" or "else" in schema
+        or not isinstance(condition, Mapping) or set(condition) != {"properties", "required"}
+        or not isinstance(consequent, Mapping) or set(consequent) != {"required"}
+        or not isinstance(condition["properties"], Mapping) or len(condition["properties"]) != 1
+    ):
+        raise ValueError("Unproved provider conditional: expected required finite selector and required-only then")
+    selector, predicate = next(iter(condition["properties"].items()))
+    properties = schema.get("properties") or {}
+    required = schema.get("required") or []
+    child = properties.get(selector)
+    additions = consequent["required"]
+    if (
+        condition["required"] != [selector] or selector not in required
+        or not isinstance(predicate, Mapping) or set(predicate) != {"const"}
+        or not isinstance(child, Mapping) or "const" in child
+        or not isinstance(child.get("enum"), list) or not child["enum"]
+        or not isinstance(additions, list) or not additions
+        or any(not isinstance(key, str) or key not in properties for key in additions)
+        or any(type(value) not in {str, bool, int, float, type(None)} for value in child["enum"])
+        or not any(_literal_equal(value, predicate["const"]) for value in child["enum"])
+    ):
+        raise ValueError("Unproved provider conditional: incomplete finite discriminator or unknown required addition")
+    cases = []
+    for value in child["enum"]:
+        case = copy.deepcopy({key: value for key, value in schema.items() if key not in {"if", "then"}})
+        case["properties"][selector]["enum"] = [value]
+        if _literal_equal(value, predicate["const"]):
+            case["required"] = [*required, *(key for key in additions if key not in required)]
+        cases.append(case)
+    if len(cases) > 1 and not _union_discriminator_paths(cases):
+        raise ValueError("Unproved provider conditional: overlapping enum cases")
+    return cases
+
+
+def _provider_subset_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Shallow, exact-equivalence normalization; never alter the local owner."""
+    forbidden = {"allOf", "not", "dependentRequired", "dependentSchemas"} & schema.keys()
+    if forbidden:
+        raise ValueError(f"Unproved provider composition: {sorted(forbidden)}")
+    if {"if", "then", "else"} & schema.keys():
+        return {"anyOf": _finite_required_cases(schema)}
+    out = copy.deepcopy(dict(schema))
+    if "oneOf" in schema:
+        branches = schema["oneOf"]
+        if (
+            "anyOf" in schema or not isinstance(branches, list) or not branches
+            or not all(isinstance(branch, Mapping) for branch in branches)
+            or not (_disjoint_union_types(branches) or _union_discriminator_paths(branches))
+        ):
+            raise ValueError("Unproved provider oneOf: branches need complete disjoint required finite discriminators or types")
+        out["anyOf"] = out.pop("oneOf")
+    return out
+
+
+def _provider_strict_projection(schema: Any) -> Any:
+    """Lossless provider-only subset + optional-property transport encoding.
+
+    Unsupported/unproved compositions fail closed. Do not recurse through JSON
+    literals or owner annotations as if they were schemas.
+    """
+    if not isinstance(schema, Mapping):
         return copy.deepcopy(schema)
-    out = {key: _provider_strict_projection(value) for key, value in schema.items()}
+    source = _provider_subset_shape(schema)
+    out = copy.deepcopy(source)
+    for key in ("properties", "$defs"):
+        if isinstance(source.get(key), Mapping):
+            out[key] = {name: _provider_strict_projection(child) for name, child in source[key].items()}
+    if isinstance(source.get("items"), Mapping):
+        out["items"] = _provider_strict_projection(source["items"])
+    if isinstance(source.get("anyOf"), list):
+        out["anyOf"] = [_provider_strict_projection(branch) for branch in source["anyOf"]]
+    if "const" in source:
+        try:
+            json.dumps(source["const"], allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Unproved provider const: not a finite JSON literal") from exc
+    if "const" in source and "type" not in source:
+        # Entailed literal type, including number (not integer) for float const.
+        literal_type = {str: "string", bool: "boolean", int: "integer", float: "number", type(None): "null", list: "array", dict: "object"}.get(type(source["const"]))
+        if literal_type is None:
+            raise ValueError("Unproved provider const: not a JSON literal")
+        out["type"] = literal_type
     props = out.get("properties")
     if isinstance(props, dict):
-        local_required = set(schema.get("required") or [])
+        local_required = set(source.get("required") or [])
         for key, child in list(props.items()):
-            if key in local_required or not isinstance(child, dict):
-                continue
-            props[key] = {"anyOf": [child, {"type": "null"}]}
+            if key not in local_required and isinstance(child, dict):
+                props[key] = {"anyOf": [child, {"type": "null"}]}
         out["required"] = list(props)
     return out
 
@@ -270,25 +417,17 @@ def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: 
     success: an unrelated invalid value must remain available to Repair unchanged.
     Ambiguous/unknown variants are copied intact for the canonical validator.
     """
-    for union in ("oneOf", "anyOf"):
-        branches = local.get(union)
-        sent_branches = provider.get(union)
-        if isinstance(branches, list):
-            if not isinstance(sent_branches, list) or len(branches) != len(sent_branches):
-                return copy.deepcopy(value)
-            candidates = []
-            for index, branch in enumerate(branches):
-                constants = _schema_const_paths(branch)
-                matches = (
-                    all(_authored_const_matches(value, path, expected) for path, expected in constants.items())
-                    if constants else not strict_schema_errors(value, branch)
-                )
-                if matches:
-                    candidates.append(index)
-            if len(candidates) != 1:
-                return copy.deepcopy(value)
-            index = candidates[0]
-            return _project_nullable_transport(value, branches[index], sent_branches[index])
+    local = _provider_subset_shape(local)
+    branches, sent_branches = local.get("anyOf"), provider.get("anyOf")
+    if isinstance(branches, list):
+        if not isinstance(sent_branches, list) or not all(isinstance(branch, Mapping) for branch in sent_branches):
+            return copy.deepcopy(value)
+        paths = _union_discriminator_paths(branches)
+        index = _union_branch_index(value, branches, paths)
+        sent_index = _union_branch_index(value, sent_branches, paths)
+        if index is None or sent_index is None:
+            return copy.deepcopy(value)
+        return _project_nullable_transport(value, branches[index], sent_branches[sent_index])
     if isinstance(value, dict):
         local_props = local.get("properties") or {}
         sent_props = provider.get("properties") or {}

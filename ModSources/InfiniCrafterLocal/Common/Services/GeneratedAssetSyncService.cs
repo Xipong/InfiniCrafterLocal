@@ -1231,6 +1231,11 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private string BestBaseUrl(GeneratedItemData data)
     {
+        // The local host downloads from the same configured generator used for craft.
+        // Advertised/recipe URLs are peer-sharing addresses, not a redirect for the host.
+        if (Main.netMode != NetmodeID.MultiplayerClient && InfiniCrafterLocalMod.Generator is GeneratorClient generator)
+            return SanitizeBaseUrl(generator.Endpoint);
+
         string meta = SanitizeBaseUrl(data.RecipeMeta?.AssetBaseUrl ?? "");
         if (!string.IsNullOrWhiteSpace(meta)) return meta;
         return InfiniCrafterLocalMod.Generator?.AssetBaseUrlForSharing() ?? "";

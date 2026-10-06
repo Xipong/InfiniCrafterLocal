@@ -20,6 +20,54 @@ internal static partial class EngineRuntimeChecks
     private static SemaphoreSlim AssetHttpSlots => (SemaphoreSlim)typeof(GeneratedAssetSyncService)
         .GetField("HttpSlots", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 
+    private static void LocalAssetDownloadsKeepGeneratorOrigin()
+    {
+        var generatorProperty = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod)
+            .GetProperty("Generator", BindingFlags.Static | BindingFlags.Public)!;
+        object? oldGenerator = generatorProperty.GetValue(null);
+        int oldMode = Terraria.Main.netMode;
+        string? oldPublicUrl = Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL");
+        var generator = new GeneratorClient { Endpoint = "http://127.0.0.1:5055/combine" };
+        const string publicUrl = "http://192.0.2.42:5055";
+        typeof(GeneratorClient).GetField("_cachedGeneratorAssetPublicBaseUrl", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(generator, publicUrl);
+        typeof(GeneratorClient).GetField("_nextGeneratorAssetPublicBaseUrlProbeUtc", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(generator, DateTime.MaxValue); // No discovery HTTP in this routing witness.
+        var select = typeof(GeneratedAssetSyncService).GetMethod("BestBaseUrl", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        using var service = new GeneratedAssetSyncService();
+        try
+        {
+            generatorProperty.SetValue(null, generator);
+            foreach (string publicOverride in new[] { "", publicUrl })
+            foreach (int mode in new[] { Terraria.ID.NetmodeID.SinglePlayer, Terraria.ID.NetmodeID.Server, Terraria.ID.NetmodeID.MultiplayerClient })
+            foreach (string metadataUrl in new[] { "", publicUrl })
+            {
+                Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", publicOverride);
+                Terraria.Main.netMode = mode;
+                var data = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+                data.RecipeMeta.AssetBaseUrl = metadataUrl;
+                string before = data.ToJson();
+                string expected = mode == Terraria.ID.NetmodeID.MultiplayerClient ? publicUrl : "http://127.0.0.1:5055";
+                Equal(expected, (string)select.Invoke(service, new object[] { data })!, "download origin follows local generator, not friend sharing URL; mode=" + mode);
+                Equal(before, data.ToJson(), "routing never mutates the accepted recipe");
+                Equal(publicUrl, generator.AssetBaseUrlForSharing(), "peer sharing origin remains independent");
+            }
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            generator.Endpoint = "not-an-http-endpoint";
+            var invalid = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+            invalid.RecipeMeta.AssetBaseUrl = publicUrl;
+            Equal("", (string)select.Invoke(service, new object[] { invalid })!, "invalid local endpoint cannot silently borrow the friend URL");
+            generatorProperty.SetValue(null, null);
+            Equal(publicUrl, (string)select.Invoke(service, new object[] { invalid })!, "metadata remains the source when no local generator exists");
+        }
+        finally
+        {
+            generatorProperty.SetValue(null, oldGenerator);
+            Terraria.Main.netMode = oldMode;
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", oldPublicUrl);
+        }
+    }
+
     private static void DisposedAssetDownloadCannotPublish()
         => CheckDisposedAssetDownloadsAsync().GetAwaiter().GetResult();
     private static void DisposedAssetDownloadRetiresWhileBodyIsWithheld()

@@ -75,6 +75,7 @@ internal static partial class EngineRuntimeChecks
             ("swarm delayed eligibility shares canonical dispatch authority", SwarmDelayedAuthorityMatchesImmediateDispatch),
             ("swarm material churn cannot starve independent owners", SwarmMaterialChurnDoesNotStarveFreshOwners),
             ("swarm material ordered admission fans out without replay", SwarmMaterialOrderedAdmissionFansOutWithoutReplay),
+            ("local asset downloads keep generator origin separate from sharing URL", LocalAssetDownloadsKeepGeneratorOrigin),
             ("runtime sprite burst bounds resident and deferred resources", RuntimeSpriteBurstBoundsResidentAndDeferredResources),
             ("runtime sprite LRU retains queued borrowers until owner drain", RuntimeSpriteLruRetainsQueuedBorrowersUntilOwnerDrain),
             ("runtime sprite worker Clear and Mod.Unload defer borrowed resources", RuntimeSpriteWorkerClearAndModUnloadDeferBorrowedResources),

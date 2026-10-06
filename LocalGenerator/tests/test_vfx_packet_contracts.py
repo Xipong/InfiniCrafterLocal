@@ -131,6 +131,49 @@ def test_empty_mechanical_context_does_not_invent_entities_or_parameters():
     assert packet.get("acceptedRuntimeProgramReadOnly") == {}
 
 
+@pytest.mark.parametrize("sound_only", [False, True], ids=["silent", "sound-only"])
+def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choices(monkeypatch, sound_only):
+    data = _accepted_visual_data("workbench_blade")
+    accepted = _legacy(data)
+    accepted.update(effectMagnitude=0.2, visualBudgetClass="tiny")
+    sound = copy.deepcopy(accepted["slots"][0])
+    sound.update(id="explicit_audio_choice", rendererKind="soundCue", channel="sound", lane="cue",
+                 emissionMode="none", particleSystemId="none", textureRole="none")
+    accepted["slots"] = [sound] if sound_only else []
+    assert vfx.validate_vfx_director_output(accepted, data)["ok"]
+    original = copy.deepcopy(data)
+    raw = copy.deepcopy(accepted)
+    raw["effectMagnitude"] = 2.0  # Metadata-only fault, never permission to redesign audio.
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.2,
+             "slotsUpsert": [{**sound, "id": "unrequested_audio"}],
+             "slotIdsDelete": [sound["id"]] if sound_only else [],
+             "note": "correct only the magnitude"}
+    sent = _offline_transport(monkeypatch, "audio_ownership_" + str(sound_only), [raw, patch])
+    final = vfx.attach_hybrid_vfx_manifest(data, "audio-ownership", llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 2
+    director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+    semantics = director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
+    assert semantics == repair["runtimeVocabularyReadOnly"]["rendererSemantics"]["soundCue"]
+    for clause in (
+        "SoundID.Item1", "native Item.UseSound=null", "without a soundCue slot",
+        "no generated use sound", "do not supply a fallback", "separate presentation choice",
+        "tiny visualBudgetClass and effectMagnitude do not select or mute sound",
+        "soundCue-only slots array is valid", "Empty slots remains a valid deliberately silent choice",
+        "no item is required to have sound", "Repair must preserve valid silence",
+    ):
+        assert clause in semantics, clause
+    assert repair["repairScope"]["fieldPermissions"] == {
+        "globals": {"effectMagnitude": [""]}, "slots": [], "assets": [],
+    }
+    assert not repair["repairScope"]["allowCreateSlots"]
+    assert final["debug"]["vfxDirectorRaw"] == accepted
+    assert final["vfxManifest"]["slots"] == vfx._compile_manifest(original, accepted, "audio-ownership")["slots"]
+    assert final["gameplay"] == original["gameplay"]
+    assert final["runtimeProgram"] == original["runtimeProgram"]
+    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert raw["effectMagnitude"] == 2.0
+
+
 @pytest.mark.parametrize("capability", ["channel_beam", "move_whip_lash"])
 def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_frozen(monkeypatch, capability):
     prefixes = []
