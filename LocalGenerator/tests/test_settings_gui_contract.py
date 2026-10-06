@@ -885,6 +885,32 @@ class _TrackedUiVar(_UiVar):
             callback()
 
 
+def test_closed_port_guard_allows_native_windows_refusal_latency(gui_workflow, monkeypatch):
+    import urllib.error
+    gui, _root, _config = gui_workflow
+    launches = []
+    def delayed_refusal(timeout, **kwargs):
+        if timeout <= 2.05:
+            raise urllib.error.URLError(TimeoutError())
+        raise urllib.error.URLError(ConnectionRefusedError(10061, "closed port"))
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", delayed_refusal)
+    monkeypatch.setattr(gui, "_start_server_after_guard", lambda: launches.append(True))
+    gui.start_server()
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert launches == [True]
+
+
+def test_shutdown_wait_allows_native_windows_refusal_latency(gui_workflow, monkeypatch):
+    import urllib.error
+    gui, _root, _config = gui_workflow
+    def delayed_refusal(timeout, **kwargs):
+        if timeout <= 2.05:
+            raise urllib.error.URLError(TimeoutError())
+        raise urllib.error.URLError(ConnectionRefusedError(10061, "closed port"))
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", delayed_refusal)
+    assert gui._wait_until_helper_stops(timeout=4, base_url="http://127.0.0.1:5055") is True
+
+
 def test_setting_edits_create_custom_without_writing_saved_config(gui_workflow):
     gui, _root, config = gui_workflow
     config.write_text("INFINI_CODEX_IMAGE_QUALITY=medium\n", encoding="utf-8")

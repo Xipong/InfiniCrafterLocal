@@ -384,7 +384,9 @@ class SettingsGuiServerControlsMixin:
             if cancel is not None and cancel.is_set():
                 return False
             try:
-                self._fetch_health_snapshot(timeout=min(0.7, max(0.05, deadline - time.monotonic())), base_url=base_url)
+                # Windows may take about two seconds to report WSAECONNREFUSED;
+                # use the remaining bounded stop budget, not a sub-second probe.
+                self._fetch_health_snapshot(timeout=max(0.05, deadline - time.monotonic()), base_url=base_url)
             except Exception as exc:
                 # A timeout, 503, malformed JSON or wrong root is not a free port.
                 return self._connection_was_refused(exc)
@@ -530,7 +532,9 @@ class SettingsGuiServerControlsMixin:
 
         def work(cancel):
             try:
-                snap = self._fetch_health_snapshot(timeout=2, base_url=base_url)
+                # A two-second Windows connect deadline can expire just before
+                # the closed-port refusal, misclassifying a free port as unknown.
+                snap = self._fetch_health_snapshot(timeout=5, base_url=base_url)
             except Exception as exc:
                 if restart and not owned_running and self._connection_was_refused(exc):
                     return ""
