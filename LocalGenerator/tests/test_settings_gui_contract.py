@@ -871,11 +871,94 @@ def test_stop_server_is_also_busy_aware_without_direct_terminate(gui_workflow, m
     assert "busy" in gui.status_var.get().lower()
 
 
+class _TrackedUiVar(_UiVar):
+    def __init__(self, value=""):
+        super().__init__(value)
+        self.callbacks = []
+
+    def trace_add(self, mode, callback):
+        self.callbacks.append(callback)
+
+    def set(self, value):
+        super().set(value)
+        for callback in self.callbacks:
+            callback()
+
+
+def test_setting_edits_create_custom_without_writing_saved_config(gui_workflow):
+    gui, _root, config = gui_workflow
+    config.write_text("INFINI_CODEX_IMAGE_QUALITY=medium\n", encoding="utf-8")
+    before = config.read_bytes()
+    gui.vars["INFINI_CODEX_IMAGE_QUALITY"] = _TrackedUiVar("medium")
+    gui.preset_var = _UiVar("Мой: Обычный")
+    gui._install_profile_tracking()
+    gui.vars["INFINI_CODEX_IMAGE_QUALITY"].set("high")
+    assert gui.preset_var.get() == "Custom"
+    assert config.read_bytes() == before
+    gui.vars["INFINI_CODEX_IMAGE_QUALITY"].set("medium")
+    assert gui.preset_var.get() == "Мой: Обычный"
+
+
+def test_gui_saves_named_profile_separately_and_restores_exact_settings(gui_workflow, monkeypatch):
+    from infini_local.desktop.settings_env import load_user_presets
+    from infini_local.desktop import settings_gui_trace_state
+    gui, _root, config = gui_workflow
+    config.write_text("INFINI_MANUAL_KNOB=disk\n", encoding="utf-8")
+    before = config.read_bytes()
+    gui.data["INFINI_MANUAL_KNOB"] = "keep"
+    gui.vars["INFINI_CODEX_IMAGE_QUALITY"] = _TrackedUiVar("high")
+    gui.vars["INFINI_LLM_REASONING_MAX_TOKENS"] = _TrackedUiVar("7500")
+    gui.vars["INFINI_OPENROUTER_API_KEY"] = _TrackedUiVar("test-only-credential")
+    gui.preset_var = _UiVar("Custom")
+    gui.user_presets = {}
+    from types import SimpleNamespace
+    gui.preset_combo = SimpleNamespace(configure=lambda **kwargs: None)
+    gui._refresh_visibility = lambda: None
+    gui._install_profile_tracking()
+    monkeypatch.setattr(settings_gui_trace_state.simpledialog, "askstring", lambda *args, **kwargs: "Мой GPU")
+    gui.save_profile_as()
+    path = config.with_name("gui_user_presets.json")
+    profiles = load_user_presets(path)
+    assert gui.preset_var.get() == "Мой: Мой GPU"
+    assert profiles["Мой GPU"]["INFINI_LLM_REASONING_MAX_TOKENS"] == "7500"
+    assert profiles["Мой GPU"]["INFINI_MANUAL_KNOB"] == "keep"
+    assert "INFINI_OPENROUTER_API_KEY" not in profiles["Мой GPU"]
+    assert config.read_bytes() == before
+    gui.vars["INFINI_CODEX_IMAGE_QUALITY"].set("low")
+    assert gui.preset_var.get() == "Custom"
+    gui.preset_var.set("Мой: Мой GPU")
+    gui.apply_preset()
+    assert gui.vars["INFINI_CODEX_IMAGE_QUALITY"].get() == "high"
+    assert gui.vars["INFINI_OPENROUTER_API_KEY"].get() == "test-only-credential"
+    assert gui.preset_var.get() == "Мой: Мой GPU"
+    assert config.read_bytes() == before
+    assert gui.collect()["INFINI_MANUAL_KNOB"] == "keep"
+    assert settings_gui.SettingsGui._pipeline_preset_from_config(
+        {**profiles["Мой GPU"], "INFINI_GUI_PIPELINE_PRESET": "Мой: Мой GPU"}, profiles
+    ) == "Мой: Мой GPU"
+
+
+def test_simple_view_keeps_active_basics_and_preserves_hidden_values():
+    from types import SimpleNamespace
+    calls = {}
+    fields = {key: [object()] for key in ("INFINI_CODEX_IMAGE_MODEL", "INFINI_SDCPP_MODEL", "INFINI_LLM_REASONING_MAX_TOKENS")}
+    gui = SimpleNamespace(advanced_var=_UiVar(False), field_widgets=fields, field_hint_labels={},
+                          field_disabled_reasons={"INFINI_SDCPP_MODEL": "Другой backend"}, _ui_sections=[])
+    gui._set_packed_visible = lambda widget, visible: calls.update({widget: visible})
+    settings_gui.SettingsGui._apply_view_mode(gui)
+    assert calls[fields["INFINI_CODEX_IMAGE_MODEL"][0]] is True
+    assert calls[fields["INFINI_SDCPP_MODEL"][0]] is False
+    assert calls[fields["INFINI_LLM_REASONING_MAX_TOKENS"][0]] is False
+    gui.advanced_var.set(True)
+    settings_gui.SettingsGui._apply_view_mode(gui)
+    assert all(calls[row[0]] for row in fields.values())
+
+
 def test_codex_settings_do_not_display_an_unrelated_flux_preset():
     data = dict(settings_schema.DEFAULTS)
     data.update({"INFINI_GUI_PIPELINE_PRESET": "OpenAI-compatible + FLUX.2 Klein 4B hybrid",
                  "INFINI_LLM_PROVIDER": "openai_codex", "INFINI_IMAGE_BACKEND": "openai_codex"})
-    assert settings_gui.SettingsGui._pipeline_preset_from_config(data) == "Свои настройки"
+    assert settings_gui.SettingsGui._pipeline_preset_from_config(data) == "Custom"
 
 
 def test_static_hover_help_does_not_replace_runtime_status(monkeypatch):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import webbrowser
 
 from infini_local.desktop.tk_compat import tk, ttk
+from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
     FIELD_HELP,
@@ -34,8 +35,61 @@ from infini_local.desktop.settings_gui_theme import (
 )
 
 
+_BASIC_FIELDS = frozenset({
+    "INFINI_HOST", "INFINI_PORT", "INFINI_LLM_PROVIDER", "INFINI_USE_LLM",
+    "INFINI_CODEX_LLM_MODEL", "INFINI_LLM_REASONING_MODE", "INFINI_LMSTUDIO_URL", "INFINI_LMSTUDIO_MODEL",
+    "INFINI_OPENROUTER_API_KEY", "INFINI_OPENROUTER_MODEL", "INFINI_OPENROUTER_PROVIDER",
+    "INFINI_OPENAI_COMPAT_BASE_URL", "INFINI_OPENAI_COMPAT_API_KEY", "INFINI_OPENAI_COMPAT_MODEL",
+    "INFINI_IMAGE_BACKEND", "INFINI_CODEX_IMAGE_MODEL", "INFINI_CODEX_IMAGE_QUALITY", "INFINI_CODEX_IMAGE_SIZE",
+    "INFINI_SDCPP_SERVER_EXE", "INFINI_SDCPP_MODEL", "INFINI_SDCPP_VAE", "INFINI_SDCPP_LLM",
+    "INFINI_SDCPP_SERVER_AUTOSTART", "INFINI_SDCPP_LORA_FILE", "INFINI_SDCPP_LORA_WEIGHT",
+    "INFINI_SDCPP_SERVER_URL", "INFINI_SDCPP_STEPS", "INFINI_SDCPP_CFG", "INFINI_SDCPP_SAMPLER",
+    "INFINI_IMAGE_API_BASE_URL", "INFINI_IMAGE_API_KEY", "INFINI_IMAGE_API_MODEL", "INFINI_IMAGE_API_SIZE",
+    "INFINI_A1111_URL", "INFINI_COMFYUI_URL", "INFINI_BG_COLOR", "INFINI_REMOVE_BG",
+    "INFINI_SPRITE_DOWNSCALE_FILTER", "INFINI_MP_ASSET_TRANSPORT", "INFINI_TERRARIA_PORT",
+    "INFINI_ASSET_PUBLIC_BASE_URL", "INFINI_MULTIDEV_CONCURRENCY",
+})
+
+
 class SettingsGuiUiMixin:
     secret_entries: list[tk.Widget]
+
+    @staticmethod
+    def _set_packed_visible(widget, visible: bool):
+        if visible:
+            if widget.winfo_manager() == "pack":
+                return
+            options = dict(getattr(widget, "_infini_pack_options", {}))
+            siblings = list(widget.master.winfo_children())
+            following = siblings[siblings.index(widget) + 1:]
+            before = next((other for other in following if other.winfo_manager() == "pack"), None)
+            if before is not None:
+                options["before"] = before
+            widget.pack(**options)
+        elif widget.winfo_manager() == "pack":
+            options = widget.pack_info()
+            options.pop("in", None)
+            widget._infini_pack_options = options
+            widget.pack_forget()
+
+    def _register_ui_section(self, body, field: str = "", choices: tuple[str, ...] = (), advanced: bool = False):
+        outer = getattr(body, "_infini_card_outer", body)
+        self.__dict__.setdefault("_ui_sections", []).append((outer, field, choices, advanced))
+
+    def _apply_view_mode(self):
+        advanced = bool(self.advanced_var.get())
+        for key, widgets in self.field_widgets.items():
+            if not widgets:
+                continue
+            basic = key in _BASIC_FIELDS or key.startswith("INFINI_LLM_POOL_")
+            visible = advanced or (basic and not self.field_disabled_reasons.get(key))
+            self._set_packed_visible(widgets[0], visible)
+            hint = self.field_hint_labels.get(key)
+            if hint is not None:
+                self._set_packed_visible(hint, advanced and visible)
+        for widget, field, choices, advanced_only in self.__dict__.get("_ui_sections", []):
+            active = not field or self.vars[field].get() in choices
+            self._set_packed_visible(widget, advanced or (active and not advanced_only))
 
     def _attach_static_help(self, widget, text):
         ToolTip(widget, text)
@@ -82,7 +136,9 @@ class SettingsGuiUiMixin:
         if changes:
             rendered = "\n".join(f"• {k}={v}" for k, v in changes.items())
             return f"{name}\n\n{text}\n\nЧто изменит Apply pipeline:\n{rendered}"
-        return text or ("Свои настройки: текущие provider/backend не соответствуют готовому профилю. Выбор профиля ничего не меняет до нажатия Применить." if name == "Свои настройки" else name)
+        if name.startswith(USER_PRESET_PREFIX):
+            return "Твой сохранённый профиль. «Применить» восстанавливает настройки; текущие ключи остаются. Для записи config.env нажми «Сохранить»."
+        return text or ("Custom — текущие настройки изменены вручную. «Сохранить как…» создаёт отдельный именованный профиль." if name == CUSTOM_PRESET else name)
 
     def _show_preset_help(self):
         self.status_var.set(PRESET_HELP.get(self.preset_var.get(), "Выбран pipeline preset. Нажми Apply pipeline, чтобы применить."))
@@ -350,6 +406,7 @@ class SettingsGuiUiMixin:
                     chip.pack(side="right", padx=(12, 0))
             body = tk.Frame(outer, bg=CARD_BG, padx=2, pady=4)
             body._infini_bg = CARD_BG
+            body._infini_card_outer = outer
             body.pack(fill="x")
             return body
         except (AttributeError, RuntimeError, TypeError):
@@ -428,34 +485,32 @@ class SettingsGuiUiMixin:
         # right-most config button is never clipped at the default window width.
         brand.pack(side="left", fill="x", expand=True)
 
-        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=5, highlightthickness=1, highlightbackground=BORDER_FG)
+        preset_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=7, highlightthickness=1, highlightbackground=BORDER_FG)
         preset_bar._infini_bg = CARD_BG
         preset_bar.pack(fill="x", pady=(0, 7))
-        preset_label = tk.Label(preset_bar, text="Готовый профиль", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold"))
-        preset_label.pack(side="left", padx=(0, 10))
-        self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data))
-        preset_combo = ttk.Combobox(preset_bar, textvariable=self.preset_var, values=["Свои настройки", *PRESETS], state="readonly", width=36)
-        preset_combo.pack(side="left", padx=6, ipady=2)
-        preset_combo.bind("<<ComboboxSelected>>", lambda _e: self._show_preset_help(), add="+")
-        self._attach_static_help(preset_combo, lambda: self._preset_help_text())
-        apply_btn = self._modern_button(preset_bar, "Применить", self.apply_preset, variant="soft")
-        apply_btn.pack(side="left", padx=(10, 16))
-        self._attach_static_help(apply_btn, "Применить выбранный pipeline preset. После применения GUI заблокирует поля, которые не участвуют в выбранной связке.")
-        guard_chip = self._chip(preset_bar, "контракт защищён", "blue")
-        guard_chip.pack(side="right", padx=(8, 0))
-        validate_btn = self._modern_button(preset_bar, "📁  Проверить", self.validate_paths, variant="ghost")
-        validate_btn.pack(side="right", padx=(8, 0))
-        self._attach_static_help(validate_btn, "Проверить активные пути/ключи для текущего provider/backend. Неактивные поля не считаются ошибкой.")
-        secrets_btn = ttk.Checkbutton(preset_bar, text="Показать ключи", variable=self.show_secrets, command=self._refresh_secret_entries)
+        profile_row = tk.Frame(preset_bar, bg=CARD_BG)
+        profile_row.pack(fill="x")
+        tk.Label(profile_row, text="Профиль", bg=CARD_BG, fg=TEXT_FG, font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 10))
+        self.preset_var = tk.StringVar(value=self._pipeline_preset_from_config(self.data, self.user_presets))
+        self.preset_combo = ttk.Combobox(profile_row, textvariable=self.preset_var,
+            values=[CUSTOM_PRESET, *PRESETS, *(USER_PRESET_PREFIX + name for name in self.user_presets)],
+            state="readonly", width=42)
+        self.preset_combo.pack(side="left", padx=6, ipady=2)
+        self.preset_combo.bind("<<ComboboxSelected>>", lambda _e: self._show_preset_help(), add="+")
+        self._attach_static_help(self.preset_combo, lambda: self._preset_help_text())
+        self._modern_button(profile_row, "Применить", self.apply_preset, variant="soft").pack(side="left", padx=(10, 6))
+        save_profile_btn = self._modern_button(profile_row, "Сохранить как…", self.save_profile_as, variant="ghost")
+        save_profile_btn.pack(side="left", padx=6)
+        self._attach_static_help(save_profile_btn, "Сохранить текущие настройки отдельным именованным профилем. Ключи/токены не копируются; config.env не изменяется.")
+        view_row = tk.Frame(preset_bar, bg=CARD_BG)
+        view_row.pack(fill="x", pady=(6, 0))
+        ttk.Checkbutton(view_row, text="Расширенные настройки", variable=self.advanced_var, command=self._apply_view_mode).pack(side="left")
+        secrets_btn = ttk.Checkbutton(view_row, text="Показать ключи", variable=self.show_secrets, command=self._refresh_secret_entries)
         secrets_btn.pack(side="right", padx=8)
         self._attach_static_help(secrets_btn, "Временно показать API keys вместо звёздочек.")
-        # Repack the flexible left group after fixed right-side controls so Tk
-        # reserves room for the full secrets/validate/status labels at 1040px.
-        for widget in (preset_label, preset_combo, apply_btn):
-            widget.pack_forget()
-        preset_label.pack(side="left", padx=(0, 10))
-        preset_combo.pack(side="left", padx=6, ipady=2)
-        apply_btn.pack(side="left", padx=(10, 16))
+        validate_btn = self._modern_button(view_row, "Проверить настройки", self.validate_paths, variant="ghost")
+        validate_btn.pack(side="right", padx=8)
+        self._attach_static_help(validate_btn, "Проверить активные пути и ключи для выбранных provider/backend; без генерации.")
 
         status_bar = tk.Frame(shell, bg=CARD_BG, padx=12, pady=7, highlightthickness=1, highlightbackground=BORDER_FG)
         try:
@@ -664,7 +719,6 @@ class SettingsGuiUiMixin:
             "Сервер и поведение крафта",
             "Локальный HTTP helper для tModLoader craft request. 127.0.0.1 — только для себя; 0.0.0.0 — LAN/Radmin.",
             icon="▣",
-            status=("Готов", "green"),
         )
         self.row(server_card, "Host", "INFINI_HOST", hint="127.0.0.1 — только ты; 0.0.0.0 — принимать подключения из Radmin/LAN.")
         self.row(server_card, "Port", "INFINI_PORT", width=16)
@@ -673,6 +727,7 @@ class SettingsGuiUiMixin:
         self.row(server_card, "Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", width=16, hint="Сколько секунд параллельный /combine ждёт текущий craft/cache вместо немедленного busy response. Для обычной игры: 210.")
         restart_bar = ttk.Frame(server_card, padding=(10, 5))
         restart_bar.pack(fill="x")
+        self._register_ui_section(restart_bar, advanced=True)
         force_button = self._modern_button(restart_bar, "Force restart…", self.force_restart_server, variant="danger")
         force_button.pack(side="left")
         self._attach_static_help(force_button, "Start/Stop по умолчанию SAFE: busy/unknown server не прерывается. Force требует отдельного подтверждения; чужой root/PID всё равно защищён.")
@@ -685,6 +740,7 @@ class SettingsGuiUiMixin:
             icon="⚒",
         )
         self.check_row(debug_card, "Включить минимум для атакующих расходников", "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", hint="Применяется к delivery-копии fresh/cache-hit результата.")
+        self._register_ui_section(debug_card, advanced=True)
         self.row(debug_card, "Минимум за один крафт", "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", width=16, values=["2", "5", "10", "20", "25", "50", "99", "100", "250", "500", "999"], hint="Если authored craftYield/maxStack ниже, оба поднимаются до выбранного количества.")
 
         radmin_status = ("Local only", "green") if not self.radmin_enabled.get() else ("Radmin/LAN", "blue")
@@ -722,6 +778,7 @@ class SettingsGuiUiMixin:
             status=("debug", "amber"),
         )
         self.row(trace_card, "Trace prompts", "INFINI_TRACE_PROMPTS", values=["1", "0"], hint="1 = сохранять LLM/image prompts и ответы в cache/prompt_trace.ndjson. Это debug, не gameplay state.")
+        self._register_ui_section(trace_card, advanced=True)
         self.row(trace_card, "Trace prompt chars", "INFINI_TRACE_MAX_PROMPT_CHARS", width=16)
         self.row(trace_card, "Trace events tail", "INFINI_TRACE_EVENTS_TAIL", width=16)
         self.row(
@@ -740,6 +797,7 @@ class SettingsGuiUiMixin:
         self.row(primary, "LLM provider", "INFINI_LLM_PROVIDER", values=["local", "openrouter", "openai_compat", "openai_codex"])
 
         codex_card = self._card(parent, "02 · Codex / ChatGPT", "Только текст: модели и поддерживаемые reasoning efforts из live-каталога аккаунта. Запрос не генерирует контент.", icon="✦", status=("OAuth", "blue"))
+        self._register_ui_section(codex_card, "INFINI_LLM_PROVIDER", ("openai_codex",))
         model_row = self.row(codex_card, "Codex text model", "INFINI_CODEX_LLM_MODEL", values=[self.data.get("INFINI_CODEX_LLM_MODEL") or ""], editable=True, hint="Slug редактируемый. Перед генерацией выбери модель; пустое значение не запускает Codex. Ошибка обновления не стирает сохранённый slug.")
         self.codex_model_combo = next(w for w in model_row.winfo_children() if isinstance(w, ttk.Combobox))
         self.codex_model_combo.bind("<<ComboboxSelected>>", lambda _e: self._update_codex_efforts(), add="+")
@@ -752,6 +810,7 @@ class SettingsGuiUiMixin:
         self._info_panel(codex_card, self.codex_catalog_var)
 
         other = self._card(parent, "03 · Другие провайдеры", "Неактивные поля приглушены, но сохранены при смене источника.", icon="⌁")
+        self._register_ui_section(other, "INFINI_LLM_PROVIDER", ("local", "openrouter", "openai_compat"))
         self.row(other, "LM Studio URL", "INFINI_LMSTUDIO_URL")
         self.row(other, "LM Studio model", "INFINI_LMSTUDIO_MODEL")
         self.row(other, "OpenRouter API key", "INFINI_OPENROUTER_API_KEY", secret=True)
@@ -764,6 +823,7 @@ class SettingsGuiUiMixin:
         self.row(other, "Compat model", "INFINI_OPENAI_COMPAT_MODEL")
         self.row(other, "LLM 1 API mode", "INFINI_LLM_API_MODE", values=["auto", "responses", "chat_completions"], hint="auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.")
         fallback = self._card(parent, "04 · Fallback LLM", "Необязательный резерв для локальных/API провайдеров.", icon="↳")
+        self._register_ui_section(fallback, advanced=True)
         self.row(fallback, "Fallback provider", "INFINI_LLM_FALLBACK_PROVIDER", values=["", "local", "openrouter", "openai_compat"], hint="Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.")
         self.row(fallback, "Fallback model", "INFINI_LLM_FALLBACK_MODEL", hint="Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.")
         self.row(fallback, "OpenRouter provider slug", "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER", hint="Отдельная фиксация upstream для OpenRouter fallback. Пусто = auto, не наследует основной slug. При фиксации основного профиля переход сюда запрещён.")
@@ -831,6 +891,7 @@ class SettingsGuiUiMixin:
     def _build_zimage_guide(self, parent):
         box = ttk.LabelFrame(parent, text="FLUX.2 / Z-Image / stable-diffusion.cpp — краткий гайд", padding=(10, 8))
         box.pack(fill="x", padx=10, pady=(6, 10))
+        self._register_ui_section(box, "INFINI_IMAGE_BACKEND", ("sdcpp",), advanced=True)
         guide = (
             "1) Пути: укажи sd-server.exe, diffusion *.gguf, ae.safetensors и Qwen/LLM *.gguf. "
             "VAE/Qwen/LoRA не надо дублировать в extra args — GUI добавит --vae/--llm/--lora-model-dir сам.\n"
@@ -860,6 +921,7 @@ class SettingsGuiUiMixin:
         self.row(choice, "Image backend", "INFINI_IMAGE_BACKEND", values=["sdcpp", "openai_codex", "image_api", "off", "comfyui", "a1111"], hint="openai_codex = ChatGPT/Codex OAuth по подписке; sdcpp = локальная модель; image_api = отдельный API; off = без PNG.")
         self.row(choice, "Shared image concurrency", "INFINI_IMAGE_MAX_CONCURRENCY", width=8, hint="Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.")
         codex = self._card(root, "02 · Codex PNG", "Встроенная известная image-модель — не список моделей аккаунта.", icon="✦", status=("известная модель", "amber"))
+        self._register_ui_section(codex, "INFINI_IMAGE_BACKEND", ("openai_codex",))
         model_row = self.row(codex, "Codex image model", "INFINI_CODEX_IMAGE_MODEL", values=[self.data.get("INFINI_CODEX_IMAGE_MODEL") or "gpt-image-2", "gpt-image-2"], editable=True, hint="gpt-image-2 — встроенная известная модель. Ручное имя сохраняется, но не подтверждает доступ к нему.")
         self._modern_button(model_row, "Пинг · read-only", self.ping_codex_image_account).pack(side="right", padx=(8, 0))
         self.row(codex, "Codex quality", "INFINI_CODEX_IMAGE_QUALITY", values=["low", "medium", "high", "auto"])
@@ -874,6 +936,7 @@ class SettingsGuiUiMixin:
         self.codex_image_account_var = tk.StringVar(value="Если есть сохранённая сессия, аккаунт проверяется при открытии вкладки; image-доступ не подтверждён.")
         self._info_panel(codex, self.codex_image_account_var)
         parent = self._card(root, "03 · Локальный sd.cpp", "FLUX.2 / Z-Image: пути, LoRA, запуск и sampler.", icon="▦")
+        self._register_ui_section(parent, "INFINI_IMAGE_BACKEND", ("sdcpp",))
         self.row(parent, "sd-server.exe", "INFINI_SDCPP_SERVER_EXE", browse="file")
         self.row(parent, "ROCm hybrid runtime", "INFINI_SDCPP_ROCM_COMPAT_ROOT", browse="dir", hint="Папка sdcpp-hybrid-gfx1030. ROCm/HIP/rocBLAS env применяется только к дочернему sd-server.exe.")
         self.row(parent, "Diffusion model", "INFINI_SDCPP_MODEL", browse="model", hint="FLUX.2 Klein или Z-Image *.gguf.")
@@ -912,6 +975,7 @@ class SettingsGuiUiMixin:
         self.row(parent, "Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", values=["1", "0"], hint="1 = не доставлять свежий craft без валидного item PNG. Основной product contract; выключать только для явной диагностики.")
         self._build_zimage_guide(root)
         parent = self._card(root, "04 · Внешний Image API", "Отдельный API key и endpoint; не относится к Codex-подписке.", icon="↗")
+        self._register_ui_section(parent, "INFINI_IMAGE_BACKEND", ("image_api",))
         self.row(parent, "Image API base", "INFINI_IMAGE_API_BASE_URL")
         self.row(parent, "Image API key", "INFINI_IMAGE_API_KEY", secret=True)
         self.row(parent, "Image API model", "INFINI_IMAGE_API_MODEL")
@@ -919,6 +983,7 @@ class SettingsGuiUiMixin:
         self.row(parent, "Image API size", "INFINI_IMAGE_API_SIZE", values=["512x512", "768x768", "1024x1024"])
         self.row(parent, "Image API timeout", "INFINI_IMAGE_API_TIMEOUT", width=16)
         parent = self._card(root, "05 · A1111 / ComfyUI", "Альтернативные локальные серверы изображений.", icon="⌁")
+        self._register_ui_section(parent, "INFINI_IMAGE_BACKEND", ("a1111", "comfyui"))
         self.row(parent, "A1111 URL", "INFINI_A1111_URL")
         self.row(parent, "ComfyUI URL", "INFINI_COMFYUI_URL")
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 try:
     import tkinter as tk
-    from tkinter import ttk, filedialog, messagebox
+    from tkinter import ttk, filedialog, messagebox, simpledialog
     TKINTER_AVAILABLE = True
     TKINTER_IMPORT_ERROR = ""
 except Exception as _tkinter_import_error:
@@ -163,10 +163,15 @@ except Exception as _tkinter_import_error:
         def askyesno(self, *args, **kwargs):
             return False
 
+    class _HeadlessSimpleDialog:
+        def askstring(self, *args, **kwargs):
+            return None
+
     tk = _TkHeadless()
     ttk = _TtkHeadless()
     filedialog = _HeadlessDialog()
     messagebox = _HeadlessMessageBox()
+    simpledialog = _HeadlessSimpleDialog()
 
 __all__ = [
     "TKINTER_AVAILABLE",
@@ -175,4 +180,5 @@ __all__ = [
     "ttk",
     "filedialog",
     "messagebox",
+    "simpledialog",
 ]

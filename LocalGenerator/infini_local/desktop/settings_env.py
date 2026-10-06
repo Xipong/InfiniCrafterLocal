@@ -1,12 +1,107 @@
 from __future__ import annotations
 
+import json
+import os
+import re
+import tempfile
 from pathlib import Path
 
-from infini_local.desktop.settings_schema import DEFAULTS, FIELD_ORDER
+from infini_local.desktop.settings_schema import DEFAULTS, FIELD_ORDER, PRESETS
 
 
 # AGENT MAP: config.env parser/writer for the desktop GUI.
 # Keep file-format compatibility here; settings_gui.py should only call these helpers.
+
+CUSTOM_PRESET = "Custom"
+USER_PRESET_PREFIX = "Мой: "
+_USER_PRESET_SCHEMA = "infini.gui-user-presets.v1"
+
+
+def user_preset_snapshot(data: dict[str, str]) -> dict[str, str]:
+    """Copy exact settings, excluding selection metadata and credential fields."""
+    return {
+        key: value
+        for key, value in data.items()
+        if isinstance(key, str)
+        and key.startswith("INFINI_")
+        and isinstance(value, str)
+        and key != "INFINI_GUI_PIPELINE_PRESET"
+        and not re.search(r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)(?:_|$)", key.upper())
+    }
+
+
+def _validate_user_preset_name(name: str) -> None:
+    if (
+        not isinstance(name, str)
+        or not name.strip()
+        or len(name) > 80
+        or any(ord(char) < 32 or ord(char) == 127 for char in name)
+    ):
+        raise ValueError("Preset name must be nonempty, at most 80 characters, without control characters.")
+    label = name.strip().casefold()
+    if (
+        label == CUSTOM_PRESET.casefold()
+        or any(label == builtin.casefold() for builtin in PRESETS)
+        or label.startswith(USER_PRESET_PREFIX.strip().casefold())
+    ):
+        raise ValueError("Preset name collides with a reserved preset label.")
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate key in user-preset file.")
+        result[key] = value
+    return result
+
+
+def load_user_presets(path: Path) -> dict[str, dict[str, str]]:
+    """Load exact non-secret settings; missing is empty, malformed raises ValueError."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object)
+    except FileNotFoundError:
+        return {}
+    if (
+        not isinstance(document, dict)
+        or document.get("schema") != _USER_PRESET_SCHEMA
+        or not isinstance(document.get("presets"), dict)
+    ):
+        raise ValueError("Invalid user-preset file schema or presets mapping.")
+    presets: dict[str, dict[str, str]] = {}
+    for name, data in document["presets"].items():
+        _validate_user_preset_name(name)
+        if not isinstance(data, dict) or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in data.items()
+        ):
+            raise ValueError("User-preset settings must be a mapping of strings to strings.")
+        presets[name] = user_preset_snapshot(data)
+    return presets
+
+
+def save_user_preset(path: Path, name: str, data: dict[str, str]) -> dict[str, dict[str, str]]:
+    """Save/update one profile and return the mapping for the GUI to refresh."""
+    _validate_user_preset_name(name)
+    presets = load_user_presets(path)
+    presets[name] = user_preset_snapshot(data)
+    document = {"schema": _USER_PRESET_SCHEMA, "presets": presets}
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return presets
+
 
 def parse_env(path: Path) -> dict[str, str]:
     data = dict(DEFAULTS)
@@ -58,6 +153,11 @@ def write_env(path: Path, data: dict[str, str]) -> None:
 
 
 __all__ = [
+    "CUSTOM_PRESET",
+    "USER_PRESET_PREFIX",
+    "user_preset_snapshot",
+    "load_user_presets",
+    "save_user_preset",
     "parse_env",
     "quote_env_value",
     "write_env",

@@ -21,7 +21,7 @@ from infini_local.desktop.settings_schema import (
 )
 
 
-from infini_local.desktop.settings_env import parse_env
+from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX, load_user_presets, parse_env
 
 from infini_local.desktop.settings_gui_ui import SettingsGuiUiMixin
 from infini_local.desktop.settings_gui_image_args import SettingsGuiImageArgsMixin
@@ -52,13 +52,24 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self.sdcpp_debug_buttons: list[tk.Widget] = []
         self.secret_entries: list[tk.Widget] = []
         self.show_secrets = tk.BooleanVar(value=False)
+        self.advanced_var = tk.BooleanVar(value=False)
+        self._ui_sections = []
         self.radmin_enabled = tk.BooleanVar(value=(self.data.get("INFINI_HOST") == "0.0.0.0" or bool(self.data.get("INFINI_ASSET_PUBLIC_BASE_URL"))))
         self.status_var = tk.StringVar(value="Готово. Выбери профиль генерации, при необходимости включи Radmin/LAN, затем сохрани настройки и запусти сервер.")
         self.applied_config_var = tk.StringVar(value="Runtime config not checked (partial non-secret projection; pools/secrets unverified).")
+        self.user_presets = {}
+        preset_error = ""
+        try:
+            self.user_presets = load_user_presets(CONFIG_PATH.with_name("gui_user_presets.json"))
+        except (OSError, ValueError) as exc:
+            preset_error = f"Пользовательские профили не загружены: {exc}"
         self._build_ui()
         self._install_global_edit_shortcuts()
         self._refresh_visibility()
         self._install_applied_config_tracking()
+        self._install_profile_tracking()
+        if preset_error:
+            self.status_var.set(preset_error)
 
     def _var(self, key: str) -> tk.StringVar:
         v = tk.StringVar(value=self.data.get(key, DEFAULTS.get(key, "")))
@@ -66,8 +77,13 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         return v
 
     @staticmethod
-    def _pipeline_preset_from_config(data: dict[str, str]) -> str:
+    def _pipeline_preset_from_config(data: dict[str, str], user_presets: dict[str, dict[str, str]] | None = None) -> str:
         saved = str(data.get("INFINI_GUI_PIPELINE_PRESET", "") or "").strip()
+        if saved == CUSTOM_PRESET:
+            return CUSTOM_PRESET
+        if saved.startswith(USER_PRESET_PREFIX):
+            preset = (user_presets or {}).get(saved[len(USER_PRESET_PREFIX):])
+            return saved if preset is not None and all(data.get(key, DEFAULTS.get(key, "")) == value for key, value in preset.items()) else CUSTOM_PRESET
         if saved in PRESETS:
             saved_preset = PRESETS[saved]
             if all(
@@ -97,7 +113,7 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
 
         # Shared sprite controls do not establish provider/backend identity.
         # Never present a nearest-score preset as the user's active pipeline.
-        return "Свои настройки"
+        return CUSTOM_PRESET
 
 
 

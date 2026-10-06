@@ -9,13 +9,13 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from infini_local.desktop.tk_compat import messagebox, tk, ttk
+from infini_local.desktop.tk_compat import messagebox, simpledialog, tk, ttk
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
     PRESETS,
     repair_sdcpp_command_template,
 )
-from infini_local.desktop.settings_env import parse_env, write_env
+from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX, parse_env, save_user_preset, write_env
 from infini_local.desktop.settings_gui_theme import (
     ROOT,
     CONFIG_PATH,
@@ -24,6 +24,57 @@ from infini_local.storage import trace_tools
 
 
 class SettingsGuiTraceStateMixin:
+    def _current_profile_settings(self):
+        data = dict(self.data)
+        data.pop("INFINI_GUI_PIPELINE_PRESET", None)
+        data.update({key: variable.get() for key, variable in self.vars.items()})
+        data.update({key: widget.get("1.0", "end-1c") for key, widget in self.text_widgets.items()})
+        return data
+
+    def _capture_profile_baseline(self):
+        self._profile_baseline = self._current_profile_settings()
+        self._profile_baseline_label = self.preset_var.get()
+
+    def _profile_settings_changed(self, *_args):
+        if self.__dict__.get("_profile_edit_guard", False):
+            return
+        label = self.__dict__.get("_profile_baseline_label", CUSTOM_PRESET)
+        if self._current_profile_settings() != self.__dict__.get("_profile_baseline", {}):
+            label = CUSTOM_PRESET
+        self.preset_var.set(label)
+
+    def _profile_text_changed(self, widget):
+        if widget.edit_modified():
+            widget.edit_modified(False)
+            self._profile_settings_changed()
+
+    def _install_profile_tracking(self):
+        self._capture_profile_baseline()
+        for variable in self.vars.values():
+            variable.trace_add("write", self._profile_settings_changed)
+        for widget in self.text_widgets.values():
+            widget.edit_modified(False)
+            widget.bind("<<Modified>>", lambda _event, item=widget: self._profile_text_changed(item), add="+")
+
+    def save_profile_as(self):
+        selected = self.preset_var.get()
+        initial = selected[len(USER_PRESET_PREFIX):] if selected.startswith(USER_PRESET_PREFIX) else ""
+        name = simpledialog.askstring("Сохранить профиль", "Название профиля:", initialvalue=initial, parent=self)
+        if name is None:
+            return
+        name = name.strip()
+        path = CONFIG_PATH.with_name("gui_user_presets.json")
+        try:
+            self.user_presets = save_user_preset(path, name, self._current_profile_settings())
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Профиль не сохранён", str(exc))
+            self.status_var.set(f"Профиль не сохранён: {exc}")
+            return
+        self.preset_combo.configure(values=[CUSTOM_PRESET, *PRESETS, *(USER_PRESET_PREFIX + key for key in self.user_presets)])
+        self.preset_var.set(USER_PRESET_PREFIX + name)
+        self._capture_profile_baseline()
+        self.status_var.set(f"Профиль «{name}» сохранён отдельно. config.env не изменён; ключи и токены в профиль не входят.")
+
     def _build_trace(self, parent):
         outer = ttk.Frame(parent, padding=10)
         outer.pack(fill="both", expand=True)
@@ -448,9 +499,12 @@ class SettingsGuiTraceStateMixin:
             self._set_field_enabled("INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK", False, "Strict AI authorship=1: procedural fallback принудительно выключен, чтобы код не авторил картинку за модель.")
         else:
             self._set_field_enabled("INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK", sprite_processing_active, "Image backend=off; fallback PNG не нужен.")
+        if "advanced_var" in self.__dict__:
+            self._apply_view_mode()
 
     def collect(self) -> dict[str, str]:
         data = parse_env(CONFIG_PATH) if CONFIG_PATH.exists() else dict(DEFAULTS)
+        data.update(self.__dict__.get("_profile_extra_settings", {}))
         data["INFINI_GUI_PIPELINE_PRESET"] = self.preset_var.get().strip() if hasattr(self, "preset_var") else data.get("INFINI_GUI_PIPELINE_PRESET", DEFAULTS.get("INFINI_GUI_PIPELINE_PRESET", ""))
         for key, var in self.vars.items():
             data[key] = var.get().strip()
@@ -520,24 +574,42 @@ class SettingsGuiTraceStateMixin:
             self._update_applied_config_feedback("Saved")
 
     def apply_preset(self):
-        preset_name = self.preset_var.get().strip()
-        if preset_name not in PRESETS:
+        preset_name = self.preset_var.get()
+        is_user = preset_name.startswith(USER_PRESET_PREFIX)
+        preset = self.__dict__.get("user_presets", {}).get(preset_name[len(USER_PRESET_PREFIX):]) if is_user else PRESETS.get(preset_name)
+        if preset is None:
             self.status_var.set("Свои настройки сохранены без изменений. Для применения выбери готовый профиль.")
             return
-        preset = PRESETS.get(preset_name, {})
-        resize_choices = {
+        resize_choices = {} if is_user else {
             "INFINI_SPRITE_DOWNSCALE_FILTER": {"box", "bilinear", "bicubic", "lanczos"},
             "INFINI_SPRITE_PREMULTIPLIED_RESIZE": {"0", "1"},
         }
-        for key, value in preset.items():
-            if key in self.vars:
-                # Pipeline selection does not discard explicit resize preferences.
-                if key in resize_choices and self._value(key).lower() in resize_choices[key]:
-                    continue
-                self.vars[key].set(value)
-        self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name
-        self.status_var.set("Pipeline applied. Нажми Save, чтобы сохранить выбранный preset в config.env. Radmin/LAN не менялся.")
-        self._refresh_visibility()
+        self._profile_edit_guard = True
+        try:
+            for key, value in preset.items():
+                if is_user and key in self.text_widgets:
+                    widget = self.text_widgets[key]
+                    widget.delete("1.0", "end")
+                    widget.insert("1.0", value)
+                    widget.edit_modified(False)
+                elif key in self.vars:
+                    # Pipeline selection does not discard explicit resize preferences.
+                    if key in resize_choices and self._value(key).lower() in resize_choices[key]:
+                        continue
+                    self.vars[key].set(value)
+                if is_user:
+                    self.data[key] = value
+            if is_user:
+                self._profile_extra_settings = {key: value for key, value in preset.items()
+                    if key not in self.vars and key not in self.text_widgets}
+                self.radmin_enabled.set(self._current_profile_settings().get("INFINI_HOST") == "0.0.0.0")
+            self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name
+            self._refresh_visibility()
+        finally:
+            self._profile_edit_guard = False
+        if "_profile_baseline" in self.__dict__:
+            self._capture_profile_baseline()
+        self.status_var.set("Профиль применён. Нажми «Сохранить», чтобы записать config.env; работающий сервер применит изменения после перезапуска.")
 
     def on_radmin_toggle(self):
         if self.radmin_enabled.get():
