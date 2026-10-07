@@ -1,6 +1,6 @@
-# LocalGenerator v0.4.249
+# LocalGenerator v0.4.249.3
 
-Python HTTP-сервис генерации и Tk GUI настроек. [Единый setup/runbook](../QUICK_START_RU.md) владеет установкой, providers, запуском и MP; [offline QA](QUICK_START_RU.md) — проверкой checkout. Парная поставка 0.4.249 включает OpenRouter upstream pin, safe restart/effective-config diagnostics и Codex effective-wire cache/prefix refinements; старый опубликованный ZIP 0.4.246 их не содержит. Обновляй генератор вместе с модом, сохраняя `config.env`, cache, recipes/PNG и данные миров. Новая held-body/collision guidance относится к будущей генерации, а не к исправлению старых рисунков.
+Python HTTP-сервис генерации и Tk GUI настроек. [Единый setup/runbook](../QUICK_START_RU.md) владеет установкой, providers, запуском и MP; [offline QA](QUICK_START_RU.md) — проверкой checkout. Парная поставка 0.4.249.3 включает явную placed-body capability и полную sanitized stage-request diagnostics, а также OpenRouter upstream pin, safe restart/effective-config diagnostics и Codex effective-wire cache/prefix refinements; старый опубликованный ZIP 0.4.246 их не содержит. Обновляй генератор вместе с модом, сохраняя `config.env`, cache, recipes/PNG и данные миров. Новая held-body/collision guidance относится к будущей генерации, а не к исправлению старых рисунков.
 
 ## Граница сервиса
 

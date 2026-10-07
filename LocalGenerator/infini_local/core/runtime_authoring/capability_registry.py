@@ -302,6 +302,9 @@ class ParamSpec:
     consumer_storage: str = ""
 
     def consumer_constraint(self) -> dict[str, Any]:
+        if self.consumer_storage == "float64":
+            return {"storage": "float64", "rule": "finite_double_no_normalization",
+                    "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."}
         return {"storage": self.consumer_storage, "neutral": self.neutral,
                 "rule": "nonneutral_must_remain_nonneutral",
                 "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."}
@@ -309,6 +312,14 @@ class ParamSpec:
     def consumer_value_error(self, value: Any) -> str | None:
         """Check declared consumer storage without modifying the authored value."""
         if not self.consumer_storage:
+            return None
+        if self.consumer_storage == "float64":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return "expected a finite number for float64 consumer storage"
+            # Bounded JSON ints need no float conversion; retain indexed shape
+            # range diagnostics even for oversized malformed JSON integers.
+            if isinstance(value, float) and not math.isfinite(value):
+                return "value is not finite in float64 consumer storage"
             return None
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return "expected a finite number for float32 consumer storage"
@@ -390,6 +401,7 @@ class CapabilitySpec:
     implementation_status: str = "refactored"
     decision: str = "expose"
     technical_lowering_outputs: tuple[str, ...] = ()
+    technical_lowering_inputs: tuple[str, ...] = ()
     component_slot: str = ""
     exclusive_group: str = ""
     position_ownership: str = "none"
@@ -642,6 +654,7 @@ def _cap(
     dependencies: Iterable[str] = (),
     conflicts: Iterable[str] = (),
     lowering: Iterable[str] = (),
+    lowering_inputs: Iterable[str] = (),
     status: str = "refactored",
     decision: str = "expose",
     component_slot: str = "",
@@ -674,6 +687,7 @@ def _cap(
         dependencies=tuple(dependencies),
         conflicts=tuple(conflicts),
         technical_lowering_outputs=tuple(lowering),
+        technical_lowering_inputs=tuple(lowering_inputs),
         implementation_status=status,
         decision=decision,
         component_slot=component_slot,
@@ -983,6 +997,37 @@ _CAPS: list[CapabilitySpec] = [
         provenance="placement payload referenced by one exact binding transaction",
         repair_group="placeable",
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
+    ),
+    _cap(
+        "present_placed_item_sprite",
+        "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+        "item_placed_body",
+        ("item_body",),
+        {
+            "placementCallId": _p("string", "Exact same-item configure_placeable call executed by a place_item binding; tileId >= 0 and wallId = -1 only", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedBody"),
+            "renderSizePx": _p("integer", "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx", minimum=1, maximum=512, units="world pixels"),
+            "footprintAnchorX": _p("number", "Normalized committed footprint rectangle X: 0 left, 1 right", minimum=0, maximum=1),
+            "footprintAnchorY": _p("number", "Normalized committed footprint rectangle Y: 0 top, 1 bottom", minimum=0, maximum=1),
+            "imagePivotX": _p("number", "Normalized full delivered PNG frame pivot X, not alpha bounds or grip", minimum=0, maximum=1),
+            "imagePivotY": _p("number", "Normalized full delivered PNG frame pivot Y, not alpha bounds or grip", minimum=0, maximum=1),
+            "offsetXPx": _p("integer", "World-axis offset; positive right", minimum=-512, maximum=512, units="world pixels"),
+            "offsetYPx": _p("integer", "World-axis offset; positive down", minimum=-512, maximum=512, units="world pixels"),
+            "rotationDegrees": _p("number", "Clockwise bitmap rotation in y-down world axes; no inferred forward-axis correction", minimum=-180, maximum=180, units="degrees"),
+            "flipX": _p("boolean", "Reflect image horizontally about its pivot before rotation"),
+            "flipY": _p("boolean", "Reflect image vertically about its pivot before rotation"),
+        },
+        multiplicity="per_placement_reference",
+        py=_COMPILER_OWNER,
+        cs="Common/Models/RuntimeProgramSpec.cs::Validate",
+        wire=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
+        provenance="literal registered same-item root-PNG projection selected only by this explicit operation",
+        repair_group="placed_body",
+        lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
+        lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
+                         "runtimeProgram.calls[].params.placementCallId",
+                         "runtimeProgram.bindings[].usePolicy.action.kind",
+                         "runtimeProgram.bindings[].usePolicy.action.targetId",
+                         "runtimeProgram.bindings[].usePolicy.action.placementCallId"),
     ),
     _cap(
         "require_use_condition",
@@ -1768,6 +1813,9 @@ if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
+    if cap.name == "present_placed_item_sprite":
+        base = "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
+        return (base, *(f"{base}.{name}" for name in cap.params if name != "placementCallId"))
     if cap.name == "configure_item_stats":
         return tuple(f"gameplay.{spec.wire_name or name}" for name, spec in cap.params.items())
     item_paths: dict[str, tuple[str, ...]] = {
@@ -1846,7 +1894,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
     direct = {
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
         "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
-        "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable",
+        "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
@@ -1874,6 +1922,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "apply_generated_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
         "configure_tool": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "configure_placeable": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+        "present_placed_item_sprite": "Common/Models/RuntimeProgramSpec.cs::Validate",
         "require_use_condition": "Content/Items/GeneratedItem.cs::UseBlockedReason",
         "add_hold_light": "Content/Items/GeneratedItem.cs::HoldItem",
         "move_player_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
@@ -1935,6 +1984,14 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         if cap.name == "charge_then_release":
             rows.append(RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")), message="released projectile needs an explicit post-release movement"))
         return tuple(rows)
+    if cap.name == "present_placed_item_sprite":
+        return (
+            RequirementSpec("executed_tile_placement_reference", capability="configure_placeable",
+                            param="placementCallId", any_of=("place_item",),
+                            message="Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference."),
+            RequirementSpec("unique_call_reference", param="placementCallId",
+                            message="Only one explicit placed-body presentation may reference a placement call."),
+        )
     if cap.name == "configure_placeable":
         return (
             RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
@@ -2013,6 +2070,8 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
 def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpec:
     reference = spec.reference
     semantic_type = spec.semantic_type
+    if cap.name == "present_placed_item_sprite" and spec.kind == "number":
+        spec = replace(spec, consumer_storage="float64")
     if cap.name == "target_and_fire" and name == "shotEntity":
         reference = ReferenceSpec("entity", PROJECTILE_ENTITY_KIND_ORDER, False, True)
         semantic_type = "runtime_entity_id"
@@ -2094,7 +2153,8 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     elif cap.name == "charge_then_release":
         emitted = ("on_release", "channel_complete")
     exact = _exact_wire_paths(cap)
-    technical = tuple(path for path in exact if path.endswith(".enabled") or path.endswith(".code") or path.endswith(".name"))
+    technical = (cap.technical_lowering_outputs if cap.technical_lowering_inputs else
+                 tuple(path for path in exact if path.endswith(".enabled") or path.endswith(".code") or path.endswith(".name")))
     params = MappingProxyType({name: _semantic_param(cap, name, spec) for name, spec in cap.params.items()})
     return replace(
         cap,

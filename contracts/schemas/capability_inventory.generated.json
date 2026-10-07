@@ -965,6 +965,187 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "present_placed_item_sprite",
+      "componentSlot": "placed_body",
+      "conflicts": [],
+      "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
+      "decision": "expose",
+      "dependencies": [
+        "configure_placeable"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetYPx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.rotationDegrees",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.flipX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.flipY"
+      ],
+      "multiplicity": "per_placement_reference",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "flipX": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "flipY": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "footprintAnchorX": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "footprintAnchorY": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "imagePivotX": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "imagePivotY": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "offsetXPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 512,
+          "minimum": -512,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "world pixels"
+        },
+        "offsetYPx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 512,
+          "minimum": -512,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "world pixels"
+        },
+        "placementCallId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": false,
+            "namespace": "call",
+            "targetKinds": [
+              "item_body"
+            ]
+          },
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "renderSizePx": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 512,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "world pixels"
+        },
+        "rotationDegrees": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 180,
+          "minimum": -180,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "degrees"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "literal registered same-item root-PNG projection selected only by this explicit operation",
+      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "capability": "configure_placeable",
+          "equals": null,
+          "kind": "executed_tile_placement_reference",
+          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference.",
+          "param": "placementCallId",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "unique_call_reference",
+          "message": "Only one explicit placed-body presentation may reference a placement call.",
+          "param": "placementCallId",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
+      ]
+    },
+    {
+      "authorityByEffect": {},
       "capability": "require_use_condition",
       "componentSlot": "use_condition",
       "conflicts": [],

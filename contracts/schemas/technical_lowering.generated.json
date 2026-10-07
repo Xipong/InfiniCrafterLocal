@@ -140,6 +140,34 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "present_placed_item_sprite",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetYPx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.rotationDegrees",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.flipX",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.flipY"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn",
+        "runtimeProgram.calls[].target",
+        "runtimeProgram.calls[].params.placementCallId",
+        "runtimeProgram.bindings[].usePolicy.action.kind",
+        "runtimeProgram.bindings[].usePolicy.action.targetId",
+        "runtimeProgram.bindings[].usePolicy.action.placementCallId"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "require_use_condition",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",

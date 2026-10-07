@@ -18,6 +18,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
+from infini_local.storage.trace_runtime import trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.pipelines.llm_transport import (
@@ -318,6 +319,7 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             "driverMeaningReadOnly": driver_meanings,
             "events": sorted(set(events_by_entity.get(str(entity.get("id") or ""), []))),
             "hitbox": copy.deepcopy(entity.get("hitbox") or {}),
+            **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision") if field in entity},
         })
     return rows
 
@@ -328,7 +330,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
     gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
     mechanics = {
-        "gameplay": {field: copy.deepcopy(gameplay[field]) for field in ("itemScale", "width", "height") if field in gameplay},
+        "gameplay": {field: copy.deepcopy(gameplay[field]) for field in ("itemScale", "width", "height", "useTime", "useAnimation", "reuseDelay") if field in gameplay},
         **{field: copy.deepcopy(runtime[field]) for field in ("itemEntityId", "primaryEntityId", "primaryOwner", "itemUse", "itemContact", "bindings") if field in runtime},
     }
     canvases = _visual_item_schema()["properties"]["preferredCanvasSize"]["enum"]
@@ -343,6 +345,12 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
     return {
         "acceptedPresentationMechanicsReadOnly": mechanics,
         "spritePresentationReadOnly": {
+            "placedBody": {
+                "operation": "present_placed_item_sprite",
+                **{key: copy.deepcopy(value) for key, value in CAPABILITY_REGISTRY["present_placed_item_sprite"].prompt_card().items() if key == "params"},
+                "meaning": CAPABILITY_REGISTRY["present_placed_item_sprite"].summary,
+                "ownership": "Accepted bindings[].usePolicy.action.placement.placedBody transforms are immutable gameplay-owned facts. Visual designs the existing root item PNG only: no additional placed PNG/project, source flag, placement entity, or redesign of these transforms. Its full-frame pivot is independent of held grip, forwardAngleDegrees and dropped-item worldScale. An absent placedBody is native presentation, never infer this operation from parents or furniture appearance.",
+            },
             "units": "R=renderSizePx is the larger complete final frame side in base world pixels, not alpha-bbox, hitbox, requested canvas or physical shaft/tip length. C is the actual loaded final frame max-side. G=gameplay.itemScale, W=item.worldScale, I=item.inventoryScale, D=hitbox.drawScale, E=entity.scale and current P=Projectile.scale are independent dimensionless multipliers; Visual cannot edit G or D.",
             "axis": "forwardAngleDegrees is the final PNG local forward-axis in degrees: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. It describes pixels, not AI movement. Describe this pose in the same authored prompt; reuse inherits root pixels and axis, never a second inferred axis.",
             "heldRootVisibility": {
@@ -365,6 +373,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
             "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon may instead represent only a terminal body with a separately chosen texturedPath for the path. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
+            "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
             "bakeFillByProcessingRole": fill,
             "legacy": "Already delivered metadata absence preserves exact historical rendering; newly authored v2 projects must explicitly choose required fields. No defaults, clamps, migration or rebake.",
         },
@@ -1116,6 +1125,7 @@ def _request_visual_kit(
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
     request = with_prompt_cache_prefix(request, message_index=1, prefix_chars=prefix_chars)
+    trace_stage_request("visual_repair" if repair else "visual_director", data.get("recipeKey"), request, recipe_id=data.get("id"))
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]
     try:

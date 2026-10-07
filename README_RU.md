@@ -1,4 +1,6 @@
-# InfiniCrafterLocal v0.4.249
+# InfiniCrafterLocal v0.4.249.3
+
+**0.4.249.3:** новая явная [placed PNG capability](docs/PRESENT_PLACED_ITEM_SPRITE_RU.md), durable material/net lifecycle и полная sanitized запись stage-builder requests; owning advisories для cost/tempo/motion и accepted Visual context. Это prospective authoring, не автоматическая правка сохранённых предметов. Сохранены runtime fixes 0.4.249.2.
 
 Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 

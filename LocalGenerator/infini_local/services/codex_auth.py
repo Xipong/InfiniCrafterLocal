@@ -232,6 +232,17 @@ def _decode_unicode_runs(message: str) -> str:
     return message
 
 
+def redact_credentials(message: str, secrets: tuple[str, ...] = (), *, decode_unicode: bool = True) -> str:
+    """Reuse OAuth credential redaction without clipping or changing clean text."""
+    decoded = _decode_unicode_runs(message) if decode_unicode else message
+    sanitized = decoded
+    for secret in sorted(secrets, key=len, reverse=True):
+        if secret:
+            sanitized = sanitized.replace(secret, "[REDACTED]")
+    sanitized = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk-|rt_)[\w-]{12,})", "[REDACTED]", sanitized)
+    return message if sanitized == decoded else sanitized
+
+
 def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict) -> CodexError:
     # Decode first so JSON escapes cannot hide an echoed credential.
     raw = exc.read(65536)
@@ -247,10 +258,7 @@ def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict) -> Code
     for key, value in headers.items():
         if key.lower() in {"authorization", "chatgpt-account-id"}:
             sensitive.extend([value, value.removeprefix("Bearer ")])
-    for secret in sorted(sensitive, key=len, reverse=True):
-        if secret:
-            message = message.replace(secret, "[REDACTED]")
-    message = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk-|rt_)[\w-]{12,})", "[REDACTED]", message)
+    message = redact_credentials(message, tuple(sensitive), decode_unicode=False)
     message = " ".join(message.split())[:500]
     return CodexError(f"OpenAI HTTP {exc.code}: {message or 'request rejected'}")
 

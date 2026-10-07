@@ -85,6 +85,15 @@ def trace_event(kind: str, stage: str, title: str, payload: Any = None, *, promp
     )
 
 
+def trace_stage_request(stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+    """The existing trace toggle controls full-message artifacts and their joins."""
+    if not TRACE_PROMPTS_ENABLED:
+        return {"status": "disabled"}
+    receipt = trace_tools.persist_stage_request(CACHE_DIR, stage, recipe_key, request, recipe_id=recipe_id)
+    trace_event("request_artifact", stage, "Exact sanitized stage request", receipt)
+    return receipt
+
+
 def _tail_text_file(path: str | Path, max_chars: int = 16000) -> str:
     return trace_tools.tail_text_file(path, max_chars)
 
@@ -105,6 +114,7 @@ __all__ = [
     "_trace_clip",
     "_trace_message_summary",
     "trace_event",
+    "trace_stage_request",
     "_tail_text_file",
     "_tail_ndjson",
 ]

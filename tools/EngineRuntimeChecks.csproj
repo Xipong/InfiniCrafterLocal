@@ -20,6 +20,12 @@
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffUI.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffDraw.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedBody.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedBodyLedger.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedBodyPeerIdentity.cs" />
+    <Compile Include="EngineRuntimeChecks.TransportIdentity.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedBodyNative.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedBodyDraw.cs" />
     <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
     <Compile Include="EngineRuntimeChecks.HeldPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.HeldProxy.cs" />

@@ -156,16 +156,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 90035,
-  "fullCapabilityCatalogCount": 52,
+  "fullAuthorPayloadChars": 95345,
+  "fullCapabilityCatalogCount": 53,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 44,
+    "declaredCodes": 46,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 43,
+    "emittedCodes": 45,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 44,
-    "runtimeDeclaredCodes": 43,
+    "policyCodes": 46,
+    "runtimeDeclaredCodes": 45,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

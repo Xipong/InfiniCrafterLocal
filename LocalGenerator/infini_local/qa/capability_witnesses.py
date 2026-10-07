@@ -67,6 +67,7 @@ def _params(fn: str) -> dict[str, Any]:
             "jumpSpeedBonusPxPerTick": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
         },
         "configure_placeable": {"tileId": 4, "wallId": -1, "placeStyle": 0},
+        "present_placed_item_sprite": {"placementCallId": "native_placement"},
         "require_use_condition": {"mode": "grounded"},
         "move_player_on_use": {"mode": "recall_home", "rangeTiles": 0, "cooldownTicks": 60, "safeTileOnly": True},
         "configure_accessory": {"defensePoints": 1},
@@ -150,8 +151,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             calls.append(_call("witness_call", fn, "item"))
             action = "use_item_body"
             input_kind = "primary_use"
-            if fn == "configure_placeable":
+            if fn in {"configure_placeable", "present_placed_item_sprite"}:
                 action = "place_item"
+                if fn == "present_placed_item_sprite":
+                    calls.append(_call("native_placement", "configure_placeable", "item"))
             elif fn in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
                 action = "equip_passive"; input_kind = "equipped"
             elif fn in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:
@@ -161,7 +164,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 input_kind,
                 action,
                 "item",
-                placement_call_id="witness_call" if action == "place_item" else "",
+                placement_call_id=("native_placement" if fn == "present_placed_item_sprite" else "witness_call") if action == "place_item" else "",
                 contact_damage=fn in {"configure_item_contact_hitbox", "configure_tool"},
             ))
     else:

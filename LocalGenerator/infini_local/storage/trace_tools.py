@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -243,6 +245,58 @@ def _echo_event(
         print(f"[{stamp}] {level.upper()}: {message}{suffix}", flush=True)
     except Exception:
         pass
+
+
+def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+    """Atomic, bounded exact sanitized stage messages, not an HTTP/auth snapshot."""
+    from infini_local.services.codex_auth import redact_credentials
+
+    receipt: dict[str, Any] = {"stage": stage, "recipeKey": recipe_key}
+    if not any(type(value) is str and value for value in (recipe_key, recipe_id)):
+        return {**receipt, "status": "refused", "reason": "missing_recipe_join"}
+    try:
+        messages = []
+        for message in request["messages"]:
+            # Only authored message fields: never stringify private request objects.
+            if not isinstance(message, dict) or any(type(message.get(key)) is not str for key in ("role", "content")):
+                raise ValueError("unsupported_message")
+            row = {key: redact_credentials(message[key]) for key in ("role", "name", "content") if key in message and type(message[key]) is str}
+            messages.append(row)
+        encoded_messages = json.dumps(messages, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        artifact = {
+            "schema": "infini.stage-request-messages.v1", "stage": stage, "recipeKey": recipe_key,
+            "recipeId": recipe_id, "messages": messages,
+            "messagesSha256": hashlib.sha256(encoded_messages).hexdigest(),
+            "sanitized": messages != [{key: message[key] for key in ("role", "name", "content") if key in message} for message in request["messages"]],
+            "scope": "Complete builder messages before provider conversion; excludes transport headers/configuration.",
+        }
+        encoded = json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        receipt.update({"messagesSha256": artifact["messagesSha256"], "bytes": len(encoded)})
+        if len(encoded) > 2 * 1024 * 1024:
+            return {**receipt, "status": "refused", "reason": "payload_limit"}
+        directory = Path(cache_dir) / "stage_requests"
+        digest = hashlib.sha256(encoded).hexdigest()
+        target = directory / (digest + ".json")
+        if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
+            return {**receipt, "status": "refused", "reason": "linked_storage"}
+        with _NDJSON_WRITE_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            files = list(directory.glob("*.json"))
+            if not target.exists() and (len(files) >= 128 or sum(path.stat().st_size for path in files) + len(encoded) > 32 * 1024 * 1024):
+                return {**receipt, "status": "refused", "reason": "storage_limit"}
+            fd, temporary_name = tempfile.mkstemp(prefix=".request-", dir=directory)
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(encoded)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
+        return {**receipt, "status": "stored", "artifactSha256": digest, "path": target.relative_to(cache_dir).as_posix()}
+    except Exception as exc:
+        # Diagnostics cannot stop gameplay or disclose exception/request text.
+        return {**receipt, "status": "refused", "reason": type(exc).__name__}
 
 
 def trace_clip(value: Any, *, default_max_chars: int, max_chars: int | None = None) -> str:

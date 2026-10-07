@@ -27,4 +27,5 @@ public static class InfiniNetPacketIds
     public const byte GeneratedHitNpcPull = 21;
     public const byte RequestGeneratedPlacementIntent = 22;
     public const byte GeneratedPlacementIntentReady = 23;
+    public const byte SyncGeneratedPlacedBodyLedger = 24;
 }

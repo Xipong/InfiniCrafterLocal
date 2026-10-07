@@ -27,7 +27,9 @@ from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
-PLANNER_PROMPT_LIMIT_CHARS = 96_000
+# Engineering character guard only: additive placed-body/quality guidance keeps
+# the frozen basic/rich packets intact with >= 1,000 chars of headroom.
+PLANNER_PROMPT_LIMIT_CHARS = 96_500
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -64,6 +66,8 @@ def planner_priority_header_for_llm() -> list[str]:
         "Preserve literal parent physics where useful: a workbench may remain a literal workbench attached to a blade. Do not replace it with a vague wooden theme.",
         "Do not add a mandatory weird twist. Novelty comes from the authored composition itself, not an unrelated gimmick.",
         "Multiple independent actions are legal when they belong to the authored composition; do not add an unrelated action merely because the catalog exposes it.",
+        "alternate_use is optional: choose a purposeful additional action for the final object, not required to preserve an independent function of each parent. A coherent single-input design is valid; useful multi-mode compositions remain legal.",
+        "Use source tempo and motion when available and useful to the composition; make deviations intentional. Source flags or aiStyle are not an algorithm and do not specify gravity, acceleration or timing. You may use your knowledge to choose familiar or novel physics explicitly with the available capabilities; distinguish that authored choice from verified source facts. The host supplies no weapon preset or inferred movement.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
 
@@ -74,7 +78,8 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
     field_guide = runtime_authoring_prompt_field_guide()
     field_guide["stackCost"] = (
         "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
-        "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item."
+        "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item. "
+        "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
     )
     field_guide["bindingTarget"] += (
         " Every binding owns one usePolicy with action, stackCost and contactDamage; no call/global shadows it. "
@@ -146,7 +151,9 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
             event["constructionMeaning"] = event_detail[event["event"]]
     capabilities = compact_capability_catalog()
     for card in capabilities:
-        if card["fn"] == "charge_then_release":
+        if card["fn"] == "present_placed_item_sprite":
+            card["constructionMeaning"] = "placementCallId is an exact configure_placeable call id, not an entity reference: use the same item_body and exact place_item binding reference, tile-only. This operation explicitly selects that item's existing root PNG; no new image project/source field. Native support, solidity, wiring, mining, interaction and light remain native. Independent placed size/full-frame pivot/offset/flips/rotation are all required; no grip or forward-axis inference. Omit this call to retain native presentation. Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+        elif card["fn"] == "charge_then_release":
             card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. heldSpriteVisibilityHint is presentation, not release trigger."
         elif card["fn"] == "configure_item_use":
             card["constructionMeaning"] = "useTimeTicks is cadence, useAnimationTicks animation duration; autoReuse repeats active use while held, channel keeps that use active."

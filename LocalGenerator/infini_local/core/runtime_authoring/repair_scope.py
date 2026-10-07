@@ -97,6 +97,8 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "missing_set_key": {"strategy": "patch_exact_missing_param", "llmRepairable": True, "allowNodeDelete": False},
     "missing_required_component": {"strategy": "synthesize_exact_required_component", "llmRepairable": True, "allowNodeDelete": False},
     "place_item_without_stack_cost": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
+    "placed_body_placement_reference": {"strategy": "patch_exact_reference_or_delete_presentation", "llmRepairable": True, "allowNodeDelete": True},
+    "duplicate_placed_body_reference": {"strategy": "delete_exact_later_presentation_index", "llmRepairable": True, "allowNodeDelete": False},
     "hybrid_placeable_max_stack": {"strategy": "patch_exact_item_param", "llmRepairable": True, "allowNodeDelete": False},
     "invalid_primary_entity_reference": {"strategy": "choose_exact_existing_primary_entity", "llmRepairable": True, "allowNodeDelete": False},
     "self_reference_forbidden": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
@@ -1299,7 +1301,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         if code == "unknown_registry_requirement":
             pass
-        elif code in {"duplicate_id", "ambiguous_global_id"}:
+        elif code in {"duplicate_id", "ambiguous_global_id", "duplicate_placed_body_reference"}:
             # IDs are structural identity.  Do not let Repair rename a valid
             # row through a broad upsert; allow dropping the exact offending
             # row by index instead.

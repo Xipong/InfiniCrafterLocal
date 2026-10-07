@@ -254,6 +254,58 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "intentionallyHidden": hidden}
 
 
+def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    """Classify the new nested DTO and exact scalar storage, not GPU execution."""
+    from infini_local.core.runtime_authoring.wire_validator import _PLACED_BODY_KEYS
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
+    cap = CAPABILITY_REGISTRY["present_placed_item_sprite"]
+    expected = {(spec.wire_name or name)[0].upper() + (spec.wire_name or name)[1:]:
+                ("double" if spec.consumer_storage == "float64" else "float") if spec.kind == "number"
+                else "int" if spec.kind == "integer" else "bool"
+                for name, spec in cap.params.items() if name != "placementCallId"}
+    actual: dict[str, str] = {}
+    block = ""
+    for declaration in _nodes(_PARSER.parse(dto).root_node, "class_declaration"):
+        name = declaration.child_by_field_name("name")
+        if name is None or dto[name.start_byte:name.end_byte] != b"RuntimePlacedBodySpec":
+            continue
+        # Inspect code only: comments/string literals cannot satisfy a guard.
+        code = bytearray(dto[declaration.start_byte:declaration.end_byte])
+        for child in _nodes(declaration, "comment"):
+            code[child.start_byte-declaration.start_byte:child.end_byte-declaration.start_byte] = b" " * (child.end_byte-child.start_byte)
+        for child in _nodes(declaration, "string_literal"):
+            code[child.start_byte-declaration.start_byte:child.end_byte-declaration.start_byte] = b" " * (child.end_byte-child.start_byte)
+        block = code.decode()
+        for prop in _nodes(declaration, "property_declaration"):
+            identifier, storage = prop.child_by_field_name("name"), prop.child_by_field_name("type")
+            if identifier is not None and storage is not None:
+                actual[dto[identifier.start_byte:identifier.end_byte].decode()] = dto[storage.start_byte:storage.end_byte].decode()
+    wire = {name[0].upper() + name[1:] for name in _PLACED_BODY_KEYS}
+    import re
+    bounds: dict[str, list[int | float]] = {}
+    number = r"(-?\d+(?:\.\d+)?)"
+    for field, low, high in re.findall(r"(\w+)\s+is\s*<\s*" + number + r"\s+or\s*>\s*" + number, block):
+        bounds[field] = [float(low), float(high)]
+    unit = re.search(r"bool\s+Unit\(double\s+(\w+)\)\s*=>\s*double\.IsFinite\(\1\)\s*&&\s*\1\s*>=\s*" + number + r"\s*&&\s*\1\s*<=\s*" + number, block)
+    if unit:
+        for field in re.findall(r"!Unit\((\w+)\)", block):
+            bounds[field] = [float(unit.group(2)), float(unit.group(3))]
+    expected_bounds = {name[0].upper() + name[1:]: [spec.minimum, spec.maximum]
+                       for name, spec in cap.params.items() if spec.kind in {"integer", "number"}}
+    finite = {field for field in expected_bounds
+              if re.search(r"!double\.IsFinite\(" + re.escape(field) + r"\)", block)
+              or (unit and re.search(r"!Unit\(" + re.escape(field) + r"\)", block))}
+    required_finite = {name[0].upper()+name[1:] for name, spec in cap.params.items() if spec.kind == "number"}
+    return {"ok": actual == expected and wire == set(expected) and bounds == expected_bounds
+                  and finite == required_finite and "Math.Clamp" not in block,
+            "boundsByField": bounds, "expectedBoundsByField": expected_bounds,
+            "finiteFields": sorted(finite),
+            "storageByField": actual, "expectedStorageByField": expected,
+            "unclassifiedDtoFields": sorted(set(actual)-set(expected)),
+            "missingDtoFields": sorted(set(expected)-set(actual)),
+            "wireDtoDrift": sorted(set(actual)^wire)}
+
+
 def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Cross-check structural C# DTOs with Author, Visual and technical owners."""
     from infini_local.core.runtime_authoring import program_schema as author
@@ -271,7 +323,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     entity_components = {path[len(prefixes[0]):].split(".", 1)[0].replace("[]", "")
                          for path in paths if path.startswith(prefixes[0])}
-    placement_fields = {path[len(prefixes[1]):] for path in paths if path.startswith(prefixes[1])}
+    placement_fields = {path[len(prefixes[1]):].split(".", 1)[0] for path in paths if path.startswith(prefixes[1])}
     visual_schema = visual_response_schema(["audit_entity"])
     visual_variants = visual_schema["properties"]["entities"]["items"]["oneOf"]
     visual_model_fields = set().union(*(row["properties"] for row in visual_variants))
@@ -290,6 +342,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingUsePolicySpec": pascal(policy),
         "RuntimeBindingActionSpec": (pascal(actions) - {"PlacementCallId"}) | {"Placement"},
         "RuntimePlacementSpec": pascal(placement_fields),
+        "RuntimePlacedBodySpec": pascal(wire._PLACED_BODY_KEYS),
         "RuntimeEntitySpec": pascal(author.entity_schema()["properties"]) | pascal(entity_components)
                              | {"Visual", "VisualRole"},
         "RuntimeEntityVisualSpec": visual_contract | vfx_director_fields | visual_internal,
@@ -303,6 +356,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingUsePolicySpec": wire._USE_POLICY_KEYS,
         "RuntimeBindingActionSpec": wire._BINDING_ACTION_KEYS,
         "RuntimePlacementSpec": wire._PLACEMENT_KEYS,
+        "RuntimePlacedBodySpec": wire._PLACED_BODY_KEYS,
         "RuntimeEntitySpec": wire._ENTITY_KEYS,
         "RuntimeEntityVisualSpec": wire._VISUAL_KEYS,
         "RuntimeMovementSpec": wire._DRIVER_KEYS,
@@ -314,7 +368,9 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         properties = _class_properties(dto, cls)
         unclassified[cls] = sorted(properties - owner_fields)
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()),
+    placed_storage = placed_body_surface_audit(dto)
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"],
+            "placedBodyStorage": placed_storage,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,
             "visualStageFields": sorted(visual_contract),
             "vfxDirectorFields": sorted(vfx_director_fields),

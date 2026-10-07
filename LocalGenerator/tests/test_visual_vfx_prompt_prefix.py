@@ -416,7 +416,7 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
     packet = json.loads(request["messages"][1]["content"])
     context = packet["acceptedPresentationMechanicsReadOnly"]
     runtime = data["runtimeProgram"]
-    assert context["gameplay"] == {k: data["gameplay"][k] for k in ("itemScale", "width", "height") if k in data["gameplay"]}
+    assert context["gameplay"] == {k: data["gameplay"][k] for k in ("itemScale", "width", "height", "useTime", "useAnimation", "reuseDelay") if k in data["gameplay"]}
     for field in ("itemEntityId", "primaryEntityId", "primaryOwner", "itemUse", "itemContact", "bindings"):
         assert (field in context) == (field in runtime)
         if field in runtime:

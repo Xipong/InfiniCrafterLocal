@@ -431,6 +431,13 @@ public sealed class RuntimePlacementSpec
     public int TileId { get; set; } = -1;
     public int WallId { get; set; } = -1;
     public int PlaceStyle { get; set; }
+    private RuntimePlacedBodySpec? _placedBody;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePlacedBodySpec? PlacedBody
+    {
+        get => _placedBody;
+        set => _placedBody = value ?? throw new InvalidDataException("present placedBody cannot be null");
+    }
 
     public void NormalizeAndValidate()
     {
@@ -442,6 +449,37 @@ public sealed class RuntimePlacementSpec
             throw new InvalidDataException("placement must enable a tile or wall");
         if (PlaceStyle is < 0 or > 1000)
             throw new InvalidDataException("placement style must be 0..1000");
+        if (PlacedBody is not null)
+        {
+            if (TileId < 0 || WallId >= 0)
+                throw new InvalidDataException("placedBody requires exact tile-only placement");
+            PlacedBody.Validate();
+        }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimePlacedBodySpec
+{
+    [JsonRequired] public int RenderSizePx { get; init; }
+    [JsonRequired] public double FootprintAnchorX { get; init; }
+    [JsonRequired] public double FootprintAnchorY { get; init; }
+    [JsonRequired] public double ImagePivotX { get; init; }
+    [JsonRequired] public double ImagePivotY { get; init; }
+    [JsonRequired] public int OffsetXPx { get; init; }
+    [JsonRequired] public int OffsetYPx { get; init; }
+    [JsonRequired] public double RotationDegrees { get; init; }
+    [JsonRequired] public bool FlipX { get; init; }
+    [JsonRequired] public bool FlipY { get; init; }
+
+    public void Validate()
+    {
+        static bool Unit(double value) => double.IsFinite(value) && value >= 0 && value <= 1;
+        if (RenderSizePx is < 1 or > 512 || !Unit(FootprintAnchorX) || !Unit(FootprintAnchorY)
+            || !Unit(ImagePivotX) || !Unit(ImagePivotY) || OffsetXPx is < -512 or > 512
+            || OffsetYPx is < -512 or > 512 || !double.IsFinite(RotationDegrees)
+            || RotationDegrees is < -180 or > 180)
+            throw new InvalidDataException("placedBody transform is outside explicit accepted bounds");
     }
 }
 

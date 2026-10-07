@@ -69,7 +69,10 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert set(static) == {"priorityHeader", "gameplayAuthoringStages", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport"}
     assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor"}
     assert full["recipeKey"] != other_full["recipeKey"]
-    assert len(static["runtimeCapabilityContract"]["catalog"]["capabilities"]) == 52
+    capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    assert len(capabilities) == 53
+    assert {card["fn"] for card in capabilities} == set(author.CAPABILITY_REGISTRY)
+    assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
     assert first["messages"][1]["content"] == first_user
     assert second["messages"][1]["content"] == second_user
 

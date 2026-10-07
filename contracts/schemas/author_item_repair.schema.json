@@ -1716,6 +1716,167 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "present_placed_item_sprite"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "flipX": {
+                    "description": "Reflect image horizontally about its pivot before rotation",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "flipY": {
+                    "description": "Reflect image vertically about its pivot before rotation",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "footprintAnchorX": {
+                    "description": "Normalized committed footprint rectangle X: 0 left, 1 right",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "footprintAnchorY": {
+                    "description": "Normalized committed footprint rectangle Y: 0 top, 1 bottom",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "imagePivotX": {
+                    "description": "Normalized full delivered PNG frame pivot X, not alpha bounds or grip",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "imagePivotY": {
+                    "description": "Normalized full delivered PNG frame pivot Y, not alpha bounds or grip",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "offsetXPx": {
+                    "description": "World-axis offset; positive right",
+                    "maximum": 512,
+                    "minimum": -512,
+                    "type": "integer",
+                    "x-infini-semanticType": "pixels",
+                    "x-infini-units": "world pixels"
+                  },
+                  "offsetYPx": {
+                    "description": "World-axis offset; positive down",
+                    "maximum": 512,
+                    "minimum": -512,
+                    "type": "integer",
+                    "x-infini-semanticType": "pixels",
+                    "x-infini-units": "world pixels"
+                  },
+                  "placementCallId": {
+                    "description": "Exact same-item configure_placeable call executed by a place_item binding; tileId >= 0 and wallId = -1 only",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "graphEdge": false,
+                      "namespace": "call",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    },
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "renderSizePx": {
+                    "description": "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx",
+                    "maximum": 512,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "pixels",
+                    "x-infini-units": "world pixels"
+                  },
+                  "rotationDegrees": {
+                    "description": "Clockwise bitmap rotation in y-down world axes; no inferred forward-axis correction",
+                    "maximum": 180,
+                    "minimum": -180,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "degrees"
+                  }
+                },
+                "required": [
+                  "placementCallId",
+                  "renderSizePx",
+                  "footprintAnchorX",
+                  "footprintAnchorY",
+                  "imagePivotX",
+                  "imagePivotY",
+                  "offsetXPx",
+                  "offsetYPx",
+                  "rotationDegrees",
+                  "flipX",
+                  "flipY"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "require_use_condition"
               },
               "id": {

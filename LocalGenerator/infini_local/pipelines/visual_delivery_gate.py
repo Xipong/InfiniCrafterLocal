@@ -254,12 +254,18 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
     item_path = str(visual.get("spritePath") or "")
     item_exists = _asset_path_exists(item_path, _assessment=assessment)
     item_usable = _item_sprite_status_is_usable(item_status) and item_exists
+    from infini_local.core.runtime_authoring.binding_use_policy import placed_body_binding_ids
+    placed_bindings = placed_body_binding_ids(data)
+    if placed_bindings and not item_usable:
+        problems.append({"code": "required_placed_body_sprite_missing",
+                         "message": "Explicit placed-body presentation requires the existing root item PNG; no native/procedural replacement is permitted.",
+                         "bindingIds": list(placed_bindings), "status": item_status, "path": item_path})
     if VISUAL_REQUIRE_ITEM_SPRITE and not item_usable:
         problems.append({"code": "required_item_sprite_missing", "message": "Generated item sprite is required, but no usable processed PNG is present.", "status": item_status, "path": item_path})
 
     slots: list[dict[str, Any]] = [{
         "role": "item", "entityId": next((str(e.get("id") or "") for e in _runtime_entities(data) if e.get("kind") == "item_body"), ""),
-        "assetMode": "baked_sprite", "required": bool(VISUAL_REQUIRE_ITEM_SPRITE), "status": item_status,
+        "assetMode": "baked_sprite", "required": bool(VISUAL_REQUIRE_ITEM_SPRITE or placed_bindings), "status": item_status,
         "path": item_path, "exists": item_exists, "completePng": item_exists, "usable": item_usable,
         "technicalScore": visual.get("spriteTechnicalScore"),
     }]
@@ -406,7 +412,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
 
     return {
         "ok": not problems,
-        "requiredItemSprite": bool(VISUAL_REQUIRE_ITEM_SPRITE),
+        "requiredItemSprite": bool(VISUAL_REQUIRE_ITEM_SPRITE or placed_bindings),
         "equipmentOverlayRequired": bool(overlay_requirement["required"]),
         "requireZImageBackend": bool(VISUAL_REQUIRE_ZIMAGE_BACKEND),
         "imageBackend": IMAGE_BACKEND,

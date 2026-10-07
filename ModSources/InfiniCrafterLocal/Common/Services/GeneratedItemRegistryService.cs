@@ -417,12 +417,17 @@ public sealed class GeneratedItemRegistryService : IDisposable
         }
     }
 
+    internal static string DefinitionIdentity(GeneratedItemData data) => ComputeDefinitionHash(data);
+
     private static string ComputeDefinitionHash(GeneratedItemData data)
     {
         string networkJson = data.ToNetworkJson();
         GeneratedItemData? clone = GeneratedItemData.FromJson(networkJson);
         if (clone is not null && clone.RecipeMeta is not null)
         {
+            // Host asset routing is metadata, not authored definition identity.
+            // Canonicalize it alongside URL/roster without changing native-default bytes.
+            clone.RecipeMeta.AssetTransport = "native";
             clone.RecipeMeta.AssetBaseUrl = "";
             clone.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(clone).ToArray();
             networkJson = clone.ToNetworkJson();

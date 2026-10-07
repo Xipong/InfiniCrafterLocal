@@ -64,7 +64,7 @@ from infini_local.pipelines.llm_transport import (
     resolve_llm_model,
     with_llm_stage,
 )
-from infini_local.storage.trace_runtime import _trace_message_summary, trace_event
+from infini_local.storage.trace_runtime import _trace_message_summary, trace_event, trace_stage_request
 
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
@@ -180,6 +180,7 @@ def _repair_malformed_author_json(
     original_recipe_context: str,
     model_name: str,
     source_response_format: Mapping[str, Any] | None = None,
+    recipe_key: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Spend the one Gameplay Repair call on syntax-only Author recovery."""
 
@@ -234,6 +235,10 @@ def _repair_malformed_author_json(
         prompt=messages,
     )
     try:
+        # The Author caller owns the join; standalone syntax replays may lack it.
+        # Let the recorder explicitly refuse a missing join without blocking Repair.
+        trace_key = recipe_key if recipe_key is not None else repair_context["originalRecipeContext"].get("recipeKey")
+        trace_stage_request("gameplay_format_repair", trace_key, request)
         raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
         content = str(raw["choices"][0]["message"]["content"])
         trace_event(
@@ -288,6 +293,7 @@ def try_llm_plan(
             },
             prompt=user_content,
         )
+        trace_stage_request("gameplay_author", key, request)
         raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
@@ -311,6 +317,7 @@ def try_llm_plan(
                 original_recipe_context=user_content,
                 model_name=model_name,
                 source_response_format=_effective_response_format(request, raw),
+                recipe_key=key,
             )
             format_repaired = True
         item.setdefault("id", "g_" + stable_hash(key, format_repair_content or content, length=16))
@@ -542,6 +549,7 @@ def repair_author_item_after_failure(
         prompt=messages,
     )
     try:
+        trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"))
         raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
         content = raw["choices"][0]["message"]["content"]
         trace_event(

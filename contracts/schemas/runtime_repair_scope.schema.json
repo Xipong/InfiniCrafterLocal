@@ -1894,6 +1894,7 @@
                           "apply_generated_buff_on_use",
                           "configure_tool",
                           "configure_placeable",
+                          "present_placed_item_sprite",
                           "require_use_condition",
                           "add_hold_light",
                           "move_player_on_use",

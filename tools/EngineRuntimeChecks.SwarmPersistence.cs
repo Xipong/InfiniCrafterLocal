@@ -166,7 +166,7 @@ internal static partial class EngineRuntimeChecks
                 using var stream = new MemoryStream();
                 using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
                 {
-                    writer.Write(4); writer.Write(sequence);
+                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence);
                     writer.Write((byte)(intent ? 0 : 2)); writer.Write(x); writer.Write(y);
                     if (intent) writer.Write(0UL);
                 }
@@ -202,7 +202,7 @@ internal static partial class EngineRuntimeChecks
             {
                 using var stream = new MemoryStream();
                 using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-                    writer.Write(4); writer.Write(sequence); writer.Write(intent ? (byte)0 : layer); writer.Write(x); writer.Write(y);
+                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence); writer.Write(intent ? (byte)0 : layer); writer.Write(x); writer.Write(y);
                     if (intent) writer.Write(0UL);
                 }
                 stream.Position = 0; using var reader = new BinaryReader(stream);
@@ -714,7 +714,7 @@ internal static partial class EngineRuntimeChecks
     {
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-            writer.Write(InfiniCrafterLocal.Common.InfiniNetPacketIds.NotifyGeneratedPlacement); writer.Write(4);
+            writer.Write(InfiniCrafterLocal.Common.InfiniNetPacketIds.NotifyGeneratedPlacement); writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!);
             writer.Write(sequence); writer.Write(layer); writer.Write(x); writer.Write(y);
         }
         return stream.ToArray();
@@ -806,7 +806,7 @@ internal static partial class EngineRuntimeChecks
                             MaterialClock(102); Equal(false, generated.CanUseItem(client), "new B still waits for server");
                             byte[] next = peers.Sent.Single(); peers.Sent.Clear();
                             using (var payload = new BinaryReader(new MemoryStream(next))) {
-                                payload.ReadByte(); Equal(4, payload.ReadInt32(), "versioned ordered supersession");
+                                payload.ReadByte(); Equal((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!, payload.ReadInt32(), "versioned ordered supersession");
                                 Equal(2UL, payload.ReadUInt64(), "new actual intent sequence"); payload.ReadByte(); payload.ReadInt32(); payload.ReadInt32();
                                 Equal(1UL, payload.ReadUInt64(), "actual request names exact retired A");
                             }

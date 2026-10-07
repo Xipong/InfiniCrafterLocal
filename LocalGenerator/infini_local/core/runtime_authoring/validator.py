@@ -50,6 +50,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "dual_use_placeable_input_contract",
     "duplicate_exclusive_input",
     "duplicate_id",
+    "duplicate_placed_body_reference",
     "duplicate_single_component",
     "duplicate_equipment_damage_selector",
     "equipment_scope_conflict",
@@ -75,6 +76,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "missing_set_key",
     "missing_required_component",
     "place_item_without_stack_cost",
+    "placed_body_placement_reference",
     "hybrid_placeable_max_stack",
     "invalid_primary_entity_reference",
     "self_reference_forbidden",
@@ -307,6 +309,34 @@ def _validate_requirement(
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
 
+    if requirement.kind in {"executed_tile_placement_reference", "unique_call_reference"}:
+        reference = params.get(requirement.param)
+        if not isinstance(reference, str):
+            return None  # Shape owns missing or malformed leaf diagnostics.
+        if requirement.kind == "unique_call_reference":
+            same = [row for row in target_calls if row.get("fn") == cap.name
+                    and isinstance(row.get("params"), Mapping)
+                    and row["params"].get(requirement.param) == reference]
+            if same and same[0].get("id") != call.get("id"):
+                return ValidationIssue(path, "duplicate_placed_body_reference", requirement.message,
+                                       (), (str(call.get("id") or ""),))
+            return None
+        def valid_placement(row: Mapping[str, Any]) -> bool:
+            native = row.get("params")
+            return (row.get("fn") == requirement.capability and row.get("target") == target_id
+                    and isinstance(native, Mapping) and type(native.get("tileId")) is int
+                    and 0 <= native["tileId"] <= 65535 and type(native.get("wallId")) is int
+                    and native["wallId"] == -1
+                    and any(action_kind(binding) in requirement.any_of
+                            and binding_target_id(binding) == target_id
+                            and placement_call_id(binding) == row.get("id")
+                            for binding in bindings))
+        allowed = tuple(str(row["id"]) for row in target_calls if valid_placement(row))
+        if reference not in allowed:
+            return ValidationIssue(f"{path}.params.{requirement.param}",
+                                   "placed_body_placement_reference", requirement.message,
+                                   allowed, (str(call.get("id") or ""), reference))
+        return None
     if requirement.kind == "capability_present":
         if requirement.capability not in fns:
             return ValidationIssue(path, "missing_capability_dependency", requirement.message, (requirement.capability,), (target_id,))
@@ -661,7 +691,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                         ("author a non-neutral value representable by the declared consumer or exact neutral",),
                     ))
             ref = param_spec.reference
-            if ref is None or param_name not in params:
+            if ref is None or ref.namespace != "entity" or param_name not in params:
                 continue
             referenced_id = str(params.get(param_name) or "")
             referenced = entities_by_id.get(referenced_id) if ref.namespace == "entity" else None
@@ -899,6 +929,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     if event_spawn_budget > MAX_EVENT_SPAWNS_PER_ACTIVATION:
         issues.append(ValidationIssue("$.runtimeProgram.calls", "event_spawn_budget", f"Event spawn count {event_spawn_budget} exceeds {MAX_EVENT_SPAWNS_PER_ACTIVATION}.", (f"sum <= {MAX_EVENT_SPAWNS_PER_ACTIVATION}",)))
 
+    counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
+                            if cap.name != "present_placed_item_sprite"
+                            or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),
         "bindings": len(bindings),
@@ -908,8 +941,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         "capabilitiesUsed": sorted({str(row.get("fn")) for row in calls}),
         "primaryEntityId": primary_entity_id,
         "registryDrivenChecks": {
-            "typedReferences": sum(1 for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values() if spec.reference is not None),
-            "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),
+            "typedReferences": sum(1 for cap in counted_capabilities for spec in cap.params.values() if spec.reference is not None),
+            "requirements": sum(len(cap.requirements) for cap in counted_capabilities),
             "exclusiveGroups": sorted({cap.exclusive_group for cap in CAPABILITY_REGISTRY.values() if cap.exclusive_group}),
         },
     }

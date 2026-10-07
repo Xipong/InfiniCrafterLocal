@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -279,7 +280,7 @@ def audit_compiler_receipts(
                 "reason": "compiler receipt used an undeclared input or output field",
             })
         if final_document is not None and (
-            _final_value(final_document, path) != receipt.get("value")
+            json.dumps(_final_value(final_document, path), sort_keys=True, default=repr) != json.dumps(receipt.get("value"), sort_keys=True, default=repr)
             or type(_final_value(final_document, path)) is not type(receipt.get("value"))
         ):
             violations.append({
@@ -288,6 +289,45 @@ def audit_compiler_receipts(
                 "finalPath": path,
                 "reason": "final wire value differs from compiler receipt",
             })
+        if fn == "present_placed_item_sprite" and receipt.get("status") == "technical_projection":
+            match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.params\.placementCallId", authored_path)
+            source_call = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
+            if authored_document is not None:
+                source_index = int(match.group(1)) if match else -1
+                source_bindings = program.get("bindings", []) if isinstance(program, Mapping) else []
+                source_bindings = source_bindings if isinstance(source_bindings, list) else []
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                matches = [(i, binding) for i, binding in enumerate(source_bindings)
+                           if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                           and isinstance(binding["usePolicy"].get("action"), Mapping)
+                           and isinstance(source_call, Mapping) and isinstance(source_params, Mapping)
+                           and binding["usePolicy"]["action"].get("kind") == "place_item"
+                           and binding["usePolicy"]["action"].get("targetId") == source_call.get("target")
+                           and binding["usePolicy"]["action"].get("placementCallId") == source_params.get("placementCallId")]
+                expected_inputs = []
+                expected_path = ""
+                if len(matches) == 1:
+                    bi, binding = matches[0]
+                    cb = f"runtimeProgram.calls[{source_index}]"
+                    bb = f"runtimeProgram.bindings[{bi}].usePolicy.action"
+                    expected_inputs = [f"{cb}.fn", f"{cb}.target", f"{cb}.params.placementCallId",
+                                       f"{bb}.kind", f"{bb}.targetId", f"{bb}.placementCallId"]
+                    final_bindings = final_document.get("runtimeProgram", {}).get("bindings", []) if final_document is not None else []
+                    finals = [i for i, b in enumerate(final_bindings) if isinstance(b, Mapping) and b.get("id") == binding.get("id")]
+                    if len(finals) == 1:
+                        expected_path = f"runtimeProgram.bindings[{finals[0]}].usePolicy.action.placement.placedBody"
+                if (not isinstance(source_call, Mapping) or source_call.get("fn") != fn
+                    or source_call.get("id") != receipt.get("callId") or not expected_inputs
+                    or list(authored_paths) != expected_inputs or (final_document is not None and path != expected_path)):
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                       "reason": "placed-body receipt lacks exact target/placement/binding association"})
+            else:
+                binding_match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.usePolicy\.action\.kind", authored_paths[3]) if len(authored_paths) == 6 else None
+                expected_inputs = [pattern.replace("[]", f"[{match.group(1) if i < 3 and match else binding_match.group(1) if binding_match else '?'}]")
+                                   for i, pattern in enumerate(CAPABILITY_REGISTRY[fn].technical_lowering_inputs)]
+                if not match or not binding_match or list(authored_paths) != expected_inputs:
+                    violations.append({"fn": fn, "finalPath": path, "reason": "placed-body association receipt missing exact declared source paths"})
+            continue
         parameter_match = re.fullmatch(
             r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
         ) if fn and not lowerer_id else None
@@ -494,6 +534,35 @@ def audit_compiler_receipts(
                             "reason": "declared neutral omission has no unique omission receipt",
                         })
     if final_document is not None:
+        # Presence is an explicit root-PNG source selection. With provenance
+        # supplied, every body requires one exact association and each transform
+        # requires its own unique receipt from that association's source call.
+        runtime = final_document.get("runtimeProgram", {})
+        bindings = runtime.get("bindings", []) if isinstance(runtime, Mapping) else []
+        for bi, binding in enumerate(bindings):
+            policy = binding.get("usePolicy", {}) if isinstance(binding, Mapping) else {}
+            action = policy.get("action", {}) if isinstance(policy, Mapping) else {}
+            placement = action.get("placement", {}) if isinstance(action, Mapping) else {}
+            if not isinstance(placement, Mapping) or "placedBody" not in placement:
+                continue
+            base = f"runtimeProgram.bindings[{bi}].usePolicy.action.placement.placedBody"
+            associations = [r for r in receipt_rows if r.get("fn") == "present_placed_item_sprite"
+                            and r.get("finalPath") == base and r.get("status") == "technical_projection"
+                            and str(r.get("authoredPath") or "").endswith(".params.placementCallId")]
+            if len(associations) != 1:
+                violations.append({"finalPath": base, "reason": "placed body has no unique association receipt"})
+                continue
+            association = associations[0]
+            source_base = association["authoredPath"].rsplit(".", 1)[0]
+            for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params:
+                if name == "placementCallId":
+                    continue
+                matching = [r for r in receipt_rows if r.get("fn") == "present_placed_item_sprite"
+                            and r.get("callId") == association.get("callId")
+                            and r.get("authoredPath") == f"{source_base}.{name}"
+                            and r.get("finalPath") == f"{base}.{name}" and r.get("status") == "delivered"]
+                if len(matching) != 1:
+                    violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
         # Wire-only auditing has no Author call list: require coverage of each
         # present declared default slot, but do not claim whether it was omitted.
         for fn, cap in CAPABILITY_REGISTRY.items():
@@ -528,6 +597,7 @@ def technical_lowering_manifest() -> dict[str, Any]:
             "addsDesignChoice": False,
             "compilerOwner": cap.compiler_owner,
             "csharpOwner": cap.csharp_owner,
+            **({"technicalProjectionInputs": list(cap.technical_lowering_inputs)} if cap.technical_lowering_inputs else {}),
         })
     return {
         "schema": TECHNICAL_LOWERING_SCHEMA,

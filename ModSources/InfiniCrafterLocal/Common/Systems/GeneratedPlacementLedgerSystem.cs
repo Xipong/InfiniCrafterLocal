@@ -31,10 +31,10 @@ internal readonly record struct GeneratedPlacementKey(GeneratedPlacementLayer La
 /// choose the generated id or definition. A broken placement is atomically moved to
 /// a durable pending-return queue before delivery is attempted.
 /// </summary>
-public sealed class GeneratedPlacementLedgerSystem : ModSystem
+public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 {
-    private const int PayloadVersion = 2;
-    private const int PlacementProtocolVersion = 4;
+    private const int PayloadVersion = 3;
+    private const int PlacementProtocolVersion = 5;
     private const string SaveKey = "infiniGeneratedPlacementLedgerV2";
     private const string PendingSaveKey = "infiniGeneratedPlacementReturnsV2";
     private const string QuarantineSaveKey = "infiniGeneratedPlacementReturnQuarantineV1";
@@ -55,8 +55,13 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     {
         public string GroupId { get; init; } = "";
         public string GeneratedItemId { get; init; } = "";
-        public string DefinitionJson { get; init; } = "";
+        public string DefinitionJson { get; set; } = "";
         public List<GeneratedPlacementKey> Cells { get; init; } = new();
+        // Optional exact opt-in witness; cosmetic corruption never erases material ownership.
+        public TagCompound? PlacedBody { get; init; }
+        // Legal NBT with a noncompound cosmetic value is retained literally,
+        // never interpreted as presentation or a second material owner.
+        public TagCompound? RawPlacedBodyEnvelope { get; init; }
     }
 
     private sealed class PendingReturnRecord
@@ -92,6 +97,9 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public Player? SourcePlayer { get; init; }
         public GeneratedItemData? SourceData { get; init; }
         public ulong Sequence { get; set; }
+        // Allocated by the authority before native mutation; Ready lends this exact
+        // identity to the original placing client, never the other way around.
+        public string GroupId { get; set; } = "";
         public bool NotifyReceived { get; set; }
         public GeneratedPlacementLayer Layer { get; init; }
         public int TargetX { get; init; }
@@ -103,6 +111,8 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public HashSet<long> BeforeExpectedTiles { get; init; } = new();
         public string DefinitionHash { get; init; } = "";
         public int BeforeWallType { get; init; }
+        public string PlacementBindingId { get; init; } = "";
+        public RuntimePlacementSpec? ExactPlacement { get; init; }
     }
 
     private sealed class ClientPlacementIntent
@@ -118,6 +128,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         public ulong Sequence { get; init; }
         public string DefinitionHash { get; init; } = "";
         public bool Ready { get; set; }
+        public string GroupId { get; set; } = "";
         public bool NativeRetrySpent { get; set; }
         public bool UseAdmitted { get; set; }
     }
@@ -155,24 +166,17 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         RetiredClientPlacementIntents.Clear();
         PlacementPeerCursors.Clear();
         _nextPlacementSequence = 0;
+        _placedBodyRevision = 0;
+        _bodyFootprintMaintenanceCursor = 0;
+        PlacedBodyViews.Clear();
+        ClearPlacedBodyMirrorState();
     }
 
     public override void SaveWorldData(TagCompound tag)
     {
         tag[SaveKey] = Groups.Values
             .OrderBy(x => x.GroupId, StringComparer.Ordinal)
-            .Select(group => new TagCompound
-            {
-                ["groupId"] = group.GroupId,
-                ["generatedItemId"] = group.GeneratedItemId,
-                ["definitionJson"] = group.DefinitionJson,
-                ["cells"] = group.Cells.Select(cell => new TagCompound
-                {
-                    ["layer"] = (int)cell.Layer,
-                    ["x"] = cell.X,
-                    ["y"] = cell.Y,
-                }).ToList(),
-            }).ToList();
+            .Select(SavePlacementGroup).ToList();
         tag[PendingSaveKey] = PendingReturns.Select(ReturnClaim).ToList();
         tag[QuarantineSaveKey] = QuarantinedReturns.Select(QuarantineEnvelope).ToList();
         tag[RawQuarantineEnvelopeSaveKey] = RawQuarantineEnvelopes.Select(row => (TagCompound)row.Clone()).ToList();
@@ -223,6 +227,10 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 GeneratedItemId = generatedItemId,
                 DefinitionJson = definitionJson,
                 Cells = cells,
+                PlacedBody = row.ContainsKey("placedBody") && row["placedBody"] is TagCompound rawBody
+                    ? (TagCompound)rawBody.Clone() : null,
+                RawPlacedBodyEnvelope = row.ContainsKey("placedBody") && row["placedBody"] is not TagCompound
+                    ? new TagCompound { ["placedBody"] = ((TagCompound)row.Clone())["placedBody"] } : null,
             };
         }
         foreach (TagCompound row in tag.GetList<TagCompound>(PendingSaveKey))
@@ -275,6 +283,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         // authority, including after any number of native save/reload cycles.
         foreach (TagCompound row in tag.GetList<TagCompound>(RawQuarantineEnvelopeSaveKey))
             RawQuarantineEnvelopes.Add((TagCompound)row.Clone());
+        RestorePlacedBodyDefinitions(publish: false);
     }
 
     private static TagCompound ReturnClaim(PendingReturnRecord pending)
@@ -320,59 +329,44 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
 
     public override void NetSend(BinaryWriter writer)
     {
+        RestorePlacedBodyDefinitions(publish: true);
         writer.Write(PayloadVersion);
+        writer.Write(_placedBodyRevision);
         writer.Write(Groups.Count);
         foreach (PlacementGroup group in Groups.Values.OrderBy(x => x.GroupId, StringComparer.Ordinal))
-        {
-            writer.Write(group.GroupId);
-            writer.Write(group.GeneratedItemId);
-            writer.Write(group.Cells.Count);
-            foreach (GeneratedPlacementKey cell in group.Cells)
-            {
-                writer.Write((byte)cell.Layer);
-                writer.Write(cell.X);
-                writer.Write(cell.Y);
-            }
-        }
+            WriteMirrorGroup(writer, group);
     }
 
     public override void NetReceive(BinaryReader reader)
     {
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            throw new InvalidDataException("placement snapshots are server-to-client only");
         int version = reader.ReadInt32();
         if (version != PayloadVersion)
             throw new InvalidDataException($"Unsupported generated placement ledger payload {version}");
-        Placements.Clear();
-        Groups.Clear();
-        int groupCount = Math.Clamp(reader.ReadInt32(), 0, MaxGroups);
-        for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+        ulong revision = reader.ReadUInt64();
+        int count = reader.ReadInt32();
+        if (count < 0 || count > MaxGroups) throw new InvalidDataException("placement snapshot group capacity");
+        var incoming = new Dictionary<string, PlacementGroup>(StringComparer.Ordinal);
+        var occupied = new HashSet<GeneratedPlacementKey>();
+        for (int index = 0; index < count; index++)
         {
-            string groupId = reader.ReadString();
-            string generatedItemId = reader.ReadString();
-            int cellCount = Math.Clamp(reader.ReadInt32(), 0, MaxCellsPerGroup);
-            var cells = new List<GeneratedPlacementKey>();
-            for (int cellIndex = 0; cellIndex < cellCount; cellIndex++)
-            {
-                var layer = (GeneratedPlacementLayer)reader.ReadByte();
-                int x = reader.ReadInt32();
-                int y = reader.ReadInt32();
-                if (!Enum.IsDefined(typeof(GeneratedPlacementLayer), layer) || !WorldGen.InWorld(x, y, 1) || Placements.Count >= MaxCells)
-                    continue;
-                var key = new GeneratedPlacementKey(layer, x, y);
-                Placements[key] = groupId;
-                cells.Add(key);
-            }
-            if (groupId.Length > 0 && generatedItemId.Length > 0 && cells.Count > 0)
-                // Client-side mirror groups intentionally carry no DefinitionJson:
-                // returns are server-only (TryQueueReturn exits early on clients),
-                // so the definition is never needed here.  Do not start reading
-                // Groups[...].DefinitionJson on a client without extending NetSend.
-                Groups[groupId] = new PlacementGroup
-                {
-                    GroupId = groupId,
-                    GeneratedItemId = generatedItemId,
-                    Cells = cells,
-                };
+            PlacementGroup group = ReadMirrorGroup(reader);
+            if (!incoming.TryAdd(group.GroupId, group) || group.Cells.Any(cell => !occupied.Add(cell)) || occupied.Count > MaxCells)
+                throw new InvalidDataException("placement snapshot identity/overlap/capacity");
         }
+        EnsurePlacedBodyMirrorSender();
+        if (revision < _placedBodyRevision || (_bodySnapshotReceived && revision == _placedBodyRevision)) return;
+        Groups.Clear(); Placements.Clear();
+        BodyHydrationQueue.Clear(); BodyHydrationNodes.Clear();
+        foreach (PlacementGroup group in incoming.Values)
+        {
+            Groups[group.GroupId] = group;
+            foreach (GeneratedPlacementKey cell in group.Cells) Placements[cell] = group.GroupId;
+            EnqueuePlacedBodyHydration(group);
+        }
+        _placedBodyRevision = revision;
+        _bodySnapshotReceived = true;
     }
 
     public override void PostUpdateWorld()
@@ -398,6 +392,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
 
         if (Main.netMode == NetmodeID.MultiplayerClient)
             return;
+        RetireMissingPlacedBodyFootprints();
         int attempts = Math.Min(MaxPendingAttemptsPerTick, PendingReturns.Count);
         for (int index = attempts - 1; index >= 0; index--)
         {
@@ -463,6 +458,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         bool wall = placement.WallId >= 0 && placement.TileId < 0;
         if (!tile && !wall)
             return false;
+        if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
         bool replacesExistingAuthorization = PendingAuthorizations.ContainsKey(player.whoAmI);
         int reservedAuthorizationCount = PendingAuthorizations.Count + (replacesExistingAuthorization ? 0 : 1);
         if ((long)Groups.Count + PendingReturns.Count + QuarantinedReturns.Count(record => !record.Requeued)
@@ -489,6 +485,10 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             return false;
         try
         {
+            RuntimeBindingSpec? exactBinding = data.RuntimeProgram.Bindings.SingleOrDefault(binding =>
+                ReferenceEquals(binding.UsePolicy.Action.Placement, placement));
+            if (placement.PlacedBody is not null && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
+                return false;
             string definitionJson = data.ToNetworkJson();
             string definitionHash = PlacementDefinitionHash(definitionJson);
             if (definitionHash.Length == 0) return false;
@@ -507,6 +507,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 PlayerIndex = player.whoAmI,
                 SourcePlayer = player,
                 SourceData = data,
+                GroupId = Main.netMode == NetmodeID.MultiplayerClient ? "" : Guid.NewGuid().ToString("N"),
                 Layer = layer,
                 TargetX = targetX,
                 TargetY = targetY,
@@ -518,6 +519,8 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 DefinitionHash = definitionHash,
                 BeforeExpectedTiles = before,
                 BeforeWallType = Main.tile[targetX, targetY].WallType,
+                PlacementBindingId = exactBinding?.Id ?? "",
+                ExactPlacement = placement,
             };
             return true;
         }
@@ -548,12 +551,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     private static string PlacementDefinitionHash(string definitionJson)
     {
         GeneratedItemData? snapshot = GeneratedItemData.FromJson(definitionJson);
-        if (snapshot is null) return "";
-        // Use the registry's canonical definition identity: peer-specific asset
-        // transport URLs/roster ordering are not authored binding differences.
-        snapshot.RecipeMeta.AssetBaseUrl = "";
-        snapshot.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(snapshot).ToArray();
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(snapshot.ToNetworkJson()))).ToLowerInvariant();
+        return snapshot is null ? "" : GeneratedItemRegistryService.DefinitionIdentity(snapshot);
     }
 
     private static bool TryCommitAuthorizedPlacement(
@@ -579,26 +577,32 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         if (!WithinPlacementReach(player, authorization.TargetX, authorization.TargetY))
             return false;
 
-        List<GeneratedPlacementKey> committedCells = FindCommittedCells(authorization);
+        List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.PlacedBody is not null
+            ? FindExactPlacedBodyCells(authorization) : FindCommittedCells(authorization);
         if (committedCells.Count == 0 || committedCells.Count > MaxCellsPerGroup)
             return false;
-        if (Groups.Count >= MaxGroups
+        if (!Guid.TryParseExact(authorization.GroupId, "N", out _)
+            || Groups.ContainsKey(authorization.GroupId)
+            || Groups.Count >= MaxGroups
             || Placements.Count > MaxCells - committedCells.Count
             || committedCells.Any(Placements.ContainsKey))
             return false;
-        string groupId = Guid.NewGuid().ToString("N");
+        string groupId = authorization.GroupId;
         var group = new PlacementGroup
         {
             GroupId = groupId,
             GeneratedItemId = authorization.GeneratedItemId,
             DefinitionJson = authorization.DefinitionJson,
             Cells = committedCells,
+            PlacedBody = CapturePlacedBodyWitness(authorization, committedCells),
         };
         Groups[groupId] = group;
         foreach (GeneratedPlacementKey key in committedCells)
             Placements[key] = groupId;
         PendingAuthorizations.Remove(player.whoAmI);
         RecordPlacementReceipt(player);
+        // Commit the sole material owner/receipt before optional registry or packet work.
+        PublishPlacedBodyGroupChange(group, removed: false);
         if (Main.netMode == NetmodeID.MultiplayerClient)
             SendPlacementToServer(authorization.Sequence, authorization.Layer, authorization.TargetX, authorization.TargetY);
         ClientPlacementIntents.Remove(player.whoAmI);
@@ -706,6 +710,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
     {
         if (Main.netMode != NetmodeID.MultiplayerClient)
             return AuthorizePlacement(player, data, placement);
+        if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
         int x = Player.tileTargetX, y = Player.tileTargetY, now = (int)Main.GameUpdateCount;
         if (player.whoAmI != Main.myPlayer || player.HeldItem is null || player.HeldItem.IsAir
             || !WorldGen.InWorld(x, y, AuthorizationRadiusTiles) || !WithinPlacementReach(player, x, y)) return false;
@@ -729,8 +734,10 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
                 ClientPlacementIntents.Remove(player.whoAmI);
                 return false;
             }
-            if (!intent.Ready || !AuthorizePlacement(player, data, placement, x, y)) return false;
+            if (!intent.Ready || !Guid.TryParseExact(intent.GroupId, "N", out _)
+                || !AuthorizePlacement(player, data, placement, x, y)) return false;
             PendingAuthorizations[player.whoAmI].Sequence = intent.Sequence;
+            PendingAuthorizations[player.whoAmI].GroupId = intent.GroupId;
             intent.UseAdmitted = true;
             return true;
         }
@@ -799,14 +806,21 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
 
     internal static void HandlePlacementReadyPacket(BinaryReader reader, int whoAmI)
     {
+        if (Main.netMode != NetmodeID.MultiplayerClient || whoAmI != 256) return;
         if (reader.ReadInt32() != PlacementProtocolVersion) throw new InvalidDataException("Unsupported placement ready protocol");
         ulong sequence = reader.ReadUInt64(); bool accepted = reader.ReadBoolean();
         string definitionHash = accepted ? reader.ReadString() : "";
-        if (Main.netMode != NetmodeID.MultiplayerClient
-            || !ClientPlacementIntents.TryGetValue(Main.myPlayer, out ClientPlacementIntent? intent)
+        string groupId = accepted ? reader.ReadString() : "";
+        if (!ClientPlacementIntents.TryGetValue(Main.myPlayer, out ClientPlacementIntent? intent)
             || intent.Sequence != sequence || (int)Main.GameUpdateCount > intent.ExpiresAtTick) return;
-        if (accepted && string.Equals(definitionHash, intent.DefinitionHash, StringComparison.Ordinal)
-            && string.Equals(definitionHash, PlacementDefinitionHash(intent.Data.ToNetworkJson()), StringComparison.Ordinal)) intent.Ready = true;
+        if (accepted && Guid.TryParseExact(groupId, "N", out _)
+            && (!intent.Ready || string.Equals(intent.GroupId, groupId, StringComparison.Ordinal))
+            && string.Equals(definitionHash, intent.DefinitionHash, StringComparison.Ordinal)
+            && string.Equals(definitionHash, PlacementDefinitionHash(intent.Data.ToNetworkJson()), StringComparison.Ordinal))
+        {
+            intent.GroupId = groupId;
+            intent.Ready = true;
+        }
         else
         {
             RetiredClientPlacementIntents[Main.myPlayer] = intent;
@@ -866,7 +880,11 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
         if (packet is null) return;
         packet.Write(Common.InfiniNetPacketIds.GeneratedPlacementIntentReady);
         packet.Write(PlacementProtocolVersion); packet.Write(sequence); packet.Write(accepted);
-        if (accepted) packet.Write(PendingAuthorizations[whoAmI].DefinitionHash);
+        if (accepted)
+        {
+            packet.Write(PendingAuthorizations[whoAmI].DefinitionHash);
+            packet.Write(PendingAuthorizations[whoAmI].GroupId);
+        }
         packet.Send(whoAmI);
     }
 
@@ -950,6 +968,7 @@ public sealed class GeneratedPlacementLedgerSystem : ModSystem
             Y = y,
         };
         PendingReturns.Add(pending);
+        PublishPlacedBodyGroupChange(group, removed: true);
         if (TrySpawnPendingReturn(pending) == PendingSpawnOutcome.Spawned)
             PendingReturns.Remove(pending);
         return true;

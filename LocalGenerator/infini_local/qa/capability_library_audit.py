@@ -45,6 +45,8 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "binding_action_present",
     "binding_tuple_present",
     "binding_action_reference",
+    "executed_tile_placement_reference",
+    "unique_call_reference",
     "conditional_param",
     "non_neutral_param",
     "event_available",
@@ -219,6 +221,18 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "csharpBounds": list(csharp),
                 "preserved": bool(authored and authored[0] >= csharp[0] and authored[1] <= csharp[1]),
             })
+    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
+    placed = placed_body_surface_audit(text.encode())
+    for name, spec in CAPABILITY_REGISTRY["present_placed_item_sprite"].params.items():
+        if spec.kind not in {"integer", "number"}:
+            continue
+        field = name[:1].upper() + name[1:]
+        rows.append({"capability": "present_placed_item_sprite", "param": name,
+                     "csharpClass": "RuntimePlacedBodySpec", "authorBounds": [spec.minimum, spec.maximum],
+                     "csharpBounds": placed["boundsByField"].get(field),
+                     "csharpStorage": placed["storageByField"].get(field),
+                     "admission": "reject_without_clamp",
+                     "preserved": bool(placed["ok"])})
     return rows
 
 
@@ -243,6 +257,7 @@ def capability_library_audit() -> dict[str, Any]:
 
     known_slots: dict[str, list[str]] = {}
     reference_params = 0
+    call_reference_params = 0
     numeric_params = 0
     bounded_numeric_params = 0
     semantic_params = 0
@@ -297,7 +312,7 @@ def capability_library_audit() -> dict[str, Any]:
                 for input_name in requirement.any_of:
                     if input_name not in INPUT_KIND_REGISTRY:
                         error("unknown_requirement_input", f"{base}.requirements", input_name)
-            if requirement.kind in {"binding_action_present", "binding_action_reference"}:
+            if requirement.kind in {"binding_action_present", "binding_action_reference", "executed_tile_placement_reference"}:
                 if not requirement.any_of:
                     error("empty_binding_action_requirement", f"{base}.requirements", requirement.kind)
                 for action_name in requirement.any_of:
@@ -338,9 +353,10 @@ def capability_library_audit() -> dict[str, Any]:
                     if float(spec.minimum) > float(spec.maximum):
                         error("reversed_numeric_bounds", ppath, f"{spec.minimum}>{spec.maximum}")
             if spec.reference is not None:
-                reference_params += 1
                 ref = spec.reference
-                if ref.namespace != "entity" or not ref.target_kinds:
+                reference_params += ref.namespace == "entity"
+                call_reference_params += ref.namespace == "call"
+                if ref.namespace not in {"entity", "call"} or not ref.target_kinds:
                     error("incomplete_typed_reference", ppath, str(ref.card()))
                 if any(kind not in ENTITY_KIND_REGISTRY for kind in ref.target_kinds):
                     error("unknown_reference_target_kind", ppath, str(ref.target_kinds))
@@ -405,7 +421,7 @@ def capability_library_audit() -> dict[str, Any]:
     for row in bound_rows:
         if not row["preserved"]:
             error(
-                "author_range_exceeds_csharp_clamp",
+                "placed_body_admission_contract_drift" if row.get("admission") == "reject_without_clamp" else "author_range_exceeds_csharp_clamp",
                 f"capabilities.{row['capability']}.params.{row['param']}",
                 f"author={row['authorBounds']} C#={row['csharpBounds']}",
             )
@@ -450,6 +466,7 @@ def capability_library_audit() -> dict[str, Any]:
         "boundedNumericParameters": bounded_numeric_params,
         "semanticParameters": semantic_params,
         "typedEntityReferences": reference_params,
+        "typedCallReferences": call_reference_params,
         "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),
         "bindingDependencyEdges": sum(len(row.required_item_capabilities_any_of) for row in INPUT_KIND_REGISTRY.values()) + sum(len(row.required_item_capabilities_any_of) for row in BINDING_ACTION_REGISTRY.values()),
         "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in CAPABILITY_REGISTRY.values()),

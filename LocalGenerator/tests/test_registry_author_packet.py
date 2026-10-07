@@ -134,7 +134,7 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
     expected = {r["fn"]: r for r in compact_capability_catalog()}
     assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
     assert set(expected) == set(CAPABILITY_REGISTRY)
-    assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (52, 229)
+    assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (53, 240)
     assert (a, b) == parents_before
 
 
@@ -339,7 +339,7 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     assert "whole generated item" in guide["stackCost"]
     report = planner_prompt_usability_report(a, b, a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
-    assert PLANNER_PROMPT_LIMIT_CHARS == 96000 and report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
+    assert PLANNER_PROMPT_LIMIT_CHARS == 96500 and report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
     assert report["visibleCapabilities"] == len(CAPABILITY_REGISTRY)
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False

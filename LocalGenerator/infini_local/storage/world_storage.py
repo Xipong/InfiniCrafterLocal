@@ -444,7 +444,8 @@ def _cache_assets_ready(data: dict[str, Any]) -> bool:
 
     raw_manifest = data.get("vfxManifest")
     manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
-    if "assets" in manifest or vfx_png_dependencies(data)["dependencies"]:
+    from infini_local.core.runtime_authoring.binding_use_policy import placed_body_binding_ids
+    if "assets" in manifest or vfx_png_dependencies(data)["dependencies"] or placed_body_binding_ids(data):
         return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
     return not _asset_roster_problems(runtime_asset_paths(data))
 

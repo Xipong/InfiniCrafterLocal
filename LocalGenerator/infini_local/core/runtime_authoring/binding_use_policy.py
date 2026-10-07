@@ -147,6 +147,19 @@ def project_to_wire(
     }
 
 
+def placed_body_binding_ids(data: Mapping[str, Any]) -> tuple[str, ...]:
+    """Read-only explicit wire consumers of the existing item PNG, never image jobs."""
+    runtime = data.get("runtimeProgram")
+    if not isinstance(runtime, Mapping):
+        return ()
+    item_id = runtime.get("itemEntityId")
+    return tuple(str(binding.get("id") or "") for binding in runtime.get("bindings", [])
+                 if isinstance(binding, Mapping) and action_kind(binding) == PLACE_ITEM_ACTION
+                 and target_id(binding) == item_id
+                 and isinstance(action(binding).get("placement"), Mapping)
+                 and "placedBody" in action(binding)["placement"])
+
+
 __all__ = [
     "ACTIVE_USE_INPUTS",
     "ITEM_BODY_ACTION",
@@ -158,6 +171,7 @@ __all__ = [
     "expected_placeable_input",
     "placeable_input_contract",
     "placement_call_id",
+    "placed_body_binding_ids",
     "project_to_wire",
     "stack_cost",
     "target_id",

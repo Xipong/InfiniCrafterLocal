@@ -420,6 +420,10 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         for call in calls
         if str(call.get("fn") or "") == "configure_placeable"
     }
+    placed_body_calls = {
+        call["params"]["placementCallId"]: call
+        for call in calls if call.get("fn") == "present_placed_item_sprite"
+    }
     bindings: list[dict[str, Any]] = []
     for source_index, authored_binding in binding_sources:
         binding = project_to_wire(
@@ -447,6 +451,27 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                     "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
                     "value": copy.deepcopy(value),
                     "status": "delivered",
+                })
+            presentation = placed_body_calls.get(str(call["id"]))
+            if presentation is not None:
+                body: dict[str, Any] = {}
+                base = f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.placedBody"
+                binding["usePolicy"]["action"]["placement"]["placedBody"] = body
+                for key, value in presentation["params"].items():
+                    if key != "placementCallId":
+                        ctx.write(call=presentation, path=f"{base}.{key}", value=value,
+                                  target=body, key=key)
+                call_base = f"runtimeProgram.calls[{presentation['_sourceIndex']}]"
+                binding_base = f"runtimeProgram.bindings[{source_index}].usePolicy.action"
+                ctx.receipts.append({
+                    "callId": presentation["id"], "fn": "present_placed_item_sprite",
+                    "authoredPath": f"{call_base}.params.placementCallId",
+                    "authoredPaths": [f"{call_base}.fn", f"{call_base}.target",
+                                      f"{call_base}.params.placementCallId",
+                                      f"{binding_base}.kind", f"{binding_base}.targetId",
+                                      f"{binding_base}.placementCallId"],
+                    "finalPath": base, "value": copy.deepcopy(body),
+                    "status": "technical_projection",
                 })
     entities: list[dict[str, Any]] = []
     entity_index_by_id: dict[str, int] = {}
@@ -503,7 +528,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         entity_index = entity_index_by_id[target]
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
-        if fn == "configure_placeable":
+        if fn in {"configure_placeable", "present_placed_item_sprite"}:
             continue
         if target == item_entity_id and fn not in EVENT_ACTION_OPCODE:
             _compile_item_call(
