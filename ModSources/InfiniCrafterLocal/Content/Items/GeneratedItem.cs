@@ -623,6 +623,36 @@ public partial class GeneratedItem : ModItem
         player.aggro += a.SetBonusAggro; player.endurance += a.SetBonusEndurance; player.GetArmorPenetration(DamageClass.Generic) += a.SetBonusArmorPenetration;
     }
 
+    // Technical native-proxy suppression only. Leave Item.noUseGraphic and the
+    // authored visibility/hint untouched; the AfterParent child owns the PNG.
+    public override bool ModifyItemDraw(ref PlayerDrawSet drawInfo, ref DrawData drawData,
+        ref DrawData? coloredDrawData, ref DrawData? glowMaskDrawData)
+    {
+        // Native drawInfo.heldItem is lastVisualizedSelectedItem (a clone), not
+        // necessarily the live inventory Item used by the custom child.
+        if (!ReferenceEquals(drawInfo.heldItem, Item))
+            return true;
+
+        var assets = Terraria.GameContent.TextureAssets.Item;
+        int type = Item.type;
+        if (type <= ItemID.None || type >= assets.Length)
+            return true;
+        var nativeAsset = assets[type];
+        if (nativeAsset?.IsLoaded != true
+            || !ReferenceEquals(drawData.texture, nativeAsset.Value)
+            || !GeneratedHeldItemDrawLayer.HasReadyHeldSprite(drawInfo))
+            return true;
+
+        // The native veto covers its base/color/glow bundle. Keep optional draws
+        // using OTHER textures rather than clearing unrelated cache entries.
+        Texture2D nativeTexture = nativeAsset.Value;
+        if (coloredDrawData is DrawData colored && !ReferenceEquals(colored.texture, nativeTexture))
+            drawInfo.DrawDataCache.Add(colored);
+        if (glowMaskDrawData is DrawData glow && !ReferenceEquals(glow.texture, nativeTexture))
+            drawInfo.DrawDataCache.Add(glow);
+        return false;
+    }
+
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
     {
         EnsureRuntimeHydration();

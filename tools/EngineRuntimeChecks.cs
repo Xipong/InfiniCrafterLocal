@@ -218,6 +218,7 @@ internal static partial class EngineRuntimeChecks
             ("textured body uses declared axis and preserves native spin", TexturedBodyUsesDeclaredAxisAndPreservesNativeSpin),
             ("body copies capture selected size and axis without changing network pose", BodyCopiesCaptureSelectedSizeAndAxisWithoutChangingNetworkPose),
             ("item body copies use root size and impact stays independent", ItemBodyCopyUsesRootSizeAndDedicatedImpactStaysIndependent),
+            ("held proxy replaced only by ready instance PNG", HeldProxyIsReplacedOnlyByReadyInstanceSprite),
             ("held presentation matches engine geometry", HeldPresentationGeometryMatchesEngine),
             ("inventory/world draw preserves geometry and tint", GeneratedItemDrawPreservesEngineGeometryAndTint),
             ("runtime sprite cache premultiplies decoded pixels once", RuntimeSpriteAlphaChecksAtOwnerBoundary),

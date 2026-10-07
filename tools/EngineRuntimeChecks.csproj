@@ -20,6 +20,7 @@
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
     <Compile Include="EngineRuntimeChecks.HeldPresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.HeldProxy.cs" />
     <Compile Include="EngineRuntimeChecks.PresentationMetadata.cs" />
     <Compile Include="EngineRuntimeChecks.ItemDraw.cs" />
     <Compile Include="EngineRuntimeChecks.SpriteAlpha.cs" />

@@ -59,7 +59,16 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
     public override Position GetDefaultPosition() => new AfterParent(PlayerDrawLayers.HeldItem);
 
     public override bool GetDefaultVisibility(PlayerDrawSet drawInfo)
+        => TryGetVisibleHeldSpriteData(drawInfo, out _);
+
+    internal static bool HasReadyHeldSprite(PlayerDrawSet drawInfo)
+        => TryGetVisibleHeldSpriteData(drawInfo, out GeneratedItemData? data)
+            && !string.IsNullOrWhiteSpace(data?.Visual?.SpritePath)
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data!.Visual.SpritePath) is not null;
+
+    private static bool TryGetVisibleHeldSpriteData(PlayerDrawSet drawInfo, out GeneratedItemData? data)
     {
+        data = null;
         Player player = drawInfo.drawPlayer;
         if (player.dead || player.frozen)
             return false;
@@ -69,7 +78,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
             return false;
 
         Item held = player.HeldItem;
-        GeneratedItemData? data = ResolveHeldPresentationData(held, remotePayload);
+        data = ResolveHeldPresentationData(held, remotePayload);
 
         if (data is not null && !ShouldDrawHeldSprite(data, player, remotePayload))
             return false;
