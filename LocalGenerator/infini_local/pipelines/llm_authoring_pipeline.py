@@ -631,8 +631,13 @@ def call_llm_vfx_director(
     request = with_prompt_cache_prefix(
         request, message_index=1, prefix_chars=json_prefix_chars(user, static_keys),
     )
+    item = user.get("item") or {}
+    recipe_id = item.get("id") if isinstance(item, Mapping) else None
+    trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"][1]["content"])
+    trace_stage_request(stage_name, user.get("recipeKey"), request, recipe_id=recipe_id)
     raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
     content = raw["choices"][0]["message"]["content"]
+    trace_event("response", "LLM:" + stage_name, "VFX stage response", {"recipeId": recipe_id}, response=content)
     try:
         parsed = parse_first_valid_llm_json(content)
     except (ValueError, TypeError, json.JSONDecodeError) as exc:

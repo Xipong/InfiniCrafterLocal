@@ -14,6 +14,16 @@
 | `/infinidumppicture [all\|latest\|id-or-name-filter]` | Generated PNG/JSON/gallery в `picture_dumps/YYYYMMDD_HHMMSS/` |
 | `/infinidumppicture source [held\|active\|baseline\|item <id/name>\|projectile <id/name>]` | Loaded Terraria/mod textures в `picture_dumps/source_YYYYMMDD_HHMMSS/` |
 
+## Полное логирование LocalGenerator
+
+В GUI → **Сервер и крафт** галочка **«Полное логирование (без обрезки)»** видна без расширенного режима и включена для нового config. Сохранённый `INFINI_TRACE_PROMPTS=0` не сбрасывается при открытии/сохранении GUI или выборе встроенного pipeline preset; пользовательский профиль сохраняет выбранное значение. Изменения применяются после **Сохранить → перезапустить сервер**.
+
+- **ON:** полные sanitized prompts/ответы Gameplay/Visual/VFX (включая Repair), image prompts, payloads и шаги пишутся в `cache/prompt_trace.ndjson`, `cache/pipeline_trace.ndjson`, `cache/events.ndjson` без обрезки и автоматической ротации. Полные failure snapshots также архивируются в pipeline trace; `last_combine_failure.json` — только указатель последнего сбоя. `cache/stage_requests/*.json` сохраняет точные builder messages до provider conversion, с stage + recipeKey/recipeId + hash join, атомарно и без квот на длину/число записей. Не обещает захват transport headers или старого исторического HTTP wire; ошибка диска/неподдерживаемый message shape/linked storage дают refusal, а не частичный запрос.
+- **OFF:** нет новых дополнительных prompt/pipeline traces, stage/failure debug artifacts, info/debug/warn events, HTTP access echo и захвата stdout/stderr запущенного GUI sd.cpp backend. Краткие фатальные ошибки и стартовый server baseline остаются; старый архив автоматически не удаляется. Внешний уже работающий backend GUI не перенастраивает.
+- **Хранение ≠ показ:** GUI `/trace.json`/локальный fallback показывает последние записи; `INFINI_TRACE_EVENTS_TAIL` ограничивает число показанных строк, не архив. Содержимое показанного запроса/ответа остаётся полным. `INFINI_TRACE_MAX_PROMPT_CHARS=0` — настоящий unlimited sentinel для текстового web preview; положительное старое значение не обрезает сохранённые данные. При очень большом snapshot сохраняется I/O timeout, не подмена частичным успехом.
+- **Безопасность/диск:** credentials редактируются перед сохранением/эхом; чистый authored текст (Unicode/CRLF/escape sequences) не переписывается. ON может занимать много диска: архив очищается только вручную. GUI Clear trace очищает три NDJSON; stage-request архив удаляй отдельно при остановленном сервере.
+- **Область:** это переключатель дополнительной диагностики, не выключатель обязательного gameplay/progress, accepted recipe/history, механических receipts, transfer manifests или отдельно выбранного debug sprite-stage сохранения. Их отключение сломало бы pipeline/историю; модели, prompts/контракты и gameplay не меняются.
+
 ## `/multidevcraft`
 
 `2` закрепляет окна за `llm_1`/`llm_2`, `3` — за `llm_1..llm_3`; `off` (также `0`/`1`) возвращает одно окно. Без аргумента цикл `1 → 2 → 3 → 1`. Каждое окно имеет собственные A/B, request/progress/refund. Занятое скрываемое окно нужно сначала завершить/освободить. Профили LLM 2/3 настраиваются во вкладке Multi-dev GUI; команда не обходит validation и server-authoritative commit, не выдаёт ингредиенты.

@@ -75,7 +75,7 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 | Captured fact | Проверка / сохранённая семантика |
 |---|---|
 | Owner | Исходный `Player` + slot; due tick требует `ReferenceEquals` и active. Новый Player в том же слоте не становится владельцем старого события. Это не универсальный fence любого in-place reset. |
-| Direct NPC target | Исходный instance + slot + active; reused slot даёт отсутствующую direct target. Delayed hit/crit pull при утрате direct NPC не превращается в area pull. Остальные действия сохраняют свои обычные null-target rules. |
+| Direct NPC target | Исходный instance + slot + active **и captured RuntimeHitNpcGeneration token**; MP in-place SetDefaults с новым token даёт отсутствующую direct target, Transform с прежним token остаётся той же NPC. Delayed hit/crit pull при утрате direct NPC не превращается в area pull. Остальные действия сохраняют свои обычные null-target rules. |
 | Item-use source | Клон Item при enqueue, точный поддержанный `EntitySource_ItemUse` или `_WithAmmo`, исходные Context/AmmoItemIdUsed. Расход последнего stack или поздний `SetDefaults` исходного Item не уничтожают stat lineage. |
 | Projectile parent | Сам Projectile, slot/owner/type/identity **и ModProjectile generation**. Inactive terminal source допустим, заменённое поколение отменяет action и возвращает reservation. Terminal actions пока не полностью независимы от reuse. |
 | Misc producer | Только объявленный item-body `periodic` с Context=`InfiniRuntimePeriodic`; произвольный source не переписывается в contextless Misc/ItemUse. |
@@ -109,6 +109,10 @@ Charge-release controller — другая операция: один раз м�
 
 <a id="items"></a>
 ## Item projection, equipment и ammo
+
+QuickHeal/QuickMana сохраняют native owner heal/consume и не создают manual use-анимацию. Для generated utility [`GeneratedQuickUtilityActivation.cs`](../ModSources/InfiniCrafterLocal/Common/Runtime/GeneratedQuickUtilityActivation.cs) передаёт exact native pre-consumption inventory/void Item через SyncEquipment, затем bounded Prepare→Ready→Commit. Для bank4 сначала отправляется exact inventory-предмет открытой Void Bag, чтобы первый native quick-use не зависел от уже обновлённой сумки на сервере; серверный useVoidBag gate сохранён. Сервер применяет только utility из current-world canonical definition, не повторяет UseItem/heal/consumption/mobility/spawn/VFX. Identity/token/binding/sender/session/replay/TTL ограничивают occurrence; это vanilla owner-use trust, не независимое доказательство HP/расхода. Длительность anchored к server Prepare, поздний Commit не восстанавливает полный срок. Старые client stat snapshots не становятся authority.
+
+`grounded` проверяет contact через native TileCollision/SlopeCollision в направлении gravDir, не только zero vertical velocity; опрос не изменяет player или scratch flags native collision.
 
 | Seam | Текущий invariant / нерасширенная граница |
 |---|---|

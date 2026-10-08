@@ -366,7 +366,11 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
             assert len(posts) == len(paths) == 1
             assert Path(paths[0]).read_bytes() == raw
             assert post_deadlines == outer_deadlines, 'continuation must not reset the original image budget'
-        assert entered.is_set()
+        # A whole deadline may expire before the server thread accepts GET. The
+        # refusal/no-POST/no-file oracle above still proves the total-budget path;
+        # handler entry is required only for the advisory-timeout continuation.
+        if overall_timeout >= 0.08:
+            assert entered.is_set()
     finally:
         release.set()
         server.shutdown()

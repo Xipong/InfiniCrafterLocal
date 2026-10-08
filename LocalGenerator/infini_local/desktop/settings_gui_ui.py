@@ -47,7 +47,7 @@ _BASIC_FIELDS = frozenset({
     "INFINI_IMAGE_API_BASE_URL", "INFINI_IMAGE_API_KEY", "INFINI_IMAGE_API_MODEL", "INFINI_IMAGE_API_SIZE",
     "INFINI_A1111_URL", "INFINI_COMFYUI_URL", "INFINI_BG_COLOR", "INFINI_REMOVE_BG",
     "INFINI_SPRITE_DOWNSCALE_FILTER", "INFINI_MP_ASSET_TRANSPORT", "INFINI_TERRARIA_PORT",
-    "INFINI_ASSET_PUBLIC_BASE_URL", "INFINI_MULTIDEV_CONCURRENCY",
+    "INFINI_ASSET_PUBLIC_BASE_URL", "INFINI_MULTIDEV_CONCURRENCY", "INFINI_TRACE_PROMPTS",
 })
 
 
@@ -772,21 +772,20 @@ class SettingsGuiUiMixin:
 
         trace_card = self._card(
             parent,
-            "Trace / black box recorder",
-            "Для отладки генерации: prompt trace, compact events tail и расследование проблемных предметов без изменения gameplay.",
+            "Логирование генерации",
+            "Полные sanitized запросы, ответы и диагностика без ротации. GUI показывает последние записи, не удаляя архив.",
             icon="⌘",
             status=("debug", "amber"),
         )
-        self.row(trace_card, "Trace prompts", "INFINI_TRACE_PROMPTS", values=["1", "0"], hint="1 = сохранять LLM/image prompts и ответы в cache/prompt_trace.ndjson. Это debug, не gameplay state.")
-        self._register_ui_section(trace_card, advanced=True)
-        self.row(trace_card, "Trace prompt chars", "INFINI_TRACE_MAX_PROMPT_CHARS", width=16)
+        self.check_row(trace_card, "Полное логирование (без обрезки)", "INFINI_TRACE_PROMPTS", hint="По умолчанию включено. OFF: без дополнительных trace/артефактов/events; остаются краткие фатальные ошибки. Сохранить → перезапустить сервер.")
+        self.row(trace_card, "Preview chars (0 = все)", "INFINI_TRACE_MAX_PROMPT_CHARS", width=16)
         self.row(trace_card, "Trace events tail", "INFINI_TRACE_EVENTS_TAIL", width=16)
         self.row(
             trace_card,
             "Console events",
             "INFINI_CONSOLE_EVENT_LEVEL",
             values=["warn", "error", "info", "debug", "off"],
-            hint="Что дублировать в окно сервера. cache/events.ndjson пишется полностью всегда; это эхо, чтобы упавший крафт и смена транспорта были видны сразу. off — окно молчит, как раньше.",
+            hint="Эхо событий в окно сервера. При полном логировании OFF остаются только краткие фатальные ошибки; off отключает и их эхо.",
         )
 
     def _build_llm(self, parent):

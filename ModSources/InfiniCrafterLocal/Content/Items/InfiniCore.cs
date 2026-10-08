@@ -4,6 +4,7 @@ using InfiniCrafterLocal.Common.Players;
 using System;
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.Localization;
 using Terraria.ID;
 using Terraria.ModLoader;
 
@@ -36,7 +37,7 @@ public sealed class InfiniCore : ModItem
         // The actual craft uses explicit inventory UI input slots so the player controls
         // exactly which two items are sacrificed.
         Main.playerInventory = true;
-        CombatText.NewText(player.Hitbox, Color.LightSkyBlue, "InfiniCraft: use the station panel in inventory");
+        CombatText.NewText(player.Hitbox, Color.LightSkyBlue, Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI.CoreOpened"));
     }
 
     internal static bool IsValidIngredient(Item item)

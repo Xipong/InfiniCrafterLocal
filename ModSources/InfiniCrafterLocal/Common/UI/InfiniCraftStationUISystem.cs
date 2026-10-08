@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using Terraria;
+using Terraria.Localization;
 using Terraria.GameContent;
 using Terraria.ModLoader;
 using Terraria.UI;
@@ -21,6 +22,8 @@ namespace InfiniCrafterLocal.Common.UI;
 public sealed class InfiniCraftStationUISystem : ModSystem
 {
     private const int SlotSize = 52;
+    private static string ForgeText(string key, params object[] args)
+        => Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI." + key, args);
 
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
@@ -76,14 +79,9 @@ public sealed class InfiniCraftStationUISystem : ModSystem
 
         HandleMouse(craftPlayer, slotA, slotB, craftButtons, clearButton);
         DrawPanel(spriteBatch, panel);
-        Utils.DrawBorderString(spriteBatch, "InfiniCraft station", new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan, 0.92f);
-        Utils.DrawBorderString(
-            spriteBatch,
-            laneCount > 1 ? $"MULTI-DEV ×{laneCount}" : "use /multidevcraft 2 or 3",
-            new Vector2(panel.X + 170, panel.Y + 13),
-            laneCount > 1 ? Color.LightGreen : Color.Gray,
-            0.62f);
-        DrawButton(spriteBatch, clearButton, !craftPlayer.HasAnyCraftLanePending && craftPlayer.HasAnyInput, "Clear all");
+        DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
+            clearButton.X - panel.X - 24, 0.92f);
+        DrawButton(spriteBatch, clearButton, !craftPlayer.HasAnyCraftLanePending && craftPlayer.HasAnyInput, ForgeText("Retrieve"));
 
         for (int lane = 0; lane < laneCount; lane++)
         {
@@ -91,7 +89,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             if (lane > 0)
                 DrawRect(spriteBatch, new Rectangle(panel.X + 12, rowY, panel.Width - 24, 1), new Color(75, 105, 135, 150));
             Color laneColor = lane switch { 0 => Color.LightSkyBlue, 1 => Color.LightGreen, _ => Color.Violet };
-            Utils.DrawBorderString(spriteBatch, $"Window {lane + 1} · LLM {lane + 1}", new Vector2(panel.X + 14, rowY + 3), laneColor, 0.66f);
+            Utils.DrawBorderString(spriteBatch, ForgeText("Lane", lane + 1), new Vector2(panel.X + 14, rowY + 3), laneColor, 0.66f);
 
             ref Item first = ref craftPlayer.StationInput(lane * 2);
             ref Item second = ref craftPlayer.StationInput(lane * 2 + 1);
@@ -101,10 +99,11 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             DrawInputName(spriteBatch, slotB[lane], second, Color.LightPink);
 
             bool pending = craftPlayer.IsCraftLanePending(lane);
-            DrawButton(spriteBatch, craftButtons[lane], craftPlayer.CanStartStationCraftLane(lane), pending ? "Busy" : "Craft");
-            string label = pending ? Truncate(craftPlayer.CraftLaneLabel(lane), 31) : "Independent A+B pair";
-            Utils.DrawBorderString(spriteBatch, label, new Vector2(panel.X + 235, rowY + 29), Color.Silver, 0.60f);
-            Utils.DrawBorderString(spriteBatch, craftPlayer.CraftLaneStatus(lane), new Vector2(panel.X + 235, rowY + 50), pending ? Color.Orange : Color.LightGray, 0.59f);
+            DrawButton(spriteBatch, craftButtons[lane], craftPlayer.CanStartStationCraftLane(lane), pending ? ForgeText("Busy") : ForgeText("Craft"));
+            string label = pending ? Truncate(craftPlayer.CraftLaneLabel(lane), 31) : ForgeText("Idle");
+            DrawFittedText(spriteBatch, label, new Vector2(panel.X + 235, rowY + 29), Color.Silver, panel.Width - 249, 0.60f);
+            DrawFittedText(spriteBatch, craftPlayer.CraftLaneStatus(lane), new Vector2(panel.X + 235, rowY + 50),
+                pending ? Color.Orange : Color.LightGray, panel.Width - 249, 0.59f);
 
             var bar = new Rectangle(panel.X + 144, rowY + 78, panel.Width - 160, 12);
             DrawRect(spriteBatch, bar, new Color(18, 20, 28, 230));
@@ -113,10 +112,8 @@ public sealed class InfiniCraftStationUISystem : ModSystem
                 DrawGradient(spriteBatch, new Rectangle(bar.X, bar.Y, fill, bar.Height), new Color(40, 190, 220, 235), laneColor * 0.9f);
         }
 
-        string footer = laneCount > 1
-            ? "Each window spends its own ingredients · exact llm_1/2/3 · RMB clears slot"
-            : "Admin unlock: /multidevcraft 2 or /multidevcraft 3";
-        Utils.DrawBorderString(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, 0.56f);
+        string footer = ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
+        DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
         if (panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
@@ -165,7 +162,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             if (craftButtons[lane].Contains(mouse))
             {
                 if (!craftPlayer.TryStartCraftFromStation(lane))
-                    CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed, craftPlayer.IsCraftLanePending(lane) ? "This craft window is busy" : "Need two input items");
+                    CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed, ForgeText(craftPlayer.IsCraftLanePending(lane) ? "LaneBusy" : "NeedInputs"));
                 Main.mouseLeftRelease = false;
                 return;
             }
@@ -209,7 +206,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
                 return item.ModItem.Name;
         }
         catch { }
-        return "Item";
+        return ForgeText("Item");
     }
 
     private static void DrawButton(SpriteBatch spriteBatch, Rectangle rect, bool enabled, string text)
@@ -219,8 +216,19 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         DrawRect(spriteBatch, rect, back);
         DrawRect(spriteBatch, new Rectangle(rect.X, rect.Y, rect.Width, 2), border);
         DrawRect(spriteBatch, new Rectangle(rect.X, rect.Bottom - 2, rect.Width, 2), new Color(20, 30, 40, 220));
-        Vector2 size = FontAssets.MouseText.Value.MeasureString(text) * 0.75f;
-        Utils.DrawBorderString(spriteBatch, text, new Vector2(rect.Center.X - size.X / 2f, rect.Center.Y - size.Y / 2f - 2), enabled ? Color.White : Color.Gray, 0.75f);
+        Vector2 measured = FontAssets.MouseText.Value.MeasureString(text);
+        float scale = FitTextScale(measured.X, rect.Width - 12, 0.75f);
+        Vector2 size = measured * scale;
+        Utils.DrawBorderString(spriteBatch, text, new Vector2(rect.Center.X - size.X / 2f, rect.Center.Y - size.Y / 2f - 2), enabled ? Color.White : Color.Gray, scale);
+    }
+
+    private static float FitTextScale(float measuredWidth, float availableWidth, float maximumScale)
+        => measuredWidth <= 0f ? maximumScale : Math.Min(maximumScale, availableWidth / measuredWidth);
+
+    private static void DrawFittedText(SpriteBatch spriteBatch, string text, Vector2 position, Color color, float availableWidth, float maximumScale)
+    {
+        float scale = FitTextScale(FontAssets.MouseText.Value.MeasureString(text).X, availableWidth, maximumScale);
+        Utils.DrawBorderString(spriteBatch, text, position, color, scale);
     }
 
     private static bool PlayerHasCore(Player player)
@@ -261,7 +269,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
     private static string Truncate(string value, int maxChars)
     {
         if (string.IsNullOrWhiteSpace(value))
-            return "InfiniCraft";
+            return ForgeText("Title");
         value = value.Trim();
         return value.Length <= maxChars ? value : value[..Math.Max(0, maxChars - 1)] + "…";
     }

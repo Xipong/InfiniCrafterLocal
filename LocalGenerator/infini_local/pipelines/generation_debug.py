@@ -11,9 +11,8 @@ from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR
 from infini_local.core.item_identity_tools import name_of
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.result_models import ClampRecord, as_plain_dict
-from infini_local.storage import failure_state
+from infini_local.storage import failure_state, trace_runtime, trace_tools
 from infini_local.storage.trace_runtime import (
-    _json_slim,
     log_event,
 )
 
@@ -39,9 +38,9 @@ def record_combine_failure(
         partial_data=partial_data,
         pipeline_log=pipeline_log,
         parent_name=name_of,
-        json_slim=_json_slim,
+        json_slim=lambda value, _limit: trace_tools.json_slim(value, 0),
     )
-    snapshot = deepcopy(failure)
+    snapshot = trace_tools._redact_diagnostic(deepcopy(failure))
     if isinstance(error, BaseException):
         try:
             setattr(error, "_infini_failure_snapshot", deepcopy(snapshot))
@@ -50,7 +49,9 @@ def record_combine_failure(
     with _LAST_COMBINE_FAILURE_LOCK:
         _LAST_COMBINE_FAILURE.clear()
         _LAST_COMBINE_FAILURE.update(deepcopy(snapshot))
-        failure_state.persist_failure(CACHE_DIR, LAST_COMBINE_FAILURE_FILE, snapshot, log_event)
+        if trace_runtime.TRACE_PROMPTS_ENABLED:
+            trace_runtime.trace_event("error", "COMBINE:" + str(stage), "Complete craft failure snapshot", snapshot)
+            failure_state.persist_failure(CACHE_DIR, LAST_COMBINE_FAILURE_FILE, snapshot, log_event)
     return snapshot
 
 

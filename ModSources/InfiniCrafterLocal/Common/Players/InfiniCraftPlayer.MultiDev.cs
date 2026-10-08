@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Terraria;
+using Terraria.Localization;
 using Terraria.ID;
 
 namespace InfiniCrafterLocal.Common.Players;
@@ -56,12 +57,15 @@ public sealed partial class InfiniCraftPlayer
         return HasInputAt(first) && HasInputAt(first + 1);
     }
 
+    private static string ForgePresentationText(string key, params object[] args)
+        => Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI." + key, args);
+
     public string CraftLaneLabel(int laneIndex)
     {
         if (laneIndex == 0)
-            return CraftLabel;
+            return string.IsNullOrWhiteSpace(_label) ? ForgePresentationText("Lane", 1) : CraftLabel;
         MultiDevCraftJob? job = laneIndex is 1 or 2 ? _multiDevJobs[laneIndex - 1] : null;
-        return string.IsNullOrWhiteSpace(job?.Label) ? $"LLM {laneIndex + 1}" : job!.Label;
+        return string.IsNullOrWhiteSpace(job?.Label) ? ForgePresentationText("Lane", laneIndex + 1) : job!.Label;
     }
 
     public float CraftLaneProgress(int laneIndex)
@@ -77,21 +81,25 @@ public sealed partial class InfiniCraftPlayer
         if (laneIndex == 0)
         {
             if (!HasPendingCraft)
-                return CanStartStationCraftLane(0) ? "Ready" : "Need A+B";
+                return ForgePresentationText(CanStartStationCraftLane(0) ? "Ready" : "NeedInputs");
+            if (_awaitingServerCommit)
+                return ForgePresentationText("Host");
             if (IsWaitingForRetry)
-                return $"Retry #{GenerationAttempt + 1} in {RetrySecondsLeft}s";
-            return IsWaitingForModel ? "Waiting for LLM 1" : $"LLM 1 · {Math.Ceiling(TicksLeft / 60f)}s";
+                return ForgePresentationText("Retry", GenerationAttempt + 1, RetrySecondsLeft);
+            if (_task?.IsCompleted == true)
+                return ForgePresentationText("Committing");
+            return IsWaitingForModel ? ForgePresentationText("Waiting") : ForgePresentationText("Countdown", Math.Ceiling(TicksLeft / 60f));
         }
         MultiDevCraftJob? job = laneIndex is 1 or 2 ? _multiDevJobs[laneIndex - 1] : null;
         if (job is null)
-            return CanStartStationCraftLane(laneIndex) ? "Ready" : "Need A+B";
+            return ForgePresentationText(CanStartStationCraftLane(laneIndex) ? "Ready" : "NeedInputs");
         if (job.AwaitingServerCommit)
-            return $"Host · LLM {laneIndex + 1}";
+            return ForgePresentationText("Host");
         if (job.Task is null || !job.Task.IsCompleted)
             return job.ElapsedTicks >= CraftDurationTicks
-                ? $"Waiting for LLM {laneIndex + 1}"
-                : $"LLM {laneIndex + 1} · {Math.Ceiling(Math.Max(0, CraftDurationTicks - job.ElapsedTicks) / 60f)}s";
-        return "Committing";
+                ? ForgePresentationText("Waiting")
+                : ForgePresentationText("Countdown", Math.Ceiling(Math.Max(0, CraftDurationTicks - job.ElapsedTicks) / 60f));
+        return ForgePresentationText("Committing");
     }
 
     public bool TrySetMultiDevWindowCount(int requested, bool syncServer = true)
@@ -236,7 +244,7 @@ public sealed partial class InfiniCraftPlayer
                 if (job.WaitTicks % StationEscrowRetryIntervalTicks == 0)
                     SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
                 if (job.WaitTicks == RemoteServerCraftTimeoutTicks)
-                    CombatText.NewText(Player.Hitbox, Color.Orange, $"Multi-dev lane {job.LaneIndex + 1}: ждём durable host outcome");
+                    CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("LaneHost", job.LaneIndex + 1));
                 continue;
             }
             if (job.Task is null || !job.Task.IsCompleted)
@@ -257,7 +265,7 @@ public sealed partial class InfiniCraftPlayer
                     RefundOne(job.Request.RefundB);
                 }
                 if (Main.netMode != NetmodeID.Server)
-                    CombatText.NewText(Player.Hitbox, Color.OrangeRed, $"Multi-dev lane {job.LaneIndex + 1}: {reason}");
+                    CombatText.NewText(Player.Hitbox, Color.OrangeRed, ForgePresentationText("LaneFailed", job.LaneIndex + 1, reason));
                 _multiDevJobs[slot] = null;
                 continue;
             }
@@ -306,12 +314,12 @@ public sealed partial class InfiniCraftPlayer
             if (success)
             {
                 ClearRemoteCraftMirror(job.LaneIndex);
-                CombatText.NewText(Player.Hitbox, Color.Cyan, $"Lane {job.LaneIndex + 1}: {(string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName)}");
+                CombatText.NewText(Player.Hitbox, Color.Cyan, ForgePresentationText("LaneResult", job.LaneIndex + 1, string.IsNullOrWhiteSpace(itemName) ? ForgePresentationText("Result") : itemName));
             }
             else
             {
                 RestoreRemoteCraftMirror(job.LaneIndex, job.Request);
-                CombatText.NewText(Player.Hitbox, Color.OrangeRed, $"Lane {job.LaneIndex + 1}: {(string.IsNullOrWhiteSpace(message) ? "craft failed" : message)}");
+                CombatText.NewText(Player.Hitbox, Color.OrangeRed, ForgePresentationText("LaneRestored", job.LaneIndex + 1, message));
             }
             _multiDevJobs[slot] = null;
             return true;

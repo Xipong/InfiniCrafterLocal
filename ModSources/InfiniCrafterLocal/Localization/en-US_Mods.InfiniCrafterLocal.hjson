@@ -79,6 +79,48 @@ Mods: {
 }
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
+StationUI: {
+	Started: "Wonder Forge: up to 240 s; collect as soon as ready"
+	Attempt: "Wonder Forge: forging attempt {0}"
+	Recovery: "Wonder Forge: another attempt in {0} s"
+	Offline: "Wonder Forge unavailable; another attempt in {0} s"
+	HostWorking: "Wonder Forge: the world host is forging your item"
+	HostDelayed: "Wonder Forge: waiting for host confirmation; no second ingredient charge"
+	CountdownNotice: "Wonder Forge: up to {0} s"
+	LateNotice: "The alloy is still forming; another attempt may follow"
+
+	Title: "Wonder Forge"
+	Lane: "Hearth {0}"
+	Craft: "Forge"
+	Busy: "Forging"
+	Retrieve: "Retrieve"
+	Idle: "Two items, one alloy"
+	Ready: "Ready to forge"
+	NeedInputs: "Need two items"
+	Retry: "Attempt {0} in {1} s"
+	Waiting: "Alloy still forming"
+	Countdown: "Forging · {0} s"
+	Host: "Awaiting world host"
+	Committing: "Finishing the forge"
+	FooterSingle: "Place two items · RMB: retrieve"
+	FooterMultiple: "Each hearth uses its own pair · RMB: retrieve"
+	LaneBusy: "This hearth is busy"
+	Item: "Item"
+	CoreOpened: "Wonder Forge: choose two items"
+	CommandDescription: "Open one, two or three independent hearths in the Wonder Forge."
+	CommandUsage: "Usage: /multidevcraft [2|3|off]"
+	CommandBlocked: "Finish forging and retrieve items before closing a hearth."
+	CommandSingle: "Wonder Forge: one hearth is open."
+	CommandMultiple: "Wonder Forge: {0} independent hearths are open."
+	CommandPairs: "Each hearth needs its own pair of items."
+	HearthsOpened: "Hearths ×{0}"
+	LaneHost: "Hearth {0}: awaiting the world host’s result"
+	LaneFailed: "Hearth {0}: forging failed; ingredients returned · {1}"
+	LaneRestored: "Hearth {0}: forging failed; ingredients restored to the slots · {1}"
+	LaneResult: "Hearth {0}: {1}"
+	Result: "New alloy"
+}
+
 RuntimeTooltip: {
 	InputPrimary: "Use (left-click)"
 	InputAlternate: "Alternate use (right-click)"
@@ -106,7 +148,7 @@ RuntimeTooltip: {
 	Recall: "{0}: recall home; cooldown after success: {1}"
 	Blink: "{0}: blink toward cursor, up to {1} tiles; cooldown after success: {2}{3}"
 	SafeDestination: "; requires a safe destination"
-	Grounded: "{0}: requires no vertical movement"
+	Grounded: "{0}: requires solid support in the direction of gravity"
 	NotWet: "{0}: cannot be used while wet"
 	MinimumLife: "{0}: requires at least {1} life"
 	MinimumMana: "{0}: requires at least {1} mana"
@@ -130,7 +172,8 @@ Items: {
 	}
 
 	InfiniCore: {
-		DisplayName: Infini Core
+		DisplayName: Forge Heart
+		Tooltip: "Right-click to open the Wonder Forge in your inventory\nPlace two items in slots A and B, then forge a new alloy\nIf forging fails, your ingredients are returned"
 	}
 }
 

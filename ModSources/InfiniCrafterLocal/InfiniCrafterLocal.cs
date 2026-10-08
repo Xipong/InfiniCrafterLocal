@@ -15,7 +15,7 @@ namespace InfiniCrafterLocal;
 // authoring here — generated behavior must already be explicit GeneratedItemData.
 public sealed class InfiniCrafterLocalMod : Mod
 {
-    public const string ModVersion = "0.4.250";
+    public const string ModVersion = "0.4.251";
     public static InfiniCrafterLocalMod Instance { get; private set; } = null!;
     public static GeneratorClient Generator { get; private set; } = null!;
     public static RuntimeSpriteCache Sprites { get; private set; } = null!;
@@ -73,6 +73,11 @@ public sealed class InfiniCrafterLocalMod : Mod
         if (packetType == InfiniNetPacketIds.CraftCommitResult)
         {
             InfiniCraftPlayer.HandleCraftCommitResultPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedQuickUtilityActivation)
+        {
+            Common.Runtime.GeneratedQuickUtilityActivation.HandlePacket(reader, whoAmI);
             return;
         }
         if (packetType == InfiniNetPacketIds.SyncGeneratedUtilityBuff)

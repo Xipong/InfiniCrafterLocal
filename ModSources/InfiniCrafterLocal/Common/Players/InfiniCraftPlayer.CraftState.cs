@@ -491,7 +491,7 @@ public sealed partial class InfiniCraftPlayer
         _lastRetryNoticeTick = 0;
         _lastGeneratorOfflineNoticeTick = 0;
         StartGenerationTask("initial");
-        CombatText.NewText(Player.Hitbox, Color.Cyan, "InfiniCraft: крафт до 240с, выдача по готовности");
+        CombatText.NewText(Player.Hitbox, Color.Cyan, ForgePresentationText("Started"));
         return true;
     }
 
@@ -504,7 +504,7 @@ public sealed partial class InfiniCraftPlayer
         _retryWaitTicks = 0;
         _task = Task.Run(() => global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.GeneratePreparedBlocking(request));
         if (_generationAttempt > 1)
-            CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, $"InfiniCraft: повторный запрос #{_generationAttempt}");
+            CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, ForgePresentationText("Attempt", _generationAttempt));
     }
 
     private void ScheduleEarlyRetry(string reason)
@@ -515,7 +515,7 @@ public sealed partial class InfiniCraftPlayer
         if (_lastRetryNoticeTick <= 0 || _totalCraftTicks - _lastRetryNoticeTick >= 10 * 60)
         {
             _lastRetryNoticeTick = _totalCraftTicks;
-            CombatText.NewText(Player.Hitbox, Color.Orange, $"InfiniCraft: ждём готовый рецепт / cache retry через {RetrySecondsLeft}с");
+            CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("Recovery", RetrySecondsLeft));
         }
     }
 
@@ -529,7 +529,7 @@ public sealed partial class InfiniCraftPlayer
         if (_totalCraftTicks >= 15 * 60 && (_lastGeneratorOfflineNoticeTick <= 0 || _totalCraftTicks - _lastGeneratorOfflineNoticeTick >= 60 * 60))
         {
             _lastGeneratorOfflineNoticeTick = _totalCraftTicks;
-            CombatText.NewText(Player.Hitbox, Color.Orange, $"InfiniCraft: LocalGenerator временно недоступен — тихий retry через {RetrySecondsLeft}с");
+            CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("Offline", RetrySecondsLeft));
         }
     }
 
@@ -569,11 +569,11 @@ public sealed partial class InfiniCraftPlayer
                 _elapsedTicks++;
             _ticksLeft = Math.Max(0, CraftDurationTicks - _elapsedTicks);
             if (_serverCraftWaitTicks == 2 * 60)
-                CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, "InfiniCraft: хост генерирует предмет");
+                CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, ForgePresentationText("HostWorking"));
             if (_serverCraftWaitTicks % StationEscrowRetryIntervalTicks == 0)
                 ResendPendingRemoteCrafts();
             if (_serverCraftWaitTicks == RemoteServerCraftTimeoutTicks)
-                CombatText.NewText(Player.Hitbox, Color.Orange, "InfiniCraft: связь с хостом задерживается — ожидаем подтверждение без повторного списания");
+                CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("HostDelayed"));
             return;
         }
 
@@ -619,12 +619,12 @@ public sealed partial class InfiniCraftPlayer
             if (_ticksLeft > 0 && _announceTick >= 15 * 60)
             {
                 _announceTick = 0;
-                CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, $"InfiniCraft: до {Math.Ceiling(_ticksLeft / 60f)}с");
+                CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, ForgePresentationText("CountdownNotice", Math.Ceiling(_ticksLeft / 60f)));
             }
             if (_ticksLeft <= 0 && !_lateMessageShown)
             {
                 _lateMessageShown = true;
-                CombatText.NewText(Player.Hitbox, Color.Orange, "InfiniCraft: модель ещё думает / возможен retry");
+                CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("LateNotice"));
             }
             return;
         }

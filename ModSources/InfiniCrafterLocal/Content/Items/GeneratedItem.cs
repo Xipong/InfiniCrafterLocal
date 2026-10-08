@@ -133,7 +133,8 @@ public partial class GeneratedItem : ModItem
 
     public override void NetSend(BinaryWriter writer)
     {
-        bool materialTransport=HasMaterialTransportIdentity;
+        bool materialTransport=HasMaterialTransportIdentity
+            || global::InfiniCrafterLocal.Common.Runtime.GeneratedQuickUtilityActivation.IsEligible(Data);
         writer.Write(materialTransport?8:GeneratedItemNetPayloadVersion);
         try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
         catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
@@ -272,12 +273,45 @@ public partial class GeneratedItem : ModItem
         if (player is null || gameplay is null) return "";
         return gameplay.UseConditionMode switch
         {
-            "grounded" when player.velocity.Y != 0f => "Requires solid ground",
+            "grounded" when !HasNativeGroundSupport(player) => "Requires solid ground",
             "not_wet" when player.wet => "Cannot be used while wet",
             "life_above" when player.statLife < gameplay.UseConditionMinLife => $"Requires {gameplay.UseConditionMinLife} life",
             "mana_above" when player.statMana < gameplay.UseConditionMinMana => $"Requires {gameplay.UseConditionMinMana} mana",
             _ => "",
         };
+    }
+
+    private static bool HasNativeGroundSupport(Player player)
+    {
+        if (player.velocity.Y != 0f || player.width <= 0 || player.height <= 0
+            || !float.IsFinite(player.position.X) || !float.IsFinite(player.position.Y))
+            return false;
+        int gravityDirection = player.gravDir < 0f ? -1 : 1;
+        Vector2 probe = new(0f, gravityDirection);
+        // Native collision helpers publish scratch flags for the movement caller.
+        // This is a read-only contact query, so neither those flags nor Player state
+        // may change merely because CanUseItem examined an authored condition.
+        bool up = Collision.up, down = Collision.down, stair = Collision.stair,
+            stairFall = Collision.stairFall, sloping = Collision.sloping;
+        try
+        {
+            Vector2 movement = Collision.TileCollision(player.position, probe,
+                player.width, player.height, gravDir: gravityDirection);
+            if (movement.Y == 0f)
+                return true;
+            // TileCollision deliberately leaves slope resolution to SlopeCollision.
+            // Probe from one pixel into the gravity-facing surface; native slope
+            // resolution must return to the current contact, not just a nearby tile.
+            Vector4 slope = Collision.SlopeCollision(player.position + probe, probe,
+                player.width, player.height, fall: gravityDirection < 0);
+            return (slope.Y - player.position.Y) * gravityDirection <= 0f
+                && slope.W * gravityDirection < 1f;
+        }
+        finally
+        {
+            Collision.up = up; Collision.down = down; Collision.stair = stair;
+            Collision.stairFall = stairFall; Collision.sloping = sloping;
+        }
     }
 
     public override bool CanUseItem(Player player)

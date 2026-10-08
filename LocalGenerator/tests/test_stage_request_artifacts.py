@@ -71,13 +71,14 @@ def test_artifact_refusals_never_publish_partial_or_follow_linked_storage(monkey
     (tmp_path / 'stage_requests').unlink()
     request['messages'][0]['content'] = 'ж' * (2 * 1024 * 1024)
     receipt = trace_runtime.trace_stage_request('visual_director', 'r_large', request)
-    assert receipt['status'] == 'refused' and receipt['reason'] == 'payload_limit'
-    assert not (tmp_path / 'stage_requests').exists()
-    assert 'path' not in receipt and receipt['bytes'] > 2 * 1024 * 1024
+    assert receipt['status'] == 'stored' and receipt['bytes'] > 2 * 1024 * 1024
+    published = tmp_path / receipt['path']
+    assert json.loads(published.read_bytes())['messages'] == request['messages']
+    published.unlink()
 
     monkeypatch.setattr(trace_runtime, 'TRACE_PROMPTS_ENABLED', False)
     assert trace_runtime.trace_stage_request('visual_director', 'r_disabled', request) == {'status': 'disabled'}
-    assert not (tmp_path / 'stage_requests').exists()
+    assert not list((tmp_path / 'stage_requests').glob('*.json'))
     monkeypatch.setattr(trace_runtime, 'TRACE_PROMPTS_ENABLED', True)
     request['messages'][0]['content'] = 'full payload'
     def fail_replace(*args):

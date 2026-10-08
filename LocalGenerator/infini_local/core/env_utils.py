@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -94,6 +95,13 @@ def env_first_allow_empty(names: Iterable[str], default: str = "", *, strip: boo
         if name in os.environ:
             return env_str(name, default, strip=strip)
     return env_str("__INFINI_ENV_MISSING__", default, strip=strip)
+
+
+def env_credential_values() -> tuple[str, ...]:
+    """Known configured secrets for diagnostics; never expose them in registry/UI."""
+    return tuple(value for key, value in os.environ.items() if value
+                 and (key in {"OPENAI_API_KEY", "OPENROUTER_API_KEY"} or
+                      (key.startswith("INFINI_") and re.search(r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)(?:_|$)", key.upper()))))
 
 
 def env_path(name: str, default: str | Path) -> Path:

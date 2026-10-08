@@ -27,6 +27,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
+    CapabilitySpec,
     ENTITY_KIND_REGISTRY,
     EVENT_CAPABILITIES,
     EVENT_KIND_REGISTRY,
@@ -34,7 +35,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_dependency_alternatives,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
-from infini_local.core.repair_merge import json_path_child, json_path_relative, merge_frozen_subtree
+from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     PRIMARY_ENTITY_SELECTION_FIELD,
@@ -129,6 +130,27 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 def _values(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def _conditional_param_dependencies(cap: CapabilitySpec) -> tuple[tuple[str, Any, str], ...]:
+    """Exact selector -> required leaf facts, projected from their registry owners."""
+    dependencies: list[tuple[str, Any, str]] = []
+    for requirement in cap.requirements:
+        if requirement.kind == "conditional_param":
+            for encoded in requirement.any_of:
+                expected, required = encoded.split(":", 1)
+                dependencies.append((requirement.param, expected, required))
+    # Some conditional requiredness belongs to the registry's provider shape
+    # rather than a semantic RequirementSpec; consume that shape, not event names.
+    params_schema = cap.provider_variant_schema()["properties"]["params"]
+    condition = params_schema.get("if", {})
+    for selector, predicate in condition.get("properties", {}).items():
+        if selector in condition.get("required", ()) and "const" in predicate:
+            dependencies.extend(
+                (selector, predicate["const"], required)
+                for required in params_schema.get("then", {}).get("required", ())
+            )
+    return tuple(dependencies)
 
 
 def _program_rows(current: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -2402,6 +2424,18 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     for encoded in call_reference_param_changes:
         row_id, param_name = encoded.split(":", 1)
         grant("calls", row_id, f"params.{param_name}")
+    # Expose all exact missing leaves reachable from an authorized selector.
+    # The model still chooses the selector; filtering admits only its branch.
+    for call in rows["calls"]:
+        call_id = str(call.get("id") or "")
+        cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        if cap is None:
+            continue
+        params = _mapping(call.get("params"))
+        permissions = field_permissions["calls"].get(call_id, set())
+        for selector, _expected, required in _conditional_param_dependencies(cap):
+            if f"params.{selector}" in permissions and required not in params:
+                grant("calls", call_id, f"params.{required}")
     scope = _new_scope()
     scope["mutable"] = {
         "entityIds": sorted(mutable["entities"]),
@@ -2703,8 +2737,9 @@ def filter_repair_patch_scope(
     nodes are ignored and audited, including wrong numeric ranges or conditional
     values in frozen leaves. Malformed types, union shapes and unknown keys are
     rejected before filtering. A missing key is accepted only when the
-    validator reported that exact path; optional unrequested design fields stay
-    absent even if the model includes them in a complete-node response.
+    validator reported that exact path, or a registry conditional dependency
+    requires it for an authorized explicit selector choice. Optional unrequested
+    design fields stay absent even in a complete-node response.
     """
 
     shape = strict_repair_structure_report(patch)
@@ -2826,7 +2861,7 @@ def filter_repair_patch_scope(
             original = original_by_id.get(row_id)
             if original is not None:
                 if row_id not in mutable_ids:
-                    if dict(candidate) != dict(original):
+                    if not json_values_equal(dict(candidate), dict(original)):
                         ignored.append(_filter_ignored(path, candidate, original, "independent_valid_node_frozen"))
                     continue
                 if namespace == "bindings":
@@ -2846,7 +2881,7 @@ def filter_repair_patch_scope(
                             and actual_transaction in allowed_transactions
                             and {"", "usePolicy"}.intersection(permissions.get(row_id, ()))):
                         replacement = copy.deepcopy(dict(candidate))
-                        if replacement != original:
+                        if not json_values_equal(replacement, original):
                             filtered[upsert_key].append(replacement)
                             accepted.append(path)
                         continue
@@ -2857,6 +2892,19 @@ def filter_repair_patch_scope(
                     original_params: Mapping[str, Any] = original_params_raw if isinstance(original_params_raw, Mapping) else {}
                     candidate_params: Mapping[str, Any] = candidate_params_raw if isinstance(candidate_params_raw, Mapping) else {}
                     cap = CAPABILITY_REGISTRY.get(str(original.get("fn") or ""))
+                    if cap is not None:
+                        dependencies = _conditional_param_dependencies(cap)
+                        selected_missing = {
+                            required for selector, expected, required in dependencies
+                            if required not in original_params
+                            and f"params.{selector}" in row_permissions
+                            and json_values_equal(candidate_params.get(selector, original_params.get(selector)), expected)
+                        }
+                        for selector, expected, required in dependencies:
+                            if (required not in original_params
+                                    and f"params.{selector}" in row_permissions
+                                    and required not in selected_missing):
+                                row_permissions.discard(f"params.{required}")
                     inert_repair = any(
                         requirement.get("code") == "inert_component"
                         and row_id in requirement.get("affectedIds", [])
@@ -2892,7 +2940,7 @@ def filter_repair_patch_scope(
                     mutable_paths=row_permissions,
                     audit_path=path,
                     # A broken component may be returned as a complete object,
-                    # but only exact validator-reported leaves may change or be
+                    # but only exact error/dependency leaves may change or be
                     # added. Every other old value remains frozen.
                     allow_additions=False,
                 )
@@ -2904,7 +2952,7 @@ def filter_repair_patch_scope(
                         for call_id, key in accepted_param_deletes:
                             if call_id == row_id:
                                 merged_params_raw.pop(key, None)
-                if merged != original:
+                if not json_values_equal(merged, original):
                     filtered[upsert_key].append(merged)
                 continue
 
@@ -2948,7 +2996,7 @@ def filter_repair_patch_scope(
             )
             ignored.extend(field_ignored)
             accepted.extend(field_accepted)
-            if merged != preserved:
+            if not json_values_equal(merged, preserved):
                 filtered["metadataPatch"][field] = merged
         elif permissions:
             filtered["metadataPatch"][field] = copy.deepcopy(candidate)

@@ -311,6 +311,8 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = 
     return snap
 
 def ensure_sdcpp_server() -> bool:
+    from infini_local.storage import trace_runtime
+
     ok = sdcpp_service.ensure_server(
         state=SDCPP_SERVER_STATE,
         root=ROOT,
@@ -327,6 +329,7 @@ def ensure_sdcpp_server() -> bool:
         log_event=log_event,
         tail_text_file=_tail_text_file,
         process_env=sdcpp_backend.server_process_environment(_sdcpp_config()),
+        diagnostics_enabled=trace_runtime.TRACE_PROMPTS_ENABLED,
     )
     return ok
 

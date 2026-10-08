@@ -4879,16 +4879,16 @@
     {
       "declarations": [
         {
-          "default": 18000,
+          "default": 0,
           "file": "LocalGenerator/infini_local/storage/trace_runtime.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": 18000,
+      "default": 0,
       "documented": true,
-      "example": "18000",
+      "example": "0",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -5616,7 +5616,7 @@
   ],
   "errors": [],
   "fieldCount": 231,
-  "fingerprint": "29b496c5e6ba87d4622dc5efbc313224ac284be2b1c284b8b3e426091045867d",
+  "fingerprint": "03973310b47bc79ddfa7ca7fcae3136e6376597b1ac78efc070f86d0f22a19b1",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

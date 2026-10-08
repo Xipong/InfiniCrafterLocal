@@ -2,6 +2,11 @@
 
 Development/agent utilities. None of these files are imported by the game runtime.
 
+- `EngineRuntimeChecks.QuickUtilityActivation.cs` — native QuickHeal/QuickMana once, real compact inventory/void identity, writer→server→remote utility, replay/sender/session/lifetime/capacity controls; native SyncEquipment is observed at socket boundary, no socket match.
+- `EngineRuntimeChecks.DelayedNpcIncarnation.cs` — actual OnHitNPC/SetDefaults/ExtraAI/Transform and due target/status, no area-pull substitution, immediate/terminal/refund controls.
+- `EngineRuntimeChecks.ForgePresentation.cs` — native HJSON/prefix/Language и реальные lane statuses RU/EN; timers/host/accepted parent names неизменны.
+- `EngineRuntimeChecks.Grounded.cs` — real native TileCollision/SlopeCollision support queries on isolated TileData: empty air, solid/actuated floor, platform, half block, both gravity signs/slopes, wall and scratch-flag preservation. Registered in the headless runner/project; no world loop or GPU.
+
 - `EngineRuntimeChecks.GeneratedItemPrefix.cs` — native instance-prefix lifecycle checks: real `Item.Prefix`/`CanUseItem`, repeated projection and clone, placement/ammo independence, actual SaveData + native ItemIO prefix importer, compact forwarding and later full-definition hydration. Shared-proxy content registration, complete ItemIO.Load/Receive routing, sockets and gameplay loop are separate acceptance boundaries.
 - `EngineRuntimeChecks.RootCombat.cs` — native ItemCheck/shoot query contexts and counts, active primary/alternate roots, applied prefixes, actual hook order, terminal hold and restoration of the original source Item/crit/armor. Uses scoped native hooks and intercepted spawn boundaries; not a gameplay/MP smoke.
 - `EngineRuntimeChecks.Tooltips.cs` — real `ModifyTooltips`/`TooltipLine`/Language consumers with typed CPU fixtures and existing EN/RU HJSON: exact executable bindings, separate stack costs, base mana, bounded effects, UI number culture and non-mutation. Does not prove native inventory/GPU UI or player-dependent mana discounts.

@@ -144,14 +144,14 @@ def append_ndjson(
     max_bytes: int = _NDJSON_MAX_BYTES,
     backup_count: int = _NDJSON_BACKUP_COUNT,
 ) -> None:
-    """Append one complete JSON record through the process-wide rotation lock."""
+    """Append one complete JSON record under process lock; max_bytes=0 disables rotation."""
     target = Path(path)
     encoded = (json.dumps(record, ensure_ascii=False, separators=(",", ":"), default=str) + "\n").encode("utf-8")
     with _NDJSON_WRITE_LOCK, _ndjson_process_lock(target):
         target.parent.mkdir(parents=True, exist_ok=True)
         _recover_ndjson_locked(target)
-        limit = max(1, int(max_bytes))
-        if target.exists() and target.stat().st_size and target.stat().st_size + len(encoded) > limit:
+        limit = max(0, int(max_bytes))
+        if limit and target.exists() and target.stat().st_size and target.stat().st_size + len(encoded) > limit:
             _rotate_ndjson_locked(target, backup_count)
         with target.open("ab") as handle:
             handle.write(encoded)
@@ -172,17 +172,47 @@ def initialize_trace_storage(paths: list[str | Path] | tuple[str | Path, ...]) -
 
 
 def json_slim(obj: Any, max_chars: int = 40000) -> Any:
-    """Return a JSON-safe, size-bounded debug object for failure traces."""
+    """Return JSON-safe diagnostics; max_chars=0 preserves the complete record."""
     try:
         text = json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
-        return str(obj)[:max_chars]
-    if len(text) <= max_chars:
+        text = str(obj)
+        return text if max_chars <= 0 else text[:max_chars]
+    if max_chars <= 0 or len(text) <= max_chars:
         try:
             return json.loads(text)
         except Exception:
             return text
     return {"_truncated": True, "jsonPrefix": text[:max_chars]}
+
+
+def _redact_diagnostic(value: Any) -> Any:
+    """Sanitize every persisted/echoed member, preserving clean authored strings."""
+    from infini_local.services.codex_auth import redact_credentials
+
+    from infini_local.core.env_utils import env_credential_values
+
+    secrets = env_credential_values()
+    active: set[int] = set()
+
+    def visit(item: Any) -> Any:
+        if isinstance(item, str):
+            return redact_credentials(item, secrets)
+        if isinstance(item, (dict, list, tuple)):
+            if id(item) in active:
+                raise ValueError("cyclic_diagnostic")
+            active.add(id(item))
+            try:
+                if isinstance(item, dict):
+                    return {redact_credentials(str(key), secrets): visit(child) for key, child in item.items()}
+                return [visit(child) for child in item]
+            finally:
+                active.remove(id(item))
+        if item is None or isinstance(item, (bool, int, float)):
+            return item
+        return redact_credentials(str(item), secrets)
+
+    return visit(value)
 
 
 def log_event(
@@ -203,6 +233,11 @@ def log_event(
     """
     normalized_level = str(level)
     try:
+        message = _redact_diagnostic(str(message))
+        payload = _redact_diagnostic(payload)
+    except Exception:
+        return
+    try:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         event = {
@@ -211,7 +246,7 @@ def log_event(
             "message": str(message),
             "payload": payload,
         }
-        append_ndjson(cache_dir / "events.ndjson", event)
+        append_ndjson(cache_dir / "events.ndjson", event, max_bytes=0)
     except Exception:
         pass
     if echo_levels and normalized_level in echo_levels:
@@ -248,9 +283,7 @@ def _echo_event(
 
 
 def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
-    """Atomic, bounded exact sanitized stage messages, not an HTTP/auth snapshot."""
-    from infini_local.services.codex_auth import redact_credentials
-
+    """Atomic complete sanitized stage messages, not an HTTP/auth snapshot."""
     receipt: dict[str, Any] = {"stage": stage, "recipeKey": recipe_key}
     if not any(type(value) is str and value for value in (recipe_key, recipe_id)):
         return {**receipt, "status": "refused", "reason": "missing_recipe_join"}
@@ -260,7 +293,7 @@ def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request:
             # Only authored message fields: never stringify private request objects.
             if not isinstance(message, dict) or any(type(message.get(key)) is not str for key in ("role", "content")):
                 raise ValueError("unsupported_message")
-            row = {key: redact_credentials(message[key]) for key in ("role", "name", "content") if key in message and type(message[key]) is str}
+            row = {key: _redact_diagnostic(message[key]) for key in ("role", "name", "content") if key in message and type(message[key]) is str}
             messages.append(row)
         encoded_messages = json.dumps(messages, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         artifact = {
@@ -272,17 +305,12 @@ def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request:
         }
         encoded = json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         receipt.update({"messagesSha256": artifact["messagesSha256"], "bytes": len(encoded)})
-        if len(encoded) > 2 * 1024 * 1024:
-            return {**receipt, "status": "refused", "reason": "payload_limit"}
         directory = Path(cache_dir) / "stage_requests"
         digest = hashlib.sha256(encoded).hexdigest()
         target = directory / (digest + ".json")
         if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
             return {**receipt, "status": "refused", "reason": "linked_storage"}
         with _NDJSON_WRITE_LOCK, _ndjson_process_lock(directory / "artifacts"):
-            files = list(directory.glob("*.json"))
-            if not target.exists() and (len(files) >= 128 or sum(path.stat().st_size for path in files) + len(encoded) > 32 * 1024 * 1024):
-                return {**receipt, "status": "refused", "reason": "storage_limit"}
             fd, temporary_name = tempfile.mkstemp(prefix=".request-", dir=directory)
             temporary = Path(temporary_name)
             try:
@@ -300,12 +328,12 @@ def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request:
 
 
 def trace_clip(value: Any, *, default_max_chars: int, max_chars: int | None = None) -> str:
-    limit = int(default_max_chars) if max_chars is None else max(200, int(max_chars))
+    limit = max(0, int(default_max_chars if max_chars is None else max_chars))
     try:
         text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str, indent=2)
     except Exception:
         text = str(value)
-    if len(text) > limit:
+    if limit > 0 and len(text) > limit:
         return text[:limit] + "\n...<clipped " + str(len(text) - limit) + " chars>"
     return text
 
@@ -340,24 +368,24 @@ def trace_event(
     response: Any = None,
     error: Any = None,
 ) -> None:
-    if not trace_prompts_enabled and kind in {"prompt", "response"}:
+    if not trace_prompts_enabled:
         return
     try:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         event: dict[str, Any] = {"ts": int(time.time()), "kind": str(kind), "stage": str(stage), "title": str(title)}
         if payload is not None:
-            event["payload"] = json_slim(payload, 24000)
+            event["payload"] = json_slim(payload, 0)
         if prompt is not None:
-            event["prompt"] = trace_clip(prompt, default_max_chars=trace_max_prompt_chars)
+            event["prompt"] = trace_clip(prompt, default_max_chars=0)
         if negative is not None:
-            event["negative"] = trace_clip(negative, default_max_chars=trace_max_prompt_chars, max_chars=6000)
+            event["negative"] = trace_clip(negative, default_max_chars=0)
         if response is not None:
-            event["response"] = trace_clip(response, default_max_chars=trace_max_prompt_chars)
+            event["response"] = trace_clip(response, default_max_chars=0)
         if error is not None:
-            event["error"] = trace_clip(error, default_max_chars=trace_max_prompt_chars, max_chars=6000)
+            event["error"] = trace_clip(error, default_max_chars=0)
         target = prompt_trace_file if kind in {"prompt", "response"} or prompt is not None else trace_file
-        append_ndjson(target, event)
+        append_ndjson(target, _redact_diagnostic(event), max_bytes=0)
     except Exception:
         pass
 

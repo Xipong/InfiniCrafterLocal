@@ -260,6 +260,7 @@ def ensure_server(
     log_event: LogEvent,
     tail_text_file: TailTextFile,
     process_env: dict[str, str] | None = None,
+    diagnostics_enabled: bool = True,
 ) -> bool:
     """Ensure persistent sd.cpp server is alive, optionally autostarting it."""
     with state.lock:
@@ -283,7 +284,7 @@ def ensure_server(
         cmd, shell = build_command()
         state.last_command = stringify_cmd(cmd)
         log_path = Path(server_log_file) if server_log_file else (cache_dir / "sdcpp_server.log")
-        state.last_log_file = str(log_path)
+        state.last_log_file = str(log_path) if diagnostics_enabled else ""
         log_event("info", "starting stable-diffusion.cpp persistent server", {"cmd": state.last_command, "shell": shell, "url": server_url, "showConsole": show_console, "logFile": state.last_log_file})
         log_handle = None
         spawned_process: subprocess.Popen | None = None
@@ -291,7 +292,9 @@ def ensure_server(
             creationflags = 0
             stdout_target = None
             stderr_target = None
-            if os.name == "nt" and show_console:
+            if not diagnostics_enabled:
+                stdout_target = stderr_target = subprocess.DEVNULL
+            elif os.name == "nt" and show_console:
                 # Let sd-server own a visible console. This prevents stdout PIPE deadlocks and gives the user live logs.
                 creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
             else:

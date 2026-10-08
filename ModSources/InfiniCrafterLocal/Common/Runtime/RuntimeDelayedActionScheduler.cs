@@ -31,6 +31,7 @@ internal static class RuntimeDelayedActionScheduler
         ModProjectile? SourceModProjectile,
         int NpcId,
         NPC? Target,
+        uint TargetGeneration,
         Vector2 Position,
         Vector2 Direction,
         int DamageDone,
@@ -137,7 +138,8 @@ internal static class RuntimeDelayedActionScheduler
             capturedSource,
             sourceProjectile, projectileSlot, sourceProjectile?.identity ?? 0,
             sourceProjectile?.type ?? 0, sourceModProjectile,
-            target?.whoAmI ?? -1, target, position, direction, damageDone,
+            target?.whoAmI ?? -1, target, target is null ? 0 : RuntimeHitNpcGeneration.Get(target),
+            position, direction, damageDone,
             childDepth, enqueuedTick, dueTick, reservedSpawnBudget, budget, ownerHitReceipt));
         return true;
     }
@@ -202,6 +204,9 @@ internal static class RuntimeDelayedActionScheduler
                 && pending.NpcId < Main.maxNPCs
                 && ReferenceEquals(Main.npc[pending.NpcId], pending.Target)
                 && Main.npc[pending.NpcId].active
+                // MP NPC state reception may SetDefaults on the same object.
+                // The existing incarnation token changes on reuse, not Transform.
+                && RuntimeHitNpcGeneration.Get(Main.npc[pending.NpcId]) == pending.TargetGeneration
                 ? Main.npc[pending.NpcId]
                 : null;
             // A direct-hit pull cannot silently become an area pull if its NPC

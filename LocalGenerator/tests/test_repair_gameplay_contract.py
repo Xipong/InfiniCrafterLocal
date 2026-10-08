@@ -14,6 +14,243 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
+def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
+    """Exercise the real request/parser/scope/merge caller; only provider I/O is synthetic."""
+    import socket
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    requests = []
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("live network forbidden in offline Gameplay Repair regression")
+
+    def respond(request, **kwargs):
+        requests.append(copy.deepcopy(request))
+        assert request["response_format"]["type"] == format_mode
+        payload = copy.deepcopy(incoming)
+        if format_mode == "json_schema":
+            payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
+            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+        return {"choices": [{"message": {"content": json.dumps(payload)}}],
+                "_debug": {"responseFormatType": format_mode}}
+
+    monkeypatch.setattr(socket, "create_connection", no_network)
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    for name, value in dict(
+        USE_LLM=True, resolve_llm_model=lambda: "offline-no-model", llm_chat_json=respond,
+        trace_event=lambda *args, **kwargs: None, trace_stage_request=lambda *args, **kwargs: None,
+        llm_reasoning_system_suffix=lambda *args, **kwargs: "",
+        apply_llm_common_options=lambda request, **kwargs: request,
+    ).items():
+        monkeypatch.setattr(author, name, value)
+    result = author.repair_author_item_after_failure(
+        doc, {}, {}, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
+    assert len(requests) == 1
+    return result, json.loads(requests[0]["messages"][1]["content"])
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("leaf,old,new", [
+    pytest.param("damage", True, 1, id="true-to-integer-one"),
+    pytest.param("damage", False, 0, id="false-to-integer-zero"),
+    pytest.param("damage", 1.0, 1, id="float-to-integer"),
+    pytest.param("autoReuse", 1, True, id="integer-to-boolean"),
+    pytest.param("damage", True, 2, id="different-value-control"),
+])
+def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, leaf, old, new):
+    doc = build_capability_witness("configure_item_use")
+    fn = "configure_item_use" if leaf == "autoReuse" else "configure_item_stats"
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    call["params"][leaf] = old
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
+    expected = copy.deepcopy(doc)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"][leaf] = new
+    candidate = copy.deepcopy(call)
+    candidate["params"][leaf] = new
+    candidate["params"]["useTurn" if leaf == "autoReuse" else "manaCost"] = False if leaf == "autoReuse" else 10
+    frozen = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] != fn))
+    # The boolean case also challenges Python-equal but JSON-type-distinct frozen values.
+    frozen["params"]["knockback" if leaf == "autoReuse" else "useStyle"] = 3 if leaf == "autoReuse" else "swing"
+    incoming = {"note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
+                "callsUpsert": [candidate, frozen]}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and "$.callsUpsert[0].params." + leaf in audit["acceptedPaths"]
+    assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    assert json.dumps(repaired["debug"]["gameplayRepairPatch"]["callsUpsert"], sort_keys=True) == json.dumps(
+        [next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)], sort_keys=True)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_program(repaired)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("choice", ["periodic", "life_above", "mana_above"])
+def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, choice):
+    fn = "pull_on_event" if choice == "periodic" else "require_use_condition"
+    selector = "event" if choice == "periodic" else "mode"
+    needed = {"periodic": "periodTicks", "life_above": "minLife", "mana_above": "minMana"}[choice]
+    value = 12 if choice == "periodic" else 100
+    doc = build_capability_witness(fn)
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    if choice == "periodic":
+        call["params"].pop("periodTicks")
+        call["params"][selector] = "on_use"
+    else:
+        call["params"] = {"mode": "invalid"}
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    paths = ["params.event", "params.periodTicks"] if choice == "periodic" else ["params.minLife", "params.minMana", "params.mode"]
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": paths}]
+    candidate = copy.deepcopy(call)
+    candidate["params"].update({selector: choice, needed: value})
+    expected = apply_repair_patch(doc, {"note": "explicit target control", "callsUpsert": [candidate]})
+    assert validate_runtime_program(expected)["ok"]
+    if choice == "periodic":
+        candidate["params"].update(strength=4, radiusTiles=60)
+    else:
+        candidate["params"]["minMana" if needed == "minLife" else "minLife"] = 200
+    stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+    stats["params"]["damage"] = 1999
+    incoming = {"note": "model explicitly chose a full conditional alternative",
+                "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and "$.callsUpsert[0].params." + needed in audit["acceptedPaths"]
+    assert audit["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", [
+    "periodic-already-selected", "nonconditional-event", "nonconditional-mode",
+    "existing-threshold-frozen", "unrelated-selector-frozen", "missing-explicit-dependency",
+])
+def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, format_mode, case):
+    from infini_local.core.errors import PlannerUnavailable
+
+    fn = "pull_on_event" if case in {"periodic-already-selected", "nonconditional-event"} else "require_use_condition"
+    doc = build_capability_witness(fn)
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    if fn == "pull_on_event":
+        call["params"].pop("periodTicks")
+        call["params"]["event"] = "periodic" if case == "periodic-already-selected" else "on_use"
+        chosen = {"periodTicks": 12} if case == "periodic-already-selected" else {"event": "on_expire"}
+        hostile = {"strength": 4, **({"periodTicks": 12} if case == "nonconditional-event" else {})}
+    else:
+        call["params"] = {"mode": "invalid"}
+        chosen = {"mode": "grounded"}
+        hostile = {"minLife": 100, "minMana": 100}
+        if case == "existing-threshold-frozen":
+            call["params"]["minLife"] = 50
+            chosen = {"mode": "life_above"}
+        elif case == "unrelated-selector-frozen":
+            call["params"]["mode"] = "grounded"
+            stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+            stats["params"]["damage"] = True
+            chosen = {"mode": "life_above"}
+        elif case == "missing-explicit-dependency":
+            chosen = {"mode": "life_above"}
+            hostile = {}
+    before = json.dumps(doc, sort_keys=True)
+    expected = copy.deepcopy(doc)
+    if case == "unrelated-selector-frozen":
+        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"] = 1
+    else:
+        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(chosen)
+    candidate = copy.deepcopy(call)
+    candidate["params"].update(chosen)
+    candidate["params"].update(hostile)
+    patch = {"note": "explicit choice; missing values are never synthesized",
+             "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}
+    if case == "unrelated-selector-frozen":
+        stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+        stats["params"]["damage"] = 1
+        patch["callsUpsert"].append(stats)
+    if case == "missing-explicit-dependency":
+        with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
+            _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+    else:
+        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+        permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
+        if case == "periodic-already-selected":
+            assert permissions == [{"id": call["id"], "paths": ["params.periodTicks"]}]
+        if case == "existing-threshold-frozen":
+            assert permissions == [{"id": call["id"], "paths": ["params.minMana", "params.mode"]}]
+        repaired.pop("debug")
+        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+        assert validate_runtime_program(repaired)["ok"]
+        assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("owner", ["semantic-requirement", "provider-shape"])
+def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypatch, owner):
+    from dataclasses import replace
+    from infini_local.core.runtime_authoring.capability_registry import CapabilitySpec
+
+    fn = "require_use_condition" if owner == "semantic-requirement" else "pull_on_event"
+    doc = build_capability_witness(fn)
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    if owner == "semantic-requirement":
+        cap = CAPABILITY_REGISTRY[fn]
+        requirement = next(row for row in cap.requirements if row.kind == "conditional_param")
+        # Mutation of the canonical fact, not a shadow dependency list in Repair.
+        from infini_local.core.runtime_authoring import capability_registry, repair_scope, validator
+        registry = dict(CAPABILITY_REGISTRY)
+        registry[fn] = replace(cap, requirements=(replace(requirement, any_of=("life_above:minMana",)),))
+        for consumer in (capability_registry, repair_scope, validator):
+            monkeypatch.setattr(consumer, "CAPABILITY_REGISTRY", registry)
+        call["params"] = {"mode": "invalid"}
+        wanted, foreign, selector, choice = "minMana", "minLife", "mode", "life_above"
+        wanted_paths = ["params.minMana", "params.mode"]
+    else:
+        native_shape = CapabilitySpec.provider_variant_schema
+
+        def changed_shape(cap):
+            shape = native_shape(cap)
+            if cap.name == fn:
+                shape["properties"]["params"]["if"]["properties"]["event"]["const"] = "on_expire"
+            return shape
+
+        monkeypatch.setattr(CapabilitySpec, "provider_variant_schema", changed_shape)
+        call["params"].pop("periodTicks")
+        call["params"]["event"] = "on_use"
+        wanted, foreign, selector, choice = "periodTicks", "strength", "event", "on_expire"
+        wanted_paths = ["params.event", "params.periodTicks"]
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": wanted_paths}]
+    candidate = copy.deepcopy(call)
+    candidate["params"].update({selector: choice, wanted: 100})
+    expected = apply_repair_patch(doc, {"note": "registry-chosen conditional control", "callsUpsert": [candidate]})
+    candidate["params"][foreign] = 200 if owner == "semantic-requirement" else 4
+    filtered, audit = filter_repair_patch_scope(doc, {
+        "note": "consume mutated canonical facts", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(doc, filtered)
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_program(repaired)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
 @pytest.mark.parametrize("namespace,position", [(n, p) for n in ("entities", "bindings", "calls") for p in ("head", "tail")])
 def test_malformed_row_owns_only_its_original_index(namespace, position):
     doc = build_capability_witness("restore_resources_on_use")

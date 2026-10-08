@@ -3,6 +3,7 @@ using InfiniCrafterLocal.Common.Players;
 using Microsoft.Xna.Framework;
 using System;
 using Terraria;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Commands;
@@ -17,7 +18,9 @@ public sealed class MultiDevCraftCommand : ModCommand
     public override CommandType Type => CommandType.Chat;
     public override string Command => "multidevcraft";
     public override string Usage => "/multidevcraft [2|3|off]";
-    public override string Description => "Unlock 2 or 3 independent InfiniCraft windows pinned to LLM 1/2/3.";
+    private static string ForgeText(string key, params object[] args)
+        => Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI." + key, args);
+    public override string Description => ForgeText("CommandDescription");
 
     public override void Action(CommandCaller caller, string input, string[] args)
     {
@@ -48,22 +51,22 @@ public sealed class MultiDevCraftCommand : ModCommand
 
         if (requested < 1)
         {
-            Main.NewText("Usage: /multidevcraft [2|3|off]", 255, 180, 90);
+            Main.NewText(ForgeText("CommandUsage"), 255, 180, 90);
             return;
         }
         if (!craftPlayer.TrySetMultiDevWindowCount(requested))
         {
-            Main.NewText("Multi-dev: сначала заверши крафт/забери предметы из скрываемого окна.", 255, 160, 90);
+            Main.NewText(ForgeText("CommandBlocked"), 255, 160, 90);
             return;
         }
 
         if (requested == 1)
         {
-            Main.NewText("Multi-dev выключен: одно обычное окно крафта.", 160, 210, 255);
+            Main.NewText(ForgeText("CommandSingle"), 160, 210, 255);
             return;
         }
-        Main.NewText($"Multi-dev разблокирован: {requested} независимых окна · LLM 1..{requested}.", 90, 235, 255);
-        Main.NewText("Каждому окну нужны свои два предмета. LLM 2/3 настраиваются во вкладке Multi-dev GUI.", 170, 210, 255);
-        CombatText.NewText(caller.Player.Hitbox, Color.Cyan, $"MULTI-DEV ×{requested}");
+        Main.NewText(ForgeText("CommandMultiple", requested), 90, 235, 255);
+        Main.NewText(ForgeText("CommandPairs"), 170, 210, 255);
+        CombatText.NewText(caller.Player.Hitbox, Color.Cyan, ForgeText("HearthsOpened", requested));
     }
 }

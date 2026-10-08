@@ -8,15 +8,15 @@ from infini_local.core.env_utils import env_bool, env_int, env_str
 from infini_local.storage import trace_tools
 
 
-# AGENT MAP: rolling debug/trace runtime wiring shared by pipeline support and
+# AGENT MAP: full optional debug/trace runtime wiring shared by pipeline support and
 # the HTTP server. This is evidence/debug infrastructure only; no gameplay
 # authoring or repair logic belongs here.
 
 
-# Rolling black box recorder for GUI/debug: prompts, LLM responses, image prompts,
+# Append-only black box recorder for GUI/debug: prompts, LLM responses, image prompts,
 # sd.cpp startup/image attempts and pipeline steps. This is debug state, not gameplay state.
 TRACE_PROMPTS_ENABLED = env_bool("INFINI_TRACE_PROMPTS", True)
-TRACE_MAX_PROMPT_CHARS = max(1000, min(120000, env_int("INFINI_TRACE_MAX_PROMPT_CHARS", 18000)))
+TRACE_MAX_PROMPT_CHARS = max(0, env_int("INFINI_TRACE_MAX_PROMPT_CHARS", 0))
 TRACE_EVENTS_TAIL = max(20, min(500, env_int("INFINI_TRACE_EVENTS_TAIL", 120)))
 TRACE_FILE = CACHE_DIR / "pipeline_trace.ndjson"
 PROMPT_TRACE_FILE = CACHE_DIR / "prompt_trace.ndjson"
@@ -44,11 +44,10 @@ CONSOLE_EVENT_LEVELS = _configured_echo_levels()
 
 def initialize_trace_storage() -> dict[str, bool]:
     """Repair corrupt trailing records before the HTTP server starts accepting work."""
-    return trace_tools.initialize_trace_storage((
-        TRACE_FILE,
-        PROMPT_TRACE_FILE,
-        CACHE_DIR / "events.ndjson",
-    ))
+    paths = [CACHE_DIR / "events.ndjson"]
+    if TRACE_PROMPTS_ENABLED:
+        paths += [TRACE_FILE, PROMPT_TRACE_FILE]
+    return trace_tools.initialize_trace_storage(tuple(path for path in paths if path.exists()))
 
 
 def _json_slim(obj: Any, max_chars: int = 40000) -> Any:
@@ -56,6 +55,10 @@ def _json_slim(obj: Any, max_chars: int = 40000) -> Any:
 
 
 def log_event(level: str, message: str, payload: Any = None) -> None:
+    if not TRACE_PROMPTS_ENABLED:
+        if str(level).lower() != "error":
+            return
+        message, payload = trace_tools._redact_diagnostic(str(message))[:500], None
     trace_tools.log_event(CACHE_DIR, level, message, payload, echo_levels=CONSOLE_EVENT_LEVELS)
 
 

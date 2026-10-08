@@ -163,7 +163,7 @@ class SettingsGuiTraceStateMixin:
         health = self._fetch_health_snapshot(timeout=8, base_url=base_url)
         if not self._health_matches_this_gui(health):
             raise RuntimeError("Trace refused: другая копия server.py")
-        snap = self._read_gui_json(base_url + "/trace.json", timeout=18)
+        snap = self._read_gui_json(base_url + "/trace.json", timeout=18, max_bytes=None)
         if not self._health_matches_this_gui(snap) or snap.get("pid") != health.get("pid"):
             raise RuntimeError("Trace refused: server identity changed")
         return snap

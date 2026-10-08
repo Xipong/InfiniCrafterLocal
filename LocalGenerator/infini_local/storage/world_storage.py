@@ -486,15 +486,36 @@ def read_world_recipe_cache(
                 except (OSError, ValueError, TypeError):
                     pass
             return None
-        if validate_payload is None:
-            vfx_report = validate_vfx_manifest_wire(data)
-            assets_ready = vfx_report["ok"] and _cache_assets_ready(data)
-            if not vfx_report["ok"] or not assets_ready:
-                quarantine_world_recipe_cache(
+        # Historical v5 records may omit storage metadata, but an explicit
+        # identity must agree literally with the requested scope before restamp.
+        # Never infer a replacement key/world from parents or migrate the record.
+        mismatches = {}
+        for field, owner, key, expected in (
+            ("recipeKey", data, "recipeKey", str(recipe_key_value)),
+            ("recipeMeta.worldId", data.get("recipeMeta", {}), "worldId", str(world_id)),
+        ):
+            if key in owner and owner[key] != expected:
+                mismatches[field] = {"expected": expected, "stored": owner[key]}
+        if mismatches:
+            from infini_local.storage.trace_runtime import trace_event
+
+            context = {"recipeKey": recipe_key_value, "worldId": str(world_id),
+                       "reason": "cache_identity_mismatch"}
+            try:
+                path = quarantine_world_recipe_cache(
                     world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
-                    reason="low_level_runtime_contract_invalid", details={"vfx": vfx_report, "assetsReady": assets_ready},
+                    reason=context["reason"], details={"identityMismatches": mismatches},
                 )
-                return None
+                if path:
+                    trace_event("warn", "COMBINE:cache", "invalid low-level runtime recipe quarantined", {**context, "path": path})
+            except (OSError, ValueError, TypeError) as exc:
+                trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {**context, "error": repr(exc)})
+            return None
+        # The storage owner always admits the full canonical runtime/VFX/assets
+        # contract. A caller can add stricter checks, never replace this baseline.
+        runtime_ready = is_deliverable_recipe_payload(data, check_assets=False)
+        vfx_report = validate_vfx_manifest_wire(data)
+        assets_ready = runtime_ready and _cache_assets_ready(data)
         data.pop("_llmHistory", None)
         debug = data.setdefault("debug", {})
         debug.update({"cacheHit": "world_file", "cacheScope": "world"})
@@ -505,23 +526,32 @@ def read_world_recipe_cache(
             "storage": "world_recipe_file_authority",
         })
         delivered = sanitize_recipe_for_delivery(data)
-        if validate_payload is not None:
-            report = validate_payload(delivered)
-            if not report["ok"]:
-                from infini_local.storage.trace_runtime import trace_event
+        report = {
+            "ok": runtime_ready and assets_ready,
+            "errors": [] if runtime_ready else [{"path": "$", "message": "payload is not deliverable"}],
+        }
+        if report["ok"] and validate_payload is not None:
+            caller_report = validate_payload(delivered)
+            report["ok"] = report["ok"] and caller_report["ok"]
+            report["errors"] = caller_report.get("errors", [])
+        if not report["ok"]:
+            from infini_local.storage.trace_runtime import trace_event
 
-                context = {"recipeKey": recipe_key_value, "worldId": str(world_id),
-                           "reason": "low_level_runtime_contract_invalid"}
-                try:
-                    path = quarantine_world_recipe_cache(
-                        world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
-                        reason=context["reason"], details={"errors": report.get("errors", [])[:24]},
-                    )
-                    if path:
-                        trace_event("warn", "COMBINE:cache", "invalid low-level runtime recipe quarantined", {**context, "path": path})
-                except (OSError, ValueError, TypeError) as exc:
-                    trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {**context, "error": repr(exc)})
-                return None
+            context = {"recipeKey": recipe_key_value, "worldId": str(world_id),
+                       "reason": "low_level_runtime_contract_invalid"}
+            try:
+                path = quarantine_world_recipe_cache(
+                    world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
+                    reason=context["reason"], details={
+                        "runtimeReady": runtime_ready, "vfx": vfx_report, "assetsReady": assets_ready,
+                        "errors": report.get("errors", [])[:24],
+                    },
+                )
+                if path:
+                    trace_event("warn", "COMBINE:cache", "invalid low-level runtime recipe quarantined", {**context, "path": path})
+            except (OSError, ValueError, TypeError) as exc:
+                trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {**context, "error": repr(exc)})
+            return None
         return delivered
 
 

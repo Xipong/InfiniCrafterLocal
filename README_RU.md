@@ -1,4 +1,6 @@
-# InfiniCrafterLocal v0.4.250
+# InfiniCrafterLocal v0.4.251
+
+**0.4.251:** исправлены type-only Gameplay Repair и exact conditional dependencies, identity и полный runtime admission world-cache, native grounded support, delayed NPC incarnation и MP quick-use generated utility synchronization. В GUI добавлено полное логирование без обрезки default ON с сохраняемым quiet OFF; игровая станция и её статусы оформлены как «Кузня чудес». Подробности и границы приёмки — [исправления 0.4.251](docs/BUGFIX_0_4_251_RU.md). Старые корректные recipes/PNG не переписываются; обновляй мод и LocalGenerator вместе.
 
 **0.4.250:** сохранены точные механики и принятая внешность generated-родителей в следующих Author/Visual/Repair; настоящий craft snapshot передаёт literal tooltip с языком/identity и проверенную source-motion reference. Image backend получает exact display pixel budget и grip/topology framing. Исправлены прямой расход stackCost и identity независимых generated buffs; добавлен явный finite sound selector. Удалён host-рекомендуемый damage, обновлён Codex catalog protocol для SOL 6.1. Сохранены [placed PNG capability](docs/PRESENT_PLACED_ITEM_SPRITE_RU.md), durable material/net lifecycle, полная sanitized запись stage-builder requests и runtime fixes 0.4.249.1–.3. Старые recipes/PNG не переавторствуются; gameplay design по-прежнему выбирает модель.
 

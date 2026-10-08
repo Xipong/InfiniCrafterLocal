@@ -327,7 +327,7 @@ class SettingsGuiServerControlsMixin:
         )
 
     @staticmethod
-    def _read_gui_json(url: str, timeout: float, max_bytes: int = 16 * 1024 * 1024) -> dict:
+    def _read_gui_json(url: str, timeout: float, max_bytes: int | None = 16 * 1024 * 1024) -> dict:
         # Reuse the transport-owned monotonic/redirect/body boundary. A trickled
         # body must not retain a GUI task forever through idle-timeout resets.
         deadline = time.monotonic() + timeout

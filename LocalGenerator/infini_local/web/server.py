@@ -518,7 +518,9 @@ def main() -> None:
         print(f"stable-diffusion.cpp server={visual_config.SDCPP_SERVER_URL} autostart={visual_config.SDCPP_SERVER_AUTOSTART} exe={visual_config.SDCPP_SERVER_EXE or '<external>'} model={visual_config.SDCPP_MODEL or '<external>'} steps={visual_config.SDCPP_STEPS} cfg={visual_config.SDCPP_CFG} size={visual_config.SDCPP_WIDTH}x{visual_config.SDCPP_HEIGHT}")
     if USE_LLM:
         print("Tip: set INFINI_LLM_PROVIDER=openrouter + INFINI_OPENROUTER_API_KEY + INFINI_OPENROUTER_MODEL to use OpenRouter instead of LM Studio.")
-    if CONSOLE_EVENT_LEVELS:
+    if not TRACE_PROMPTS_ENABLED:
+        print("Full logging: OFF; optional diagnostics disabled, concise fatal errors only.")
+    elif CONSOLE_EVENT_LEVELS:
         print(f"Console events: {'/'.join(CONSOLE_EVENT_LEVELS)} mirrored here; full record in {CACHE_DIR / 'events.ndjson'} (INFINI_CONSOLE_EVENT_LEVEL=off to silence)")
     else:
         print(f"Console events: off; craft diagnostics only in {CACHE_DIR / 'events.ndjson'} (INFINI_CONSOLE_EVENT_LEVEL=warn to show them here)")

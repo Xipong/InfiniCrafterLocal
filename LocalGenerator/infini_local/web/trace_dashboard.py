@@ -16,7 +16,7 @@ def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_
 
     def table_for(d: dict[str, Any], keys: list[str] | None = None) -> str:
         items = [(k, d.get(k)) for k in (keys or list(d.keys()))]
-        return "<table>" + "".join(f"<tr><th>{esc(k)}</th><td><pre>{esc(trace_clip(v, 4000))}</pre></td></tr>" for k, v in items) + "</table>"
+        return "<table>" + "".join(f"<tr><th>{esc(k)}</th><td><pre>{esc(trace_clip(v, None))}</pre></td></tr>" for k, v in items) + "</table>"
 
     def event_list(items: list[dict[str, Any]], with_prompts: bool = False) -> str:
         parts = []
@@ -24,7 +24,7 @@ def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_
             title = ev.get("title") or ev.get("message") or ev.get("stage") or "event"
             stage = ev.get("stage") or ev.get("level") or ev.get("kind") or ""
             body = {k: v for k, v in ev.items() if k not in {"prompt", "negative", "response"}}
-            details = f"<pre>{esc(trace_clip(body, 5000))}</pre>"
+            details = f"<pre>{esc(trace_clip(body, None))}</pre>"
             if with_prompts:
                 if ev.get("prompt"):
                     details += f"<h4>Prompt</h4><pre>{esc(ev.get('prompt'))}</pre>"
@@ -57,7 +57,7 @@ def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_
         '<section class="card"><h2>Prompt trace</h2>', event_list(snap.get("promptTrace") or [], True), '</section>',
         '<section class="card"><h2>Pipeline trace</h2>', event_list(snap.get("pipelineTrace") or [], False), '</section>',
         '<section class="card"><h2>Events</h2>', event_list(snap.get("events") or [], False), '</section>',
-        '<section class="card"><h2>Last combine failure</h2><pre>', esc(trace_clip(snap.get("lastCombineFailure"), 12000)), '</pre></section>',
+        '<section class="card"><h2>Last combine failure</h2><pre>', esc(trace_clip(snap.get("lastCombineFailure"), None)), '</pre></section>',
     ])
 
 

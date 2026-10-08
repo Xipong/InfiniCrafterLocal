@@ -38,7 +38,10 @@ def test_three_windows_have_independent_slots_jobs_and_ui_controls() -> None:
     assert "for (int lane = 0; lane < laneCount; lane++)" in ui
     assert "TryStartCraftFromStation(lane)" in ui
     assert "CraftLaneProgress(lane)" in ui
-    assert "Window {lane + 1} · LLM {lane + 1}" in ui
+    # Presentation is localized independently of the exact provider/profile IDs.
+    assert 'ForgeText("Lane", lane + 1)' in ui
+    assert "Mods.InfiniCrafterLocal.StationUI." in ui
+    assert "Window {lane + 1} · LLM {lane + 1}" not in ui
 
 
 def test_multiplayer_lane_identity_authority_and_refunds_are_request_scoped() -> None:

@@ -18,7 +18,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
-from infini_local.storage.trace_runtime import trace_stage_request
+from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
 from infini_local.pipelines.llm_transport import (
@@ -1125,9 +1125,12 @@ def _request_visual_kit(
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
     request = with_prompt_cache_prefix(request, message_index=1, prefix_chars=prefix_chars)
-    trace_stage_request("visual_repair" if repair else "visual_director", data.get("recipeKey"), request, recipe_id=data.get("id"))
+    stage_name = "visual_repair" if repair else "visual_director"
+    trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"][1]["content"])
+    trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]
+    trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)
     try:
         parsed = parse_first_valid_llm_json(content)
         effective_format = _effective_response_format(request, raw)

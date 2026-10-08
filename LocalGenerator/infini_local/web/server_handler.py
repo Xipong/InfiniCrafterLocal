@@ -10,6 +10,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from infini_local.core import strict_json
+from infini_local.storage import trace_runtime, trace_tools
 
 
 class _InvalidJsonRequest(ValueError):
@@ -76,7 +77,8 @@ def build_handler(
         server_version = f"InfiniCrafterLocal/{app_version}"
 
         def log_message(self, fmt: str, *args: Any) -> None:
-            print(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}")
+            if trace_runtime.TRACE_PROMPTS_ENABLED:
+                print(trace_tools._redact_diagnostic(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}"))
 
         def do_GET(self) -> None:
             try:

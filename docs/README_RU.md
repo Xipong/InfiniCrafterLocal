@@ -37,6 +37,8 @@
 
 ## Проверка и generated references
 
+- [Исправления 0.4.251](BUGFIX_0_4_251_RU.md) — Repair, cache admission и native support/MP lifecycle; пары runtime/generator и пределы проверки.
+
 [Владельцы тестовых контрактов](TEST_CONTRACT_OWNERS_RU.md) — единый runbook для regression/mutation/gates и границ доказательства. [Toolbox](../toolbox/README.md) отделяет offline checks от отдельно разрешаемых live-кампаний. CPU/headless, native GPU, игра/MP и художественная приёмка — разные уровни, не взаимозаменяемые отметки PASS.
 
 | Generated документ | Producer |
