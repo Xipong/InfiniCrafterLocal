@@ -1,4 +1,6 @@
-# InfiniCrafterLocal v0.4.251
+# InfiniCrafterLocal v0.4.252
+
+**0.4.252:** новая анимированная иконка «Сердца кузни» в духе Calamity и плавный янтарно-золотисто-голубой градиент имени RU/EN. Иконка: 24 кадра / 2 секунды; имя: 4-секундная цветовая волна. Только оформление собственного station key; рецепт, цена, редкость, расход и generated-предметы не меняются. [Детали 0.4.252](docs/FORGE_HEART_0_4_252_RU.md).
 
 **0.4.251:** исправлены type-only Gameplay Repair и exact conditional dependencies, identity и полный runtime admission world-cache, native grounded support, delayed NPC incarnation и MP quick-use generated utility synchronization. В GUI добавлено полное логирование без обрезки default ON с сохраняемым quiet OFF; игровая станция и её статусы оформлены как «Кузня чудес». Подробности и границы приёмки — [исправления 0.4.251](docs/BUGFIX_0_4_251_RU.md). Старые корректные recipes/PNG не переписываются; обновляй мод и LocalGenerator вместе.
 

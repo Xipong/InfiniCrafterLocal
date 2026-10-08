@@ -78,6 +78,8 @@ internal static partial class EngineRuntimeChecks
             ("persistence PlacementReadyCannotApproveDifferentServerResolvedBinding", PlacementReadyCannotApproveDifferentServerResolvedBinding),
             ("dynamic projectile pierce preserves native maximum and immunity", RuntimeDynamicPierceKeepsNativeMaximumAndImmunity),
             ("generated tooltips describe exact executable bindings", GeneratedTooltipsDescribeExactExecutableBindings),
+            ("forge heart name animated gradient", ForgeHeartNameGradientPreservesNativeText),
+            ("forge heart native atlas animation", ForgeHeartNativeAnimationUsesAtlas),
             ("forge localization uses native filename prefix", ForgePresentationLocalizationUsesNativePrefix),
             ("forge craft notices use localized native text", ForgePresentationCraftNoticesUseLocalizedText),
             ("forge lane status preserves timers and host facts", ForgePresentationLaneStatusPreservesTimersAndHostFacts),

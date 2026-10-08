@@ -60,6 +60,7 @@
     <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
     <Compile Include="EngineRuntimeChecks.Tooltips.cs" />
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.ForgeHeart.cs" />
     <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
     <Compile Include="EngineRuntimeChecks.RootCombat.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />

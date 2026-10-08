@@ -29,6 +29,8 @@
 
 ## Visual, VFX и ассеты
 
+- [Сердце кузни 0.4.252](FORGE_HEART_0_4_252_RU.md) — собственная анимированная иконка и градиентное имя; native atlas/tooltip owners и границы проверки.
+
 - [Качество контекста и source physics](ITEM_QUALITY_CONTEXT_RU.md) — exact parents, literal tooltips, motion reference и display pixel budget.
 - [Presentation consistency](PRESENTATION_CONSISTENCY_RU.md) — согласованность gameplay, видимого тела и стадий.
 - [Visual metadata](VISUAL_PRESENTATION_METADATA.md) — принятые поля и их ownership.
