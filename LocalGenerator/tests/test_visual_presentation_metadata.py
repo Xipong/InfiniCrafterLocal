@@ -996,7 +996,7 @@ def test_parent_native_sprite_reference_is_visual_only_exact_and_detached(frame_
 
 
 @pytest.mark.parametrize("size", [1, 47, 512])
-def test_generated_parent_visual_reference_uses_only_present_accepted_render_size(size):
+def test_generated_parent_visual_reference_keeps_present_calibration_without_inference(size):
     parent = {"id": 1, "name": "shared proxy", "width": 123, "height": 456,
               "spriteReferenceRaw": _native_sprite_reference(),
               "generatedData": {"id": "exact-definition", "visual": {"renderSizePx": size,
@@ -1005,18 +1005,21 @@ def test_generated_parent_visual_reference_uses_only_present_accepted_render_siz
     before = copy.deepcopy(parent)
     card = raw_parent_card_for_llm(parent, include_visual_reference=True)
     assert "spriteReference" not in card["raw"]
-    assert card["raw"]["generatedParent"]["visual"] == {"renderSizePx": size}
+    calibration = {"renderSizePx": size, "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3}
+    assert card["raw"]["generatedParent"]["visual"] == calibration
     gameplay = raw_parent_card_for_llm(parent)
     assert "visual" not in gameplay["raw"]["generatedParent"]
     assert parent == before
     undeclared = copy.deepcopy(parent)
     undeclared["generatedData"]["visual"].pop("renderSizePx")
-    assert "visual" not in raw_parent_card_for_llm(undeclared, include_visual_reference=True)["raw"]["generatedParent"]
+    assert raw_parent_card_for_llm(undeclared, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == {
+        key: value for key, value in calibration.items() if key != "renderSizePx"
+    }
     assert recipe_key(parent, parent, 7, "frozen") == recipe_key(undeclared, undeclared, 7, "frozen")
     other = copy.deepcopy(parent)
     other["generatedData"]["id"] = "other-definition"
     other["generatedData"]["visual"]["renderSizePx"] = 91
-    assert raw_parent_card_for_llm(other, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == {"renderSizePx": 91}
+    assert raw_parent_card_for_llm(other, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == {**calibration, "renderSizePx": 91}
     card["raw"]["generatedParent"]["visual"]["renderSizePx"] = 2
     assert parent == before
 
@@ -1059,9 +1062,14 @@ def test_generated_parent_bad_or_old_size_stays_unknown_without_inference(size):
                   "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3},
                   "gameplay": {"width": 64, "height": 32}, "runtimeProgram": {"entities": [], "bindings": []}}}
     card = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert "visual" not in card["raw"]["generatedParent"]
+    assert card["raw"]["generatedParent"]["visual"] == {
+        "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3,
+    }
     assert "spriteReference" not in card["raw"]
-    assert card == raw_parent_card_for_llm(parent)
+    author_card = raw_parent_card_for_llm(parent)
+    without_visual = copy.deepcopy(card)
+    without_visual["raw"]["generatedParent"].pop("visual")
+    assert without_visual == author_card
 
 
 def test_parent_reference_never_reads_fingerprint_or_proxy_and_accepts_loaded_literal_one_pixel():

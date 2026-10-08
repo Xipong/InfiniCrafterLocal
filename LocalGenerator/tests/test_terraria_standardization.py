@@ -110,14 +110,7 @@ def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
     assert gameplay["ammoShootSpeedPxPerTick"] == 5.5
     assert gameplay["notAmmo"] is True
     bindings = card["raw"]["generatedParent"]["runtimeProgram"]["bindings"]
-    assert bindings == [{
-        "input": "primary_use",
-        "usePolicy": {
-            "action": {"kind": "use_item_body", "targetId": "item"},
-            "stackCost": 1,
-            "contactDamage": False,
-        },
-    }]
+    assert bindings == item["generatedData"]["runtimeProgram"]["bindings"]
 
 
 def test_cross_mod_identity_does_not_duplicate_placeable_runtime_facts() -> None:

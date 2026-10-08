@@ -795,6 +795,32 @@ def test_subscription_reasoning_respects_stage_owner_and_catalog_max(wire, monke
         assert llm.apply_minimum_reasoning_effort({"reasoning": reasoning}, model_name="gpt-6-sol", minimum="medium")["reasoning"]["effort"] == "max"
 
 
+def test_account_catalog_protocol_discovers_newly_gated_models(monkeypatch, subscription):
+    # Offline transport fixture for the observed client-version gate, not a
+    # synthesized production model list or an inference entitlement assertion.
+    calls = []
+    rows = [
+        {"slug": "gpt-6-sol", "visibility": "list", "priority": 1},
+        {"slug": "gpt-6.1-sol", "visibility": "list", "priority": 0,
+         "supported_reasoning_levels": [{"effort": "low"}, {"effort": "high"}],
+         "default_reasoning_level": "low"},
+    ]
+
+    def get(url, **options):
+        calls.append((url, options))
+        version = parse_qs(urlsplit(url).query)["client_version"][0]
+        return {"models": rows if tuple(map(int, version.split("."))) >= (0, 161, 0) else rows[:1]}
+
+    monkeypatch.setattr(auth, "get_json", get)
+    models = catalog.list_text_models()
+    assert [model.slug for model in models] == ["gpt-6.1-sol", "gpt-6-sol"]
+    assert models[0].efforts == ("low", "high")
+    assert models[0].default_effort == "low"
+    assert len(calls) == 1
+    assert urlsplit(calls[0][0]).netloc == "chatgpt.com"
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer test-access-not-real"
+
+
 @pytest.mark.parametrize("scenario", ["visible", "credential-metadata", "empty"])
 def test_account_catalog_preserves_declared_models_and_rejects_unsafe_metadata(monkeypatch, subscription, scenario):
     _, credentials = subscription
@@ -1035,7 +1061,7 @@ def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
     monkeypatch.setattr(visual, "SPRITE_RETRIES", 3)
     monkeypatch.setattr(visual, "VISUAL_ALLOW_PROCEDURAL_FALLBACK", True)
     monkeypatch.setattr(visual, "VISUAL_STRICT_AI_AUTHORSHIP", False)
-    monkeypatch.setattr(visual, "normalize_asset_prompt", lambda data, role, prompt, canvas: prompt)
+    monkeypatch.setattr(visual, "normalize_asset_prompt", lambda data, role, prompt, canvas, **kwargs: prompt)
     monkeypatch.setattr(visual.visual_asset_pipeline, "generate_procedural_asset", lambda *a, **kw: fallbacks.append(True))
     data = {"id": "test", "visual": {"imagePrompt": "authored sprite"}}
     visual.maybe_generate_sprite(data)

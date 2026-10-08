@@ -29,6 +29,7 @@
 
 ## Visual, VFX и ассеты
 
+- [Качество контекста и source physics](ITEM_QUALITY_CONTEXT_RU.md) — exact parents, literal tooltips, motion reference и display pixel budget.
 - [Presentation consistency](PRESENTATION_CONSISTENCY_RU.md) — согласованность gameplay, видимого тела и стадий.
 - [Visual metadata](VISUAL_PRESENTATION_METADATA.md) — принятые поля и их ownership.
 - [VFX materials](VFX_MATERIAL_ELEMENTS_RU.md) — материал, selector, geometry и bounded execution.

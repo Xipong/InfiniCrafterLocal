@@ -44,6 +44,15 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
+            ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),
+            ("VFX sound selector silence and server controls", VfxSoundSelectorPreservesSilentAndServerControls),
+            ("quality250 NativeDirectUseStackCostIsLiteralUnderSaving", NativeDirectUseStackCostIsLiteralUnderSaving),
+            ("quality250 NativeQuickHealStackCostUsesPrimaryUnderSaving", NativeQuickHealStackCostUsesPrimaryUnderSaving),
+            ("quality250 NativeLiteralStackCostKeepsMobilityAndPlacementGates", NativeLiteralStackCostKeepsMobilityAndPlacementGates),
+            ("quality250 NativePickAmmoSavingRemainsIndependentOfDirectStackCost", NativePickAmmoSavingRemainsIndependentOfDirectStackCost),
+            ("quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry", NativeFloat32BuffNearNeutralIdentityAndExpiry),
+            ("quality250 NativeFloat32BuffAllComponentsAndExactRefresh", NativeFloat32BuffAllComponentsAndExactRefresh),
             ("persistence RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial", RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial),
             ("persistence ScopedRemoteEscrowResponseRequiresExactOrigin", ScopedRemoteEscrowResponseRequiresExactOrigin),
             ("persistence NativePlacementIntentPrecedesMutationAndRejectsLateClaims", NativePlacementIntentPrecedesMutationAndRejectsLateClaims),
@@ -172,6 +181,8 @@ internal static partial class EngineRuntimeChecks
             ("craft identity rejects failed defaults", CraftIdentityRejectsFailedDefaults),
             ("inventory ammo keeps generated definition", InventoryAmmoKeepsGeneratedDefinition),
             ("parent placement facts reach craft snapshot", ParentPlacementFactsReachCraftSnapshot),
+            ("literal parent tooltip reaches real craft snapshot", LiteralParentTooltipReachesRealCraftSnapshot),
+            ("verified native motion reference reaches craft snapshot", VerifiedNativeMotionReferenceReachesCraftSnapshot),
             ("runtime entity count respects declared limit", RuntimeEntityCountRespectsDeclaredLimit),
             ("run-speed equipment applies after vanilla movement", RunSpeedEquipmentAppliesAfterVanillaMovement),
             ("equipment authored ranges reach player", EquipmentAuthoredRangesReachPlayer),

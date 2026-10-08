@@ -54,7 +54,7 @@ from infini_local.pipelines.sprite_postprocess import (
 )
 from infini_local.pipelines.visual_asset_manifest import write_visual_manifest
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause, image_generation_prompt_suffix, normalize_asset_prompt
 from infini_local.pipelines.visual_soul import attach_visual_soul_from_sprite
 
 
@@ -159,6 +159,7 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         prompt=prompt, negative=str(visual.get("negativePrompt") or ""), canvas=canvas,
         topology=topology, part_count_min=minimum, part_count_max=maximum,
         policy=_PublicationPolicy.ITEM, publication_identity=_legacy_publication_identity(data, "item", "", str(data.get("id") or "sprite")),
+        final_frame_clause=image_final_frame_prompt_clause(data, "item", canvas),
     )
     result = _execute_image_request(data, request)
     visual["finalItemPrompt"] = result.final_prompt
@@ -291,6 +292,7 @@ class _ImageRequest:
     part_count_max: int
     policy: _PublicationPolicy
     publication_identity: bytes
+    final_frame_clause: str = ""
 
 
 @dataclass(frozen=True)
@@ -377,7 +379,7 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
 
 def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _ImageResult:
     """The sole budget → generate → process → validate/refit → commit lifecycle."""
-    result = _ImageResult(final_prompt=truncate_prompt_at_boundary(request.prompt, 1800))
+    result = _ImageResult(final_prompt=request.prompt if request.final_frame_clause else truncate_prompt_at_boundary(request.prompt, 1800))
     attempts: list[dict[str, Any]] = []
     if IMAGE_BACKEND == "off":
         return replace(result, status="prompt_only")
@@ -408,7 +410,24 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             attempt_id = "infini_vfx_job_" + hashlib.sha256(identity).hexdigest()
         else:
             attempt_id = request.logical_asset_id if attempt == 0 else f"{request.logical_asset_id}_retry{attempt}"
-        prompt = request.prompt if attempt == 0 else build_retry_prompt_from_validation(request.prompt, result.validation or {}, request.processing_role, attempt, request.canvas)
+        if attempt == 0:
+            prompt = request.prompt
+        else:
+            retry_source = request.prompt
+            guidance = image_generation_prompt_suffix()
+            if request.final_frame_clause:
+                # Strip only our exact generated tail, never a marker found in
+                # authored art. Preserve the historical subject/guard compactor
+                # budget and append the immutable selected facts afterwards.
+                suffix = request.final_frame_clause + guidance
+                if not retry_source.endswith(suffix):
+                    raise ValueError("image final-frame clause is not the owned prompt tail")
+                retry_source = retry_source[:-len(suffix)] + guidance
+            prompt = build_retry_prompt_from_validation(retry_source, result.validation or {}, request.processing_role, attempt, request.canvas)
+            if request.final_frame_clause:
+                if not prompt.endswith(guidance):
+                    raise ValueError("image retry builder omitted its owned guidance tail")
+                prompt = prompt[:-len(guidance)] + request.final_frame_clause + guidance
         result = replace(result, final_prompt=prompt, final_prompt_attempt=attempt)
         trace_event("prompt", f"IMAGE:{request.audit_role}", f"{IMAGE_BACKEND} {request.audit_role} prompt attempt {attempt}", {
             "assetId": request.logical_asset_id, "attemptId": attempt_id, "attempt": attempt, "role": request.audit_role,
@@ -514,16 +533,18 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
 def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "", processing_role: str = "", publication_entity_id: str = "") -> tuple[str, str, float, str]:
     """Adapt one authored role into the common image-attempt lifecycle."""
     contract_role = processing_role or ("impact" if role.startswith("impact_") else role)
-    base_prompt = normalize_asset_prompt(data, contract_role, prompt, canvas)
+    base_prompt = normalize_asset_prompt(data, contract_role, prompt, canvas, entity_id=entity_id)
+    frame_clause = image_final_frame_prompt_clause(data, contract_role, canvas, entity_id=entity_id)
     debug = data.setdefault("debug", {})
-    debug[f"{role}FinalPrompt"] = truncate_prompt_at_boundary(base_prompt, 1800)
+    debug[f"{role}FinalPrompt"] = base_prompt if frame_clause else truncate_prompt_at_boundary(base_prompt, 1800)
     debug[f"{role}AuthoringPolicy"] = "ai_primary_non_procedural"
     topology, minimum, maximum = _authored_sprite_topology(data, "entity:" + entity_id if entity_id else role)
     policy = _PublicationPolicy.REQUIRED_VFX if contract_role in {"vfx_cutout", "vfx_strip"} else _PublicationPolicy.LEGACY_ASSET
     request = _ImageRequest(logical_asset_id=asset_id, audit_role=role, processing_role=contract_role,
         prompt=base_prompt, negative=str(negative or ""), canvas=canvas, topology=topology,
         part_count_min=minimum, part_count_max=maximum, policy=policy,
-        publication_identity=_legacy_publication_identity(data, role, publication_entity_id or entity_id, asset_id))
+        publication_identity=_legacy_publication_identity(data, role, publication_entity_id or entity_id, asset_id),
+        final_frame_clause=frame_clause)
     result = _execute_image_request(data, request)
     return result.public_path, result.url, round(result.technical_score, 3), result.status
 

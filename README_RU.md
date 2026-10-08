@@ -1,6 +1,6 @@
-# InfiniCrafterLocal v0.4.249.3
+# InfiniCrafterLocal v0.4.250
 
-**0.4.249.3:** новая явная [placed PNG capability](docs/PRESENT_PLACED_ITEM_SPRITE_RU.md), durable material/net lifecycle и полная sanitized запись stage-builder requests; owning advisories для cost/tempo/motion и accepted Visual context. Это prospective authoring, не автоматическая правка сохранённых предметов. Сохранены runtime fixes 0.4.249.2.
+**0.4.250:** сохранены точные механики и принятая внешность generated-родителей в следующих Author/Visual/Repair; настоящий craft snapshot передаёт literal tooltip с языком/identity и проверенную source-motion reference. Image backend получает exact display pixel budget и grip/topology framing. Исправлены прямой расход stackCost и identity независимых generated buffs; добавлен явный finite sound selector. Удалён host-рекомендуемый damage, обновлён Codex catalog protocol для SOL 6.1. Сохранены [placed PNG capability](docs/PRESENT_PLACED_ITEM_SPRITE_RU.md), durable material/net lifecycle, полная sanitized запись stage-builder requests и runtime fixes 0.4.249.1–.3. Старые recipes/PNG не переавторствуются; gameplay design по-прежнему выбирает модель.
 
 Мод Terraria/tModLoader и LocalGenerator создают предмет из двух выбранных входов. Gameplay Author составляет `runtimeProgram` v5; Python проверяет и технически компилирует его, Visual/VFX Directors оформляют принятые entities/events, image backend рисует PNG, C# исполняет typed DTO. Repair условен и ограничен отвергнутыми полями; код не выбирает механику из названия, категории или прозы.
 
@@ -11,6 +11,7 @@
 - [Установка, настройки, запуск и MP — единый runbook](QUICK_START_RU.md).
 - [Команды игрового чата и результаты диагностики](command.md).
 - [Сборка мода и внешние DLL](BUILD_QOL_RU.md).
+- [Качество контекста родителей, source physics и image brief](docs/ITEM_QUALITY_CONTEXT_RU.md).
 - [LocalGenerator: файлы, границы сервиса и offline QA](LocalGenerator/README_RU.md).
 
 ## Версия и обновление

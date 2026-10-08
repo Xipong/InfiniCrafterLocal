@@ -83,6 +83,16 @@ public partial class GeneratedItem : ModItem
             try { Item.NetStateChanged(); } catch { }
     }
 
+    public override void SetStaticDefaults()
+    {
+        // Every generated instance declares literal direct-use stackCost 0/1.
+        // Native ItemCheck's ranged/throwing saving runs before ConsumeItem;
+        // force entry into that final per-instance gate, never force its result.
+        // This type-wide invariant is registered once, not changed per definition.
+        // PickAmmo owns an independent IsAmmoFreeThisShot path and ignores this set.
+        ItemID.Sets.ForceConsumption[Type] = true;
+    }
+
     public override void SetDefaults()
     {
         ResetPureMobilityUseOutcome();

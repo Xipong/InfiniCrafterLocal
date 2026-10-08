@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Terraria.Audio;
+using Terraria.ID;
 
 namespace InfiniCrafterLocal.Common.Models;
 
@@ -210,6 +212,10 @@ public sealed class VfxSlotSpec
     public string Source { get; set; } = "llm_vfx_director";
     [JsonRequired] public string EmissionMode { get; set; } = "none";
     [JsonRequired] public string ParticleSystemId { get; set; } = "none";
+    private string? _soundId;
+    // Absent persisted selectors retain Item1; explicit null is not absence.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SoundId { get => _soundId; set => _soundId = value ?? throw new InvalidDataException("soundId cannot be null"); }
     [JsonRequired] public float FadeIn { get; set; }
     [JsonRequired] public float FadeOut { get; set; }
     public int SlotSeed { get; set; }
@@ -255,6 +261,10 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        if (SoundId is not null) {
+            if (rendererKind != InfiniVfxRendererKind.SoundCue) throw new InvalidDataException("soundId is owned only by soundCue");
+            _ = ResolveSoundStyle(); // exact finite selector; never trim/guess/substitute
+        }
         VfxLibraryValidation.Validate(this,rendererKind);
         bool materialBranch = rendererKind is InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath;
         if (rendererKind == InfiniVfxRendererKind.SpriteElement) {
@@ -305,6 +315,33 @@ public sealed class VfxSlotSpec
         foreach (VfxBakedCommandSpec command in BakedCommands) command.Normalize();
         BakedCommandCount = BakedCommands.Length;
     }
+
+    // Shared item/projectile projection: exact authored SoundID member only.
+    // null is exclusively old-wire absence; unknown present values fail closed.
+    internal SoundStyle ResolveSoundStyle() => SoundId switch
+    {
+        null or "Item1" => SoundID.Item1,
+        "Item2" => SoundID.Item2,
+        "Item3" => SoundID.Item3,
+        "Item4" => SoundID.Item4,
+        "Item8" => SoundID.Item8,
+        "Item9" => SoundID.Item9,
+        "Item14" => SoundID.Item14,
+        "Item20" => SoundID.Item20,
+        "Item21" => SoundID.Item21,
+        "Item29" => SoundID.Item29,
+        "Item43" => SoundID.Item43,
+        "Dig" => SoundID.Dig,
+        "Tink" => SoundID.Tink,
+        "Grab" => SoundID.Grab,
+        "Shatter" => SoundID.Shatter,
+        "Splash" => SoundID.Splash,
+        "Coins" => SoundID.Coins,
+        "Unlock" => SoundID.Unlock,
+        "MaxMana" => SoundID.MaxMana,
+        "ResearchComplete" => SoundID.ResearchComplete,
+        _ => throw new InvalidDataException($"invalid VFX soundId '{SoundId}'"),
+    };
 
     private static string RuntimeId(string? value, string label)
     {

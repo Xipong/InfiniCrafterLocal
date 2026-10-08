@@ -195,6 +195,11 @@ def test_frozen_material_boundary(case):
     data = _data()
     templates = {"sprite": _sprite(data), "asset": _with_asset(data), "legacy": _legacy(data)}
     raw = apply_edits(templates[case["base"]], case["rawEdits"])
+    # Adapt only the old sound witnesses to the new fresh-author requirement;
+    # captured edits/scopes stay byte-identical and keep their original oracle.
+    for slot in raw["slots"]:
+        if isinstance(slot, dict) and slot.get("rendererKind") == "soundCue":
+            slot["soundId"] = "Item1"
     before, gameplay = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]

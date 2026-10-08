@@ -62,15 +62,36 @@ def _native_sprite_reference_for_llm(value: Any) -> dict[str, Any]:
     return copy.deepcopy(observation)
 
 
+# Accepted appearance only: omit PNG paths, URLs, image-job/status/score data and
+# derived classifications. These values are copied, never interpreted as design.
+_PARENT_VISUAL_FIELDS = (
+    "role", "assetMode", "visualProjectRef", "prompt", "imagePrompt", "negativePrompt",
+    "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "renderSizePx",
+    "forwardAngleDegrees", "inventoryScale", "worldScale", "scale", "grip",
+    "drawOffsetX", "drawOffsetY", "effectColor", "accessoryMount", "equipOverlayPrompt",
+    "dominantColorHex", "accentColorHex", "style", "objectType", "requiredAnchors",
+)
+
+
+def _accepted_visual_facts(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    facts = {key: copy.deepcopy(value[key]) for key in _PARENT_VISUAL_FIELDS if key in value}
+    size = facts.get("renderSizePx")
+    if "renderSizePx" in facts and not (type(size) is int and 1 <= size <= 512):
+        facts.pop("renderSizePx")
+    return facts
+
+
 def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: bool = False) -> dict[str, Any]:
     """Compact parent card for the LLM.
 
     The packet contains raw source fields or exact accepted generated runtime facts.
     It never adds code-derived semantics, behavior digests, categories or tags.
-    Visual consumers may opt into read-only calibration: loaded native texture and
-    sampled UI-frame pixels, or an explicit accepted generated world max-side size.
-    These are not alpha bounds/hitboxes or required child dimensions; missing is
-    unknown, never a canvas/scale/collider default. Gameplay's default is unchanged.
+    Visual consumers may opt into read-only accepted appearance and calibration:
+    loaded native texture/UI-frame pixels or generated root/entity identity,
+    silhouette, palette, grip, canvas/axis and scales. Missing facts stay unknown;
+    no appearance becomes a gameplay choice or required child dimension.
     """
     item_raw = compact_item_raw_for_llm(item)
     cross_mod_identity = {
@@ -132,69 +153,39 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     if runtime_probe:
         card["raw"]["runtimeProbe"] = _compact_raw_value(runtime_probe)
     if isinstance(gd, dict) and gd:
-        gameplay_raw = dict_get_ci(gd, "gameplay", {})
         runtime_raw = dict_get_ci(gd, "runtimeProgram", {})
+        runtime_raw = runtime_raw if isinstance(runtime_raw, dict) else {}
         summary_raw = dict_get_ci(gd, "generatedParentSummary", {})
-        gameplay = gameplay_raw if isinstance(gameplay_raw, dict) else {}
-        runtime = runtime_raw if isinstance(runtime_raw, dict) else {}
+        runtime = copy.deepcopy(runtime_raw)
         summary = summary_raw if isinstance(summary_raw, dict) else {}
-        entities = []
-        for row in runtime.get("entities") or []:
-            if not isinstance(row, dict):
-                continue
-            entity_fact = {
-                "id": row.get("id"),
-                "kind": row.get("kind"),
-                "visualRole": row.get("visualRole"),
-                "spawn": row.get("spawn") if isinstance(row.get("spawn"), dict) else None,
-                "damage": row.get("damage") if isinstance(row.get("damage"), dict) else None,
-                "lifetimeTicks": row.get("lifetimeTicks"),
-                "hitbox": row.get("hitbox") if isinstance(row.get("hitbox"), dict) else None,
-                "collision": row.get("collision") if isinstance(row.get("collision"), dict) else None,
-                "movement": row.get("movement") if isinstance(row.get("movement"), dict) else None,
-                "controller": row.get("controller") if isinstance(row.get("controller"), dict) else None,
-                "targeting": row.get("targeting") if isinstance(row.get("targeting"), dict) else None,
-                "light": row.get("light") if isinstance(row.get("light"), dict) else None,
-                "events": [
-                    {key: event.get(key) for key in (
-                        "id", "event", "action", "entityId", "count", "spreadRadians", "damageMultiplier",
-                        "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode",
-                        "strength", "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
-                    ) if key in event}
-                    for event in row.get("events") or [] if isinstance(event, dict)
-                ],
-            }
-            entities.append({key: value for key, value in entity_fact.items() if value not in (None, "", [], {})})
-        generated_parent = {
-            "gameplay": {key: gameplay.get(key) for key in (
-                "kind", "damageClass", "damage", "knockback", "useTime", "useAnimation", "useStyleName",
-                "autoReuse", "useTurn", "manaCost", "healLife", "healMana", "potion", "maxStack",
-                "ammoCategory", "ammoProjectileId", "ammoShootSpeedPxPerTick", "notAmmo", "pickPower", "axePower", "hammerPower", "craftYield", "rarity", "value",
-            ) if key in gameplay},
-            "runtimeProgram": {
-                "apiVersion": runtime.get("apiVersion"),
-                "schema": runtime.get("schema"),
-                "itemEntityId": runtime.get("itemEntityId"),
-                "entities": entities,
-                "bindings": [
-                    {
-                        "input": row.get("input"),
-                        "usePolicy": copy.deepcopy(row.get("usePolicy")),
-                    }
-                    for row in runtime.get("bindings") or [] if isinstance(row, dict)
-                ],
-            },
-        }
+        # Read-only identity projection, not authoring/lowering: preserve every
+        # accepted mechanical value, binding/event ID, zero, false and empty list.
+        # Appearance has a separate Visual-only handoff below; never let it
+        # become Author context or replace exact mechanics with a prose summary.
+        for entity in runtime.get("entities") or []:
+            if isinstance(entity, dict):
+                entity.pop("visual", None)
+        generated_parent = {"runtimeProgram": runtime}
+        for key in ("id", "recipeKey", "gameplay", "accessory", "armor"):
+            value = dict_get_ci(gd, key)
+            if value is not None:
+                generated_parent[key] = copy.deepcopy(value)
         if summary:
             generated_parent["summary"] = {key: copy.deepcopy(summary.get(key)) for key in (
                 "schema", "name", "identity", "description", "playerExperience", "notableEffects",
                 "runtimePrimaryEntityId", "runtimeEntityIds",
             ) if _compact_keep(summary.get(key))}
         if include_visual_reference:
-            visual_raw = dict_get_ci(gd, "visual", {})
-            render_size = dict_get_ci(visual_raw, "renderSizePx")
-            if type(render_size) is int and 1 <= render_size <= 512:
-                generated_parent["visual"] = {"renderSizePx": render_size}
+            visual = _accepted_visual_facts(dict_get_ci(gd, "visual", {}))
+            if visual:
+                generated_parent["visual"] = visual
+            # Exact entity IDs and kinds remain alongside their own accepted
+            # appearance; do not select one parent entity or fill inherited data.
+            for source, entity in zip(runtime_raw.get("entities") or [], runtime.get("entities") or []):
+                if isinstance(source, dict) and isinstance(entity, dict):
+                    appearance = _accepted_visual_facts(source.get("visual"))
+                    if appearance:
+                        entity["visual"] = appearance
         card["raw"]["generatedParent"] = generated_parent
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.
     return _strip_derived_packet_fields({k: v for k, v in card.items() if _compact_keep(v)})

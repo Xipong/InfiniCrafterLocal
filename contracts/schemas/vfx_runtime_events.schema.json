@@ -987,6 +987,61 @@
             "if": {
               "properties": {
                 "rendererKind": {
+                  "const": "soundCue"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "required": [
+                "soundId"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "projectileAfterimage",
+                    "spriteStampTrail",
+                    "historyRibbon",
+                    "tipTrail",
+                    "ghostArc",
+                    "wavyStrip",
+                    "beamLine",
+                    "fieldPulse",
+                    "orbitingMotes",
+                    "actorAfterimage",
+                    "impactRing",
+                    "impactSprite",
+                    "childMotes",
+                    "lightCue",
+                    "screenShakeCue",
+                    "libraryParticle",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "soundId": {
+                  "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
                   "const": "libraryParticle"
                 }
               },
@@ -2425,6 +2480,32 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
+          },
+          "soundId": {
+            "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement.",
+            "enum": [
+              "Item1",
+              "Item2",
+              "Item3",
+              "Item4",
+              "Item8",
+              "Item9",
+              "Item14",
+              "Item20",
+              "Item21",
+              "Item29",
+              "Item43",
+              "Dig",
+              "Tink",
+              "Grab",
+              "Shatter",
+              "Splash",
+              "Coins",
+              "Unlock",
+              "MaxMana",
+              "ResearchComplete"
+            ],
+            "type": "string"
           },
           "spread": {
             "description": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",

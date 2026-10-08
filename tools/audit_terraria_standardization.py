@@ -4,6 +4,7 @@ from __future__ import annotations
 """Machine gate for canonical Terraria/tModLoader integration boundaries."""
 
 import argparse
+import copy
 import json
 import re
 import subprocess
@@ -31,6 +32,29 @@ OUTPUT = ROOT / "contracts" / "terraria_standardization_audit.generated.json"
 
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def generated_parent_semantics_preserved() -> bool:
+    # Execute the canonical projection. Requiring individual key spellings in
+    # its source incorrectly rejects a lossless whole-object deep copy.
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    definition = {
+        "id": "audit_parent", "gameplay": {"potion": True, "ammoCategory": "bullet",
+            "ammoProjectileId": 14, "ammoShootSpeedPxPerTick": 2.5, "notAmmo": False,
+            "generatedBuff": {"movementSpeed": -0.00004}},
+        "runtimeProgram": {"itemEntityId": "item", "entities": [], "bindings": [{"id": "use",
+            "input": "primary_use", "usePolicy": {"action": {"kind": "apply_item_effects",
+                "targetId": "item"}, "stackCost": 1, "contactDamage": False}}]},
+    }
+    parent = {"name": "literal control", "generatedData": definition}
+    before = copy.deepcopy(parent)
+    try:
+        projected = raw_parent_card_for_llm(parent)["raw"]["generatedParent"]
+        return (projected["gameplay"] == definition["gameplay"]
+                and projected["runtimeProgram"] == definition["runtimeProgram"]
+                and parent == before)
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def report() -> dict[str, Any]:
@@ -93,7 +117,7 @@ def report() -> dict[str, Any]:
     check("no_plural_gameplay_ammo_alias", '"arrows"' not in apply + vocabulary and '"bullets"' not in apply + vocabulary, "plural ammo aliases are not canonical gameplay tokens")
     restore = CAPABILITY_REGISTRY.get("restore_resources_on_use")
     check("potion_flag_is_authored", restore is not None and tuple(restore.params) == ("healLife", "healMana", "usesPotionRules") and "item.potion = enabled && Gameplay.Potion;" in apply and "item.potion = Gameplay.HealLife > 0" not in apply, "Item.potion must be authored, binding-scoped, and not inferred from healing")
-    check("generated_parent_preserves_exact_item_semantics", all(x in parent_cards for x in ('"potion"', '"usePolicy"', '"ammoCategory"', '"ammoProjectileId"', '"ammoShootSpeedPxPerTick"', '"notAmmo"')) and 'row.get("action")' not in parent_cards and 'row.get("target")' not in parent_cards, "generated parents must preserve exact binding usePolicy/ammo/potion facts for the next Author")
+    check("generated_parent_preserves_exact_item_semantics", generated_parent_semantics_preserved(), "generated parents must preserve exact binding usePolicy/ammo/potion facts for the next Author")
     check("loaded_rarity_guard", "RarityLoader.RarityCount" in normalize and "ClampInt(Gameplay.Rarity" not in normalize, "rarity must be an actually loaded ID, not silently clamped")
     check("loaded_buff_guards", "BuffLoader.BuffCount" in normalize and "BuffLoader.BuffCount" in dto and "extra buff row cannot be null" in normalize and "requires positive duration" in normalize and "buff.BuffCode > 0" in generated_item, "buff IDs and durations must fail closed against the loaded content registry")
     check("loaded_tile_wall_guards", "TileLoader.TileCount" in dto and "WallLoader.WallCount" in dto and "ClampInt(Gameplay.CreateTile" not in normalize and "ClampInt(Gameplay.CreateWall" not in normalize, "tile/wall IDs must be validated against loaded tModLoader content")

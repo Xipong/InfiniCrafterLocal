@@ -37,7 +37,7 @@ VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
 # and the output schema derived from the accepted runtime program.
 _VFX_RUNTIME_VOCABULARY_KEYS = (
     "schema", "rendererKind", "rendererRequirements", "rendererSemantics",
-    "colorPolicy", "heldRootVisibility", "backend", "textureRole", "particleRole", "anchor", "channel",
+    "colorPolicy", "heldRootVisibility", "soundId", "backend", "textureRole", "particleRole", "anchor", "channel",
     "lane", "emissionMode", "blend", "layer", "particleSystemId",
     "visualBudgetClass", "numericRanges", "textureDependencyTuples", "maxSlots",
 )
@@ -88,12 +88,18 @@ _RENDERER_SEMANTICS = {
     "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt and impact texture; no inventory/dust substitute.",
     "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
     "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
-    "soundCue": "SoundID.Item1 at the resolved anchor; alpha controls volume. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
+    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: fresh soundCue requires an explicit soundId from the general palette. Persisted legacy absence keeps SoundID.Item1. Only soundCue may carry soundId; present null, unknown names, aliases and free paths are invalid. alpha controls volume; the existing phase-to-pitch mapping is unchanged. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
     "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. If the intended body covers that path, an explicit compatible source=whip/beam slot can coexist with a baked tip/body; runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
+# Exact installed Terraria.ID.SoundID members, shared by schema and vocabulary.
+# This general sample palette carries no weapon/entity/category routing.
+_SOUND_IDS = (
+    "Item1", "Item2", "Item3", "Item4", "Item8", "Item9", "Item14", "Item20", "Item21", "Item29", "Item43",
+    "Dig", "Tink", "Grab", "Shatter", "Splash", "Coins", "Unlock", "MaxMana", "ResearchComplete",
+)
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
@@ -205,6 +211,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "rendererKind": list(_RENDERERS),
         "rendererRequirements": copy.deepcopy(_RENDERER_REQUIREMENTS),
         "rendererSemantics": copy.deepcopy(_RENDERER_SEMANTICS),
+        "soundId": list(_SOUND_IDS),
         "heldRootVisibility": {
             field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
             for field in ("hideUseGraphic", "heldSpriteVisibilityHint")
@@ -253,7 +260,7 @@ def _impact_sprite_background_rule() -> str:
     )
 
 
-def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool = True) -> dict[str, Any]:
     pairs = _allowed_pairs(data)
     entity_ids = sorted({row["entityId"] for row in pairs})
     events = sorted({row["event"] for row in pairs})
@@ -307,6 +314,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "path": path_schema(),
             "screenShake": screen_shake_schema(),
             "particle": library_particle_schema(),
+            "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement."},
         },
         "required": [
             "id", "entityId", "event", "rendererKind", "backend", "textureRole",
@@ -328,6 +336,17 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
     slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, list(_CHANNELS), _textured_path_sources(data)))
     slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data)))
+    # Fresh model output must choose explicitly; persisted legacy soundCue
+    # absence is compatibility-only and is never materialized in Python.
+    if require_sound_selection:
+        slot["allOf"].append({
+            "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind"]},
+            "then": {"required": ["soundId"]},
+        })
+    slot["allOf"].append({
+        "if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "soundCue"]}}, "required": ["rendererKind"]},
+        "then": {"properties": {"soundId": {"enum": []}}},
+    })
     slot["allOf"].extend([
         {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}}, "required": ["rendererKind"]},
          "then": {"required": ["particle"], "properties": {"channel": {"enum": ["ambientParticles", "impactParticles", "decaySmoke"]}, "lane": {"enum": ["primary", "support", "accent", "ornament"]}}}},
@@ -649,6 +668,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["screenShake"] = copy.deepcopy(slot["screenShake"])
         if "particle" in slot:
             clean["particle"] = copy.deepcopy(slot["particle"])
+        if "soundId" in slot:
+            clean["soundId"] = slot["soundId"]
         errors.extend(_material_slot_errors(slot, path))
         for renderer in ("soundCue", "lightCue"):
             required = _RENDERER_REQUIREMENTS[renderer]
@@ -693,7 +714,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         errors.append({"path": "$.vfxManifest.slots", "message": "array required"})
     slots = raw_slots if isinstance(raw_slots, list) else []
     # Runtime carries technical fields instead of Director-only image captions.
-    slots_schema = _director_schema(data)["properties"]["slots"]
+    slots_schema = _director_schema(data, require_sound_selection=False)["properties"]["slots"]
     if len(slots) > slots_schema["maxItems"]:
         errors.append({"path": "$.vfxManifest.slots", "message": f"at most {slots_schema['maxItems']} slots"})
     slot_schema = slots_schema["items"]
@@ -702,7 +723,8 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         slot_schema["required"].remove(field)
     slot_schema["properties"].update({
         **{field: {"type": "string"} for field in ("eventGroup", "stage", "source", "bakedClipId", "bakedClipHash", "effectName")},
-        "slotSeed": {"type": "integer"}, "bakedCommandCount": {"type": "integer", "minimum": 0},
+        "slotSeed": {"type": "integer"}, "phaseOffset": {"type": "number", "minimum": -1.0, "maximum": 1.0},
+        "bakedCommandCount": {"type": "integer", "minimum": 0},
         "bakedCommands": {"type": "array", "maxItems": 0},
     })
     if "assets" in manifest:
@@ -732,12 +754,12 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         renderer = slot.get("rendererKind")
         if not isinstance(renderer, str) or renderer not in _RENDERERS:
             errors.append({"path": path + ".rendererKind", "message": "unsupported renderer"})
-        if renderer in (*MATERIAL_RENDERERS, "screenShakeCue", "libraryParticle"):
+        if renderer in (*MATERIAL_RENDERERS, "screenShakeCue", "libraryParticle", "soundCue"):
             for error in strict_schema_errors(slot, slot_schema, path=path):
                 errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
             errors.extend(_material_slot_errors(slot, path))
         else:
-            for field in ("element", "path", "screenShake", "particle"):
+            for field in ("element", "path", "screenShake", "particle", "soundId"):
                 if field in slot:
                     errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
     for error in vfx_png_dependencies(data, manifest)["errors"]:

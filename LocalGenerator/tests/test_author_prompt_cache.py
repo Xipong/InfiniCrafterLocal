@@ -42,6 +42,37 @@ def test_schema_factory_is_evaluated_only_for_schema_mode(monkeypatch):
     assert json.loads(json.dumps(result)) == result
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize(
+    "source_a, source_b",
+    [
+        pytest.param({"damage": 0, "healLife": 50}, {"damage": 0, "value": 5}, id="healing-and-material"),
+        pytest.param({"damage": 0, "rare": 65535}, {"damage": 0, "value": 100000000}, id="rarity-and-price"),
+        pytest.param({"damage": 7, "useTime": 20}, {"damage": 4, "useTime": 30}, id="combat-parents"),
+    ],
+)
+def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, source_b):
+    from copy import deepcopy
+
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    before = deepcopy((source_a, source_b))
+    request, user, _ = author.build_initial_author_request(
+        source_a, source_b, {}, {}, "no-damage-advice", model_name="test-model",
+    )
+    assert request["messages"][1]["content"] == user
+    payload = json.loads(user)
+    corridor = payload["balanceCorridor"]
+    assert "suggestedDamage" not in corridor
+    assert "damage" not in corridor["broadEnvelope"]
+    assert corridor["parentDamage"] == [source_a["damage"], source_b["damage"]]
+    catalog = payload["runtimeCapabilityContract"]["catalog"]
+    for fn in ("configure_item_stats", "set_projectile_damage"):
+        card = next(row for row in catalog["capabilities"] if row["fn"] == fn)
+        assert card["params"]["damage"]["min"] == 0
+        assert card["params"]["damage"]["max"] == 2000
+    assert (source_a, source_b) == before
+
+
 def _marked_prefix(request):
     marker = request.get("_infini_prompt_cache")
     assert marker is not None, "production request must declare the reusable instruction/catalog boundary"

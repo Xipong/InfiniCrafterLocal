@@ -27,9 +27,10 @@ from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 
-# Engineering character guard only: additive placed-body/quality guidance keeps
-# the frozen basic/rich packets intact with >= 1,000 chars of headroom.
-PLANNER_PROMPT_LIMIT_CHARS = 96_500
+# Engineering character guard, not a model token limit. The old 96,500 bound
+# refused real source-rich parents before the provider seam. Preserve both
+# complete source tooltips and accepted generated graphs; never clip them to fit.
+PLANNER_PROMPT_LIMIT_CHARS = 196_608
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -99,6 +100,15 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
     field_guide["sourceValues"] = (
         "Neutral values are not defaults: choose meaningful params from design/source facts or omit unnecessary calls. "
         "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0."
+    )
+    field_guide["projectileMotion"] = (
+        "Decide the trajectory of every moving entity deliberately. move_straight has no falling arc; "
+        "move_gravity_arc adds its explicit vertical velocity increment from the first projectile update. "
+        "Source projectile identity, arrow flags and aiStyle do not execute native AI in a generated entity. "
+        "Use observed source motion when provided; otherwise your domain knowledge may guide the authored "
+        "choice, but is not a verified source measurement. A straight or altered shot remains legal when "
+        "intentional and coherent with the concept. Do not accidentally promise ballistic motion while "
+        "authoring constant velocity. No host-selected movement or weapon preset is supplied."
     )
     field_guide["damageClass"] = {
         "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
@@ -195,7 +205,6 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "parentDamage": stage.get("sourceDamage"),
         "parentUseTimeTicks": stage.get("sourceFastestUseTime"),
         "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
-        "suggestedDamage": stage.get("derivedDamage"),
         "broadEnvelope": envelope,
         "rule": "These are broad source-numeric balance bounds, not a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
     }

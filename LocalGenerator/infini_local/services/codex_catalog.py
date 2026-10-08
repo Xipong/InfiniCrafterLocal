@@ -9,9 +9,9 @@ from infini_local.services import codex_auth
 
 MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
 # This is the Codex protocol client version, not the InfiniCrafter app version.
-# The subscription catalog filters by minimum client version: sending 0.4.241
-# returned zero models while the pinned upstream Codex release exposed them.
-CLIENT_VERSION = "0.156.1"
+# The account catalog gates new models by protocol client version. Keep this
+# aligned with a verified upstream Codex release, not the InfiniCrafter version.
+CLIENT_VERSION = "0.161.0"
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
 

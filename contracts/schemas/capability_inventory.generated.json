@@ -2814,7 +2814,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 0",
-      "purpose": "Keep initial velocity.",
+      "purpose": "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",

@@ -45,12 +45,12 @@ public sealed partial class InfiniCraftPlayer
         };
 
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
-            => Math.Abs(MiningSpeedMultiplier - other.MiningSpeedMultiplier) < 0.0001f
-            && Math.Abs(EmitLightStrength - other.EmitLightStrength) < 0.0001f
+            => MiningSpeedMultiplier == other.MiningSpeedMultiplier
+            && EmitLightStrength == other.EmitLightStrength
             && string.Equals(LightColorName, other.LightColorName, StringComparison.OrdinalIgnoreCase)
             && OreSenseRadiusTiles == other.OreSenseRadiusTiles
-            && Math.Abs(MovementSpeed - other.MovementSpeed) < 0.0001f
-            && Math.Abs(JumpBoost - other.JumpBoost) < 0.0001f
+            && MovementSpeed == other.MovementSpeed
+            && JumpBoost == other.JumpBoost
             && ManaRegen == other.ManaRegen
             && LifeRegen == other.LifeRegen;
     }

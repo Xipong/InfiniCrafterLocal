@@ -524,10 +524,7 @@ def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transpo
             assert actual["raw"]["spriteReference"] == parent["spriteReferenceRaw"]
         elif reference == "generated-declared-and-old":
             assert "spriteReference" not in actual["raw"]
-            if name == "parentA":
-                assert actual["raw"]["generatedParent"]["visual"] == {"renderSizePx": 47}
-            else:
-                assert "visual" not in actual["raw"]["generatedParent"]
+            assert actual["raw"]["generatedParent"]["visual"] == parent["generatedData"]["visual"]
         else:
             assert "spriteReference" not in actual["raw"]
     assert (parent_a, parent_b) == frozen

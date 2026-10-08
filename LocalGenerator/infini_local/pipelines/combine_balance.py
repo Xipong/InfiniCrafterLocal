@@ -65,13 +65,7 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         for item in (a, b) if item_num(item, "damage", 0) > 0
     ] or [20.0])
     combined = max(scores) + min(scores) * 0.28
-    max_damage = max(damages)
-    suggested_damage = (
-        int(_clamp(max(max_damage + 1, max_damage * 1.25 + combined ** 0.5), 1, 2000))
-        if max_damage else int(_clamp(combined ** 0.75, 0, 2000))
-    )
     power_budget = round(_clamp(0.9 + combined / 55.0, 0.9, 8.0), 2)
-    damage_hi = int(_clamp(max(24, suggested_damage * 2.5 + 24), 24, 2000))
     progression_facts = [
         fact for fact in (
             _source_progression_fact(a, "A"),
@@ -86,10 +80,8 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "sourceFastestUseTime": fastest_use,
         "sourceNumericProgressionFacts": progression_facts,
         "derivedPower": round(combined, 2),
-        "derivedDamage": suggested_damage,
         "powerBudget": power_budget,
         "balanceEnvelope": {
-            "damage": {"minimum": 0, "suggested": suggested_damage, "maximum": damage_hi},
             "useTimeTicks": {"minimum": 4, "suggested": int(_clamp(fastest_use, 4, 600)), "maximum": 600},
             "lifetimeTicks": {"minimum": 1, "maximum": 36000},
             "entityCount": {"minimum": 1, "maximum": 12},

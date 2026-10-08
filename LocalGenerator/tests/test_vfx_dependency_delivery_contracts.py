@@ -54,7 +54,7 @@ def authored_vfx(renderer: str, texture: str = "entity") -> dict:
         if renderer == "lightCue":
             slot.update(channel="light", lane="cue")
         elif renderer == "soundCue":
-            slot.update(channel="sound", lane="cue")
+            slot.update(channel="sound", lane="cue", soundId="Item1")
     return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "visualBudgetClass": "normal",
             "motif": {"element": "amber", "shapeLanguage": "ring", "motionLanguage": "quiet",
                       "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.0}, "slots": [slot]}

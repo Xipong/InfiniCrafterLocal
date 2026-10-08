@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import re
 from typing import Any
@@ -513,6 +514,12 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     # If the live client sent richer fields, keep them; if older payload, itemRaw is built from item fields.
     raw.update({k: item_field(item, k, None) for k in LLM_ITEM_RAW_KEYS if item_field(item, k, None) is not None})
     out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
+    # Literal source text/provenance is one observation: preserve line order,
+    # whitespace, empty lines and source-bound refusal without compacting it.
+    for key in ("tooltipLines", "tooltipSource"):
+        value = item_field(item, key, None)
+        if value is not None:
+            out[key] = copy.deepcopy(value)
     if generated_data_of(item):
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
@@ -646,6 +653,10 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
+    # The native producer owns verification and scope. Never infer a trajectory
+    # from names/aiStyle or compact/clip this optional read-only observation.
+    if isinstance(proj.get("motionReference"), dict):
+        out["motionReference"] = copy.deepcopy(proj["motionReference"])
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
     if LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST:
@@ -715,7 +726,7 @@ def _raw_item_fields_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     Missing projectile/probe sections are simply omitted; Gemma does the source reading.
     """
     keys = [
-        "type", "name", "internalName", "fullName", "sourceMod", "tooltipLines",
+        "type", "name", "internalName", "fullName", "sourceMod", "tooltipLines", "tooltipSource",
         "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation",
         "rare", "rarityDetails", "value", "maxStack", "stack", "consumable", "material",
         "accessory", "defense", "createTile", "createWall", "placeStyle",
@@ -797,6 +808,10 @@ def _projectile_profile_same_except_source(a: dict[str, Any], b: dict[str, Any])
     if not isinstance(a, dict) or not isinstance(b, dict) or not a or not b:
         return False
     identity_keys = ("type", "internalName", "sourceMod")
+    # A source observation cannot be borrowed from a similar projectile profile:
+    # absence, identity/hash and full scope must match before exact deduplication.
+    if ("motionReference" in a) != ("motionReference" in b) or a.get("motionReference") != b.get("motionReference"):
+        return False
     if not any(_compact_keep(a.get(k)) and a.get(k) == b.get(k) for k in identity_keys):
         return False
     core_keys = (

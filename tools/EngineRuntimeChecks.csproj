@@ -18,6 +18,8 @@
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
+    <Compile Include="EngineRuntimeChecks.LiteralStackCost.cs" />
+    <Compile Include="EngineRuntimeChecks.Float32BuffIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffUI.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffDraw.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedBody.cs" />
@@ -35,6 +37,7 @@
     <Compile Include="EngineRuntimeChecks.SpriteAlpha.cs" />
     <Compile Include="EngineRuntimeChecks.EquipPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.VfxEventConsistency.cs" />
+    <Compile Include="EngineRuntimeChecks.SoundSelection.cs" />
     <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
     <Compile Include="EngineRuntimeChecks.MaterialElements.cs" />
     <Compile Include="EngineRuntimeChecks.LibraryVfx.cs" />
@@ -61,6 +64,8 @@
     <Compile Include="EngineRuntimeChecks.MobilityConsumption.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
+    <Compile Include="EngineRuntimeChecks.ParentTooltip.cs" />
+    <Compile Include="EngineRuntimeChecks.ParentMotion.cs" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/Luminance/bin/Debug/net8.0/Luminance.dll" />

@@ -444,6 +444,8 @@ def _renderer_material(data, renderer):
         return _screen_shake(data)
     raw = _sprite(data) if renderer == "spriteElement" else _path(data) if renderer == "texturedPath" else _vfx_output(data)
     raw["slots"][0].update(rendererKind=renderer)
+    if renderer == "soundCue":
+        raw["slots"][0]["soundId"] = "Item1"
     if renderer == "impactSprite":
         raw["slots"][0].update(textureRole="impact", spritePrompt="one transparent impact sprite")
     return raw

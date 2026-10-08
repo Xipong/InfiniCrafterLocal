@@ -1241,7 +1241,7 @@ def _movement(
 
 
 _CAPS.extend([
-    _movement("move_straight", "Keep initial velocity.", 0, provenance="existing movement code 0"),
+    _movement("move_straight", "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.", 0, provenance="existing movement code 0"),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),

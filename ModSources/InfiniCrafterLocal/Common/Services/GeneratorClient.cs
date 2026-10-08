@@ -17,6 +17,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using Terraria;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Services;
@@ -29,6 +30,24 @@ namespace InfiniCrafterLocal.Common.Services;
 public sealed class GeneratorClient
 {
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    // Read-only source certificate, not generated behavior or AI dispatch. A
+    // different native method declines the observation instead of guessing it.
+    private const string MotionSourceMethodSha256 = "5ce22f6374b8b786ee332454aa0bb136ebd20c57520929b41fe4f328dca56d9b";
+    private const string InstalledMotionSourceMethodSha256 = "cf0488832f92e43e699ae307df6f73d90f88f17194250f0a39ca5715a9e0631b";
+    private static readonly Lazy<string?> MotionSourceCertificate = new(() =>
+    {
+        try
+        {
+            byte[]? il = typeof(Projectile).GetMethod("AI_001", System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)?.GetMethodBody()?.GetILAsByteArray();
+            if (il is null) return null;
+            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(il)).ToLowerInvariant();
+            // Both exact implementations were independently executed through
+            // native AI (delay/increment/cap). This is not an inferred IL alias.
+            return hash is MotionSourceMethodSha256 or InstalledMotionSourceMethodSha256 ? hash : null;
+        }
+        catch { return null; }
+    });
     private readonly object _assetPublicBaseUrlLock = new();
     private string _cachedGeneratorAssetPublicBaseUrl = "";
     private string _cachedGeneratorAssetTransport = "native";
@@ -494,6 +513,7 @@ public sealed class GeneratorClient
         var nameTokens = NameTokens(craftItem).ToArray();
         string sourceMod = SourceModName(craftItem);
         string internalName = InternalName(craftItem);
+        var tooltip = CaptureLiteralParentTooltip(craftItem, existing, sourceMod + "/" + internalName);
         var snapshot = new
         {
             id = craftItem.type,
@@ -501,6 +521,8 @@ public sealed class GeneratorClient
             sourceMod,
             internalName,
             fullName = sourceMod + "/" + internalName,
+            tooltipLines = tooltip.Lines,
+            tooltipSource = tooltip.Source,
             prefix = InfiniTerrariaSentinels.NoPrefix,
             originalPrefix,
             prefixIgnored,
@@ -576,6 +598,35 @@ public sealed class GeneratorClient
         var wire = (JsonObject)JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!;
         wire["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
         return wire;
+    }
+
+    private static (string[] Lines, object? Source) CaptureLiteralParentTooltip(Item item, GeneratedItemData? existing, string fullName)
+    {
+        // Request-only source text, never semantic parsing or a native-AI certificate.
+        // A generated proxy's static tooltip describes the host, not its accepted definition.
+        if (existing is not null || item.IsAir)
+            return (Array.Empty<string>(), null);
+        try
+        {
+            var tooltip = Lang.GetTooltip(item.type);
+            if (tooltip is null || tooltip.Lines == 0)
+                return (Array.Empty<string>(), null);
+            // Preserve literal lines and whitespace. Refuse the optional whole source
+            // observation on a bound, never publish a clipped sentence as verbatim.
+            if (tooltip.Lines > 64)
+                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName,
+                    language = Language.ActiveCulture.Name, status = "refused_line_bound" });
+            var lines = Enumerable.Range(0, tooltip.Lines).Select(tooltip.GetLine).ToArray();
+            if (lines.Sum(line => line.Length) > 16_384)
+                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName,
+                    language = Language.ActiveCulture.Name, status = "refused_character_bound" });
+            return (lines, new { source = "Lang.GetTooltip", fullName,
+                language = Language.ActiveCulture.Name, status = "observed_literal" });
+        }
+        catch
+        {
+            return (Array.Empty<string>(), null);
+        }
     }
 
     private sealed record ParentSpriteFrameReference(string Source,
@@ -1067,6 +1118,24 @@ public sealed class GeneratorClient
         };
     }
 
+    private static object? VerifiedSourceMotionReference(Projectile source)
+    {
+        // This exact source identity was observed through real native AI, with
+        // its method bytes pinned. No name/aiStyle -> generated movement rule.
+        // Sampling arbitrary native AI during crafting would have world effects.
+        if (source.ModProjectile is not null || source.type != ProjectileID.WoodenArrowFriendly
+            || MotionSourceCertificate.Value is not string certificate)
+            return null;
+        return new
+        {
+            source = "verified_native_AI_001_reference", fullName = "Terraria/WoodenArrowFriendly",
+            sourceMethodSha256 = certificate, firstGravityUpdate = 15,
+            verticalVelocityIncrementPerUpdate = 0.1f, maxDownwardVelocityPxPerUpdate = 16f,
+            units = "velocity in pixels/projectile update; start counts native AI invocations",
+            scope = "Native dry initial flight with default AI state; not collision/liquid/global-mod behavior. Read-only reference, not inherited execution. Generated move_gravity_arc starts immediately and is not an exact delayed native-AI replica. Author chooses the trajectory explicitly."
+        };
+    }
+
     private static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
     {
         if (projectileType <= ProjectileID.None)
@@ -1145,7 +1214,8 @@ public sealed class GeneratorClient
                 netImportant = p.netImportant,
                 damageClass = DamageClassName(p.DamageType),
                 framesRaw = SafeProjFrames(projectileType),
-                setsRaw = ProjectileSetsRaw(projectileType)
+                setsRaw = ProjectileSetsRaw(projectileType),
+                motionReference = VerifiedSourceMotionReference(p)
             };
         }
         catch
