@@ -1,0 +1,130 @@
+InfiniCrafterLocal Source-Available License 1.0
+License identifier: LicenseRef-InfiniCrafterLocal-Source-Available-1.0
+Copyright (c) 2026 Xipong and the respective contributors.
+
+1. Scope and official source
+
+This license covers the original InfiniCrafterLocal source code, documentation,
+project-owned assets and compiled distributions made available with this notice
+(the "Project"), to the extent their respective copyright holders may license
+them. The original project maintainer is Xipong (the "Maintainer").
+
+The official source is https://github.com/Xipong/InfiniCrafterLocal, including
+its Releases and GitHub-generated source archives. Another original-project
+release channel is official only when the Maintainer explicitly designates it
+in that repository. A third-party mirror or fork is not an official source.
+
+This license is source-available, not an open-source license. It applies to
+versions distributed with this notice, beginning with version 0.4.254; it does
+not withdraw any permissions validly granted for earlier versions.
+
+2. Permitted use and development
+
+Subject to this license, you may download, install, run and study the Project,
+make private copies and backups, and modify and build it for your own use.
+You may prepare and submit contributions to the official repository, including
+through a working fork, branch or patch. You may share links to the official
+source and official downloads, and publish reviews, gameplay videos, screenshots
+and reasonable excerpts for discussion or documentation with attribution.
+These permissions do not authorize independently distributing Project builds.
+
+Nothing in this license limits rights already granted by GitHub's applicable
+Terms of Service for public repositories, including viewing and creating copies
+with GitHub's fork functionality. A GitHub working fork is not, by itself,
+authorized to operate as an alternative product or release/download channel.
+
+3. Original distributions: link to the official source
+
+Except for the platform rights in section 2, the substantial-derivative
+permission in section 4, or the Maintainer's explicit written permission,
+you must not independently distribute or rehost the original Project, source
+archives, compiled builds, installers or bundled copies. This prohibition
+includes mirrors, alternative download pages, repacks, modpacks containing
+Project files and renamed or cosmetically changed releases. Distribute links
+to the official source instead. An attribution link alone does not authorize
+a mirror or repack. There is no permission to sublicense the original Project
+under different terms or remove its authorship, license or origin notices.
+
+4. Substantial independent derivatives
+
+You may independently distribute a derivative of the Project only if it has
+Substantial Changes and all the conditions below are met. This is a specific
+exception to section 3, not permission to mirror the original release.
+
+"Substantial Changes" means implemented, demonstrable changes that give the
+derivative materially different functionality, architecture or user workflow
+from the identified upstream version. Examples include a major new subsystem,
+a genuinely different generation/runtime workflow, or a substantive systemic
+rework. Assess the result as a whole, not its line count or claimed effort.
+
+Renaming, changing a logo or colors, a version bump, translating text, editing
+default settings, dependency updates, repackaging, isolated minor fixes, or
+combining such changes without materially different functionality do not,
+by themselves, qualify. Mere assertions of substantial changes do not qualify.
+
+A distributed substantial derivative must:
+(a) use a distinct product name and clearly state that it is an unofficial
+    derivative, not an official InfiniCrafterLocal release;
+(b) identify the upstream version or commit and prominently link to the official
+    source in its repository, primary download page and accompanying README;
+(c) describe its Substantial Changes concretely in a changelog or comparison;
+(d) preserve applicable authorship, attribution and this license, including in
+    source archives and accompanying binary-distribution materials;
+(e) provide the corresponding modified Project source, including build scripts
+    and dependency manifests needed to build the distributed version, under
+    this license, at no additional charge; external dependencies remain subject
+    to their own licenses and need not be bundled;
+(f) not imply endorsement by the Maintainer or present upstream work as its own;
+(g) not offer unmodified or merely cosmetic original-project builds as a separate
+    download under cover of the substantial derivative.
+
+If your changes do not satisfy this section, submit a pull request or seek
+explicit written permission before publishing an independent distribution.
+A derivative permitted by this section is still subject to this license; its
+recipients do not obtain unrestricted rights to redistribute the original.
+
+5. Contributions and permissions
+
+Pull requests to the official repository are the preferred way to improve the
+Project. Preference for PRs is not an obligation to submit private changes, a
+promise of acceptance, or a requirement to obtain approval for a derivative
+that already satisfies section 4.
+
+By intentionally submitting a contribution for inclusion, you confirm that you
+may license that contribution under these terms, unless a separate agreement
+says otherwise. You retain your authorship; submission does not assign ownership.
+Third-party material must be identified with its original license and notices.
+
+Requests for exceptions may be made through an issue or discussion in the
+official repository, addressed to Xipong. An exception must be explicitly granted
+in writing by the Maintainer; silence, an open issue or a pending PR is not consent.
+
+6. Third-party materials and generated user content
+
+Terraria, tModLoader, ParticleLibrary, Luminance, external libraries, models,
+services and separately licensed material retain their own rights and license
+terms. This license neither replaces those terms nor grants rights the Project's
+copyright holders do not possess. A separately identified third-party license
+controls the material it covers.
+
+This license does not claim ownership of your saves, personal configuration,
+recipes or generated item descriptions/images merely because you used the
+Project. Their distribution is not restricted by this license unless they
+contain copies of Project material covered here; model/service terms and any
+other third-party rights remain separate.
+
+7. Termination, reserved rights and disclaimer
+
+Permissions granted by this license end automatically if you breach its
+conditions. Ending those permissions does not extinguish rights that applicable
+law or GitHub's Terms of Service grant independently. For reinstatement or an
+exception, contact the Maintainer. All rights not expressly granted are reserved.
+
+THE PROJECT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. TO THE EXTENT PERMITTED BY APPLICABLE LAW, ITS COPYRIGHT
+HOLDERS AND CONTRIBUTORS ARE NOT LIABLE FOR CLAIMS, DAMAGES OR OTHER LIABILITY
+ARISING FROM THE PROJECT OR ITS USE.
+
+The English text in LICENSE is authoritative. LICENSE_RU.md is its Russian
+translation; in the event of a discrepancy, LICENSE controls.

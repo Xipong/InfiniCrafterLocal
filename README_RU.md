@@ -1,6 +1,8 @@
-# InfiniCrafterLocal v0.4.253 — локальный кандидат
+# InfiniCrafterLocal v0.4.254
 
-**0.4.253 (не опубликован):** explicit opt-in live concurrency выбранной entity, точные collision/return последствия в Author/Repair; report bounds 4000/3000 с сохранением длинного parent report; ограниченные повторы transient Codex transport; обычные `dart_raw…png` больше не скрываются как credentials; native cursor/held proxy использует готовый PNG точного экземпляра. Сохранённые механики и рецепты не меняются. [Контракт изменений и оставшиеся вопросы](docs/CURRENT_WORLD_TECHNICAL_FIXES_RU.md).
+**0.4.254:** добавлена [Source-Available License 1.0](LICENSE) ([русский перевод](LICENSE_RU.md)): оригинальные поставки — через официальный источник; зеркала, репаки и самостоятельные переиздания без существенных изменений запрещены. Рабочие форки для PR и личные изменения разрешены; существенные производные проекты — только на условиях раздела 4 LICENSE. Предпочтительный путь улучшений — [Pull Request](CONTRIBUTING.md). Gameplay, генерация, настройки, сохранения и рецепты не менялись.
+
+**0.4.253:** уточнены model-facing описания после трёх независимых холодных чтений Luna medium, сохранены 54 capabilities / 241 parameters. Также включены opt-in live concurrency, точные collision/return последствия, report bounds 4000/3000, ограниченные повторы transient Codex transport, token-boundary redaction и native cursor/held PNG точного экземпляра. [Контракт технических изменений и оставшиеся вопросы](docs/CURRENT_WORLD_TECHNICAL_FIXES_RU.md).
 
 **0.4.252:** новая анимированная иконка «Сердца кузни» в духе Calamity и плавный янтарно-золотисто-голубой градиент имени RU/EN. Иконка: 24 кадра / 2 секунды; имя: 4-секундная цветовая волна. Только оформление собственного station key; рецепт, цена, редкость, расход и generated-предметы не меняются. [Детали 0.4.252](docs/FORGE_HEART_0_4_252_RU.md).
 

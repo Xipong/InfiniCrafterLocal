@@ -2,6 +2,7 @@
 
 Начало работы — [README_RU.md](README_RU.md); все руководства — [docs/README_RU.md](docs/README_RU.md); переход от задачи к коду — [AGENT_INDEX_RU.md](AGENT_INDEX_RU.md).
 
+- [LICENSE](LICENSE) / [русский перевод](LICENSE_RU.md) — условия; [CONTRIBUTING.md](CONTRIBUTING.md) — PR и распространение.
 - [LocalGenerator](LocalGenerator/FOLDER_DOCS_RU.md) — Python authoring, validation, assets/storage и QA.
 - [ModSources](ModSources/FOLDER_DOCS_RU.md) — typed tModLoader executor.
 - [contracts](contracts/FOLDER_DOCS_RU.md) — generated schemas/manifests; [lowery.md](lowery.md) — generated boundary/mappings.

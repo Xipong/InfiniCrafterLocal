@@ -1,6 +1,8 @@
-# InfiniCrafterLocal v0.4.253 — setup/runbook
+# InfiniCrafterLocal v0.4.254 — setup/runbook
 
-Поставка 0.4.253 — мод **и** LocalGenerator вместе, включая [OpenRouter pin](docs/OPENROUTER_ROUTING_RU.md). При обновлении сохрани личный `config.env`, cache, recipes/PNG и данные миров; модели и внешние `ParticleLibrary`/`Luminance` не поставляются. Runtime-исправления не перерисовывают старые PNG, а guidance применяется к будущей генерации. Этот runbook владеет setup/run; остальные документы не повторяют его.
+Поставка 0.4.254 — мод **и** LocalGenerator вместе, включая [OpenRouter pin](docs/OPENROUTER_ROUTING_RU.md). При обновлении сохрани личный `config.env`, cache, recipes/PNG и данные миров; модели и внешние `ParticleLibrary`/`Luminance` не поставляются. Runtime-исправления не перерисовывают старые PNG, а guidance применяется к будущей генерации. Этот runbook владеет setup/run; остальные документы не повторяют его.
+
+Официальные загрузки — [GitHub Releases](https://github.com/Xipong/InfiniCrafterLocal/releases). Условия использования и распространения — [LICENSE](LICENSE) / [русский перевод](LICENSE_RU.md); улучшения предпочтительно через [PR](CONTRIBUTING.md).
 
 ## Установка
 
