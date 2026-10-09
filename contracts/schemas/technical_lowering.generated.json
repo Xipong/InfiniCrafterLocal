@@ -327,6 +327,16 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_concurrency",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
+      "outputs": [
+        "runtimeProgram.entities[].spawn.maxActive"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_damage",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",

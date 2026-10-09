@@ -12,6 +12,7 @@
 | Выбрать конкретного upstream-провайдера | [Строгий OpenRouter pin](OPENROUTER_ROUTING_RU.md) |
 | Подключить подписочный Codex image route | [OAuth и ограничения маршрута](CODEX_IMAGE_OAUTH_RU.md) |
 | Разобраться с формой запросов и задержкой | [Transport/request contract](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
+| Ясность Author и точный read-only Repair context | [Холодное чтение Luna и contract fixes](AUTHOR_PROMPT_CLARITY_RU.md) |
 | Проверить конкретный результат | [Recipe health](RECIPE_HEALTH_AND_CONTRACTS_RU.md) |
 
 ## Архитектура и изменение контрактов
@@ -29,6 +30,7 @@
 
 ## Visual, VFX и ассеты
 
+- [Технические исправления текущего мира](CURRENT_WORLD_TECHNICAL_FIXES_RU.md) — report bounds/parent transport, bounded Codex retry/redaction, native instance cursor; открытые returning/Bundle design-вопросы.
 - [Сердце кузни 0.4.252](FORGE_HEART_0_4_252_RU.md) — собственная анимированная иконка и градиентное имя; native atlas/tooltip owners и границы проверки.
 
 - [Качество контекста и source physics](ITEM_QUALITY_CONTEXT_RU.md) — exact parents, literal tooltips, motion reference и display pixel budget.

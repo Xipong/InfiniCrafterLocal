@@ -6,10 +6,13 @@ OpenAI validates the bearer token. No dependency on Hermes or the Codex CLI.
 from __future__ import annotations
 
 import base64
+from http.client import IncompleteRead, RemoteDisconnected
 from contextlib import contextmanager
 import re
 import secrets
+import ssl
 import threading
+from typing import Any, Callable, TypeVar
 from urllib import request as urlrequest
 from urllib import error as urlerror
 from urllib.parse import urlsplit
@@ -20,6 +23,12 @@ import os
 from pathlib import Path
 import tempfile
 import time
+
+from infini_local.core.env_utils import env_int
+from infini_local.core.http_io import (
+    HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds,
+    read_with_deadline, urlopen_no_redirect,
+)
 
 
 class CodexError(RuntimeError):
@@ -239,13 +248,26 @@ def redact_credentials(message: str, secrets: tuple[str, ...] = (), *, decode_un
     for secret in sorted(secrets, key=len, reverse=True):
         if secret:
             sanitized = sanitized.replace(secret, "[REDACTED]")
-    sanitized = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk-|rt_)[\w-]{12,})", "[REDACTED]", sanitized)
+    # Pattern-only refresh tokens must start at a token boundary. In particular,
+    # rt_ inside an ordinary *_dart_raw_* filename is not a refresh token.
+    # Explicit known secrets above remain redacted even inside other text;
+    # JWT/API-key recognition keeps its existing behavior.
+    sanitized = re.sub(r"(?:eyJ[\w-]+\.[\w-]+\.[\w-]+|sk-[\w-]{12,}|(?<![\w-])rt_[\w-]{12,})", "[REDACTED]", sanitized)
     return message if sanitized == decoded else sanitized
 
 
-def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict) -> CodexError:
+def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict, *, deadline: float | None = None) -> CodexError:
     # Decode first so JSON escapes cannot hide an echoed credential.
-    raw = exc.read(65536)
+    if deadline is None:
+        raw = exc.read(65536)
+    else:
+        try:
+            raw = read_with_deadline(exc, deadline=deadline, max_bytes=65536)
+        except HttpDeadlineExceeded:
+            raise
+        except (HttpResponseTooLarge, OSError, IncompleteRead):
+            remaining_seconds(deadline)
+            raw = b""  # Incomplete diagnostics must not replace the HTTP status.
     try:
         data = json.loads(raw)
         error = data.get("error", data) if isinstance(data, dict) else {}
@@ -263,6 +285,46 @@ def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict) -> Code
     return CodexError(f"OpenAI HTTP {exc.code}: {message or 'request rejected'}")
 
 
+_IMAGE_GENERATION_URL = "https://chatgpt.com/backend-api/codex/images/generations"
+_TRANSIENT_HTTP_STATUSES = frozenset({408, 409, 425, 500, 502, 503, 504})
+
+
+_ResponseValue = TypeVar("_ResponseValue")
+
+
+def _generation_request(req, *, deadline: float, attempts: int, payload: dict, headers: dict,
+                        read_response: Callable[[Any], _ResponseValue]) -> _ResponseValue:
+    """One transport owner: exact request, bounded sends and one shared deadline.
+
+    Auth/quota (including 429) and request-shape rejections remain terminal.
+    The image lifecycle must not multiply this budget with semantic retries.
+    """
+    for attempt in range(attempts):
+        remaining_seconds(deadline)
+        try:
+            with urlopen_no_redirect(req, deadline=deadline) as response:
+                return read_response(response)
+        except HttpDeadlineExceeded:
+            raise
+        except urlerror.HTTPError as exc:
+            try:
+                failure = _http_failure(exc, payload, headers, deadline=deadline)
+            finally:
+                exc.close()
+            if exc.code not in _TRANSIENT_HTTP_STATUSES or attempt + 1 == attempts:
+                raise failure from None
+        except (urlerror.URLError, OSError, IncompleteRead, RemoteDisconnected) as exc:
+            remaining_seconds(deadline)
+            if isinstance(getattr(exc, "reason", exc), ssl.SSLError):
+                raise CodexError("OpenAI TLS connection was rejected") from None
+            if attempt + 1 == attempts:
+                raise CodexError("OpenAI connection failed or timed out") from None
+        delay = min(1.5, 0.2 * (2 ** attempt))
+        time.sleep(min(delay, remaining_seconds(deadline)))
+        remaining_seconds(deadline)
+    raise CodexError("Invalid Codex transport attempt budget")
+
+
 def _json_request(url: str, payload: dict, *, method: str, headers: dict | None, timeout: float, limit: int, form: bool = False) -> dict:
     """Bounded JSON transport, no redirects, credentials never reach another origin."""
     _validated_https_origin(url)
@@ -276,20 +338,37 @@ def _json_request(url: str, payload: dict, *, method: str, headers: dict | None,
         else:
             raw_payload = json.dumps(payload).encode()
     req = urlrequest.Request(url, data=raw_payload, headers=merged, method=method)
+    generation = method == "POST" and url == _IMAGE_GENERATION_URL
+    deadline = time.monotonic() + timeout
     try:
-        with urlrequest.build_opener(_NoRedirect()).open(req, timeout=timeout) as response:
-            raw = response.read(limit + 1)
+        if generation:
+            attempts = env_int("INFINI_SPRITE_RETRIES", 2, lo=0, hi=8) + 1
+            raw = _generation_request(req, deadline=deadline, attempts=attempts, payload=payload, headers=merged,
+                                      read_response=lambda response: read_with_deadline(response, deadline=deadline, max_bytes=limit))
+        else:
+            # OAuth code exchange/refresh and catalog requests retain one send.
+            with urlrequest.build_opener(_NoRedirect()).open(req, timeout=timeout) as response:
+                raw = response.read(limit + 1)
         if len(raw) > limit:
             raise CodexError("OpenAI response exceeded the size limit")
         result = json.loads(raw)
         if not isinstance(result, dict):
             raise CodexError("OpenAI response must be a JSON object")
         return result
+    except HttpDeadlineExceeded:
+        raise
+    except HttpResponseTooLarge:
+        raise CodexError("OpenAI response exceeded the size limit") from None
     except urlerror.HTTPError as exc:
-        raise _http_failure(exc, payload, merged) from None
+        try:
+            raise _http_failure(exc, payload, merged) from None
+        finally:
+            exc.close()
     except (ValueError, UnicodeError):
         raise CodexError("OpenAI returned invalid JSON") from None
     except (urlerror.URLError, OSError):
+        if generation:
+            remaining_seconds(deadline)
         raise CodexError("OpenAI connection failed or timed out") from None
 
 
@@ -309,63 +388,64 @@ def post_sse(url: str, payload: dict, *, headers: dict | None = None, timeout: f
     merged = {"Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "infinicrafter/1.0", **(headers or {})}
     req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=merged, method="POST")
     deadline = time.monotonic() + timeout
-    try:
-        with urlrequest.build_opener(_NoRedirect()).open(req, timeout=timeout) as response:
-            total = 0
-            data_lines: list[bytes] = []
-            completed_items: list[dict] = []
-            text_deltas: list[str] = []
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise CodexError("Codex text stream timed out")
-                # urllib sets a socket timeout per read, not for the whole SSE
-                # request. Reduce every network read to the remaining budget.
-                sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
-                if sock is not None:
-                    sock.settimeout(max(0.001, remaining))
-                line = response.readline(256 * 1024 + 1)
-                if time.monotonic() > deadline:
-                    raise CodexError("Codex text stream timed out")
-                total += len(line)
-                if total > limit or len(line) > 256 * 1024:
-                    raise CodexError("Codex text stream exceeded its size limit")
-                if not line:
-                    break
-                if line.startswith(b"data:"):
-                    data_lines.append(line[5:].strip())
-                    continue
-                if line.strip() or not data_lines:
-                    continue
-                raw = b"\n".join(data_lines)
-                data_lines.clear()
-                if raw == b"[DONE]":
-                    break
-                try:
-                    event = json.loads(raw)
-                except (ValueError, UnicodeError):
-                    raise CodexError("Codex returned malformed stream data") from None
-                if not isinstance(event, dict):
-                    raise CodexError("Codex returned malformed stream data")
-                kind = event.get("type")
-                if kind == "response.output_item.done" and isinstance(event.get("item"), dict):
-                    completed_items.append(event["item"])
-                if kind == "response.output_text.delta" and isinstance(event.get("delta"), str):
-                    text_deltas.append(event["delta"])
-                if kind in {"response.failed", "response.incomplete", "error"}:
-                    raise CodexError("Codex text response failed or was incomplete")
-                if kind == "response.completed":
-                    result = event.get("response")
-                    if not isinstance(result, dict) or result.get("status") not in (None, "completed"):
-                        raise CodexError("Codex text completion was invalid")
-                    if not result.get("output"):
-                        result["output"] = completed_items or ([{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "".join(text_deltas)}]}] if text_deltas else [])
-                    return result
-            raise CodexError("Codex text stream ended before completion")
-    except urlerror.HTTPError as exc:
-        raise _http_failure(exc, payload, merged) from None
-    except (urlerror.URLError, OSError):
-        raise CodexError("Codex text connection failed or timed out") from None
+    attempts = env_int("INFINI_LLM_FALLBACK_NETWORK_FAILS", 2, lo=1, hi=10)
+    return _generation_request(req, deadline=deadline, attempts=attempts, payload=payload, headers=merged,
+                               read_response=lambda response: _read_sse_response(response, deadline=deadline, limit=limit))
+
+
+def _read_sse_response(response, *, deadline: float, limit: int) -> dict:
+    """Each transport attempt owns its partial stream; never combine attempts."""
+    total = 0
+    data_lines: list[bytes] = []
+    completed_items: list[dict] = []
+    text_deltas: list[str] = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise CodexError("Codex text stream timed out")
+        # urllib sets a socket timeout per read, not for the whole SSE
+        # request. Reduce every network read to the remaining budget.
+        sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+        if sock is not None:
+            sock.settimeout(max(0.001, remaining))
+        line = response.readline(256 * 1024 + 1)
+        if time.monotonic() > deadline:
+            raise CodexError("Codex text stream timed out")
+        total += len(line)
+        if total > limit or len(line) > 256 * 1024:
+            raise CodexError("Codex text stream exceeded its size limit")
+        if not line:
+            break
+        if line.startswith(b"data:"):
+            data_lines.append(line[5:].strip())
+            continue
+        if line.strip() or not data_lines:
+            continue
+        raw = b"\n".join(data_lines)
+        data_lines.clear()
+        if raw == b"[DONE]":
+            break
+        try:
+            event = json.loads(raw)
+        except (ValueError, UnicodeError):
+            raise CodexError("Codex returned malformed stream data") from None
+        if not isinstance(event, dict):
+            raise CodexError("Codex returned malformed stream data")
+        kind = event.get("type")
+        if kind == "response.output_item.done" and isinstance(event.get("item"), dict):
+            completed_items.append(event["item"])
+        if kind == "response.output_text.delta" and isinstance(event.get("delta"), str):
+            text_deltas.append(event["delta"])
+        if kind in {"response.failed", "response.incomplete", "error"}:
+            raise CodexError("Codex text response failed or was incomplete")
+        if kind == "response.completed":
+            result = event.get("response")
+            if not isinstance(result, dict) or result.get("status") not in (None, "completed"):
+                raise CodexError("Codex text completion was invalid")
+            if not result.get("output"):
+                result["output"] = completed_items or ([{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "".join(text_deltas)}]}] if text_deltas else [])
+            return result
+    raise CodexError("Codex text stream ended before completion")
 
 
 @contextmanager

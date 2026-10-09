@@ -2232,7 +2232,17 @@
                         "description": "Add percent/100 to Player.moveSpeed",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "maxRunSpeedBonusPxPerTick": {
                         "type": "number",
@@ -2268,7 +2278,17 @@
                         "description": "Add percent/100 to generic attack speed",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "genericKnockbackBonusPercent": {
                         "type": "number",
@@ -2277,7 +2297,17 @@
                         "description": "Add percent/100 to generic StatModifier knockback; not flat points",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "minionSlotsBonus": {
                         "type": "integer",
@@ -2304,7 +2334,17 @@
                         "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "ammoSaveChancePercent": {
                         "type": "number",
@@ -2313,7 +2353,17 @@
                         "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
                         "x-infini-units": "probability_percent",
                         "x-infini-semanticType": "probability_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "aggroPoints": {
                         "type": "integer",
@@ -2331,7 +2381,17 @@
                         "description": "Add percent/100 to Player.endurance damage reduction",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "genericArmorPenetrationPoints": {
                         "type": "number",
@@ -2349,7 +2409,17 @@
                         "description": "Add percent/100 to Player.whipRangeMultiplier",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "taggedSummonSourceDamageBonusPercent": {
                         "type": "number",
@@ -2358,7 +2428,17 @@
                         "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
                         "x-infini-units": "source_damage_percent",
                         "x-infini-semanticType": "source_damage_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "lightStrength": {
                         "type": "number",
@@ -2516,7 +2596,17 @@
                         "description": "Add percent/100 to Player.moveSpeed",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "maxRunSpeedBonusPxPerTick": {
                         "type": "number",
@@ -2552,7 +2642,17 @@
                         "description": "Add percent/100 to generic attack speed",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "genericKnockbackBonusPercent": {
                         "type": "number",
@@ -2561,7 +2661,17 @@
                         "description": "Add percent/100 to generic StatModifier knockback; not flat points",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "minionSlotsBonus": {
                         "type": "integer",
@@ -2588,7 +2698,17 @@
                         "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "ammoSaveChancePercent": {
                         "type": "number",
@@ -2597,7 +2717,17 @@
                         "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
                         "x-infini-units": "probability_percent",
                         "x-infini-semanticType": "probability_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "aggroPoints": {
                         "type": "integer",
@@ -2615,7 +2745,17 @@
                         "description": "Add percent/100 to Player.endurance damage reduction",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "genericArmorPenetrationPoints": {
                         "type": "number",
@@ -2633,7 +2773,17 @@
                         "description": "Add percent/100 to Player.whipRangeMultiplier",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "taggedSummonSourceDamageBonusPercent": {
                         "type": "number",
@@ -2642,7 +2792,17 @@
                         "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
                         "x-infini-units": "source_damage_percent",
                         "x-infini-semanticType": "source_damage_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "lightStrength": {
                         "type": "number",
@@ -2706,7 +2866,17 @@
                         "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "setBonusLifeRegenHpPerSecond": {
                         "type": "number",
@@ -2752,7 +2922,17 @@
                         "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "setBonusAmmoSaveChancePercent": {
                         "type": "number",
@@ -2761,7 +2941,17 @@
                         "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
                         "x-infini-units": "probability_percent",
                         "x-infini-semanticType": "probability_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "setBonusAggroPoints": {
                         "type": "integer",
@@ -2779,7 +2969,17 @@
                         "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
                         "x-infini-units": "percentage_points",
                         "x-infini-semanticType": "percentage_points",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       },
                       "setBonusGenericArmorPenetrationPoints": {
                         "type": "number",
@@ -2861,7 +3061,17 @@
                         "description": "Add this percent to the selected class damage additive modifier; 15 means +15%",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
-                        "x-infini-neutral": 0
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
                       }
                     },
                     "required": [
@@ -2924,7 +3134,7 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Default root binding spawn count per activation; event actions and target_and_fire select their own counts",
+                        "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended",
                         "x-infini-semanticType": "spawn_or_target_count"
                       },
                       "spreadRadians": {
@@ -2974,6 +3184,61 @@
                       "offsetPx",
                       "aim",
                       "placement"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "set_projectile_concurrency"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "maxActive": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 96,
+                        "description": "Maximum live projectiles for this owner, generated item ID and exact entity ID",
+                        "x-infini-units": "live projectiles",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "maxActive"
                     ]
                   }
                 },
@@ -3243,14 +3508,14 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 32,
-                        "description": "Maximum custom tile bounces",
+                        "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                         "x-infini-semanticType": "bounce_count"
                       },
                       "pierce": {
                         "type": "integer",
                         "minimum": -1,
                         "maximum": 100,
-                        "description": "Terraria Projectile.penetrate count; -1 means infinite",
+                        "description": "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
                         "x-infini-semanticType": "penetration_count"
                       },
                       "extraUpdates": {
@@ -3273,7 +3538,7 @@
                         "type": "integer",
                         "minimum": -1,
                         "maximum": 600,
-                        "description": "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds",
+                        "description": "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds",
                         "x-infini-units": "engine units: local NPC cooldown counts",
                         "x-infini-semanticType": "unitless_scalar"
                       }
@@ -5567,12 +5832,12 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 700
+          "maxLength": 4000
         },
         "playerExperience": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 500
+          "maxLength": 3000
         },
         "selfEvaluation": {
           "type": "object",

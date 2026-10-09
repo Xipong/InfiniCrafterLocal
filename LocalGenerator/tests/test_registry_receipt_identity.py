@@ -1,6 +1,8 @@
 """Receipt provenance cannot be forged even when equal-valued outputs are swapped."""
 
 from copy import deepcopy
+import re
+from typing import Any
 import pytest
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
@@ -8,9 +10,13 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
     validate_runtime_wire,
 )
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.technical_lowering import (
+    PRIMARY_BINDING_ROLE_LOWERER_ID,
+    PRIMARY_OWNER_LOWERER_ID,
+    audit_compiler_receipts,
+)
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 
 
 def _call(doc, fn):
@@ -480,3 +486,208 @@ def test_equipment_dependencies_refuse_invalid_composition_before_projection(fn,
 
 
 # Event blink mode is checked in the move_owner_on_event delay case.
+
+
+@pytest.mark.parametrize(
+    "fn,param,source_value,forged",
+    [
+        ("configure_item_stats", "valueCopper", 1, True),
+        ("configure_item_stats", "valueCopper", 1, 1.0),
+        ("configure_accessory", "defensePoints", 1, True),
+        ("configure_tool", "axePowerTooltipPercent", 5, True),
+        ("configure_accessory", "moveSpeedBonusPercent", 100, True),
+        ("configure_spawn", "speedPxPerUpdate", -0.0, 0.0),
+    ],
+)
+def test_source_receipt_projection_rejects_equal_numeric_representation_forgery(fn, param, source_value, forged):
+    source = build_capability_witness(fn)
+    call = _call(source, fn)
+    call["params"][param] = source_value
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    selected = next(r for r in rows if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param))
+    assert selected["value"] == forged  # Python equality is exactly the broken criterion.
+    selected["value"] = forged
+    segments = [int(v[1:-1]) if v.startswith("[") else v for v in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", selected["finalPath"])]
+    slot: Any = wire
+    for key in segments[:-1]:
+        slot = slot[key]
+    slot[segments[-1]] = forged
+    frozen = deepcopy((source, wire))
+    report = audit_compiler_receipts(rows, authored_document=source, final_document=wire)
+    assert not report["ok"], report
+    assert any("not the declared projection" in v["reason"] for v in report["violations"]), report
+    assert (source, wire) == frozen
+    # Coherently forged wire/receipt values do not authenticate their source.
+    standalone = audit_compiler_receipts(rows, final_document=wire)
+    assert standalone["authoredSourceChecked"] is False
+
+
+def test_source_receipt_projection_rejects_bool_for_identity_integer():
+    source = build_capability_witness("configure_spawn")
+    call = _call(source, "configure_spawn")
+    call["params"]["count"] = 1
+    wire = compile_runtime_program(source)
+    call["params"]["count"] = True
+    assert not validate_runtime_program(source)["ok"]  # Separate audit-only bug, not compiler admission.
+    report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)
+    assert not report["ok"], report
+    assert any("not the declared projection" in v["reason"] for v in report["violations"]), report
+
+
+@pytest.mark.parametrize(
+    "fixture,primary,lowerer",
+    [
+        ("workbench_blade", "nail", PRIMARY_OWNER_LOWERER_ID),
+        ("held_and_deployed", "deployed_lantern", PRIMARY_BINDING_ROLE_LOWERER_ID),
+    ],
+)
+def test_global_receipts_reject_valid_changed_primary_source(fixture, primary, lowerer):
+    source = build_runtime_fixture(fixture)
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    frozen_wire = deepcopy(wire)
+    source["runtimeProgram"]["primaryEntityId"] = primary
+    assert validate_runtime_program(source)["ok"]
+    frozen_source = deepcopy(source)
+    report = audit_compiler_receipts(
+        wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire,
+    )
+    assert not report["ok"], report
+    assert any(v.get("lowererId") == lowerer for v in report["violations"]), report
+    assert source == frozen_source and wire == frozen_wire
+
+
+@pytest.mark.parametrize("lowerer", [PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID])
+@pytest.mark.parametrize("mutation", ["drop", "duplicate", "duplicate-input", "status", "split-index", "missing-source"])
+@pytest.mark.parametrize("with_source", [False, True])
+def test_primary_global_receipts_require_exact_inputs_and_unique_coverage(lowerer, mutation, with_source):
+    source = build_runtime_fixture("held_and_deployed")
+    wire = compile_runtime_program(source)
+    rows = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
+    selected = next(r for r in rows if r.get("lowererId") == lowerer)
+    if mutation == "drop":
+        rows.remove(selected)
+    elif mutation == "duplicate":
+        rows.append(deepcopy(selected))
+    elif mutation == "duplicate-input":
+        selected["authoredPaths"].append(selected["authoredPaths"][-1])
+    elif mutation == "status":
+        selected["status"] = "delivered"
+    elif mutation == "split-index":
+        selected["authoredPaths"][-1] = selected["authoredPaths"][-1].replace("[1]", "[2]")
+        if lowerer == PRIMARY_BINDING_ROLE_LOWERER_ID:
+            # Binding 0 was authored before binding 1 but is sorted after it.
+            selected["finalPath"] = "runtimeProgram.bindings[1].role"
+            selected["value"] = wire["runtimeProgram"]["bindings"][1]["role"]
+    else:
+        selected["authoredPaths"] = [p.replace("[1]", "[999]") for p in selected["authoredPaths"]]
+    if not with_source and mutation == "missing-source":
+        # A wire-only audit cannot resolve Author indices: do not invent proof.
+        report = audit_compiler_receipts(rows, final_document=wire)
+        assert report["ok"] and report.get("authoredSourceChecked") is False
+    else:
+        report = audit_compiler_receipts(rows, authored_document=source if with_source else None, final_document=wire)
+        assert not report["ok"], report
+        assert any(v.get("lowererId") == lowerer for v in report["violations"]), report
+
+
+@pytest.mark.parametrize("mutation", ["source", "same-valued-source", "value-and-wire", "drop", "duplicate", "duplicate-input", "status"])
+@pytest.mark.parametrize("with_source", [False, True])
+def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation, with_source):
+    source = build_runtime_fixture("held_and_deployed")
+    if mutation == "same-valued-source":
+        # Another valid owner-attached entity shares the role, but not identity.
+        program = source["runtimeProgram"]
+        program["entities"].append({"id": "other_held", "kind": "owner_attached_projectile"})
+        for call in list(program["calls"]):
+            if call["target"] == "held_lantern_pike":
+                extra = deepcopy(call)
+                extra.update(id="other_" + call["id"], target="other_held")
+                program["calls"].append(extra)
+        program["calls"].append({
+            "id": "spawn_other", "fn": "spawn_entity_on_event", "target": "held_lantern_pike",
+            "params": {"event": "on_hit", "entity": "other_held", "count": 1,
+                       "spreadRadians": 0, "damageMultiplier": 1, "delayTicks": 0},
+        })
+        assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    rows = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
+    selected = _receipt(rows, "runtimeProgram.entities[1].visualRole")
+    if mutation == "source":
+        selected["authoredPaths"] = ["runtimeProgram.entities[2].kind"]
+    elif mutation == "same-valued-source":
+        other = _receipt(rows, "runtimeProgram.entities[4].visualRole")
+        assert selected["value"] == other["value"]
+        selected["authoredPaths"], other["authoredPaths"] = other["authoredPaths"], selected["authoredPaths"]
+    elif mutation == "value-and-wire":
+        selected["value"] = wire["runtimeProgram"]["entities"][1]["visualRole"] = "projectile"
+    elif mutation == "drop":
+        rows.remove(selected)
+    elif mutation == "duplicate":
+        rows.append(deepcopy(selected))
+    elif mutation == "duplicate-input":
+        selected["authoredPaths"] *= 2
+    else:
+        selected["status"] = "delivered"
+    report = audit_compiler_receipts(rows, authored_document=source if with_source else None, final_document=wire)
+    if not with_source and mutation in {"source", "same-valued-source"}:
+        assert report["ok"] and report["authoredSourceChecked"] is False
+    else:
+        assert not report["ok"], report
+        assert any(v.get("lowererId") == "entity_kind_to_visual_role" for v in report["violations"]), report
+
+
+@pytest.mark.parametrize("lowerer", [PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID])
+@pytest.mark.parametrize("with_source", [False, True])
+def test_primary_global_receipts_reject_coherently_forged_wire_values(lowerer, with_source):
+    source = build_runtime_fixture("held_and_deployed")
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    selected = next(r for r in rows if r.get("lowererId") == lowerer)
+    if lowerer == PRIMARY_OWNER_LOWERER_ID:
+        selected["value"] = wire["runtimeProgram"]["primaryOwner"] = "item_body"
+    else:
+        selected["value"] = wire["runtimeProgram"]["bindings"][0]["role"] = "primary"
+    report = audit_compiler_receipts(rows, authored_document=source if with_source else None, final_document=wire)
+    assert not report["ok"], report
+    assert any(v.get("lowererId") == lowerer for v in report["violations"]), report
+
+
+@pytest.mark.parametrize("mutation", ["swap-source-paths", "swap-wire-ids"])
+def test_primary_global_receipts_reject_equal_role_cross_binding_identity(mutation):
+    source = build_runtime_fixture("equipment_tool_combat")
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    roles = [r for r in rows if r.get("lowererId") == PRIMARY_BINDING_ROLE_LOWERER_ID]
+    assert all(r["value"] == "primary" for r in roles)
+    if mutation == "swap-source-paths":
+        roles[0]["authoredPaths"], roles[1]["authoredPaths"] = roles[1]["authoredPaths"], roles[0]["authoredPaths"]
+    else:
+        bindings = wire["runtimeProgram"]["bindings"]
+        bindings[0]["id"], bindings[1]["id"] = bindings[1]["id"], bindings[0]["id"]
+    report = audit_compiler_receipts(rows, authored_document=source, final_document=wire)
+    assert not report["ok"]
+    assert any("authored identity" in v["reason"] for v in report["violations"]), report
+    # The unchanged role values alone cannot expose this forged ownership.
+    standalone = audit_compiler_receipts(rows, final_document=wire)
+    assert standalone["ok"] and standalone["authoredSourceChecked"] is False
+
+
+@pytest.mark.parametrize("fixture", NON_ARCHETYPAL_FIXTURES)
+def test_global_receipts_accept_real_compiler_fixtures_without_mutation(fixture):
+    source = build_runtime_fixture(fixture)
+    source["runtimeProgram"]["entities"].reverse()
+    source["runtimeProgram"]["bindings"].reverse()
+    frozen_source = deepcopy(source)
+    wire = compile_runtime_program(source)
+    frozen_wire = deepcopy(wire)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    assert audit_compiler_receipts(rows, authored_document=source)["ok"]
+    report = audit_compiler_receipts(rows, final_document=wire)
+    assert report["ok"] and report.get("authoredSourceChecked") is False
+    assert validate_runtime_wire(wire)["ok"]
+    assert source == frozen_source and wire == frozen_wire

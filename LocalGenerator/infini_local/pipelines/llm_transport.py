@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 from infini_local.core.env_utils import env_str
 from infini_local.core.http_io import HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds, read_with_deadline, urlopen_no_redirect
-from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY
+from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, static_instruction_prefix_parts
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
     CODEX_LLM_MODEL,
@@ -1205,7 +1205,12 @@ def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict
         prefix_packet.pop("prompt_cache_key", None)  # Never hash our own routing hint.
         prefix_packet["messages"] = prefix_packet["messages"][:index + 1]
         prefix_packet["messages"][index]["content"] = messages[index]["content"][:chars]
+        static_prefix = static_instruction_prefix_parts(payload)
+        if static_prefix is not None:
+            prefix_packet["messages"][index] = {"role": "developer", "content": static_prefix[1]}
         stable = {"provider": "openai_codex", "wire": _request_payload(prefix_packet)}
+        if static_prefix is not None:
+            stable["framing"] = {"version": 1, "authority": "builder-declared-static-instructions"}
     else:
         stable = {
             "model": model,
@@ -1505,7 +1510,15 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
     ))
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if active_llm_provider(context) == "openai_codex":
+        # Validate the original typed envelope before JSON copying can coerce an
+        # invalid declared boundary (e.g. tuple messages) into an admitted shape.
+        static_instruction_prefix_parts(payload)
     out = _clean_llm_payload(payload)
+    if active_llm_provider(context) == "openai_codex" and PROMPT_CACHE_METADATA_KEY in payload:
+        # Native adapter-only metadata; retain even invalid explicit declarations
+        # so the authority validator refuses them instead of silently downgrading.
+        out[PROMPT_CACHE_METADATA_KEY] = copy.deepcopy(payload[PROMPT_CACHE_METADATA_KEY])
     # Routing belongs to the selected profile, not a stale caller payload.
     out.pop("provider", None)
     upstream = _openrouter_provider(context)
@@ -1550,12 +1563,26 @@ def _usage_fields(result: dict[str, Any]) -> dict[str, Any]:
         return None
 
     cached = counter("cached_tokens")
+    output_details = usage.get("output_tokens_details")
+    reasoning = output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
+    attribution = usage.get("attribution")
+    request_fields = attribution.get("request_fields") if isinstance(attribution, dict) else None
+    instructions = request_fields.get("instructions") if isinstance(request_fields, dict) else None
+
+    def instruction_counter(name: str) -> int | None:
+        value = instructions.get(name) if isinstance(instructions, dict) else None
+        return value if type(value) is int and value >= 0 else None
+
     return {
         "inputTokens": int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0),
         "outputTokens": int(usage.get("output_tokens") or usage.get("completion_tokens") or 0),
         "cachedInputTokens": cached,
         "cacheWriteTokens": counter("cache_write_tokens"),
         "cacheHit": (cached > 0) if cached is not None else None,
+        "reasoningTokens": reasoning if type(reasoning) is int and reasoning >= 0 else None,
+        "instructionsInputTokens": instruction_counter("input_tokens"),
+        "instructionsCachedInputTokens": instruction_counter("cached_tokens"),
+        "instructionsCacheWriteTokens": instruction_counter("cache_write_tokens"),
     }
 
 

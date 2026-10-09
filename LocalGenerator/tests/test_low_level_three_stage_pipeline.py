@@ -383,7 +383,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     else:
         prompt = requests[0]["messages"][1]["content"]
         assert '"currentItem"' not in prompt and '"item_use"' in prompt and '"item_stats"' in prompt
-        assert '1999' not in prompt
+        assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
         assert calls["item_use"]["params"]["useStyle"] == "shoot"
         assert calls["item_use"]["params"]["heldSpriteVisibilityHint"] == "immediate"

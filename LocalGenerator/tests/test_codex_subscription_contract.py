@@ -135,9 +135,16 @@ def test_subscription_author_schema_types_every_const_without_changing_literal_c
     assert request == before
     assert wire["model"] == "gpt-6-sol"
     assert wire["text"]["format"]["type"] == "json_schema" and wire["text"]["format"]["strict"] is True
-    assert [item["content"][0]["text"] for item in wire["input"]] == [
-        item["content"] for item in request["messages"] if item["role"] != "system"
-    ]
+    if stage == "author":
+        assert [item["role"] for item in wire["input"]] == ["developer", "user"]
+        static, dynamic = [item["content"][0]["text"] for item in wire["input"]]
+        # Only object member framing changed; restore the exact logical text.
+        assert static[:-1] + "," + dynamic[1:] == request["messages"][1]["content"]
+        assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor"}
+    else:
+        assert [item["content"][0]["text"] for item in wire["input"]] == [
+            item["content"] for item in request["messages"] if item["role"] != "system"
+        ]
     assert local == (contract.author_item_response_schema() if stage == "author" else contract.author_item_repair_response_schema())
 
 
@@ -605,6 +612,32 @@ def test_subscription_rejects_encoded_credential_echo(subscription, encoding, co
     with pytest.raises(auth.CodexError, match="credential") as caught:
         backend.generate_chat({"model": "test-model", "messages": [{"role": "user", "content": "test"}]}, timeout=3)
     assert credentials.access_token not in str(caught.value)
+
+
+@pytest.mark.parametrize("present,value", [(False, None), (True, 168), *[(True, x) for x in [True, -1, 1.5, "168", None, [], {}]]])
+def test_subscription_cache_instruction_attribution_survives_usage_projection(subscription, present, value, monkeypatch, tmp_path):
+    response, credentials = subscription
+    response["usage"] = {"input_tokens": 22000, "output_tokens": 120,
+        "input_tokens_details": {"cached_tokens": 21000}, "output_tokens_details": {"reasoning_tokens": 100}}
+    if present:
+        response["usage"]["attribution"] = {"request_fields": {"instructions": {
+            "input_tokens": value, "cached_tokens": value, "cache_write_tokens": 0, "output_tokens": 0,
+            "metadata": credentials.access_token,
+        }}, "items": {credentials.refresh_token: {"input_tokens": 10}}}
+    result = backend.generate_chat({"model": "gpt-6.1-sol", "messages": [{"role": "user", "content": "test"}]}, timeout=3)
+    diagnostic = llm._usage_fields(result)
+    assert diagnostic["reasoningTokens"] == 100
+    assert diagnostic["instructionsInputTokens"] == (value if present and type(value) is int and value >= 0 else None)
+    assert diagnostic["instructionsCachedInputTokens"] == (value if present and type(value) is int and value >= 0 else None)
+    assert diagnostic["instructionsCacheWriteTokens"] == (0 if present else None)
+    assert credentials.access_token not in repr(result) and credentials.refresh_token not in repr(result)
+    from infini_local.storage import trace_runtime
+    monkeypatch.setattr(trace_runtime, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
+    llm.log_event("info", "LLM usage", diagnostic)
+    persisted = json.loads((tmp_path / "events.ndjson").read_text())["payload"]
+    assert persisted == diagnostic
+    assert credentials.access_token not in repr(persisted) and credentials.refresh_token not in repr(persisted)
 
 
 @pytest.mark.parametrize("scenario,value", [

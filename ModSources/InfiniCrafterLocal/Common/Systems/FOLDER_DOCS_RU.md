@@ -1,5 +1,7 @@
 # Common/Systems
 
+- [GeneratedCursorItemPresentationSystem.cs](GeneratedCursorItemPresentationSystem.cs) — exact selected generated instance в native cursor preview, только готовый PNG и verified IL source/tint owner; foreign/missing icon остаётся native. Unload снимает hook. [Контракт](../../../../docs/CURRENT_WORLD_TECHNICAL_FIXES_RU.md).
+
 - [InfiniCraftWorldExitSystem.cs](InfiniCraftWorldExitSystem.cs) — загрузка world registry и безопасное завершение transient craft state при выходе.
 - [GeneratedStationEscrowStateSystem.cs](GeneratedStationEscrowStateSystem.cs) — world-owned escrow/outcome journal, а не ephemeral client cache.
 - [GeneratedPlacementLedgerSystem.cs](GeneratedPlacementLedgerSystem.cs) — tile/wall placement groups, accepted-placement receipt для однократного списания stack, world save/load и client sync.

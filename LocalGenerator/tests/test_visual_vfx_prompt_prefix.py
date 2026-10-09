@@ -77,7 +77,7 @@ def test_prompt_style_reaches_all_real_stage_requests_without_changing_contracts
             system = request["messages"][0]["content"]
             assert "Target game: Terraria (tModLoader)" in system
             assert ("Terraria Like art direction" in system) == (style == "Terraria Like")
-            assert "frozen fields during Repair" in system
+            assert "accepted gameplay or frozen fields" in system
             if style == "Terraria Like":
                 for phrase in ("compact coherent palette", "discrete shadow/highlight bands", "1x gameplay size", "soft-alpha"):
                     assert phrase in system
@@ -159,7 +159,7 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
                 payload, messages = captured[0]
                 assert json.loads(messages[1]["content"]) == payload
                 assert payload["outputSchema"] == vfx._vfx_repair_schema_from_packet(packet)
-                assert set(payload) == {"task", "rules", "runtimeVocabularyReadOnly", "item", "acceptedVisualKitReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
+                assert set(payload) == {"task", "rules", "runtimeVocabularyReadOnly", "item", "acceptedVisualKitReadOnly", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
                 keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS
                 if not malformed:
                     assert payload["brokenFragments"]["globals"] == {"effectMagnitude": 0.5}
@@ -167,12 +167,13 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
             else:
                 payload = packet
                 keys = vfx.VFX_PROMPT_STATIC_KEYS
-                assert set(payload) == {"schema", "rules", "runtimeVocabulary", "item", "parents", "acceptedVisualKit", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"}
+                assert set(payload) == {"schema", "rules", "runtimeVocabulary", "item", "parents", "acceptedVisualKit", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"}
                 assert payload["parents"][0]["name"] == f"parent {fixture}"
                 assert payload["acceptedVisualKit"] == data["visualKit"]
                 assert {**payload["runtimeVocabulary"], **payload["runtimeSurface"]} == vfx.vfx_director_surface(data)
                 assert payload["outputSchema"] == vfx.vfx_director_schema(data)
                 assert list(payload["runtimeSurface"])[-2:] == ["runtimePairs", "runtimeVisualRoles"]
+            assert payload["acceptedGameplayReadOnly"] == data["gameplay"]
             schema_key = "outputSchema"
         if repair:
             assert payload["exactErrors"] == errors

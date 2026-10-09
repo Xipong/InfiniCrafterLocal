@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
+from infini_local.core.llm_prompt_cache import static_instruction_prefix_parts
 from infini_local.services import codex_auth
 
 RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
@@ -52,12 +53,20 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
     messages = packet.get("messages")
     if not isinstance(messages, list) or not messages:
         raise codex_auth.CodexError("Codex text requires an authored stage packet")
-    for message in messages:
+    try:
+        static_prefix = static_instruction_prefix_parts(packet)
+    except ValueError as error:
+        raise codex_auth.CodexError("Invalid Codex static instruction prefix") from error
+    for index, message in enumerate(messages):
         if not isinstance(message, dict) or message.get("role") not in {"system", "developer", "user", "assistant"} or not isinstance(message.get("content"), str):
             raise codex_auth.CodexError("Codex text received an unsupported message shape")
         role, content = message["role"], message["content"]
         if role == "system":
             instructions.append(content)
+        elif static_prefix is not None and index == static_prefix[0]:
+            for split_role, split_text in (("developer", static_prefix[1]), ("user", static_prefix[2])):
+                inputs.append({"type": "message", "role": split_role,
+                               "content": [{"type": "input_text", "text": split_text}]})
         else:
             content_type = "output_text" if role == "assistant" else "input_text"
             inputs.append({"type": "message", "role": role, "content": [{"type": content_type, "text": content}]})
@@ -83,7 +92,8 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
             # in instructions after system messages have been projected there.
             # Keep this transport-only prefix invariant: recipe text containing
             # "JSON" must not remove a message before the shared static prefix.
-            # Every authored message remains verbatim and in its original order.
+            # Apart from the explicitly authorized JSON member framing above,
+            # authored content and message order are preserved.
             inputs.insert(0, {"type": "message", "role": "developer", "content": [
                 {"type": "input_text", "text": "JSON response."},
             ]})
@@ -160,6 +170,16 @@ def generate_chat(packet: dict[str, Any], *, timeout: int) -> dict[str, Any]:
         }
         if safe_counters:
             safe_usage[details_key] = safe_counters
+    # Retain only the explicitly named instruction-field counters. Opaque item
+    # IDs/metadata are not source bindings and may carry provider-controlled text.
+    attribution = usage.get("attribution")
+    request_fields = attribution.get("request_fields") if isinstance(attribution, dict) else None
+    instructions = request_fields.get("instructions") if isinstance(request_fields, dict) else None
+    if isinstance(instructions, dict):
+        counters = {key: instructions[key] for key in ("input_tokens", "cached_tokens", "cache_write_tokens", "output_tokens")
+                    if type(instructions.get(key)) is int and instructions[key] >= 0}
+        if counters:
+            safe_usage["attribution"] = {"request_fields": {"instructions": counters}}
     return {
         "choices": [{"message": {"role": "assistant", "content": content}}],
         "usage": safe_usage,

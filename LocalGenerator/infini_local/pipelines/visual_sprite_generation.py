@@ -487,6 +487,11 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                 result = replace(result, public_path=published, status=status, failure_phase="")
                 return _finish_image_request(data, request, result, attempts)
         except Exception as exc:
+            # The legacy Codex adapter wraps OSError, including TimeoutError.
+            # Restore transport deadline attribution without retrying the image
+            # lifecycle (or misreporting a deadline as a local PNG write fault).
+            if isinstance(exc, ImageOutputIOError) and isinstance(exc.__cause__, HttpDeadlineExceeded):
+                exc = exc.__cause__
             attempts.append({"attempt": attempt, "ok": False, "error": repr(exc), "phase": phase})
             result = replace(result, public_path="", status="failed", error=repr(exc), failure_phase=phase)
             trace_event("error", f"IMAGE:{request.audit_role}", "sprite generation attempt failed", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND}, error=repr(exc))

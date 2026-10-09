@@ -172,6 +172,21 @@ public sealed class GeneratedParentSummarySpec
             .Take(maxItems)
             .ToArray();
 
+    private static string BoundedReport(string? value, int maxScalars)
+    {
+        // Match the Author schema's Unicode-character allowance, not UTF-16
+        // storage units. Keep full admitted reports without cutting a surrogate.
+        string text = (value ?? "").Trim();
+        int scalars = 0, end = 0;
+        foreach (Rune rune in text.EnumerateRunes())
+        {
+            if (scalars == maxScalars) break;
+            end += rune.Utf16SequenceLength;
+            scalars++;
+        }
+        return end == text.Length ? text : text[..end];
+    }
+
     public void Normalize()
     {
         Schema = Bounded(Schema, 64);
@@ -179,8 +194,8 @@ public sealed class GeneratedParentSummarySpec
             throw new InvalidDataException($"Unsupported generated parent summary schema '{Schema}'");
         Name = Bounded(Name, 80);
         Identity = Bounded(Identity, 180);
-        Description = Bounded(Description, 700);
-        PlayerExperience = Bounded(PlayerExperience, 500);
+        Description = BoundedReport(Description, 4000);
+        PlayerExperience = BoundedReport(PlayerExperience, 3000);
         NotableEffects = BoundedArray(NotableEffects, 12, 280);
         RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
         RuntimeEntityIds = BoundedArray(RuntimeEntityIds, 24, 48);

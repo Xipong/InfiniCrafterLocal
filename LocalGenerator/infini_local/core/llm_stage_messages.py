@@ -33,8 +33,8 @@ def generation_system_suffix() -> str:
     direction = generation_art_direction()
     return (
         "\n\nTarget game: Terraria (tModLoader). Create a generated item or its presentation assets for that game, "
-        "not a standalone illustration. Preserve literal parent identity and this stage's exact output contract. "
-        "Art direction is advisory, never permission to change accepted gameplay or frozen fields during Repair."
+        "not a standalone illustration. Preserve literal parent identity and the exact requested output contract. "
+        "Art direction is advisory, never permission to change accepted gameplay or frozen fields."
     ) + (f"\n\n{direction}" if direction else "")
 
 

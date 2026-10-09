@@ -22,6 +22,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
+from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import _has_non_neutral_generated_buff
 
@@ -47,7 +48,9 @@ _VISUAL_KEYS = frozenset({
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
     "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
 })
-_SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"})
+_SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"}) | frozenset(
+    spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["set_projectile_concurrency"].params.items()
+)
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
 _HITBOX_KEYS = frozenset({"widthPx", "heightPx", "drawScale", "hitboxScale"})
@@ -279,8 +282,18 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             component = _validate_component_shape(entity.get(component_name), allowed_keys, f"{entity_path}.{component_name}", errors)
             if component_name == "visual" and component is not None:
                 _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
-            if component_name == "spawn" and component is not None and "overTarget" in component:
-                _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
+            if component_name == "spawn" and component is not None:
+                concurrency = CAPABILITY_REGISTRY["set_projectile_concurrency"]
+                for name, spec in concurrency.params.items():
+                    key = spec.wire_name or name
+                    if key not in component:
+                        continue  # Legacy omission adds no admission cap.
+                    path = f"{entity_path}.spawn.{key}"
+                    if kind not in concurrency.target_kinds or strict_schema_errors(component[key], spec.schema(), path=path):
+                        errors.append({"path": path, "code": "invalid_projectile_concurrency",
+                                       "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
+                if "overTarget" in component:
+                    _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:
                 _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
         if not entity_id:
@@ -458,7 +471,6 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if isinstance(placement, Mapping):
                 _reject_unknown(placement, _PLACEMENT_KEYS, f"{binding_path}.usePolicy.action.placement", errors)
                 if "placedBody" in placement:
-                    from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
                     specs = CAPABILITY_REGISTRY["present_placed_item_sprite"].params
                     body_schema = {"type": "object", "additionalProperties": False,
                                    "properties": {name: spec.schema() for name, spec in specs.items() if name != "placementCallId"},

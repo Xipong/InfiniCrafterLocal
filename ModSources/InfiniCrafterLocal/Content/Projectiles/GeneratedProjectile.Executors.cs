@@ -153,11 +153,11 @@ public sealed partial class GeneratedProjectile
             Projectile.damage = Math.Max(0, (int)MathF.Round(Projectile.damage * multiplier));
             Projectile.knockBack *= multiplier;
             Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
-            Projectile.velocity = direction * Math.Max(1f, _entity.Spawn.SpeedPxPerTick) * multiplier;
+            Projectile.velocity = direction * _entity.Spawn.SpeedPxPerTick * multiplier;
             Projectile.tileCollide = _entity.Collision.TileCollide;
             RunRuntimeEvent(RuntimeEventKind.OnRelease, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnRelease, Projectile.Center);
-            if (ratio >= 0.999f)
+            if (_chargeTicks >= chargeDuration)
             {
                 RunRuntimeEvent(RuntimeEventKind.ChannelComplete, null, 0);
                 EmitAndSyncVfxEvent(RuntimeEventKind.ChannelComplete, Projectile.Center);

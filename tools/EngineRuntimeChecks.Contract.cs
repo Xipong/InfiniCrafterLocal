@@ -8,6 +8,80 @@ using InfiniCrafterLocal.Common.Models;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void LongerGeneratedReportSurvivesParentSummaryTransport()
+    {
+        // Feed raw JSON to the real reader: normalizing ToJson first would hide
+        // the old 700/500 truncation before the observer sees the input.
+        var source = GeneratedItemData.Placeholder();
+        JsonObject raw = JsonNode.Parse(source.ToJson())!.AsObject();
+        string description = new string('д', 1200);
+        string experience = new string('п', 900);
+        raw["generatedParentSummary"]!["description"] = description;
+        raw["generatedParentSummary"]!["playerExperience"] = experience;
+        var data = GeneratedItemData.FromJson(raw.ToJsonString())
+            ?? throw new InvalidOperationException("longer parent report JSON rejected");
+        Equal(description, data.GeneratedParentSummary.Description, "parent description not clipped");
+        Equal(experience, data.GeneratedParentSummary.PlayerExperience, "parent experience not clipped");
+        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() })
+        {
+            var copy = GeneratedItemData.FromJson(json)
+                ?? throw new InvalidOperationException("longer report round trip rejected");
+            Equal(description, copy.GeneratedParentSummary.Description, "description survives native serializers");
+            Equal(experience, copy.GeneratedParentSummary.PlayerExperience, "experience survives native serializers");
+        }
+        string saveReference = data.ToPlayerSaveJson();
+        var restoredReference = GeneratedItemData.FromPlayerSaveJson(saveReference)
+            ?? throw new InvalidOperationException("longer report broke compact player reference");
+        Equal(data.Id, restoredReference.Id, "compact player reference identity retained");
+        Equal(false, saveReference.Contains(description, StringComparison.Ordinal), "player save remains reference-only");
+        // Python JSON Schema counts Unicode scalar values; do not halve the
+        // admitted report allowance for astral characters at the CLR boundary.
+        string astralDescription = string.Concat(Enumerable.Repeat("🌄", 4000));
+        string astralExperience = string.Concat(Enumerable.Repeat("🌄", 3000));
+        raw["generatedParentSummary"]!["description"] = astralDescription;
+        raw["generatedParentSummary"]!["playerExperience"] = astralExperience;
+        var astral = GeneratedItemData.FromJson(raw.ToJsonString())
+            ?? throw new InvalidOperationException("astral report rejected");
+        Equal(astralDescription, astral.GeneratedParentSummary.Description, "scalar-count description retained");
+        Equal(astralExperience, astral.GeneratedParentSummary.PlayerExperience, "scalar-count experience retained");
+        Equal(source.Gameplay.Damage, data.Gameplay.Damage, "report expansion keeps damage");
+        Equal(source.RuntimeProgram.ItemEntityId, data.RuntimeProgram.ItemEntityId, "report expansion keeps item identity");
+    }
+
+    private static void ExpandedScalarReportKeepsNativeCloneAndBoundedTransport()
+    {
+        WithGeneratedPrefixScope(() => {
+            var raw = JsonNode.Parse(File.ReadAllText("tools/fixtures/current-world-1647275982-cursor.json"))!.AsObject();
+            string description = string.Concat(Enumerable.Repeat("🌄", 4000));
+            string experience = string.Concat(Enumerable.Repeat("🌄", 3000));
+            raw["generatedParentSummary"]!["description"] = description;
+            raw["generatedParentSummary"]!["playerExperience"] = experience;
+            raw["generatedParentSummary"]!["notableEffects"] = new JsonArray(
+                Enumerable.Range(0, 12).Select(_ => (JsonNode?)JsonValue.Create(string.Concat(Enumerable.Repeat("🌄", 140)))).ToArray());
+            var admitted = GeneratedItemData.FromJson(raw.ToJsonString())
+                ?? throw new InvalidOperationException("expanded scalar report rejected");
+            var host = GeneratedPrefixHost(admitted);
+            var clone = (InfiniCrafterLocal.Content.Items.GeneratedItem)host.Item.Clone().ModItem;
+            Equal(admitted.Id, clone.Data.Id, "expanded report native clone keeps definition identity");
+            Equal(description, clone.Data.GeneratedParentSummary.Description, "native clone retains full description");
+            Equal(experience, clone.Data.GeneratedParentSummary.PlayerExperience, "native clone retains full experience");
+            string wire = admitted.ToNetworkJson();
+            Equal(true, System.Text.Encoding.UTF8.GetByteCount(wire) > 100_000, "fixture exercises former byte ceiling");
+            var copy = GeneratedItemData.FromJson(wire) ?? throw new InvalidOperationException("expanded wire rejected");
+            Equal(description, copy.GeneratedParentSummary.Description, "network retains scalar-max description");
+            Equal(experience, copy.GeneratedParentSummary.PlayerExperience, "network retains scalar-max experience");
+            Equal(false, ReferenceEquals(clone.Data.RuntimeProgram, admitted.RuntimeProgram), "clone mutable graph independent");
+            // Oversized non-report metadata still meets a finite transport refusal;
+            // a local native clone is not a network send and must keep its identity.
+            admitted.Canonical.Modifiers = new[] { new string('a', 300_000) };
+            bool refused = false;
+            try { admitted.ToNetworkJson(); } catch (InvalidDataException) { refused = true; }
+            Equal(true, refused, "network retains finite definition ceiling");
+            clone = (InfiniCrafterLocal.Content.Items.GeneratedItem)host.Item.Clone().ModItem;
+            Equal(admitted.Id, clone.Data.Id, "local clone independent of network admission ceiling");
+        });
+    }
+
     private static void NeutralItemOmissionsPreserveProjection()
     {
         // Build an actual wire document first; ToJson normalizes its source and

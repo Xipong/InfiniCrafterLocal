@@ -33,9 +33,10 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "primaryRule": (
             "Select one existing entity id for lifecycle/held representation, not by damage or mere spawning. "
             "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
-            "the same entity, contactDamage=false and configure_item_use hides the item graphic, that exact "
-            "spawn target owns lifecycle/held representation. Otherwise another entity requires explicitly "
-            "authored lifecycle/held ownership. Binding/call rows do not carry role; Lowery derives wire roles "
+            "the same entity, all have contactDamage=false and configure_item_use.hideUseGraphic=true, select "
+            "that exact spawn target. This selector does not create movement, a controller, damage or a concurrency cap. "
+            "A movement/controller that claims held-projectile representation does so only for this primary entity. "
+            "Binding/call rows do not carry role; Lowery derives wire roles "
             "by exact target equality with primaryEntityId."
         ),
     }
@@ -68,6 +69,7 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
 
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
+    report_properties = _author_schema()["properties"]["realization"]["properties"]
     return {
         # This order is model-facing: non-binding intent, executable mechanics,
         # then the same Author's account and self-evaluation of the result.
@@ -103,8 +105,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                     "For alternate placement, identify the placed target's meaningful utility worth "
                     "escrowing the same generated item: accepted placement removes it from inventory "
                     "and makes it unavailable until the tile breaks and returns it. Explicit useful "
-                    "placement and multiple purposeful actions remain legal. These preferences do not "
-                    "authorize Repair to redesign existing authored choices."
+                    "placement and multiple purposeful actions remain legal."
                 ),
             }],
         },
@@ -117,8 +118,16 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "existing compatible entity id from fn.targets", "params": {"all non-optional and conditional params": "exact card keys and typed values; optional fields only when selected"}}],
         },
         "realization": {
-            "description": "final interpretation of the emitted runtimeProgram, not an observed execution",
-            "playerExperience": "what the final executable program lets the player experience",
+            "description": (
+                "final interpretation of the emitted runtimeProgram, not an observed execution; "
+                f"string minLength={report_properties['description']['minLength']}, "
+                f"maxLength={report_properties['description']['maxLength']} Unicode code points"
+            ),
+            "playerExperience": (
+                "what the final executable program lets the player experience; "
+                f"string minLength={report_properties['playerExperience']['minLength']}, "
+                f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
+            ),
             "selfEvaluation": {
                 "planVsProgram": {
                     "verdict": "aligned|changed|uncertain",
@@ -149,7 +158,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "weapon archetype selector",
             "family-derived movement/attachment/delivery",
             "compiler receipts",
-            "visual or VFX gameplay invention",
+            "gameplay claimed only in prose rather than runtimeProgram",
         ],
     }
 
@@ -161,10 +170,8 @@ def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) 
         " JSON Schema nullable transport: only when the supplied response schema requires an otherwise "
         "optional object property and explicitly allows null, emit null to represent omission. "
         "This is transport encoding, not an authored value or permission to default invalid values. "
-        "In a full Author object omission has only its declared contract meaning; in a Repair patch "
-        "omission means no change and preserves frozen values and accepted absences. "
+        "Omission retains its meaning in the requested output contract. "
         "Never use this rule for unknown keys, required non-null fields, or array elements. "
-        "For Gameplay Repair, the required realizationReplacement must remain a complete non-null report. "
         "If no JSON Schema is supplied (json_object/off), omit optional fields instead; explicit null "
         "is not an omission alias."
     )

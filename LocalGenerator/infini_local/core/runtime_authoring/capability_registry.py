@@ -305,9 +305,18 @@ class ParamSpec:
         if self.consumer_storage == "float64":
             return {"storage": "float64", "rule": "finite_double_no_normalization",
                     "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."}
-        return {"storage": self.consumer_storage, "neutral": self.neutral,
-                "rule": "nonneutral_must_remain_nonneutral",
-                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."}
+        constraint = {"storage": self.consumer_storage, "neutral": self.neutral,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."}
+        if self.wire_divisor != 1 or self.wire_multiplier != 1:
+            constraint["wireProjection"] = {"divisor": self.wire_divisor, "multiplier": self.wire_multiplier}
+            constraint["meaning"] = (
+                "Apply the declared wire projection in binary64, then check float32 consumer storage. "
+                "A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. "
+                "This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. "
+                "No rounding or replacement is performed by validation."
+            )
+        return constraint
 
     def consumer_value_error(self, value: Any) -> str | None:
         """Check declared consumer storage without modifying the authored value."""
@@ -324,13 +333,19 @@ class ParamSpec:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return "expected a finite number for float32 consumer storage"
         try:
-            stored = struct.unpack("!f", struct.pack("!f", value))[0]
+            # Storage consumes the declared wire projection, not the Author unit.
+            # Check both boundaries: /100 may already underflow in binary64.
+            projected = self.to_wire(value)
+            neutral = self.to_wire(self.neutral)
+            if value != self.neutral and projected == neutral:
+                return f"non-neutral value collapses to neutral {neutral} in declared wire projection"
+            stored = struct.unpack("!f", struct.pack("!f", projected))[0]
         except (OverflowError, struct.error):
             return "value is not finite in float32 consumer storage"
         if not math.isfinite(stored):
             return "value is not finite in float32 consumer storage"
-        if value != self.neutral and stored == self.neutral:
-            return f"non-neutral value collapses to neutral {self.neutral} in float32 consumer storage"
+        if value != self.neutral and stored == neutral:
+            return f"non-neutral value collapses to neutral {neutral} in float32 consumer storage after declared wire projection"
         return None
 
     def to_wire(self, value: Any) -> Any:
@@ -762,7 +777,8 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                   wire_multiplier=wire_multiplier, multiple_of=multiple_of,
                   runtime_minimum=safety[0] if safety else None,
                   runtime_maximum=safety[1] if safety else None,
-                  neutral=0, execution_phase=phase)
+                  neutral=0, execution_phase=phase,
+                  consumer_storage="float32" if percent else "")
 
     p: dict[str, ParamSpec] = {
         "defensePoints": stat("defense", "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment", 0 if armor else -50, 200, "defense_points", integer=True),
@@ -1118,7 +1134,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "phase": _p("string", "equipped applies while wearing this accessory/armor; matching_armor_set applies only on the head of a complete matching set", enum=("equipped", "matching_armor_set")),
             "damageClass": _p("string", "Equipped damage class; this equipment operation supports only these five classes", enum=EQUIPMENT_DAMAGE_CLASSES, semantic_type="equipment_damage_class"),
-            "bonusPercent": _p("number", "Add this percent to the selected class damage additive modifier; 15 means +15%", minimum=-90, maximum=300, units="additive_percent", semantic_type="additive_percent", wire_divisor=100, neutral=0, execution_phase="UpdateAccessory/UpdateEquip or UpdateArmorSet according to authored phase"),
+            "bonusPercent": _p("number", "Add this percent to the selected class damage additive modifier; 15 means +15%", minimum=-90, maximum=300, units="additive_percent", semantic_type="additive_percent", wire_divisor=100, neutral=0, consumer_storage="float32", execution_phase="UpdateAccessory/UpdateEquip or UpdateArmorSet according to authored phase"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1129,12 +1145,12 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_spawn",
-        "Set how this entity is spawned; does not choose its movement or damage.",
+        "Set this entity spawn cardinality per activation, initial direction and position; cardinality is separate from the optional set_projectile_concurrency live cap, not a singleton guarantee. Does not choose movement or damage.",
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
             "speedPxPerUpdate": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update", wire_name="speedPxPerTick"),
-            "count": _p("integer", "Default root binding spawn count per activation; event actions and target_and_fire select their own counts", minimum=1, maximum=12),
+            "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
             "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
@@ -1145,6 +1161,27 @@ _CAPS: list[CapabilitySpec] = [
         wire=("runtimeProgram.entities[].spawn.*",),
         provenance="shot count/spread/aim/placement extracted from all roots",
         repair_group="spawn",
+    ),
+    _cap(
+        "set_projectile_concurrency",
+        ("Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, "
+         "across all producers regardless of root/child, binding or input; pending scheduler entries are not live. "
+         "The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping "
+         "by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical "
+         "copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding "
+         "to the same entity share the cap. This does not override existing producer semantics: the owner-attached "
+         "active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use "
+         "singleton or make hold refill to this cap. First-batch count retains its existing meaning. Late spawn refusal "
+         "does not roll back other activation events or native item/mana costs. Capability absence adds no admission cap; no neutral/default "
+         "is materialized, no name/category/movement routing and no other mechanic is selected."),
+        "entity_spawn",
+        PROJECTILE_ENTITY_KINDS,
+        {"maxActive": _p("integer", "Maximum live projectiles for this owner, generated item ID and exact entity ID", minimum=1, maximum=96, units="live projectiles")},
+        py=_COMPILER_OWNER,
+        cs="GeneratedProjectile.cs::SpawnRuntimeEntity",
+        wire=("runtimeProgram.entities[].spawn.maxActive",),
+        provenance="explicit optional per-entity live admission cap; no omission materialization",
+        repair_group="projectile_concurrency",
     ),
     _cap(
         "set_projectile_damage",
@@ -1200,11 +1237,11 @@ _CAPS: list[CapabilitySpec] = [
         {
             "tileCollide": _p("boolean", "Collide with solid tiles"),
             "ignoreWater": _p("boolean", "Ignore Terraria liquid drag; false keeps vanilla water interaction"),
-            "bounceCount": _p("integer", "Maximum custom tile bounces", minimum=0, maximum=32),
-            "pierce": _p("integer", "Terraria Projectile.penetrate count; -1 means infinite", minimum=-1, maximum=100),
+            "bounceCount": _p("integer", "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts", minimum=0, maximum=32),
+            "pierce": _p("integer", "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name", minimum=-1, maximum=100),
             "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)", minimum=0, maximum=5),
             "npcImmunityMode": _p("string", "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers", enum=("owner", "local")),
-            "localNpcHitCooldownEngineUnits": _p("integer", "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine units: local NPC cooldown counts", wire_name="localNpcHitCooldownTicks"),
+            "localNpcHitCooldownEngineUnits": _p("integer", "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine units: local NPC cooldown counts", wire_name="localNpcHitCooldownTicks"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults/OnTileCollide",
@@ -1255,11 +1292,11 @@ _CAPS.extend([
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 4"),
-    _movement("move_boomerang", "Fly out, then return to the owner.", 5, {
+    _movement("move_boomerang", "Fly out, then return to the owner. A wall collision starts return and disables tileCollide; it does not kill the projectile or spend tile bounces. NPC penetration remains the separate authored collision choice.", 5, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 5"),
-    _movement("move_bounce", "Use per-update gravity and authored tile bounces.", 6, {
+    _movement("move_bounce", "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate authored bounceCount. Bounces reflect collided axes with 0.78 retained velocity; this does not guarantee rolling, resting or an explosion.", 6, {
         "gravityVelocityPerUpdate": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick"),
     }, provenance="existing movement code 6"),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
@@ -1423,7 +1460,9 @@ _CAPS.extend([
     ),
     _cap(
         "damage_area_on_event",
-        "Deal bounded AoE damage around the event position; excludes an already-hit direct target.",
+        "Deal bounded AoE damage around the event position. on_hit/on_crit exclude that event's direct target. "
+        "on_tile_collision/on_expire/on_kill carry no direct target: a previously hit NPC is not excluded by hit history; "
+        "do not promise an additional hit, since NPC eligibility and native damage rules still apply.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
@@ -1856,6 +1895,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         )
     if cap.name == "configure_spawn":
         return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items()]])
+    if cap.name == "set_projectile_concurrency":
+        return tuple(f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items())
     if cap.name == "set_projectile_damage":
         return tuple(["runtimeProgram.entities[].damage.enabled", *[f"runtimeProgram.entities[].damage.{name}" for name in cap.params]])
     if cap.name == "set_projectile_lifetime":
@@ -1896,7 +1937,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
-        "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn",
+        "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
     }
@@ -1930,6 +1971,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "configure_armor": "Content/Items/GeneratedItem.cs::UpdateEquip",
         "add_equipment_damage_bonus": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
         "configure_spawn": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
+        "set_projectile_concurrency": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
         "set_projectile_damage": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_lifetime": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_hitbox": "Content/Projectiles/GeneratedProjectile.cs::Configure",

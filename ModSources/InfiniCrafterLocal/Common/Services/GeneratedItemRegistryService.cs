@@ -50,7 +50,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
     private const byte DefinitionTransportVersion = 1;
     private const byte DefinitionHashListVersion = 1;
     private const int MaxKnownDefinitionHashes = 512;
-    private const int MaxDefinitionJsonBytes = 256 * 1024;
+    private const int MaxDefinitionJsonBytes = GeneratedItemData.MaxDefinitionJsonBytes;
     private const int MaxIncomingDefinitionTransfers = 128;
     private const int IncomingDefinitionStaleTicks = 30 * 60;
     private const int HydrationRequestRetryTicks = 90;

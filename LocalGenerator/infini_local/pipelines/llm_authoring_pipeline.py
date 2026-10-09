@@ -52,6 +52,7 @@ from infini_local.pipelines.author_item_contract import (
 from infini_local.pipelines.llm_authoring_prompt import (
     build_llm_author_payload,
     realization_execution_truth_for_llm,
+    runtime_units_for_llm,
 )
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.llm_transport import (
@@ -169,6 +170,7 @@ def build_initial_author_request(
     request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
     request = with_prompt_cache_prefix(
         request, message_index=1, prefix_chars=json_prefix_chars(payload, _AUTHOR_CACHE_PREFIX_KEYS),
+        static_instruction_prefix=True,
     )
     return request, user_content, system
 
@@ -403,9 +405,9 @@ def build_gameplay_repair_dossier(
     """Build the finite model-facing dossier for one Gameplay Repair call.
 
     This is intentionally a pure projection.  It contains exact invalid
-    fragments, the local read-only dependency neighbourhood, a compact global
-    id index, and only the blocker capability cards that can solve the current
-    deterministic errors without rewriting frozen context.
+    fragments, local dependencies, a compact global id index, and exact read-only
+    concept/runtimeProgram for the complete realizationReplacement. Capability
+    cards remain limited to current blockers; source visibility grants no edits.
     """
 
     _ = (ca, cb)
@@ -437,7 +439,7 @@ def build_gameplay_repair_dossier(
             "immutableProgramIndex.entities[*].id is the exact allowlist for every target and entity-reference value that points to an existing entity in this patch; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call may instead target an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and do not invent any other target.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, and budgets.",
-            "Always return realizationReplacement after considering the patch. It must be a literal post-repair execution report, obey runtimeExecutionTruth, describe only the actually repaired program, and rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport from the final patch result; it is never deterministically synthesized.",
+            "Always return realizationReplacement as an interpretation of the exact post-merge program, not an observed run. acceptedItemContext.concept is the original non-binding intent; acceptedItemContext.runtimeProgram is the exact read-only pre-repair source, including invalid fields. Overlay only edits admitted by repairScope on that source; keep every frozen value and absence unchanged. acceptedItemContext.realization is the previous report, not execution evidence. Obey runtimeExecutionTruth and rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport against the resulting program; realizationReplacement is never deterministically synthesized.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
             "For each repairRequirements row with requiredBindingUpdates, emit every listed existing binding exactly once using one of its complete allowed transactions; mustApplyAll means these updates are one coupled repair, not alternatives. When mustCreateExactlyOne is true, emit exactly one allowedBindingTransactions row and it must have a new id. When mustChooseExactlyOne is true without mustCreateExactlyOne, emit exactly one complete allowedBindingTransactions choice: an existing id is eligible only when it appears in that row's allowedExistingBindingIds and its complete tuple is projected by bindingAlternatives; a new id is eligible only when repairScope.create.bindings permits it. Global mutability never authorizes an id for another requirement; never update every listed lane.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
@@ -447,7 +449,10 @@ def build_gameplay_repair_dossier(
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         },
-        "runtimeExecutionTruth": realization_execution_truth_for_llm(),
+        "runtimeExecutionTruth": {
+            **realization_execution_truth_for_llm(),
+            "units": runtime_units_for_llm(),
+        },
         "parents": {
             "a": {"packet": raw_parent_card_for_llm(dict(a))},
             "b": {"packet": raw_parent_card_for_llm(dict(b))},
@@ -456,6 +461,7 @@ def build_gameplay_repair_dossier(
             "name": current.get("name"),
             "category": current.get("category"),
             "realization": copy.deepcopy(current.get("realization") or {}),
+            **{key: copy.deepcopy(current[key]) for key in ("concept", "runtimeProgram") if key in current},
         },
         "exactValidationErrors": exact_errors,
         "failureStage": str(failure_report.get("stage") or "runtime_program_validation"),
@@ -485,8 +491,8 @@ def repair_author_item_after_failure(
 ) -> dict[str, Any]:
     """Perform one conditional Gameplay Repair over a deterministic node scope.
 
-    The model receives only invalid nodes, exact missing-dependency permissions,
-    and immutable summaries/full dependency fragments.  The model may return a
+    The model receives invalid nodes, exact missing-dependency permissions, and
+    read-only source context for its full report. The model may return a
     complete broken node, but deterministic merge changes only exact broken paths;
     already-valid old values remain frozen and independent nodes are ignored.
     """

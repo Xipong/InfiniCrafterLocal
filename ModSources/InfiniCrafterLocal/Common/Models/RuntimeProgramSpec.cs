@@ -544,7 +544,7 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
-            if (Spawn.Enabled || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
+            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -653,6 +653,18 @@ public sealed class RuntimeSpawnSpec
     public bool Enabled { get; set; }
     public float SpeedPxPerTick { get; set; }
     public int Count { get; set; } = 1;
+    private int? _maxActive;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxActive
+    {
+        get => _maxActive;
+        set
+        {
+            if (value is null || value < 1 || value > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner)
+                throw new InvalidDataException("spawn.maxActive must be an explicit integer from 1 to the owner projectile ceiling");
+            _maxActive = value;
+        }
+    }
     public float SpreadRadians { get; set; }
     public int OffsetPx { get; set; }
     public string Aim { get; set; } = "cursor";

@@ -1933,6 +1933,13 @@
           "maximum": 10,
           "minimum": 1,
           "type": "integer"
+        },
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/services/codex_auth.py",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
         }
       ],
       "default": 2,
@@ -1943,7 +1950,8 @@
       "minimum": 1,
       "name": "INFINI_LLM_FALLBACK_NETWORK_FAILS",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/services/codex_auth.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4796,6 +4804,13 @@
           "maximum": 8,
           "minimum": 0,
           "type": "integer"
+        },
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/services/codex_auth.py",
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
         }
       ],
       "default": 2,
@@ -4806,7 +4821,8 @@
       "minimum": 0,
       "name": "INFINI_SPRITE_RETRIES",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/services/codex_auth.py"
       ],
       "secret": false,
       "type": "integer",
@@ -5616,7 +5632,7 @@
   ],
   "errors": [],
   "fieldCount": 231,
-  "fingerprint": "03973310b47bc79ddfa7ca7fcae3136e6376597b1ac78efc070f86d0f22a19b1",
+  "fingerprint": "2730eda0d8aafdda6e971983cbe64756d070f7133bdba27bd9e354d250711c34",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

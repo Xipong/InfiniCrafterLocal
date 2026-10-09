@@ -2028,6 +2028,16 @@
                     "maximum": 99,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
@@ -2037,6 +2047,16 @@
                     "maximum": 75,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2070,6 +2090,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2088,6 +2118,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2150,6 +2190,16 @@
                     "maximum": 90,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2204,6 +2254,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2222,6 +2282,16 @@
                     "maximum": 300,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
@@ -2237,6 +2307,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2295,6 +2375,16 @@
                     "maximum": 99,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
@@ -2304,6 +2394,16 @@
                     "maximum": 75,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2337,6 +2437,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2355,6 +2465,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2417,6 +2537,16 @@
                     "maximum": 90,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2471,6 +2601,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2498,6 +2638,16 @@
                     "maximum": 99,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
@@ -2507,6 +2657,16 @@
                     "maximum": 75,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2544,6 +2704,16 @@
                     "maximum": 90,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
@@ -2571,6 +2741,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2606,6 +2786,16 @@
                     "maximum": 300,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
@@ -2621,6 +2811,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2673,6 +2873,16 @@
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
+                    },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
@@ -2754,7 +2964,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "count": {
-                    "description": "Default root binding spawn count per activation; event actions and target_and_fire select their own counts",
+                    "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended",
                     "maximum": 12,
                     "minimum": 1,
                     "type": "integer",
@@ -2804,6 +3014,61 @@
                   "offsetPx",
                   "aim",
                   "placement"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_concurrency"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "maxActive": {
+                    "description": "Maximum live projectiles for this owner, generated item ID and exact entity ID",
+                    "maximum": 96,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "live projectiles"
+                  }
+                },
+                "required": [
+                  "maxActive"
                 ],
                 "type": "object"
               },
@@ -3060,7 +3325,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "bounceCount": {
-                    "description": "Maximum custom tile bounces",
+                    "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                     "maximum": 32,
                     "minimum": 0,
                     "type": "integer",
@@ -3079,7 +3344,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "localNpcHitCooldownEngineUnits": {
-                    "description": "Only npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. owner mode uses shared owner immunity instead; with extraUpdates>0 do not infer elapsed seconds",
+                    "description": "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds",
                     "maximum": 600,
                     "minimum": -1,
                     "type": "integer",
@@ -3096,7 +3361,7 @@
                     "x-infini-semanticType": "terraria_npc_immunity_mode"
                   },
                   "pierce": {
-                    "description": "Terraria Projectile.penetrate count; -1 means infinite",
+                    "description": "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
                     "maximum": 100,
                     "minimum": -1,
                     "type": "integer",

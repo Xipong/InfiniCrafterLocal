@@ -31,6 +31,7 @@
     <Compile Include="EngineRuntimeChecks.ItemImpact.cs" />
     <Compile Include="EngineRuntimeChecks.HeldPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.HeldProxy.cs" />
+    <Compile Include="EngineRuntimeChecks.CursorInstance.cs" />
     <Compile Include="EngineRuntimeChecks.QuickUse.cs" />
     <Compile Include="EngineRuntimeChecks.QuickUtilityActivation.cs" />
     <Compile Include="EngineRuntimeChecks.Grounded.cs" />
@@ -54,10 +55,12 @@
     <Compile Include="EngineRuntimeChecks.Proximity.cs" />
     <Compile Include="EngineRuntimeChecks.BudgetPeer.cs" />
     <Compile Include="EngineRuntimeChecks.RootSpawn.cs" />
+    <Compile Include="EngineRuntimeChecks.Concurrency.cs" />
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
     <Compile Include="EngineRuntimeChecks.AssetIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
+    <Compile Include="EngineRuntimeChecks.UnitBoundaries.cs" />
     <Compile Include="EngineRuntimeChecks.Tooltips.cs" />
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />
     <Compile Include="EngineRuntimeChecks.ForgeHeart.cs" />

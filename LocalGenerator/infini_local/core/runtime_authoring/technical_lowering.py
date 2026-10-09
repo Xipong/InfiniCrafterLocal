@@ -7,6 +7,7 @@ from typing import Any, Iterable, Mapping
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
+    VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
 )
 from infini_local.core.runtime_authoring.program_schema import (
@@ -182,6 +183,12 @@ def declared_global_inputs_for(lowerer_id: str) -> tuple[str, ...]:
 _MISSING = object()
 
 
+def _same_receipt_value(actual: Any, expected: Any) -> bool:
+    """Preserve wire types and JSON representation, including signed zero."""
+    return (type(actual) is type(expected)
+            and json.dumps(actual, sort_keys=True, default=repr) == json.dumps(expected, sort_keys=True, default=repr))
+
+
 def _receipt_path_segments(path: str) -> list[str | int] | None:
     """Parse receipt grammar; unrepresentable numeric indices are malformed."""
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d+\])*", path):
@@ -213,10 +220,111 @@ def _final_value(document: Mapping[str, Any], path: str) -> Any:
     return value
 
 
+def _primary_receipt_source_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any],
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    """Check the actual source relation, not just declared path shapes."""
+    lowerer_id = receipt.get("lowererId")
+    if lowerer_id not in {PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID}:
+        return ""
+    primary = _final_value(authored_document, PRIMARY_ENTITY_AUTHOR_PATH)
+    entities = _final_value(authored_document, "runtimeProgram.entities")
+    primary_rows = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+                    if isinstance(row, Mapping) and row.get("id") == primary]
+    if not isinstance(primary, str) or not primary or len(primary_rows) != 1:
+        return "global receipt lacks a unique authored primary entity"
+    source_index, entity = primary_rows[0]
+    if final_document is not None and _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH) != primary:
+        return "global receipt primary identity differs from the authored source"
+    if lowerer_id == PRIMARY_OWNER_LOWERER_ID:
+        kind = entity.get("kind")
+        expected = primary_owner_receipt(source_index=source_index, owner=primary_owner_for_kind(kind if isinstance(kind, str) else ""))
+        if not expected["value"]:
+            return "global receipt has an undeclared primary entity kind"
+    else:
+        paths = receipt.get("authoredPaths", [])
+        match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.usePolicy\.action\.targetId", paths[1]) if len(paths) == 2 else None
+        if match is None:
+            return "global receipt lacks exact declared binding inputs"
+        source_index = int(match.group(1))
+        binding = _final_value(authored_document, f"runtimeProgram.bindings[{source_index}]")
+        target = _final_value(authored_document, paths[1])
+        if not isinstance(binding, Mapping) or not isinstance(target, str) or not target:
+            return "global receipt lacks its originating authored binding"
+        final_index = 0
+        if final_document is not None:
+            bindings = _final_value(final_document, "runtimeProgram.bindings")
+            finals = [(i, row) for i, row in enumerate(bindings if isinstance(bindings, list) else [])
+                      if isinstance(row, Mapping) and row.get("id") == binding.get("id")]
+            if len(finals) != 1:
+                return "global receipt lacks a unique final binding identity"
+            final_index, _ = finals[0]
+            if _final_value(final_document, f"runtimeProgram.bindings[{final_index}].usePolicy.action.targetId") != target:
+                return "global receipt binding target differs from the authored source"
+        expected = primary_binding_role_receipt(
+            source_index=source_index, final_index=final_index, role=primary_binding_role(primary, target),
+        )
+    if any(receipt.get(key) != expected[key] for key in ("authoredPaths", "value", "status")):
+        return "global receipt is not the exact declared projection of its authored source"
+    if final_document is not None and receipt.get("finalPath") != expected["finalPath"]:
+        return "global receipt output is not bound to its authored identity"
+    return ""
+
+
+def _visual_receipt_source_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any],
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.entities\[(\d+)\]\.kind", paths[0]) if len(paths) == 1 else None
+    entity = _final_value(authored_document, paths[0].rsplit(".", 1)[0]) if match else None
+    kind = entity.get("kind") if isinstance(entity, Mapping) else None
+    expected = VISUAL_ROLE_BY_ENTITY_KIND.get(kind) if isinstance(kind, str) else None
+    if not isinstance(entity, Mapping) or expected is None or receipt.get("value") != expected:
+        return "global visual receipt is not the declared projection of its authored kind"
+    if final_document is not None:
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        finals = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+                  if isinstance(row, Mapping) and row.get("id") == entity.get("id")]
+        if len(finals) != 1 or finals[0][1].get("kind") != kind or receipt.get("finalPath") not in {
+            f"runtimeProgram.entities[{finals[0][0]}].visualRole",
+            f"runtimeProgram.entities[{finals[0][0]}].visual.role",
+        }:
+            return "global visual receipt output is not bound to its authored entity identity/kind"
+    return ""
+
+
+def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mapping[str, Any]) -> str:
+    """Recompute from wire facts only; these cannot authenticate Author indices."""
+    lowerer_id = receipt.get("lowererId")
+    path = receipt.get("finalPath", "")
+    expected = _MISSING
+    if lowerer_id == PRIMARY_OWNER_LOWERER_ID:
+        primary = _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH)
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        rows = [row for row in entities if isinstance(row, Mapping) and row.get("id") == primary] if isinstance(entities, list) else []
+        kind = rows[0].get("kind") if len(rows) == 1 else None
+        expected = primary_owner_for_kind(kind) if isinstance(kind, str) else _MISSING
+    elif lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+        primary = _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH)
+        target = _final_value(final_document, path.rsplit(".", 1)[0] + ".usePolicy.action.targetId")
+        if isinstance(primary, str) and primary and isinstance(target, str) and target:
+            expected = primary_binding_role(primary, target)
+    elif lowerer_id == "entity_kind_to_visual_role":
+        match = re.fullmatch(r"(runtimeProgram\.entities\[\d+\])\.(?:visualRole|visual\.role)", path)
+        kind = _final_value(final_document, match.group(1) + ".kind") if match else None
+        expected = VISUAL_ROLE_BY_ENTITY_KIND.get(kind, _MISSING) if isinstance(kind, str) else _MISSING
+    else:
+        return ""
+    return "global receipt is not the declared projection of final wire facts" if receipt.get("value") != expected else ""
+
+
 def audit_compiler_receipts(
     receipts: Iterable[Any], *, authored_document: Mapping[str, Any] | None = None,
     final_document: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Audit supplied evidence; without Author, success is wire consistency only."""
     program = authored_document.get("runtimeProgram") if authored_document is not None else None
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
@@ -265,9 +373,11 @@ def audit_compiler_receipts(
         declared_inputs = declared_global_inputs_for(lowerer_id) if lowerer_id else ()
         authored_paths = tuple(str(value) for value in receipt.get("authoredPaths") or ())
         inputs_match = not lowerer_id or (
-            all(any(path_matches(pattern, value) for value in authored_paths) for pattern in declared_inputs)
-            and all(any(path_matches(pattern, value) for pattern in declared_inputs) for value in authored_paths)
+            len(authored_paths) == len(declared_inputs)
+            and all(path_matches(pattern, value) for pattern, value in zip(declared_inputs, authored_paths))
         )
+        if lowerer_id == PRIMARY_OWNER_LOWERER_ID and inputs_match:
+            inputs_match = authored_paths[1].rsplit(".", 1)[0] == authored_paths[2].rsplit(".", 1)[0]
         if not declared or not any(path_matches(pattern, path) for pattern in declared) or not inputs_match:
             violations.append({
                 "callId": str(receipt.get("callId") or ""),
@@ -279,16 +389,26 @@ def audit_compiler_receipts(
                 "declaredOutputs": list(declared),
                 "reason": "compiler receipt used an undeclared input or output field",
             })
-        if final_document is not None and (
-            json.dumps(_final_value(final_document, path), sort_keys=True, default=repr) != json.dumps(receipt.get("value"), sort_keys=True, default=repr)
-            or type(_final_value(final_document, path)) is not type(receipt.get("value"))
-        ):
+        if lowerer_id and receipt.get("status") != "technical_projection":
+            violations.append({"lowererId": lowerer_id, "finalPath": path,
+                               "reason": "global receipt has an unexpected status"})
+        if final_document is not None and not _same_receipt_value(_final_value(final_document, path), receipt.get("value")):
             violations.append({
                 "callId": str(receipt.get("callId") or ""),
                 "fn": fn,
                 "finalPath": path,
                 "reason": "final wire value differs from compiler receipt",
             })
+        if authored_document is not None:
+            reason = (_visual_receipt_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == "entity_kind_to_visual_role"
+                      else _primary_receipt_source_error(receipt, authored_document, final_document))
+            if reason:
+                violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
+        if final_document is not None and lowerer_id:
+            reason = _global_receipt_wire_error(receipt, final_document)
+            if reason:
+                violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
         if fn == "present_placed_item_sprite" and receipt.get("status") == "technical_projection":
             match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.params\.placementCallId", authored_path)
             source_call = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
@@ -411,7 +531,7 @@ def audit_compiler_receipts(
                         "authoredPath": authored_path, "finalPath": path,
                         "reason": "authored parameter absent from originating call",
                     })
-                elif receipt.get("value") != cap.params[match.group(2)].to_wire(source_params[match.group(2)]):
+                elif not _same_receipt_value(receipt.get("value"), cap.params[match.group(2)].to_wire(source_params[match.group(2)])):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""),
                         "fn": fn,
@@ -474,6 +594,50 @@ def audit_compiler_receipts(
                             "callId": str(receipt.get("callId") or ""), "fn": fn,
                             "finalPath": path, "reason": "equipment class modifier has no unique declared configuration",
                         })
+    # Require the existing primary receipts, never synthesize new provenance.
+    # Source and wire indices are separate: bindings may be sorted during compile.
+    if authored_document is not None:
+        if _final_value(authored_document, PRIMARY_ENTITY_AUTHOR_PATH) is not _MISSING:
+            matching = [r for r in receipt_rows if r.get("lowererId") == PRIMARY_OWNER_LOWERER_ID]
+            if len(matching) != 1:
+                violations.append({"lowererId": PRIMARY_OWNER_LOWERER_ID, "finalPath": PRIMARY_OWNER_FINAL_PATH,
+                                   "reason": "global projection has no unique compiler receipt"})
+        bindings = _final_value(authored_document, "runtimeProgram.bindings")
+        for bi, _ in enumerate(bindings if isinstance(bindings, list) else []):
+            source_path = f"runtimeProgram.bindings[{bi}].usePolicy.action.targetId"
+            matching = [r for r in receipt_rows if r.get("lowererId") == PRIMARY_BINDING_ROLE_LOWERER_ID
+                        and r.get("authoredPaths") == [PRIMARY_ENTITY_AUTHOR_PATH, source_path]]
+            if len(matching) != 1:
+                violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
+                                   "reason": "global projection has no unique compiler receipt"})
+        entities = _final_value(authored_document, "runtimeProgram.entities")
+        for ei, _ in enumerate(entities if isinstance(entities, list) else []):
+            source_path = f"runtimeProgram.entities[{ei}].kind"
+            for output in declared_global_outputs_for("entity_kind_to_visual_role"):
+                matching = [r for r in receipt_rows if r.get("lowererId") == "entity_kind_to_visual_role"
+                            and r.get("authoredPaths") == [source_path] and path_matches(output, r["finalPath"])]
+                if len(matching) != 1:
+                    violations.append({"lowererId": "entity_kind_to_visual_role", "authoredPath": source_path,
+                                       "reason": "global projection has no unique compiler receipt"})
+    if final_document is not None:
+        expected_globals = []
+        if _final_value(final_document, PRIMARY_OWNER_FINAL_PATH) is not _MISSING:
+            expected_globals.append((PRIMARY_OWNER_LOWERER_ID, PRIMARY_OWNER_FINAL_PATH))
+        bindings = _final_value(final_document, "runtimeProgram.bindings")
+        expected_globals.extend((PRIMARY_BINDING_ROLE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].role")
+                                for bi, _ in enumerate(bindings if isinstance(bindings, list) else []))
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        # Isolated capability projectors can supply partial entity DTOs without
+        # global fields; require coverage for each actual global output slot.
+        expected_globals.extend(("entity_kind_to_visual_role", output.replace("[]", f"[{ei}]"))
+                                for ei, _ in enumerate(entities if isinstance(entities, list) else [])
+                                for output in declared_global_outputs_for("entity_kind_to_visual_role")
+                                if _final_value(final_document, output.replace("[]", f"[{ei}]")) is not _MISSING)
+        for lowerer_id, path in expected_globals:
+            matching = [r for r in receipt_rows if r.get("lowererId") == lowerer_id and r.get("finalPath") == path]
+            if len(matching) != 1:
+                violations.append({"lowererId": lowerer_id, "finalPath": path,
+                                   "reason": "global projection has no unique compiler receipt"})
     if authored_document is not None:
         for index, call in enumerate(source_calls):
             if not isinstance(call, Mapping) or call.get("fn") not in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
@@ -584,6 +748,9 @@ def audit_compiler_receipts(
         "ok": not violations,
         "violations": violations,
         "lowerers": list(GLOBAL_TECHNICAL_LOWERINGS),
+        # Keep source-backed compiler serialization unchanged. Only standalone
+        # audits need an explicit limit on what their successful check proves.
+        **({"authoredSourceChecked": False} if authored_document is None else {}),
     }
 
 

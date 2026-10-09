@@ -127,14 +127,15 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
         "non-binding", "extra control modes", "meaningful utility", "createTile", "does not require",
         "placed target", "worth escrowing", "same generated item", "removes it from inventory",
         "unavailable until", "tile breaks", "returns it", "placement and multiple purposeful actions remain legal",
-        "do not authorize Repair to redesign",
     ):
         assert phrase in intent
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expected = {r["fn"]: r for r in compact_capability_catalog()}
     assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
     assert set(expected) == set(CAPABILITY_REGISTRY)
-    assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (53, 240)
+    assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (
+        len(CAPABILITY_REGISTRY), sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
+    )
     assert (a, b) == parents_before
 
 
@@ -193,7 +194,7 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
     )
     context = json.loads(requests[0]["messages"][1]["content"])
     intent = context["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
-    assert "do not authorize Repair to redesign" in intent
+    assert "Repair" not in intent
     assert any("Do not redesign, add, drop" in rule for rule in context["rules"])
     assert context["malformedRawText"] == content[:-1] + ",}"
     assert prepared == before and item == before and raw == content
@@ -870,4 +871,7 @@ def test_serialized_stage_prose_explains_nullable_transport_only_with_schema(mon
     if mode == "json_schema":
         assert "omission" in system
         assert "array elements" in system
-        assert "no change" in system
+        if stage == "repair":
+            assert "no change" in system
+        else:
+            assert "Omission retains its meaning in the requested output contract" in system

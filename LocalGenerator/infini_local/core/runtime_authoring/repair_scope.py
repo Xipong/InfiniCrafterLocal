@@ -3658,9 +3658,9 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
     """Project the failed program into a small but sufficient Repair dossier.
 
     The model receives complete broken nodes plus a local dependency
-    neighbourhood around affected entities.  Independent nodes stay in a
-    compact immutable index, so Repair can reason about existing ids without
-    paying for or rewriting the whole runtime program.
+    neighbourhood around affected entities, plus a compact immutable index.
+    The caller separately supplies exact read-only concept/runtimeProgram for
+    the complete report; neither projection enlarges the permitted edit scope.
     """
 
     rows = _program_rows(current)
@@ -3758,7 +3758,7 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
             ]
         elif namespace == "bindings":
             summaries[namespace] = [
-                {key: row.get(key) for key in ("id", "input", "action", "target")}
+                {key: copy.deepcopy(row[key]) for key in ("id", "input", "usePolicy") if key in row}
                 for row in values
             ]
         elif namespace == "calls":

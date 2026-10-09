@@ -50,7 +50,7 @@ public partial class GeneratedItem : ModItem
     public override ModItem Clone(Item newEntity)
     {
         var clone = (GeneratedItem)base.Clone(newEntity);
-        try { clone.Data = GeneratedItemData.FromJson((Data ?? GeneratedItemData.Placeholder()).ToNetworkJson()) ?? GeneratedItemData.Placeholder(); }
+        try { clone.Data = (Data ?? GeneratedItemData.Placeholder()).CloneForItemInstance(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
@@ -334,6 +334,10 @@ public partial class GeneratedItem : ModItem
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
+            if (entity?.Spawn.MaxActive is not null && !GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
+                Math.Min(RootBindingSpawnCapacity(entity), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                    - GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI))))
+                return false;
             if (entity?.IsOwnerAttached == true)
             {
                 foreach (Projectile projectile in Main.ActiveProjectiles)
@@ -751,6 +755,15 @@ public partial class GeneratedItem : ModItem
         if (glowMaskDrawData is DrawData glow && !ReferenceEquals(glow.texture, nativeTexture))
             drawInfo.DrawDataCache.Add(glow);
         return false;
+    }
+
+    // Cursor source correction requires the same exact inventory asset as this hook.
+    // Readiness is technical presentation only; never change authored hideUseGraphic.
+    internal bool HasReadyInventorySprite()
+    {
+        GeneratedItemData data = PresentationData();
+        return !string.IsNullOrWhiteSpace(data.Visual.SpritePath)
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath) is not null;
     }
 
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)

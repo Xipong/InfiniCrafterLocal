@@ -43,6 +43,13 @@ _VFX_RUNTIME_VOCABULARY_KEYS = (
 )
 VFX_PROMPT_STATIC_KEYS = ("schema", "rules", "runtimeVocabulary")
 VFX_REPAIR_PROMPT_STATIC_KEYS = ("task", "rules", "runtimeVocabularyReadOnly")
+_ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
+    "acceptedGameplayReadOnly, when present, is the exact accepted gameplay, not an edit target. "
+    "useTime/useAnimation are base item cadence/animation in world ticks (60/s); itemScale is the "
+    "held-root dimensionless multiplier, not a VFX slot scale or PNG frame size. Do not infer "
+    "missing values, live attack-speed modifiers or event frequency from names/prose. "
+    "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact bindings/events."
+)
 
 
 @dataclass(frozen=True)
@@ -117,7 +124,21 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     "effectMagnitude": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
     "rhythm": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
     "chaos": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
-    "scale": "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. Sprite trail scale=max(0.05, projectile.scale*scale); projectile event afterimage scale=clamp(projectile.scale,0.1,8)*scale; directional item/impact sprite scale clamps to 0.05..8. Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. Dust size clamp(scale,0.2,3). Not a universal pixel size.",
+    "scale": (
+        "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. "
+        "For projectileAfterimage/spriteStampTrail/actorAfterimage, R=selected renderSizePx from acceptedVisualKit; "
+        "q_selected=R/max(actual final PNG frame width, height), not canvas, alpha-bbox or hitbox. "
+        "item/reuse_item_icon selects root item R; a distinct baked entity selects its own R; absent R gives q_selected=1. "
+        "P=projectile.scale, initial P=D*E (D=hitbox.drawScale, E=accepted entity visual scale); "
+        "current P already includes growth, not another E or gameplay.itemScale. "
+        "Periodic sprite trail with declared R: clamp(P,0.1,8)*scale*q_selected; absent R: max(0.05,P*scale). "
+        "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected, using captured P. "
+        "Directional item body stamp: clamp(scale,0.05,8)*q_selected, not a held-pose copy. "
+        "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion. "
+        "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected; common scale is neutral=1. "
+        "Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. "
+        "Dust size clamp(scale,0.2,3). Not a universal pixel size."
+    ),
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
     "duration": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
     "alpha": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
@@ -810,6 +831,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         },
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
+        **({"acceptedGameplayReadOnly": copy.deepcopy(data["gameplay"])} if "gameplay" in data else {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
         "runtimeVocabulary": {key: surface[key] for key in _VFX_RUNTIME_VOCABULARY_KEYS},
         "runtimeSurface": {key: value for key, value in surface.items() if key not in _VFX_RUNTIME_VOCABULARY_KEYS},
@@ -817,6 +839,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         "rules": [
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
+            _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
             "Legacy forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
@@ -1267,6 +1290,7 @@ def _request(
             "task": "Patch only exact invalid VFX fields/slots.",
             "item": copy.deepcopy(packet.get("item") or {}),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
+            **({"acceptedGameplayReadOnly": copy.deepcopy(packet["acceptedGameplayReadOnly"])} if "acceptedGameplayReadOnly" in packet else {}),
             "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
             "runtimeVocabularyReadOnly": copy.deepcopy(packet.get("runtimeVocabulary") or {}),
             "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
@@ -1283,6 +1307,7 @@ def _request(
                 "schema and note are required; omit unchanged edit fields as no-ops, including assetsUpsert/assetIdsDelete/assetIndicesDelete. Present arrays may not be null. Valid asset prompts, layout, canvas, references and optional absence are frozen. Repair a bad reference only; never create compensating artwork.",
                 "bind only exact runtimeSurfaceReadOnly.runtimePairs entityId+event pairs; runtimeVocabularyReadOnly owns the read-only enum values, numeric ranges, rendererRequirements, rendererSemantics and textureDependencyTuples",
                 "presentation only; gameplay is immutable",
+                _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             ],
         }
         user = {

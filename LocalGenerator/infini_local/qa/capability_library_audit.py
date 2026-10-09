@@ -178,6 +178,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     }
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
+        "set_projectile_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
@@ -206,6 +207,22 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "entity": "EntityId",
             }.get(param_name, param_name[:1].upper() + param_name[1:])
             csharp = bounds.get(csharp_name)
+            if cap.name == "set_projectile_concurrency":
+                block = _class_block(text, class_name)
+                declaration = re.search(
+                    rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"
+                    rf"public int\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
+                    r"if\s*\(value is null \|\| value < ([^|]+?) \|\| value > ([^)]+)\)\s*"
+                    r"throw new InvalidDataException\(",
+                    block, re.DOTALL,
+                )
+                reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+                authored_bounds = [spec.minimum, spec.maximum]
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": authored_bounds,
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "preserved": reject_bounds == authored_bounds})
+                continue
             if csharp is None:
                 # Lifetime is clamped at the entity level, not a sub-spec.
                 if cap.name == "set_projectile_lifetime" and param_name == "lifetimeTicks":

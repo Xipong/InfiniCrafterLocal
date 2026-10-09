@@ -1902,6 +1902,7 @@
                           "configure_armor",
                           "add_equipment_damage_bonus",
                           "configure_spawn",
+                          "set_projectile_concurrency",
                           "set_projectile_damage",
                           "set_projectile_lifetime",
                           "set_projectile_hitbox",

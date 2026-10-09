@@ -199,8 +199,10 @@ def realization_schema() -> dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "description": _strict_string(min_len=1, max_len=700),
-            "playerExperience": _strict_string(min_len=1, max_len=500),
+            # Full post-program prose, not a short UI/debug preview. Author,
+            # Repair and provider/prompt projections share this finite authority.
+            "description": _strict_string(min_len=1, max_len=4000),
+            "playerExperience": _strict_string(min_len=1, max_len=3000),
             # Deliberately last: the same Author independently compares the
             # non-binding draft with the program, then the program with its report.
             "selfEvaluation": {

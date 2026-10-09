@@ -264,6 +264,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Math.Min(
                 availableOwnerSlots,
                 Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, remainingSpawnBudget)));
+        // Concurrency is explicit entity admission, independent of movement/type.
+        // Refuse the effective whole batch; never clip an authored multi-shot batch.
+        if (!CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
+            return 0;
         float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
         int spawned = 0;
         for (int i = 0; i < count; i++)
@@ -292,6 +296,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             spawned++;
         }
         return spawned;
+    }
+
+    internal static bool CanAdmitEntityBatch(GeneratedItemData data, RuntimeEntitySpec entity, int ownerId, int count)
+    {
+        if (entity.Spawn.MaxActive is not int maximum) return true;
+        int active = 0;
+        foreach (Projectile projectile in Main.ActiveProjectiles)
+            if (projectile.owner == ownerId && projectile.ModProjectile is GeneratedProjectile generated
+                && generated.Matches(data.Id, entity.Id))
+                active++;
+        return count > 0 && active <= maximum - count;
     }
 
     internal static int CountActiveGeneratedProjectiles(int ownerId)

@@ -26,11 +26,11 @@
 
 ## Измеренные свойства
 
-- capabilities: **53**; parameters: **240**; numeric: **188/188 bounded**;
+- capabilities: **54**; parameters: **241**; numeric: **189/189 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
 - typed entity references: **2**; requirements: **30**; binding dependency edges: **8**;
-- exact wire paths: **323**; global technical lowerer outputs: **149**;
-- Python↔C# range parity rows: **85**; vertical witnesses: **53**;
+- exact wire paths: **324**; global technical lowerer outputs: **149**;
+- Python↔C# range parity rows: **86**; vertical witnesses: **54**;
 - errors: **0**; warnings: **0**.
 
 <a id="proof"></a>
@@ -54,7 +54,7 @@
 - Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.
 - Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.
 - Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет [`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.
-- Каталог покрывает реализованные 53 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
+- Каталог покрывает реализованные 54 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
 
 <a id="assessment"></a>
 

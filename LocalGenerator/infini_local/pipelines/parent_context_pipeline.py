@@ -796,42 +796,20 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 def _projectile_profile_same_except_source(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """True when two compact projectile raw cards carry the same core mechanics.
+    """Deduplicate only equivalent retained facts, not similar core mechanics.
 
-    `source`, `setsRaw`, and behavior digest prose are intentionally ignored:
-    directProjectile/effectiveProjectile/ammo can point at the same item.shoot
-    projectile through different dump paths. Keeping all copies verbatim bloats
-    planner prompts and makes small LLMs over-read projectile internal names as
-    extra ingredients. Missing core fields are not treated as equal, so lossy ammo
-    snippets remain available as raw context instead of being hidden.
+    Only the top-level provenance `source` may differ; the replacement retains
+    it separately. Nested source/scope, sets, presence and scalar types are facts.
+    Canonical JSON ignores object order without Python's 0 == False == 0.0 alias.
     """
     if not isinstance(a, dict) or not isinstance(b, dict) or not a or not b:
         return False
     identity_keys = ("type", "internalName", "sourceMod")
-    # A source observation cannot be borrowed from a similar projectile profile:
-    # absence, identity/hash and full scope must match before exact deduplication.
-    if ("motionReference" in a) != ("motionReference" in b) or a.get("motionReference") != b.get("motionReference"):
-        return False
     if not any(_compact_keep(a.get(k)) and a.get(k) == b.get(k) for k in identity_keys):
         return False
-    core_keys = (
-        "type", "internalName", "sourceMod", "aiStyle", "penetrate", "timeLeft",
-        "extraUpdates", "tileCollide", "ownerHitCheck", "arrow", "minion", "sentry",
-        "width", "height", "scale", "light",
+    return json.dumps({k: v for k, v in a.items() if k != "source"}, sort_keys=True) == json.dumps(
+        {k: v for k, v in b.items() if k != "source"}, sort_keys=True,
     )
-    matched = 0
-    for k in core_keys:
-        av = a.get(k)
-        bv = b.get(k)
-        if _compact_keep(av) and _compact_keep(bv):
-            if av != bv:
-                return False
-            matched += 1
-        elif _compact_keep(av) != _compact_keep(bv):
-            # One side lacks a real core fact; keep both raw cards unless this is
-            # a non-core/prose field handled above.
-            return False
-    return matched >= 3
 
 def _dedupe_projectile_profile(raw: dict[str, Any], key: str, reference_key: str, reference: dict[str, Any]) -> None:
     cur = raw.get(key)

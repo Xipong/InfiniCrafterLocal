@@ -22,7 +22,9 @@ public sealed partial class GeneratedItemData
     public const int CurrentSchemaVersion = 5;
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
-    private const int MaxNetworkStringPayloadBytes = 100_000;
+    // Full definitions already travel via the registry's bounded chunk protocol,
+    // not a single ModPacket string. Share that existing 256 KiB ceiling.
+    internal const int MaxDefinitionJsonBytes = 256 * 1024;
     private const int MaxPlayerSaveTagStringPayloadBytes = 4 * 1024;
     private const string PlayerSaveReferenceKind = "generatedItemRefV5";
 
@@ -49,9 +51,20 @@ public sealed partial class GeneratedItemData
         GeneratedItemData clone = CloneUnchecked(this);
         StripAuthoringBulkForTransport(clone);
         string json = JsonSerializer.Serialize(clone, Options);
-        if (Utf8ByteCount(json) > MaxNetworkStringPayloadBytes)
-            throw new InvalidDataException($"Generated item '{Id}' network payload exceeds {MaxNetworkStringPayloadBytes} bytes");
+        if (Utf8ByteCount(json) > MaxDefinitionJsonBytes)
+            throw new InvalidDataException($"Generated item '{Id}' network payload exceeds {MaxDefinitionJsonBytes} bytes");
         return json;
+    }
+
+    // Same stripped definition as network projection, but cloning is local:
+    // it must not lose identity merely because a network byte budget refuses it.
+    internal GeneratedItemData CloneForItemInstance()
+    {
+        Normalize();
+        GeneratedItemData clone = CloneUnchecked(this);
+        StripAuthoringBulkForTransport(clone);
+        clone.Normalize();
+        return clone;
     }
 
     public string ToPlayerSaveJson()
