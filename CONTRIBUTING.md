@@ -25,7 +25,9 @@
 ## Форки, релизы и распространение
 
 Юридически определяющий текст — [LICENSE](LICENSE),
-[русский перевод](LICENSE_RU.md). Это source-available, а не open-source лицензия.
+[русский перевод](LICENSE_RU.md). Это source-available, а не open-source лицензия;
+она распространяется на все версии оригинального проекта, кроме отдельно
+лицензированных материалов, и сохраняет ранее правомерно предоставленные права.
 
 - Пользоваться, изучать, менять для себя и готовить PR можно.
 - Оригинальные файлы распространяются через официальный источник: делись
@@ -44,6 +46,8 @@
 
 ## English summary
 
+The license covers all versions of the original project, except separately
+licensed material and permissions already validly granted under other terms.
 Pull requests to the upstream `main` branch are preferred. Private modifications
 and working forks for contributions are permitted. Link to official downloads
 instead of mirroring or repacking original files. Independent distributions with

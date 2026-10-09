@@ -5,7 +5,7 @@ Copyright (c) 2026 Xipong and the respective contributors.
 1. Scope and official source
 
 This license covers the original InfiniCrafterLocal source code, documentation,
-project-owned assets and compiled distributions made available with this notice
+project-owned assets and compiled distributions of the original project
 (the "Project"), to the extent their respective copyright holders may license
 them. The original project maintainer is Xipong (the "Maintainer").
 
@@ -14,9 +14,11 @@ its Releases and GitHub-generated source archives. Another original-project
 release channel is official only when the Maintainer explicitly designates it
 in that repository. A third-party mirror or fork is not an official source.
 
-This license is source-available, not an open-source license. It applies to
-versions distributed with this notice, beginning with version 0.4.254; it does
-not withdraw any permissions validly granted for earlier versions.
+This license is source-available, not an open-source license. It covers all
+versions of the original Project, including earlier, current and future versions,
+except material explicitly offered under separate terms. Publication of this
+notice is not limited to version 0.4.254. It does not withdraw permissions already
+validly granted under another license or individual written agreement.
 
 2. Permitted use and development
 
