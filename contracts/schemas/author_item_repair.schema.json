@@ -2113,7 +2113,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2132,7 +2132,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2175,7 +2175,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2203,7 +2203,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2275,7 +2275,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2339,7 +2339,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2367,7 +2367,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2392,7 +2392,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2460,7 +2460,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2479,7 +2479,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2522,7 +2522,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2550,7 +2550,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2622,7 +2622,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2686,7 +2686,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2723,7 +2723,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2742,7 +2742,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2789,7 +2789,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2826,7 +2826,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2871,7 +2871,7 @@
                     "minimum": 0,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2896,7 +2896,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -2958,7 +2958,7 @@
                     "minimum": -90,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Apply the declared wire projection in binary64, then check float32 consumer storage. A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32",
@@ -5630,7 +5630,7 @@
                     "x-infini-units": "tiles"
                   },
                   "safeTileOnly": {
-                    "description": "Check destination bounds, solid-tile overlap and nearby lava; false skips these checks; not a general hazard check",
+                    "description": "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   }

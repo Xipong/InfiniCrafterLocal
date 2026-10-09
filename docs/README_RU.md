@@ -13,6 +13,7 @@
 | Подключить подписочный Codex image route | [OAuth и ограничения маршрута](CODEX_IMAGE_OAUTH_RU.md) |
 | Разобраться с формой запросов и задержкой | [Transport/request contract](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
 | Ясность Author и точный read-only Repair context | [Холодное чтение Luna и contract fixes](AUTHOR_PROMPT_CLARITY_RU.md) |
+| Проверка понятности всего каталога без потери ёмкости | [Три Luna6 medium, 0.4.253](LUNA_MEDIUM_COMPREHENSION_RU.md) |
 | Проверить конкретный результат | [Recipe health](RECIPE_HEALTH_AND_CONTRACTS_RU.md) |
 
 ## Архитектура и изменение контрактов

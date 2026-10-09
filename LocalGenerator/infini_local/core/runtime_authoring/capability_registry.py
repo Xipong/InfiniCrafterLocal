@@ -311,10 +311,9 @@ class ParamSpec:
         if self.wire_divisor != 1 or self.wire_multiplier != 1:
             constraint["wireProjection"] = {"divisor": self.wire_divisor, "multiplier": self.wire_multiplier}
             constraint["meaning"] = (
-                "Apply the declared wire projection in binary64, then check float32 consumer storage. "
-                "A non-neutral Author value must remain non-neutral at both boundaries; exact neutral is allowed. "
-                "This guards neutral collapse, not exact float round-trip or later gameplay arithmetic. "
-                "No rounding or replacement is performed by validation."
+                "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay "
+                "non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. "
+                "Guards neutral collapse, not exact float round-trip or later gameplay arithmetic."
             )
         return constraint
 
@@ -891,7 +890,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_item_contact_hitbox",
-        "Configure geometry for item-body contact that is enabled by a binding usePolicy; omitting this call keeps Terraria's unscaled hitbox.",
+        "Modify the current Terraria contact rectangle when a binding enables item-body contact; not a fixed PNG box. Keep its center; round each dimension times hitboxScale, add contactForgivenessPx on each side, minimum 1px. Omission leaves native geometry unchanged.",
         "item_combat",
         ("item_body",),
         {
@@ -999,7 +998,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_placeable",
-        "Set one concrete tile/wall placement result.",
+        "Set a concrete tile/wall placement. The current runtime admits one layer per use: both IDs enabled is schema-valid but refused at runtime; this call cannot place both together.",
         "item_placeable",
         ("item_body",),
         {
@@ -1292,7 +1291,7 @@ _CAPS.extend([
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 4"),
-    _movement("move_boomerang", "Fly out, then return to the owner. A wall collision starts return and disables tileCollide; it does not kill the projectile or spend tile bounces. NPC penetration remains the separate authored collision choice.", 5, {
+    _movement("move_boomerang", "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.", 5, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 5"),
@@ -1460,9 +1459,9 @@ _CAPS.extend([
     ),
     _cap(
         "damage_area_on_event",
-        "Deal bounded AoE damage around the event position. on_hit/on_crit exclude that event's direct target. "
-        "on_tile_collision/on_expire/on_kill carry no direct target: a previously hit NPC is not excluded by hit history; "
-        "do not promise an additional hit, since NPC eligibility and native damage rules still apply.",
+        "Deal bounded AoE damage at the event position. Exclude the event's direct target only for on_hit/on_crit. "
+        "For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. "
+        "An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
@@ -1544,7 +1543,7 @@ _CAPS.extend([
             "event": _p("string", "Source event", enum=("on_hit", "on_tile_collision", "on_expire")),
             "rangeTiles": _p("integer", "Maximum movement range", minimum=1, maximum=120, units="tiles"),
             "cooldownTicks": _p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"),
-            "safeTileOnly": _p("boolean", "Check destination bounds, solid-tile overlap and nearby lava; false skips these checks; not a general hazard check"),
+            "safeTileOnly": _p("boolean", "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,

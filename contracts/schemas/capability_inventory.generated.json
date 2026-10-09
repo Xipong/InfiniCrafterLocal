@@ -389,7 +389,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "exact geometry for binding-owned item-body contact",
-      "purpose": "Configure geometry for item-body contact that is enabled by a binding usePolicy; omitting this call keeps Terraria's unscaled hitbox.",
+      "purpose": "Modify the current Terraria contact rectangle when a binding enables item-body contact; not a fixed PNG box. Keep its center; round each dimension times hitboxScale, add contactForgivenessPx on each side, minimum 1px. Omission leaves native geometry unchanged.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -937,7 +937,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "placement payload referenced by one exact binding transaction",
-      "purpose": "Set one concrete tile/wall placement result.",
+      "purpose": "Set a concrete tile/wall placement. The current runtime admits one layer per use: both IDs enabled is schema-valid but refused at runtime; this call cannot place both together.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3147,7 +3147,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 5",
-      "purpose": "Fly out, then return to the owner. A wall collision starts return and disables tileCollide; it does not kill the projectile or spend tile bounces. NPC penetration remains the separate authored collision choice.",
+      "purpose": "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4706,7 +4706,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "burst/aura/blackhole AoE extracted from on-hit executor",
-      "purpose": "Deal bounded AoE damage around the event position. on_hit/on_crit exclude that event's direct target. on_tile_collision/on_expire/on_kill carry no direct target: a previously hit NPC is not excluded by hit history; do not promise an additional hit, since NPC eligibility and native damage rules still apply.",
+      "purpose": "Deal bounded AoE damage at the event position. Exclude the event's direct target only for on_hit/on_crit. For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

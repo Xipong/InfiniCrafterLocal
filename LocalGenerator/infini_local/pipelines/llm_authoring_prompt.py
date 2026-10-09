@@ -26,6 +26,7 @@ from infini_local.pipelines.author_item_contract import (
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.parent_context_pipeline import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
@@ -230,7 +231,7 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
         elif card["fn"] == "configure_item_use":
             card["constructionMeaning"] = "Timing is owned by configure_item_stats.useTimeTicks (cadence) and configure_item_stats.useAnimationTicks (animation duration), not params of this call. Here autoReuse repeats active use while held, and channel keeps that use active."
         elif card["fn"] == "configure_item_stats":
-            card["constructionMeaning"] = "A hybrid with reusable spawn_entity/use_item_body use (stackCost=0) has maxStack=1: one durable unit moves between inventory and escrowed placed form. One-shot non-placement use (stackCost=1) is not subject to this maxStack rule."
+            card["constructionMeaning"] = "Only an item with both a place_item binding and reusable spawn_entity/use_item_body use (stackCost=0) requires maxStack=1: one durable unit switches inventory/placed form. This rule does not limit stacks without placement or with only one-shot non-placement use (stackCost=1)."
     return {
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         "authoringSchema": RUNTIME_PROGRAM_SCHEMA,
@@ -260,11 +261,16 @@ def engine_runtime_capability_contract_for_llm(
 
 def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     stage = stat_profile_for(a, b)
-    envelope = stage.get("balanceEnvelope") if isinstance(stage.get("balanceEnvelope"), dict) else {}
+    envelope = {key: dict(value) if isinstance(value, dict) else value
+                for key, value in (stage.get("balanceEnvelope") or {}).items()}
+    # A combat-only derived/default cadence is not a literal parent observation.
+    # Retain the broad envelope, but leave timing choices to the Author.
+    if isinstance(envelope.get("useTimeTicks"), dict):
+        envelope["useTimeTicks"].pop("suggested", None)
     return {
         "authority": stage.get("authority"),
         "parentDamage": stage.get("sourceDamage"),
-        "parentUseTimeTicks": stage.get("sourceFastestUseTime"),
+        "parentUseTimeTicks": [item_field(parent, "useTime", None) for parent in (a, b)],
         "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
         "broadEnvelope": envelope,
         "rule": "These are broad source-numeric balance bounds, not a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
