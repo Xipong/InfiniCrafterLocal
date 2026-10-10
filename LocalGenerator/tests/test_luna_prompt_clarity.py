@@ -37,9 +37,11 @@ def test_reusable_stack_rule_requires_explicit_placement(monkeypatch):
 
 
 def test_repeated_consumer_guidance_is_short_and_keeps_all_boundaries(monkeypatch):
-    cards = packet(monkeypatch)['runtimeCapabilityContract']['catalog']['capabilities']
-    meanings = [p['consumerConstraint']['meaning'] for c in cards for p in c['params'].values()
-                if p.get('consumerConstraint', {}).get('wireProjection')]
+    catalog = packet(monkeypatch)['runtimeCapabilityContract']['catalog']
+    profiles = catalog['fieldGuide']['consumerConstraints']
+    constraints = [profiles[p['consumerConstraint']] for c in catalog['capabilities'] for p in c['params'].values()
+                   if 'consumerConstraint' in p]
+    meanings = [constraint['meaning'] for constraint in constraints if constraint.get('wireProjection')]
     assert meanings
     for text in meanings:
         assert len(text) <= 275

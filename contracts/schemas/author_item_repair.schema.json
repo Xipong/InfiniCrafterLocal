@@ -4785,6 +4785,60 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "damageStartProgress": {
+                    "default": 1.0,
+                    "description": "Minimum warmup progress that enables the native friendly hit lane, inclusive. 1 retains the full-warmup gate; 0 enables hits from the start. Progress and threshold use binary64 before native hit dispatch.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "fraction of warmup"
+                  },
+                  "initialDamageMultiplier": {
+                    "default": 1.0,
+                    "description": "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "source damage multiplier"
+                  },
+                  "initialWidthMultiplier": {
+                    "default": 1.0,
+                    "description": "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "beam width multiplier"
+                  },
+                  "manaPayment": {
+                    "default": "initial_use_only",
+                    "description": "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.",
+                    "enum": [
+                      "initial_use_only",
+                      "each_use_time"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "initial_use_only",
+                    "x-infini-semanticType": "bounded_text",
+                    "x-infini-units": "native mana payment cadence"
+                  },
                   "rangeTiles": {
                     "description": "Beam length",
                     "maximum": 120,
@@ -4793,8 +4847,16 @@
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
                   },
+                  "raycastTiles": {
+                    "default": false,
+                    "description": "When true, Collision.LaserScan samples three rays across current beam width and clips the shared segment to the shortest bounded sample without temporal smoothing. False retains full range. Does not set collision.tileCollide or damage.ownerHitCheck.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tile clipping enabled"
+                  },
                   "warmupTicks": {
-                    "description": "Warmup before full damage",
+                    "description": "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.",
                     "maximum": 600,
                     "minimum": 0,
                     "type": "integer",

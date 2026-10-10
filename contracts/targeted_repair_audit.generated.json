@@ -116,7 +116,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 38705,
+      "dossierChars": 41663,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -156,7 +156,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 119632,
+  "fullAuthorPayloadChars": 105579,
   "fullCapabilityCatalogCount": 55,
   "ok": true,
   "policyCoverage": {

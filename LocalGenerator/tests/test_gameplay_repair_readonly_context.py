@@ -191,7 +191,7 @@ def _hostile_patch(item):
     }
 
 
-def _repair_with_response(monkeypatch, item, patch, format_mode):
+def _repair_with_response(monkeypatch, item, patch, format_mode, *, out_of_scope_response=False):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
@@ -203,7 +203,13 @@ def _repair_with_response(monkeypatch, item, patch, format_mode):
         payload = copy.deepcopy(patch)
         if format_mode == "json_schema":
             payload = _encode_nullable_fixture(payload, author_item_repair_response_schema())
-            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
+            if out_of_scope_response:
+                # Deliberately simulate a provider violating the request grammar.
+                # Even then, a useful allowed leaf survives frozen extra rewrites.
+                assert not validator.is_valid(payload)
+            else:
+                validator.validate(payload)
         return {"choices": [{"message": {"content": json.dumps(payload)}}],
                 "_debug": {"responseFormatType": format_mode}}
 
@@ -225,7 +231,7 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     assert scope["fieldPermissions"]["calls"] == [
         {"id": "held_lantern_pike_life", "paths": ["params.lifetimeTicks"]}]
     incoming = _hostile_patch(item)
-    repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode)
+    repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode, out_of_scope_response=True)
     dossier = json.loads(request["messages"][1]["content"])
     assert dossier["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert dossier["repairScope"] == scope
