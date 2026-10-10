@@ -1566,8 +1566,8 @@
                     "type": "integer",
                     "x-infini-semanticType": "terraria_hammer_power"
                   },
-                  "miningSpeedScale": {
-                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
+                  "miningSpeedMultiplier": {
+                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
                     "maximum": 4,
                     "minimum": 0.1,
                     "type": "number",
@@ -1586,7 +1586,7 @@
                   "pickPower",
                   "axePowerTooltipPercent",
                   "hammerPower",
-                  "miningSpeedScale"
+                  "miningSpeedMultiplier"
                 ],
                 "type": "object"
               }
@@ -4597,8 +4597,8 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "gravityVelocityPerUpdate": {
-                    "description": "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
+                  "accelY": {
+                    "description": "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
                     "maximum": 2,
                     "minimum": -2,
                     "type": "number",
@@ -4614,7 +4614,7 @@
                   }
                 },
                 "required": [
-                  "gravityVelocityPerUpdate"
+                  "accelY"
                 ],
                 "type": "object"
               },
@@ -4714,8 +4714,8 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "rangeTiles": {
-                    "description": "Orbit leash",
+                  "radiusTiles": {
+                    "description": "Fixed orbit radius around the owner",
                     "maximum": 80,
                     "minimum": 1,
                     "type": "number",
@@ -4724,7 +4724,7 @@
                   }
                 },
                 "required": [
-                  "rangeTiles"
+                  "radiusTiles"
                 ],
                 "type": "object"
               },
@@ -5476,8 +5476,8 @@
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
                   },
-                  "returnSpeed": {
-                    "description": "Return speed",
+                  "speed": {
+                    "description": "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
                     "maximum": 80,
                     "minimum": 1,
                     "type": "number",
@@ -5487,7 +5487,7 @@
                 },
                 "required": [
                   "rangeTiles",
-                  "returnSpeed"
+                  "speed"
                 ],
                 "type": "object"
               },

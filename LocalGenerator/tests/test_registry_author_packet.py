@@ -358,14 +358,14 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
     request, user, _ = build_initial_author_request({}, {}, {}, {}, "tool-applicability", model_name="offline-test")
     assert request["response_format"]["type"] == mode
     card = cards_from(json.loads(user)["runtimeCapabilityContract"]["catalog"])["configure_tool"]
-    meaning = CAPABILITY_REGISTRY["configure_tool"].params["miningSpeedScale"].description
-    assert card["params"]["miningSpeedScale"]["meaning"] == meaning
+    meaning = CAPABILITY_REGISTRY["configure_tool"].params["miningSpeedMultiplier"].description
+    assert card["params"]["miningSpeedMultiplier"]["meaning"] == meaning
     for fact in ("while held", "pickPower", "axePowerTooltipPercent", "hammerPower", "> 0", "0.001", "all-zero powers", "no mining-speed effect"):
         assert fact in meaning, "the packet must explain the consumer's joint activation gate"
 
     doc = build_capability_witness("configure_tool")
     tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
-    tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedScale=2)
+    tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedMultiplier=2)
     light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
     light.update(id="independent_light")
     doc["runtimeProgram"]["calls"].append(light)
@@ -417,7 +417,7 @@ UNIT_MEANINGS = {
         "miningSpeedMultiplier": "pickSpeed",
         "lightStrength": "RGB",
     },
-    "configure_tool": {"pickPower": "tooltip", "hammerPower": "tooltip", "miningSpeedScale": "pickSpeed"},
+    "configure_tool": {"pickPower": "tooltip", "hammerPower": "tooltip", "miningSpeedMultiplier": "pickSpeed"},
     "configure_tile_placement": {"placeStyle": "Item.placeStyle"},
     "require_use_condition": {"condition": "thresholds include equality"},
     "add_hold_light": {"strength": "RGB"},
@@ -438,7 +438,7 @@ UNIT_MEANINGS = {
     "set_projectile_hitbox": {"drawScale": "visual scale"},
     "set_projectile_damage": {"knockback": "Projectile.knockBack"},
     "set_projectile_collision": {"updatesPerTick": "per world tick", "immunity": "engine"},
-    "move_gravity_arc": {"gravityVelocityPerUpdate": "per projectile update"},
+    "move_gravity_arc": {"accelY": "per projectile update"},
     "move_sine_homing": {"waveVelocityCoefficient": "0.03"},
     "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
     "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
@@ -509,7 +509,7 @@ def test_serialized_numeric_card_explains_exact_consumer_meaning(packet, fn, nam
 RAW_COEFFICIENTS = {
     "configure_item_stats": ("knockback",),
     "set_projectile_damage": ("knockback",),
-    "configure_tool": ("miningSpeedScale",),
+    "configure_tool": ("miningSpeedMultiplier",),
     "apply_generated_buff_on_use": ("miningSpeedMultiplier", "lightStrength", "moveSpeedBonusFactor", "manaRegenBonusPoints"),
     "configure_accessory": ("manaRegenBonusPoints", "aggroPoints", "lightStrength"),
     "configure_armor": ("manaRegenBonusPoints", "aggroPoints", "lightStrength", "setBonuses.manaRegenBonusPoints", "setBonuses.aggroPoints"),
@@ -550,7 +550,7 @@ def test_raw_coefficients_have_identity_wire_conversion(fn, name):
             ("move_returning_glaive", "returnSpeed"),
             ("move_accelerate", "maxSpeed"),
             ("move_flail_tether", "returnSpeed"),
-            ("move_yoyo_hover", "returnSpeed"),
+            ("move_yoyo_hover", "speed"),
         )
     ],
 )

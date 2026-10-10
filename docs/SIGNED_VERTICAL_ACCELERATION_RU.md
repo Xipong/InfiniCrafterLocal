@@ -1,22 +1,24 @@
 # Знаковое вертикальное ускорение
 
-Категория аудита **A14** открывает для свежего Author существующий знаковый диапазон `move_gravity_arc.gravityVelocityPerUpdate`: **−2…2** вместо положительного 0.001…2. Это расширение Author domain поверх прежнего низкоуровневого consumer, а не заявление о когда-то работающей исторической Author capability.
+Категория аудита **A14** открыла для свежего Author существующий знаковый диапазон `move_gravity_arc.accelY`: **−2…2** вместо положительного 0.001…2. Это расширение Author domain поверх прежнего низкоуровневого consumer, а не заявление о когда-то работающей исторической Author capability. Каноническое имя `accelY` заменяет `gravityVelocityPerUpdate`; числовой диапазон, единицы и исполнение при переименовании не меняются.
 
 ## Явный контракт
 
 ```json
-{"id":"rise","fn":"move_gravity_arc","target":"shot","params":{"gravityVelocityPerUpdate":-0.1875}}
+{"id":"rise","fn":"move_gravity_arc","target":"shot","params":{"accelY":-0.1875}}
 ```
 
 Terraria считает положительный Y направлением вниз. На каждом активном projectile update opcode 2 прибавляет указанное значение к `Projectile.velocity.Y`. Отрицательное значение ускоряет вверх, положительное — вниз; явный ноль оставляет вертикальную скорость прежней. Горизонтальная скорость не меняется. Это ускорение без terminal-speed cap, а не displacement, заданная высота или обещание приземления. Столкновение с тайлами, bounceCount, penetration, lifetime и отдельный controller остаются самостоятельными authored choices.
 
-При `updatesPerTick=N` за world tick выполняется N прибавлений. При `N=6` и `gravityVelocityPerUpdate=-0.1875` вертикальная скорость за один полностью активный world tick изменяется на −1.125 pixels/projectile-update. Spawn speed по-прежнему измеряется в pixels/projectile-update; автоматического пересчёта единиц нет. Activation delay подавляет движение до первого активного update; lifetime учитывается по существующему контракту configure_spawn. Если controller в этот момент владеет движением, базовый movement не выполняется.
+При `updatesPerTick=N` за world tick выполняется N прибавлений. При `N=6` и `accelY=-0.1875` вертикальная скорость за один полностью активный world tick изменяется на −1.125 pixels/projectile-update. Spawn speed по-прежнему измеряется в pixels/projectile-update; автоматического пересчёта единиц нет. Activation delay подавляет движение до первого активного update; lifetime учитывается по существующему контракту configure_spawn. Если controller в этот момент владеет движением, базовый movement не выполняется.
 
 Поле обязательно: `neutral=0` описывает смысл нуля и float32 guard, но не разрешает пропуск; `default` отсутствует. Schema, prompt-card и validator берут диапазон из единственного `ParamSpec`. Bool, null, строки, нечисла, значения вне диапазона и ненулевые числа, исчезающие в float32, отвергаются. Никакого округления, clamp или выбора знака вместо Author нет. Обычное конечное float32 округление сохраняется; проверка nonneutral storage не обещает точного эффекта каждого микроскопического прибавления к уже большой скорости.
 
 ## Wire, provenance и совместимость
 
 Значение дословно проецируется в `movement.params.gravityPerTick`; `name=move_gravity_arc`, `code=2` не меняются. Receipt связывает тот же authored leaf с фактическим final path и value. Strict wire принимает подписанный handoff и отвергает расхождение payload с receipt. Runtime body и DTO не изменены: существующий `RuntimeParamsSpec.Normalize` допускает −2…2, а `GeneratedProjectile.RunMovement` прибавляет `p.GravityPerTick`. Эта проекция — identity, не lossy normalization.
+
+Новые receipts указывают `.params.accelY`. Сохранённые receipts с `.params.gravityVelocityPerUpdate` проверяются через `retained_receipt_params` только без исходного Author; их пути и значения не переписываются. Старое имя не допускается в свежем Author или Repair и не используется как alias при проверке source-aware provenance.
 
 Прежний wire с положительными значениями и сохранённые opcode 6/`move_bounce` не переписываются. Fresh Author продолжает использовать только `move_gravity_arc`; retained bounce остаётся internal. Другие широкие defensive DTO ranges — shrink/expanding scale, return speed и timed yoyo — этим PR не открываются. Исторические fixtures и hashes сохраняются; общий suite продолжает проверять сохранённые документы.
 

@@ -268,8 +268,8 @@ def _workbench_blade() -> dict[str, Any]:
 
 def _umbrella_grenade() -> dict[str, Any]:
     b = _Builder("umbrella_grenade", name="Umbrella Grenadier", mechanic="Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.", damage=34)
-    b.projectile("umbrella_guard", "owner_attached_projectile", speed=0, lifetime=32, damage=18, tile=False, pierce=-1, movement="move_yoyo_hover", movement_params={"rangeTiles": 2, "returnSpeed": 12}, width=54, height=28)
-    b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"gravityVelocityPerUpdate": 0.25}, width=18, height=18)
+    b.projectile("umbrella_guard", "owner_attached_projectile", speed=0, lifetime=32, damage=18, tile=False, pierce=-1, movement="move_yoyo_hover", movement_params={"rangeTiles": 2, "speed": 12}, width=54, height=28)
+    b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"accelY": 0.25}, width=18, height=18)
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
     b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"when": "on_expire", "radiusTiles": 7, "damageMultiplier": 1.4})
@@ -297,7 +297,7 @@ def _fishing_platform_tool() -> dict[str, Any]:
     b = _Builder("fishing_platform_tool", name="Angler's Platform Rod", mechanic="Functions as a tool and places a concrete temporary-looking platform tile.", category="hybrid", damage=8, item_body_contact=True)
     b.bind("primary_tool", "primary_use", "use_item_body", "item")
     b.bind("alternate_place", "alternate_use", "place_item", "item", stack_cost=1, placement_call_id="platform_result")
-    b.call("tool_heads", "configure_tool", "item", {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedScale": 0.9})
+    b.call("tool_heads", "configure_tool", "item", {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedMultiplier": 0.9})
     b.call("platform_result", "configure_tile_placement", "item", {"tileId": 19, "placeStyle": 0})
     return b.finish(primary_entity_id="item", composition="A fishing rod carries a fold-out platform panel as a literal placeable result.", parent_a="fishing rod", parent_b="platform tile")
 
@@ -330,7 +330,7 @@ def _equipment_tool_combat() -> dict[str, Any]:
     b.bind("passive_harness", "equipped", "equip_passive", "item")
     b.call("harness_stats", "configure_accessory", "item", {"defensePoints": 4, "moveSpeedBonusPercent": 8, "genericCritChancePercentagePoints": 2, "damageReductionPercentagePoints": 2, "lightStrength": 0.35, "lightColor": "yellow"})
     b.call("harness_damage", "add_equipment_damage_bonus", "item", {"phase": "equipped", "damageClass": "generic", "bonusPercent": 5})
-    b.call("mining_heads", "configure_tool", "item", {"pickPower": 55, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.85})
+    b.call("mining_heads", "configure_tool", "item", {"pickPower": 55, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 0.85})
     b.call("place_torch", "configure_tile_placement", "item", {"tileId": 4, "placeStyle": 0})
 
     return b.finish(primary_entity_id="item", composition="A mining harness retains its drill heads and installs its lamp as a literal tile.", parent_a="mining harness/tool", parent_b="placeable lamp")

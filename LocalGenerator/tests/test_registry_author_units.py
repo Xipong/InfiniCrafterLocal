@@ -28,7 +28,10 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 FN = "apply_generated_buff_on_use"
 
 RENAMES = (
-    ("move_gravity_arc", "gravityPerTick", "gravityVelocityPerUpdate", 0.1875, "movement.params"),
+    ("move_gravity_arc", "gravityPerTick", "accelY", 0.1875, "movement.params"),
+    ("move_orbit", "rangeTiles", "radiusTiles", 7.125, "movement.params"),
+    ("move_yoyo_hover", "returnSpeed", "speed", 7.125, "movement.params"),
+    ("configure_tool", "miningSpeedScale", "miningSpeedMultiplier", 1.125, "gameplay"),
     ("move_spiral", "turnRadiansPerTick", "turnRadiansPerUpdate", -0.1875, "movement.params"),
     ("move_expanding_wave", "scalePerTick", "scaleGrowthPerUpdate", 0.1875, "movement.params"),
     ("move_accelerate", "acceleration", "speedMultiplierPerUpdate", 1.125, "movement.params"),
@@ -62,7 +65,7 @@ def _project(fn, new, value):
     call = {
         "id": "renamed",
         "fn": fn,
-        "target": "item" if fn.startswith(("configure_item", "configure_vanilla", "restore_", "apply_generated")) else "shot",
+        "target": "item" if compiler.CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",) else "shot",
         "_sourceIndex": 0,
         "params": {
             # This test calls the isolated projector, not the full compiler

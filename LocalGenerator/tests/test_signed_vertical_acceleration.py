@@ -13,7 +13,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 FN = "move_gravity_arc"
-PARAM = "gravityVelocityPerUpdate"
+PARAM = "accelY"
 
 
 def selected(document, fn=FN):
@@ -110,9 +110,10 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
 
 def test_only_gravity_arc_domain_expands_and_retained_bounce_stays_hidden():
     assert CAPABILITY_REGISTRY["move_bounce"].decision == "internal"
-    assert CAPABILITY_REGISTRY["move_bounce"].params[PARAM].minimum == 0.001
+    assert CAPABILITY_REGISTRY["move_bounce"].params["gravityVelocityPerUpdate"].minimum == 0.001
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["scaleGrowthPerUpdate"].minimum == 0.001
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["maxScale"].maximum == 4
-    for fn in ("move_boomerang", "move_returning_glaive", "move_flail_tether", "move_yoyo_hover"):
-        assert CAPABILITY_REGISTRY[fn].params["returnSpeed"].minimum == 1
-        assert CAPABILITY_REGISTRY[fn].params["returnSpeed"].maximum == 80
+    for fn, speed in (("move_boomerang", "returnSpeed"), ("move_returning_glaive", "returnSpeed"),
+                      ("move_flail_tether", "returnSpeed"), ("move_yoyo_hover", "speed")):
+        assert CAPABILITY_REGISTRY[fn].params[speed].minimum == 1
+        assert CAPABILITY_REGISTRY[fn].params[speed].maximum == 80

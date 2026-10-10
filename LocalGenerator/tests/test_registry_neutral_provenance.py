@@ -218,7 +218,7 @@ def test_joint_buff_omissions_preserve_light_or_reject_inert(present, active):
         for fn, names in (
             ("apply_generated_buff_on_use", ("lightStrength", "lightColor")),
             ("restore_resources_on_use", ("healLife", "healMana")),
-            ("configure_tool", ("pickPower", "axePowerTooltipPercent", "hammerPower", "miningSpeedScale")),
+            ("configure_tool", ("pickPower", "axePowerTooltipPercent", "hammerPower", "miningSpeedMultiplier")),
             ("set_projectile_collision", ("immunity", "updatesPerTick")),
             ("move_boomerang", ("returnAfterTicks", "returnSpeed")),
         )
