@@ -235,4 +235,3 @@ def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero
     report = validate_runtime_wire(wire)
     assert not report["ok"]
     assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".spreadRadians") for row in report["errors"])
-

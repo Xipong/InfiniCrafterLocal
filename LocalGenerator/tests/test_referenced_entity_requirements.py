@@ -142,4 +142,3 @@ def test_reference_repair_can_create_complete_child_without_touching_existing_no
     assert validate_runtime_program(repaired)["ok"]
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == "nail_spawn")["params"]["aim"] == "cursor"
     assert len(repaired["runtimeProgram"]["entities"]) == len(doc["runtimeProgram"]["entities"]) + 1
-
