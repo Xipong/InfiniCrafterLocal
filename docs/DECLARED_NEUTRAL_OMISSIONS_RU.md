@@ -19,15 +19,16 @@ Schema `default` — аннотация, не обещание provider constrai
 | `configure_item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
 | `configure_item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
 | `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusFactor/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
+| `channel_beam` | `manaPayment → initial_use_only`; `initialDamageMultiplier/initialWidthMultiplier/damageStartProgress → 1.0`; `raycastTiles → false`; совместные сочетания и native semantics — [A7](CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md) |
 
-Это девять параметров в трёх capabilities текущего узкого изменения, не blanket optionality. Units и старые wire conversions не меняются; актуальный executable перечень — registry.
+Это конечный перечень объявленных параметров, не blanket optionality. Units и старые wire conversions не меняются; актуальный executable перечень — registry. Для beam сохранённый wire без расширений остаётся без новых полей, а fresh Author получает явные нейтрали с omission receipts.
 
 <a id="dependencies"></a>
 ## Совместные зависимости важнее optionality
 
 Generated buff требует хотя бы один **ненейтральный исполняемый** эффект. Полностью отсутствующий/нейтральный набор с выключенным light — RED; цвет без light не эффект. `durationTicks/lightStrength/lightColor` и executable `apply_item_effects` binding остаются явными. Код не выбирает цвет.
 
-Не распространять разрешение на damageClass/damage/useStyle/channel, геометрию, refs/target, events, lifetime, cooldown/immunity. `channel_beam/charge_then_release` всё ещё требуют explicit channel. Необъявленные группы требуют отдельного совместного доказательства:
+Обязательные damageClass/damage/useStyle/channel, базовая геометрия, refs/target, events, lifetime и cooldown/immunity не получают общего разрешения на пропуск. `channel_beam/charge_then_release` всё ещё требуют explicit channel; beam rangeTiles/widthPx/warmupTicks остаются обязательными. Пять новых beam-полей разрешены только своим явным default=neutral и отдельным совместным доказательством. Необъявленные группы требуют такого доказательства:
 
 - healLife/healMana: sparse вызов должен отдельно гарантировать ненулевое восстановление;
 - pick/axe/hammer + mining multiplier: скорость без working tool power инертна;

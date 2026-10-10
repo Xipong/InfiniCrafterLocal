@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring.technical_lowering import (
     primary_binding_role_receipt,
     primary_owner_for_kind,
     primary_owner_receipt,
+    effect_group_binding_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH,
@@ -115,6 +116,18 @@ def _compile_item_call(
 ) -> None:
     fn = str(call.get("fn") or "")
     p = _copy_params(call)
+    effect_prefix = "gameplay"
+    cap = CAPABILITY_REGISTRY[fn]
+    if cap.effect_groupable and "effectGroupId" in p:
+        groups = runtime.setdefault("effectGroups", [])
+        group_id = p["effectGroupId"]
+        index = next((i for i, row in enumerate(groups) if row["id"] == group_id), len(groups))
+        if index == len(groups):
+            groups.append({"id": group_id})
+        gameplay = groups[index]
+        effect_prefix = f"runtimeProgram.effectGroups[{index}]"
+        ctx.write(call=call, path=effect_prefix + ".id", value=group_id,
+                  target=gameplay, key="id", authored_param="effectGroupId")
 
     def project(target: dict[str, Any], path_prefix: str, mapping: Mapping[str, str]) -> None:
         for wire_key, destination in mapping.items():
@@ -130,7 +143,7 @@ def _compile_item_call(
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
 
     def project_equipment(target: dict[str, Any], prefix: str) -> None:
-        for source, spec in CAPABILITY_REGISTRY[fn].params.items():
+        for source in CAPABILITY_REGISTRY[fn].params:
             if source in p:
                 ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
@@ -177,6 +190,12 @@ def _compile_item_call(
             "contactForgivenessPx": "contactForgivenessPx",
         })
         return
+    if fn == "configure_weapon_ammo":
+        ammo: dict[str, Any] = {}
+        project(ammo, "runtimeProgram.weaponAmmo", {name: name for name in CAPABILITY_REGISTRY[fn].params})
+        ctx.write_derived(call=call, path="runtimeProgram.weaponAmmo", value=ammo, target=runtime, key="weaponAmmo",
+                          source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        return
     if fn == "configure_vanilla_ammo_item":
         project(gameplay, "gameplay", {
             "ammoCategory": "ammoCategory",
@@ -186,7 +205,7 @@ def _compile_item_call(
         })
         return
     if fn == "restore_resources_on_use":
-        project(gameplay, "gameplay", {"healLife": "healLife", "healMana": "healMana", "potionSickness": "potion"})
+        project(gameplay, effect_prefix, {"healLife": "healLife", "healMana": "healMana", "potionSickness": "potion"})
         return
     if fn == "apply_vanilla_buff_on_use":
         buffs = gameplay.setdefault("extraBuffs", [])
@@ -197,18 +216,18 @@ def _compile_item_call(
             {
                 "callId": str(call.get("id") or ""), "fn": fn,
                 "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.buffId",
-                "finalPath": f"gameplay.extraBuffs[{base}].buffCode", "value": p["buffId"], "status": "technical_projection",
+                "finalPath": f"{effect_prefix}.extraBuffs[{base}].buffCode", "value": p["buffId"], "status": "technical_projection",
             },
             {
                 "callId": str(call.get("id") or ""), "fn": fn,
                 "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.durationTicks",
-                "finalPath": f"gameplay.extraBuffs[{base}].buffTime", "value": p["durationTicks"], "status": "technical_projection",
+                "finalPath": f"{effect_prefix}.extraBuffs[{base}].buffTime", "value": p["durationTicks"], "status": "technical_projection",
             },
         ])
         return
     if fn == "apply_generated_buff_on_use":
         generated = gameplay.setdefault("generatedBuff", {})
-        project(generated, "gameplay.generatedBuff", {
+        project(generated, effect_prefix + ".generatedBuff", {
             "durationTicks": "durationTicks",
             "miningSpeedMultiplier": "miningSpeedMultiplier",
             "lightStrength": "emitLightStrength",
@@ -236,12 +255,16 @@ def _compile_item_call(
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
         return
     if fn == "move_player_on_use":
-        project(gameplay, "gameplay", {
+        project(gameplay, effect_prefix, {
             "mode": "mobilityMode",
             "rangeTiles": "mobilityRangeTiles",
             "cooldownTicks": "mobilityCooldownTicks",
             "safeTileOnly": "mobilitySafeTileOnly",
         })
+        return
+    if fn == "refresh_generated_effect_group_while_held":
+        ctx.write(call=call, path="runtimeProgram.heldEffectGroupId", value=p["effectGroupId"],
+                  target=runtime, key="heldEffectGroupId", authored_param="effectGroupId")
         return
     if fn == "configure_accessory":
         accessory["enabled"] = True
@@ -298,8 +321,11 @@ def _compile_entity_call(
         spawn["enabled"] = True
         ctx.write_derived(call=call, path=f"{base}.spawn.enabled", value=True, target=spawn, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "set_projectile_concurrency":
+    if fn in {"set_projectile_concurrency", "set_descendant_concurrency"}:
         project(component("spawn"), f"{base}.spawn", p)
+        return
+    if fn == "set_projectile_sentry":
+        project(entity, base, p)
         return
     if fn == "set_projectile_damage":
         damage = component("damage")
@@ -330,14 +356,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.controller.name", value=fn, target=controller, key="name", source=source_fn)
         ctx.write_derived(call=call, path=f"{base}.controller.code", value=CONTROLLER_OPCODE[fn], target=controller, key="code", source=source_fn)
         if fn == "target_and_fire":
-            targeting = component("targeting")
-            for source_key, destination in {
-                "shotEntity": "shotEntityId",
-                "intervalTicks": "intervalTicks",
-                "rangeTiles": "rangeTiles",
-                "sameTargetBias": "sameTargetBias",
-            }.items():
-                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination, authored_param=source_key)
+            project(component("targeting"), f"{base}.targeting", p)
         else:
             controller_params = controller.setdefault("params", {})
             for key, value in p.items():
@@ -449,6 +468,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             final_index=final_index,
             role=binding["role"],
         ))
+        if "effectGroupId" in binding["usePolicy"]["action"]:
+            ctx.receipts.append(effect_group_binding_receipt(source_index=source_index, final_index=final_index,
+                value=binding["usePolicy"]["action"]["effectGroupId"]))
         if action_kind(authored_binding) == "place_item":
             call = placement_calls_by_id[placement_call_id(authored_binding)]
             source_call_index = int(call["_sourceIndex"])

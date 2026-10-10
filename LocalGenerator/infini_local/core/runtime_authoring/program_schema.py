@@ -68,6 +68,11 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
         },
     }
     required = ["kind", "targetId"]
+    if action_name == "apply_item_effects":
+        properties["effectGroupId"] = {
+            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+        }
     if action_name == "place_item":
         properties["placementCallId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
@@ -289,7 +294,24 @@ def author_item_response_schema() -> dict[str, Any]:
     }
 
 
-def author_item_repair_schema() -> dict[str, Any]:
+def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+    """Canonical patch shape, optionally restricted to request-visible calls.
+
+    None requests the complete local contract. An explicit empty set permits
+    only an empty callsUpsert array, never the full catalog. Scope permissions
+    and the frozen merge remain separate authorities after parsing.
+    """
+    variants = capability_provider_union()
+    if capability_names is not None:
+        requested = set(capability_names)
+        registered = {row["properties"]["fn"]["const"] for row in variants}
+        if requested - registered:
+            raise ValueError(f"Unknown Repair schema capabilities: {sorted(requested - registered)}")
+        variants = [row for row in variants if row["properties"]["fn"]["const"] in requested]
+    calls_schema = {"type": "array", "items": {"oneOf": variants}, "maxItems": 48} if variants else {
+        "type": "array", "maxItems": 0,
+        "items": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+    }
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -301,7 +323,7 @@ def author_item_repair_schema() -> dict[str, Any]:
             "bindingsUpsert": {"type": "array", "items": binding_schema(), "maxItems": 8},
             "bindingIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 8},
             "bindingIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 7}, "maxItems": 8},
-            "callsUpsert": {"type": "array", "items": {"oneOf": capability_provider_union()}, "maxItems": 48},
+            "callsUpsert": calls_schema,
             "callIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 48},
             "callIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 47}, "maxItems": 48},
             "callParamKeysDelete": {

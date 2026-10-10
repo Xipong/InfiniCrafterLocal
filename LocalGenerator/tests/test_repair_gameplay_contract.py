@@ -14,7 +14,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
+def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_scope_response=False):
     """Exercise the real request/parser/scope/merge caller; only provider I/O is synthetic."""
     import socket
     from jsonschema import Draft202012Validator
@@ -34,7 +34,20 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
         payload = copy.deepcopy(incoming)
         if format_mode == "json_schema":
             payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
-            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
+            if out_of_scope_response:
+                # Foreign hostile rows are not nullable choices offered by the
+                # scoped grammar. Keep their literal sparse bytes after encoding.
+                scope = json.loads(request["messages"][1]["content"])["repairScope"]
+                mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
+                payload["callsUpsert"] = [
+                    encoded if original["id"] in mutable_ids else copy.deepcopy(original)
+                    for original, encoded in zip(incoming["callsUpsert"], payload["callsUpsert"])
+                ]
+                # A provider violating its grammar still meets frozen local merge.
+                assert not validator.is_valid(payload)
+            else:
+                validator.validate(payload)
         return {"choices": [{"message": {"content": json.dumps(payload)}}],
                 "_debug": {"responseFormatType": format_mode}}
 
@@ -82,7 +95,8 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
     frozen["params"]["knockback" if leaf == "autoReuse" else "useStyle"] = 3 if leaf == "autoReuse" else "swing"
     incoming = {"note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
                 "callsUpsert": [candidate, frozen]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + leaf in audit["acceptedPaths"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
@@ -128,7 +142,8 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     stats["params"]["damage"] = 1999
     incoming = {"note": "model explicitly chose a full conditional alternative",
                 "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + needed in audit["acceptedPaths"]
@@ -189,7 +204,9 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, form
         with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
             _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
     else:
-        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+        repaired, dossier = _offline_gameplay_repair(
+            monkeypatch, doc, patch, format_mode,
+            out_of_scope_response=case == "unrelated-selector-frozen")
         permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
         if case == "periodic-already-selected":
             assert permissions == [{"id": call["id"], "paths": ["params.periodTicks"]}]
@@ -456,7 +473,7 @@ def test_gameplay_exact_leaf_repair(case):
         paths = ["params.damage"]
     elif case.startswith("buff"):
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
-            if name not in {"durationTicks", "lightColor"}:
+            if name not in {"durationTicks", "lightColor"} and spec.neutral is not None:
                 if case == "buff-sparse" and not spec.required:
                     node["params"].pop(name, None)
                 else:

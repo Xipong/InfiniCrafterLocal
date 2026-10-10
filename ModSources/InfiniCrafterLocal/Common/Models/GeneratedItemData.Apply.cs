@@ -1,6 +1,8 @@
 #nullable enable
 using InfiniCrafterLocal.Content.Projectiles;
 using System;
+using System.IO;
+using System.Linq;
 
 using Terraria;
 using Terraria.ID;
@@ -78,6 +80,9 @@ public sealed partial class GeneratedItemData
         // sword, bow, staff, sentry, furniture, or none of those.
         RuntimeBindingSpec? primary = RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
         RuntimeBindingSpec? alternate = RuntimeProgram.BindingForInput(RuntimeInputKind.AlternateUse);
+        item.sentry = new[] { primary, alternate }.Any(binding => binding is not null
+            && binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
+            && RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId)?.NativeSentry == true);
         bool spawnsRuntimeEntity = primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
             || alternate?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity;
         item.shoot = spawnsRuntimeEntity ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
@@ -85,9 +90,10 @@ public sealed partial class GeneratedItemData
             ? RuntimeProgram.TryGetEntity(primary.UsePolicy.Action.TargetId)
             : null;
         item.shootSpeed = primaryEntity?.Spawn.SpeedPxPerTick ?? 0f;
+        ApplyWeaponAmmoField(item, primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity);
 
         // Exact Terraria ammo-item projection. Item.ammo means “this item is ammo”;
-        // Item.useAmmo would mean “this weapon consumes ammo” and is intentionally not
+        // The separate explicit WeaponAmmo capability owns Item.useAmmo. Neither is
         // inferred here. The projectile ID is authored explicitly rather than selected
         // from a family/category table.
         item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory(Gameplay.AmmoCategory);
@@ -122,13 +128,25 @@ public sealed partial class GeneratedItemData
         StampAppliedTrace(item);
     }
 
-    internal void ApplyUseEffectFields(Item item, bool enabled)
+    internal void ApplyWeaponAmmoField(Item item, bool activeSpawn)
+        => item.useAmmo = activeSpawn && RuntimeProgram.WeaponAmmo is { } ammo
+            ? TerrariaRuntimeVocabulary.ResolveAmmoCategory(ammo.AmmoCategory) : AmmoID.None;
+
+    internal IItemEffectsSpec EffectsForBinding(RuntimeBindingSpec? binding)
+        => binding?.UsePolicy.Action.EffectGroupId is string id
+            ? RuntimeProgram.TryGetEffectGroup(id) ?? throw new InvalidDataException($"missing effect group '{id}'")
+            : Gameplay;
+
+    internal IItemEffectsSpec PrimaryUseEffects => EffectsForBinding(RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse));
+
+    internal void ApplyUseEffectFields(Item item, bool enabled, RuntimeBindingSpec? binding = null)
     {
-        item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 0;
-        item.healMana = enabled ? Math.Max(0, Gameplay.HealMana) : 0;
-        item.potion = enabled && Gameplay.Potion;
-        item.buffType = enabled ? Math.Max(0, Gameplay.BuffCode) : 0;
-        item.buffTime = enabled ? Math.Max(0, Gameplay.BuffTime) : 0;
+        IItemEffectsSpec effects = binding is null ? PrimaryUseEffects : EffectsForBinding(binding);
+        item.healLife = enabled ? Math.Max(0, effects.HealLife) : 0;
+        item.healMana = enabled ? Math.Max(0, effects.HealMana) : 0;
+        item.potion = enabled && effects.Potion;
+        item.buffType = enabled ? Math.Max(0, effects.BuffCode) : 0;
+        item.buffTime = enabled ? Math.Max(0, effects.BuffTime) : 0;
     }
 
     private static void ConfigureNonUsableEquipmentItem(Item item)

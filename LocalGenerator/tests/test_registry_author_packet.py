@@ -34,6 +34,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from test_author_request_compaction import _expand_constraint_references
 
 
 @pytest.fixture
@@ -71,7 +72,9 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
         assert phrase.lower() not in user.lower()
     assert "concept" in user and "realization" in user
     expected = {r["fn"]: r for r in compact_capability_catalog()}
-    assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
+    assert _expand_constraint_references(
+        {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
+         for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
     assert set(expected) == set(CAPABILITY_REGISTRY)
     assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in CAPABILITY_REGISTRY.values())
     assert {r["input"] for r in catalog["inputs"] if r["exclusive"]} == {n for n, s in INPUT_KIND_REGISTRY.items() if s.exclusive}
@@ -131,7 +134,9 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
         assert phrase in intent
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expected = {r["fn"]: r for r in compact_capability_catalog()}
-    assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
+    assert _expand_constraint_references(
+        {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
+         for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
     assert set(expected) == set(CAPABILITY_REGISTRY)
     assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (
         len(CAPABILITY_REGISTRY), sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
@@ -286,7 +291,7 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     author_binding = card["runtimeProgram"]["bindings"][0]
     assert set(author_binding) == {"id", "input", "usePolicy"}
     assert set(author_binding["usePolicy"]) == {"action", "stackCost", "contactDamage"}
-    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId"}
+    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
     assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
@@ -441,7 +446,7 @@ UNIT_MEANINGS = {
     "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
     "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
     "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
-    "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "Soft"},
+    "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "hard geometric"},
     "pull_on_event": {"strength": "velocity", "radiusTiles": "no directTarget"},
     "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
 }

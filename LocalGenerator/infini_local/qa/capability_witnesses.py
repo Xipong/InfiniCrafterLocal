@@ -124,6 +124,14 @@ def _binding(
 def build_capability_witness(fn: str) -> dict[str, Any]:
     if fn not in CAPABILITY_REGISTRY:
         raise KeyError(fn)
+    if fn == "configure_weapon_ammo":
+        doc = build_capability_witness("move_straight")
+        next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_motion"
+        doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item"))
+        doc["name"] = f"Capability Witness {fn}"
+        doc["concept"]["coreMechanic"] = f"Execute {fn} through its public typed contract."
+        doc["realization"]["description"] = f"A minimal runtime witness executing {fn}."
+        return doc
     cap = CAPABILITY_REGISTRY[fn]
     entities: list[dict[str, Any]] = [{"id": "item", "kind": "item_body"}]
     bindings: list[dict[str, Any]] = []
@@ -149,6 +157,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             if fn == "add_equipment_damage_bonus":
                 calls.append(_call("base_equipment", "configure_accessory", "item", {"defensePoints": 1}))
             calls.append(_call("witness_call", fn, "item"))
+            if fn == "refresh_generated_effect_group_while_held":
+                effect = _params("apply_generated_buff_on_use")
+                effect["effectGroupId"] = _params(fn)["effectGroupId"]
+                calls.append(_call("held_utility_effect", "apply_generated_buff_on_use", "item", effect))
             action = "use_item_body"
             input_kind = "primary_use"
             if fn in {"configure_placeable", "present_placed_item_sprite"}:

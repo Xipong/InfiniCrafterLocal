@@ -306,6 +306,32 @@ def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "wireDtoDrift": sorted(set(actual)^wire)}
 
 
+def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    """A named container cannot grow item stats or a second undocumented effect slot."""
+    from infini_local.core.runtime_authoring.wire_validator import _item_effect_group_wire_schema
+
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeItemEffectGroupSpec.cs").read_bytes()
+    prefix = "runtimeProgram.effectGroups[]."
+    fields = {path[len(prefix):].split(".", 1)[0].replace("[]", "")
+              for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths if path.startswith(prefix)}
+    pascal = lambda names: {name[0].upper() + name[1:] for name in names}
+    actual = _class_properties(dto, "RuntimeItemEffectGroupSpec")
+    wire_fields = set(_item_effect_group_wire_schema()["properties"])
+    return {"ok": actual == pascal(fields) == pascal(wire_fields),
+            "unclassifiedDtoFields": sorted(actual - pascal(fields)),
+            "missingDtoFields": sorted(pascal(fields) - actual),
+            "wireDtoDrift": sorted(actual ^ pascal(wire_fields))}
+
+
+def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    """Exact typed native-ammo choices, without an unregistered weapon profile."""
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeWeaponAmmoSpec.cs").read_bytes()
+    expected = {name[0].upper() + name[1:] for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params}
+    actual = _class_properties(dto, "RuntimeWeaponAmmoSpec")
+    return {"ok": actual == expected, "unclassifiedDtoFields": sorted(actual - expected),
+            "missingDtoFields": sorted(expected - actual)}
+
+
 def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Cross-check structural C# DTOs with Author, Visual and technical owners."""
     from infini_local.core.runtime_authoring import program_schema as author
@@ -321,6 +347,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     actions = set().union(*(row["properties"]["usePolicy"]["properties"]["action"]["properties"] for row in binding_variants))
     prefixes = ("runtimeProgram.entities[].", "runtimeProgram.bindings[].usePolicy.action.placement.")
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
+    runtime_capability_roots = {path.split(".")[1].replace("[]", "") for path in paths if path.startswith("runtimeProgram.")}
     entity_components = {path[len(prefixes[0]):].split(".", 1)[0].replace("[]", "")
                          for path in paths if path.startswith(prefixes[0])}
     placement_fields = {path[len(prefixes[1]):].split(".", 1)[0] for path in paths if path.startswith(prefixes[1])}
@@ -336,7 +363,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     visual_contract = pascal(visual_model_fields) & _class_properties(dto, "RuntimeEntityVisualSpec")
     origins = {
         "RuntimeProgramSpec": pascal(program["properties"]) | {
-            "ItemEntityId", "PrimaryOwner", "Limits", "ItemUse", "ItemContact"},
+            "ItemEntityId", "PrimaryOwner", "Limits", "ItemUse", "ItemContact"} | pascal(runtime_capability_roots),
         "RuntimeLimitsSpec": pascal(wire._LIMIT_KEYS),  # compiler-owned fixed safety budgets
         "RuntimeBindingSpec": pascal(bindings) | {"Role"},
         "RuntimeBindingUsePolicySpec": pascal(policy),
@@ -369,8 +396,12 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         unclassified[cls] = sorted(properties - owner_fields)
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
     placed_storage = placed_body_surface_audit(dto)
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"],
+    effect_groups = item_effect_group_surface_audit()
+    weapon_ammo = weapon_ammo_surface_audit()
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
             "placedBodyStorage": placed_storage,
+            "itemEffectGroups": effect_groups,
+            "weaponAmmo": weapon_ammo,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,
             "visualStageFields": sorted(visual_contract),
             "vfxDirectorFields": sorted(vfx_director_fields),
