@@ -10,7 +10,7 @@
 
 **Draft** у runtime-категорий означает, что код, контракты, portable tests и подготовленные native scenarios доступны для ревью, но C# build/EngineRuntimeChecks и Terraria SP/MP ещё не выполнены. В окружении нет .NET/tModLoader/ParticleLibrary/Luminance. У компактного output отдельный Draft нужен для проверки качества реальной LLM-генерации; новый режим остаётся opt-in.
 
-Число pytest относится к собственной ветке. Эти числа нельзя складывать как независимое общее покрытие: suite в основном общий. Для каждого code PR выполнены также остальные обязательные portable gates; native notRun не включён в PASS. Artifact-only follow-ups отдельно отмечены в описаниях соответствующих PR.
+Число pytest относится к собственной ветке. Эти числа нельзя складывать как независимое общее покрытие: suite в основном общий. Для каждого code PR выполнены также остальные обязательные portable gates; native notRun не включён в PASS. Artifact-only и formatting-only follow-ups отдельно отмечены в описаниях соответствующих PR с точными проверенными ревизиями.
 
 ## Карта и доказательства
 
@@ -128,4 +128,4 @@ Ammo saving, собственный item stack RNG и live projectile cap — р
 | [#24](https://github.com/Xipong/InfiniCrafterLocal/pull/24) | [24f76ffc31275](https://github.com/Xipong/InfiniCrafterLocal/commit/24f76ffc312750a6702c3b38b3a454bcd60ac162) | `audit/author-projectiles` |
 | [#25](https://github.com/Xipong/InfiniCrafterLocal/pull/25) | [16bdf428c54b4](https://github.com/Xipong/InfiniCrafterLocal/commit/16bdf428c54b42398c728c58c612bc19a71b84d2) | `main` |
 | [#26](https://github.com/Xipong/InfiniCrafterLocal/pull/26) | [9134fa9d8884](https://github.com/Xipong/InfiniCrafterLocal/commit/9134fa9d8884acd5e28028f5548f3a7c54d00fb2) | `audit/author-projectiles` |
-| [#27](https://github.com/Xipong/InfiniCrafterLocal/pull/27) | [b7135fea50ec](https://github.com/Xipong/InfiniCrafterLocal/commit/b7135fea50ecfd80320bf7d5cc1aa2fb3fdd2ad2) | `audit/runtime-parent-inheritance` |
+| [#27](https://github.com/Xipong/InfiniCrafterLocal/pull/27) | [ed4ae1fde559](https://github.com/Xipong/InfiniCrafterLocal/commit/ed4ae1fde55958e0f3c9c76648e596adfd11068f) | `audit/runtime-parent-inheritance` |
