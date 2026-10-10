@@ -441,7 +441,7 @@ UNIT_MEANINGS = {
     "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
     "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
     "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
-    "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "Soft"},
+    "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "hard geometric"},
     "pull_on_event": {"strength": "velocity", "radiusTiles": "no directTarget"},
     "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
 }

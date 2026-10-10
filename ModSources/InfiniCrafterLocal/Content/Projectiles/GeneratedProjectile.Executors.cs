@@ -176,19 +176,54 @@ public sealed partial class GeneratedProjectile
             return true;
         _controllerTimer = 0;
         float range = Math.Max(16f, (_entity.Targeting.RangeTiles > 0 ? _entity.Targeting.RangeTiles : _entity.Controller.Params.RangeTiles) * 16f);
-        NPC? target = FindNearestNpc(Projectile.Center, range, _lastTarget, _entity.Targeting.SameTargetBias);
+        NPC? target = FindFiringTarget(range, _entity.Targeting);
         if (target is null) return true;
         _lastTarget = target.whoAmI;
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
-        int granted = budget.Reserve(1);
+        int granted = budget.Reserve(_entity.Targeting.Count);
         int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: 1,
+            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: _entity.Targeting.Count,
+            spreadOverride: (float)_entity.Targeting.SpreadRadians,
             activationBudget: budget) : 0;
         budget.Return(granted - spawned);
         Projectile.netUpdate = true;
         return true;
+    }
+
+    private NPC? FindFiringTarget(float range, RuntimeTargetingSpec targeting)
+    {
+        bool Admitted(NPC npc, out float score)
+        {
+            score = float.PositiveInfinity;
+            if (!npc.CanBeChasedBy(Projectile)) return false;
+            float distance = Vector2.Distance(Projectile.Center, npc.Center);
+            // Geometric admission precedes the preference discount. A previous
+            // or assigned target cannot turn a hard radius into a score radius.
+            if (targeting.HardRange && distance > range) return false;
+            score = npc.whoAmI == _lastTarget
+                ? distance * (1f - Math.Clamp(targeting.SameTargetBias, 0f, 0.9f))
+                : distance;
+            if (!targeting.HardRange && score >= range) return false;
+            return !targeting.RequireLineOfSight || Collision.CanHit(
+                Projectile.position, Projectile.width, Projectile.height, npc.position, npc.width, npc.height);
+        }
+
+        if (targeting.TargetPolicy == "player_assigned_first")
+        {
+            NPC? assigned = Projectile.OwnerMinionAttackTargetNPC;
+            if (assigned is not null && Admitted(assigned, out _)) return assigned;
+        }
+        NPC? selected = null;
+        float best = float.PositiveInfinity;
+        foreach (NPC npc in Main.ActiveNPCs)
+            if (Admitted(npc, out float score) && score < best)
+            {
+                selected = npc;
+                best = score;
+            }
+        return selected;
     }
 
     private void RunMovement()

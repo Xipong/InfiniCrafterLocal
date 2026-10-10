@@ -62,7 +62,7 @@ _PARAMS_KEYS = frozenset({
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
     "chargeTicks", "powerMultiplier", "shotEntity", "intervalTicks", "sameTargetBias",
 })
-_TARGETING_KEYS = frozenset({"shotEntityId", "intervalTicks", "rangeTiles", "sameTargetBias"})
+_TARGETING_KEYS = frozenset(spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["target_and_fire"].params.items())
 _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
@@ -364,6 +364,17 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
         if isinstance(targeting, Mapping):
+            # New options are absent in retained v5 wire. Any present option is
+            # checked by its canonical ParamSpec without supplying a value.
+            for name in ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"):
+                if name in targeting:
+                    spec = CAPABILITY_REGISTRY["target_and_fire"].params[name]
+                    for error in strict_schema_errors(targeting[name], spec.schema()):
+                        errors.append({**error, "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
+                    consumer_error = spec.consumer_value_error(targeting[name])
+                    if consumer_error:
+                        errors.append({"code": "consumer_precision_loss", "message": consumer_error,
+                                       "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
             child = str(targeting.get("shotEntityId") or "")
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})

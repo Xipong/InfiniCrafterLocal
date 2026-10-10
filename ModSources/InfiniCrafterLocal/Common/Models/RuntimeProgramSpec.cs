@@ -867,12 +867,28 @@ public sealed class RuntimeTargetingSpec
     public int IntervalTicks { get; set; }
     public float RangeTiles { get; set; }
     public float SameTargetBias { get; set; }
+    // Retained v5 documents omit these fields. Their defaults preserve the exact
+    // former single-shot/soft-score behaviour; new Author choices are receipted.
+    public int Count { get; set; } = 1;
+    // Keep the admitted JSON number until the native float32 spawn boundary,
+    // so a tiny nonzero angle cannot disappear before validation observes it.
+    public double SpreadRadians { get; set; }
+    public string TargetPolicy { get; set; } = "distance_score";
+    public bool RequireLineOfSight { get; set; }
+    public bool HardRange { get; set; }
     public void Normalize()
     {
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
         SameTargetBias = Math.Clamp(SameTargetBias, 0f, 1f);
+        if (Count is < 1 or > 4)
+            throw new InvalidDataException("targeting count is outside explicit accepted bounds");
+        if (SpreadRadians is < 0d or > 0.75d)
+            throw new InvalidDataException("targeting spread is outside explicit accepted bounds");
+        if (!double.IsFinite(SpreadRadians) || SpreadRadians != 0d && (float)SpreadRadians == 0f
+            || TargetPolicy is not ("distance_score" or "player_assigned_first"))
+            throw new InvalidDataException("targeting volley/policy is outside explicit accepted bounds");
     }
 }
 
