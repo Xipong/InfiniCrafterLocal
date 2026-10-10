@@ -470,9 +470,12 @@ class ParamSpec:
                 if self.kind == "number":
                     # Binary64 division is not injective: retain its admitted
                     # projected envelope, not a fabricated inverse Author float.
-                    return (type(value) in (int, float) and math.isfinite(value)
+                    # Number division emits floats; the wire must also satisfy
+                    # the same consumer storage constraint, without redivision.
+                    return (type(value) is float and math.isfinite(value)
                             and (self.minimum is None or value >= self.to_wire(self.minimum))
-                            and (self.maximum is None or value <= self.to_wire(self.maximum)))
+                            and (self.maximum is None or value <= self.to_wire(self.maximum))
+                            and self.consumer_value_error(value, wire_value=True) is None)
                 authored = value * self.wire_divisor
             else:
                 authored = value
@@ -535,8 +538,8 @@ class ParamSpec:
             )
         return constraint
 
-    def consumer_value_error(self, value: Any) -> str | None:
-        """Check declared consumer storage without modifying the authored value."""
+    def consumer_value_error(self, value: Any, *, wire_value: bool = False) -> str | None:
+        """Check declared consumer storage without modifying Author or wire."""
         if not self.consumer_storage:
             return None
         if self.consumer_storage == "float64":
@@ -552,16 +555,17 @@ class ParamSpec:
         try:
             # Storage consumes the declared wire projection, not the Author unit.
             # Check both boundaries: /100 may already underflow in binary64.
-            projected = self.to_wire(value)
+            projected = value if wire_value else self.to_wire(value)
             neutral = self.to_wire(self.neutral)
-            if value != self.neutral and projected == neutral:
+            source_neutral = neutral if wire_value else self.neutral
+            if value != source_neutral and projected == neutral:
                 return f"non-neutral value collapses to neutral {neutral} in declared wire projection"
             stored = struct.unpack("!f", struct.pack("!f", projected))[0]
         except (OverflowError, struct.error):
             return "value is not finite in float32 consumer storage"
         if not math.isfinite(stored):
             return "value is not finite in float32 consumer storage"
-        if value != self.neutral and stored == neutral:
+        if value != source_neutral and stored == neutral:
             return f"non-neutral value collapses to neutral {neutral} in float32 consumer storage after declared wire projection"
         return None
 
@@ -1387,7 +1391,7 @@ _CAPS: list[CapabilitySpec] = [
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
-            "moveSpeedBonusFactor": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0, consumer_storage="float32"),
+            "moveSpeedBonusPercent": _p("number", "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers", minimum=-50, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
             "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"),
             "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
             "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
@@ -1398,6 +1402,9 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing generated-buff executor",
         repair_group="generated_buff",
         lowering=("gameplay.generatedBuff.*",),
+        retained_receipt_params={
+            "moveSpeedBonusFactor": _p("number", "Retained prior additive Player.moveSpeed factor provenance", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0, consumer_storage="float32"),
+        },
         effect_groupable=True,
     ),
     _cap(

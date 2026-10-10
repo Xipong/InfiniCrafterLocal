@@ -26,8 +26,8 @@ def _offline(monkeypatch):
 
 
 def _source():
-    # Hand-authored source fixture, not a model response. Ambiguous legacy names
-    # deliberately have the same values in containers with different units.
+    # Hand-authored source fixture, not a model response. The same wire field
+    # names occur in several independently scoped consumers.
     return {
         "name": "UNTRUSTED SOURCE: preserve literal facts",
         "axePower": 9,
@@ -77,7 +77,7 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
         assert _mapping(glossary, f"raw.generatedParent.{owner}.lifeRegen", f"configure_{owner}") == [
             "lifeRegenHpPerSecond", "source / 2", "HP/s"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.movementSpeed", "apply_generated_buff_on_use") == [
-        "moveSpeedBonusFactor", "source", "engine units: additive moveSpeed factor"]
+        "moveSpeedBonusPercent", "source * 100", "additive_percent"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.lifeRegen", "apply_generated_buff_on_use") == [
         "lifeRegenHpPerSecond", "source / 2", "HP/s"]
     raw = packet["parents"]["A"]["packet"]["raw"]
@@ -265,7 +265,7 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     ("configure_tool", {"axePowerTooltipPercent": 45}, "gameplay"),
     ("configure_accessory", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "accessory"),
     ("configure_armor", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "armor"),
-    ("apply_generated_buff_on_use", {"moveSpeedBonusFactor": 0.15, "lifeRegenHpPerSecond": 1}, "gameplay.generatedBuff"),
+    ("apply_generated_buff_on_use", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "gameplay.generatedBuff"),
 ])
 def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode, fn, values, path):
     from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program, validate_runtime_wire

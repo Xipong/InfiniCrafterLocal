@@ -412,7 +412,7 @@ UNIT_MEANINGS = {
     "configure_item_stats": {"knockback": "Item.knockBack", "scale": "1 unchanged"},
     "configure_item_contact_hitbox": {"contactForgivenessPx": "each side"},
     "apply_generated_buff_on_use": {
-        "moveSpeedBonusFactor": "Player.moveSpeed",
+        "moveSpeedBonusPercent": "Player.moveSpeed",
         "jumpSpeedBonusPxPerTick": "pixels/tick",
         "manaRegenBonusPoints": "Player.manaRegen",
         "miningSpeedMultiplier": "pickSpeed",
@@ -511,7 +511,7 @@ RAW_COEFFICIENTS = {
     "configure_item_stats": ("knockback",),
     "set_projectile_damage": ("knockback",),
     "configure_tool": ("miningSpeedMultiplier",),
-    "apply_generated_buff_on_use": ("miningSpeedMultiplier", "lightStrength", "moveSpeedBonusFactor", "manaRegenBonusPoints"),
+    "apply_generated_buff_on_use": ("miningSpeedMultiplier", "lightStrength", "manaRegenBonusPoints"),
     "configure_accessory": ("manaRegenBonusPoints", "aggroPoints", "lightStrength"),
     "configure_armor": ("manaRegenBonusPoints", "aggroPoints", "lightStrength", "setBonuses.manaRegenBonusPoints", "setBonuses.aggroPoints"),
     "add_hold_light": ("strength",),
@@ -539,7 +539,7 @@ def test_raw_coefficients_have_identity_wire_conversion(fn, name):
     assert spec.wire_divisor == spec.wire_multiplier == 1
     value = 1.770282212988338
     assert value * 100 / 100 != value
-    assert CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params["moveSpeedBonusFactor"].to_wire(value).hex() == value.hex()
+    assert spec.to_wire(value).hex() == value.hex()
 
 
 @pytest.mark.parametrize(

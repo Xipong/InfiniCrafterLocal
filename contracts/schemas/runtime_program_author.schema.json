@@ -1463,21 +1463,25 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: pickSpeed divisor"
                   },
-                  "moveSpeedBonusFactor": {
+                  "moveSpeedBonusPercent": {
                     "default": 0,
-                    "description": "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers",
-                    "maximum": 2,
-                    "minimum": -0.5,
+                    "description": "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers",
+                    "maximum": 200,
+                    "minimum": -50,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
                     },
                     "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: additive moveSpeed factor"
+                    "x-infini-semanticType": "additive_percent",
+                    "x-infini-units": "additive_percent"
                   },
                   "oreSenseEnabled": {
                     "default": false,
