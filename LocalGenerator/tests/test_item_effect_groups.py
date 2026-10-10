@@ -215,3 +215,130 @@ def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects()
     group.update(healLife=0, healMana=0, potion=False, extraBuffs=[], mobilityMode="", mobilityRangeTiles=0,
                  mobilityCooldownTicks=0, mobilitySafeTileOnly=True)
     assert validate_runtime_wire(final)["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatch, format_mode):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _groups()
+    alternate = doc["runtimeProgram"]["bindings"].pop()
+    primary = doc["runtimeProgram"]["bindings"][0]
+    primary["usePolicy"]["action"]["effectGroupId"] = "missing"
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert any(row["input"] == "alternate_use" and row["usePolicy"]["action"]["effectGroupId"] == "second"
+               for row in scope["create"]["bindings"]["allowedTransactions"])
+    corrected = deepcopy(primary)
+    corrected["usePolicy"]["action"]["effectGroupId"] = "first"
+    expected = apply_repair_patch(doc, {"note": "model chooses both exact consumers", "bindingsUpsert": [corrected, alternate]})
+    corrected["usePolicy"]["stackCost"] = 1
+    hostile = deepcopy(doc["runtimeProgram"]["calls"][0])
+    hostile["params"]["damage"] = 999
+    incoming = {"note": "explicit selector and independent alternate", "realizationReplacement": doc["realization"],
+                "bindingsUpsert": [corrected, alternate], "callsUpsert": [hostile]}
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatch, format_mode):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("refresh_generated_effect_group_while_held")
+    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
+    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
+    frozen = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["deletable"]["callIds"] == [held["id"]]
+    expected = apply_repair_patch(doc, {"note": "explicit optional removal", "callIdsDelete": [held["id"]]})
+    hostile = deepcopy(frozen)
+    hostile["params"]["damage"] = 999
+    incoming = {"note": "remove diagnosed held call only", "realizationReplacement": doc["realization"],
+                "callIdsDelete": [held["id"], frozen["id"]], "callsUpsert": [hostile]}
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(monkeypatch, format_mode):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _groups("apply_generated_buff_on_use")
+    bindings = doc["runtimeProgram"]["bindings"]
+    alternate = bindings.pop()
+    bindings[0]["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "item"}
+    held = deepcopy(next(row for row in build_capability_witness("refresh_generated_effect_group_while_held")["runtimeProgram"]["calls"]
+                         if row["fn"] == "refresh_generated_effect_group_while_held"))
+    held.update(id="held_selector")
+    held["params"]["effectGroupId"] = "missing"
+    doc["runtimeProgram"]["calls"].append(held)
+    fixed = deepcopy(held)
+    fixed["params"]["effectGroupId"] = "first"
+    expected = apply_repair_patch(doc, {"note": "two model-chosen consumers", "callsUpsert": [fixed], "bindingsUpsert": [alternate]})
+    assert validate_runtime_program(expected)["ok"]
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert any(row["usePolicy"]["action"].get("effectGroupId") == "second"
+               for row in scope["create"]["bindings"]["allowedTransactions"])
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc,
+        {"note": "held first and explicit alternate second", "realizationReplacement": doc["realization"],
+         "callsUpsert": [fixed], "bindingsUpsert": [alternate]}, format_mode)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypatch, format_mode):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("refresh_generated_effect_group_while_held")
+    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
+    buff = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "apply_generated_buff_on_use")
+    held["params"]["effectGroupId"] = "missing"
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["deletable"]["callIds"] == []
+    fixed = deepcopy(held)
+    fixed["params"]["effectGroupId"] = "witness"
+    expected = apply_repair_patch(doc, {"note": "choose existing utility", "callsUpsert": [fixed]})
+    incoming = {"note": "retarget only", "realizationReplacement": doc["realization"],
+                "callsUpsert": [fixed], "callIdsDelete": [held["id"], buff["id"]]}
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["broken-active", "nonempty-held", "empty-held"])
+def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode, case):
+    from infini_local.core.errors import PlannerUnavailable
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _groups() if case == "broken-active" else build_capability_witness("refresh_generated_effect_group_while_held")
+    if case == "broken-active":
+        doc["runtimeProgram"]["bindings"].pop()
+        doc["runtimeProgram"]["bindings"][0]["usePolicy"]["action"]["effectGroupId"] = "missing"
+    elif case == "nonempty-held":
+        next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")["params"]["effectGroupId"] = "missing"
+    else:
+        doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
+    before = deepcopy(doc)
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc,
+            {"note": "no correction or removal chosen", "realizationReplacement": doc["realization"]}, format_mode)
+    assert doc == before
+    assert not validate_runtime_program(doc)["ok"]

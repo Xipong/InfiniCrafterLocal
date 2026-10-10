@@ -11,6 +11,7 @@ using Microsoft.Xna.Framework;
 using MonoMod.RuntimeDetour;
 using Terraria;
 using Terraria.ID;
+using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
@@ -163,7 +164,7 @@ internal static partial class EngineRuntimeChecks
         string json = NamedItemEffectsFixture().ToJson();
         var copy = GeneratedItemData.FromJson(json);
         Equal(true, copy is not null, "named groups survive exact native JSON normalization");
-        Equal("alternate_effects", copy!.RuntimeProgram.Bindings[1].UsePolicy.Action.EffectGroupId, "binding identity survives roundtrip");
+        Equal("alternate_effects", copy!.RuntimeProgram.Bindings[1].UsePolicy.Action.EffectGroupId!, "binding identity survives roundtrip");
         Equal(35, copy.RuntimeProgram.EffectGroups![1].HealMana, "named payload survives roundtrip");
         foreach (string mutation in new[] { "null_groups", "empty_groups", "null_selector", "missing_selector", "orphan", "foreign_stats", "null_generated_buff" })
         {

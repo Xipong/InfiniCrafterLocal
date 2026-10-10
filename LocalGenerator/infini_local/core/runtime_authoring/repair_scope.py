@@ -1324,6 +1324,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 metadata_fields.add(field)
 
         if code in {"missing_effect_group", "invalid_held_effect_group"}:
+            if (code == "invalid_held_effect_group" and not allowed
+                    and node_namespace == "calls" and node_id):
+                # No existing utility group can satisfy this optional selector.
+                # Only the model may remove the diagnosed call; never invent a buff.
+                mark("calls", node_id, can_delete=True)
+                requirement_row["repairStrategy"] = "delete_exact_invalid_held_call"
             # The invalid reference leaf is mutable; all candidate definitions
             # remain read-only context. Never synthesize a group or its effects.
             for candidate in rows["calls"]:
@@ -1691,19 +1697,54 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         elif code == "missing_binding_dependency" and node_namespace == "calls" and node_id:
             capability = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
             effect_group_id = _mapping(node_row.get("params")).get("effectGroupId") if capability is not None and capability.effect_groupable else None
-            if isinstance(effect_group_id, str) and any(
-                str(other.get("code") or "") == "missing_effect_group"
-                or (capability.name == "apply_generated_buff_on_use" and str(other.get("code") or "") == "invalid_held_effect_group")
-                for other in error_rows
-            ):
-                # A broken existing selector is repaired at its own exact leaf.
-                # Its dependent group must not force an extra consumer as well;
-                # final merged validation still requires every group to be used.
-                requirement_row["repairStrategy"] = "resolve_existing_effect_group_reference"
-                context["calls"].add(node_id)
-                continue
             node_target_id = str(node_row.get("target") or "")
             owner_item_target_id = sole_item_entity_id
+            selector_choices: list[tuple[str, dict[str, Any]]] = []
+            held_selector_covers_group = False
+            if isinstance(effect_group_id, str):
+                for selector_error in error_rows:
+                    selector_code = str(selector_error.get("code") or "")
+                    if selector_code not in {"missing_effect_group", "invalid_held_effect_group"}:
+                        continue
+                    if effect_group_id not in _values(selector_error.get("allowed")):
+                        continue
+                    selector_node = _node_from_path(str(selector_error.get("path") or ""), indexed_rows)
+                    if selector_node is None:
+                        continue
+                    selector_namespace, selector_index, _ = selector_node
+                    selector = _mapping(indexed_rows[selector_namespace][selector_index])
+                    if (selector_code == "invalid_held_effect_group" and capability is not None
+                            and capability.name == "apply_generated_buff_on_use"
+                            and str(selector.get("target") or "") == node_target_id):
+                        held_selector_covers_group = True
+                    elif (selector_code == "missing_effect_group" and selector_namespace == "bindings"
+                            and binding_target_id(selector) == node_target_id):
+                        fixed = copy.deepcopy(dict(selector))
+                        binding_id = str(fixed.pop("id", ""))
+                        fixed["usePolicy"]["action"]["effectGroupId"] = effect_group_id
+                        selector_choices.append((binding_id, fixed))
+            if held_selector_covers_group:
+                pending_groups = set()
+                for dependency_error in error_rows:
+                    if dependency_error.get("code") != "missing_binding_dependency":
+                        continue
+                    dependency_node = _node_from_path(str(dependency_error.get("path") or ""), indexed_rows)
+                    if dependency_node is None or dependency_node[0] != "calls":
+                        continue
+                    dependency_call = _mapping(indexed_rows["calls"][dependency_node[1]])
+                    dependency_cap = CAPABILITY_REGISTRY.get(str(dependency_call.get("fn") or ""))
+                    group = _mapping(dependency_call.get("params")).get("effectGroupId")
+                    if (dependency_cap is not None and dependency_cap.effect_groupable
+                            and str(dependency_call.get("target") or "") == node_target_id
+                            and isinstance(group, str)):
+                        pending_groups.add(group)
+                if len(pending_groups) == 1:
+                    requirement_row["repairStrategy"] = "resolve_existing_effect_group_reference"
+                    context["calls"].add(node_id)
+                    continue
+                # One held selector cannot consume multiple independent groups.
+                requirement_row["repairStrategy"] = "retarget_held_selector_or_create_exact_consumer"
+                context["calls"].add(node_id)
             authorized_capabilities = {
                 capability_name
                 for candidate_error in error_rows
@@ -1715,7 +1756,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             )
             allowed_rows: list[dict[str, Any]] = []
             required_binding_updates: list[dict[str, Any]] = []
-            existing_binding_choices: list[dict[str, Any]] = []
+            existing_binding_choices: list[dict[str, Any]] = [
+                {"bindingId": binding_id, "allowed": [fixed]}
+                for binding_id, fixed in selector_choices
+            ]
 
             def requirement_target_id(
                 requirement_target: str,
@@ -1832,7 +1876,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         required_inputs: tuple[str, ...] = ()
                         if (
                             existing_primary is not None
-                            and action_kind(existing_primary) in capability_requirement.any_of
+                            and (action_kind(existing_primary) in capability_requirement.any_of
+                                 or isinstance(effect_group_id, str))
                             and existing_alternate is None
                         ):
                             required_inputs = ("alternate_use",)
@@ -2025,8 +2070,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 for choice in existing_binding_choices
                 if str(choice.get("bindingId") or "")
             )
-            requirement_row["mustChooseExactlyOne"] = bool(binding_choice_rows)
-            requirement_row["mustCreateExactlyOne"] = bool(allowed_rows) and not existing_choice_rows
+            requirement_row["mustChooseExactlyOne"] = bool(binding_choice_rows) and not held_selector_covers_group
+            requirement_row["mustCreateExactlyOne"] = bool(allowed_rows) and not existing_choice_rows and not held_selector_covers_group
             if required_binding_updates:
                 requirement_row["requiredBindingUpdates"] = required_binding_updates
                 requirement_row["mustApplyAll"] = True
