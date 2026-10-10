@@ -24,7 +24,7 @@ Author-visible gameplay aliases отсутствуют. Конечные technic
 
 `configure_vanilla_ammo_item`: Item.ammo через finite AmmoID, authored Item.shoot (stable ProjectileID 1..1021), отдельный `shootSpeedContributionPxPerUpdate`, Item.notAmmo и обязательный consumable=true. Это **ammo-item identity**, не weapon ammo consumption.
 
-Item.useAmmo не выводится из ammo-item; PickAmmo меняет projectile type/speed/damage/knockback, поэтому weapon support требует полного отдельного slice. Sand не exposed: type-wide ItemID.Sets.SandgunAmmoProjectileData несовместим с независимой семантикой generated items, разделяющих proxy Item.type.
+Item.useAmmo не выводится из ammo-item. Отдельный [weapon ammo slice](WEAPON_AMMO_CONSUMPTION_RU.md) (`configure_weapon_ammo`) сохраняет native selection/conservation и damage/knockback, явно выбирает speed basis и оставляет projectile behavior у authored runtime entity. Sand не exposed: type-wide ItemID.Sets.SandgunAmmoProjectileData несовместим с независимой семантикой generated items, разделяющих proxy Item.type.
 
 `restore_resources_on_use.usesPotionRules` напрямую задаёт Item.potion; healLife/healMana сами не включают potion sickness. Food/нестандартный heal не получает скрытые potion rules.
 
