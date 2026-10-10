@@ -64,7 +64,7 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
     assert repair["properties"]["motif"]["anyOf"][0] == normal["properties"]["motif"]
     assert repair["properties"]["effectMagnitude"]["anyOf"][0] == normal["properties"]["effectMagnitude"]
     # Additive payloads/asset requests are conditionally required, never legacy defaults.
-    assert set(original_slot["properties"]) - {"element", "path", "particle", "screenShake", "soundId"} == set(original_slot["required"])
+    assert set(original_slot["properties"]) - {"element", "path", "particle", "screenShake", "soundId", "sound"} == set(original_slot["required"])
     assert set(normal["properties"]) - {"assets"} == set(normal["required"])
     assert packet["runtimeVocabulary"]["numericRanges"] == {
         "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],
@@ -138,7 +138,7 @@ def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choice
     accepted.update(effectMagnitude=0.2, visualBudgetClass="tiny")
     sound = copy.deepcopy(accepted["slots"][0])
     sound.update(id="explicit_audio_choice", rendererKind="soundCue", channel="sound", lane="cue",
-                 emissionMode="none", particleSystemId="none", textureRole="none", soundId="Item1")
+                 emissionMode="none", particleSystemId="none", textureRole="none", soundId="Item1", sound={"volume": 0.4, "pitch": 0, "pitchVariance": 0})
     accepted["slots"] = [sound] if sound_only else []
     assert vfx.validate_vfx_director_output(accepted, data)["ok"]
     original = copy.deepcopy(data)
