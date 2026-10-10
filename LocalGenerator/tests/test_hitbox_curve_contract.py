@@ -149,9 +149,11 @@ def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner():
 @pytest.mark.parametrize("name", NON_ARCHETYPAL_FIXTURES)
 def test_no_curve_preserves_frozen_gameplay_payload(name):
     capture = json.loads((Path(__file__).parent / "fixtures/hitbox_curve_legacy_payload_sha256.json").read_text())
-    wire = compile_runtime_program(build_runtime_fixture(name))
+    from beam_contract_checks import without_declared_beam_neutrals
+    from sentry_contract_checks import without_declared_targeting_neutrals
+    wire = without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))
     assert all("hitboxCurve" not in entity for entity in wire["runtimeProgram"]["entities"])
-    text = json.dumps(_payload(without_declared_targeting_neutrals(wire)), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    text = json.dumps(_payload(wire), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     assert hashlib.sha256(text.encode()).hexdigest() == capture["sha256"][name]
 
 

@@ -214,7 +214,6 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'MaxInstances = sample.MaxInstances', 'MaxInstances = 1', 'native playback policy', id='sound-instance-policy-substitution'),
     pytest.param('check_vfx_sound_contract', 'Common/VFX/InfiniItemVfxRuntime.cs', 'if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);', 'SoundEngine.PlaySound(sound, center);', 'explicit silence', id='sound-zero-spends-native-instance'),
     pytest.param('check_vfx_sound_contract', 'Common/VFX/InfiniVfxRuntime.cs', 'SoundStyle sound = slot.ResolveSoundStyle();', 'SoundStyle sound = SoundID.Item1;', 'shared playback projection', id='projectile-sound-fallback'),
-
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '_entity?.HitboxCurve?.MirrorToSprite == true', 'false', 'explicit body scale opt-in', id='mirror-opt-in-lost'),
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '_entity?.VisualScaleCurve is not null', 'false', 'explicit visual curve opt-in', id='visual-curve-opt-in-lost'),
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '? Projectile.scale : Math.Clamp', '? Math.Clamp(Projectile.scale, 0.1f, 8f) : Math.Clamp', 'explicit body scale PNG consumer', id='explicit-mirror-png-clamped'),
@@ -224,6 +223,7 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', 'preserveWidth ? width : Math.Max(1f, width)', 'Math.Max(1f, width)', 'explicit body scale final line consumer', id='explicit-mirror-final-width-floored'),
     pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', 'preserveWidth ? 0f : 0.01f', '0.01f', 'explicit body scale final line consumer', id='explicit-mirror-small-segment-suppressed'),
     pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', '!float.IsFinite(width) || width <= 0f', 'width < 0f', 'explicit body scale final line consumer', id='explicit-line-invalid-width-not-refused'),
+
     pytest.param('check_client_source_contracts', 'Common/Config/InfiniGameplayQolConfig.cs', 'RuntimeSpriteCacheMaxTextures = 512', 'RuntimeSpriteCacheMaxTextures = 600', 'runtime cache config parity', id='cache-config-drift'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', '!config.EnableInventoryAssetPrefetch', 'config.EnableInventoryAssetPrefetch', 'inventory prefetch', id='prefetch-optout-inverted'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', 'if (ensured >= maxItems)', 'if (ensured < maxItems)', 'inventory prefetch', id='unbounded-prefetch'),

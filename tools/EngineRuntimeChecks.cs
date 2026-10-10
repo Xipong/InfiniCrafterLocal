@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("raw numeric helper signed nullable neutral domains", RawNumericHelperSignedNullableAndNeutralDomains),
+            ("hitbox raw numeric outside domain", HitboxRawNumericDomainRefusesOutsideBeforeNarrowing),
+            ("hitbox raw numeric serialization cache network", HitboxRawNumericEndpointsSurviveSerializationCacheNetwork),
+            ("hitbox raw numeric presence and invalid types", HitboxRawNumericPresenceAndInvalidTypesStayStrict),
             ("hitbox curve actual rectangle and world-tick clock", HitboxCurveActualDamageRectAndWorldTickClock),
             ("hitbox curve explicit visual mirror and hydration", HitboxCurveExplicitVisualMirrorAndLateHydration),
             ("hitbox curve strict DTO presence", HitboxCurveDtoPresenceAndDriverBoundaries),

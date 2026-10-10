@@ -636,6 +636,7 @@ def check_visual_vfx_contract() -> None:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 
 
+
 def check_vfx_sound_contract() -> None:
     # Read the actual VFX owner, never a second list of samples/Author controls.
     source = ast.parse((ROOT / "LocalGenerator/infini_local/core/vfx_manifest.py").read_text(encoding="utf-8"))

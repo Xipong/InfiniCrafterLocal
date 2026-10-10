@@ -14,6 +14,7 @@
     <Compile Include="EngineRuntimeChecks.cs" />
     <Compile Include="EngineRuntimeChecks.HitboxCurve.cs" />
     <Compile Include="EngineRuntimeChecks.Modifiers.cs" />
+    <Compile Include="EngineRuntimeChecks.RawJsonNumeric.cs" />
     <Compile Include="EngineRuntimeChecks.World.cs" />
     <Compile Include="EngineRuntimeChecks.Player.cs" />
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />

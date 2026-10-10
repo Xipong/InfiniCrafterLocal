@@ -87,8 +87,13 @@ present curve leaf; injection нового component без его receipts от
 Present null/partial/unknown object, нечисло, boolean вместо числа, NaN/Infinity,
 неизвестная curve и выход за bounds отвергаются. C# optional container не
 материализуется при отсутствии, его поля используют JsonRequired и проверки
-диапазонов с отказом без clamp. Старые документы без новой capability сохраняют
-точный gameplay/runtime payload.
+диапазонов с отказом без clamp. `startScale`/`endScale` проходят property-local
+`RawJsonFloatDomainConverter`: исходная JSON decimal/exponent лексема сравнивается
+с 0.25…8 **до** преобразования в float32, включая значения точнее binary64/decimal.
+Допустимое значение может округлиться к endpoint; значение снаружи не принимается
+из-за округления. Neutral-collapse policy здесь не объявлена: близость к 1 не
+создаёт нового запрета. Full/cache/network сохраняют float32 storage и optional
+absence. Старые документы без новой capability сохраняют точный gameplay/runtime payload.
 
 Repair отсутствующего/ошибочного scalar меняет только этот leaf; соседние
 endpoints, время, curve и mirror остаются frozen. Для конфликта mirror разрешено

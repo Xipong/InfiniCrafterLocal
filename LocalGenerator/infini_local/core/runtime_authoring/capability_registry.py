@@ -2439,6 +2439,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+
     if cap.name == "configure_weapon_ammo":
         return (RequirementSpec(
             "binding_tuple_present", target="any_entity",
