@@ -31,6 +31,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _childDepth;
     private int _remainingSpawnBudget; // peer-visible snapshot only; not owner authority
     private RuntimeSpawnBudget? _activationSpawnBudget;
+    private RuntimeSpawnLease? _spawnBudgetLease;
     private int _age;
     private int _remainingBounces;
     private int _activationDelayTicks;
@@ -107,6 +108,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.tileCollide = false;
         Projectile.ignoreWater = false;
         Projectile.netImportant = false;
+        Projectile.sentry = false;
     }
 
     internal void Configure(
@@ -116,7 +118,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int remainingSpawnBudget,
         Vector2 initialDirection,
         bool preserveSyncedState = false,
-        RuntimeSpawnBudget? activationBudget = null)
+        RuntimeSpawnBudget? activationBudget = null,
+        bool ownsSpawnReservation = false)
     {
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedBounces = _remainingBounces;
@@ -126,7 +129,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _generatedItemId = data.Id;
         _entityId = entity.Id;
         _childDepth = Math.Clamp(childDepth, 0, data.RuntimeProgram.Limits.MaxChildDepth);
-        _remainingSpawnBudget = Math.Clamp(remainingSpawnBudget, 0, data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        _remainingSpawnBudget = Math.Clamp(remainingSpawnBudget, 0, InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner);
         // Only the firing peer owns the mutable ledger. ExtraAI is an observation,
         // never a grant of fresh event-spawn capacity on another network peer.
         if (activationBudget is not null)
@@ -137,6 +140,21 @@ public sealed partial class GeneratedProjectile : ModProjectile
             _activationSpawnBudget = new RuntimeSpawnBudget(_remainingSpawnBudget);
         else if (!preserveSyncedState)
             _activationSpawnBudget = null;
+        bool localAuthority = Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+            && Main.player[Projectile.owner] is { active: true } budgetOwner
+            && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(budgetOwner);
+        if (!preserveSyncedState)
+        {
+            _spawnBudgetLease?.Release();
+            _spawnBudgetLease = null;
+            if (localAuthority && entity.Spawn.DescendantMaxActive is int cap)
+            {
+                // A free root has no ancestor occupancy. A nested declaration
+                // adds a cap and cannot replace the incoming ancestor ledger.
+                _activationSpawnBudget = new RuntimeSpawnBudget(cap, concurrent: true,
+                    parent: childDepth > 0 ? activationBudget ?? _activationSpawnBudget : null);
+            }
+        }
         _initialDirection = initialDirection.SafeNormalize(Vector2.UnitX);
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
@@ -168,6 +186,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.alpha = _activationDelayTicks > 0 ? 220 : 0;
         }
         _preserveSyncedStateOnHydrate = false;
+        // Only fully configured native results convert a reservation to live
+        // occupancy. A configuration exception leaves it available for refund.
+        if (!preserveSyncedState && localAuthority && ownsSpawnReservation && activationBudget is not null)
+        {
+            RuntimeSpawnLease? lease = null;
+            lease = activationBudget.TrackLive(Projectile,
+                () => ReferenceEquals(_spawnBudgetLease, lease) && ReferenceEquals(Projectile.ModProjectile, this)
+                    && Projectile.whoAmI >= 0 && Projectile.whoAmI < Main.projectile.Length
+                    && ReferenceEquals(Main.projectile[Projectile.whoAmI], Projectile));
+            _spawnBudgetLease = lease;
+        }
     }
 
     private void ApplyEntityStats()
@@ -199,7 +228,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             : -2;
         Projectile.netImportant = entity.IsOwnerAttached
             || entity.IsStationary
+            || entity.NativeSentry == true
             || entity.Controller.Code != RuntimeControllerCode.None;
+        Projectile.sentry = entity.NativeSentry == true;
         Projectile.timeLeft = Math.Max(1, AuthoredTicksToProjectileUpdates(entity.LifetimeTicks) + _activationDelayTicks);
         // Charging is a lifecycle phase, not an entity-kind collision policy.
         // Released peers retain their explicitly authored collision on hydration.
@@ -236,69 +267,92 @@ public sealed partial class GeneratedProjectile : ModProjectile
         if (remainingSpawnBudget <= 0)
             return 0;
 
-        Vector2 cursor = Main.MouseWorld;
-        Vector2 position = entity.Spawn.Placement switch
-        {
-            "owner_center" => owner.MountedCenter,
-            "cursor" => cursor,
-            "ground_at_cursor" => FindGroundAtCursor(cursor),
-            "above_cursor" => cursor - Vector2.UnitY * Math.Max(16f, entity.Spawn.OverTarget.HeightTiles * 16f),
-            _ => origin,
-        };
-        if (entity.Spawn.OverTarget.HeightTiles > 0f && entity.Spawn.Placement != "above_cursor")
-            position -= Vector2.UnitY * entity.Spawn.OverTarget.HeightTiles * 16f;
-
-        Vector2 baseDirection = entity.Spawn.Aim switch
-        {
-            "cursor" => (cursor - position).SafeNormalize(new Vector2(owner.direction, 0f)),
-            "facing" => new Vector2(owner.direction, 0f),
-            "velocity" => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
-            "none" => Vector2.Zero,
-            _ => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
-        };
-        if (baseDirection != Vector2.Zero)
-            position += baseDirection * entity.Spawn.OffsetPx;
-
-        int availableOwnerSlots = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
-            - CountActiveGeneratedProjectiles(owner.whoAmI);
-        if (availableOwnerSlots <= 0)
-            return 0;
-        int count = Math.Clamp(
-            requestedCount ?? entity.Spawn.Count,
-            1,
-            Math.Min(
-                availableOwnerSlots,
-                Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, remainingSpawnBudget)));
-        // Concurrency is explicit entity admission, independent of movement/type.
-        // Refuse the effective whole batch; never clip an authored multi-shot batch.
-        if (!CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
-            return 0;
-        float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
         int spawned = 0;
-        for (int i = 0; i < count; i++)
+        try
         {
-            float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
-            Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
-            Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * entity.Spawn.SpeedPxPerTick;
-            // A supplied root value is the final native shooting result, including
-            // player/prefix/late hooks. Null retains the authored event-spawn lane.
-            int damage = entity.Damage.Enabled
-                ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
-                : 0;
-            Projectile projectile = Projectile.NewProjectileDirect(
-                source,
-                position,
-                velocity,
-                ModContent.ProjectileType<GeneratedProjectile>(),
-                damage,
-                rootKnockbackOverride ?? entity.Damage.Knockback,
-                owner.whoAmI);
-            if (projectile.ModProjectile is not GeneratedProjectile generated)
-                continue;
-            generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
-                activationBudget: activationBudget);
-            projectile.netUpdate = true;
-            spawned++;
+            Vector2 cursor = Main.MouseWorld;
+            Vector2 position = entity.Spawn.Placement switch
+            {
+                "owner_center" => owner.MountedCenter,
+                "cursor" => cursor,
+                "ground_at_cursor" => FindGroundAtCursor(cursor),
+                "above_cursor" => cursor - Vector2.UnitY * Math.Max(16f, entity.Spawn.OverTarget.HeightTiles * 16f),
+                "native_resting_spot" => NativeRestingSpot(owner, entity),
+                _ => origin,
+            };
+            if (entity.Spawn.OverTarget.HeightTiles > 0f && entity.Spawn.Placement != "above_cursor")
+                position -= Vector2.UnitY * entity.Spawn.OverTarget.HeightTiles * 16f;
+
+            Vector2 baseDirection = entity.Spawn.Aim switch
+            {
+                "cursor" => (cursor - position).SafeNormalize(new Vector2(owner.direction, 0f)),
+                "facing" => new Vector2(owner.direction, 0f),
+                "velocity" => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
+                "none" => Vector2.Zero,
+                _ => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
+            };
+            if (baseDirection != Vector2.Zero)
+                position += baseDirection * entity.Spawn.OffsetPx;
+
+            int availableOwnerSlots = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                - CountActiveGeneratedProjectiles(owner.whoAmI);
+            if (availableOwnerSlots <= 0)
+                return 0;
+            int count = Math.Clamp(
+                requestedCount ?? entity.Spawn.Count,
+                1,
+                Math.Min(
+                    availableOwnerSlots,
+                    Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, remainingSpawnBudget)));
+            // Concurrency is explicit entity admission, independent of movement/type.
+            // Refuse the effective whole batch; never clip an authored multi-shot batch.
+            if (!CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
+                return 0;
+            float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
+            for (int i = 0; i < count; i++)
+            {
+                float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
+                Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
+                Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * entity.Spawn.SpeedPxPerTick;
+                // A supplied root value is the final native shooting result, including
+                // player/prefix/late hooks. Null retains the authored event-spawn lane.
+                int damage = entity.Damage.Enabled
+                    ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
+                    : 0;
+                Projectile projectile = Projectile.NewProjectileDirect(
+                    source,
+                    position,
+                    velocity,
+                    ModContent.ProjectileType<GeneratedProjectile>(),
+                    damage,
+                    rootKnockbackOverride ?? entity.Damage.Knockback,
+                    owner.whoAmI);
+                if (!projectile.active || projectile.ModProjectile is not GeneratedProjectile generated)
+                    continue;
+                try
+                {
+                    generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
+                        activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0);
+                }
+                catch
+                {
+                    // A failed configuration must not leave a partial actor
+                    // outside its admission pool or execute terminal effects.
+                    projectile.active = false;
+                    throw;
+                }
+                projectile.netUpdate = true;
+                spawned++;
+                if (entity.NativeSentry == true) owner.UpdateMaxTurrets();
+            }
+        }
+        catch
+        {
+            // The caller refunds normal refusals after the returned count. An
+            // exception skips that path: return only reservations not attached
+            // to successful hosts, then preserve the original failure.
+            if (childDepth > 0) activationBudget.Return(remainingSpawnBudget - spawned);
+            throw;
         }
         return spawned;
     }
@@ -323,6 +377,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 count++;
         }
         return count;
+    }
+
+    private static Vector2 NativeRestingSpot(Player owner, RuntimeEntitySpec entity)
+    {
+        owner.FindSentryRestingSpot(ModContent.ProjectileType<GeneratedProjectile>(), out int x, out int y, out _);
+        return new Vector2(x, y - entity.Hitbox.HeightPx * 0.5f);
     }
 
     private static Vector2 FindGroundAtCursor(Vector2 cursor)

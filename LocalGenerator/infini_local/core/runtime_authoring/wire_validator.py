@@ -41,7 +41,7 @@ _FORBIDDEN_ROUTER_KEYS = {
 
 _RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
-_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events"})
+_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry"})
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
@@ -49,7 +49,8 @@ _VISUAL_KEYS = frozenset({
     "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"}) | frozenset(
-    spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["set_projectile_concurrency"].params.items()
+    spec.wire_name or name for fn in ("set_projectile_concurrency", "set_descendant_concurrency")
+    for name, spec in CAPABILITY_REGISTRY[fn].params.items()
 )
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
@@ -283,15 +284,19 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if component_name == "visual" and component is not None:
                 _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
             if component_name == "spawn" and component is not None:
-                concurrency = CAPABILITY_REGISTRY["set_projectile_concurrency"]
-                for name, spec in concurrency.params.items():
-                    key = spec.wire_name or name
-                    if key not in component:
-                        continue  # Legacy omission adds no admission cap.
-                    path = f"{entity_path}.spawn.{key}"
-                    if kind not in concurrency.target_kinds or strict_schema_errors(component[key], spec.schema(), path=path):
-                        errors.append({"path": path, "code": "invalid_projectile_concurrency",
-                                       "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
+                for fn in ("set_projectile_concurrency", "set_descendant_concurrency"):
+                    concurrency = CAPABILITY_REGISTRY[fn]
+                    for name, spec in concurrency.params.items():
+                        key = spec.wire_name or name
+                        if key not in component:
+                            continue  # Legacy omission adds no admission cap.
+                        path = f"{entity_path}.spawn.{key}"
+                        if kind not in concurrency.target_kinds or strict_schema_errors(component[key], spec.schema(), path=path):
+                            errors.append({"path": path, "code": "invalid_projectile_concurrency",
+                                           "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
+                if "placement" in component:
+                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
+                        errors.append(issue)
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:
@@ -307,6 +312,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     if not selected or strict_schema_errors(params[name], spec.schema(), path=path) or spec.consumer_value_error(params[name]):
                         errors.append({"path": path, "code": "invalid_channel_beam_param",
                                        "message": "Present beam extension must match its exact controller, target, type, bounds and consumer precision without coercion."})
+        if "nativeSentry" in entity:
+            spec = CAPABILITY_REGISTRY["set_projectile_sentry"]
+            path = f"{entity_path}.nativeSentry"
+            if kind not in spec.target_kinds or strict_schema_errors(entity["nativeSentry"], spec.params["enabled"].schema(), path=path):
+                errors.append({"path": path, "code": "invalid_native_sentry", "message": "Present nativeSentry must be an explicit projectile boolean."})
         if not entity_id:
             errors.append({"path": f"$.runtimeProgram.entities[{index}].id", "code": "required_id", "message": "Entity id is required."})
         elif entity_id in entity_by_id:
