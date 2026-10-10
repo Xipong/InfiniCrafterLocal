@@ -764,7 +764,17 @@ public sealed class RuntimeDamageSpec
 
 public sealed class RuntimeHitboxCurveSpec
 {
+    public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StartScaleJsonConverter() : base("0.25", "8") { }
+    }
+    [JsonConverter(typeof(StartScaleJsonConverter))]
     [JsonRequired] public float StartScale { get; set; }
+    public sealed class EndScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public EndScaleJsonConverter() : base("0.25", "8") { }
+    }
+    [JsonConverter(typeof(EndScaleJsonConverter))]
     [JsonRequired] public float EndScale { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
@@ -816,6 +826,11 @@ public static class RuntimeModifierClock
 
 public sealed class RuntimeTurnModifierSpec
 {
+    public sealed class TurnRadiansPerUpdateJsonConverter : RawJsonFloatDomainConverter
+    {
+        public TurnRadiansPerUpdateJsonConverter() : base("-0.5", "0.5", "0") { }
+    }
+    [JsonConverter(typeof(TurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float TurnRadiansPerUpdate { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
@@ -829,7 +844,17 @@ public sealed class RuntimeTurnModifierSpec
 
 public sealed class RuntimeSpeedModifierSpec
 {
+    public sealed class SpeedMultiplierPerUpdateJsonConverter : RawJsonFloatDomainConverter
+    {
+        public SpeedMultiplierPerUpdateJsonConverter() : base("0.8", "1.2", "1") { }
+    }
+    [JsonConverter(typeof(SpeedMultiplierPerUpdateJsonConverter))]
     [JsonRequired] public float SpeedMultiplierPerUpdate { get; set; }
+    public sealed class MaxSpeedJsonConverter : RawJsonFloatDomainConverter
+    {
+        public MaxSpeedJsonConverter() : base("0.1", "80") { }
+    }
+    [JsonConverter(typeof(MaxSpeedJsonConverter))]
     [JsonRequired] public float MaxSpeed { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
@@ -844,7 +869,17 @@ public sealed class RuntimeSpeedModifierSpec
 
 public sealed class RuntimeHomingModifierSpec
 {
+    public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
+    {
+        public RangeTilesJsonConverter() : base("1", "120") { }
+    }
+    [JsonConverter(typeof(RangeTilesJsonConverter))]
     [JsonRequired] public float RangeTiles { get; set; }
+    public sealed class MaxTurnRadiansPerUpdateJsonConverter : RawJsonFloatDomainConverter
+    {
+        public MaxTurnRadiansPerUpdateJsonConverter() : base("0.0001", "3.2") { }
+    }
+    [JsonConverter(typeof(MaxTurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float MaxTurnRadiansPerUpdate { get; set; }
     [JsonRequired] public bool RequireLineOfSight { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
@@ -860,7 +895,17 @@ public sealed class RuntimeHomingModifierSpec
 
 public sealed class RuntimeNpcAttractionSpec
 {
+    public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
+    {
+        public RangeTilesJsonConverter() : base("1", "80") { }
+    }
+    [JsonConverter(typeof(RangeTilesJsonConverter))]
     [JsonRequired] public float RangeTiles { get; set; }
+    public sealed class StrengthPerUpdateJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StrengthPerUpdateJsonConverter() : base("0.001", "4") { }
+    }
+    [JsonConverter(typeof(StrengthPerUpdateJsonConverter))]
     [JsonRequired] public float StrengthPerUpdate { get; set; }
     [JsonRequired] public string Falloff { get; set; } = "";
     [JsonRequired] public int MaxTargets { get; set; }
@@ -879,7 +924,17 @@ public sealed class RuntimeNpcAttractionSpec
 
 public sealed class RuntimeVisualScaleCurveSpec
 {
+    public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StartScaleJsonConverter() : base("0.25", "8") { }
+    }
+    [JsonConverter(typeof(StartScaleJsonConverter))]
     [JsonRequired] public float StartScale { get; set; }
+    public sealed class EndScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public EndScaleJsonConverter() : base("0.25", "8") { }
+    }
+    [JsonConverter(typeof(EndScaleJsonConverter))]
     [JsonRequired] public float EndScale { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }

@@ -181,6 +181,33 @@ internal static partial class EngineRuntimeChecks
             spec["unknown"] = 1; Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "unknown modifier choice"); spec.Remove("unknown");
             entity[member] = null; Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "explicit null modifier"); entity.Remove(member);
         }
+        foreach ((string member, string json, string field, string outside, string valid) in new[] {
+            ("turnModifier", "{\"turnRadiansPerUpdate\":0.1,\"startDelayTicks\":0,\"durationTicks\":60}", "turnRadiansPerUpdate", "0.500000000000000000000000000001", "0.499999999999999999999999999999"),
+            ("turnModifier", "{\"turnRadiansPerUpdate\":0.1,\"startDelayTicks\":0,\"durationTicks\":60}", "turnRadiansPerUpdate", "1e-46", "0"),
+            ("speedModifier", "{\"speedMultiplierPerUpdate\":1.01,\"maxSpeed\":20,\"startDelayTicks\":0,\"durationTicks\":60}", "speedMultiplierPerUpdate", "1.200000000000000000000000001", "1.19999999999999999999999999"),
+            ("speedModifier", "{\"speedMultiplierPerUpdate\":1.01,\"maxSpeed\":20,\"startDelayTicks\":0,\"durationTicks\":60}", "speedMultiplierPerUpdate", "1.0000000000000002", "1"),
+            ("speedModifier", "{\"speedMultiplierPerUpdate\":1.01,\"maxSpeed\":20,\"startDelayTicks\":0,\"durationTicks\":60}", "maxSpeed", "0.09999999999999999999999999", "0.10000000000000000000000001"),
+            ("homingModifier", "{\"rangeTiles\":10,\"maxTurnRadiansPerUpdate\":0.1,\"requireLineOfSight\":true,\"startDelayTicks\":0,\"durationTicks\":60}", "rangeTiles", "120.00000000000000000000001", "120"),
+            ("homingModifier", "{\"rangeTiles\":10,\"maxTurnRadiansPerUpdate\":0.1,\"requireLineOfSight\":true,\"startDelayTicks\":0,\"durationTicks\":60}", "maxTurnRadiansPerUpdate", "0.0000999999999999999999999", "0.0001"),
+            ("npcAttraction", "{\"rangeTiles\":10,\"strengthPerUpdate\":2,\"falloff\":\"linear\",\"maxTargets\":4,\"startDelayTicks\":0,\"durationTicks\":60}", "rangeTiles", "80.00000000000000000000001", "80"),
+            ("npcAttraction", "{\"rangeTiles\":10,\"strengthPerUpdate\":2,\"falloff\":\"linear\",\"maxTargets\":4,\"startDelayTicks\":0,\"durationTicks\":60}", "strengthPerUpdate", "0.0009999999999999999999999", "0.001"),
+            ("visualScaleCurve", "{\"startScale\":1,\"endScale\":4,\"curve\":\"exponential\",\"startDelayTicks\":0,\"durationTicks\":60}", "startScale", "0.24999999999999999999999999", "0.25"),
+            ("visualScaleCurve", "{\"startScale\":1,\"endScale\":4,\"curve\":\"exponential\",\"startDelayTicks\":0,\"durationTicks\":60}", "endScale", "8.000000000000000000000001", "8"),
+            ("hitboxCurve", "{\"startScale\":1,\"endScale\":4,\"curve\":\"linear\",\"startDelayTicks\":0,\"durationTicks\":60,\"mirrorToSprite\":false}", "startScale", "0.24999999999999999999999999", "0.25"),
+            ("hitboxCurve", "{\"startScale\":1,\"endScale\":4,\"curve\":\"linear\",\"startDelayTicks\":0,\"durationTicks\":60,\"mirrorToSprite\":false}", "endScale", "8.000000000000000000000001", "8"),
+        })
+        {
+            var spec = JsonNode.Parse(json)!.AsObject(); entity[member] = spec;
+            spec[field] = "RAW_MODIFIER_NUMBER";
+            string document = raw.ToJsonString();
+            Equal(true, GeneratedItemData.FromJson(document.Replace("\"RAW_MODIFIER_NUMBER\"", outside, StringComparison.Ordinal)) is null,
+                "original modifier domain and neutral preserved " + member + "." + field + "=" + outside);
+            var accepted = GeneratedItemData.FromJson(document.Replace("\"RAW_MODIFIER_NUMBER\"", valid, StringComparison.Ordinal))
+                ?? throw new InvalidOperationException("valid raw modifier refused " + member + "." + field);
+            foreach (string payload in new[] { accepted.ToJson(), accepted.ToNetworkJson() })
+                Equal(true, GeneratedItemData.FromJson(payload) is not null, "rounded modifier endpoint re-admits " + member + "." + field);
+            entity.Remove(member);
+        }
         var legacy = GeneratedItemData.FromJson(raw.ToJsonString()) ?? throw new InvalidOperationException("old absence rejected");
         Equal(false, legacy.ToJson().Contains("turnModifier", StringComparison.Ordinal), "old absence remains absent");
         entity["whipUsesOwnerGravity"] = true;
