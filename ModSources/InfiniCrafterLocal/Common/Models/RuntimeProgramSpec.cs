@@ -732,7 +732,18 @@ public sealed class RuntimeDamageSpec
 
 public sealed class RuntimeHitboxCurveSpec
 {
+    public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StartScaleJsonConverter() : base("0.25", "8") { }
+    }
+    public sealed class EndScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public EndScaleJsonConverter() : base("0.25", "8") { }
+    }
+
+    [JsonConverter(typeof(StartScaleJsonConverter))]
     [JsonRequired] public float StartScale { get; set; }
+    [JsonConverter(typeof(EndScaleJsonConverter))]
     [JsonRequired] public float EndScale { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }

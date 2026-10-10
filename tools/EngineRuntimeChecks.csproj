@@ -13,6 +13,7 @@
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
     <Compile Include="EngineRuntimeChecks.cs" />
     <Compile Include="EngineRuntimeChecks.HitboxCurve.cs" />
+    <Compile Include="EngineRuntimeChecks.RawJsonNumeric.cs" />
     <Compile Include="EngineRuntimeChecks.World.cs" />
     <Compile Include="EngineRuntimeChecks.Player.cs" />
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
