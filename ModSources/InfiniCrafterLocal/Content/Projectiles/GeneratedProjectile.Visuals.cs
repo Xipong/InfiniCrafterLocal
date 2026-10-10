@@ -12,7 +12,7 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
     private bool PreservesExplicitBodyScale()
-        => _entity?.HitboxCurve?.MirrorToSprite == true;
+        => _entity?.HitboxCurve?.MirrorToSprite == true || _entity?.VisualScaleCurve is not null;
 
     public override bool PreDraw(ref Color lightColor)
     {
@@ -44,8 +44,8 @@ public sealed partial class GeneratedProjectile
         if (texture is null) return;
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() * 0.5f;
-        // An explicit mirror already owns the complete bounded product. Legacy
-        // live sprite scale retains its old clamp when that mirror is absent.
+        // An explicit mirror or visual curve owns the complete bounded product.
+        // Legacy live sprite scale retains its old clamp without either owner.
         float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
             * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
