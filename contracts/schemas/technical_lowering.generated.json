@@ -61,6 +61,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "configure_weapon_ammo",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "outputs": [
+        "runtimeProgram.weaponAmmo",
+        "runtimeProgram.weaponAmmo.ammoCategory",
+        "runtimeProgram.weaponAmmo.speedBasis"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "configure_vanilla_ammo_item",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
@@ -332,6 +347,26 @@
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
       "outputs": [
         "runtimeProgram.entities[].spawn.maxActive"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_sentry",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+      "outputs": [
+        "runtimeProgram.entities[].nativeSentry"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_descendant_concurrency",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
+      "outputs": [
+        "runtimeProgram.entities[].spawn.descendantMaxActive"
       ]
     },
     {
@@ -646,13 +681,18 @@
       "authoredDecisionsPreserved": true,
       "capability": "channel_beam",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "outputs": [
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.rangeTiles",
         "runtimeProgram.entities[].controller.params.widthPx",
-        "runtimeProgram.entities[].controller.params.warmupTicks"
+        "runtimeProgram.entities[].controller.params.warmupTicks",
+        "runtimeProgram.entities[].controller.params.manaPayment",
+        "runtimeProgram.entities[].controller.params.initialDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.initialWidthMultiplier",
+        "runtimeProgram.entities[].controller.params.damageStartProgress",
+        "runtimeProgram.entities[].controller.params.raycastTiles"
       ]
     },
     {
@@ -683,7 +723,12 @@
         "runtimeProgram.entities[].targeting.sameTargetBias",
         "runtimeProgram.entities[].targeting.damageBasis",
         "runtimeProgram.entities[].targeting.knockbackBasis",
-        "runtimeProgram.entities[].targeting.damageMultiplier"
+        "runtimeProgram.entities[].targeting.damageMultiplier",
+        "runtimeProgram.entities[].targeting.count",
+        "runtimeProgram.entities[].targeting.spreadRadians",
+        "runtimeProgram.entities[].targeting.targetPolicy",
+        "runtimeProgram.entities[].targeting.requireLineOfSight",
+        "runtimeProgram.entities[].targeting.hardRange"
       ]
     },
     {

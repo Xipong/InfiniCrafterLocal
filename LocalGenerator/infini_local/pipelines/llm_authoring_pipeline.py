@@ -35,6 +35,7 @@ from infini_local.core.runtime_authoring.program_schema import (
     assert_bounded_author_input,
     strict_repair_structure_report,
 )
+from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
 )
@@ -44,6 +45,7 @@ from infini_local.pipelines.author_item_contract import (
     author_item_provider_response_schema,
     author_item_prompt_shape_card,
     author_item_repair_prompt_shape_card,
+    author_item_repair_response_schema,
     provider_nullable_transport_rule,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
@@ -186,6 +188,12 @@ def _repair_malformed_author_json(
 ) -> tuple[dict[str, Any], str]:
     """Spend the one Gameplay Repair call on syntax-only Author recovery."""
 
+    original_context = json.loads(original_recipe_context)
+    # Keep exact recipe facts, not a second copy of the full Author instructions.
+    # The syntax rules, allowed params and full output shape remain below; the
+    # equality check after decoding still forbids adding or changing gameplay.
+    original_context = {key: value for key, value in original_context.items()
+                        if key not in _AUTHOR_CACHE_PREFIX_KEYS}
     repair_context = {
         "schema": "infini.gameplay-author-format-repair.v1",
         "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
@@ -202,7 +210,7 @@ def _repair_malformed_author_json(
         "requiredJsonShape": author_item_prompt_shape_card(),
         "parseError": f"{type(parse_error).__name__}: {parse_error}",
         "malformedRawText": malformed_raw_text,
-        "originalRecipeContext": json.loads(original_recipe_context),
+        "originalRecipeContext": original_context,
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
@@ -509,6 +517,8 @@ def repair_author_item_after_failure(
             "Gameplay validation exposed a registry/runtime defect that LLM Repair must not hide: "
             + bounded_json_dumps(scope["nonRepairableErrors"], max_chars=5000)
         )
+    local_repair_schema = author_item_repair_response_schema(
+        capability_names=runtime_repair_schema_capabilities(scope))
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "
@@ -533,7 +543,7 @@ def repair_author_item_after_failure(
         "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_repair",
-            schema=author_item_provider_repair_response_schema,
+            schema=lambda: author_item_provider_repair_response_schema(local_schema=local_repair_schema),
             strict=True,
             auto_preference="json_schema",
         ),
@@ -567,7 +577,8 @@ def repair_author_item_after_failure(
         )
         parsed = parse_first_valid_llm_json(content)
         patch = project_provider_nullable_optionals_to_local(
-            parsed, response_format=_effective_response_format(request, raw),
+            parsed, local_schema=local_repair_schema,
+            response_format=_effective_response_format(request, raw),
         )
         if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
             raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")

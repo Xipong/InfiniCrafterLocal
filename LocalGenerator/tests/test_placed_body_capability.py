@@ -14,6 +14,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport
+from sentry_contract_checks import without_declared_targeting_neutrals
 
 FN = "present_placed_item_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
@@ -326,6 +327,18 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 
 def test_absent_member_keeps_complete_legacy_compiled_bytes():
     from captured_parent_combat_author import historical_child_combat_wire
+    from beam_contract_checks import without_declared_beam_neutrals
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name:hashlib.sha256(json.dumps(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name))), ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
+    actual = {}
+    for name in baseline:
+        final = historical_child_combat_wire(without_declared_targeting_neutrals(
+            without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name)))))
+        # The archive predates weapon-ammo's two registry inventory diagnostics.
+        # Assert and reverse only those diagnostics; compare every retained byte.
+        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
+        assert checks["requirements"] == 29
+        checks["exclusiveGroups"].remove("ammo_role")
+        checks["requirements"] -= 1
+        actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline

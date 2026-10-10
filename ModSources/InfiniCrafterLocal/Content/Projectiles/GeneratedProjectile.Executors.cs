@@ -105,6 +105,12 @@ public sealed partial class GeneratedProjectile
             Projectile.Kill();
             return true;
         }
+        if (!TryPayChannelBeamMana(owner))
+        {
+            Projectile.friendly = false;
+            Projectile.Kill();
+            return true;
+        }
         Vector2 direction = AimDirection(owner);
         Projectile.Center = owner.MountedCenter + direction * 18f;
         Projectile.velocity = direction;
@@ -112,9 +118,32 @@ public sealed partial class GeneratedProjectile
         Projectile.timeLeft = 2;
         Projectile.tileCollide = _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner, keepAnimation: true);
-        int warmup = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
-        Projectile.friendly = warmup <= 0 || _age >= warmup;
+        Projectile.friendly = ChannelBeamWarmupProgress() >= (_entity.Controller.Params.DamageStartProgress ?? 1d);
         return true;
+    }
+
+    private bool TryPayChannelBeamMana(Player owner)
+    {
+        if (_entity!.Controller.Params.ManaPayment != "each_use_time"
+            || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
+            return true;
+        uint now = Main.GameUpdateCount;
+        if (!_beamManaClockStarted)
+        {
+            _beamManaClockStarted = true;
+            _beamLastManaTick = now;
+            return true; // Native item use already owns the initial payment.
+        }
+        uint elapsed = unchecked(now - _beamLastManaTick);
+        if (elapsed < (uint)Math.Max(1, owner.HeldItem.useTime)) return true;
+        _beamLastManaTick = now;
+        return owner.CheckMana(owner.HeldItem, amount: -1, pay: true, blockQuickMana: false);
+    }
+
+    private double ChannelBeamWarmupProgress()
+    {
+        int duration = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
+        return duration <= 0 ? 1d : Math.Clamp((double)_age / duration, 0d, 1d);
     }
 
     private bool ApplyChargeThenRelease()
@@ -176,7 +205,7 @@ public sealed partial class GeneratedProjectile
             return true;
         _controllerTimer = 0;
         float range = Math.Max(16f, (_entity.Targeting.RangeTiles > 0 ? _entity.Targeting.RangeTiles : _entity.Controller.Params.RangeTiles) * 16f);
-        NPC? target = FindNearestNpc(Projectile.Center, range, _lastTarget, _entity.Targeting.SameTargetBias);
+        NPC? target = FindFiringTarget(range, _entity.Targeting);
         if (target is null) return true;
         _lastTarget = target.whoAmI;
         string shotId = _entity.Targeting.ShotEntityId;
@@ -187,14 +216,49 @@ public sealed partial class GeneratedProjectile
             damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
             out int? damageOverride, out float? knockbackOverride))
             return true;
-        int granted = budget.Reserve(1);
+        int granted = budget.Reserve(_entity.Targeting.Count ?? 1);
         int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: 1,
+            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: (_entity.Targeting.Count ?? 1),
+            spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
             damageMultiplier: damageMultiplier, activationBudget: budget,
             rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
         Projectile.netUpdate = true;
         return true;
+    }
+
+    private NPC? FindFiringTarget(float range, RuntimeTargetingSpec targeting)
+    {
+        bool Admitted(NPC npc, out float score)
+        {
+            score = float.PositiveInfinity;
+            if (!npc.CanBeChasedBy(Projectile)) return false;
+            float distance = Vector2.Distance(Projectile.Center, npc.Center);
+            // Geometric admission precedes the preference discount. A previous
+            // or assigned target cannot turn a hard radius into a score radius.
+            if (targeting.HardRange == true && distance > range) return false;
+            score = npc.whoAmI == _lastTarget
+                ? distance * (1f - Math.Clamp(targeting.SameTargetBias, 0f, 0.9f))
+                : distance;
+            if (targeting.HardRange != true && score >= range) return false;
+            return targeting.RequireLineOfSight != true || Collision.CanHit(
+                Projectile.position, Projectile.width, Projectile.height, npc.position, npc.width, npc.height);
+        }
+
+        if (targeting.TargetPolicy == "player_assigned_first")
+        {
+            NPC? assigned = Projectile.OwnerMinionAttackTargetNPC;
+            if (assigned is not null && Admitted(assigned, out _)) return assigned;
+        }
+        NPC? selected = null;
+        float best = float.PositiveInfinity;
+        foreach (NPC npc in Main.ActiveNPCs)
+            if (Admitted(npc, out float score) && score < best)
+            {
+                selected = npc;
+                best = score;
+            }
+        return selected;
     }
 
     private void RunMovement()

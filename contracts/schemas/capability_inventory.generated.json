@@ -401,15 +401,103 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "configure_weapon_ammo",
+      "componentSlot": "weapon_ammo",
+      "conflicts": [
+        "exclusive_group:ammo_role"
+      ],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "ammo_role",
+      "finalWirePaths": [
+        "runtimeProgram.weaponAmmo",
+        "runtimeProgram.weaponAmmo.ammoCategory",
+        "runtimeProgram.weaponAmmo.speedBasis"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "ammoCategory": {
+          "enum": [
+            "arrow",
+            "bullet",
+            "candy_corn",
+            "coin",
+            "dart",
+            "fallen_star",
+            "flare",
+            "gel",
+            "jack_o_lantern",
+            "nail_friendly",
+            "rocket",
+            "snowball",
+            "solution",
+            "stake",
+            "stynger_bolt"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_ammo_id_category",
+          "units": ""
+        },
+        "speedBasis": {
+          "enum": [
+            "authored_spawn",
+            "native_shot"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restores native weapon-side ammo requirement/conservation and combat contribution without retired bow/gun classifiers; native ammo projectile AI remains outside this capability",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "primary_use|spawn_entity",
+            "alternate_use|spawn_entity"
+          ],
+          "kind": "binding_tuple_present",
+          "message": "Weapon ammo requires an explicit active spawn_entity shot; hold/equipped events or item effects are not native ammo consumers.",
+          "target": "any_entity"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.weaponAmmo"
+      ]
+    },
+    {
+      "authorityByEffect": {},
       "capability": "configure_vanilla_ammo_item",
       "componentSlot": "ammo_item",
-      "conflicts": [],
+      "conflicts": [
+        "exclusive_group:ammo_role"
+      ],
       "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
-      "exclusiveGroup": "",
+      "exclusiveGroup": "ammo_role",
       "finalWirePaths": [
         "gameplay.ammoCategory",
         "gameplay.ammoProjectileId",
@@ -2415,7 +2503,8 @@
             "owner_center",
             "cursor",
             "ground_at_cursor",
-            "above_cursor"
+            "above_cursor",
+            "native_resting_spot"
           ],
           "kind": "string",
           "maximum": null,
@@ -2498,6 +2587,98 @@
       "promptVisibility": true,
       "provenance": "explicit optional per-entity live admission cap; no omission materialization",
       "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Late spawn refusal does not roll back other activation events or native item/mana costs. Capability absence adds no admission cap; no neutral/default is materialized, no name/category/movement routing and no other mechanic is selected.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_sentry",
+      "componentSlot": "native_sentry",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].nativeSentry"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "enabled": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "native sentry registration restored as an independent declared engine primitive",
+      "purpose": "Explicitly choose Projectile.sentry registration for this entity. enabled=true participates in the owner's native maxTurrets cap; Player.UpdateMaxTurrets runs immediately after each successful native sentry spawn and may retire the oldest sentry. Active item bindings project Item.sentry from their exact target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement or choose a weapon family. Omission preserves prior non-sentry behaviour.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_descendant_concurrency",
+      "componentSlot": "spawn",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].spawn.descendantMaxActive"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "maxActive": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 96,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pending or live descendants"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "sustained bounded descendant capacity without a monotonic 32-shot lifetime stop",
+      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget, with no fresh capacity created by network hydration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4031,13 +4212,17 @@
       ]
     },
     {
-      "authorityByEffect": {},
+      "authorityByEffect": {
+        "NPC_source_damage": "native_projectile_hit_authority",
+        "beam_geometry": "native_local_collision_and_visual",
+        "sustain_mana": "owner_execute_sync"
+      },
       "capability": "channel_beam",
       "componentSlot": "controller",
       "conflicts": [
         "exclusive_group:controller"
       ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "decision": "expose",
       "dependencies": [
         "configure_item_use"
@@ -4050,11 +4235,59 @@
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.rangeTiles",
         "runtimeProgram.entities[].controller.params.widthPx",
-        "runtimeProgram.entities[].controller.params.warmupTicks"
+        "runtimeProgram.entities[].controller.params.warmupTicks",
+        "runtimeProgram.entities[].controller.params.manaPayment",
+        "runtimeProgram.entities[].controller.params.initialDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.initialWidthMultiplier",
+        "runtimeProgram.entities[].controller.params.damageStartProgress",
+        "runtimeProgram.entities[].controller.params.raycastTiles"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "damageStartProgress": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "fraction of warmup"
+        },
+        "initialDamageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.01,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "source damage multiplier"
+        },
+        "initialWidthMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.01,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "beam width multiplier"
+        },
+        "manaPayment": {
+          "enum": [
+            "initial_use_only",
+            "each_use_time"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": "native mana payment cadence"
+        },
         "rangeTiles": {
           "enum": [],
           "kind": "number",
@@ -4064,6 +4297,16 @@
           "required": true,
           "semanticType": "tiles",
           "units": "tiles"
+        },
+        "raycastTiles": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": "tile clipping enabled"
         },
         "warmupTicks": {
           "enum": [],
@@ -4089,7 +4332,7 @@
       "positionOwnership": "owns_position_while_active",
       "promptVisibility": true,
       "provenance": "beam scan/channel extracted from the retired magic macro",
-      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
+      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4234,11 +4477,26 @@
         "runtimeProgram.entities[].targeting.sameTargetBias",
         "runtimeProgram.entities[].targeting.damageBasis",
         "runtimeProgram.entities[].targeting.knockbackBasis",
-        "runtimeProgram.entities[].targeting.damageMultiplier"
+        "runtimeProgram.entities[].targeting.damageMultiplier",
+        "runtimeProgram.entities[].targeting.count",
+        "runtimeProgram.entities[].targeting.spreadRadians",
+        "runtimeProgram.entities[].targeting.targetPolicy",
+        "runtimeProgram.entities[].targeting.requireLineOfSight",
+        "runtimeProgram.entities[].targeting.hardRange"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 4,
+          "minimum": 1,
+          "reference": null,
+          "required": false,
+          "semanticType": "spawn_or_target_count",
+          "units": "projectiles/volley"
+        },
         "damageBasis": {
           "enum": [
             "authored_child",
@@ -4260,6 +4518,16 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "hardRange": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
         "intervalTicks": {
@@ -4295,6 +4563,16 @@
           "semanticType": "tiles",
           "units": "tiles"
         },
+        "requireLineOfSight": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "sameTargetBias": {
           "enum": [],
           "kind": "number",
@@ -4326,12 +4604,35 @@
           "required": true,
           "semanticType": "runtime_entity_id",
           "units": ""
+        },
+        "spreadRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.75,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "radians",
+          "units": "radians"
+        },
+        "targetPolicy": {
+          "enum": [
+            "distance_score",
+            "player_assigned_first"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "owns_stationary_position",
       "promptVisibility": true,
       "provenance": "stationary targeting/firing split from the retired sentry macro",
-      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers.",
+      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; selected damage is multiplied once without repeating player/class modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",

@@ -16,21 +16,6 @@ namespace InfiniCrafterLocal.Common.Runtime;
 /// It never infers an action from item prose/category/name and never substitutes
 /// a weapon-family macro. Callers remain responsible for exact lifecycle timing.
 /// </summary>
-// One owner-local ledger per activation, referenced by every root sibling and
-// descendant. Never stored in a process-wide map or reconstructed from peer AI.
-internal sealed class RuntimeSpawnBudget
-{
-    public int Remaining { get; private set; }
-    public RuntimeSpawnBudget(int remaining) => Remaining = Math.Max(0, remaining);
-    public int Reserve(int count)
-    {
-        int granted = Math.Min(Math.Max(0, count), Remaining);
-        Remaining -= granted;
-        return granted;
-    }
-    public void Return(int count) => Remaining += Math.Max(0, count);
-}
-
 internal static class RuntimeProgramExecutor
 {
     // tML dispatches owner-hit hooks only on the owner. NPC.AddBuff and
@@ -145,9 +130,9 @@ internal static class RuntimeProgramExecutor
         int reservedSpawnBudget,
         RuntimeParentCombat parentCombat)
     {
-        int available = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Remaining;
-        if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
-            || available <= 0)
+        // Reserve observes concurrent child retirement; a stale Remaining=0
+        // must not bypass it for an immediate event-only producer.
+        if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth)
         {
             budget.Return(reservedSpawnBudget);
             return;
