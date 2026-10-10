@@ -102,13 +102,22 @@ def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_count
         from sentry_contract_checks import without_declared_targeting_neutrals
         final = compile_runtime_program(build_runtime_fixture(name))
         assert final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]["requirements"] == (
-            55 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+            55 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in (
+                "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity"))
         )
         final = historical_spawn_velocity_wire(historical_child_combat_wire(
             without_declared_targeting_neutrals(without_declared_beam_neutrals(final))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        added_modifier_caps = (
+            "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
+        )
+        # New capabilities add registry diagnostics, not old gameplay. Assert
+        # their exact declared contribution before reversing the historical
+        # counter; archived hashes and every gameplay/receipt byte stay frozen.
+        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
