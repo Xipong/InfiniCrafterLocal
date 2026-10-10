@@ -182,7 +182,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
             _remainingBounces = Math.Clamp(syncedBounces, 0, entity.Collision.BounceCount);
             _activationDelayTicks = Math.Max(0, syncedActivationDelay);
-            Projectile.friendly = _activationDelayTicks <= 0 && entity.Damage.Enabled && entity.Damage.Damage > 0;
+            Projectile.friendly = _activationDelayTicks <= 0 && entity.Damage.Enabled && Projectile.damage > 0;
             Projectile.alpha = _activationDelayTicks > 0 ? 220 : 0;
         }
         _preserveSyncedStateOnHydrate = false;
@@ -207,7 +207,6 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.height = entity.Hitbox.HeightPx;
         Projectile.Center = center;
         Projectile.scale = entity.Hitbox.DrawScale * entity.Visual.Scale;
-        Projectile.friendly = entity.Damage.Enabled && entity.Damage.Damage > 0;
         Projectile.hostile = false;
         // NewProjectileDirect owns initial damage/knockback (including event
         // multipliers); live/network state owns subsequent changes such as charge.
@@ -224,6 +223,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         ApplyHitboxCurveVisual();
         ApplyVisualScaleCurve();
         _activationDelayTicks = AuthoredTicksToProjectileUpdates(entity.Spawn.OverTarget.DelayTicks);
+        Projectile.friendly = _activationDelayTicks == 0 && entity.Damage.Enabled && Projectile.damage > 0;
         Projectile.usesLocalNPCImmunity = entity.Collision.NpcImmunityMode == "local";
         Projectile.localNPCHitCooldown = Projectile.usesLocalNPCImmunity
             ? entity.Collision.LocalNpcHitCooldownTicks
@@ -319,8 +319,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
                 Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
                 Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * (rootSpeedOverride ?? entity.Spawn.SpeedPxPerTick);
-                // A supplied root value is the final native shooting result, including
-                // player/prefix/late hooks. Null retains the authored event-spawn lane.
+                // A supplied value is final native shooting or explicitly selected
+                // live-parent child combat; never repeat player/class modifiers.
+                // Null retains the independently authored child lane.
                 int damage = entity.Damage.Enabled
                     ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
                     : 0;

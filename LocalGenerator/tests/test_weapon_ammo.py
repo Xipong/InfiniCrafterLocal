@@ -97,36 +97,14 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     from sentry_contract_checks import without_declared_targeting_neutrals
     from beam_contract_checks import without_declared_beam_neutrals
+    from captured_parent_combat_author import historical_child_combat_wire
+    from captured_item_alias_wire import historical_item_alias_wire
 
     for name, expected_hash in baseline.items():
-        final = without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))
-        rows = final["runtimeContract"]["finalWireReceipts"]
-        for row in rows:
-            if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
-                assert row["status"] == "delivered" and row["value"] in ("immediate", "on_release")
-                assert row["finalPath"] in ("gameplay.releaseTiming", "runtimeProgram.itemUse.releaseTiming")
-                row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
-        placement_calls = {row["callId"] for row in rows if row.get("fn") == "configure_tile_placement"}
-        for call_id in placement_calls:
-            selected = [row for row in rows if row.get("callId") == call_id]
-            assert len(selected) == 3
-            inactive = next(row for row in selected if row["finalPath"].endswith(".wallId"))
-            assert inactive["status"] == "technical_projection" and inactive["value"] == -1
-            assert inactive["authoredPath"].endswith(".fn")
-            inactive["status"] = "delivered"
-            inactive["authoredPath"] = inactive["authoredPath"].removesuffix("fn") + "params.wallId"
-            for row in selected:
-                assert row["fn"] == "configure_tile_placement"
-                row["fn"] = "configure_placeable"
-            positions = [i for i, row in enumerate(rows) if row.get("callId") == call_id]
-            ordered = [next(row for row in selected if row["finalPath"].endswith("." + field))
-                       for field in ("tileId", "wallId", "placeStyle")]
-            for i, row in zip(positions, ordered):
-                rows[i] = row
-        stats = final["runtimeContract"]["validation"]["stats"]
-        stats["capabilitiesUsed"] = sorted("configure_placeable" if fn == "configure_tile_placement" else fn
-                                           for fn in stats["capabilitiesUsed"])
-        checks = stats["registryDrivenChecks"]
+        final = historical_item_alias_wire(historical_child_combat_wire(
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(
+                compile_runtime_program(build_runtime_fixture(name))))))
+        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         added_modifier_caps = (
             "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",

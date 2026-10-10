@@ -1,0 +1,2567 @@
+{
+  "schema": "infini.parent-combat-retained-wire.v1",
+  "capturedBase": "9a9ebd520212dd902640029836f897c5a502b2e7",
+  "cases": [
+    {
+      "capability": "spawn_entity_on_event",
+      "wire": {
+        "name": "Capability Witness spawn_entity_on_event",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute spawn_entity_on_event through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute spawn_entity_on_event through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing spawn_entity_on_event.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute spawn_entity_on_event through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the spawn_entity_on_event capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes spawn_entity_on_event.",
+                  "reportedBehavior": "The report says that the runtime executes spawn_entity_on_event.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.wire.v3",
+          "itemEntityId": "item",
+          "primaryEntityId": "witness_entity",
+          "primaryOwner": "projectile",
+          "limits": {
+            "maxEntityCount": 12,
+            "maxChildDepth": 3,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body",
+              "visualRole": "inventory_item",
+              "events": [],
+              "visual": {
+                "role": "inventory_item"
+              }
+            },
+            {
+              "id": "witness_entity",
+              "kind": "owner_attached_projectile",
+              "visualRole": "held_body",
+              "events": [
+                {
+                  "id": "witness_call",
+                  "event": "on_hit",
+                  "action": "spawn_entity_on_event",
+                  "actionCode": 1,
+                  "entityId": "witness_child",
+                  "count": 1,
+                  "spreadRadians": 0.0,
+                  "damageMultiplier": 0.5,
+                  "delayTicks": 0
+                }
+              ],
+              "visual": {
+                "role": "held_body"
+              },
+              "spawn": {
+                "speedPxPerTick": 8.0,
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "placement": "item_use_origin",
+                "enabled": true
+              },
+              "damage": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false,
+                "enabled": true
+              },
+              "lifetimeTicks": 120,
+              "hitbox": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              },
+              "collision": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "extraUpdates": 0,
+                "npcImmunityMode": "local",
+                "localNpcHitCooldownTicks": 10
+              },
+              "movement": {
+                "name": "move_straight",
+                "code": 0,
+                "params": {}
+              }
+            },
+            {
+              "id": "witness_child",
+              "kind": "child_projectile",
+              "visualRole": "child_projectile",
+              "events": [],
+              "visual": {
+                "role": "child_projectile"
+              },
+              "spawn": {
+                "speedPxPerTick": 8.0,
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "placement": "item_use_origin",
+                "enabled": true
+              },
+              "damage": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false,
+                "enabled": true
+              },
+              "lifetimeTicks": 120,
+              "hitbox": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              },
+              "collision": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "extraUpdates": 0,
+                "npcImmunityMode": "local",
+                "localNpcHitCooldownTicks": 10
+              },
+              "movement": {
+                "name": "move_straight",
+                "code": 0,
+                "params": {}
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "witness_entity"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              },
+              "role": "primary"
+            }
+          ],
+          "itemUse": {
+            "configured": true,
+            "useStyle": "shoot",
+            "hideUseGraphic": false,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "handPose": "one_handed",
+            "releaseTiming": "immediate",
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0
+          }
+        },
+        "runtimeContract": {
+          "compiledSchema": "infini.runtime-program.wire.v3",
+          "runtimeApiVersion": "infini.runtime-program.v5",
+          "finalWireReceipts": [
+            {
+              "lowererId": "primary_entity_kind_to_owner",
+              "authoredPaths": [
+                "runtimeProgram.primaryEntityId",
+                "runtimeProgram.entities[1].id",
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.primaryOwner",
+              "value": "projectile",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "primary_entity_to_binding_role",
+              "authoredPaths": [
+                "runtimeProgram.primaryEntityId",
+                "runtimeProgram.bindings[0].usePolicy.action.targetId"
+              ],
+              "finalPath": "runtimeProgram.bindings[0].role",
+              "value": "primary",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[0].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[0].visualRole",
+              "value": "inventory_item",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[0].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[0].visual.role",
+              "value": "inventory_item",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[1].visualRole",
+              "value": "held_body",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[1].visual.role",
+              "value": "held_body",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[2].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[2].visualRole",
+              "value": "child_projectile",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[2].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[2].visual.role",
+              "value": "child_projectile",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.damageClass",
+              "finalPath": "gameplay.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.damage",
+              "finalPath": "gameplay.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.knockback",
+              "finalPath": "gameplay.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.useTimeTicks",
+              "finalPath": "gameplay.useTime",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.useAnimationTicks",
+              "finalPath": "gameplay.useAnimation",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.manaCost",
+              "finalPath": "gameplay.manaCost",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.rarity",
+              "finalPath": "gameplay.rarity",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.valueCopper",
+              "finalPath": "gameplay.value",
+              "value": 1000,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.maxStack",
+              "finalPath": "gameplay.maxStack",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.craftYield",
+              "finalPath": "gameplay.craftYield",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.widthPx",
+              "finalPath": "gameplay.width",
+              "value": 24,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.heightPx",
+              "finalPath": "gameplay.height",
+              "value": 24,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.scale",
+              "finalPath": "gameplay.itemScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].fn",
+              "finalPath": "runtimeProgram.itemUse.configured",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+              "finalPath": "gameplay.useStyleName",
+              "value": "shoot",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.autoReuse",
+              "finalPath": "gameplay.autoReuse",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useTurn",
+              "finalPath": "gameplay.useTurn",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+              "finalPath": "gameplay.holdoutOffsetX",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+              "finalPath": "gameplay.holdoutOffsetY",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.handPose",
+              "finalPath": "gameplay.handPose",
+              "value": "one_handed",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.heldSpriteVisibilityHint",
+              "finalPath": "gameplay.releaseTiming",
+              "value": "immediate",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+              "finalPath": "runtimeProgram.itemUse.useStyle",
+              "value": "shoot",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.hideUseGraphic",
+              "finalPath": "runtimeProgram.itemUse.hideUseGraphic",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.disableMeleeHitbox",
+              "finalPath": "runtimeProgram.itemUse.disableMeleeHitbox",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.channel",
+              "finalPath": "runtimeProgram.itemUse.channel",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.handPose",
+              "finalPath": "runtimeProgram.itemUse.handPose",
+              "value": "one_handed",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.heldSpriteVisibilityHint",
+              "finalPath": "runtimeProgram.itemUse.releaseTiming",
+              "value": "immediate",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+              "finalPath": "runtimeProgram.itemUse.holdoutOffsetX",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+              "finalPath": "runtimeProgram.itemUse.holdoutOffsetY",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.speedPxPerUpdate",
+              "finalPath": "runtimeProgram.entities[1].spawn.speedPxPerTick",
+              "value": 8.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.count",
+              "finalPath": "runtimeProgram.entities[1].spawn.count",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.spreadRadians",
+              "finalPath": "runtimeProgram.entities[1].spawn.spreadRadians",
+              "value": 0.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.offsetPx",
+              "finalPath": "runtimeProgram.entities[1].spawn.offsetPx",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.aim",
+              "finalPath": "runtimeProgram.entities[1].spawn.aim",
+              "value": "cursor",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.placement",
+              "finalPath": "runtimeProgram.entities[1].spawn.placement",
+              "value": "item_use_origin",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].fn",
+              "finalPath": "runtimeProgram.entities[1].spawn.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.damageClass",
+              "finalPath": "runtimeProgram.entities[1].damage.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.damage",
+              "finalPath": "runtimeProgram.entities[1].damage.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.knockback",
+              "finalPath": "runtimeProgram.entities[1].damage.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.ownerHitCheck",
+              "finalPath": "runtimeProgram.entities[1].damage.ownerHitCheck",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].fn",
+              "finalPath": "runtimeProgram.entities[1].damage.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "authoredPath": "runtimeProgram.calls[4].params.lifetimeTicks",
+              "finalPath": "runtimeProgram.entities[1].lifetimeTicks",
+              "value": 120,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.widthPx",
+              "finalPath": "runtimeProgram.entities[1].hitbox.widthPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.heightPx",
+              "finalPath": "runtimeProgram.entities[1].hitbox.heightPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.drawScale",
+              "finalPath": "runtimeProgram.entities[1].hitbox.drawScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.hitboxScale",
+              "finalPath": "runtimeProgram.entities[1].hitbox.hitboxScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.tileCollide",
+              "finalPath": "runtimeProgram.entities[1].collision.tileCollide",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.ignoreWater",
+              "finalPath": "runtimeProgram.entities[1].collision.ignoreWater",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.bounceCount",
+              "finalPath": "runtimeProgram.entities[1].collision.bounceCount",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.pierce",
+              "finalPath": "runtimeProgram.entities[1].collision.pierce",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.extraUpdates",
+              "finalPath": "runtimeProgram.entities[1].collision.extraUpdates",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.npcImmunityMode",
+              "finalPath": "runtimeProgram.entities[1].collision.npcImmunityMode",
+              "value": "local",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.localNpcHitCooldownEngineUnits",
+              "finalPath": "runtimeProgram.entities[1].collision.localNpcHitCooldownTicks",
+              "value": 10,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.speedPxPerUpdate",
+              "finalPath": "runtimeProgram.entities[2].spawn.speedPxPerTick",
+              "value": 8.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.count",
+              "finalPath": "runtimeProgram.entities[2].spawn.count",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.spreadRadians",
+              "finalPath": "runtimeProgram.entities[2].spawn.spreadRadians",
+              "value": 0.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.offsetPx",
+              "finalPath": "runtimeProgram.entities[2].spawn.offsetPx",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.aim",
+              "finalPath": "runtimeProgram.entities[2].spawn.aim",
+              "value": "cursor",
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.placement",
+              "finalPath": "runtimeProgram.entities[2].spawn.placement",
+              "value": "item_use_origin",
+              "status": "delivered"
+            },
+            {
+              "callId": "child_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].fn",
+              "finalPath": "runtimeProgram.entities[2].spawn.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "child_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.damageClass",
+              "finalPath": "runtimeProgram.entities[2].damage.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.damage",
+              "finalPath": "runtimeProgram.entities[2].damage.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.knockback",
+              "finalPath": "runtimeProgram.entities[2].damage.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.ownerHitCheck",
+              "finalPath": "runtimeProgram.entities[2].damage.ownerHitCheck",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].fn",
+              "finalPath": "runtimeProgram.entities[2].damage.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "child_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "authoredPath": "runtimeProgram.calls[9].params.lifetimeTicks",
+              "finalPath": "runtimeProgram.entities[2].lifetimeTicks",
+              "value": 120,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.widthPx",
+              "finalPath": "runtimeProgram.entities[2].hitbox.widthPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.heightPx",
+              "finalPath": "runtimeProgram.entities[2].hitbox.heightPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.drawScale",
+              "finalPath": "runtimeProgram.entities[2].hitbox.drawScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.hitboxScale",
+              "finalPath": "runtimeProgram.entities[2].hitbox.hitboxScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.tileCollide",
+              "finalPath": "runtimeProgram.entities[2].collision.tileCollide",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.ignoreWater",
+              "finalPath": "runtimeProgram.entities[2].collision.ignoreWater",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.bounceCount",
+              "finalPath": "runtimeProgram.entities[2].collision.bounceCount",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.pierce",
+              "finalPath": "runtimeProgram.entities[2].collision.pierce",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.extraUpdates",
+              "finalPath": "runtimeProgram.entities[2].collision.extraUpdates",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.npcImmunityMode",
+              "finalPath": "runtimeProgram.entities[2].collision.npcImmunityMode",
+              "value": "local",
+              "status": "delivered"
+            },
+            {
+              "callId": "child_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.localNpcHitCooldownEngineUnits",
+              "finalPath": "runtimeProgram.entities[2].collision.localNpcHitCooldownTicks",
+              "value": 10,
+              "status": "delivered"
+            },
+            {
+              "callId": "child_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[12].fn",
+              "finalPath": "runtimeProgram.entities[2].movement.name",
+              "value": "move_straight",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "child_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[12].fn",
+              "finalPath": "runtimeProgram.entities[2].movement.code",
+              "value": 0,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[13].fn",
+              "finalPath": "runtimeProgram.entities[1].movement.name",
+              "value": "move_straight",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[13].fn",
+              "finalPath": "runtimeProgram.entities[1].movement.code",
+              "value": 0,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.event",
+              "finalPath": "runtimeProgram.entities[1].events[0].event",
+              "value": "on_hit",
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].fn",
+              "finalPath": "runtimeProgram.entities[1].events[0].action",
+              "value": "spawn_entity_on_event",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].fn",
+              "finalPath": "runtimeProgram.entities[1].events[0].actionCode",
+              "value": 1,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.entity",
+              "finalPath": "runtimeProgram.entities[1].events[0].entityId",
+              "value": "witness_child",
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.count",
+              "finalPath": "runtimeProgram.entities[1].events[0].count",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.spreadRadians",
+              "finalPath": "runtimeProgram.entities[1].events[0].spreadRadians",
+              "value": 0.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.damageMultiplier",
+              "finalPath": "runtimeProgram.entities[1].events[0].damageMultiplier",
+              "value": 0.5,
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "spawn_entity_on_event",
+              "authoredPath": "runtimeProgram.calls[14].params.delayTicks",
+              "finalPath": "runtimeProgram.entities[1].events[0].delayTicks",
+              "value": 0,
+              "status": "delivered"
+            }
+          ],
+          "validation": {
+            "schema": "infini.runtime-program-validation.v1",
+            "ok": true,
+            "errors": [],
+            "stats": {
+              "entities": 3,
+              "bindings": 1,
+              "calls": 15,
+              "eventSpawnBudget": 1,
+              "spawnGraphDepth": 1,
+              "capabilitiesUsed": [
+                "configure_item_stats",
+                "configure_item_use",
+                "configure_spawn",
+                "move_straight",
+                "set_projectile_collision",
+                "set_projectile_damage",
+                "set_projectile_hitbox",
+                "set_projectile_lifetime",
+                "spawn_entity_on_event"
+              ],
+              "primaryEntityId": "witness_entity",
+              "registryDrivenChecks": {
+                "typedReferences": 2,
+                "requirements": 28,
+                "exclusiveGroups": [
+                  "controller",
+                  "movement"
+                ]
+              }
+            }
+          },
+          "technicalLoweringAudit": {
+            "schema": "infini.technical-lowering-audit.v1",
+            "ok": true,
+            "violations": [],
+            "lowerers": [
+              {
+                "id": "entity_kind_to_visual_role",
+                "inputs": [
+                  "runtimeProgram.entities[].kind"
+                ],
+                "outputs": [
+                  "runtimeProgram.entities[].visualRole",
+                  "runtimeProgram.entities[].visual.role"
+                ],
+                "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
+                "preserves": [
+                  "entity kind",
+                  "entity identity",
+                  "all gameplay components"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "primary_entity_to_binding_role",
+                "inputs": [
+                  "runtimeProgram.primaryEntityId",
+                  "runtimeProgram.bindings[].usePolicy.action.targetId"
+                ],
+                "outputs": [
+                  "runtimeProgram.bindings[].role"
+                ],
+                "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+                "preserves": [
+                  "primary entity identity",
+                  "binding identity",
+                  "binding target",
+                  "input",
+                  "action"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "primary_entity_kind_to_owner",
+                "inputs": [
+                  "runtimeProgram.primaryEntityId",
+                  "runtimeProgram.entities[].id",
+                  "runtimeProgram.entities[].kind"
+                ],
+                "outputs": [
+                  "runtimeProgram.primaryOwner"
+                ],
+                "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+                "preserves": [
+                  "primary entity identity",
+                  "entity kind"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "capability_name_to_opcode",
+                "inputs": [
+                  "runtimeProgram.calls[].fn"
+                ],
+                "outputs": [
+                  "runtimeProgram.entities[].movement.code",
+                  "runtimeProgram.entities[].controller.code",
+                  "runtimeProgram.entities[].events[].actionCode"
+                ],
+                "equivalence": "finite numeric wire opcode for the exact authored capability name",
+                "preserves": [
+                  "capability identity",
+                  "target",
+                  "params",
+                  "event links"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "item_fields_to_tml_projection",
+                "inputs": [
+                  "item_body capability params"
+                ],
+                "outputs": [
+                  "gameplay.damageClass",
+                  "gameplay.damage",
+                  "gameplay.knockback",
+                  "gameplay.useTime",
+                  "gameplay.useAnimation",
+                  "gameplay.manaCost",
+                  "gameplay.rarity",
+                  "gameplay.value",
+                  "gameplay.maxStack",
+                  "gameplay.craftYield",
+                  "gameplay.width",
+                  "gameplay.height",
+                  "gameplay.itemScale",
+                  "gameplay.useStyleName",
+                  "gameplay.autoReuse",
+                  "gameplay.useTurn",
+                  "gameplay.holdoutOffsetX",
+                  "gameplay.holdoutOffsetY",
+                  "gameplay.handPose",
+                  "gameplay.releaseTiming",
+                  "runtimeProgram.itemUse.configured",
+                  "runtimeProgram.itemUse.useStyle",
+                  "runtimeProgram.itemUse.hideUseGraphic",
+                  "runtimeProgram.itemUse.disableMeleeHitbox",
+                  "runtimeProgram.itemUse.channel",
+                  "runtimeProgram.itemUse.handPose",
+                  "runtimeProgram.itemUse.releaseTiming",
+                  "runtimeProgram.itemUse.holdoutOffsetX",
+                  "runtimeProgram.itemUse.holdoutOffsetY",
+                  "runtimeProgram.itemContact.hitboxScale",
+                  "runtimeProgram.itemContact.contactForgivenessPx",
+                  "gameplay.ammoCategory",
+                  "gameplay.ammoProjectileId",
+                  "gameplay.ammoShootSpeedPxPerTick",
+                  "gameplay.notAmmo",
+                  "gameplay.healLife",
+                  "gameplay.healMana",
+                  "gameplay.potion",
+                  "gameplay.extraBuffs[].buffCode",
+                  "gameplay.extraBuffs[].buffTime",
+                  "gameplay.generatedBuff.durationTicks",
+                  "gameplay.generatedBuff.miningSpeedMultiplier",
+                  "gameplay.generatedBuff.emitLightStrength",
+                  "gameplay.generatedBuff.lightColorName",
+                  "gameplay.generatedBuff.oreSenseRadiusTiles",
+                  "gameplay.generatedBuff.movementSpeed",
+                  "gameplay.generatedBuff.jumpBoost",
+                  "gameplay.generatedBuff.manaRegen",
+                  "gameplay.generatedBuff.lifeRegen",
+                  "gameplay.pickPower",
+                  "gameplay.axePower",
+                  "gameplay.hammerPower",
+                  "gameplay.miningSpeedScale",
+                  "gameplay.useConditionMode",
+                  "gameplay.useConditionMinLife",
+                  "gameplay.useConditionMinMana",
+                  "gameplay.holdLightStrength",
+                  "gameplay.holdLightColorName",
+                  "gameplay.mobilityMode",
+                  "gameplay.mobilityRangeTiles",
+                  "gameplay.mobilityCooldownTicks",
+                  "gameplay.mobilitySafeTileOnly",
+                  "accessory.enabled",
+                  "accessory.defense",
+                  "accessory.maxLife",
+                  "accessory.maxMana",
+                  "accessory.lifeRegen",
+                  "accessory.manaRegen",
+                  "accessory.movementSpeed",
+                  "accessory.maxRunSpeed",
+                  "accessory.jumpSpeed",
+                  "accessory.genericCrit",
+                  "accessory.attackSpeed",
+                  "accessory.knockback",
+                  "accessory.minionSlots",
+                  "accessory.sentrySlots",
+                  "accessory.manaCostReduction",
+                  "accessory.ammoSaveChance",
+                  "accessory.aggro",
+                  "accessory.endurance",
+                  "accessory.armorPenetration",
+                  "accessory.whipRange",
+                  "accessory.summonTagDamage",
+                  "accessory.lightStrength",
+                  "accessory.lightColorName",
+                  "accessory.fallDamageImmune",
+                  "accessory.lavaImmune",
+                  "accessory.waterWalk",
+                  "armor.enabled",
+                  "armor.slot",
+                  "armor.setKey",
+                  "armor.defense",
+                  "armor.maxLife",
+                  "armor.maxMana",
+                  "armor.lifeRegen",
+                  "armor.manaRegen",
+                  "armor.movementSpeed",
+                  "armor.maxRunSpeed",
+                  "armor.jumpSpeed",
+                  "armor.genericCrit",
+                  "armor.attackSpeed",
+                  "armor.knockback",
+                  "armor.minionSlots",
+                  "armor.sentrySlots",
+                  "armor.manaCostReduction",
+                  "armor.ammoSaveChance",
+                  "armor.aggro",
+                  "armor.endurance",
+                  "armor.armorPenetration",
+                  "armor.whipRange",
+                  "armor.summonTagDamage",
+                  "armor.lightStrength",
+                  "armor.lightColorName",
+                  "armor.fallDamageImmune",
+                  "armor.lavaImmune",
+                  "armor.waterWalk",
+                  "armor.setBonusGenericCrit",
+                  "armor.setBonusMovementSpeed",
+                  "armor.setBonusLifeRegen",
+                  "armor.setBonusManaRegen",
+                  "armor.setBonusMinionSlots",
+                  "armor.setBonusSentrySlots",
+                  "armor.setBonusManaCostReduction",
+                  "armor.setBonusAmmoSaveChance",
+                  "armor.setBonusAggro",
+                  "armor.setBonusEndurance",
+                  "armor.setBonusArmorPenetration",
+                  "accessory.genericDamage",
+                  "accessory.meleeDamage",
+                  "accessory.rangedDamage",
+                  "accessory.magicDamage",
+                  "accessory.summonDamage",
+                  "armor.genericDamage",
+                  "armor.meleeDamage",
+                  "armor.rangedDamage",
+                  "armor.magicDamage",
+                  "armor.summonDamage",
+                  "armor.setBonusGenericDamage",
+                  "armor.setBonusMeleeDamage",
+                  "armor.setBonusRangedDamage",
+                  "armor.setBonusMagicDamage",
+                  "armor.setBonusSummonDamage"
+                ],
+                "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
+                "preserves": [
+                  "all authored item values",
+                  "explicit zero",
+                  "units"
+                ],
+                "addsDesignChoice": false
+              }
+            ]
+          }
+        },
+        "gameplay": {
+          "kind": "generic",
+          "damageClass": "generic",
+          "damage": 20,
+          "knockback": 3.0,
+          "useTime": 20,
+          "useAnimation": 20,
+          "manaCost": 0,
+          "rarity": 1,
+          "value": 1000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "width": 24,
+          "height": 24,
+          "itemScale": 1.0,
+          "useStyleName": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": "one_handed",
+          "releaseTiming": "immediate"
+        },
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "capability": "target_and_fire",
+      "wire": {
+        "name": "Capability Witness target_and_fire",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute target_and_fire through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute target_and_fire through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing target_and_fire.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute target_and_fire through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the target_and_fire capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes target_and_fire.",
+                  "reportedBehavior": "The report says that the runtime executes target_and_fire.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.wire.v3",
+          "itemEntityId": "item",
+          "primaryEntityId": "witness_entity",
+          "primaryOwner": "projectile",
+          "limits": {
+            "maxEntityCount": 12,
+            "maxChildDepth": 3,
+            "maxEventSpawnsPerActivation": 32
+          },
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body",
+              "visualRole": "inventory_item",
+              "events": [],
+              "visual": {
+                "role": "inventory_item"
+              }
+            },
+            {
+              "id": "witness_entity",
+              "kind": "stationary_projectile",
+              "visualRole": "deployed_entity",
+              "events": [],
+              "visual": {
+                "role": "deployed_entity"
+              },
+              "spawn": {
+                "speedPxPerTick": 8.0,
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "placement": "item_use_origin",
+                "enabled": true
+              },
+              "damage": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false,
+                "enabled": true
+              },
+              "lifetimeTicks": 120,
+              "hitbox": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              },
+              "collision": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "extraUpdates": 0,
+                "npcImmunityMode": "local",
+                "localNpcHitCooldownTicks": 10
+              },
+              "controller": {
+                "name": "target_and_fire",
+                "code": 3
+              },
+              "targeting": {
+                "shotEntityId": "witness_shot",
+                "intervalTicks": 30,
+                "rangeTiles": 20,
+                "sameTargetBias": 0.2
+              }
+            },
+            {
+              "id": "witness_shot",
+              "kind": "child_projectile",
+              "visualRole": "child_projectile",
+              "events": [],
+              "visual": {
+                "role": "child_projectile"
+              },
+              "spawn": {
+                "speedPxPerTick": 8.0,
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "placement": "item_use_origin",
+                "enabled": true
+              },
+              "damage": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false,
+                "enabled": true
+              },
+              "lifetimeTicks": 120,
+              "hitbox": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              },
+              "collision": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "extraUpdates": 0,
+                "npcImmunityMode": "local",
+                "localNpcHitCooldownTicks": 10
+              },
+              "movement": {
+                "name": "move_straight",
+                "code": 0,
+                "params": {}
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "usePolicy": {
+                "action": {
+                  "kind": "spawn_entity",
+                  "targetId": "witness_entity"
+                },
+                "stackCost": 0,
+                "contactDamage": false
+              },
+              "role": "primary"
+            }
+          ],
+          "itemUse": {
+            "configured": true,
+            "useStyle": "shoot",
+            "hideUseGraphic": false,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "handPose": "one_handed",
+            "releaseTiming": "immediate",
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0
+          }
+        },
+        "runtimeContract": {
+          "compiledSchema": "infini.runtime-program.wire.v3",
+          "runtimeApiVersion": "infini.runtime-program.v5",
+          "finalWireReceipts": [
+            {
+              "lowererId": "primary_entity_kind_to_owner",
+              "authoredPaths": [
+                "runtimeProgram.primaryEntityId",
+                "runtimeProgram.entities[1].id",
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.primaryOwner",
+              "value": "projectile",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "primary_entity_to_binding_role",
+              "authoredPaths": [
+                "runtimeProgram.primaryEntityId",
+                "runtimeProgram.bindings[0].usePolicy.action.targetId"
+              ],
+              "finalPath": "runtimeProgram.bindings[0].role",
+              "value": "primary",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[0].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[0].visualRole",
+              "value": "inventory_item",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[0].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[0].visual.role",
+              "value": "inventory_item",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[1].visualRole",
+              "value": "deployed_entity",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[1].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[1].visual.role",
+              "value": "deployed_entity",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[2].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[2].visualRole",
+              "value": "child_projectile",
+              "status": "technical_projection"
+            },
+            {
+              "lowererId": "entity_kind_to_visual_role",
+              "authoredPaths": [
+                "runtimeProgram.entities[2].kind"
+              ],
+              "finalPath": "runtimeProgram.entities[2].visual.role",
+              "value": "child_projectile",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.damageClass",
+              "finalPath": "gameplay.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.damage",
+              "finalPath": "gameplay.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.knockback",
+              "finalPath": "gameplay.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.useTimeTicks",
+              "finalPath": "gameplay.useTime",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.useAnimationTicks",
+              "finalPath": "gameplay.useAnimation",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.manaCost",
+              "finalPath": "gameplay.manaCost",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.rarity",
+              "finalPath": "gameplay.rarity",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.valueCopper",
+              "finalPath": "gameplay.value",
+              "value": 1000,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.maxStack",
+              "finalPath": "gameplay.maxStack",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.craftYield",
+              "finalPath": "gameplay.craftYield",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.widthPx",
+              "finalPath": "gameplay.width",
+              "value": 24,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.heightPx",
+              "finalPath": "gameplay.height",
+              "value": 24,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_stats",
+              "fn": "configure_item_stats",
+              "authoredPath": "runtimeProgram.calls[0].params.scale",
+              "finalPath": "gameplay.itemScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].fn",
+              "finalPath": "runtimeProgram.itemUse.configured",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+              "finalPath": "gameplay.useStyleName",
+              "value": "shoot",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.autoReuse",
+              "finalPath": "gameplay.autoReuse",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useTurn",
+              "finalPath": "gameplay.useTurn",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+              "finalPath": "gameplay.holdoutOffsetX",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+              "finalPath": "gameplay.holdoutOffsetY",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.handPose",
+              "finalPath": "gameplay.handPose",
+              "value": "one_handed",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.heldSpriteVisibilityHint",
+              "finalPath": "gameplay.releaseTiming",
+              "value": "immediate",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+              "finalPath": "runtimeProgram.itemUse.useStyle",
+              "value": "shoot",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.hideUseGraphic",
+              "finalPath": "runtimeProgram.itemUse.hideUseGraphic",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.disableMeleeHitbox",
+              "finalPath": "runtimeProgram.itemUse.disableMeleeHitbox",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.channel",
+              "finalPath": "runtimeProgram.itemUse.channel",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.handPose",
+              "finalPath": "runtimeProgram.itemUse.handPose",
+              "value": "one_handed",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.heldSpriteVisibilityHint",
+              "finalPath": "runtimeProgram.itemUse.releaseTiming",
+              "value": "immediate",
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+              "finalPath": "runtimeProgram.itemUse.holdoutOffsetX",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "item_use",
+              "fn": "configure_item_use",
+              "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+              "finalPath": "runtimeProgram.itemUse.holdoutOffsetY",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.speedPxPerUpdate",
+              "finalPath": "runtimeProgram.entities[1].spawn.speedPxPerTick",
+              "value": 8.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.count",
+              "finalPath": "runtimeProgram.entities[1].spawn.count",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.spreadRadians",
+              "finalPath": "runtimeProgram.entities[1].spawn.spreadRadians",
+              "value": 0.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.offsetPx",
+              "finalPath": "runtimeProgram.entities[1].spawn.offsetPx",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.aim",
+              "finalPath": "runtimeProgram.entities[1].spawn.aim",
+              "value": "cursor",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].params.placement",
+              "finalPath": "runtimeProgram.entities[1].spawn.placement",
+              "value": "item_use_origin",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[2].fn",
+              "finalPath": "runtimeProgram.entities[1].spawn.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.damageClass",
+              "finalPath": "runtimeProgram.entities[1].damage.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.damage",
+              "finalPath": "runtimeProgram.entities[1].damage.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.knockback",
+              "finalPath": "runtimeProgram.entities[1].damage.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].params.ownerHitCheck",
+              "finalPath": "runtimeProgram.entities[1].damage.ownerHitCheck",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[3].fn",
+              "finalPath": "runtimeProgram.entities[1].damage.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "base_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "authoredPath": "runtimeProgram.calls[4].params.lifetimeTicks",
+              "finalPath": "runtimeProgram.entities[1].lifetimeTicks",
+              "value": 120,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.widthPx",
+              "finalPath": "runtimeProgram.entities[1].hitbox.widthPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.heightPx",
+              "finalPath": "runtimeProgram.entities[1].hitbox.heightPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.drawScale",
+              "finalPath": "runtimeProgram.entities[1].hitbox.drawScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[5].params.hitboxScale",
+              "finalPath": "runtimeProgram.entities[1].hitbox.hitboxScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.tileCollide",
+              "finalPath": "runtimeProgram.entities[1].collision.tileCollide",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.ignoreWater",
+              "finalPath": "runtimeProgram.entities[1].collision.ignoreWater",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.bounceCount",
+              "finalPath": "runtimeProgram.entities[1].collision.bounceCount",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.pierce",
+              "finalPath": "runtimeProgram.entities[1].collision.pierce",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.extraUpdates",
+              "finalPath": "runtimeProgram.entities[1].collision.extraUpdates",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.npcImmunityMode",
+              "finalPath": "runtimeProgram.entities[1].collision.npcImmunityMode",
+              "value": "local",
+              "status": "delivered"
+            },
+            {
+              "callId": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[6].params.localNpcHitCooldownEngineUnits",
+              "finalPath": "runtimeProgram.entities[1].collision.localNpcHitCooldownTicks",
+              "value": 10,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.speedPxPerUpdate",
+              "finalPath": "runtimeProgram.entities[2].spawn.speedPxPerTick",
+              "value": 8.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.count",
+              "finalPath": "runtimeProgram.entities[2].spawn.count",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.spreadRadians",
+              "finalPath": "runtimeProgram.entities[2].spawn.spreadRadians",
+              "value": 0.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.offsetPx",
+              "finalPath": "runtimeProgram.entities[2].spawn.offsetPx",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.aim",
+              "finalPath": "runtimeProgram.entities[2].spawn.aim",
+              "value": "cursor",
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].params.placement",
+              "finalPath": "runtimeProgram.entities[2].spawn.placement",
+              "value": "item_use_origin",
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_configure_spawn",
+              "fn": "configure_spawn",
+              "authoredPath": "runtimeProgram.calls[7].fn",
+              "finalPath": "runtimeProgram.entities[2].spawn.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "shot_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.damageClass",
+              "finalPath": "runtimeProgram.entities[2].damage.damageClass",
+              "value": "generic",
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.damage",
+              "finalPath": "runtimeProgram.entities[2].damage.damage",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.knockback",
+              "finalPath": "runtimeProgram.entities[2].damage.knockback",
+              "value": 3.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].params.ownerHitCheck",
+              "finalPath": "runtimeProgram.entities[2].damage.ownerHitCheck",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "authoredPath": "runtimeProgram.calls[8].fn",
+              "finalPath": "runtimeProgram.entities[2].damage.enabled",
+              "value": true,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "shot_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "authoredPath": "runtimeProgram.calls[9].params.lifetimeTicks",
+              "finalPath": "runtimeProgram.entities[2].lifetimeTicks",
+              "value": 120,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.widthPx",
+              "finalPath": "runtimeProgram.entities[2].hitbox.widthPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.heightPx",
+              "finalPath": "runtimeProgram.entities[2].hitbox.heightPx",
+              "value": 16,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.drawScale",
+              "finalPath": "runtimeProgram.entities[2].hitbox.drawScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "authoredPath": "runtimeProgram.calls[10].params.hitboxScale",
+              "finalPath": "runtimeProgram.entities[2].hitbox.hitboxScale",
+              "value": 1.0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.tileCollide",
+              "finalPath": "runtimeProgram.entities[2].collision.tileCollide",
+              "value": true,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.ignoreWater",
+              "finalPath": "runtimeProgram.entities[2].collision.ignoreWater",
+              "value": false,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.bounceCount",
+              "finalPath": "runtimeProgram.entities[2].collision.bounceCount",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.pierce",
+              "finalPath": "runtimeProgram.entities[2].collision.pierce",
+              "value": 1,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.extraUpdates",
+              "finalPath": "runtimeProgram.entities[2].collision.extraUpdates",
+              "value": 0,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.npcImmunityMode",
+              "finalPath": "runtimeProgram.entities[2].collision.npcImmunityMode",
+              "value": "local",
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "authoredPath": "runtimeProgram.calls[11].params.localNpcHitCooldownEngineUnits",
+              "finalPath": "runtimeProgram.entities[2].collision.localNpcHitCooldownTicks",
+              "value": 10,
+              "status": "delivered"
+            },
+            {
+              "callId": "shot_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[12].fn",
+              "finalPath": "runtimeProgram.entities[2].movement.name",
+              "value": "move_straight",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "shot_motion",
+              "fn": "move_straight",
+              "authoredPath": "runtimeProgram.calls[12].fn",
+              "finalPath": "runtimeProgram.entities[2].movement.code",
+              "value": 0,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].fn",
+              "finalPath": "runtimeProgram.entities[1].controller.name",
+              "value": "target_and_fire",
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].fn",
+              "finalPath": "runtimeProgram.entities[1].controller.code",
+              "value": 3,
+              "status": "technical_projection"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].params.shotEntity",
+              "finalPath": "runtimeProgram.entities[1].targeting.shotEntityId",
+              "value": "witness_shot",
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].params.intervalTicks",
+              "finalPath": "runtimeProgram.entities[1].targeting.intervalTicks",
+              "value": 30,
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].params.rangeTiles",
+              "finalPath": "runtimeProgram.entities[1].targeting.rangeTiles",
+              "value": 20,
+              "status": "delivered"
+            },
+            {
+              "callId": "witness_call",
+              "fn": "target_and_fire",
+              "authoredPath": "runtimeProgram.calls[13].params.sameTargetBias",
+              "finalPath": "runtimeProgram.entities[1].targeting.sameTargetBias",
+              "value": 0.2,
+              "status": "delivered"
+            }
+          ],
+          "validation": {
+            "schema": "infini.runtime-program-validation.v1",
+            "ok": true,
+            "errors": [],
+            "stats": {
+              "entities": 3,
+              "bindings": 1,
+              "calls": 14,
+              "eventSpawnBudget": 0,
+              "spawnGraphDepth": 1,
+              "capabilitiesUsed": [
+                "configure_item_stats",
+                "configure_item_use",
+                "configure_spawn",
+                "move_straight",
+                "set_projectile_collision",
+                "set_projectile_damage",
+                "set_projectile_hitbox",
+                "set_projectile_lifetime",
+                "target_and_fire"
+              ],
+              "primaryEntityId": "witness_entity",
+              "registryDrivenChecks": {
+                "typedReferences": 2,
+                "requirements": 28,
+                "exclusiveGroups": [
+                  "controller",
+                  "movement"
+                ]
+              }
+            }
+          },
+          "technicalLoweringAudit": {
+            "schema": "infini.technical-lowering-audit.v1",
+            "ok": true,
+            "violations": [],
+            "lowerers": [
+              {
+                "id": "entity_kind_to_visual_role",
+                "inputs": [
+                  "runtimeProgram.entities[].kind"
+                ],
+                "outputs": [
+                  "runtimeProgram.entities[].visualRole",
+                  "runtimeProgram.entities[].visual.role"
+                ],
+                "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
+                "preserves": [
+                  "entity kind",
+                  "entity identity",
+                  "all gameplay components"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "primary_entity_to_binding_role",
+                "inputs": [
+                  "runtimeProgram.primaryEntityId",
+                  "runtimeProgram.bindings[].usePolicy.action.targetId"
+                ],
+                "outputs": [
+                  "runtimeProgram.bindings[].role"
+                ],
+                "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+                "preserves": [
+                  "primary entity identity",
+                  "binding identity",
+                  "binding target",
+                  "input",
+                  "action"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "primary_entity_kind_to_owner",
+                "inputs": [
+                  "runtimeProgram.primaryEntityId",
+                  "runtimeProgram.entities[].id",
+                  "runtimeProgram.entities[].kind"
+                ],
+                "outputs": [
+                  "runtimeProgram.primaryOwner"
+                ],
+                "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+                "preserves": [
+                  "primary entity identity",
+                  "entity kind"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "capability_name_to_opcode",
+                "inputs": [
+                  "runtimeProgram.calls[].fn"
+                ],
+                "outputs": [
+                  "runtimeProgram.entities[].movement.code",
+                  "runtimeProgram.entities[].controller.code",
+                  "runtimeProgram.entities[].events[].actionCode"
+                ],
+                "equivalence": "finite numeric wire opcode for the exact authored capability name",
+                "preserves": [
+                  "capability identity",
+                  "target",
+                  "params",
+                  "event links"
+                ],
+                "addsDesignChoice": false
+              },
+              {
+                "id": "item_fields_to_tml_projection",
+                "inputs": [
+                  "item_body capability params"
+                ],
+                "outputs": [
+                  "gameplay.damageClass",
+                  "gameplay.damage",
+                  "gameplay.knockback",
+                  "gameplay.useTime",
+                  "gameplay.useAnimation",
+                  "gameplay.manaCost",
+                  "gameplay.rarity",
+                  "gameplay.value",
+                  "gameplay.maxStack",
+                  "gameplay.craftYield",
+                  "gameplay.width",
+                  "gameplay.height",
+                  "gameplay.itemScale",
+                  "gameplay.useStyleName",
+                  "gameplay.autoReuse",
+                  "gameplay.useTurn",
+                  "gameplay.holdoutOffsetX",
+                  "gameplay.holdoutOffsetY",
+                  "gameplay.handPose",
+                  "gameplay.releaseTiming",
+                  "runtimeProgram.itemUse.configured",
+                  "runtimeProgram.itemUse.useStyle",
+                  "runtimeProgram.itemUse.hideUseGraphic",
+                  "runtimeProgram.itemUse.disableMeleeHitbox",
+                  "runtimeProgram.itemUse.channel",
+                  "runtimeProgram.itemUse.handPose",
+                  "runtimeProgram.itemUse.releaseTiming",
+                  "runtimeProgram.itemUse.holdoutOffsetX",
+                  "runtimeProgram.itemUse.holdoutOffsetY",
+                  "runtimeProgram.itemContact.hitboxScale",
+                  "runtimeProgram.itemContact.contactForgivenessPx",
+                  "gameplay.ammoCategory",
+                  "gameplay.ammoProjectileId",
+                  "gameplay.ammoShootSpeedPxPerTick",
+                  "gameplay.notAmmo",
+                  "gameplay.healLife",
+                  "gameplay.healMana",
+                  "gameplay.potion",
+                  "gameplay.extraBuffs[].buffCode",
+                  "gameplay.extraBuffs[].buffTime",
+                  "gameplay.generatedBuff.durationTicks",
+                  "gameplay.generatedBuff.miningSpeedMultiplier",
+                  "gameplay.generatedBuff.emitLightStrength",
+                  "gameplay.generatedBuff.lightColorName",
+                  "gameplay.generatedBuff.oreSenseRadiusTiles",
+                  "gameplay.generatedBuff.movementSpeed",
+                  "gameplay.generatedBuff.jumpBoost",
+                  "gameplay.generatedBuff.manaRegen",
+                  "gameplay.generatedBuff.lifeRegen",
+                  "gameplay.pickPower",
+                  "gameplay.axePower",
+                  "gameplay.hammerPower",
+                  "gameplay.miningSpeedScale",
+                  "gameplay.useConditionMode",
+                  "gameplay.useConditionMinLife",
+                  "gameplay.useConditionMinMana",
+                  "gameplay.holdLightStrength",
+                  "gameplay.holdLightColorName",
+                  "gameplay.mobilityMode",
+                  "gameplay.mobilityRangeTiles",
+                  "gameplay.mobilityCooldownTicks",
+                  "gameplay.mobilitySafeTileOnly",
+                  "accessory.enabled",
+                  "accessory.defense",
+                  "accessory.maxLife",
+                  "accessory.maxMana",
+                  "accessory.lifeRegen",
+                  "accessory.manaRegen",
+                  "accessory.movementSpeed",
+                  "accessory.maxRunSpeed",
+                  "accessory.jumpSpeed",
+                  "accessory.genericCrit",
+                  "accessory.attackSpeed",
+                  "accessory.knockback",
+                  "accessory.minionSlots",
+                  "accessory.sentrySlots",
+                  "accessory.manaCostReduction",
+                  "accessory.ammoSaveChance",
+                  "accessory.aggro",
+                  "accessory.endurance",
+                  "accessory.armorPenetration",
+                  "accessory.whipRange",
+                  "accessory.summonTagDamage",
+                  "accessory.lightStrength",
+                  "accessory.lightColorName",
+                  "accessory.fallDamageImmune",
+                  "accessory.lavaImmune",
+                  "accessory.waterWalk",
+                  "armor.enabled",
+                  "armor.slot",
+                  "armor.setKey",
+                  "armor.defense",
+                  "armor.maxLife",
+                  "armor.maxMana",
+                  "armor.lifeRegen",
+                  "armor.manaRegen",
+                  "armor.movementSpeed",
+                  "armor.maxRunSpeed",
+                  "armor.jumpSpeed",
+                  "armor.genericCrit",
+                  "armor.attackSpeed",
+                  "armor.knockback",
+                  "armor.minionSlots",
+                  "armor.sentrySlots",
+                  "armor.manaCostReduction",
+                  "armor.ammoSaveChance",
+                  "armor.aggro",
+                  "armor.endurance",
+                  "armor.armorPenetration",
+                  "armor.whipRange",
+                  "armor.summonTagDamage",
+                  "armor.lightStrength",
+                  "armor.lightColorName",
+                  "armor.fallDamageImmune",
+                  "armor.lavaImmune",
+                  "armor.waterWalk",
+                  "armor.setBonusGenericCrit",
+                  "armor.setBonusMovementSpeed",
+                  "armor.setBonusLifeRegen",
+                  "armor.setBonusManaRegen",
+                  "armor.setBonusMinionSlots",
+                  "armor.setBonusSentrySlots",
+                  "armor.setBonusManaCostReduction",
+                  "armor.setBonusAmmoSaveChance",
+                  "armor.setBonusAggro",
+                  "armor.setBonusEndurance",
+                  "armor.setBonusArmorPenetration",
+                  "accessory.genericDamage",
+                  "accessory.meleeDamage",
+                  "accessory.rangedDamage",
+                  "accessory.magicDamage",
+                  "accessory.summonDamage",
+                  "armor.genericDamage",
+                  "armor.meleeDamage",
+                  "armor.rangedDamage",
+                  "armor.magicDamage",
+                  "armor.summonDamage",
+                  "armor.setBonusGenericDamage",
+                  "armor.setBonusMeleeDamage",
+                  "armor.setBonusRangedDamage",
+                  "armor.setBonusMagicDamage",
+                  "armor.setBonusSummonDamage"
+                ],
+                "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
+                "preserves": [
+                  "all authored item values",
+                  "explicit zero",
+                  "units"
+                ],
+                "addsDesignChoice": false
+              }
+            ]
+          }
+        },
+        "gameplay": {
+          "kind": "generic",
+          "damageClass": "generic",
+          "damage": 20,
+          "knockback": 3.0,
+          "useTime": 20,
+          "useAnimation": 20,
+          "manaCost": 0,
+          "rarity": 1,
+          "value": 1000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "width": 24,
+          "height": 24,
+          "itemScale": 1.0,
+          "useStyleName": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": "one_handed",
+          "releaseTiming": "immediate"
+        },
+        "accessory": {
+          "enabled": false
+        },
+        "armor": {
+          "enabled": false
+        }
+      }
+    }
+  ]
+}

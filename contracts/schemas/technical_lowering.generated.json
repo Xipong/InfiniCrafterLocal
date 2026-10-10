@@ -898,6 +898,9 @@
         "runtimeProgram.entities[].targeting.intervalTicks",
         "runtimeProgram.entities[].targeting.rangeTiles",
         "runtimeProgram.entities[].targeting.sameTargetBias",
+        "runtimeProgram.entities[].targeting.damageBasis",
+        "runtimeProgram.entities[].targeting.knockbackBasis",
+        "runtimeProgram.entities[].targeting.damageMultiplier",
         "runtimeProgram.entities[].targeting.count",
         "runtimeProgram.entities[].targeting.spreadRadians",
         "runtimeProgram.entities[].targeting.targetPolicy",
@@ -929,6 +932,8 @@
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].damageBasis",
+        "runtimeProgram.entities[].events[].knockbackBasis",
         "runtimeProgram.entities[].events[].damageMultiplier",
         "runtimeProgram.entities[].events[].delayTicks",
         "runtimeProgram.entities[].events[].periodTicks"

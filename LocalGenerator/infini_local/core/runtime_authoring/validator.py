@@ -88,6 +88,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "unknown_registry_requirement",
     "unreachable_entity",
     "unsupported_input_action",
+    "unsupported_param_target_kind",
     "wrong_binding_target_kind",
     "wrong_reference_target_kind",
     "wrong_target_kind",
@@ -312,6 +313,16 @@ def _validate_requirement(
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
+
+    if requirement.kind == "param_requires_target_kind":
+        if (params.get(requirement.param) == requirement.equals
+                and entities_by_id.get(target_id, {}).get("kind") not in requirement.any_of):
+            allowed = tuple(str(value) for value in cap.params[requirement.param].enum
+                            if value != requirement.equals)
+            return ValidationIssue(f"{path}.params.{requirement.param}",
+                                   "unsupported_param_target_kind", requirement.message,
+                                   allowed, (str(call.get("id") or ""), target_id))
+        return None
 
     if requirement.kind == "capability_absent":
         if requirement.param and params.get(requirement.param) != requirement.equals:

@@ -73,7 +73,8 @@ internal static class RuntimeProgramExecutor
         int damageDone,
         int childDepth,
         RuntimeSpawnBudget budget,
-        int reservedSpawnBudget = 0)
+        int reservedSpawnBudget = 0,
+        RuntimeParentCombat? parentCombat = null)
     {
         if (!HasActionAuthority(action, owner))
         {
@@ -83,7 +84,8 @@ internal static class RuntimeProgramExecutor
         switch (action.ActionCode)
         {
             case RuntimeEventActionCode.SpawnEntity:
-                SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget);
+                SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget,
+                    parentCombat ?? RuntimeParentCombat.Capture(source, owner));
                 break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (directTarget is { active: true })
@@ -125,7 +127,8 @@ internal static class RuntimeProgramExecutor
         Vector2 direction,
         int childDepth,
         RuntimeSpawnBudget budget,
-        int reservedSpawnBudget)
+        int reservedSpawnBudget,
+        RuntimeParentCombat parentCombat)
     {
         // Reserve observes concurrent child retirement; a stale Remaining=0
         // must not bypass it for an immediate event-only producer.
@@ -136,6 +139,12 @@ internal static class RuntimeProgramExecutor
         }
         RuntimeEntitySpec? target = data.RuntimeProgram.TryGetEntity(action.EntityId);
         if (target is null || !target.IsProjectileEntity)
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        if (!RuntimeChildCombat.TryResolve(action.DamageBasis, action.KnockbackBasis,
+            EventSpawnDamageMultiplier(action), parentCombat, out int? damageOverride, out float? knockbackOverride))
         {
             budget.Return(reservedSpawnBudget);
             return;
@@ -154,7 +163,9 @@ internal static class RuntimeProgramExecutor
             requestedCount: requested,
             spreadOverride: action.SpreadRadians,
             damageMultiplier: EventSpawnDamageMultiplier(action),
-            activationBudget: budget) : 0;
+            activationBudget: budget,
+            rootDamageOverride: damageOverride,
+            rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
     }
 

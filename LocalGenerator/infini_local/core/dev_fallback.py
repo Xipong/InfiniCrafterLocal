@@ -130,7 +130,7 @@ def deterministic_low_level_plan(
                 {"id": "call_move_held", "fn": "move_forward_then_retract", "target": "held_body", "params": {"rangeTiles": 6.0, "durationTicks": 24}},
                 {
                     "id": "call_spawn_shards", "fn": "spawn_entity_on_event", "target": "held_body",
-                    "params": {"event": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0},
+                    "params": {"event": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
                 },
                 {
                     "id": "call_spawn_child", "fn": "configure_spawn", "target": "child_shard",

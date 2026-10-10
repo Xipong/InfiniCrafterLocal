@@ -8,6 +8,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 from sentry_contract_checks import without_declared_targeting_neutrals
 from beam_contract_checks import without_declared_beam_neutrals
 
@@ -96,11 +97,11 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         )
         assert actual_capabilities == row["capabilities"]
 
-        compiled = compile_runtime_program(_current_author_seed(authored))
+        compiled = compile_runtime_program(captured_parent_combat_author(_current_author_seed(authored)))
         assert validate_runtime_wire(compiled)["ok"] is True
-        # Preserve the historical corpus: A6 adds exactly five formerly implicit
-        # targeting neutrals, each checked before comparing every retained byte.
-        actual_wire = _delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))
+        # Project only proven historical-equivalent combat choices and declared neutrals.
+        actual_wire = _delivery_wire(historical_child_combat_wire(
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled))))
         assert actual_wire == row["expectedDeliveryWire"]
         digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]

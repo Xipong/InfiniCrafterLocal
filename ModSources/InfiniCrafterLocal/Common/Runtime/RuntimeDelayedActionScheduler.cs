@@ -35,6 +35,7 @@ internal static class RuntimeDelayedActionScheduler
         Vector2 Position,
         Vector2 Direction,
         int DamageDone,
+        RuntimeParentCombat ParentCombat,
         int ChildDepth,
         uint EnqueuedTick,
         uint DueTick,
@@ -123,6 +124,14 @@ internal static class RuntimeDelayedActionScheduler
         }
         else return false; // Never replace an unknown source with a contextless Misc source.
 
+        // Capture before reserving and before later AI/charge changes. Dispatch
+        // receives even an empty snapshot; it must never reread a delayed parent.
+        RuntimeParentCombat parentCombat = RuntimeParentCombat.Capture(capturedSource, owner);
+        if (action.ActionCode == RuntimeEventActionCode.SpawnEntity
+            && !RuntimeChildCombat.TryResolve(action.DamageBasis, action.KnockbackBasis,
+                RuntimeProgramExecutor.EventSpawnDamageMultiplier(action), parentCombat, out _, out _))
+            return false;
+
         int reservedSpawnBudget = 0;
         if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
         {
@@ -139,7 +148,7 @@ internal static class RuntimeDelayedActionScheduler
             sourceProjectile, projectileSlot, sourceProjectile?.identity ?? 0,
             sourceProjectile?.type ?? 0, sourceModProjectile,
             target?.whoAmI ?? -1, target, target is null ? 0 : RuntimeHitNpcGeneration.Get(target),
-            position, direction, damageDone,
+            position, direction, damageDone, parentCombat,
             childDepth, enqueuedTick, dueTick, reservedSpawnBudget, budget, ownerHitReceipt));
         return true;
     }
@@ -227,7 +236,8 @@ internal static class RuntimeDelayedActionScheduler
                 pending.DamageDone,
                 pending.ChildDepth,
                 pending.Budget,
-                pending.ReservedSpawnBudget);
+                pending.ReservedSpawnBudget,
+                parentCombat: pending.ParentCombat);
             ExecutedThisTick++;
         }
     }
