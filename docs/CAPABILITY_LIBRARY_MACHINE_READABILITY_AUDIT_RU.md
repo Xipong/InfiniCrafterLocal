@@ -7,7 +7,7 @@
 
 <a id="verdict"></a>
 
-## Вердикт: 85/100
+## Вердикт: 100/100
 
 Это **структурная оценка контракта**, а не заявление, что реализован весь Terraria runtime.
 
@@ -17,7 +17,7 @@
 | `typedParameters` | 15 | PASS |
 | `compositionMetadata` | 15 | PASS |
 | `exactDelivery` | 15 | PASS |
-| `runtimeOwnership` | 15 | FAIL |
+| `runtimeOwnership` | 15 | PASS |
 | `rangeParity` | 10 | PASS |
 | `projectionParity` | 10 | PASS |
 | `verticalSlices` | 10 | PASS |
@@ -29,9 +29,9 @@
 - capabilities: **58**; parameters: **263**; numeric: **195/195 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
 - typed entity references: **2**; requirements: **37**; binding dependency edges: **8**;
-- exact wire paths: **373**; global technical lowerer outputs: **150**;
-- Python↔C# range parity rows: **102**; vertical witnesses: **58**;
-- errors: **1**; warnings: **0**.
+- exact wire paths: **373**; global technical lowerer outputs: **151**;
+- Python↔C# range parity rows: **106**; vertical witnesses: **58**;
+- errors: **0**; warnings: **0**.
 
 <a id="proof"></a>
 
@@ -64,16 +64,3 @@
 - **Однозначность для LLM: 9/10** — API не содержит weapon families и semantic defaults; некоторые item-body calls длинные из-за широких typed DTO.
 - **Выразительность текущего runtime: 8/10** — странные multi-entity композиции поддерживаются, но controller layering и произвольная world interaction намеренно ограничены.
 - **Доказанность в игре: неполная** до C# build/tModLoader singleplayer/host-client smoke.
-
-## Issues
-
-```json
-[
-  {
-    "severity": "error",
-    "code": "missing_csharp_owner",
-    "path": "capabilities.set_projectile_hitbox_curve.csharpOwner",
-    "message": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual: Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual: missing method symbol(s): ['ApplyHitboxCurveVisual']"
-  }
-]
-```

@@ -939,6 +939,25 @@
   "globalLowerers": [
     {
       "addsDesignChoice": false,
+      "equivalence": "literal optional authored probability on the same exact binding identity",
+      "id": "binding_stack_chance_identity",
+      "inputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "preserves": [
+        "binding identity",
+        "explicit zero",
+        "probability",
+        "absence",
+        "placement escrow"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
       "equivalence": "literal named effect group on the same exact authored binding",
       "id": "binding_effect_group_identity",
       "inputs": [

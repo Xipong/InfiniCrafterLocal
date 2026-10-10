@@ -12,6 +12,8 @@
     <!-- Compile the canonical implementation, never a copied/extracted method. -->
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
     <Compile Include="EngineRuntimeChecks.cs" />
+    <Compile Include="EngineRuntimeChecks.HitboxCurve.cs" />
+    <Compile Include="EngineRuntimeChecks.RawJsonNumeric.cs" />
     <Compile Include="EngineRuntimeChecks.World.cs" />
     <Compile Include="EngineRuntimeChecks.Player.cs" />
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
@@ -19,6 +21,7 @@
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.LiteralStackCost.cs" />
+    <Compile Include="EngineRuntimeChecks.StackChance.cs" />
     <Compile Include="EngineRuntimeChecks.Float32BuffIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffUI.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffDraw.cs" />
@@ -73,6 +76,7 @@
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.MobilityConsumption.cs" />
+    <Compile Include="EngineRuntimeChecks.NamedItemEffects.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
     <Compile Include="EngineRuntimeChecks.DelayedNpcIncarnation.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
