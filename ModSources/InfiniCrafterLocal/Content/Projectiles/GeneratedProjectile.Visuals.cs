@@ -59,7 +59,7 @@ public sealed partial class GeneratedProjectile
         if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
         {
             GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float beamWidth);
-            InfiniVfxRuntime.DrawLine(pixel, start - Main.screenPosition, end - Main.screenPosition, color, beamWidth);
+            InfiniVfxRuntime.DrawLine(pixel, start - Main.screenPosition, end - Main.screenPosition, color, beamWidth, preserveWidth: true);
             return;
         }
         if (_entity.Movement.Code == 18)

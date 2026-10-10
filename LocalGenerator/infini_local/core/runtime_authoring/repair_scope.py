@@ -2620,6 +2620,36 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     return scope
 
 
+def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
+    """Project finite request grammar without narrowing an authorized fn edit.
+
+    capabilitySubset describes blocker cards, not every possible replacement
+    when fn/the complete call is mutable. Those scopes retain the registered
+    public union; a parameter-only scope can use its exact blocker/support and
+    create-policy names. Grammar visibility never grants a write permission.
+    """
+    public = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible}
+    identity = _mapping(scope.get("identityChanges"))
+    permissions = _mapping(scope.get("fieldPermissions"))
+    fn_mutable = bool(identity.get("callFnIds")) or any(
+        path in {"", "fn"}
+        for row in _values(permissions.get("calls")) if isinstance(row, Mapping)
+        for path in _values(row.get("paths"))
+    )
+    if fn_mutable:
+        return sorted(public)
+    names = set(_values(scope.get("capabilitySubset")))
+    blockers = _mapping(scope.get("blockerPlan"))
+    for key in ("directCapabilityNames", "supportingCapabilityNames", "existingBrokenCapabilityNames"):
+        names.update(_values(blockers.get(key)))
+    create = _mapping(_mapping(scope.get("create")).get("calls"))
+    if create.get("allowed"):
+        names.update(_values(create.get("allowedFns")))
+    if names - public:
+        raise ValueError(f"Repair scope references non-public capabilities: {sorted(names - public)}")
+    return sorted(names)
+
+
 def _scope_error(path: str, message: str, *, actual: Any = None) -> dict[str, Any]:
     row: dict[str, Any] = {"path": path, "code": "repair_scope_violation", "message": message}
     if actual is not None:
@@ -3802,5 +3832,6 @@ __all__ = [
     "filter_repair_patch_scope",
     "runtime_repair_fragments",
     "runtime_repair_scope_schema",
+    "runtime_repair_schema_capabilities",
     "validate_repair_patch_scope",
 ]
