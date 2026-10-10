@@ -48,9 +48,27 @@ Native `ModifyDamageHitbox` умножает обе стороны сущест�
 `mirrorToSprite=false` не трогает visual scale. Видимый рост можно авторить
 независимо прежним movement или последующими отдельными visual modifiers.
 `mirrorToSprite=true` задаёт `drawScale * visual.scale * curveScale` для спрайта.
+Этот полный product доходит до actual PNG/reuse renderer без прежнего clamp
+`Projectile.scale` к 0.1…8. Допустимый product 0.015625…128 сохраняется и при
+наличии явного `renderSizePx`: перевод размера полного PNG frame применяется
+после него ровно один раз. У обычного `runtime_geometry` те же authored
+multiplier определяют длину/толщину без старых minimum 8px/2px/1px и без
+отсечения положительных сегментов короче 0.1px. Нулевые, отрицательные или
+нечисловые physical extents отвергаются на конечной границе DrawLine.
+При отсутствии curve либо `mirrorToSprite=false` остаются прежние visual
+clamps/floors. `no_asset` по-прежнему не рисует body; mirror не создаёт asset.
+VFX body-copy slots имеют собственные опубликованные scale rules: mirror
+базового body не переопределяет их slot scale или legacy copy clamps.
 Gameplay всегда берёт кривую и static hitboxScale, никогда `Projectile.scale`,
 PNG dimensions или VFX artist scale. Поэтому замена визуального представления
 не меняет damage geometry.
+
+Оба Visual Director/Repair packets получают exact accepted `hitboxCurve`
+read-only и формулу соответствующего body режима. Отсутствие поля сохраняется;
+Visual не может добавить curve, поменять её endpoints или выбрать mirror.
+Тот же accepted object передаётся image backend: в facts отдельного baked body
+и в `sharedEntityMultipliers` root PNG для каждого `reuse_item_icon` consumer.
+Reuse не создаёт дополнительного image job; старое отсутствие остаётся отсутствием.
 
 Beam и whip имеют специальные line-collision owners, поэтому их сочетание с
 этой **прямоугольной** кривой отклоняется в Author и strict wire/C# DTO. Длины и
@@ -90,10 +108,16 @@ receipt/Repair путь, numeric native-range parity и восемь frozen game
 fingerprints, снятых до изменения. Counter metadata о числе registry
 requirements не является gameplay payload.
 
-Три EngineRuntimeChecks используют настоящий `ModifyDamageHitbox`, production
+Пять EngineRuntimeChecks используют настоящий `ModifyDamageHitbox`, production
 curve math, host/DTO и hydration: linear/exponential midpoints, рост и уменьшение,
 extraUpdates1/3/6, неизменный центр, независимость от sprite scale, явный mirror,
 проверки partial/null/malformed JSON. Они добавлены в штатный native harness.
+Два consumer checks наблюдают настоящие FNA SpriteBatch CPU vertices после
+`DrawAuthoredEntityVisual`/`DrawRuntimeGeometry`: PNG и reuse, с/без frame size,
+product 0.015625/12/128, сохранённый absent/independent режим и generic segment
+0.0625px. Только GPU flush перехвачен; это не имитация формулы renderer.
+Portable source mutations отдельно доказывают чувствительность к возврату
+каждого clamp/floor и потере optional exact-width policy.
 
 Native C# build, исполнение EngineRuntimeChecks и игровой SP/MP smoke здесь
 **notRun**: среда не содержит dotnet/tModLoader/dependency assemblies. Portable

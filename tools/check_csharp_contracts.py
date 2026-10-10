@@ -617,6 +617,32 @@ def check_visual_vfx_contract() -> None:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 
 
+def check_explicit_body_scale() -> None:
+    """Keep explicit curve scale through the actual PNG/primitive consumers."""
+    visual = read("Content/Projectiles/GeneratedProjectile.Visuals.cs")
+    runtime = read("Common/VFX/InfiniVfxRuntime.cs")
+    predicate = stripped(method_body(visual, "PreservesExplicitBodyScale"))
+    require(predicate, "_entity?.HitboxCurve?.MirrorToSprite == true", "explicit body scale opt-in")
+    sprite = stripped(method_body(visual, "DrawAuthoredEntityVisual"))
+    require(sprite, "PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f)", "explicit body scale PNG consumer")
+    require(sprite, "* selected.FrameScale(source.Width, source.Height)", "explicit body scale frame units")
+    body = stripped(method_body(visual, "DrawRuntimeGeometry"))
+    for token in (
+        "bool exactScale = PreservesExplicitBodyScale()",
+        "exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale)",
+        "exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f : Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f)",
+        "color, width, preserveWidth: exactScale",
+    ):
+        require(body, token, "explicit body scale primitive consumer")
+    line = stripped(method_body(runtime, "DrawLine"))
+    for token in (
+        "lengthSquared <= (preserveWidth ? 0f : 0.01f)",
+        "preserveWidth && (!float.IsFinite(lengthSquared) || !float.IsFinite(width) || width <= 0f)",
+        "preserveWidth ? width : Math.Max(1f, width)",
+    ):
+        require(line, token, "explicit body scale final line consumer")
+
+
 def check_deleted_architecture() -> None:
     forbidden_files = [
         "Content/Projectiles/GeneratedProjectile.Runtime.cs",
@@ -675,6 +701,7 @@ def main() -> int:
     check_world_transactions()
     check_delivery_metadata()
     check_visual_vfx_contract()
+    check_explicit_body_scale()
     check_deleted_architecture()
     check_packet_ids()
     if ERRORS:

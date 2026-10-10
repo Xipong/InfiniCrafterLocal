@@ -47,6 +47,8 @@ internal static partial class EngineRuntimeChecks
             ("hitbox curve actual rectangle and world-tick clock", HitboxCurveActualDamageRectAndWorldTickClock),
             ("hitbox curve explicit visual mirror and hydration", HitboxCurveExplicitVisualMirrorAndLateHydration),
             ("hitbox curve strict DTO presence", HitboxCurveDtoPresenceAndDriverBoundaries),
+            ("hitbox mirror exact PNG vertices", HitboxCurveExplicitMirrorReachesSpriteVertices),
+            ("hitbox mirror exact primitive vertices", HitboxCurveExplicitMirrorReachesPrimitiveVertices),
             ("bugfix251 grounded native support", GroundedConditionRequiresNativeSupport),
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),
