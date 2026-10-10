@@ -185,13 +185,15 @@ def test_production_repair_can_retarget_or_create_exact_child_and_freezes_existi
     # orphan caused by retargeting the only reference (negative case below).
     doc["runtimeProgram"]["calls"].append({"id": "keep_original", "target": "witness_entity", "fn": "spawn_entity_on_event",
         "params": {"entity": "witness_child", "event": "on_hit", "count": 1, "spreadRadians": 0.0,
-                   "damageMultiplier": 1.0, "delayTicks": 0}})
+                   "damageMultiplier": 1.0, "delayTicks": 0,
+                   "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     child, calls = _copy_child(doc, "selected")
     if not create:
         doc["runtimeProgram"]["entities"].append(child); doc["runtimeProgram"]["calls"].extend(calls)
         doc["runtimeProgram"]["calls"].append({"id": "keep_selected", "target": "witness_entity", "fn": "spawn_entity_on_event",
             "params": {"entity": "selected", "event": "on_hit", "count": 1, "spreadRadians": 0.0,
-                       "damageMultiplier": 1.0, "delayTicks": 0}})
+                       "damageMultiplier": 1.0, "delayTicks": 0,
+                       "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     before = deepcopy(doc)
     candidate = deepcopy(_call(doc)); candidate["params"].update(entity="selected", stepCount=12)
     hostile = deepcopy(_child_spawn(doc)); hostile["params"]["aim"] = "velocity"
@@ -336,6 +338,11 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
 
     doc = _doc()
     calls = doc["runtimeProgram"]["calls"]
+    emission = _call(doc)
+    calls.append({"id": "combined_parent_combat", "fn": "spawn_entity_on_event", "target": emission["target"],
+                  "params": {"event": "on_hit", "entity": emission["params"]["entity"], "count": 1,
+                             "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0,
+                             "damageBasis": "live_parent", "knockbackBasis": "authored_child"}})
     owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
     for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
         for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
@@ -359,6 +366,13 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     wire = compile_runtime_program(accepted)
     assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=accepted, final_document=wire)["ok"]
+    event = next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"]
+                 if event["id"] == "combined_parent_combat")
+    assert event["damageBasis"] == "live_parent" and event["knockbackBasis"] == "authored_child"
+    assert _event(wire)["action"] == FN
+    for source in (None, accepted):
+        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source,
+                                       final_document=wire)["ok"]
     assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "authored_spawn"}
     assert wire["runtimeProgram"]["heldEffectGroupId"] == "witness"
     assert [group["id"] for group in wire["runtimeProgram"]["effectGroups"]] == ["witness"]
@@ -371,9 +385,11 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     candidate["params"].update(endScale=0.25, startScale=7)
     frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
+    hostile_combat = deepcopy(next(row for row in calls if row["id"] == "combined_parent_combat"))
+    hostile_combat["params"]["damageBasis"] = "authored_child"
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
         {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
-         "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
+         "callsUpsert": [candidate, frozen, hostile_combat]}, format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     assert json.dumps(repaired["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)

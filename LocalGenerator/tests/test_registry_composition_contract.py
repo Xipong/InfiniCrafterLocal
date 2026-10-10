@@ -392,7 +392,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
                     "spreadRadians": 0.0,
                     "damageMultiplier": 1.0 if mutation == "cycle" else 0.2,
                     "delayTicks": i,
-                },
+                 "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
             }
             for i in range(1 if mutation == "cycle" else 3)
         )

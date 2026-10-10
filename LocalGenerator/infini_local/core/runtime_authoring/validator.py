@@ -90,6 +90,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "unknown_registry_requirement",
     "unreachable_entity",
     "unsupported_input_action",
+    "unsupported_param_target_kind",
     "wrong_binding_target_kind",
     "wrong_reference_target_kind",
     "reference_requirements_unsatisfied",
@@ -324,6 +325,16 @@ def _validate_requirement(
             allowed = compatible_entity_reference_ids(cap, requirement.param, target_id, entities_by_id, calls_by_target)
             return ValidationIssue(f"{path}.params.{requirement.param}", "reference_requirements_unsatisfied",
                                    requirement.message, allowed, (str(call.get("id") or ""), referenced_id))
+        return None
+
+    if requirement.kind == "param_requires_target_kind":
+        if (params.get(requirement.param) == requirement.equals
+                and entities_by_id.get(target_id, {}).get("kind") not in requirement.any_of):
+            allowed = tuple(str(value) for value in cap.params[requirement.param].enum
+                            if value != requirement.equals)
+            return ValidationIssue(f"{path}.params.{requirement.param}",
+                                   "unsupported_param_target_kind", requirement.message,
+                                   allowed, (str(call.get("id") or ""), target_id))
         return None
 
     if requirement.kind == "capability_absent":

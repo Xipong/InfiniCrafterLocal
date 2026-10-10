@@ -326,6 +326,7 @@ class ParamSpec:
     wire_enum: Mapping[Any, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_offset: int = 0
     min_properties: int | None = None
+    wire_presence_requires_receipt: bool = False
 
     @property
     def structured(self) -> bool:
@@ -842,6 +843,7 @@ def _p(
     wire_enum: Mapping[Any, Any] | None = None,
     wire_offset: int = 0,
     min_properties: int | None = None,
+    wire_presence_requires_receipt: bool = False,
 ) -> ParamSpec:
     return ParamSpec(
         kind=kind,
@@ -871,6 +873,7 @@ def _p(
         wire_enum=MappingProxyType(dict(wire_enum or {})),
         wire_offset=wire_offset,
         min_properties=min_properties,
+        wire_presence_requires_receipt=wire_presence_requires_receipt,
     )
 
 
@@ -1766,7 +1769,7 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
+        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; selected damage is multiplied once without repeating player/class modifiers.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
@@ -1774,6 +1777,9 @@ _CAPS.extend([
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
             "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1, units="engine units: distance-score discount"),
+            "damageBasis": _p("string", "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4, wire_presence_requires_receipt=True),
             "count": _p("integer", "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot", minimum=1, maximum=4, units="projectiles/volley", required=False, default=1, neutral=1),
             "spreadRadians": _p("number", "Full symmetric fan angle for this firing volley; count=1 has zero angular offset", minimum=0, maximum=0.75, units="radians", required=False, default=0.0, neutral=0.0, consumer_storage="float32"),
             "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score", enum=("distance_score", "player_assigned_first"), required=False, default="distance_score", neutral="distance_score"),
@@ -1803,7 +1809,7 @@ _CAPS.extend([
     ),
     _cap(
         "spawn_entity_on_event",
-        "Spawn a referenced authored entity when one supported event occurs.",
+        "Spawn a referenced authored entity when one supported event occurs. Explicit combat bases select the child's authored stats or the event-owning projectile's actual damage/knockback. Delayed actions snapshot live parent stats when enqueued, including terminal events; player/class modifiers are not applied again. Item-body events can select only authored_child.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
@@ -1811,7 +1817,9 @@ _CAPS.extend([
             "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Spawn count", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
-            "damageMultiplier": _p("number", "Multiplier applied to the referenced child entity's authored base damage", minimum=0, maximum=4),
+            "damageBasis": _p("string", "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
             "delayTicks": _p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"),
             "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
         },
@@ -2341,8 +2349,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name in {"channel_beam", "charge_then_release"}:
         return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
     if cap.name == "target_and_fire":
-        return ("runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
-                *(f"runtimeProgram.entities[].targeting.{spec.wire_name or name}" for name, spec in cap.params.items()))
+        return tuple([
+            "runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
+            *[f"runtimeProgram.entities[].targeting.{name}" for name in param_fields],
+        ])
     if cap.name == "spawn_over_target":
         return tuple(f"runtimeProgram.entities[].spawn.overTarget.{name}" for name in cap.params)
     if cap.category == "event":
@@ -2594,7 +2604,14 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     if cap.name == "require_use_condition":
         return (RequirementSpec("conditional_param", param="mode", any_of=("life_above:minLife", "mana_above:minMana"), message="threshold modes require their threshold parameter"),)
     if cap.category == "event":
-        return (RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event"),)
+        requirements = [RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event")]
+        if cap.name == "spawn_entity_on_event":
+            requirements.extend(RequirementSpec(
+                "param_requires_target_kind", param=name, equals="live_parent",
+                any_of=PROJECTILE_ENTITY_KIND_ORDER,
+                message="live_parent requires the actual event-owning projectile; an item-body event must explicitly select authored_child.",
+            ) for name in ("damageBasis", "knockbackBasis"))
+        return tuple(requirements)
     return ()
 
 

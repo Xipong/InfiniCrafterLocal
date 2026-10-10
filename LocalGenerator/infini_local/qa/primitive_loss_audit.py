@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import re
 from typing import Any
 
 from tree_sitter import Language, Parser, Node
@@ -54,6 +55,48 @@ def _class_properties(data: bytes, class_name: str) -> set[str]:
                 properties.add(data[identifier.start_byte:identifier.end_byte].decode())
         return properties
     raise ValueError(f"Missing executable C# DTO class {class_name}")
+
+
+def nullable_float_rejection_bounds(data: bytes, class_name: str, property_name: str) -> list[float] | None:
+    """Read the strict nullable scalar setter, including null/finite rejection and storage.
+
+    A changed guard/assignment or comment-only decoy fails this source proof;
+    native execution is covered separately by EngineRuntimeChecks.
+    """
+    def tokens(node: Node) -> bytes:
+        if node.type == "comment":
+            return b""
+        return b"".join(tokens(child) for child in node.children) if node.children else node.text or b""
+
+    for declaration in _nodes(_PARSER.parse(data).root_node, "class_declaration"):
+        name = declaration.child_by_field_name("name")
+        if name is None or name.text != class_name.encode():
+            continue
+        for prop in _nodes(declaration, "property_declaration"):
+            name = prop.child_by_field_name("name")
+            if name is None or name.text != property_name.encode():
+                continue
+            storage = prop.child_by_field_name("type")
+            if storage is None or storage.text != b"float?":
+                return None
+            accessors = list(_nodes(prop, "accessor_declaration"))
+            getter = next((row for row in accessors if row.children[0].type == "get"), None)
+            setter = next((row for row in accessors if row.children[0].type == "set"), None)
+            getter_match = re.fullmatch(rb"get=>([A-Za-z_][A-Za-z_0-9]*);", tokens(getter)) if getter else None
+            body = next(_nodes(setter, "block"), None) if setter else None
+            statements = [row for row in body.named_children if row.type != "comment"] if body else []
+            if not getter_match or len(statements) != 2 or statements[0].type != "if_statement":
+                return None
+            condition = statements[0].child_by_field_name("condition")
+            guard = re.fullmatch(rb"valueisnotfloat([A-Za-z_][A-Za-z_0-9]*)\|\|!float\.IsFinite\(\1\)\|\|\1<(-?[0-9.]+)f\|\|\1>(-?[0-9.]+)f", tokens(condition)) if condition else None
+            consequence = statements[0].child_by_field_name("consequence")
+            if (not guard or consequence is None or consequence.type != "throw_statement"
+                    or not tokens(consequence).startswith(b"thrownewInvalidDataException(")
+                    or statements[0].child_by_field_name("alternative") is not None
+                    or tokens(statements[1]) != getter_match[1] + b"=" + guard[1] + b";"):
+                return None
+            return [float(guard[2]), float(guard[3])]
+    return None
 
 
 def _method_bounds(data: bytes, signature: bytes, next_signature: bytes) -> tuple[int, int]:

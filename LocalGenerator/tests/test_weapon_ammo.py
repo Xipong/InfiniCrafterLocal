@@ -97,26 +97,12 @@ def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_count
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     for name, expected_hash in baseline.items():
         final = compile_runtime_program(build_runtime_fixture(name))
-        # #13 deliberately materializes five declared neutral omissions, with
-        # receipts. Reverse only this separately asserted notation projection
-        # for the historical pre-ammo byte oracle; do not overwrite its hashes.
-        neutral_targeting = {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
-                             "requireLineOfSight": False, "hardRange": False}
-        retired_paths = set()
-        for index, entity in enumerate(final["runtimeProgram"]["entities"]):
-            targeting = entity.get("targeting", {})
-            for field, value in neutral_targeting.items():
-                if field not in targeting:
-                    continue
-                path = f"runtimeProgram.entities[{index}].targeting.{field}"
-                receipt = [row for row in final["runtimeContract"]["finalWireReceipts"] if row["finalPath"] == path]
-                assert len(receipt) == 1 and receipt[0]["status"] == "declared_neutral_omission"
-                assert type(targeting[field]) is type(value) and targeting[field] == value
-                assert type(receipt[0]["value"]) is type(value) and receipt[0]["value"] == value
-                retired_paths.add(path)
-                del targeting[field]
-        final["runtimeContract"]["finalWireReceipts"] = [row for row in final["runtimeContract"]["finalWireReceipts"]
-                                                         if row["finalPath"] not in retired_paths]
+        from captured_parent_combat_author import historical_child_combat_wire
+        from sentry_contract_checks import without_declared_targeting_neutrals
+        from beam_contract_checks import without_declared_beam_neutrals
+        # Compose proven archive-only projections; frozen hashes stay untouched.
+        final = historical_child_combat_wire(without_declared_targeting_neutrals(
+            without_declared_beam_neutrals(final)))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
         added_modifier_caps = (

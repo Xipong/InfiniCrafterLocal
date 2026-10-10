@@ -67,6 +67,7 @@ _NODE_PATH_RE = re.compile(
 # Repair policy must fail tests instead of silently falling back to a full-item
 # retry or an empty patch.
 REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
+    "unsupported_param_target_kind": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
     "consumer_representability": {"strategy": "patch_exact_param", "llmRepairable": True, "allowNodeDelete": False},
     "ambiguous_global_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
