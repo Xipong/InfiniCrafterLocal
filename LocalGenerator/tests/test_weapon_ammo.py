@@ -92,13 +92,15 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
 
 def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
+    from sentry_contract_checks import without_declared_targeting_neutrals
 
     # Keep frozen base627 hashes; reverse only the proven test-local alias
     # projection and two native-ammo inventory diagnostics. No omitted field
     # is materialized, and every other gameplay/provenance byte stays pinned.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     for name, expected_hash in baseline.items():
-        final = without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name)))
+        final = without_declared_targeting_neutrals(
+            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
         assert checks["requirements"] == 29

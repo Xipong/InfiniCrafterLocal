@@ -53,6 +53,7 @@ Owner immunity разделяет Terraria cooldown между снарядам�
 | `owner_center` | `owner_center`: mounted center владельца |
 | `cursor` | `cursor`: позиция курсора |
 | `ground_at_cursor` | `ground_at_cursor`: прежний поиск земли под курсором |
+| `native_resting_spot` | `native_resting_spot`: явный `Player.FindSentryRestingSpot` с native reachable-area clamp и выравниванием по половине hitbox height; не включает native sentry lifecycle |
 
 `at` записывает нулевые `overTarget.heightTiles` и `overTarget.delayTicks`. `above` записывает явные `heightTiles` в диапазоне `1..80` и `activationDelayTicks` integer `0..600` в прежние `overTarget.heightTiles` / `overTarget.delayTicks`. Для отсутствия задержки в этой форме нужно написать `0`. Новая форма `at` с положительной задержкой не входит в этот контракт: это отдельное расширение прежнего Author, для которого нужна отдельная проверка runtime.
 

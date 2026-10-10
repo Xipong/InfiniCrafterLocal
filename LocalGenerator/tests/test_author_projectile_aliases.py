@@ -69,6 +69,7 @@ def test_collision_rejects_ambiguous_choices_and_noninteger_updates(name, value)
 @pytest.mark.parametrize("anchor,wire_anchor", [
     ("activation_origin", "item_use_origin"), ("owner_center", "owner_center"),
     ("cursor", "cursor"), ("ground_at_cursor", "ground_at_cursor"),
+    ("native_resting_spot", "native_resting_spot"),
 ])
 @pytest.mark.parametrize("height,delay", [(None, 0), (1, 0), (7.25, 19), (80, 600)])
 def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_anchor, height, delay):

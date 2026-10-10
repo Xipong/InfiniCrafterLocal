@@ -5214,7 +5214,7 @@
                         "type": "number",
                         "minimum": 1,
                         "maximum": 120,
-                        "description": "Soft target range: previous target may be chosen outside it after distance discount",
+                        "description": "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },
@@ -5225,6 +5225,57 @@
                         "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
                         "x-infini-units": "engine units: distance-score discount",
                         "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 4,
+                        "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
+                        "x-infini-units": "projectiles/volley",
+                        "x-infini-semanticType": "spawn_or_target_count",
+                        "default": 1,
+                        "x-infini-neutral": 1
+                      },
+                      "spreadRadians": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 0.75,
+                        "description": "Full symmetric fan angle for this firing volley; count=1 has zero angular offset",
+                        "x-infini-units": "radians",
+                        "x-infini-semanticType": "radians",
+                        "default": 0.0,
+                        "x-infini-neutral": 0.0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0.0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "targetPolicy": {
+                        "type": "string",
+                        "enum": [
+                          "distance_score",
+                          "player_assigned_first"
+                        ],
+                        "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "distance_score",
+                        "x-infini-neutral": "distance_score"
+                      },
+                      "requireLineOfSight": {
+                        "type": "boolean",
+                        "description": "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": false,
+                        "x-infini-neutral": false
+                      },
+                      "hardRange": {
+                        "type": "boolean",
+                        "description": "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": false,
+                        "x-infini-neutral": false
                       }
                     },
                     "required": [
