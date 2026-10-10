@@ -203,6 +203,28 @@ def test_numeric_bounds_and_complete_dto_fields_are_machine_audited():
     dto = dto_path.read_bytes().replace(b"[JsonRequired] public float StrengthPerUpdate", b"public float UnexposedPull { get; set; }\n    [JsonRequired] public float StrengthPerUpdate")
     assert not runtime_component_surface_audit(dto)["ok"]
 
+@pytest.mark.parametrize("fn,leaf,collapsed,neutral,positive", [
+    ("set_projectile_turn_modifier", "turnRadiansPerUpdate", 1e-46, 0, 0.04),
+    ("set_projectile_speed_modifier", "speedMultiplierPerUpdate", 1.0000000000000002, 1, 1.01),
+])
+def test_non_neutral_modifier_cannot_collapse_in_the_real_consumer_and_repair_is_leaf_local(fn, leaf, collapsed, neutral, positive):
+    doc = source(fn); call(doc, fn)["params"][leaf] = collapsed
+    errors = validate_runtime_program(doc)["errors"]
+    assert any(row["path"].endswith(".params." + leaf) for row in errors)
+    scope = build_runtime_repair_scope(doc, errors)
+    correction = deepcopy(call(doc, fn)); correction["params"].update({leaf: positive, "durationTicks": 20000})
+    patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [correction], "note": "retain nonneutral consumer value"}, scope)
+    assert audit["ok"] and audit["ignoredChanges"]
+    repaired = apply_repair_patch(doc, patch)
+    assert call(repaired, fn)["params"]["durationTicks"] == PARAMS[fn]["durationTicks"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    for accepted in (neutral, positive):
+        control = source(fn); call(control, fn)["params"][leaf] = accepted
+        assert validate_runtime_wire(compile_runtime_program(control))["ok"]
+    del call(control, fn)["params"][leaf]
+    assert not validate_runtime_program(control)["ok"]  # neutral metadata is not omission permission
+
+
 def test_actual_author_request_exposes_every_explicit_choice():
     _, user, _ = build_initial_author_request({"name": "A"}, {"name": "B"}, {}, {}, "modifier-offline", model_name="test-model")
     import json

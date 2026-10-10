@@ -1257,7 +1257,7 @@ _CAPS: list[CapabilitySpec] = [
         "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
-            "turnRadiansPerUpdate": _p("number", "Signed velocity rotation on each active projectile AI update", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32"),
+            "turnRadiansPerUpdate": _p("number", "Signed velocity rotation on each active projectile AI update", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0),
             "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
             "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
         }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -1268,7 +1268,7 @@ _CAPS: list[CapabilitySpec] = [
         "After movement and turn, multiply velocity on each active projectile update and clamp its magnitude to the authored cap. Values below one slow; above one accelerate. Phase timing is in world ticks, while the multiplier is explicitly per projectile update.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
-            "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per active projectile update", minimum=0.8, maximum=1.2, units="dimensionless multiplier/update", consumer_storage="float32"),
+            "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per active projectile update", minimum=0.8, maximum=1.2, units="dimensionless multiplier/update", consumer_storage="float32", neutral=1),
             "maxSpeed": _p("number", "Inclusive magnitude cap applied after the multiplication", minimum=0.1, maximum=80, units="pixels/projectile update", consumer_storage="float32"),
             "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
             "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),

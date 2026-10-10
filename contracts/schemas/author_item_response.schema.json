@@ -3607,9 +3607,10 @@
                         "description": "Signed velocity rotation on each active projectile AI update",
                         "x-infini-units": "radians/projectile update",
                         "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0,
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
-                          "neutral": null,
+                          "neutral": 0,
                           "rule": "nonneutral_must_remain_nonneutral",
                           "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                         }
@@ -3682,9 +3683,10 @@
                         "description": "Velocity multiplier per active projectile update",
                         "x-infini-units": "dimensionless multiplier/update",
                         "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 1,
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
-                          "neutral": null,
+                          "neutral": 1,
                           "rule": "nonneutral_must_remain_nonneutral",
                           "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                         }

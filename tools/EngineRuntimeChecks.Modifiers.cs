@@ -131,7 +131,7 @@ internal static partial class EngineRuntimeChecks
             Player oldOwner = Terraria.Main.player[0];
             try
             {
-                owner.active = true; owner.whoAmI = 0; owner.direction = 1; owner.itemAnimationMax = 20; owner.itemAnimation = 5;
+                owner.active = true; owner.whoAmI = 0; owner.direction = 1; owner.itemAnimationMax = 20; owner.itemAnimation = 5; owner.whipRangeMultiplier = 1f;
                 Terraria.Main.player[0] = owner;
                 var spec = Entity(); spec.Kind = "owner_attached_projectile";
                 spec.Movement.Name = "move_whip_lash"; spec.Movement.Code = 18; spec.Movement.Params.RangeTiles = 10; spec.Movement.Params.Segments = 12;
@@ -148,7 +148,8 @@ internal static partial class EngineRuntimeChecks
                     ModifierNear(normal[i].X, inverse.X, "whip mirrored x"); ModifierNear(-normal[i].Y, inverse.Y, "whip mirrored y");
                 }
                 Equal(points[^1], projectile.Center, "actual whip tip follows mirrored polyline");
-                Vector2 tip = points[^1];
+                Vector2 tip = (points[^2] + points[^1]) * 0.5f;
+                Equal(true, Vector2.DistanceSquared(points[^2], points[^1]) > 0f, "positive nondegenerate native whip segment");
                 Equal(true, generated.Colliding(new Rectangle(), new Rectangle((int)tip.X - 3, (int)tip.Y - 3, 6, 6)) == true, "collision consumes mirrored points");
             }
             finally { Terraria.Main.player[0] = oldOwner; }
@@ -157,7 +158,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ModifierStrictDtoPresenceAndOldAbsence()
     {
-        var raw = JsonNode.Parse(RootSpawnFixture(8, 1).ToJson())!.AsObject();
+        var raw = JsonNode.Parse(SwarmGameplayFixture().ToJson())!.AsObject();
         JsonObject entity = raw["runtimeProgram"]!["entities"]![1]!.AsObject();
         foreach ((string member, string json) in new[] {
             ("turnModifier", "{\"turnRadiansPerUpdate\":0.1,\"startDelayTicks\":0,\"durationTicks\":60}"),

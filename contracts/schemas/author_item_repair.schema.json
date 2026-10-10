@@ -3541,10 +3541,11 @@
                     "type": "number",
                     "x-infini-consumerConstraint": {
                       "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": null,
+                      "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "radians/projectile update"
                   }
@@ -3622,10 +3623,11 @@
                     "type": "number",
                     "x-infini-consumerConstraint": {
                       "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": null,
+                      "neutral": 1,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
+                    "x-infini-neutral": 1,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "dimensionless multiplier/update"
                   },
