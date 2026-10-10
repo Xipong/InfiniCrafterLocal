@@ -198,7 +198,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     use = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_use")
     original = copy.deepcopy(use)
     use["params"].pop("useStyle")
-    use["params"].pop("autoReuse" if scenario == "required-pair" else "heldSpriteVisibilityHint")
+    use["params"].pop("autoReuse" if scenario == "required-pair" else "customHeldSprite")
     report = validate_runtime_program(current)
     assert not report["ok"]
     scope = build_runtime_repair_scope(current, report["errors"])
@@ -211,7 +211,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     if scenario == "optional-absence":
         assert next(e["paths"] for e in scope["fieldPermissions"]["calls"] if e["id"] == "item_use") == ["params.useStyle"]
     fixed = copy.deepcopy(use)
-    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", heldSpriteVisibilityHint="on_release")
+    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", customHeldSprite="visible")
     fixed["target"] = "nail"
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
@@ -227,11 +227,11 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     assert calls["item_use"]["target"] == original["target"]
     assert calls["item_stats"]["params"]["damage"] != 999
     if scenario == "required-pair":
-        assert calls["item_use"]["params"]["heldSpriteVisibilityHint"] == "immediate"
+        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
     else:
-        assert "heldSpriteVisibilityHint" not in calls["item_use"]["params"]
+        assert "customHeldSprite" not in calls["item_use"]["params"]
         assert any(e["path"].endswith("params.handPose") for e in audit["ignoredChanges"])
-        assert any(e["path"].endswith("params.heldSpriteVisibilityHint") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
+        assert any(e["path"].endswith("params.customHeldSprite") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
 
 
 @pytest.mark.parametrize("scenario", ["call-property", "param-extra", "renamed-value", "nested-extra"])
@@ -310,7 +310,7 @@ def test_missing_dependency_creation(scenario, ok):
         candidate["id"] = "item"
     patch = dict(_empty_gameplay_patch(), callsUpsert=[candidate])
     if scenario == "delete-new-param":
-        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "heldSpriteVisibilityHint"}]
+        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "customHeldSprite"}]
     if scenario == "global-collision":
         audit = validate_repair_patch_scope(current, patch, scope)
         assert not audit["ok"]
@@ -337,7 +337,7 @@ def test_missing_dependency_creation(scenario, ok):
     pytest.param("configure_tool", "configure_tool", "binding_input_present", "item_body", "primary_use", False, id="ambiguous-item-owner"),
     pytest.param("configure_item_stats", "workbench_blade", "binding_action_present", "same_target", "spawn_entity", False, id="foreign-action-target"),
     pytest.param("configure_item_stats", "workbench_blade", "binding_tuple_present", "same_target", "primary_use|spawn_entity|contactDamage=true", True, id="foreign-existing-tuple-target"),
-    pytest.param("configure_placeable", "configure_placeable", "binding_action_reference", "item_body", "spawn_entity", False, id="non-place-action-reference"),
+    pytest.param("configure_tile_placement", "configure_tile_placement", "binding_action_reference", "item_body", "spawn_entity", False, id="non-place-action-reference"),
 ])
 def test_requirement_owner_refuses_foreign_binding_choices(monkeypatch, capability, fixture, kind, target, allowed, retain_binding):
     registry = dict(CAPABILITY_REGISTRY)
@@ -373,7 +373,7 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
     event_call["params"]["when"] = "on_use" if scenario == "placement" else "on_hit"
     if scenario == "placement":
         binding["usePolicy"] = {"action": {"kind": "place_item", "targetId": "item", "placementCallId": "place_bench"}, "stackCost": 1, "contactDamage": False}
-        program["calls"].append({"id": "place_bench", "fn": "configure_placeable", "target": "item", "params": {"tileId": 18, "wallId": -1, "placeStyle": 0}})
+        program["calls"].append({"id": "place_bench", "fn": "configure_tile_placement", "target": "item", "params": {"tileId": 18, "placeStyle": 0}})
         event_call["params"]["entity"] = "workbench_blade"
     else:
         program["bindings"].append(_binding_row("projectile_root", "alternate_use" if scenario == "foreign-target-contact" else "hold", "spawn_entity", "workbench_blade", contact_damage=scenario == "foreign-target-contact"))
@@ -546,7 +546,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     program["calls"] = [
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
-        {"id": "place", "fn": "configure_placeable", "target": "item", "params": {"tileId": 1, "wallId": -1, "placeStyle": 0}},
+        {"id": "place", "fn": "configure_tile_placement", "target": "item", "params": {"tileId": 1, "placeStyle": 0}},
         {"id": "tool", "fn": "configure_tool", "target": "item", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
     ]
     program["bindings"] = [{
@@ -773,9 +773,9 @@ def test_shape_failure_still_exposes_graph_semantic_blockers() -> None:
     )
     current["runtimeProgram"]["calls"].append({
         "id": "invalid_placeable",
-        "fn": "configure_placeable",
+        "fn": "configure_tile_placement",
         "target": "item",
-        "params": {"tileId": -2, "wallId": -1, "placeStyle": 0},
+        "params": {"tileId": -2, "placeStyle": 0},
     })
 
     report = authored_item_validation_report(current)
@@ -783,7 +783,9 @@ def test_shape_failure_still_exposes_graph_semantic_blockers() -> None:
 
     assert {"shape_one_of", "shape_pattern", "shape_minimum"}.issubset(codes)
     assert {"invalid_primary_entity_reference", "duplicate_exclusive_input"}.issubset(codes)
-    assert {"wrong_binding_target_kind", "entity_not_binding_spawnable", "inert_stationary_entity", "empty_component"}.issubset(codes)
+    # Invalid tile ID is now a strict scalar-domain failure; the old two-sentinel
+    # placement shape no longer contributes an empty-component diagnostic.
+    assert {"wrong_binding_target_kind", "entity_not_binding_spawnable", "inert_stationary_entity"}.issubset(codes)
 
     scope = build_runtime_repair_scope(current, report["errors"])
     transaction = scope["repairTransactions"]["primaryEntitySelection"]
@@ -1574,7 +1576,8 @@ def test_maximal_author_schema_shape_keeps_worst_branch_and_report_tail():
     call = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)
     for key, spec in CAPABILITY_REGISTRY[fn].params.items():
         if key not in call["params"]:
-            call["params"][key] = spec.enum[0] if spec.enum else spec.neutral
+            call["params"][key] = ({child: leaf.enum[0] if leaf.enum else leaf.neutral for child, leaf in spec.properties.items()}
+                                   if spec.properties else spec.enum[0] if spec.enum else spec.neutral)
     assert set(call["params"]) == set(worst["properties"]["params"]["properties"])
     program = good["runtimeProgram"]
     for namespace, source in (("calls", call), ("entities", program["entities"][0]), ("bindings", program["bindings"][0])):

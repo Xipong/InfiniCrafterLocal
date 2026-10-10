@@ -115,11 +115,23 @@ internal static partial class EngineRuntimeChecks
             Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40,40), "real selected placement authorizes");
             Equal(false, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "unchanged native before-state cannot mint material");
             target.HasTile = adjacent.HasTile = true; target.TileType = adjacent.TileType = TileID.Stone;
+            int decoderVisits = 0;
             PlacedDecode fail = (int x, int y, int type, int style, out int ox, out int oy, out int w, out int h, out int alt) => {
-                ox = oy = w = h = alt = 0; throw new InvalidDataException("fixture post-native cosmetic decoder fault");
+                decoderVisits++; ox = oy = w = h = alt = 0;
+                throw new InvalidDataException("fixture post-native cosmetic decoder fault");
             };
-            using (var hook = new MonoMod.RuntimeDetour.Hook(typeof(GeneratedPlacementLedgerSystem).GetMethod("TryResolveNativeFootprint", PersistenceStatic)!, fail))
+            using (var hook = new MonoMod.RuntimeDetour.ILHook(
+                typeof(GeneratedPlacementLedgerSystem).GetMethod("CapturePlacedBodyWitness", PersistenceStatic)!, il => {
+                    var sites = il.Body.Instructions.Where(ins => ins.OpCode == Mono.Cecil.Cil.OpCodes.Call
+                        && ins.Operand is Mono.Cecil.MethodReference method
+                        && method.DeclaringType.FullName == typeof(GeneratedPlacementLedgerSystem).FullName
+                        && method.Name == "TryResolveNativeFootprint" && method.Parameters.Count == 9).ToArray();
+                    Equal(1, sites.Length, "one exact post-material cosmetic decoder call site");
+                    var cursor = new MonoMod.Cil.ILCursor(il); cursor.Goto(sites[0]); cursor.Remove();
+                    cursor.EmitDelegate(fail);
+                }))
                 Equal(true, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "cosmetic fault cannot abandon native material success");
+            Equal(1, decoderVisits, "cosmetic exception injection reached the actual post-material caller");
             Equal(true, GeneratedPlacementLedgerSystem.TryConsumePlacementReceipt(player), "exact material receipt still charges accepted use");
             Equal(false, GeneratedPlacementLedgerSystem.TryConsumePlacementReceipt(player), "material receipt cannot charge twice");
             Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Tile, 41,40), "adjacent simultaneous same-type tile not absorbed");

@@ -175,7 +175,7 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
             },
         }]
         assert next(row["params"] for row in prepared["runtimeProgram"]["calls"] if row["id"] == "platform_result") == {
-            "tileId": 19, "wallId": -1, "placeStyle": 0,
+            "tileId": 19, "placeStyle": 0,
         }
     else:
         assert placement == []
@@ -422,8 +422,8 @@ UNIT_MEANINGS = {
         "lightStrength": "RGB",
     },
     "configure_tool": {"pickPower": "tooltip", "hammerPower": "tooltip", "miningSpeedScale": "pickSpeed"},
-    "configure_placeable": {"placeStyle": "style index"},
-    "require_use_condition": {"minLife": "statLife >=", "minMana": "statMana >="},
+    "configure_tile_placement": {"placeStyle": "Item.placeStyle"},
+    "require_use_condition": {"condition": "thresholds include equality"},
     "add_hold_light": {"strength": "RGB"},
     "emit_light_while_active": {"strength": "RGB"},
     "configure_accessory": {
@@ -459,7 +459,7 @@ EXPLICIT_MEANINGS = [
     ("configure_item_stats", "manaCost", "Base Item.mana"),
     ("configure_item_stats", "craftYield", "maxStack"),
     ("restore_resources_on_use", "usesPotionRules", "Quick Heal"),
-    ("configure_item_use", "heldSpriteVisibilityHint", "not gameplay release timing"),
+    ("configure_item_use", "customHeldSprite", "not gameplay release timing"),
     ("configure_accessory", "ammoSaveChancePercent", "any weapon"),
     ("configure_accessory", "ammoSaveChancePercent", "CanConsumeAmmo"),
     ("configure_accessory", "manaRegenBonusPoints", "not mana/s"),
@@ -516,7 +516,7 @@ RAW_COEFFICIENTS = {
     "configure_tool": ("miningSpeedScale",),
     "apply_generated_buff_on_use": ("miningSpeedMultiplier", "lightStrength", "moveSpeedBonusFactor", "manaRegenBonusPoints"),
     "configure_accessory": ("manaRegenBonusPoints", "aggroPoints", "lightStrength"),
-    "configure_armor": ("manaRegenBonusPoints", "aggroPoints", "lightStrength", "setBonusManaRegenBonusPoints", "setBonusAggroPoints"),
+    "configure_armor": ("manaRegenBonusPoints", "aggroPoints", "lightStrength", "setBonuses.manaRegenBonusPoints", "setBonuses.aggroPoints"),
     "add_hold_light": ("strength",),
     "emit_light_while_active": ("strength",),
     "move_slow_homing": ("homingStrength",),
@@ -534,7 +534,10 @@ RAW_COEFFICIENTS = {
 
 @pytest.mark.parametrize("fn,name", [pytest.param(fn, n, id=fn + "-" + n) for fn, names in RAW_COEFFICIENTS.items() for n in names])
 def test_raw_coefficients_have_identity_wire_conversion(fn, name):
-    spec = CAPABILITY_REGISTRY[fn].params[name]
+    parts = name.split(".")
+    spec = CAPABILITY_REGISTRY[fn].params[parts[0]]
+    for part in parts[1:]:
+        spec = spec.properties[part]
     assert "engine units" in spec.units.lower()
     assert spec.wire_divisor == spec.wire_multiplier == 1
     value = 1.770282212988338

@@ -80,8 +80,9 @@ def _member_reads(data: bytes, bounds: tuple[int, int], root_name: bytes = b"a")
 
 def _declared(group: str) -> set[str]:
     capability = CAPABILITY_REGISTRY[f"configure_{group}"]
-    direct = {(spec.wire_name or name)[0].upper() + (spec.wire_name or name)[1:]
-              for name, spec in capability.params.items()}
+    direct = {wire[0].upper() + wire[1:]
+              for name, spec in capability.params.items()
+              for wire in spec.wire_field_names(name)}
     # Class selectors are Author params of a separate typed operation, but lower
     # into the existing legacy equipment DTO fields consumed by C#.
     prefix = group + "."
