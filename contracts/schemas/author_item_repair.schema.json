@@ -283,7 +283,8 @@
                         "x-infini-reference": {
                           "allowSelf": false,
                           "capabilities": [
-                            "configure_placeable"
+                            "configure_tile_placement",
+                            "configure_wall_placement"
                           ],
                           "graphEdge": false,
                           "namespace": "call"
@@ -597,7 +598,8 @@
                         "x-infini-reference": {
                           "allowSelf": false,
                           "capabilities": [
-                            "configure_placeable"
+                            "configure_tile_placement",
+                            "configure_wall_placement"
                           ],
                           "graphEdge": false,
                           "namespace": "call"
@@ -1045,6 +1047,16 @@
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "customHeldSprite": {
+                    "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic for declared-size presentations and historical keep behavior without that metadata. This does not schedule gameplay release or change vanilla hideUseGraphic.",
+                    "enum": [
+                      "hidden",
+                      "visible",
+                      "inherit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "disableMeleeHitbox": {
                     "description": "Disable vanilla item melee hitbox",
                     "type": "boolean",
@@ -1062,19 +1074,8 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "heldSpriteVisibilityHint": {
-                    "description": "Custom held-root visibility only, not gameplay release timing: immediate hides; on_release/after_charge explicitly keep while use is active (no different scheduling). Empty/omitted follows hideUseGraphic for declared-size presentations (visual.renderSizePx), and preserves historical keep behavior when that metadata is absent",
-                    "enum": [
-                      "",
-                      "immediate",
-                      "on_release",
-                      "after_charge"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "hideUseGraphic": {
-                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), empty/omitted heldSpriteVisibilityHint also hides the custom generated root; explicit on_release/after_charge keep it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless immediate is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
+                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), customHeldSprite=inherit or omission also hides the custom generated root; explicit visible keeps it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless hidden is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
@@ -1805,7 +1806,7 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
-                "const": "configure_placeable"
+                "const": "configure_tile_placement"
               },
               "id": {
                 "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
@@ -1816,29 +1817,78 @@
                 "additionalProperties": false,
                 "properties": {
                   "placeStyle": {
-                    "description": "Exact Item.placeStyle style index for the loaded tile/wall, not a universal visual style",
+                    "description": "Exact Item.placeStyle for the selected loaded placement",
                     "maximum": 255,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_place_style"
                   },
                   "tileId": {
-                    "description": "Exact loaded TileID/ModContent.TileType; -1 disables",
+                    "description": "Exact loaded tile ID; copy from parent facts, do not guess",
                     "maximum": 65535,
-                    "minimum": -1,
+                    "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_tile_id_or_disabled"
+                  }
+                },
+                "required": [
+                  "tileId",
+                  "placeStyle"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "configure_wall_placement"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "placeStyle": {
+                    "description": "Exact Item.placeStyle for the selected loaded placement",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "terraria_place_style"
                   },
                   "wallId": {
-                    "description": "Exact loaded WallID/ModContent.WallType; -1 disables",
+                    "description": "Exact loaded wall ID; copy from parent facts, do not guess",
                     "maximum": 65535,
-                    "minimum": -1,
+                    "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_wall_id_or_disabled"
                   }
                 },
                 "required": [
-                  "tileId",
                   "wallId",
                   "placeStyle"
                 ],
@@ -1955,7 +2005,7 @@
                     "x-infini-units": "world pixels"
                   },
                   "placementCallId": {
-                    "description": "Exact same-item configure_placeable call executed by a place_item binding; tileId >= 0 and wallId = -1 only",
+                    "description": "Exact same-item configure_tile_placement call executed by a place_item binding; wall placements cannot carry this presentation",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {
@@ -2041,34 +2091,61 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "minLife": {
-                    "description": "Current HP (Player.statLife >= minLife) required for life_above; equality allowed",
-                    "maximum": 1000,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "life_points"
-                  },
-                  "minMana": {
-                    "description": "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed",
-                    "maximum": 1000,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "mana_points"
-                  },
-                  "mode": {
-                    "description": "Use condition",
-                    "enum": [
-                      "grounded",
-                      "not_wet",
-                      "life_above",
-                      "mana_above"
+                  "condition": {
+                    "description": "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.",
+                    "oneOf": [
+                      {
+                        "description": "Player is grounded",
+                        "enum": [
+                          "grounded"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "description": "Player is not wet",
+                        "enum": [
+                          "not_wet"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Player.statLife >= the authored life threshold",
+                        "properties": {
+                          "lifeAtLeast": {
+                            "description": "Inclusive life threshold",
+                            "maximum": 1000,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "lifeAtLeast"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Player.statMana >= the authored mana threshold",
+                        "properties": {
+                          "manaAtLeast": {
+                            "description": "Inclusive mana threshold",
+                            "maximum": 1000,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "manaAtLeast"
+                        ],
+                        "type": "object"
+                      }
                     ],
-                    "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [
-                  "mode"
+                  "condition"
                 ],
                 "type": "object"
               },
@@ -2194,7 +2271,6 @@
                   "mode": {
                     "description": "Mobility executor",
                     "enum": [
-                      "recall_home",
                       "blink_to_cursor"
                     ],
                     "type": "string",
@@ -2219,6 +2295,56 @@
                   "rangeTiles",
                   "cooldownTicks",
                   "safeTileOnly"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "recall_home_on_use"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "cooldownTicks": {
+                    "description": "Shared player mobility cooldown after success",
+                    "maximum": 3600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  }
+                },
+                "required": [
+                  "cooldownTicks"
                 ],
                 "type": "object"
               },
@@ -2868,145 +2994,155 @@
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
                   },
-                  "setBonusAggroPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
-                    "maximum": 1000,
-                    "minimum": -1000,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "engine units: aggro points",
-                    "x-infini-units": "engine units: aggro points"
-                  },
-                  "setBonusAmmoSaveChancePercent": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
-                    "maximum": 99,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
+                  "setBonuses": {
+                    "additionalProperties": false,
+                    "description": "Matching three-piece armor set bonuses, executed once by its head piece; exact setKey required for non-neutral effects",
+                    "minProperties": 1,
+                    "properties": {
+                      "aggroPoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
+                        "maximum": 1000,
+                        "minimum": -1000,
+                        "type": "integer",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "engine units: aggro points",
+                        "x-infini-units": "engine units: aggro points"
+                      },
+                      "ammoSaveChancePercent": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "maximum": 99,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        },
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "probability_percent",
+                        "x-infini-units": "probability_percent"
+                      },
+                      "damageReductionPercentagePoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
+                        "maximum": 75,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        },
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-units": "percentage_points"
+                      },
+                      "genericArmorPenetrationPoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic; not damage percent",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "armor_points",
+                        "x-infini-units": "armor_points"
+                      },
+                      "genericCritChancePercentagePoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance",
+                        "maximum": 100,
+                        "minimum": -100,
+                        "type": "number",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-units": "percentage_points"
+                      },
+                      "lifeRegenHpPerSecond": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
+                        "maximum": 100,
+                        "minimum": -50,
+                        "multipleOf": 0.5,
+                        "type": "number",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "HP/s",
+                        "x-infini-units": "HP/s"
+                      },
+                      "manaCostReductionPercentagePoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                        "maximum": 90,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        },
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "percentage_points",
+                        "x-infini-units": "percentage_points"
+                      },
+                      "manaRegenBonusPoints": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
+                        "maximum": 200,
+                        "minimum": -100,
+                        "type": "integer",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "engine units: manaRegenBonus points",
+                        "x-infini-units": "engine units: manaRegenBonus points"
+                      },
+                      "minionSlotsBonus": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "slots",
+                        "x-infini-units": "slots"
+                      },
+                      "moveSpeedBonusPercent": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
+                        "maximum": 300,
+                        "minimum": -90,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        },
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "additive_percent",
+                        "x-infini-units": "additive_percent"
+                      },
+                      "sentrySlotsBonus": {
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots",
+                        "maximum": 20,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-neutral": 0,
+                        "x-infini-semanticType": "slots",
+                        "x-infini-units": "slots"
                       }
                     },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "probability_percent",
-                    "x-infini-units": "probability_percent"
-                  },
-                  "setBonusDamageReductionPercentagePoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
-                    "maximum": 75,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
-                      }
-                    },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "percentage_points",
-                    "x-infini-units": "percentage_points"
-                  },
-                  "setBonusGenericArmorPenetrationPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic; not damage percent",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "armor_points",
-                    "x-infini-units": "armor_points"
-                  },
-                  "setBonusGenericCritChancePercentagePoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance",
-                    "maximum": 100,
-                    "minimum": -100,
-                    "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "percentage_points",
-                    "x-infini-units": "percentage_points"
-                  },
-                  "setBonusLifeRegenHpPerSecond": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
-                    "maximum": 100,
-                    "minimum": -50,
-                    "multipleOf": 0.5,
-                    "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "HP/s",
-                    "x-infini-units": "HP/s"
-                  },
-                  "setBonusManaCostReductionPercentagePoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
-                    "maximum": 90,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
-                      }
-                    },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "percentage_points",
-                    "x-infini-units": "percentage_points"
-                  },
-                  "setBonusManaRegenBonusPoints": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
-                    "maximum": 200,
-                    "minimum": -100,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "engine units: manaRegenBonus points",
-                    "x-infini-units": "engine units: manaRegenBonus points"
-                  },
-                  "setBonusMinionSlotsBonus": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots",
-                    "maximum": 20,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "slots",
-                    "x-infini-units": "slots"
-                  },
-                  "setBonusMoveSpeedBonusPercent": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
-                    "maximum": 300,
-                    "minimum": -90,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
-                      }
-                    },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "additive_percent",
-                    "x-infini-units": "additive_percent"
-                  },
-                  "setBonusSentrySlotsBonus": {
-                    "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots",
-                    "maximum": 20,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "slots",
-                    "x-infini-units": "slots"
+                    "required": [],
+                    "type": "object",
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "setKey": {
                     "description": "Exact authored set key (empty when no matching set is intended)",

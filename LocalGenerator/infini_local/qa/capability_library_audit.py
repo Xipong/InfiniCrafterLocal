@@ -302,13 +302,15 @@ def capability_library_audit() -> dict[str, Any]:
         issues.append(AuditIssue("warning", code, path, message))
 
     capability_names = set(CAPABILITY_REGISTRY)
+    public_names = {name for name, cap in CAPABILITY_REGISTRY.items()
+                    if cap.prompt_visible and cap.decision == "expose"}
     provider_names = {row["properties"]["fn"]["const"] for row in capability_provider_union()}
     prompt_names = {row["fn"] for row in compact_capability_catalog()}
     manifest = runtime_authoring_registry_manifest()
     manifest_names = {row["fn"] for row in manifest["capabilities"]}
     for projection, names in (("provider", provider_names), ("prompt", prompt_names), ("manifest", manifest_names)):
-        if names != capability_names:
-            error("registry_projection_mismatch", projection, f"missing={sorted(capability_names - names)} extra={sorted(names - capability_names)}")
+        if names != public_names:
+            error("registry_projection_mismatch", projection, f"missing={sorted(public_names - names)} extra={sorted(names - public_names)}")
 
     known_slots: dict[str, list[str]] = {}
     reference_params = 0
@@ -512,6 +514,8 @@ def capability_library_audit() -> dict[str, Any]:
     score = sum(weight for name, weight in weights.items() if criteria[name])
     metrics.update({
         "capabilities": len(CAPABILITY_REGISTRY),
+        "publicCapabilities": len(public_names),
+        "retainedCapabilities": len(capability_names - public_names),
         "entityKinds": len(ENTITY_KIND_REGISTRY),
         "inputs": len(INPUT_KIND_REGISTRY),
         "bindingActions": len(BINDING_ACTION_REGISTRY),

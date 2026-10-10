@@ -29,7 +29,7 @@ _ITEM_BASE_USE = {
     "useStyle": "shoot", "autoReuse": False, "useTurn": True,
     "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False,
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
-    "handPose": "one_handed", "heldSpriteVisibilityHint": "immediate",
+    "handPose": "one_handed", "customHeldSprite": "hidden",
 }
 _SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
@@ -38,6 +38,10 @@ _COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pier
 
 
 def _value(spec: ParamSpec, name: str) -> Any:
+    if spec.alternatives:
+        return _value(spec.alternatives[0], name)
+    if spec.kind == "object":
+        return {key: _value(leaf, key) for key, leaf in spec.properties.items() if leaf.required}
     if spec.enum:
         return deepcopy(spec.enum[0])
     if spec.kind == "boolean":
@@ -66,10 +70,12 @@ def _params(fn: str) -> dict[str, Any]:
             "lightColor": "white", "oreSenseEnabled": False, "moveSpeedBonusFactor": 0.0,
             "jumpSpeedBonusPxPerTick": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
         },
-        "configure_placeable": {"tileId": 4, "wallId": -1, "placeStyle": 0},
+        "configure_tile_placement": {"tileId": 4, "placeStyle": 0},
+        "configure_wall_placement": {"wallId": 1, "placeStyle": 0},
         "present_placed_item_sprite": {"placementCallId": "native_placement"},
-        "require_use_condition": {"mode": "grounded"},
-        "move_player_on_use": {"mode": "recall_home", "rangeTiles": 0, "cooldownTicks": 60, "safeTileOnly": True},
+        "require_use_condition": {"condition": "grounded"},
+        "move_player_on_use": {"mode": "blink_to_cursor", "rangeTiles": 5, "cooldownTicks": 60, "safeTileOnly": True},
+        "recall_home_on_use": {"cooldownTicks": 60},
         "configure_accessory": {"defensePoints": 1},
         "add_equipment_damage_bonus": {"phase": "equipped", "damageClass": "melee", "bonusPercent": 15},
         "configure_armor": {
@@ -163,10 +169,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call("held_utility_effect", "apply_generated_buff_on_use", "item", effect))
             action = "use_item_body"
             input_kind = "primary_use"
-            if fn in {"configure_placeable", "present_placed_item_sprite"}:
+            if fn in {"configure_tile_placement", "configure_wall_placement", "present_placed_item_sprite"}:
                 action = "place_item"
                 if fn == "present_placed_item_sprite":
-                    calls.append(_call("native_placement", "configure_placeable", "item"))
+                    calls.append(_call("native_placement", "configure_tile_placement", "item"))
             elif fn in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
                 action = "equip_passive"; input_kind = "equipped"
             elif fn in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:
@@ -184,7 +190,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             item_use = deepcopy(_ITEM_BASE_USE)
             if fn in {"channel_beam", "charge_then_release"}:
                 item_use["channel"] = True
-                item_use["heldSpriteVisibilityHint"] = "on_release"
+                item_use["customHeldSprite"] = "visible"
             calls.append(_call("item_use", "configure_item_use", "item", item_use))
         if fn == "target_and_fire":
             kind = "stationary_projectile"
@@ -296,7 +302,9 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
 def capability_vertical_slice_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     ok = True
-    for fn in CAPABILITY_REGISTRY:
+    for fn, cap in CAPABILITY_REGISTRY.items():
+        if not cap.prompt_visible or cap.decision != "expose":
+            continue
         authored = build_capability_witness(fn)
         author = validate_runtime_program(authored)
         row: dict[str, Any] = {"fn": fn, "authorValid": bool(author.get("ok")), "authorErrors": author.get("errors") or []}

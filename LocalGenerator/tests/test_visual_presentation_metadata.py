@@ -329,7 +329,7 @@ def test_vfx_runtime_pairs_follow_actual_item_and_projectile_emitters() -> None:
     assert (primary_target, "on_kill") in pairs
     assert (primary_target, "on_use") not in pairs
 
-    place_only = compile_runtime_program(build_capability_witness("configure_placeable"))
+    place_only = compile_runtime_program(build_capability_witness("configure_tile_placement"))
     place_item_id = place_only["runtimeProgram"]["itemEntityId"]
     place_pairs = {
         (row["entityId"], row["event"])

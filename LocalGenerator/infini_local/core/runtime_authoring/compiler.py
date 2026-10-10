@@ -249,10 +249,16 @@ def _compile_item_call(
         return
 
     if fn == "require_use_condition":
-        project(gameplay, "gameplay", {"mode": "useConditionMode", "minLife": "useConditionMinLife", "minMana": "useConditionMinMana"})
+        ctx.project_parameter(call=call, param="condition", value=p["condition"], target=gameplay, prefix="gameplay")
         return
     if fn == "add_hold_light":
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
+        return
+    if fn == "recall_home_on_use":
+        ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix="gameplay")
+        for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
+            ctx.write_derived(call=call, path=f"gameplay.{key}", value=value, target=gameplay, key=key,
+                              source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "move_player_on_use":
         project(gameplay, effect_prefix, {
@@ -448,7 +454,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     placement_calls_by_id = {
         str(call["id"]): call
         for call in calls
-        if str(call.get("fn") or "") == "configure_placeable"
+        if str(call.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
     }
     placed_body_calls = {
         call["params"]["placementCallId"]: call
@@ -459,6 +465,8 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         binding = project_to_wire(
             authored_binding,
             placement_calls_by_id=placement_calls_by_id,
+            placement_literals_by_fn={str(call["fn"]): CAPABILITY_REGISTRY[str(call["fn"])].fixed_wire_literals
+                                      for call in placement_calls_by_id.values()},
         )
         binding["role"] = primary_binding_role(primary_entity_id, binding_target_id(authored_binding))
         final_index = len(bindings)
@@ -479,12 +487,17 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             for key, value in params.items():
                 ctx.receipts.append({
                     "callId": str(call["id"]),
-                    "fn": "configure_placeable",
+                    "fn": str(call["fn"]),
                     "authoredPath": f"runtimeProgram.calls[{source_call_index}].params.{key}",
                     "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
                     "value": copy.deepcopy(value),
                     "status": "delivered",
                 })
+            for key, value in CAPABILITY_REGISTRY[str(call["fn"])].fixed_wire_literals.items():
+                ctx.write_derived(call=call,
+                    path=f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
+                    value=value, target=binding["usePolicy"]["action"]["placement"], key=key,
+                    source=f"runtimeProgram.calls[{source_call_index}].fn")
             presentation = placed_body_calls.get(str(call["id"]))
             if presentation is not None:
                 body: dict[str, Any] = {}
@@ -561,7 +574,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         entity_index = entity_index_by_id[target]
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
-        if fn in {"configure_placeable", "present_placed_item_sprite"}:
+        if fn in {"configure_tile_placement", "configure_wall_placement", "present_placed_item_sprite"}:
             continue
         if target == item_entity_id and fn not in EVENT_ACTION_OPCODE:
             _compile_item_call(

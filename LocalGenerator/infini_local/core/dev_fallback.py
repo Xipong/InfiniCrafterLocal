@@ -114,7 +114,7 @@ def deterministic_low_level_plan(
                 },
                 {
                     "id": "call_item_use", "fn": "configure_item_use", "target": "item",
-                    "params": {"useStyle": "shoot", "autoReuse": True, "useTurn": True, "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "two_handed", "heldSpriteVisibilityHint": "immediate"},
+                    "params": {"useStyle": "shoot", "autoReuse": True, "useTurn": True, "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "two_handed", "customHeldSprite": "hidden"},
                 },
                 {
                     "id": "call_spawn_held", "fn": "configure_spawn", "target": "held_body",

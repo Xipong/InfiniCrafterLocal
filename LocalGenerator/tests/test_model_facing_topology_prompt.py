@@ -50,7 +50,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
-    assert set(cards) == set(CAPABILITY_REGISTRY)
+    assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert _expand_constraint_references(
         {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
          for fn, card in cards.items()}, catalog["fieldGuide"]["consumerConstraints"]) == canonical
@@ -80,7 +80,7 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     use = cards["configure_item_use"]["constructionMeaning"]
     assert all(term in use for term in ("useTimeTicks", "useAnimationTicks", "autoReuse", "channel"))
     charge = cards["charge_then_release"]["constructionMeaning"]
-    assert all(term in charge for term in ("channel=true", "charged entity", "chargeTicks", "heldSpriteVisibilityHint", "presentation"))
+    assert all(term in charge for term in ("channel=true", "charged entity", "chargeTicks", "customHeldSprite", "presentation"))
     assert "While-selected HoldItem" in inputs["hold"]["constructionMeaning"]
     assert all(term in inputs["equipped"]["constructionMeaning"].lower() for term in ("passive", "runtime uses the first", "head only", "head/body/legs"))
     assert "requiredComponents" in entities["item_body"] and "configure_item_stats" in entities["item_body"]["requiredComponents"]

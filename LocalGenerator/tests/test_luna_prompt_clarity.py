@@ -77,5 +77,6 @@ def test_event_cards_do_not_borrow_other_operations_safety_or_payload(monkeypatc
     aoe = cards['damage_area_on_event']['does']
     assert 'on_tile_collision/on_expire/on_kill carry no direct target' not in aoe
     assert 'only for on_hit/on_crit' in aoe
-    placement = cards['configure_placeable']['does']
-    assert 'both IDs enabled' in placement and 'runtime' in placement
+    placement = cards['configure_tile_placement']['does']
+    assert 'tile' in placement and 'placement' in placement
+    assert 'configure_wall_placement' in cards and 'configure_placeable' not in cards

@@ -435,7 +435,7 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     use = CAPABILITY_REGISTRY["configure_item_use"].params
     assert presentation["heldRootVisibility"]["hideUseGraphic"] == use["hideUseGraphic"].description
-    assert presentation["heldRootVisibility"]["heldSpriteVisibilityHint"] == use["heldSpriteVisibilityHint"].description
+    assert presentation["heldRootVisibility"]["customHeldSprite"] == use["customHeldSprite"].description
     assert presentation["heldRootVisibility"]["wireHint"] == "runtimeProgram.itemUse.releaseTiming"
 
     for role, by_canvas in presentation["bakeFillByProcessingRole"].items():
