@@ -470,9 +470,12 @@ class ParamSpec:
                 if self.kind == "number":
                     # Binary64 division is not injective: retain its admitted
                     # projected envelope, not a fabricated inverse Author float.
-                    return (type(value) in (int, float) and math.isfinite(value)
+                    # Number division emits floats; the wire must also satisfy
+                    # the same consumer storage constraint, without redivision.
+                    return (type(value) is float and math.isfinite(value)
                             and (self.minimum is None or value >= self.to_wire(self.minimum))
-                            and (self.maximum is None or value <= self.to_wire(self.maximum)))
+                            and (self.maximum is None or value <= self.to_wire(self.maximum))
+                            and self.consumer_value_error(value, wire_value=True) is None)
                 authored = value * self.wire_divisor
             else:
                 authored = value
@@ -535,8 +538,8 @@ class ParamSpec:
             )
         return constraint
 
-    def consumer_value_error(self, value: Any) -> str | None:
-        """Check declared consumer storage without modifying the authored value."""
+    def consumer_value_error(self, value: Any, *, wire_value: bool = False) -> str | None:
+        """Check declared consumer storage without modifying Author or wire."""
         if not self.consumer_storage:
             return None
         if self.consumer_storage == "float64":
@@ -552,16 +555,17 @@ class ParamSpec:
         try:
             # Storage consumes the declared wire projection, not the Author unit.
             # Check both boundaries: /100 may already underflow in binary64.
-            projected = self.to_wire(value)
+            projected = value if wire_value else self.to_wire(value)
             neutral = self.to_wire(self.neutral)
-            if value != self.neutral and projected == neutral:
+            source_neutral = neutral if wire_value else self.neutral
+            if value != source_neutral and projected == neutral:
                 return f"non-neutral value collapses to neutral {neutral} in declared wire projection"
             stored = struct.unpack("!f", struct.pack("!f", projected))[0]
         except (OverflowError, struct.error):
             return "value is not finite in float32 consumer storage"
         if not math.isfinite(stored):
             return "value is not finite in float32 consumer storage"
-        if value != self.neutral and stored == neutral:
+        if value != source_neutral and stored == neutral:
             return f"non-neutral value collapses to neutral {neutral} in float32 consumer storage after declared wire projection"
         return None
 
