@@ -119,7 +119,14 @@ def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_count
                                                          if row["finalPath"] not in retired_paths]
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29
+        added_modifier_caps = (
+            "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
+        )
+        # New capabilities add registry diagnostics, not old gameplay. Assert
+        # their exact declared contribution before reversing the historical
+        # counter; archived hashes and every gameplay/receipt byte stay frozen.
+        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()

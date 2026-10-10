@@ -99,17 +99,12 @@ public sealed partial class GeneratedItemData
     {
         if (RuntimeProgram.WeaponAmmo is not null && Gameplay.AmmoCategory.Length > 0)
             throw new InvalidDataException("one generated item cannot be both an ammo consumer and a native ammo stack");
-        bool hasExplicitUseEffects = Gameplay.HealLife > 0
-            || Gameplay.HealMana > 0
-            || (Gameplay.ExtraBuffs?.Length ?? 0) > 0
-            || Gameplay.GeneratedBuff?.HasAnyEffect == true
-            || !string.IsNullOrWhiteSpace(Gameplay.MobilityMode);
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
 
         foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)
         {
             string action = binding.UsePolicy.Action.Kind;
-            if (action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
+            if (action == RuntimeBindingAction.ApplyItemEffects && !RuntimeItemEffectGroupSpec.HasEffects(EffectsForBinding(binding)))
                 throw new InvalidDataException($"binding '{binding.Id}' apply_item_effects has no compiled item effect capability");
             if (action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
                 throw new InvalidDataException($"binding '{binding.Id}' equip_passive has no compiled accessory/armor capability");

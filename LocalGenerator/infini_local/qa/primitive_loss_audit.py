@@ -312,6 +312,23 @@ def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "wireDtoDrift": sorted(set(actual)^wire)}
 
 
+def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    """A named container cannot grow item stats or a second undocumented effect slot."""
+    from infini_local.core.runtime_authoring.wire_validator import _item_effect_group_wire_schema
+
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeItemEffectGroupSpec.cs").read_bytes()
+    prefix = "runtimeProgram.effectGroups[]."
+    fields = {path[len(prefix):].split(".", 1)[0].replace("[]", "")
+              for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths if path.startswith(prefix)}
+    pascal = lambda names: {name[0].upper() + name[1:] for name in names}
+    actual = _class_properties(dto, "RuntimeItemEffectGroupSpec")
+    wire_fields = set(_item_effect_group_wire_schema()["properties"])
+    return {"ok": actual == pascal(fields) == pascal(wire_fields),
+            "unclassifiedDtoFields": sorted(actual - pascal(fields)),
+            "missingDtoFields": sorted(pascal(fields) - actual),
+            "wireDtoDrift": sorted(actual ^ pascal(wire_fields))}
+
+
 def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Exact typed native-ammo choices, without an unregistered weapon profile."""
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeWeaponAmmoSpec.cs").read_bytes()
@@ -385,9 +402,11 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         unclassified[cls] = sorted(properties - owner_fields)
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
     placed_storage = placed_body_surface_audit(dto)
+    effect_groups = item_effect_group_surface_audit()
     weapon_ammo = weapon_ammo_surface_audit()
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and weapon_ammo["ok"],
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
             "placedBodyStorage": placed_storage,
+            "itemEffectGroups": effect_groups,
             "weaponAmmo": weapon_ammo,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,
             "visualStageFields": sorted(visual_contract),
