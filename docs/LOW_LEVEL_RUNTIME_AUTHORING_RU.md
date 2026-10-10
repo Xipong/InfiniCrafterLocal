@@ -54,6 +54,8 @@ Construction facts живут у своих owners, а не в повторны�
 | Capability cards | Channel/charge/release, cadence/animation, reusable hybrid bounds |
 | Глобальные invariants | ID uniqueness, exact primary ownership, acyclic graph и spawn/depth budgets |
 
+Форма `realization.selfEvaluation.planVsProgram` запрашивается у Author и Repair для полезной самопроверки, но её отсутствие или ошибки оформления остаются только raw shape diagnostics: сами по себе они не отменяют craft и не вызывают Gameplay Repair. Код не дописывает и не исправляет отчёт. Это изменение границы приёмки диагностического поля, не runtime-преобразование или fallback. `description`, `playerExperience`, `programVsReport` и их контейнеры сохраняют строгую проверку; gameplay choices/refs/dependencies и schema-derived resource bounds также остаются обязательными. Разрешённый `realizationReplacement` в Repair подчиняется той же границе; permissions и frozen-first merge не расширяются.
+
 `planVsProgram.actionChecks` покрывает каждую planned action и executable input/event lane, включая aligned и added lanes; указывает exact runtime IDs, результат, intentionality и причину. `programVsReport.behaviorChecks` отдельно покрывает executable input/entity/event lanes против обоих report texts. Blanket aligned verdict не заменяет rows; непонятная семантика отмечается `uncertain`. `realization_execution_truth_for_llm()` остаётся источником Repair execution guidance; initial Author берёт оттуда диагностический selfEvaluation contract, а не новый judge-pass. Исторический builder замер — [отдельная запись](AUTHOR_DIRECT_CONSTRUCTION_RU.md#measurement), не обещание first-Author success rate.
 
 <a id="validation-events"></a>
