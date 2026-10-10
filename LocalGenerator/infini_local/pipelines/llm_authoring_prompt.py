@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from infini_local.core.runtime_authoring import (
     BINDING_ACTION_REGISTRY,
@@ -76,8 +76,30 @@ def planner_priority_header_for_llm() -> list[str]:
     ]
 
 
-def source_wire_units_for_llm() -> dict[str, Any]:
-    """Static reading aid from direct registry mappings, never a parent converter.
+def _source_path_objects(packet: Mapping[str, Any], path: str) -> list[Mapping[str, Any]]:
+    """Read the exact declared namespace; [] visits only that named array."""
+    values: list[Any] = [packet]
+    for part in path.split("."):
+        is_array = part.endswith("[]")
+        key = part[:-2] if is_array else part
+        next_values: list[Any] = []
+        for value in values:
+            if not isinstance(value, Mapping) or key not in value:
+                continue
+            child = value[key]
+            if is_array:
+                if isinstance(child, list):
+                    next_values.extend(child)
+            else:
+                next_values.append(child)
+        values = next_values
+    return [value for value in values if isinstance(value, Mapping)]
+
+
+def source_wire_units_for_llm(
+    parent_packets: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Registry reading aid, optionally limited to exact present parent paths.
 
     Final paths supply the scope; a bare legacy leaf name cannot establish its
     units. Selector-dependent and boolean projections are deliberately excluded.
@@ -106,6 +128,14 @@ def source_wire_units_for_llm() -> dict[str, Any]:
                     roots.append("raw.item")
                 for source in roots:
                     scopes.setdefault((source, capability.name), {})[field] = [name, reading, spec.units]
+    scope_rows = []
+    for (source, fn), fields in scopes.items():
+        if parent_packets is not None:
+            containers = [row for packet in parent_packets for row in _source_path_objects(packet, source)]
+            fields = {name: reading for name, reading in fields.items()
+                      if any(name in row for row in containers)}
+        if fields:
+            scope_rows.append({"source": source, "fn": fn, "fields": fields})
     return {
         "readingRule": (
             "Paths are relative to each parent packet; [] means each entry in that exact container. "
@@ -118,10 +148,7 @@ def source_wire_units_for_llm() -> dict[str, Any]:
             "rebalance choices or additional Repair permissions."
         ),
         "fieldColumns": ["authorParam", "sourceToAuthor", "authorUnits"],
-        "scopes": [
-            {"source": source, "fn": fn, "fields": fields}
-            for (source, fn), fields in scopes.items()
-        ],
+        "scopes": scope_rows,
     }
 
 
@@ -133,11 +160,41 @@ def runtime_units_for_llm() -> dict[str, Any]:
     }
 
 
-def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
+def _share_consumer_constraints(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Intern only literally equal metadata; no gameplay value is transformed.
+
+    Labels are packet-local references, not a parallel table of numeric rules.
+    A new registry rule receives a new definition rather than a guessed profile.
+    """
+    profiles: dict[str, dict[str, Any]] = {}
+    labels: dict[str, str] = {}
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            constraint = value.get("consumerConstraint")
+            if isinstance(constraint, dict):
+                identity = json.dumps(constraint, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+                if identity not in labels:
+                    label = f"numeric{len(labels) + 1}"
+                    labels[identity] = label
+                    profiles[label] = constraint
+                value["consumerConstraint"] = labels[identity]
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(cards)
+    return profiles
+
+
+def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dict[str, Any]:
     # Registry cards retain their canonical fields; only missing execution facts
     # are attached to the relevant presentation card.
     field_guide = runtime_authoring_prompt_field_guide()
-    field_guide.update(runtime_units_for_llm())
+    if include_source_units:
+        field_guide.update(runtime_units_for_llm())
     field_guide["stackCost"] = (
         "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
         "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item. "
@@ -223,6 +280,11 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
         if event["event"] in event_detail:
             event["constructionMeaning"] = event_detail[event["event"]]
     capabilities = compact_capability_catalog()
+    field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
+    field_guide["consumerConstraintReadingRule"] = (
+        "Each param consumerConstraint names one complete rule in fieldGuide.consumerConstraints. "
+        "The referenced precision, neutral and wireProjection constraints all apply."
+    )
     for card in capabilities:
         if card["fn"] == "present_placed_item_sprite":
             card["constructionMeaning"] = "placementCallId is an exact configure_placeable call id, not an entity reference: use the same item_body and exact place_item binding reference, tile-only. This operation explicitly selects that item's existing root PNG; no new image project/source field. Native support, solidity, wiring, mining, interaction and light remain native. Independent placed size/full-frame pivot/offset/flips/rotation are all required; no grip or forward-axis inference. Omit this call to retain native presentation. Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
@@ -252,7 +314,7 @@ def engine_runtime_capability_contract_for_llm(
     del a, b, envelope
     return {
         "principle": "The author composes the item. Deterministic code only type-checks, bounds, compiles and executes explicit choices.",
-        "catalog": sharp_engine_fn_catalog_for_llm(),
+        "catalog": sharp_engine_fn_catalog_for_llm(include_source_units=False),
         "technicalNotes": concise_terraria_tick_guide_for_llm(),
         "reportEvidenceRule": "Every selfEvaluation actionCheck/behaviorCheck cites exact existing runtimeProgram entity, binding, or call ids.",
         "literalSynthesisRule": "Keep concrete parent objects/parts literal when the concept uses them; do not code-normalize furniture into a material theme.",
@@ -328,6 +390,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     # canonical/category/tag/head-noun data is never model-facing.
     _ = (ca, cb)
     corridor = _balance_corridor(a, b)
+    parents = {
+        "A": {"packet": raw_parent_card_for_llm(a)},
+        "B": {"packet": raw_parent_card_for_llm(b)},
+    }
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
         "gameplayAuthoringStages": gameplay_authoring_stages_for_llm(),
@@ -339,11 +405,9 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        "parents": {
-            "A": {"packet": raw_parent_card_for_llm(a)},
-            "B": {"packet": raw_parent_card_for_llm(b)},
-        },
+        "parents": parents,
         "balanceCorridor": corridor,
+        "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
     chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     if chars > PLANNER_PROMPT_LIMIT_CHARS:

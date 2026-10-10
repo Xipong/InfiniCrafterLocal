@@ -4031,13 +4031,17 @@
       ]
     },
     {
-      "authorityByEffect": {},
+      "authorityByEffect": {
+        "NPC_source_damage": "native_projectile_hit_authority",
+        "beam_geometry": "native_local_collision_and_visual",
+        "sustain_mana": "owner_execute_sync"
+      },
       "capability": "channel_beam",
       "componentSlot": "controller",
       "conflicts": [
         "exclusive_group:controller"
       ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "decision": "expose",
       "dependencies": [
         "configure_item_use"
@@ -4050,11 +4054,59 @@
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.rangeTiles",
         "runtimeProgram.entities[].controller.params.widthPx",
-        "runtimeProgram.entities[].controller.params.warmupTicks"
+        "runtimeProgram.entities[].controller.params.warmupTicks",
+        "runtimeProgram.entities[].controller.params.manaPayment",
+        "runtimeProgram.entities[].controller.params.initialDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.initialWidthMultiplier",
+        "runtimeProgram.entities[].controller.params.damageStartProgress",
+        "runtimeProgram.entities[].controller.params.raycastTiles"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "damageStartProgress": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "fraction of warmup"
+        },
+        "initialDamageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.01,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "source damage multiplier"
+        },
+        "initialWidthMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.01,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "beam width multiplier"
+        },
+        "manaPayment": {
+          "enum": [
+            "initial_use_only",
+            "each_use_time"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": "native mana payment cadence"
+        },
         "rangeTiles": {
           "enum": [],
           "kind": "number",
@@ -4064,6 +4116,16 @@
           "required": true,
           "semanticType": "tiles",
           "units": "tiles"
+        },
+        "raycastTiles": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": "tile clipping enabled"
         },
         "warmupTicks": {
           "enum": [],
@@ -4089,7 +4151,7 @@
       "positionOwnership": "owns_position_while_active",
       "promptVisibility": true,
       "provenance": "beam scan/channel extracted from the retired magic macro",
-      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
+      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

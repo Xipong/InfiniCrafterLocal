@@ -107,6 +107,12 @@ public sealed partial class GeneratedProjectile
             Projectile.Kill();
             return true;
         }
+        if (!TryPayChannelBeamMana(owner))
+        {
+            Projectile.friendly = false;
+            Projectile.Kill();
+            return true;
+        }
         Vector2 direction = AimDirection(owner);
         Projectile.Center = owner.MountedCenter + direction * 18f;
         Projectile.velocity = direction;
@@ -114,9 +120,32 @@ public sealed partial class GeneratedProjectile
         Projectile.timeLeft = 2;
         Projectile.tileCollide = _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner, keepAnimation: true);
-        int warmup = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
-        Projectile.friendly = warmup <= 0 || _age >= warmup;
+        Projectile.friendly = ChannelBeamWarmupProgress() >= (_entity.Controller.Params.DamageStartProgress ?? 1d);
         return true;
+    }
+
+    private bool TryPayChannelBeamMana(Player owner)
+    {
+        if (_entity!.Controller.Params.ManaPayment != "each_use_time"
+            || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
+            return true;
+        uint now = Main.GameUpdateCount;
+        if (!_beamManaClockStarted)
+        {
+            _beamManaClockStarted = true;
+            _beamLastManaTick = now;
+            return true; // Native item use already owns the initial payment.
+        }
+        uint elapsed = unchecked(now - _beamLastManaTick);
+        if (elapsed < (uint)Math.Max(1, owner.HeldItem.useTime)) return true;
+        _beamLastManaTick = now;
+        return owner.CheckMana(owner.HeldItem, amount: -1, pay: true, blockQuickMana: false);
+    }
+
+    private double ChannelBeamWarmupProgress()
+    {
+        int duration = AuthoredTicksToProjectileUpdates(_entity!.Controller.Params.WarmupTicks);
+        return duration <= 0 ? 1d : Math.Clamp((double)_age / duration, 0d, 1d);
     }
 
     private bool ApplyChargeThenRelease()
