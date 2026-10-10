@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     CAPABILITY_REGISTRY,
     INPUT_KINDS,
+    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E402
     AMMO_CATEGORY_TMODLOADER_NAMES,
@@ -142,7 +143,7 @@ def report() -> dict[str, Any]:
     check("item_value_semantics", bool(stats and "Item.value" in stats.params["valueCopper"].description and "resale" in stats.params["valueCopper"].description), "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value")
 
     collision = CAPABILITY_REGISTRY.get("set_projectile_collision")
-    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "pierce", "extraUpdates", "npcImmunityMode", "localNpcHitCooldownEngineUnits")
+    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "pierce", "updatesPerTick", "immunity")
     check("explicit_projectile_collision", collision is not None and tuple(collision.params) == expected_collision, "projectile liquid and immunity semantics must be explicit")
     check("vanilla_projectile_defaults", "Projectile.ignoreWater = false;" in projectile and "Projectile.netImportant = false;" in projectile, "proxy SetDefaults must retain Terraria defaults until authored entity configuration")
     check("explicit_liquid_projection", "Projectile.ignoreWater = entity.Collision.IgnoreWater;" in projectile, "ignoreWater must come from authored collision data")
@@ -186,7 +187,7 @@ def report() -> dict[str, Any]:
         "score": passed,
         "scoreMax": total,
         "metrics": {
-            "capabilities": len(CAPABILITY_REGISTRY),
+            "capabilities": len(visible_capabilities()),
             "canonicalDamageClasses": len(DAMAGE_CLASS_TMODLOADER_NAMES),
             "canonicalUseStyles": len(ITEM_USE_STYLE_TMODLOADER_NAMES),
             "canonicalAmmoCategories": len(AMMO_CATEGORY_TMODLOADER_NAMES),

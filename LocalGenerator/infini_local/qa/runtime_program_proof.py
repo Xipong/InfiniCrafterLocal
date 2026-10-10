@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 from pathlib import Path
@@ -62,7 +63,7 @@ def build_runtime_program_proof() -> dict[str, Any]:
         "schema": "infini.low-level-runtime-proof.v1",
         "ok": all_ok,
         "runtimeApi": "infini.runtime-program.v5",
-        "capabilityCount": len(CAPABILITY_REGISTRY),
+        "capabilityCount": len(visible_capabilities()),
         "prompt": prompt,
         "fixtures": fixture_rows,
     }

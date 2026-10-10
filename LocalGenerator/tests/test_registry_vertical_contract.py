@@ -6,6 +6,7 @@ import inspect
 from pathlib import Path
 from dataclasses import replace
 from types import MappingProxyType, ModuleType
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from copy import deepcopy
 import pytest
 from infini_local.core.runtime_authoring import (
@@ -65,7 +66,7 @@ from infini_local.pipelines import llm_authoring_pipeline as pipeline
         pytest.param("inputs", "input", INPUT_KIND_REGISTRY, id="inputs"),
         pytest.param("bindingActions", "action", BINDING_ACTION_REGISTRY, id="binding-actions"),
         pytest.param("events", "event", EVENT_KIND_REGISTRY, id="events"),
-        pytest.param("capabilities", "fn", CAPABILITY_REGISTRY, id="capabilities"),
+        pytest.param("capabilities", "fn", {cap.name: cap for cap in visible_capabilities()}, id="capabilities"),
     ],
 )
 def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
@@ -80,13 +81,13 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
         )
 
 
-@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn in CAPABILITY_REGISTRY])
+@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn in (cap.name for cap in visible_capabilities())])
 def test_registered_capability_survives_schema_card_projection_compiler_and_wire(fn):
     cap = CAPABILITY_REGISTRY[fn]
     variants = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {v["properties"]["fn"]["const"] for v in variants} == set(CAPABILITY_REGISTRY)
-    assert len(capability_provider_union()) == len(CAPABILITY_REGISTRY)
-    assert {c["fn"] for c in compact_capability_catalog()} == set(CAPABILITY_REGISTRY)
+    assert {v["properties"]["fn"]["const"] for v in variants} == {cap.name for cap in visible_capabilities()}
+    assert len(capability_provider_union()) == len(visible_capabilities())
+    assert {c["fn"] for c in compact_capability_catalog()} == {cap.name for cap in visible_capabilities()}
     assert all("*" not in p for p in cap.final_wire_paths)
     full, compact = cap.prompt_card(), cap.author_prompt_card()
     assert {k: v for k, v in compact.items() if k != "params"} == {k: v for k, v in full.items() if k != "params"}
@@ -96,7 +97,7 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     for name, spec in cap.params.items():
         row, original = compact["params"][name], full["params"][name]
         if fn != "add_equipment_damage_bonus":
-            assert any(p.rsplit(".", 1)[-1] in {name, spec.wire_name} for p in cap.final_wire_paths), (fn, name)
+            assert all(any(p.endswith("." + wire_name) for p in cap.final_wire_paths) for wire_name in spec.wire_field_names(name)), (fn, name)
         meaning = row.get("meaning", "")
         if fn == "configure_armor" and name.startswith("setBonus"):
             meaning = guide["setBonusParamPrefix"] + meaning
@@ -148,7 +149,7 @@ def test_library_audit_and_shared_notation_have_no_missing_boundary():
     report = capability_library_audit()
     assert report["ok"] and report["score"] == report["scoreMax"], report["issues"]
     metrics = report["metrics"]
-    assert metrics["capabilities"] == metrics["verticalSliceCount"] == len(CAPABILITY_REGISTRY)
+    assert metrics["capabilities"] == metrics["verticalSliceCount"] == len(visible_capabilities())
     assert metrics["boundedNumericParameters"] == metrics["numericParameters"]
     assert metrics["typedEntityReferences"] == 2 and metrics["requirements"] >= 10
     guide = runtime_authoring_prompt_field_guide()

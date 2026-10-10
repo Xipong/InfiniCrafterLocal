@@ -324,7 +324,16 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_complete_legacy_compiled_bytes():
-    baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name:hashlib.sha256(json.dumps(compile_runtime_program(build_runtime_fixture(name)), ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
-    assert actual == baseline
+def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical, _historical_spawn_defaults
+
+    # Full-document hashes remain archival: fresh Author paths deliberately
+    # change provenance. Compare delivery choices, removing only the newly
+    # explicit at-position zero DTO defaults with an exact assertion.
+    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
+    for row in corpus["cases"]:
+        compiled = compile_runtime_program(_current_author_seed(row["authored"]))
+        delivered = _historical_spawn_defaults(_delivery_wire(compiled), row["expectedDeliveryWire"])
+        assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
+        assert delivered == row["expectedDeliveryWire"]
+        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]

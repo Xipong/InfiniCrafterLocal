@@ -609,7 +609,7 @@ def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation
                 program["calls"].append(extra)
         program["calls"].append({
             "id": "spawn_other", "fn": "spawn_entity_on_event", "target": "held_lantern_pike",
-            "params": {"event": "on_hit", "entity": "other_held", "count": 1,
+            "params": {"when": "on_hit", "entity": "other_held", "count": 1,
                        "spreadRadians": 0, "damageMultiplier": 1, "delayTicks": 0},
         })
         assert validate_runtime_program(source)["ok"]

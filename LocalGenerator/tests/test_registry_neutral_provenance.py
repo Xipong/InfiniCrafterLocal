@@ -21,6 +21,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "configure_spawn": {"count": 1, "spreadRadians": 0},
+    "set_projectile_collision": {"bounceCount": 0},
     "configure_item_stats": {"manaCost": 0},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
     "apply_generated_buff_on_use": {
@@ -89,7 +91,8 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
 
 @pytest.mark.parametrize(
     "fn,omitted,values",
-    [pytest.param(fn, (n,), {}, id=fn + "-" + n) for fn, vs in DECLARED.items() for n in vs]
+    [pytest.param(fn, (n,), {}, id=fn + "-" + n) for fn, vs in DECLARED.items() for n in vs
+     if CAPABILITY_REGISTRY[fn].params[n].omission_condition is None]
     + [
         pytest.param("configure_item_stats", ("manaCost",), {"damageClass": dc}, id="mana-" + dc)
         for dc in ("melee", "ranged", "magic", "summon", "default")
@@ -212,7 +215,7 @@ def test_joint_buff_omissions_preserve_light_or_reject_inert(present, active):
             ("apply_generated_buff_on_use", ("lightStrength", "lightColor")),
             ("restore_resources_on_use", ("healLife", "healMana")),
             ("configure_tool", ("pickPower", "axePowerTooltipPercent", "hammerPower", "miningSpeedScale")),
-            ("set_projectile_collision", ("npcImmunityMode", "localNpcHitCooldownEngineUnits")),
+            ("set_projectile_collision", ("immunity", "updatesPerTick")),
             ("move_boomerang", ("returnAfterTicks", "returnSpeed")),
         )
         for present in product([False, True], repeat=len(names))

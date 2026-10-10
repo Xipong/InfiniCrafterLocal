@@ -1,6 +1,7 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 import re
@@ -72,8 +73,8 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
     assert "concept" in user and "realization" in user
     expected = {r["fn"]: r for r in compact_capability_catalog()}
     assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
-    assert set(expected) == set(CAPABILITY_REGISTRY)
-    assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in CAPABILITY_REGISTRY.values())
+    assert set(expected) == {cap.name for cap in visible_capabilities()}
+    assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in visible_capabilities())
     assert {r["input"] for r in catalog["inputs"] if r["exclusive"]} == {n for n, s in INPUT_KIND_REGISTRY.items() if s.exclusive}
     guide = catalog["fieldGuide"]
     assert guide["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
@@ -132,9 +133,9 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expected = {r["fn"]: r for r in compact_capability_catalog()}
     assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
-    assert set(expected) == set(CAPABILITY_REGISTRY)
+    assert set(expected) == {cap.name for cap in visible_capabilities()}
     assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (
-        len(CAPABILITY_REGISTRY), sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
+        len(visible_capabilities()), sum(len(cap.params) for cap in visible_capabilities()),
     )
     assert (a, b) == parents_before
 
@@ -341,7 +342,7 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     report = planner_prompt_usability_report(a, b, a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["visibleCapabilities"] == len(CAPABILITY_REGISTRY)
+    assert report["visibleCapabilities"] == len(visible_capabilities())
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 
@@ -384,6 +385,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
         pytest.param(fn, key, value, id=fn + "-" + key)
         for fn, key, value in (
             ("heal_owner_on_event", "network_authority", "owner_execute_sync"),
+            ("pull_owner_to_event_target", "network_authority", "owner_execute_sync"),
             ("apply_status_on_event", "network_authority", "owner_execute_sync"),
             ("chain_damage_on_event", "network_authority", "owner_execute_sync"),
             ("damage_area_on_event", "network_authority", "server_execute"),
@@ -391,7 +393,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
             (
                 "pull_on_event",
                 "authority_by_effect",
-                {"on_hit:target_to_owner": "owner_request_server_execute", "owner_to_target": "owner_execute_sync"},
+                {"on_hit:target_to_owner": "owner_request_server_execute", "on_hit:target_to_entity": "owner_request_server_execute"},
             ),
         )
     ],
@@ -431,18 +433,17 @@ UNIT_MEANINGS = {
         "genericArmorPenetrationPoints": "armor",
         "lightStrength": "RGB",
     },
-    "configure_spawn": {"speedPxPerUpdate": "extraUpdates", "count": "root binding"},
+    "configure_spawn": {"speedPxPerUpdate": "updatesPerTick", "count": "root binding"},
     "set_projectile_hitbox": {"drawScale": "visual scale"},
     "set_projectile_damage": {"knockback": "Projectile.knockBack"},
-    "set_projectile_collision": {"extraUpdates": "per world tick", "localNpcHitCooldownEngineUnits": "engine"},
+    "set_projectile_collision": {"updatesPerTick": "per world tick", "immunity": "engine"},
     "move_gravity_arc": {"gravityVelocityPerUpdate": "per projectile update"},
-    "move_bounce": {"gravityVelocityPerUpdate": "per projectile update"},
     "move_sine_homing": {"waveVelocityCoefficient": "0.03"},
     "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
     "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
     "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
     "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "Soft"},
-    "pull_on_event": {"strength": "velocity", "radiusTiles": "no directTarget"},
+    "pull_on_event": {"strength": "velocity", "radiusTiles": "no active direct target"},
     "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
 }
 EXPLICIT_MEANINGS = [
@@ -478,17 +479,16 @@ EXPLICIT_MEANINGS = [
     ("chain_damage_on_event", "damageMultiplier", "damageDone"),
     ("chain_damage_on_event", "damageMultiplier", "at least 1"),
     ("chain_damage_on_event", "damageMultiplier", "before target defense"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "unscaled"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "-1"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "once"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "0..600"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "owner"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "extraUpdates"),
+    ("set_projectile_collision", "immunity", "unscaled"),
+    ("set_projectile_collision", "immunity", "once"),
+    ("set_projectile_collision", "immunity", "0..600"),
+    ("set_projectile_collision", "immunity", "owner"),
+    ("set_projectile_collision", "immunity", "updatesPerTick"),
     ("configure_accessory", "lifeRegenHpPerSecond", "+2"),
     ("configure_accessory", "lifeRegenHpPerSecond", "+1 HP/s"),
     ("configure_accessory", "lifeRegenHpPerSecond", "-2"),
     ("configure_accessory", "lifeRegenHpPerSecond", "-1 HP/s"),
-    ("move_drift", "velocityRetention", "1 + extraUpdates"),
+    ("move_drift", "velocityRetention", "updatesPerTick"),
     ("configure_spawn", "speedPxPerUpdate", "10"),
 ]
 
@@ -585,10 +585,10 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
         pytest.param("fieldGuide", "paramNotation", "", p, id="numeric-guide-" + p)
         for p in (
             "per projectile update",
-            "extraUpdates",
+            "updatesPerTick",
             "world ticks",
-            "1 + extraUpdates",
-            "localNpcHitCooldownEngineUnits",
+            "updatesPerTick updates",
+            "immunity.localCooldown",
             "15",
             "0.15",
             "bonusPercent",
@@ -617,8 +617,9 @@ def test_serialized_construction_guide_keeps_specific_obligations(packet, sectio
     assert phrase in value
     assert "bindings[].target" not in catalog["fieldGuide"]["bindingTarget"]
     assert "free_projectile" in {r["kind"] for r in catalog["entityKinds"]}
-    cooldown = cards_from(catalog)["set_projectile_collision"]["params"]["localNpcHitCooldownEngineUnits"]
-    assert cooldown["min"] == -1 and cooldown["max"] == 600
+    immunity = cards_from(catalog)["set_projectile_collision"]["params"]["immunity"]["shape"]
+    cooldown = next(row["properties"]["localCooldown"] for row in immunity["oneOf"] if row.get("type") == "object")
+    assert cooldown["minimum"] == 0 and cooldown["maximum"] == 600
     assert "per projectile update" in cards_from(catalog)["move_drift"]["does"]
 
 

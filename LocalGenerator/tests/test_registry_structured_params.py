@@ -1,6 +1,8 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
 from copy import deepcopy
 from dataclasses import replace
+import json
+from pathlib import Path
 import sys
 from types import MappingProxyType
 
@@ -18,8 +20,8 @@ def _typed_collision(monkeypatch):
     document = build_capability_witness("set_projectile_collision")
     cap = registry.CAPABILITY_REGISTRY["set_projectile_collision"]
     params = dict(cap.params)
-    params.pop("npcImmunityMode")
-    cooldown = params.pop("localNpcHitCooldownEngineUnits")
+    params.pop("npcImmunityMode", None)
+    cooldown = cap.retained_receipt_params["localNpcHitCooldownEngineUnits"]
     params["immunity"] = ParamSpec(
         "union", "Exact immunity variant", alternatives=(
             ParamSpec("string", "Owner immunity", enum=("owner_shared",),
@@ -30,16 +32,14 @@ def _typed_collision(monkeypatch):
         ),
     )
     modified = dict(registry.CAPABILITY_REGISTRY)
-    changed = replace(cap, params=MappingProxyType(params), retained_receipt_params=MappingProxyType({
-        name: cap.params[name] for name in ("npcImmunityMode", "localNpcHitCooldownEngineUnits")
-    }))
+    changed = replace(cap, params=MappingProxyType(params), retained_receipt_params=cap.retained_receipt_params)
     modified[cap.name] = replace(changed, final_wire_paths=registry._exact_wire_paths(changed))
     for name, module in tuple(sys.modules.items()):
         if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
             monkeypatch.setattr(module, "CAPABILITY_REGISTRY", modified)
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"].pop("npcImmunityMode")
-    call["params"].pop("localNpcHitCooldownEngineUnits")
+    call["params"].pop("npcImmunityMode", None)
+    call["params"].pop("localNpcHitCooldownEngineUnits", None)
     return document, call
 
 
@@ -119,7 +119,12 @@ def test_nested_union_diagnostic_does_not_unfreeze_the_valid_sibling(monkeypatch
 
 def test_retained_provenance_preserves_old_wire_without_accepting_old_author(monkeypatch):
     old_author = build_capability_witness("set_projectile_collision")
-    old_wire = compiler.compile_runtime_program(old_author)
+    corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
+    old_wire = next(row["wire"] for row in corpus["cases"] if row["fn"] == "set_projectile_collision")
+    old_call = next(c for c in old_author["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    old_call["params"].pop("immunity")
+    old_call["params"].pop("updatesPerTick")
+    old_call["params"].update(npcImmunityMode="owner", localNpcHitCooldownEngineUnits=37, extraUpdates=5)
     old_receipts = deepcopy(old_wire["runtimeContract"]["finalWireReceipts"])
     _typed_collision(monkeypatch)
     assert technical_lowering.audit_compiler_receipts(old_receipts, final_document=old_wire)["ok"]

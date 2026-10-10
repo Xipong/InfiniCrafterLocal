@@ -143,7 +143,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     author_guide = author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
     assert units == {key: author_guide[key] for key in ("paramNotation", "sourceWireUnits")}
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
-    for clock in ("60/s", "1 + extraUpdates", "world ticks", "per projectile update", "localNpcHitCooldownEngineUnits"):
+    for clock in ("60/s", "updatesPerTick", "world ticks", "per projectile update", "immunity.localCooldown"):
         assert clock in units["paramNotation"]
     report = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, report["errors"])

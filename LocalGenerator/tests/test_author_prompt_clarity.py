@@ -51,7 +51,7 @@ def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(mo
         assert phrase in card['does']
     doc = build_capability_witness('damage_area_on_event')
     call = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'damage_area_on_event')
-    del call['params']['radiusPx']
+    del call['params']['radiusTiles']
     report = validate_runtime_program(doc)
     assert not report['ok']
     dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=report)
@@ -109,11 +109,16 @@ def test_author_system_suffix_does_not_explain_other_model_tasks(monkeypatch, mo
         assert 'null' in system and 'unknown keys' in system
 
 
-def test_required_inactive_cooldown_is_not_mistaken_for_optional(monkeypatch):
+def test_immunity_is_one_required_typed_choice(monkeypatch):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'cooldown', model_name='test-model')
     cat = json.loads(user)['runtimeCapabilityContract']['catalog']
-    param = next(c for c in cat['capabilities'] if c['fn'] == 'set_projectile_collision')['params']['localNpcHitCooldownEngineUnits']
+    params = next(c for c in cat['capabilities'] if c['fn'] == 'set_projectile_collision')['params']
+    param = params['immunity']
     assert not param.get('optional', False)
-    assert 'Required in both immunity modes' in param['meaning']
-    assert 'ignored in owner mode' in param['meaning']
+    shape = param['shape']['oneOf']
+    assert [branch['enum'] for branch in shape if branch.get('type') == 'string'] == [['owner_shared'], ['once_per_npc']]
+    cooldown = next(branch['properties']['localCooldown'] for branch in shape if branch.get('type') == 'object')
+    assert cooldown['minimum'] == 0 and cooldown['maximum'] == 600
+    assert 'unscaled' in cooldown['description']
+    assert 'localNpcHitCooldownEngineUnits' not in params and 'npcImmunityMode' not in params

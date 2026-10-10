@@ -8,6 +8,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from tests.captured_projectile_author import project_captured_projectile_call
 
 
 _CORPUS = Path(__file__).with_name("fixtures") / "runtime_program_v5_seed_corpus.json"
@@ -22,6 +23,27 @@ def _delivery_wire(compiled: dict[str, Any]) -> dict[str, Any]:
     assert isinstance(wire, dict)
     wire.pop("debug", None)
     return wire
+
+
+def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
+    """Express only the captured choices in the current Author grammar."""
+    current = deepcopy(authored)
+    for call in current["runtimeProgram"]["calls"]:
+        project_captured_projectile_call(call)
+    return current
+
+
+def _historical_spawn_defaults(wire: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
+    """The new `at` choice explicitly projects the old zero over-target DTO."""
+    projected = deepcopy(wire)
+    expected_entities = {row["id"]: row for row in expected["runtimeProgram"]["entities"]}
+    for entity in projected["runtimeProgram"]["entities"]:
+        spawn = entity.get("spawn", {})
+        old_spawn = expected_entities[entity["id"]].get("spawn", {})
+        if "overTarget" in spawn and "overTarget" not in old_spawn:
+            assert spawn["overTarget"] == {"heightTiles": 0, "delayTicks": 0}
+            del spawn["overTarget"]
+    return projected
 
 
 _HISTORICAL_DELIVERY_SHA256 = {
@@ -75,9 +97,11 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         )
         assert actual_capabilities == row["capabilities"]
 
-        compiled = compile_runtime_program(authored)
+        archived_digest = hashlib.sha256(_canonical(row["expectedDeliveryWire"]).encode("utf-8")).hexdigest()
+        assert archived_digest == row["expectedDeliveryWireSha256"]
+        compiled = compile_runtime_program(_current_author_seed(authored))
         assert validate_runtime_wire(compiled)["ok"] is True
-        actual_wire = _delivery_wire(compiled)
+        actual_wire = _historical_spawn_defaults(_delivery_wire(compiled), row["expectedDeliveryWire"])
         assert actual_wire == row["expectedDeliveryWire"]
         digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]

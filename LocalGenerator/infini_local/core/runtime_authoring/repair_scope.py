@@ -25,6 +25,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     complete_transaction as transaction,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
+    authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     CapabilitySpec,
@@ -33,6 +34,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     event_dependency_alternatives,
+    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
@@ -284,7 +286,7 @@ def _candidate_capability_viable(
     """
 
     cap = CAPABILITY_REGISTRY.get(name)
-    if cap is None:
+    if cap is None or not cap.prompt_visible or cap.decision != "expose":
         return False
     target_ids = tuple(str(value) for value in target_ids if str(value))
     target_kinds = {
@@ -586,7 +588,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                                             "type": "object",
                                             "additionalProperties": False,
                                             "properties": {
-                                                "fn": {"type": "string", "enum": list(CAPABILITY_REGISTRY)},
+                                                "fn": {"type": "string", "enum": [cap.name for cap in visible_capabilities()]},
                                                 "targetId": _strict_scope_string_schema(),
                                                 "exactParams": {
                                                     "type": "array",
@@ -1307,7 +1309,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         grant(node_namespace, node_id, f"params.{param_name}")
                         context[node_namespace].add(node_id)
                     cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
-                    if param_name == "event":
+                    if param_name == "when" and not (
+                        code == "shape_one_of" and any(json_path_relative(other, path) for other in error_paths_all)
+                    ):
                         call_event_change_ids.add(node_id)
                     if cap is not None and param_name in cap.params and cap.params[param_name].reference is not None:
                         call_reference_param_changes.add(f"{node_id}:{param_name}")
@@ -1463,7 +1467,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 allowed_alternatives: list[dict[str, Any]] = []
                 if cap is not None:
                     call_event_change_ids.add(node_id)
-                    grant("calls", node_id, "params.event")
+                    grant("calls", node_id, "params.when")
                     for event in cap.allowed_events:
                         for dependency, binding_targets in _event_producer_options(
                             event, target_id, target_kind, rows,
@@ -2077,7 +2081,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if code == "event_not_emitted" and node_namespace == "calls" and target_ids:
                 event_target_id = target_ids[0]
                 event_target_kind = str(row_by_id.get(event_target_id, {}).get("kind") or "")
-                event_name = str((node_row.get("params") or {}).get("event") or "")
+                event_name = authored_event(_mapping(node_row.get("params")))
                 structured_alternatives = _event_producer_options(
                     event_name, event_target_id, event_target_kind, rows,
                 )
@@ -2318,9 +2322,9 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 grant("calls", call_id, f"params.{param_name}")
                         if code in {"child_depth_budget", "event_spawn_budget"} and cap.activation_spawn_count_param:
                             grant("calls", call_id, f"params.{cap.activation_spawn_count_param}")
-                    if isinstance(call.get("params"), Mapping) and "event" in call["params"]:
+                    if isinstance(call.get("params"), Mapping) and "when" in call["params"]:
                         call_event_change_ids.add(call_id)
-                        grant("calls", call_id, "params.event")
+                        grant("calls", call_id, "params.when")
         # Existing related nodes are useful context unless explicitly mutable.
         for row_id in related:
             context_id(row_id)
@@ -2348,9 +2352,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         name for name in create_call_fns
         if name in CAPABILITY_REGISTRY and name not in event_supporting_capabilities
     )
+    public_capabilities = {cap.name for cap in visible_capabilities()}
+    direct_blocker_capabilities.intersection_update(public_capabilities)
+    existing_broken_capabilities.intersection_update(public_capabilities)
     supporting_capabilities = (
         _capability_dependency_closure(direct_blocker_capabilities) - direct_blocker_capabilities
     ) | event_supporting_capabilities
+    supporting_capabilities.intersection_update(public_capabilities)
     if create_call_fns:
         create_call_fns.update(supporting_capabilities)
     capability_subset = direct_blocker_capabilities | supporting_capabilities | existing_broken_capabilities
@@ -2423,7 +2431,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     for row_id in call_target_change_ids:
         grant("calls", row_id, "target")
     for row_id in call_event_change_ids:
-        grant("calls", row_id, "params.event")
+        grant("calls", row_id, "params.when")
     for encoded in call_reference_param_changes:
         row_id, param_name = encoded.split(":", 1)
         grant("calls", row_id, f"params.{param_name}")
@@ -2439,6 +2447,32 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         for selector, _expected, required in _conditional_param_dependencies(cap):
             if f"params.{selector}" in permissions and required not in params:
                 grant("calls", call_id, f"params.{required}")
+    # A formerly inactive omitted field becomes an explicit decision only when
+    # Repair is allowed to change the exact consumer branch that hid it.
+    for call in rows["calls"]:
+        call_id, target = str(call.get("id") or ""), str(call.get("target") or "")
+        cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        if cap is None:
+            continue
+        params = _mapping(call.get("params"))
+        own_permissions = field_permissions["calls"].get(call_id, set())
+        for name, spec in cap.params.items():
+            condition = spec.omission_condition
+            if name in params or condition is None:
+                continue
+            selector_changes = any(f"params.{selector}" in own_permissions for selector, _ in condition.param_equals)
+            kind_changes = bool(condition.target_kinds and target in entity_kind_change_ids)
+            support_changes = any(
+                row.get("target") == target and row.get("fn") in condition.target_capabilities
+                and (str(row.get("id") or "") in call_fn_change_ids
+                     or str(row.get("id") or "") in call_target_change_ids
+                     or str(row.get("id") or "") in deletable["calls"])
+                for row in rows["calls"]
+            )
+            if selector_changes or kind_changes or support_changes:
+                mark("calls", call_id)
+                grant("calls", call_id, f"params.{name}")
+                context_id(target)
     scope = _new_scope()
     scope["mutable"] = {
         "entityIds": sorted(mutable["entities"]),
@@ -2482,7 +2516,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "allowed": bool((create_call_targets or create_call_target_kinds) and create_call_fns),
             "allowedTargetIds": sorted(create_call_targets),
             "allowedTargetKinds": sorted(create_call_target_kinds),
-            "allowedFns": sorted(name for name in create_call_fns if name in CAPABILITY_REGISTRY),
+            "allowedFns": sorted(name for name in create_call_fns if name in CAPABILITY_REGISTRY
+                                 and CAPABILITY_REGISTRY[name].prompt_visible and CAPABILITY_REGISTRY[name].decision == "expose"),
             "requiredReferenceEntityIds": sorted(required_reference_entities),
         },
     }
@@ -2977,6 +3012,44 @@ def filter_repair_patch_scope(
             else:
                 ignored.append(_filter_ignored(path, candidate, None, reason))
 
+    # Conditional omission dependencies are evaluated after every authorized
+    # context edit has been frozen, so call order cannot change permission.
+    def effective_rows(namespace: str, upsert_key: str, delete_key: str, index_delete_key: str) -> list[Mapping[str, Any]]:
+        replacements = {str(row.get("id") or ""): row for row in filtered[upsert_key]}
+        deleted, deleted_indices = set(filtered[delete_key]), set(filtered[index_delete_key])
+        originals = _program_index_rows(current)[namespace]
+        existing_ids = {str(row.get("id") or "") for row in originals if isinstance(row, Mapping)}
+        result = [replacements.get(str(row.get("id") or ""), row) for index, row in enumerate(originals)
+                  if isinstance(row, Mapping) and index not in deleted_indices and str(row.get("id") or "") not in deleted]
+        result.extend(row for row_id, row in replacements.items() if row_id not in existing_ids)
+        return result
+    effective_entities = effective_rows("entities", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete")
+    effective_calls = effective_rows("calls", "callsUpsert", "callIdsDelete", "callIndicesDelete")
+    original_calls = {str(row.get("id") or ""): row for row in rows["calls"]}
+    for call in filtered["callsUpsert"]:
+        original = original_calls.get(str(call.get("id") or ""))
+        cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        if original is None or cap is None or original.get("fn") != call.get("fn"):
+            continue
+        old_params, params = _mapping(original.get("params")), call.get("params")
+        if not isinstance(params, dict):
+            continue
+        target = original.get("target")
+        old_kind = next((str(row.get("kind") or "") for row in rows["entities"] if row.get("id") == target), "")
+        old_support = [str(row.get("fn") or "") for row in rows["calls"] if row.get("target") == target]
+        new_kind = next((str(row.get("kind") or "") for row in effective_entities if row.get("id") == call.get("target")), "")
+        new_support = [str(row.get("fn") or "") for row in effective_calls if row.get("target") == call.get("target")]
+        for name, spec in cap.params.items():
+            condition = spec.omission_condition
+            if (condition is not None and name not in old_params and name in params
+                    and condition.allows(old_params, old_kind, old_support)
+                    and condition.allows(params, new_kind, new_support)):
+                candidate = params.pop(name)
+                patch_index = next(i for i, row in enumerate(patch.get("callsUpsert", [])) if row.get("id") == call.get("id"))
+                path = f"$.callsUpsert[{patch_index}].params.{name}"
+                accepted[:] = [value for value in accepted if value != path]
+                ignored.append(_filter_ignored(path, candidate, None, "inactive_omission_stays_frozen"))
+
     allowed_metadata = set(str(value) for value in _values(scope.get("metadataFields")))
     metadata = _mapping(patch.get("metadataPatch"))
     for field, candidate in metadata.items():
@@ -3299,8 +3372,8 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                         errors.append(_scope_error(path + ".target", "call target is immutable for this parameter repair", actual=row.get("target")))
                     params = _mapping(row.get("params"))
                     original_params = _mapping(original.get("params"))
-                    if row_id not in set(_values(identity.get("callEventIds"))) and "event" in original_params and params.get("event") != original_params.get("event"):
-                        errors.append(_scope_error(path + ".params.event", "event binding is immutable unless the reported error concerns the event", actual=params.get("event")))
+                    if row_id not in set(_values(identity.get("callEventIds"))) and "when" in original_params and authored_event(params) != authored_event(original_params):
+                        errors.append(_scope_error(path + ".params.when", "event binding is immutable unless the reported error concerns the event", actual=params.get("when")))
                     allowed_ref_changes = set(str(value) for value in _values(identity.get("callReferenceParams")))
                     cap = CAPABILITY_REGISTRY.get(str(original.get("fn") or ""))
                     if cap is not None:
@@ -3359,7 +3432,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             call = preview_calls_by_id.get(call_id, {})
             raw_params = call.get("params")
             params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
-            selected_event = str(params.get("event") or "")
+            selected_event = authored_event(params)
             allowed_rows = [row for row in transaction.get("allowed") or [] if isinstance(row, Mapping)]
             alternatives = [
                 row for row in allowed_rows
@@ -3431,7 +3504,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
 
             if not any(alternative_complete(row) for row in alternatives):
                 errors.append(_scope_error(
-                    f"$.runtimeProgram.calls[{call_id}].params.event",
+                    f"$.runtimeProgram.calls[{call_id}].params.when",
                     "event selection must include one complete exact producer alternative in the same repair",
                     actual={"event": selected_event, "targetId": target_id},
                 ))

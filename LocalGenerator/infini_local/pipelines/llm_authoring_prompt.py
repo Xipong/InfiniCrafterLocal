@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 from typing import Any
 
@@ -217,7 +218,7 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
         "on_expire": "Natural lifetime expiry and move_proximity_missile proximity detonation; not a general catch/collision event. A kill before the final lifetime update does not emit on_expire. Do not promise an on_expire effect at an earlier final bounce/collision.",
         "on_kill": "Projectile termination event, including collision death, penetration exhaustion, proximity detonation, natural expiry and ordinary return-to-owner completion or controller cancellation. Only explicitly attached actions execute; termination does not imply an explosion.",
         "on_tile_collision": "Emitted at each tile collision, including a bounce.",
-        "periodic": "periodTicks is required on periodic event calls. item_body periodic runs while held (HoldItem), not merely equipped.",
+        "periodic": "Periodic event calls require when={everyTicks:n}; n is an explicit integer from 6 to 3600. item_body periodic runs while held (HoldItem), not merely equipped.",
     }
     for event in events:
         if event["event"] in event_detail:
@@ -360,13 +361,13 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     catalog_names = [row["fn"] for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]]
     return {
         "schema": "infini.low-level-author-prompt-usability.v1",
-        "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == set(CAPABILITY_REGISTRY),
+        "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == {cap.name for cap in visible_capabilities()},
         "chars": len(encoded),
         "limit": PLANNER_PROMPT_LIMIT_CHARS,
         "headroom": PLANNER_PROMPT_LIMIT_CHARS - len(encoded),
         "visibleCapabilities": len(catalog_names),
-        "missingCapabilities": sorted(set(CAPABILITY_REGISTRY) - set(catalog_names)),
-        "extraCapabilities": sorted(set(catalog_names) - set(CAPABILITY_REGISTRY)),
+        "missingCapabilities": sorted({cap.name for cap in visible_capabilities()} - set(catalog_names)),
+        "extraCapabilities": sorted(set(catalog_names) - {cap.name for cap in visible_capabilities()}),
         "containsWeaponMacro": any(
             name in encoded
             for name in (

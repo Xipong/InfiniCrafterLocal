@@ -15,17 +15,17 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 from check_delivery_contract import build_report as delivery_report
 from check_planner_prompt_usability import build_report as prompt_report
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
     capability_provider_union,
     compact_capability_catalog,
     runtime_program_author_schema,
 )
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.qa.capability_library_audit import capability_library_audit
 from infini_local.qa.capability_witnesses import capability_vertical_slice_report
 
 
 def build_report() -> dict[str, Any]:
-    names = set(CAPABILITY_REGISTRY)
+    names = {cap.name for cap in visible_capabilities()}
     schema_names = {
         row["properties"]["fn"]["const"]
         for row in runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]

@@ -1,6 +1,7 @@
 """Exercise construction facts in the actual serialized Author request."""
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, compact_capability_catalog
@@ -49,7 +50,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
-    assert set(cards) == set(CAPABILITY_REGISTRY)
+    assert set(cards) == {cap.name for cap in visible_capabilities()}
     assert {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
             for fn, card in cards.items()} == canonical
     guide = catalog["fieldGuide"]["referenceRules"] + " " + payload["runtimeProgramInvariants"]["graphAndSpawnBudget"]
@@ -65,7 +66,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     for card in cards.values():
         for name, param in card["params"].items():
             assert param.get("optional", False) is not CAPABILITY_REGISTRY[card["fn"]].params[name].required
-    assert "periodTicks" in cards["spawn_entity_on_event"]["params"]
+    assert "everyTicks" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
     assert "requires" in cards["spawn_entity_on_event"]
 
 

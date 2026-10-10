@@ -31,13 +31,17 @@ _ITEM_BASE_USE = {
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
     "handPose": "one_handed", "heldSpriteVisibilityHint": "immediate",
 }
-_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
+_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
-_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10}
+_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}
 
 
 def _value(spec: ParamSpec, name: str) -> Any:
+    if spec.alternatives:
+        return _value(spec.alternatives[0], name)
+    if spec.properties:
+        return {key: _value(child, key) for key, child in spec.properties.items() if child.required}
     if spec.enum:
         return deepcopy(spec.enum[0])
     if spec.kind == "boolean":
@@ -82,13 +86,14 @@ def _params(fn: str) -> dict[str, Any]:
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
         "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2},
-        "spawn_entity_on_event": {"event": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0},
-        "apply_status_on_event": {"event": "on_hit", "buffId": 20, "durationTicks": 60},
-        "damage_area_on_event": {"event": "on_hit", "radiusPx": 48, "damageMultiplier": 0.5},
-        "chain_damage_on_event": {"event": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
-        "pull_on_event": {"event": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8, "periodTicks": 12},
-        "heal_owner_on_event": {"event": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
-        "move_owner_on_event": {"event": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0},
+        "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
+        "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
+        "chain_damage_on_event": {"when": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
+        "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8},
+        "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
+        "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
+        "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
@@ -284,7 +289,9 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
 def capability_vertical_slice_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     ok = True
-    for fn in CAPABILITY_REGISTRY:
+    for fn, cap in CAPABILITY_REGISTRY.items():
+        if not cap.prompt_visible or cap.decision != "expose":
+            continue
         authored = build_capability_witness(fn)
         author = validate_runtime_program(authored)
         row: dict[str, Any] = {"fn": fn, "authorValid": bool(author.get("ok")), "authorErrors": author.get("errors") or []}

@@ -1,4 +1,5 @@
 """Canonical Gameplay Repair: diagnostics -> exact scope -> filter -> apply -> compiler."""
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 
@@ -100,13 +101,12 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
 @pytest.mark.parametrize("choice", ["periodic", "life_above", "mana_above"])
 def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, choice):
     fn = "pull_on_event" if choice == "periodic" else "require_use_condition"
-    selector = "event" if choice == "periodic" else "mode"
-    needed = {"periodic": "periodTicks", "life_above": "minLife", "mana_above": "minMana"}[choice]
+    selector = "when" if choice == "periodic" else "mode"
+    needed = {"periodic": "when", "life_above": "minLife", "mana_above": "minMana"}[choice]
     value = 12 if choice == "periodic" else 100
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     if choice == "periodic":
-        call["params"].pop("periodTicks")
         call["params"][selector] = "on_use"
     else:
         call["params"] = {"mode": "invalid"}
@@ -114,10 +114,10 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     report = validate_runtime_program(doc)
     assert not report["ok"]
     scope = build_runtime_repair_scope(doc, report["errors"])
-    paths = ["params.event", "params.periodTicks"] if choice == "periodic" else ["params.minLife", "params.minMana", "params.mode"]
+    paths = ["params.when"] if choice == "periodic" else ["params.minLife", "params.minMana", "params.mode"]
     assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": paths}]
     candidate = copy.deepcopy(call)
-    candidate["params"].update({selector: choice, needed: value})
+    candidate["params"].update({"when": {"everyTicks": value}} if choice == "periodic" else {selector: choice, needed: value})
     expected = apply_repair_patch(doc, {"note": "explicit target control", "callsUpsert": [candidate]})
     assert validate_runtime_program(expected)["ok"]
     if choice == "periodic":
@@ -151,10 +151,9 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, form
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     if fn == "pull_on_event":
-        call["params"].pop("periodTicks")
-        call["params"]["event"] = "periodic" if case == "periodic-already-selected" else "on_use"
-        chosen = {"periodTicks": 12} if case == "periodic-already-selected" else {"event": "on_expire"}
-        hostile = {"strength": 4, **({"periodTicks": 12} if case == "nonconditional-event" else {})}
+        call["params"]["when"] = {} if case == "periodic-already-selected" else "on_use"
+        chosen = {"when": {"everyTicks": 12}} if case == "periodic-already-selected" else {"when": "on_expire"}
+        hostile = {"strength": 4, **({"delayTicks": 12} if case == "nonconditional-event" else {})}
     else:
         call["params"] = {"mode": "invalid"}
         chosen = {"mode": "grounded"}
@@ -192,7 +191,7 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, form
         repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
         permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
         if case == "periodic-already-selected":
-            assert permissions == [{"id": call["id"], "paths": ["params.periodTicks"]}]
+            assert permissions == [{"id": call["id"], "paths": ["params.when.everyTicks"]}]
         if case == "existing-threshold-frozen":
             assert permissions == [{"id": call["id"], "paths": ["params.minMana", "params.mode"]}]
         repaired.pop("debug")
@@ -223,23 +222,22 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
         wanted, foreign, selector, choice = "minMana", "minLife", "mode", "life_above"
         wanted_paths = ["params.minMana", "params.mode"]
     else:
-        native_shape = CapabilitySpec.provider_variant_schema
-
-        def changed_shape(cap):
-            shape = native_shape(cap)
-            if cap.name == fn:
-                shape["properties"]["params"]["if"]["properties"]["event"]["const"] = "on_expire"
-            return shape
-
-        monkeypatch.setattr(CapabilitySpec, "provider_variant_schema", changed_shape)
-        call["params"].pop("periodTicks")
-        call["params"]["event"] = "on_use"
-        wanted, foreign, selector, choice = "periodTicks", "strength", "event", "on_expire"
-        wanted_paths = ["params.event", "params.periodTicks"]
+        from infini_local.core.runtime_authoring import capability_registry, repair_scope, validator, compiler, technical_lowering
+        from infini_local.core.runtime_authoring.capability_registry import ParamSpec
+        cap = CAPABILITY_REGISTRY[fn]
+        interval = cap.params["when"].alternatives[1].properties["everyTicks"]
+        changed_when = ParamSpec("object", "Mutated exact periodic leaf", properties={"customInterval": interval},
+                                 wire_literals={"event": "periodic"})
+        registry = {**CAPABILITY_REGISTRY, fn: replace(cap, params={**cap.params, "when": changed_when})}
+        for consumer in (capability_registry, repair_scope, validator, compiler, technical_lowering):
+            monkeypatch.setattr(consumer, "CAPABILITY_REGISTRY", registry)
+        call["params"]["when"] = {"customInterval": 5}
+        wanted, foreign, selector, choice = "when", "strength", "when", {"customInterval": 100}
+        wanted_paths = ["params.when.customInterval"]
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": wanted_paths}]
     candidate = copy.deepcopy(call)
-    candidate["params"].update({selector: choice, wanted: 100})
+    candidate["params"].update({selector: choice, wanted: 100} if owner == "semantic-requirement" else {"when": choice})
     expected = apply_repair_patch(doc, {"note": "registry-chosen conditional control", "callsUpsert": [candidate]})
     candidate["params"][foreign] = 200 if owner == "semantic-requirement" else 4
     filtered, audit = filter_repair_patch_scope(doc, {
@@ -567,7 +565,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     assert {e["path"] for e in report["errors"] if e["code"].startswith("shape_") and e["path"].startswith(base)} == {base, *(f"{base}.params.{key}" for key in missing)}
     assert all(e["path"] != base + ".fn" for e in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": sorted("params." + key for key in missing)}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": sorted("params." + key for key in missing | {"bounceCount"})}]
     assert node["id"] not in scope["identityChanges"]["callFnIds"]
     assert not any(row["callId"] == node["id"] and row["key"] in node["params"] for row in scope["deletable"]["callParamKeys"])
     candidate = copy.deepcopy(original)
@@ -584,7 +582,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     expected = copy.deepcopy(original)
     expected["params"].update(node["params"])
     assert filtered["callsUpsert"] == [expected] and not filtered["callParamKeysDelete"]
-    assert set(filtered["callsUpsert"][0]["params"]) == required
+    assert set(filtered["callsUpsert"][0]["params"]) == required | {"bounceCount"}
     if foreign_fn:
         assert any(row["path"].endswith(".fn") for row in audit["ignoredChanges"])
     repaired = apply_repair_patch(doc, filtered)
@@ -634,7 +632,7 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
                 assert filtered["bindingsUpsert"] == []
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"]["params"]["required"]])
+@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose" and cap.provider_variant_schema()["properties"]["params"]["required"]])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]
