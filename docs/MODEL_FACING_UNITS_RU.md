@@ -18,7 +18,7 @@ Gameplay параметры, descriptions, domains, units и exact wire mapping 
 
 Прежние Author имена этих полей сохранены только как `retained_receipt_params`: старые receipts проверяются без миграции saved wire. Свежие Author и Repair принимают только новые имена; source-aware аудит требует фактического нового authored leaf. Замороженные test corpora сохраняют исходные JSON и hashes, а их входы переводятся в текущую нотацию только test-only helper.
 
-`test_scalar_author_names.py` сравнивает полные compiled hashes с захватом до переименования, проверяет сохранённые receipts, запрет старых Author/Repair имён и точные новые field permissions. Эти проверки доказывают совместимость и строгость контракта; улучшение качества LLM-генераций ими не измеряется.
+`test_registry_author_units.py` сравнивает полные compiled hashes с захватом до переименования, проверяет сохранённые receipts, запрет старых Author/Repair имён и точные новые field permissions. Эти проверки доказывают совместимость и строгость контракта; улучшение качества LLM-генераций ими не измеряется.
 
 <a id="clocks"></a>
 ## World ticks, updates, pixels
