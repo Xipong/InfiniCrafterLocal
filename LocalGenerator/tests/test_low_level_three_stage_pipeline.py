@@ -28,18 +28,22 @@ def _binding_row(
     contact_damage: bool = False,
     placement_call_id: str = "",
 ) -> dict:
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
     action = {"kind": action_name, "targetId": target_id}
     if placement_call_id:
         action["placementCallId"] = placement_call_id
-    return {
-        "id": binding_id,
-        "input": input_name,
-        "usePolicy": {
-            "action": action,
-            "stackCost": stack_cost,
-            "contactDamage": contact_damage,
-        },
-    }
+    spec = BINDING_ACTION_REGISTRY.get(action_name)
+    inp = INPUT_KIND_REGISTRY.get(input_name)
+    if spec is not None and spec.target_kinds == ("item_body",):
+        action.pop("targetId")
+    if inp is not None and len(inp.allowed_actions) == 1 and action_name == inp.allowed_actions[0]:
+        action.pop("kind")
+    row = {"id": binding_id, "input": input_name}
+    if action:
+        row["action"] = action
+    if input_name in {"primary_use", "alternate_use"} and action_name != "place_item":
+        row.update(stackCost=stack_cost, contactDamage=contact_damage)
+    return row
 
 
 def _binding_transaction(

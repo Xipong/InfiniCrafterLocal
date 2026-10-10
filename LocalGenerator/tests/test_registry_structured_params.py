@@ -1,6 +1,8 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
 from copy import deepcopy
 from dataclasses import replace
+import json
+from pathlib import Path
 import sys
 from types import MappingProxyType
 
@@ -18,8 +20,9 @@ def _typed_collision(monkeypatch):
     document = build_capability_witness("set_projectile_collision")
     cap = registry.CAPABILITY_REGISTRY["set_projectile_collision"]
     params = dict(cap.params)
-    params.pop("npcImmunityMode")
-    cooldown = params.pop("localNpcHitCooldownEngineUnits")
+    params.pop("npcImmunityMode", None)
+    params.pop("localNpcHitCooldownEngineUnits", None)
+    cooldown = cap.retained_receipt_params.get("localNpcHitCooldownEngineUnits", cap.params.get("localNpcHitCooldownEngineUnits"))
     params["immunity"] = ParamSpec(
         "union", "Exact immunity variant", alternatives=(
             ParamSpec("string", "Owner immunity", enum=("owner_shared",),
@@ -30,16 +33,14 @@ def _typed_collision(monkeypatch):
         ),
     )
     modified = dict(registry.CAPABILITY_REGISTRY)
-    changed = replace(cap, params=MappingProxyType(params), retained_receipt_params=MappingProxyType({
-        name: cap.params[name] for name in ("npcImmunityMode", "localNpcHitCooldownEngineUnits")
-    }))
+    changed = replace(cap, params=MappingProxyType(params), retained_receipt_params=cap.retained_receipt_params)
     modified[cap.name] = replace(changed, final_wire_paths=registry._exact_wire_paths(changed))
     for name, module in tuple(sys.modules.items()):
         if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
             monkeypatch.setattr(module, "CAPABILITY_REGISTRY", modified)
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"].pop("npcImmunityMode")
-    call["params"].pop("localNpcHitCooldownEngineUnits")
+    call["params"].pop("npcImmunityMode", None)
+    call["params"].pop("localNpcHitCooldownEngineUnits", None)
     return document, call
 
 
@@ -155,7 +156,12 @@ def test_nested_union_diagnostic_does_not_unfreeze_the_valid_sibling(monkeypatch
 
 def test_retained_provenance_preserves_old_wire_without_accepting_old_author(monkeypatch):
     old_author = build_capability_witness("set_projectile_collision")
-    old_wire = compiler.compile_runtime_program(old_author)
+    corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
+    old_wire = next(row["wire"] for row in corpus["cases"] if row["fn"] == "set_projectile_collision")
+    old_call = next(c for c in old_author["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    old_call["params"].pop("immunity")
+    old_call["params"].pop("updatesPerTick")
+    old_call["params"].update(npcImmunityMode="owner", localNpcHitCooldownEngineUnits=37, extraUpdates=5)
     old_receipts = deepcopy(old_wire["runtimeContract"]["finalWireReceipts"])
     _typed_collision(monkeypatch)
     assert technical_lowering.audit_compiler_receipts(old_receipts, final_document=old_wire)["ok"]
@@ -173,7 +179,29 @@ def test_retained_provenance_preserves_old_wire_without_accepting_old_author(mon
     assert not technical_lowering.audit_compiler_receipts(changed)["ok"]
 
 
+def _scalar_collision(monkeypatch):
+    """Isolated prior scalar contract, not a production grammar/importer."""
+    import infini_local.qa.capability_witnesses as witnesses
+    monkeypatch.setattr(witnesses, "_COLLISION", {
+        "tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1,
+        "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10,
+    })
+    cap = registry.CAPABILITY_REGISTRY["set_projectile_collision"]
+    params = dict(cap.params)
+    params.pop("immunity")
+    params.pop("updatesPerTick")
+    params.update(cap.retained_receipt_params)
+    changed = replace(cap, params=params, retained_receipt_params={})
+    modified = dict(registry.CAPABILITY_REGISTRY)
+    modified[cap.name] = replace(changed, final_wire_paths=registry._exact_wire_paths(changed))
+    for name, module in tuple(sys.modules.items()):
+        if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
+            monkeypatch.setattr(module, "CAPABILITY_REGISTRY", modified)
+
+
 def _two_collision_calls(monkeypatch, typed):
+    if not typed:
+        _scalar_collision(monkeypatch)
     document = build_capability_witness("spawn_entity_on_event")
     if typed:
         _typed_collision(monkeypatch)
@@ -181,8 +209,8 @@ def _two_collision_calls(monkeypatch, typed):
     assert len(calls) == 2
     for i, call in enumerate(calls):
         if typed:
-            call["params"].pop("npcImmunityMode")
-            call["params"].pop("localNpcHitCooldownEngineUnits")
+            call["params"].pop("npcImmunityMode", None)
+            call["params"].pop("localNpcHitCooldownEngineUnits", None)
             call["params"]["immunity"] = {"localCooldown": 10 + i}
         else:
             call["params"]["localNpcHitCooldownEngineUnits"] = 10 + i
@@ -234,7 +262,7 @@ def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, 
         cap = registry.CAPABILITY_REGISTRY["chain_damage_on_event"]
         params = dict(cap.params)
         params["maxTargets"] = replace(params.pop("count"), wire_name="count")
-        params["when"] = replace(params.pop("event"), wire_name="event")
+        params["when"] = params["when"]
         modified = dict(registry.CAPABILITY_REGISTRY)
         modified["damage_nearest_on_event"] = replace(cap, name="damage_nearest_on_event", params=params,
                                                      fixed_wire_literals={"action": "chain_damage_on_event", "actionCode": 4})
@@ -242,7 +270,7 @@ def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, 
         for source in (call, another):
             source["fn"] = "damage_nearest_on_event"
             source["params"]["maxTargets"] = source["params"].pop("count")
-            source["params"]["when"] = source["params"].pop("event")
+            source["params"]["when"] = source["params"]["when"]
         for row in receipts:
             if row.get("fn") == "chain_damage_on_event":
                 row["fn"] = "damage_nearest_on_event"
@@ -303,7 +331,8 @@ def test_wire_only_spawn_position_rejects_impossible_above_height(monkeypatch):
     document = build_capability_witness("configure_spawn")
     cap = registry.CAPABILITY_REGISTRY["configure_spawn"]
     params = dict(cap.params)
-    placement = params.pop("placement")
+    params.pop("position")
+    placement = cap.retained_receipt_params["placement"]
     params["position"] = ParamSpec("object", "Above anchor", properties={
         "above": replace(placement, enum=("cursor",), wire_name="placement"),
         "heightTiles": ParamSpec("number", "Height", minimum=1, maximum=80, wire_name="overTarget.heightTiles"),
@@ -316,7 +345,7 @@ def test_wire_only_spawn_position_rejects_impossible_above_height(monkeypatch):
         if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
             monkeypatch.setattr(module, "CAPABILITY_REGISTRY", modified)
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"].pop("placement")
+    call["params"].pop("placement", None)
     call["params"]["position"] = {"above": "cursor", "heightTiles": 1, "activationDelayTicks": 0}
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
@@ -383,7 +412,7 @@ def test_unrelated_retained_parameter_cannot_excuse_missing_typed_outputs(monkey
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     cap = technical_lowering.CAPABILITY_REGISTRY["set_projectile_collision"]
     retained = dict(cap.retained_receipt_params)
-    retained["extraUpdates"] = registry.CAPABILITY_REGISTRY[cap.name].params["extraUpdates"]
+    retained["extraUpdates"] = cap.retained_receipt_params["extraUpdates"]
     modified = dict(technical_lowering.CAPABILITY_REGISTRY)
     modified[cap.name] = replace(cap, retained_receipt_params=retained)
     monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", modified)
@@ -393,6 +422,7 @@ def test_unrelated_retained_parameter_cannot_excuse_missing_typed_outputs(monkey
 
 @pytest.mark.parametrize("missing", ["npcImmunityMode", "localNpcHitCooldownEngineUnits"])
 def test_retained_scalar_variant_outputs_still_require_complete_coverage(monkeypatch, missing):
+    _scalar_collision(monkeypatch)
     document = build_capability_witness("set_projectile_collision")
     wire = compiler.compile_runtime_program(document)
     _typed_collision(monkeypatch)

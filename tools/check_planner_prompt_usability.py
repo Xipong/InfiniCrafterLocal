@@ -5,7 +5,7 @@ import argparse, json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
 PARENT_A = {"id":"workbench","name":"Workbench","damage":0,"useTime":20,"tags":["furniture"],"category":"placeable"}
@@ -13,9 +13,9 @@ PARENT_B = {"id":"blade","name":"Blade","damage":18,"useTime":24,"tags":["metal"
 
 def build_report() -> dict:
     report = planner_prompt_usability_report(PARENT_A, PARENT_B, PARENT_A, PARENT_B, "workbench+blade")
-    report["expectedCapabilities"] = sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
+    report["expectedCapabilities"] = len(visible_capabilities())
     report["checks"] = {
-        "singleSelfContainedCatalog": report.get("visibleCapabilities") == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values()),
+        "singleSelfContainedCatalog": report.get("visibleCapabilities") == len(visible_capabilities()),
         "noMissing": not report.get("missingCapabilities"),
         "noExtra": not report.get("extraCapabilities"),
         "noWeaponMacro": not report.get("containsWeaponMacro"),

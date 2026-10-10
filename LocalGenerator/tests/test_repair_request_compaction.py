@@ -111,14 +111,14 @@ def test_create_policy_and_event_support_are_included_without_granting_permissio
     damage = copy.deepcopy(_call(item, "set_projectile_damage"))
     item["runtimeProgram"]["calls"].remove(_call(item, "set_projectile_damage"))
     event = _call(item, "apply_status_on_event")
-    event["params"]["event"] = "on_spawn"
+    event["params"]["when"] = "on_spawn"
     failure = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, failure["errors"])
     before = copy.deepcopy(scope)
     assert "set_projectile_damage" in runtime_repair_schema_capabilities(scope)
     assert "apply_status_on_event" in runtime_repair_schema_capabilities(scope)
     corrected = copy.deepcopy(event)
-    corrected["params"]["event"] = "on_hit"
+    corrected["params"]["when"] = "on_hit"
     patch = {"note": "Explicit event and its exact producer", "callsUpsert": [corrected, damage],
              "realizationReplacement": item["realization"]}
     _wire_roundtrip(patch, _local(scope))

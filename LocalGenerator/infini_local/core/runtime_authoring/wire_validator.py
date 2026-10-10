@@ -6,13 +6,13 @@ from typing import Any
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
     ACTIVE_USE_INPUTS,
-    action,
-    action_kind,
-    contact_damage,
+    wire_action as action,
+    wire_action_kind as action_kind,
+    wire_contact_damage as contact_damage,
     placeable_input_contract,
-    stack_cost,
+    wire_stack_cost as stack_cost,
+    wire_target_id as binding_target_id,
     stack_chance_error,
-    target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
@@ -433,8 +433,11 @@ def _validate_target_emission(event: Mapping[str, Any], entities: list[Mapping[s
                 source = CAPABILITY_REGISTRY[requirement.capability]
                 for key, required_value in requirement.equals.items():
                     spec = source.params[key]
-                    value = spawn.get(spec.wire_name or key)
-                    valid = valid and not strict_schema_errors(value, spec.schema()) and value == required_value
+                    for projection in spec.projected_fields(required_value, key):
+                        value: Any = spawn
+                        for part in projection.wire_path.split("."):
+                            value = value.get(part) if isinstance(value, Mapping) else None
+                        valid = valid and type(value) is type(projection.value) and value == projection.value
             elif requirement.kind == "referenced_entity_without_capability" and requirement.capability == "spawn_over_target":
                 over = spawn.get("overTarget", {})
                 valid = valid and isinstance(over, Mapping) and all(
@@ -625,7 +628,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             errors.append({"path": path, "code": "invalid_projectile_concurrency",
                                            "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
                 if "placement" in component:
-                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
+                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].retained_receipt_params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
                         errors.append(issue)
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
@@ -882,7 +885,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         cost = stack_cost(binding)
         if cost not in {0, 1}:
             errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "invalid_stack_cost", "message": "stackCost must be exactly 0 or 1."})
-        if reason := stack_chance_error(binding):
+        if reason := stack_chance_error({"input": binding.get("input"), **policy}):
             errors.append({"path": f"{binding_path}.usePolicy.stackConsumeChancePercent", "code": "invalid_stack_chance", "message": reason})
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
@@ -1019,7 +1022,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "equip_passive has no compiled accessory/armor capability."})
 
     placeable_roles_valid, placeable_role_message = placeable_input_contract(
-        row for row in bindings if isinstance(row, Mapping)
+        {"input": row.get("input"), **dict(row["usePolicy"])}
+        for row in bindings if isinstance(row, Mapping) and isinstance(row.get("usePolicy"), Mapping)
     )
     if not placeable_roles_valid:
         errors.append({

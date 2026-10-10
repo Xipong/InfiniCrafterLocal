@@ -31,10 +31,10 @@ _ITEM_BASE_USE = {
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
     "handPose": "one_handed", "customHeldSprite": "hidden",
 }
-_SPAWN = {"velocity": {"constantSpeedPxPerUpdate": 8.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
+_SPAWN = {"velocity": {"constantSpeedPxPerUpdate": 8.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
-_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10}
+_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}
 
 
 def _value(spec: ParamSpec, name: str) -> Any:
@@ -88,24 +88,30 @@ def _params(fn: str) -> dict[str, Any]:
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
         "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
-        "spawn_entity_on_event": {"event": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
-        "spawn_entity_from_hit_target": {"event": "on_hit", "entity": "witness_child", "count": 3, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "geometry": {"beforeProbability": 0.85, "hitboxMaxSideFactor": 0.6, "clearancePx": 10, "beforePositionJitterRadiusPx": 8, "beforeDirectionJitterRadians": 0.2, "afterFanSpreadRadians": 1.2, "initialIgnoreCountdownUpdates": 10}},
-        "select_targets_and_emit_on_event": {"event": "on_hit", "entity": "witness_child", "stepCount": 2,
+        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+        "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
+        "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
+        "chain_damage_on_event": {"when": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
+        "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8},
+        "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
+        "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
+        "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "spawn_entity_from_hit_target": {"when": "on_hit", "entity": "witness_child", "count": 3, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "geometry": {"beforeProbability": 0.85, "hitboxMaxSideFactor": 0.6, "clearancePx": 10, "beforePositionJitterRadiusPx": 8, "beforeDirectionJitterRadians": 0.2, "afterFanSpreadRadians": 1.2, "initialIgnoreCountdownUpdates": 10}},
+        "select_targets_and_emit_on_event": {"when": "on_hit", "entity": "witness_child", "stepCount": 2,
             "stepRangeTiles": 22.5, "selectionAnchor": "previous_target", "repeatPolicy": "allow_revisits",
             "requireLineOfSight": False, "initialIgnoreCountdownUpdates": 10, "delayTicks": 0},
-        "apply_status_on_event": {"event": "on_hit", "buffId": 20, "durationTicks": 60},
-        "damage_area_on_event": {"event": "on_hit", "radiusPx": 48, "damageMultiplier": 0.5},
-        "chain_damage_on_event": {"event": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
-        "pull_on_event": {"event": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8, "periodTicks": 12},
-        "heal_owner_on_event": {"event": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
-        "move_owner_on_event": {"event": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
 
 
 def _call(call_id: str, fn: str, target: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"id": call_id, "fn": fn, "target": target, "params": deepcopy(_params(fn) if params is None else params)}
+    row = {"id": call_id, "fn": fn, "target": target}
+    if CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",):
+        row.pop("target")
+    if CAPABILITY_REGISTRY[fn].params:
+        row["params"] = deepcopy(_params(fn) if params is None else params)
+    return row
 
 
 def _binding(
@@ -120,15 +126,27 @@ def _binding(
     action: dict[str, Any] = {"kind": action_kind, "targetId": target}
     if placement_call_id:
         action["placementCallId"] = placement_call_id
-    return {
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+    if BINDING_ACTION_REGISTRY[action_kind].target_kinds == ("item_body",):
+        action.pop("targetId")
+    if len(INPUT_KIND_REGISTRY[input_kind].allowed_actions) == 1:
+        action.pop("kind")
+    row = {
         "id": binding_id,
         "input": input_kind,
-        "usePolicy": {
+        **{
             "action": action,
             "stackCost": 1 if action_kind == "place_item" else 0,
             "contactDamage": contact_damage,
         },
     }
+
+    if not action:
+        row.pop("action")
+    if input_kind not in {"primary_use", "alternate_use"} or action_kind == "place_item":
+        row.pop("stackCost")
+        row.pop("contactDamage")
+    return row
 
 
 def build_capability_witness(fn: str) -> dict[str, Any]:
@@ -231,7 +249,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             for base_fn, params in base.items():
                 child_params = deepcopy(params)
                 if fn in {"spawn_entity_from_hit_target", "select_targets_and_emit_on_event"} and base_fn == "configure_spawn":
-                    child_params.update(placement="item_use_origin", aim="velocity", offsetPx=0)
+                    child_params.update(position={"at": "activation_origin"}, aim="velocity", offsetPx=0)
                 calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", child_params))
             calls.append(_call("child_motion", "move_straight", "witness_child", {}))
 

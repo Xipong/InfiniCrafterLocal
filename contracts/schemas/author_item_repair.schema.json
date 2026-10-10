@@ -28,6 +28,40 @@
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "spawn_entity"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "targetId"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -37,68 +71,57 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "spawn_entity"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "spawn_entity"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "targetId"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -108,74 +131,44 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "spawn_entity"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "use_item_body"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -185,68 +178,38 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "use_item_body"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "use_item_body"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -256,74 +219,50 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "use_item_body"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "effectGroupId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "apply_item_effects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -333,75 +272,44 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "effectGroupId": {
-                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string"
-                      },
-                      "kind": {
-                        "const": "apply_item_effects"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "effectGroupId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "apply_item_effects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -411,81 +319,57 @@
               "input": {
                 "const": "primary_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "effectGroupId": {
-                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string"
-                      },
-                      "kind": {
-                        "const": "apply_item_effects"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "place_item"
+                  },
+                  "placementCallId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "capabilities": [
+                        "configure_tile_placement",
+                        "configure_wall_placement"
+                      ],
+                      "graphEdge": false,
+                      "namespace": "call"
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "placementCallId"
+                ],
+                "type": "object"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -494,84 +378,52 @@
               },
               "input": {
                 "const": "primary_use"
-              },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "place_item"
-                      },
-                      "placementCallId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": false,
-                          "capabilities": [
-                            "configure_tile_placement",
-                            "configure_wall_placement"
-                          ],
-                          "graphEdge": false,
-                          "namespace": "call"
-                        }
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId",
-                      "placementCallId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "const": false
-                  },
-                  "stackCost": {
-                    "const": 1
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "spawn_entity"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "targetId"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -581,68 +433,57 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "spawn_entity"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "spawn_entity"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "targetId"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -652,74 +493,44 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "spawn_entity"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "use_item_body"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -729,68 +540,38 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "use_item_body"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "use_item_body"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -800,74 +581,50 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "use_item_body"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "effectGroupId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "apply_item_effects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -877,75 +634,44 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "effectGroupId": {
-                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string"
-                      },
-                      "kind": {
-                        "const": "apply_item_effects"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackCost": {
-                    "const": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "effectGroupId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "apply_item_effects"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "contactDamage": {
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -955,81 +681,57 @@
               "input": {
                 "const": "alternate_use"
               },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "effectGroupId": {
-                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string"
-                      },
-                      "kind": {
-                        "const": "apply_item_effects"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "type": "boolean"
-                  },
-                  "stackConsumeChancePercent": {
-                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "stackCost": {
-                    "const": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
+              "stackConsumeChancePercent": {
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving.",
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action",
+              "stackCost",
+              "contactDamage"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "place_item"
+                  },
+                  "placementCallId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "capabilities": [
+                        "configure_tile_placement",
+                        "configure_wall_placement"
+                      ],
+                      "graphEdge": false,
+                      "namespace": "call"
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "placementCallId"
+                ],
+                "type": "object"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -1038,84 +740,45 @@
               },
               "input": {
                 "const": "alternate_use"
-              },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "place_item"
-                      },
-                      "placementCallId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": false,
-                          "capabilities": [
-                            "configure_tile_placement",
-                            "configure_wall_placement"
-                          ],
-                          "graphEdge": false,
-                          "namespace": "call"
-                        }
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId",
-                      "placementCallId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "const": false
-                  },
-                  "stackCost": {
-                    "const": 1
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action"
             ],
             "type": "object"
           },
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "targetId"
+                ],
+                "type": "object"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -1124,62 +787,12 @@
               },
               "input": {
                 "const": "hold"
-              },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "spawn_entity"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "const": false
-                  },
-                  "stackCost": {
-                    "const": 0
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
               }
             },
             "required": [
               "id",
               "input",
-              "usePolicy"
+              "action"
             ],
             "type": "object"
           },
@@ -1194,62 +807,11 @@
               },
               "input": {
                 "const": "equipped"
-              },
-              "usePolicy": {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "kind": {
-                        "const": "equip_passive"
-                      },
-                      "targetId": {
-                        "maxLength": 48,
-                        "minLength": 1,
-                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "type": "string",
-                        "x-infini-reference": {
-                          "allowSelf": true,
-                          "graphEdge": false,
-                          "namespace": "entity",
-                          "targetKinds": [
-                            "item_body",
-                            "owner_attached_projectile",
-                            "free_projectile",
-                            "stationary_projectile",
-                            "temporary_helper",
-                            "field",
-                            "child_projectile"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "targetId"
-                    ],
-                    "type": "object"
-                  },
-                  "contactDamage": {
-                    "const": false
-                  },
-                  "stackCost": {
-                    "const": 0
-                  }
-                },
-                "required": [
-                  "action",
-                  "stackCost",
-                  "contactDamage"
-                ],
-                "type": "object"
               }
             },
             "required": [
               "id",
-              "input",
-              "usePolicy"
+              "input"
             ],
             "type": "object"
           }
@@ -1458,25 +1020,11 @@
                   "scale"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1592,25 +1140,11 @@
                   "channel"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1650,25 +1184,11 @@
                   "contactForgivenessPx"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1724,25 +1244,11 @@
                   "speedBasis"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1811,25 +1317,11 @@
                   "notAmmo"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1882,25 +1374,11 @@
                   "usesPotionRules"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -1946,25 +1424,11 @@
                   "durationTicks"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2113,25 +1577,11 @@
                   "lightColor"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2161,25 +1611,11 @@
                   "effectGroupId"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2237,25 +1673,11 @@
                   "miningSpeedScale"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2294,25 +1716,11 @@
                   "placeStyle"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2351,25 +1759,11 @@
                   "placeStyle"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2512,25 +1906,11 @@
                   "flipY"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2606,25 +1986,11 @@
                   "condition"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2675,25 +2041,11 @@
                   "color"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2755,25 +2107,11 @@
                   "safeTileOnly"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -2811,25 +2149,11 @@
                   "cooldownTicks"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -3158,25 +2482,11 @@
                 },
                 "required": [],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -3675,25 +2985,11 @@
                   "setKey"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -3759,25 +3055,11 @@
                   "bonusPercent"
                 ],
                 "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "item_body"
-                  ]
-                }
               }
             },
             "required": [
               "id",
               "fn",
-              "target",
               "params"
             ],
             "type": "object"
@@ -3797,7 +3079,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aim": {
-                    "description": "Initial aim axis and forward offset: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction. none is zero velocity for the constant variant; radial/disk sample their own directions independently.",
+                    "description": "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.",
                     "enum": [
                       "cursor",
                       "facing",
@@ -3808,10 +3090,12 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "count": {
-                    "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended",
+                    "default": 1,
+                    "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it",
                     "maximum": 12,
                     "minimum": 1,
                     "type": "integer",
+                    "x-infini-neutral": 1,
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "offsetPx": {
@@ -3822,24 +3106,77 @@
                     "x-infini-semanticType": "pixels",
                     "x-infini-units": "pixels"
                   },
-                  "placement": {
-                    "description": "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle",
-                    "enum": [
-                      "item_use_origin",
-                      "owner_center",
-                      "cursor",
-                      "ground_at_cursor",
-                      "above_cursor",
-                      "native_resting_spot"
+                  "position": {
+                    "description": "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
+                    "oneOf": [
+                      {
+                        "additionalProperties": false,
+                        "description": "At the explicit anchor, with no vertical offset",
+                        "properties": {
+                          "at": {
+                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+                            "enum": [
+                              "activation_origin",
+                              "owner_center",
+                              "cursor",
+                              "ground_at_cursor",
+                              "native_resting_spot"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "at"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Above the explicit anchor",
+                        "properties": {
+                          "above": {
+                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+                            "enum": [
+                              "activation_origin",
+                              "owner_center",
+                              "cursor",
+                              "ground_at_cursor",
+                              "native_resting_spot"
+                            ],
+                            "type": "string"
+                          },
+                          "activationDelayTicks": {
+                            "description": "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay",
+                            "maximum": 600,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-infini-units": "ticks"
+                          },
+                          "heightTiles": {
+                            "description": "Vertical offset above the selected anchor",
+                            "maximum": 80,
+                            "minimum": 1,
+                            "type": "number",
+                            "x-infini-units": "tiles"
+                          }
+                        },
+                        "required": [
+                          "above",
+                          "heightTiles",
+                          "activationDelayTicks"
+                        ],
+                        "type": "object"
+                      }
                     ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
+                    "x-infini-semanticType": "spawn_position"
                   },
                   "spreadRadians": {
-                    "description": "Total angular spread",
+                    "default": 0,
+                    "description": "Total angular spread. May be omitted only for child_projectile, whose producers override it",
                     "maximum": 6.283185307179586,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "radians",
                     "x-infini-units": "radians"
                   },
@@ -4081,11 +3418,9 @@
                 },
                 "required": [
                   "velocity",
-                  "count",
-                  "spreadRadians",
                   "offsetPx",
                   "aim",
-                  "placement"
+                  "position"
                 ],
                 "type": "object"
               },
@@ -5089,12 +4424,6 @@
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
-              "params": {
-                "additionalProperties": false,
-                "properties": {},
-                "required": [],
-                "type": "object"
-              },
               "target": {
                 "description": "Authored entity id. Target kind is checked locally.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -5112,8 +4441,7 @@
             "required": [
               "id",
               "fn",
-              "target",
-              "params"
+              "target"
             ],
             "type": "object"
           },
@@ -5132,40 +4460,55 @@
                 "additionalProperties": false,
                 "properties": {
                   "bounceCount": {
+                    "default": 0,
                     "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                     "maximum": 32,
                     "minimum": 0,
                     "type": "integer",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "bounce_count"
-                  },
-                  "extraUpdates": {
-                    "description": "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)",
-                    "maximum": 5,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "extra_ai_updates"
                   },
                   "ignoreWater": {
                     "description": "Ignore Terraria liquid drag; false keeps vanilla water interaction",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "localNpcHitCooldownEngineUnits": {
-                    "description": "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds",
-                    "maximum": 600,
-                    "minimum": -1,
-                    "type": "integer",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: local NPC cooldown counts"
-                  },
-                  "npcImmunityMode": {
-                    "description": "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers",
-                    "enum": [
-                      "owner",
-                      "local"
+                  "immunity": {
+                    "description": "Choose owner_shared, once_per_npc, or {localCooldown:0..600} raw unscaled engine counts; independent of penetration and updatesPerTick.",
+                    "oneOf": [
+                      {
+                        "description": "Terraria shared owner immunity; this projectile has no separate NPC timer",
+                        "enum": [
+                          "owner_shared"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "description": "This projectile may hit each NPC once",
+                        "enum": [
+                          "once_per_npc"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Per-projectile NPC immunity with explicit engine cooldown counts",
+                        "properties": {
+                          "localCooldown": {
+                            "description": "Raw unscaled Projectile.localNPCHitCooldown, including 0; not seconds/world ticks",
+                            "maximum": 600,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-infini-units": "engine units: local NPC cooldown counts"
+                          }
+                        },
+                        "required": [
+                          "localCooldown"
+                        ],
+                        "type": "object"
+                      }
                     ],
-                    "type": "string",
-                    "x-infini-semanticType": "terraria_npc_immunity_mode"
+                    "x-infini-semanticType": "terraria_npc_immunity"
                   },
                   "pierce": {
                     "description": "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
@@ -5178,16 +4521,21 @@
                     "description": "Collide with solid tiles",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "updatesPerTick": {
+                    "description": "Total Projectile AI/movement updates per world tick; does not rescale any per-update parameter",
+                    "maximum": 6,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar"
                   }
                 },
                 "required": [
                   "tileCollide",
                   "ignoreWater",
-                  "bounceCount",
                   "pierce",
-                  "extraUpdates",
-                  "npcImmunityMode",
-                  "localNpcHitCooldownEngineUnits"
+                  "updatesPerTick",
+                  "immunity"
                 ],
                 "type": "object"
               },
@@ -5229,12 +4577,6 @@
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
-              "params": {
-                "additionalProperties": false,
-                "properties": {},
-                "required": [],
-                "type": "object"
-              },
               "target": {
                 "description": "Authored entity id. Target kind is checked locally.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -5257,8 +4599,7 @@
             "required": [
               "id",
               "fn",
-              "target",
-              "params"
+              "target"
             ],
             "type": "object"
           },
@@ -5396,7 +4737,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "velocityRetention": {
-                    "description": "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
+                    "description": "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
                     "maximum": 1.05,
                     "minimum": 0.8,
                     "type": "number",
@@ -5525,61 +4866,6 @@
                 "required": [
                   "returnAfterTicks",
                   "returnSpeed"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_bounce"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "gravityVelocityPerUpdate": {
-                    "description": "Add to vertical velocity (pixels/update) per projectile update",
-                    "maximum": 2,
-                    "minimum": 0.001,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: vertical velocity increment per update"
-                  }
-                },
-                "required": [
-                  "gravityVelocityPerUpdate"
                 ],
                 "type": "object"
               },
@@ -6007,18 +5293,19 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: velocity lerp fraction"
                   },
-                  "proximityRadiusPx": {
-                    "description": "Trigger radius",
-                    "maximum": 512,
-                    "minimum": 4,
-                    "type": "integer",
-                    "x-infini-semanticType": "pixels",
-                    "x-infini-units": "pixels"
-                  },
                   "rangeTiles": {
                     "description": "Detection/search radius",
                     "maximum": 120,
                     "minimum": 1,
+                    "type": "number",
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tiles"
+                  },
+                  "triggerRadiusTiles": {
+                    "description": "Trigger radius on the exact 1/16-tile pixel lattice",
+                    "maximum": 32,
+                    "minimum": 0.25,
+                    "multipleOf": 0.0625,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
@@ -6027,7 +5314,7 @@
                 "required": [
                   "rangeTiles",
                   "homingStrength",
-                  "proximityRadiusPx"
+                  "triggerRadiusTiles"
                 ],
                 "type": "object"
               },
@@ -6781,70 +6068,6 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
-                "const": "spawn_over_target"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "delayTicks": {
-                    "description": "Telegraph delay",
-                    "maximum": 600,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "heightTiles": {
-                    "description": "Vertical spawn height",
-                    "maximum": 80,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
-                  }
-                },
-                "required": [
-                  "heightTiles",
-                  "delayTicks"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
                 "const": "spawn_entity_on_event"
               },
               "id": {
@@ -6854,16 +6077,6 @@
               },
               "params": {
                 "additionalProperties": false,
-                "if": {
-                  "properties": {
-                    "event": {
-                      "const": "periodic"
-                    }
-                  },
-                  "required": [
-                    "event"
-                  ]
-                },
                 "properties": {
                   "count": {
                     "description": "Spawn count",
@@ -6915,23 +6128,6 @@
                     },
                     "x-infini-semanticType": "runtime_entity_id"
                   },
-                  "event": {
-                    "description": "Source event",
-                    "enum": [
-                      "on_use",
-                      "on_spawn",
-                      "on_hit",
-                      "on_crit",
-                      "on_tile_collision",
-                      "on_expire",
-                      "on_kill",
-                      "periodic",
-                      "on_release",
-                      "channel_complete"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "knockbackBasis": {
                     "description": "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source",
                     "enum": [
@@ -6941,14 +6137,6 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "periodTicks": {
-                    "description": "Required for periodic event",
-                    "maximum": 3600,
-                    "minimum": 6,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
                   "spreadRadians": {
                     "description": "Total angular spread",
                     "maximum": 6.283185307179586,
@@ -6956,10 +6144,48 @@
                     "type": "number",
                     "x-infini-semanticType": "radians",
                     "x-infini-units": "radians"
+                  },
+                  "when": {
+                    "description": "Exact event or explicit periodic interval",
+                    "oneOf": [
+                      {
+                        "description": "Execute on this exact emitted event",
+                        "enum": [
+                          "on_use",
+                          "on_spawn",
+                          "on_hit",
+                          "on_crit",
+                          "on_tile_collision",
+                          "on_expire",
+                          "on_kill",
+                          "on_release",
+                          "channel_complete"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "properties": {
+                          "everyTicks": {
+                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 3600,
+                            "minimum": 6,
+                            "type": "integer",
+                            "x-infini-units": "ticks"
+                          }
+                        },
+                        "required": [
+                          "everyTicks"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "entity",
                   "count",
                   "spreadRadians",
@@ -6968,11 +6194,6 @@
                   "damageMultiplier",
                   "delayTicks"
                 ],
-                "then": {
-                  "required": [
-                    "periodTicks"
-                  ]
-                },
                 "type": "object"
               },
               "target": {
@@ -7049,7 +6270,7 @@
                     "x-infini-units": "ticks"
                   },
                   "entity": {
-                    "description": "Referenced moving child; its spawn placement must be item_use_origin, aim velocity, offsetPx 0, with no spawn_over_target",
+                    "description": "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {
@@ -7062,15 +6283,6 @@
                       ]
                     },
                     "x-infini-semanticType": "runtime_entity_id"
-                  },
-                  "event": {
-                    "description": "Exact direct-contact source event",
-                    "enum": [
-                      "on_hit",
-                      "on_crit"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
                   },
                   "geometry": {
                     "additionalProperties": false,
@@ -7194,10 +6406,19 @@
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "entity",
                   "count",
                   "geometry",
@@ -7272,15 +6493,6 @@
                     },
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "event": {
-                    "description": "Source hit event",
-                    "enum": [
-                      "on_hit",
-                      "on_crit"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "initialIgnoreCountdownUpdates": {
                     "description": "Exclude the exact emission-anchor NPC while this native AI countdown is positive; decremented before collision, so 10 means pre-AI plus nine post-AI collision opportunities; 0 disables",
                     "maximum": 600,
@@ -7327,10 +6539,19 @@
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "entity",
                   "stepCount",
                   "stepRangeTiles",
@@ -7408,18 +6629,18 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
+                  "when": {
+                    "description": "Execute on this exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
                     ],
                     "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "buffId",
                   "durationTicks"
                 ],
@@ -7483,8 +6704,17 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
+                  "radiusTiles": {
+                    "description": "Damage radius on the exact 1/16-tile pixel lattice",
+                    "maximum": 48,
+                    "minimum": 0.5,
+                    "multipleOf": 0.0625,
+                    "type": "number",
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tiles"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit",
@@ -7493,20 +6723,12 @@
                       "on_kill"
                     ],
                     "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
-                  "radiusPx": {
-                    "description": "Damage radius",
-                    "maximum": 768,
-                    "minimum": 8,
-                    "type": "integer",
-                    "x-infini-semanticType": "pixels",
-                    "x-infini-units": "pixels"
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
-                  "radiusPx",
+                  "when",
+                  "radiusTiles",
                   "damageMultiplier"
                 ],
                 "type": "object"
@@ -7576,15 +6798,6 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
-                    "enum": [
-                      "on_hit",
-                      "on_crit"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "rangeTiles": {
                     "description": "Fixed search radius from the original event position",
                     "maximum": 60,
@@ -7592,10 +6805,19 @@
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "count",
                   "rangeTiles",
                   "damageMultiplier"
@@ -7643,16 +6865,6 @@
               },
               "params": {
                 "additionalProperties": false,
-                "if": {
-                  "properties": {
-                    "event": {
-                      "const": "periodic"
-                    }
-                  },
-                  "required": [
-                    "event"
-                  ]
-                },
                 "properties": {
                   "delayTicks": {
                     "description": "Delay this exact action after the chosen event; 0 executes immediately",
@@ -7663,36 +6875,17 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
-                    "enum": [
-                      "on_hit",
-                      "periodic",
-                      "on_expire"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "mode": {
                     "description": "Pull direction",
                     "enum": [
                       "target_to_owner",
-                      "target_to_entity",
-                      "owner_to_target"
+                      "target_to_entity"
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "periodTicks": {
-                    "description": "Required for periodic event",
-                    "maximum": 3600,
-                    "minimum": 6,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
                   "radiusTiles": {
-                    "description": "NPC search radius only with no directTarget; ignored for owner_to_target",
+                    "description": "NPC search radius with no active direct target; also used by on_hit if its target became inactive",
                     "maximum": 60,
                     "minimum": 1,
                     "type": "number",
@@ -7706,19 +6899,141 @@
                     "type": "number",
                     "x-infini-semanticType": "effect_strength",
                     "x-infini-units": "engine units: velocity impulse coefficient per event"
+                  },
+                  "when": {
+                    "description": "Exact event or explicit periodic interval",
+                    "oneOf": [
+                      {
+                        "description": "Execute on this exact emitted event",
+                        "enum": [
+                          "on_hit",
+                          "on_expire"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "properties": {
+                          "everyTicks": {
+                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 3600,
+                            "minimum": 6,
+                            "type": "integer",
+                            "x-infini-units": "ticks"
+                          }
+                        },
+                        "required": [
+                          "everyTicks"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "mode",
                   "strength",
                   "radiusTiles"
                 ],
-                "then": {
-                  "required": [
-                    "periodTicks"
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
                   ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "pull_owner_to_event_target"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delayTicks": {
+                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "strength": {
+                    "description": "Player velocity impulse toward the event's active direct target",
+                    "maximum": 4,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-semanticType": "effect_strength",
+                    "x-infini-units": "engine units: velocity impulse coefficient per event"
+                  },
+                  "when": {
+                    "description": "Exact event or explicit periodic interval",
+                    "oneOf": [
+                      {
+                        "description": "Execute on this exact emitted event",
+                        "enum": [
+                          "on_hit",
+                          "on_expire"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "properties": {
+                          "everyTicks": {
+                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 3600,
+                            "minimum": 6,
+                            "type": "integer",
+                            "x-infini-units": "ticks"
+                          }
+                        },
+                        "required": [
+                          "everyTicks"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "x-infini-semanticType": "runtime_event_trigger"
+                  }
                 },
+                "required": [
+                  "when",
+                  "strength"
+                ],
                 "type": "object"
               },
               "target": {
@@ -7778,15 +7093,6 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
-                    "enum": [
-                      "on_hit",
-                      "on_crit"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "maxHeal": {
                     "description": "Per-event heal cap",
                     "maximum": 200,
@@ -7794,10 +7100,19 @@
                     "type": "integer",
                     "x-infini-semanticType": "life_points",
                     "x-infini-units": "HP"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "damageFraction",
                   "maxHeal"
                 ],
@@ -7862,16 +7177,6 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
-                  "event": {
-                    "description": "Source event",
-                    "enum": [
-                      "on_hit",
-                      "on_tile_collision",
-                      "on_expire"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "runtime_event_kind"
-                  },
                   "rangeTiles": {
                     "description": "Maximum movement range",
                     "maximum": 120,
@@ -7884,10 +7189,20 @@
                     "description": "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "when": {
+                    "description": "Execute on this exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_tile_collision",
+                      "on_expire"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
                 "required": [
-                  "event",
+                  "when",
                   "rangeTiles",
                   "cooldownTicks",
                   "safeTileOnly"

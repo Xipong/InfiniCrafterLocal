@@ -26,7 +26,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def _body_event(document: dict, event: str) -> None:
     document["runtimeProgram"]["calls"].append({
         "id": "body_status", "fn": "apply_status_on_event", "target": "item",
-        "params": {"event": event, "buffId": 20, "durationTicks": 60},
+        "params": {"when": event, "buffId": 20, "durationTicks": 60},
     })
 
 
@@ -46,7 +46,7 @@ def test_spawn_binding_emits_item_body_on_use_even_with_projectile_target() -> N
     authored = build_runtime_fixture("workbench_blade")
     authored["runtimeProgram"]["calls"].append({
         "id": "body_use_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     assert strict_author_shape_report(authored)["ok"]
@@ -65,7 +65,7 @@ def test_apply_item_effects_emits_item_use_without_contact() -> None:
 
 def test_apply_item_effects_contact_has_same_body_event_producer() -> None:
     authored = build_capability_witness("restore_resources_on_use")
-    authored["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] = True
+    authored["runtimeProgram"]["bindings"][0]["contactDamage"] = True
     next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
     _body_event(authored, "on_crit")
     assert strict_author_shape_report(authored)["ok"]
@@ -78,7 +78,7 @@ def test_apply_item_effects_contact_has_same_body_event_producer() -> None:
 
 def test_disabled_contact_does_not_claim_body_hit_producer() -> None:
     authored = build_runtime_fixture("workbench_blade")
-    authored["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] = False
+    authored["runtimeProgram"]["bindings"][0]["contactDamage"] = False
     _body_event(authored, "on_hit")
     assert "event_not_emitted" in {e["code"] for e in validate_runtime_program(authored)["errors"]}
 
@@ -116,17 +116,17 @@ def test_repair_can_offer_contact_on_item_effects_root_without_replacing_it() ->
     alternatives = next(row for row in scope["eventAlternatives"] if row["callId"] == "body_status")
     assert any("apply_item_effects" in binding["anyOfActions"] and binding["requiredContactDamage"] is True
                for option in alternatives["allowed"] for binding in option["requiredBindings"])
-    assert any(row["id"] == authored["runtimeProgram"]["bindings"][0]["id"] and "usePolicy" in row["paths"]
+    assert any(row["id"] == authored["runtimeProgram"]["bindings"][0]["id"] and "contactDamage" in row["paths"]
                for row in scope["fieldPermissions"]["bindings"])
     repaired = copy.deepcopy(authored)
-    repaired["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] = True
+    repaired["runtimeProgram"]["bindings"][0]["contactDamage"] = True
     assert validate_runtime_program(repaired)["ok"]
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 def test_spawn_item_hit_repair_names_projectile_action_target_not_event_source() -> None:
     authored = build_runtime_fixture("workbench_blade")
     binding = authored["runtimeProgram"]["bindings"][0]
-    binding["usePolicy"]["contactDamage"] = False
+    binding["contactDamage"] = False
     _body_event(authored, "on_hit")
     report = validate_runtime_program(authored)
     assert [row["code"] for row in report["errors"]] == ["event_not_emitted"]
@@ -141,7 +141,7 @@ def test_spawn_item_hit_repair_names_projectile_action_target_not_event_source()
     update = next(row for row in scope["repairRequirements"] if row["code"] == "event_not_emitted")
     assert binding["id"] in update["allowedExistingBindingIds"]
     fixed = copy.deepcopy(binding)
-    fixed["usePolicy"]["contactDamage"] = True
+    fixed["contactDamage"] = True
     patch = {"note": "repair contact on existing spawn binding", "bindingsUpsert": [fixed]}
     filtered, audit = filter_repair_patch_scope(authored, patch, scope)
     assert audit["ok"], audit
@@ -169,7 +169,7 @@ def test_frozen_contact_suppression_repair_never_offers_unexecutable_contact(sup
     assert not any(row["callId"] == "body_status" for row in scope["eventAlternatives"])
     assert "body_status" in scope["deletable"]["callIds"]
     assert not next(row for row in scope["repairRequirements"] if row["code"] == "event_not_emitted")["allowedValues"]
-    assert not any(row["usePolicy"]["contactDamage"] is True
+    assert not any(row["contactDamage"] is True
                    for row in scope["create"]["bindings"]["allowedTransactions"])
     filtered, audit = filter_repair_patch_scope(authored, {"note": "drop impossible event call", "callIdsDelete": ["body_status"]}, scope)
     assert audit["ok"], audit
@@ -184,12 +184,12 @@ def test_incompatible_event_projection_respects_frozen_contact_and_action_target
     next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_use", "on_hit", "on_crit"],
         "relatedIds": ["item"], "message": "synthetic incompatible event selection",
     }])
@@ -206,7 +206,7 @@ def test_incompatible_event_with_no_executable_event_can_remove_only_invalid_cal
     next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
     _body_event(authored, "on_hit")
     broken = next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "body_status")
-    broken["params"]["event"] = "on_use"
+    broken["params"]["when"] = "on_use"
     report = validate_runtime_program(authored)
     assert "capability_event_incompatible" in {row["code"] for row in report["errors"]}
     scope = build_runtime_repair_scope(authored, report["errors"])
@@ -224,22 +224,22 @@ def test_incompatible_event_with_no_executable_event_can_remove_only_invalid_cal
 def test_incompatible_event_repair_can_update_existing_contact_without_changing_target() -> None:
     authored = build_runtime_fixture("workbench_blade")
     binding = authored["runtimeProgram"]["bindings"][0]
-    binding["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "item"}
-    binding["usePolicy"]["contactDamage"] = False
+    binding["action"] = {"kind": "use_item_body"}
+    binding["contactDamage"] = False
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_hit"],
         "relatedIds": ["item"], "message": "synthetic event choice",
     }])
     allowed = next(row for row in scope["bindingAlternatives"] if row["bindingId"] == binding["id"])["allowed"]
-    assert any(row["usePolicy"]["contactDamage"] is True
-               and row["usePolicy"]["action"]["targetId"] == "item" for row in allowed)
+    assert any(row["contactDamage"] is True
+               and row["action"] == {"kind": "use_item_body"} for row in allowed)
     # Occupy the other exclusive use input: a new spawn binding is impossible,
     # but the existing contact-policy edit remains a complete alternative.
     other = copy.deepcopy(binding)
@@ -247,7 +247,7 @@ def test_incompatible_event_repair_can_update_existing_contact_without_changing_
     other["input"] = "alternate_use"
     authored["runtimeProgram"]["bindings"].append(other)
     closed = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_hit"],
         "relatedIds": ["item"], "message": "synthetic event choice",
     }])

@@ -13,6 +13,7 @@ from infini_local.core.runtime_authoring import (
 from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
 from infini_local.pipelines import visual_generation_pipeline as visual
 from tests.test_visual_presentation_metadata import kit
+from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_parent_combat_author import captured_parent_combat_author
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
 
@@ -120,7 +121,9 @@ def _historical_names(document):
         elif row.get("fn") == "configure_placeable" and params.get("tileId") == -1:
             row["fn"] = "configure_wall_placement"
             del params["tileId"]
-    return captured_spawn_velocity_author(captured_parent_combat_author(projected))
+        project_captured_projectile_call(row)
+    from tests.captured_projectile_author import project_captured_author_notation
+    return project_captured_author_notation(captured_spawn_velocity_author(captured_parent_combat_author(projected)))
 
 
 def test_replay_frozen_provenance():
@@ -152,7 +155,16 @@ def test_captured_gameplay_repair_replay(section, case):
                 assert row["params"].pop("axePower") == old_axe
                 row["params"]["axePowerTooltipPercent"] = old_axe * 5
     report = validate_runtime_program(initial)
-    assert {str(row.get("code") or "") for row in report.get("errors") or []} == set(replay["expectedInitialCodes"])
+    expected_codes = set(replay["expectedInitialCodes"])
+    if case in {"ropebound_spear", "silt_extractinator"}:
+        # Historical placement cost was a required const. Current source forbids
+        # that fixed property, while retaining the exact semantic cost diagnostic.
+        assert "shape_const" in expected_codes
+        expected_codes.remove("shape_const")
+        expected_codes.add("shape_additional_property")
+        assert any(row["code"] == "shape_additional_property" and row["path"].endswith(".stackCost") for row in report["errors"])
+        assert any(row["code"] == "place_item_without_stack_cost" and row["path"].endswith(".stackCost") for row in report["errors"])
+    assert {str(row.get("code") or "") for row in report.get("errors") or []} == expected_codes
     scope = build_runtime_repair_scope(initial, report["errors"])
     if historical_patch is not None:
         assert historical_patch["realizationReplacement"] is not None
@@ -170,9 +182,11 @@ def test_captured_gameplay_repair_replay(section, case):
         expected_paths = replay.get("expectedMutableBindingPaths")
         if expected_paths is not None:
             actual = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["bindings"]}
-            projected = {identity: sorted("usePolicy.action.kind" if path == "action" else path for path in paths) for identity, paths in expected_paths.items()}
+            assert case == "jester_bow"
+            assert expected_paths == {"b_primary_use": ["action", "input", "target", "usePolicy", "usePolicy.action.targetId"], "b_spawn_arrow": ["input"]}
+            projected = {"b_primary_use": ["action", "action.kind", "action.targetId", "input", "target"], "b_spawn_arrow": ["input"]}
             assert actual == projected
-            assert all("action" not in paths for paths in actual.values())
+            assert all(not any(path.startswith("usePolicy") for path in paths) for paths in actual.values())
             assert scope["retarget"]["bindingTargetIds"] == replay["expectedRetargetBindingTargetIds"]
         source_code = replay.get("createAllowedFnsFromErrorCode")
         if source_code is not None:

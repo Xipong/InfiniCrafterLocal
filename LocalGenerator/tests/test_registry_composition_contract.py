@@ -312,8 +312,8 @@ def test_hidden_item_body_without_contact_requires_exact_spawn_target_ownership(
     hidden_projectile_form = build_runtime_fixture("door_on_chain")
     program = hidden_projectile_form["runtimeProgram"]
     item_id = next(row["id"] for row in program["entities"] if row["kind"] == "item_body")
-    spawn_target = program["bindings"][0]["usePolicy"]["action"]["targetId"]
-    item_use = next(row for row in program["calls"] if row["fn"] == "configure_item_use" and row["target"] == item_id)
+    spawn_target = program["bindings"][0]["action"]["targetId"]
+    item_use = next(row for row in program["calls"] if row["fn"] == "configure_item_use")
     item_use["params"]["hideUseGraphic"] = True
     program["primaryEntityId"] = item_id
 
@@ -372,10 +372,10 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
     elif mutation == "exclusive-input":
         binding = deepcopy(program["bindings"][0])
         binding["id"] = "duplicate_primary"
-        binding["usePolicy"]["action"]["targetId"] = "nail"
+        binding["action"]["targetId"] = "nail"
         program["bindings"].append(binding)
     elif mutation == "missing-reference":
-        program["bindings"][0]["usePolicy"]["action"]["targetId"] = "absent"
+        program["bindings"][0]["action"]["targetId"] = "absent"
     elif mutation == "unknown-capability":
         motion["fn"] = "unknown_runtime_magic"
     elif mutation in {"cycle", "spawn-budget"}:
@@ -386,7 +386,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
                 "role": "secondary",
                 "target": "nail" if mutation == "cycle" else "workbench_blade",
                 "params": {
-                    "event": "on_hit",
+                    "when": "on_hit",
                     "entity": "workbench_blade" if mutation == "cycle" else "nail",
                     "count": 1 if mutation == "cycle" else 12,
                     "spreadRadians": 0.0,
@@ -453,15 +453,15 @@ def test_reordered_binding_receipts_keep_authored_and_wire_identity():
         assert (
             row["value"]
             == final["role"]
-            == ("primary" if source["usePolicy"]["action"]["targetId"] == doc["runtimeProgram"]["primaryEntityId"] else "secondary")
+            == ("primary" if source["action"]["targetId"] == doc["runtimeProgram"]["primaryEntityId"] else "secondary")
         )
 
 
 def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
     doc = build_runtime_fixture("workbench_blade")
     binding = doc["runtimeProgram"]["bindings"][0]
-    assert binding["usePolicy"]["action"]["kind"] == "spawn_entity"
-    binding["usePolicy"]["contactDamage"] = True
+    assert binding["action"]["kind"] == "spawn_entity"
+    binding["contactDamage"] = True
     wire = compile_runtime_program(doc)
     program = wire["runtimeProgram"]
     assert program["primaryEntityId"] == program["itemEntityId"] == "item" and program["primaryOwner"] == "item_body"
@@ -476,7 +476,6 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
         {
             "id": "tool_heads",
             "fn": "configure_tool",
-            "target": "item",
             "params": {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedScale": 0.9},
         }
     )
@@ -488,7 +487,7 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
         and flail["bindings"][0]["usePolicy"]["contactDamage"] is False
     )
     place = build_runtime_fixture("fishing_platform_tool")
-    place["runtimeProgram"]["bindings"][1]["usePolicy"]["contactDamage"] = True
+    place["runtimeProgram"]["bindings"][1]["contactDamage"] = True
     assert not validate_runtime_program(place)["ok"]
     binding["input"] = "hold"
     assert not validate_runtime_program(doc)["ok"]

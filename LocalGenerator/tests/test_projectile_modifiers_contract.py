@@ -31,7 +31,10 @@ def call(doc, fn):
 
 def source(fn):
     doc = build_capability_witness(fn)
-    call(doc, fn)["params"] = deepcopy(PARAMS[fn])
+    if PARAMS[fn]:
+        call(doc, fn)["params"] = deepcopy(PARAMS[fn])
+    else:
+        assert "params" not in call(doc, fn)
     return doc
 
 def entity(wire, fn):

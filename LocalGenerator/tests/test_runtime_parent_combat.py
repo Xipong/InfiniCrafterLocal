@@ -29,7 +29,7 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
 
     document = build_runtime_fixture("held_and_deployed")
     calls = document["runtimeProgram"]["calls"]
-    held = next(row for row in calls if row["target"] == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
+    held = next(row for row in calls if row.get("target") == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
     held.update(fn="channel_beam", params={
         "rangeTiles": 20, "widthPx": 12, "warmupTicks": 12, "manaPayment": "each_use_time",
         "initialDamageMultiplier": 0.35, "initialWidthMultiplier": 0.22,
@@ -41,12 +41,12 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
         count=4, spreadRadians=0.6, targetPolicy="player_assigned_first", requireLineOfSight=True, hardRange=True,
     )
     calls.extend([
-        {"id": "ammo", "fn": "configure_weapon_ammo", "target": "item",
+        {"id": "ammo", "fn": "configure_weapon_ammo",
          "params": {"ammoCategory": "arrow", "speedBasis": "native_shot"}},
         {"id": "native", "fn": "set_projectile_sentry", "target": "deployed_lantern", "params": {"enabled": True}},
         {"id": "pool", "fn": "set_descendant_concurrency", "target": "deployed_lantern", "params": {"maxActive": 12}},
         {"id": "shot_event", "fn": "spawn_entity_on_event", "target": "deployed_lantern", "params": {
-            "event": "periodic", "periodTicks": 90, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
+            "when": {"everyTicks": 90}, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
             "damageBasis": damage_basis, "knockbackBasis": knockback_basis,
             "damageMultiplier": multiplier, "delayTicks": 3,
         }},
@@ -251,7 +251,7 @@ def test_item_body_live_parent_reports_and_repairs_only_the_selected_basis(name)
     document = build_capability_witness("spawn_entity_on_event")
     call = _call(document, "spawn_entity_on_event")
     call["target"] = "item"
-    call["params"].update(event="on_use", **{name: "live_parent"})
+    call["params"].update(when="on_use", **{name: "live_parent"})
     report = validate_runtime_program(document)
     errors = [row for row in report["errors"] if row["code"] == "unsupported_param_target_kind"]
     assert len(errors) == 1 and errors[0]["path"].endswith(".params." + name)

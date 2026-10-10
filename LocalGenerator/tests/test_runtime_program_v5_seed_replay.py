@@ -8,6 +8,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from tests.captured_projectile_author import project_captured_projectile_call, project_captured_author_notation
 from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
 from sentry_contract_checks import without_declared_targeting_neutrals
@@ -32,6 +33,7 @@ def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
     """Express this frozen test corpus in the new Author shape; never import saves."""
     current = deepcopy(authored)
     for call in current["runtimeProgram"]["calls"]:
+        project_captured_projectile_call(call)
         params = call["params"]
         if call["fn"] == "configure_item_use" and "heldSpriteVisibilityHint" in params:
             old = params.pop("heldSpriteVisibilityHint")
@@ -44,7 +46,20 @@ def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
                 assert params["tileId"] == -1
                 call["fn"] = "configure_wall_placement"
                 del params["tileId"]
-    return current
+    return project_captured_author_notation(current)
+
+
+def _historical_spawn_defaults(wire: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
+    """The new `at` choice explicitly projects the old zero over-target DTO."""
+    projected = deepcopy(wire)
+    expected_entities = {row["id"]: row for row in expected["runtimeProgram"]["entities"]}
+    for entity in projected["runtimeProgram"]["entities"]:
+        spawn = entity.get("spawn", {})
+        old_spawn = expected_entities[entity["id"]].get("spawn", {})
+        if "overTarget" in spawn and "overTarget" not in old_spawn:
+            assert spawn["overTarget"] == {"heightTiles": 0, "delayTicks": 0}
+            del spawn["overTarget"]
+    return projected
 
 
 _HISTORICAL_DELIVERY_SHA256 = {
@@ -98,9 +113,14 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         )
         assert actual_capabilities == row["capabilities"]
 
+        archived_digest = hashlib.sha256(_canonical(row["expectedDeliveryWire"]).encode("utf-8")).hexdigest()
+        assert archived_digest == row["expectedDeliveryWireSha256"]
         compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(authored))))
         assert validate_runtime_wire(compiled)["ok"] is True
-        actual_wire = historical_spawn_velocity_wire(historical_child_combat_wire(_delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))))
+        actual_wire = _historical_spawn_defaults(
+            _delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))),
+            row["expectedDeliveryWire"]
+        )
         assert actual_wire == row["expectedDeliveryWire"]
         digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]

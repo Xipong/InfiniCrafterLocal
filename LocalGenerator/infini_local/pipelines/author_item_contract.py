@@ -47,26 +47,20 @@ def author_item_response_schema() -> dict[str, Any]:
 
 
 def _binding_prompt_shape_card() -> dict[str, Any]:
-    """One model-visible binding shape shared by Author and Repair cards."""
-
+    """The existing Author/Repair card describes the sole current source grammar."""
     return {
         "id": "stable_binding_id",
         "input": "primary_use|alternate_use|hold|equipped",
-        "usePolicy": {
-            "action": {
-                "kind": "catalog action",
-                "targetId": "exact existing entity id compatible with the selected action.targets",
-                "placementCallId": "include only for place_item; otherwise omit",
-                "effectGroupId": "optional only for apply_item_effects: exact effectGroupId authored on item-effect calls; omission selects existing ungrouped effects",
-            },
-            "stackCost": "exact integer 0 or 1 allowed by the selected input/action",
-            "stackConsumeChancePercent": "optional integer 0..100, only active non-placement stackCost=1; omission keeps 100 percent. Own-stack debit after the completed use, never ammo or placement saving",
-            "contactDamage": (
-                "boolean body-hitbox lane for this active use; independent from action/target, so "
-                "spawn_entity + true means item-body contact and projectile spawn on the same use; "
-                "must be false for place_item, hold, and equipped"
-            ),
+        "action": {
+            "kind": "required for primary_use/alternate_use; omit for hold/equipped because input declares one action",
+            "targetId": "required for projectile actions; forbidden for item_body-only actions (unique declared item_body)",
+            "placementCallId": "required only for place_item",
+            "effectGroupId": "optional only for apply_item_effects; omission selects existing ungrouped effects",
         },
+        "stackCost": "required integer 0|1 only for active non-placement; omit fixed place_item=1 and passive=0",
+        "stackConsumeChancePercent": "optional integer 0..100 only active non-placement stackCost=1; omission means 100 percent. Own-stack debit, never ammo or placement saving",
+        "contactDamage": "required independent boolean only for active non-placement; omit fixed place_item/hold/equipped=false",
+        "omissionRule": "equipped has no action object; hold action has only targetId. No other decision may be omitted.",
     }
 
 
@@ -117,7 +111,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": [_binding_prompt_shape_card()],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "existing compatible entity id from fn.targets", "params": {"all non-optional and conditional params": "exact card keys and typed values; optional fields only when selected"}}],
+            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "omit and forbid for item_body-only fn.targets with one declared item_body; otherwise exact existing compatible entity id", "params": {"all non-optional and conditional params": "exact card keys and typed values; optional fields only when selected; omit params property entirely for zero-argument capability"}}],
         },
         "realization": {
             "description": (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable, Mapping
 
@@ -15,6 +16,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
+    authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
@@ -208,7 +210,7 @@ def _traversable_runtime_shell(document: Mapping[str, Any]) -> bool:
         program.get("calls"),
     )
     return all(
-        isinstance(rows, list) and all(isinstance(row, dict) for row in rows)
+        isinstance(rows, list)
         for rows in containers
     )
 
@@ -471,6 +473,13 @@ def _validate_requirement(
             if mode == expected and required_param not in params:
                 return ValidationIssue(f"{path}.params.{required_param}", "missing_dependency_param", requirement.message, (required_param,))
         return None
+    if requirement.kind == "conditional_omission":
+        condition = cap.params[requirement.param].omission_condition
+        kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
+        target_capabilities = (str(row.get("fn") or "") for row in calls_by_target.get(target_id, ()))
+        if requirement.param not in params and (condition is None or not condition.allows(params, kind, target_capabilities)):
+            return ValidationIssue(f"{path}.params.{requirement.param}", "missing_dependency_param", requirement.message, (requirement.param,))
+        return None
     if requirement.kind == "binding_input_present":
         required_target = item_id if requirement.target == "item_body" else target_id
         if not any(
@@ -617,8 +626,7 @@ def _validate_requirement(
             return ValidationIssue(f"{path}.params", "inert_component", requirement.message, ("set one non-neutral effect", "remove the call"))
         return None
     if requirement.kind == "event_available":
-        raw_event = params.get(requirement.param)
-        event = raw_event if isinstance(raw_event, str) else ""
+        event = authored_event(params)
         kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
         ok, allowed, message = _event_available(
             event=event,
@@ -640,6 +648,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     still-readable graph blockers are aggregated without inferring gameplay.
     """
 
+    from infini_local.core.runtime_authoring.technical_lowering import _exact_mechanical_view  # pyright: ignore[reportPrivateUsage] -- canonical private lowering, not public admission
+    literal_program = document.get("runtimeProgram", {})
+    document = _exact_mechanical_view(document)
     issues: list[ValidationIssue] = []
     program_raw = document.get("runtimeProgram")
     program: Mapping[str, Any] = program_raw if isinstance(program_raw, Mapping) else {}
@@ -673,6 +684,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     if len(item_entities) != 1:
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
     item_id = str(item_entities[0].get("id") or "") if len(item_entities) == 1 else ""
+    body_resolved = len(item_entities) == 1 and isinstance(item_entities[0].get("id"), str) and bool(re.fullmatch(r"[a-z][a-z0-9_]{0,47}", item_id))
 
     primary_issues, primary_entity_id = _primary_entity_issues(entities_by_id, program)
     issues.extend(primary_issues)
@@ -685,9 +697,13 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         input_name = str(binding.get("input") or "")
         action_name = action_kind(binding)
         entity = entities_by_id.get(target_id)
+        if not action_name:
+            continue  # Shape owns an undecided selector; never invent a target dependency.
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
-        action_path = f"$.runtimeProgram.bindings[{index}].usePolicy.action"
+        action_path = f"$.runtimeProgram.bindings[{index}].action"
+        if not body_resolved and action_spec is not None and action_spec.target_kinds == ("item_body",):
+            continue  # declaration diagnostics own this unresolved dependency
         if entity is None:
             issues.append(ValidationIssue(f"{action_path}.targetId", "missing_entity_reference", f"Binding '{binding_id}' references missing entity '{target_id}'.", tuple(entities_by_id), (binding_id, target_id)))
             continue
@@ -755,9 +771,12 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
         cap = CAPABILITY_REGISTRY.get(fn)
         entity = entities_by_id.get(target_id)
-        if cap is None:
-            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown capability '{fn}'.", tuple(CAPABILITY_REGISTRY), (call_id,)))
+        if cap is None or not cap.prompt_visible or cap.decision != "expose":
+            public_names = tuple(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose")
+            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown public capability '{fn}'.", public_names, (call_id,)))
             continue
+        if not body_resolved and cap.target_kinds == ("item_body",):
+            continue  # no writable synthetic target for an implied body reference
         if entity is None:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "missing_entity_reference", f"Call '{call_id}' references missing entity '{target_id}'.", tuple(entities_by_id), (call_id, target_id)))
             continue
@@ -812,9 +831,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 event_referenced_entities.add(referenced_id)
 
         if cap.category == "event":
-            event = str(params.get("event") or "")
+            event = authored_event(params)
             if event not in cap.allowed_events:
-                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.event", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
+                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.when", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
 
         if cap.activation_spawn_count_param:
             raw_spawn_count = params.get(cap.activation_spawn_count_param)
@@ -891,6 +910,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         kind_spec = ENTITY_KIND_REGISTRY.get(kind)
         if kind_spec is None:
             continue  # strict shape owns unknown entity kinds
+        if kind == "item_body" and not body_resolved:
+            continue
         target_calls = calls_by_target.get(entity_id, [])
         fns = {str(row.get("fn") or "") for row in target_calls}
         for required in kind_spec.required_components:
@@ -909,7 +930,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue("$.runtimeProgram.entities", "unreachable_entity", f"Entity '{entity_id}' is not reached by a binding or typed entity reference.", ("bind it", "reference it", "delete it"), (entity_id,)))
         position_drivers = [CAPABILITY_REGISTRY[fn] for fn in fns if fn in CAPABILITY_REGISTRY and CAPABILITY_REGISTRY[fn].position_ownership != "none"]
         if kind_spec.requires_position_driver and not position_drivers:
-            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if kind in row.target_kinds and row.position_ownership != "none"))
+            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose" and kind in row.target_kinds and row.position_ownership != "none"))
             issues.append(ValidationIssue("$.runtimeProgram.calls", "missing_movement_component", f"{kind} '{entity_id}' requires explicit movement/controller; none is inferred.", allowed, (entity_id,)))
         if kind in {"stationary_projectile", "temporary_helper", "field"}:
             meaningful = any(CAPABILITY_REGISTRY[fn].meaningful_for_stationary for fn in fns if fn in CAPABILITY_REGISTRY)
@@ -951,19 +972,21 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         action_name = action_kind(binding)
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
+        if not body_resolved and action_spec is not None and action_spec.target_kinds == ("item_body",):
+            continue
         group_id = binding_action(binding).get("effectGroupId")
         if action_name == "apply_item_effects":
             selected_calls = effect_groups.get(group_id, []) if isinstance(group_id, str) else [
                 row for row in item_calls if isinstance(row.get("params"), Mapping) and "effectGroupId" not in row["params"]]
             selected_fns = {str(row.get("fn") or "") for row in selected_calls}
             if isinstance(group_id, str) and group_id not in effect_groups:
-                issues.append(ValidationIssue(f"$.runtimeProgram.bindings[{index}].usePolicy.action.effectGroupId",
+                issues.append(ValidationIssue(f"$.runtimeProgram.bindings[{index}].action.effectGroupId",
                     "missing_effect_group", "Binding must select an exact declared effect group.", tuple(effect_groups), (str(binding.get("id") or ""),)))
         else:
             selected_fns = item_fns
         dependencies = (
             ("input", input_spec.required_item_capabilities_any_of if input_spec is not None else ()),
-            ("usePolicy.action.kind", action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
+            ("action.kind", action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
         )
         for source, required_any_of in dependencies:
             if required_any_of and not selected_fns.intersection(required_any_of) and not (action_name == "apply_item_effects" and isinstance(group_id, str)):
@@ -978,7 +1001,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             continue
         if stack_cost(binding) != 1:
             issues.append(ValidationIssue(
-                f"$.runtimeProgram.bindings[{index}].usePolicy.stackCost",
+                f"$.runtimeProgram.bindings[{index}].stackCost",
                 "place_item_without_stack_cost",
                 f"place_item on {input_name} requires stackCost=1 in the same usePolicy.",
                 ("1",),
@@ -1016,7 +1039,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             or str(referenced_call.get("target") or "") != binding_target_id(binding)
         ):
             issues.append(ValidationIssue(
-                f"$.runtimeProgram.bindings[{index}].usePolicy.action.placementCallId",
+                f"$.runtimeProgram.bindings[{index}].action.placementCallId",
                 "missing_binding_dependency",
                 "place_item must reference one configure_tile_placement or configure_wall_placement call on the same item target.",
                 tuple(
@@ -1079,7 +1102,16 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             "exclusiveGroups": sorted({cap.exclusive_group for cap in CAPABILITY_REGISTRY.values() if cap.exclusive_group}),
         },
     }
-    return {"schema": "infini.runtime-program-validation.v1", "ok": not issues, "errors": [issue.row() for issue in issues], "stats": stats}
+    source_indices = {namespace: [i for i, row in enumerate(literal_program.get(namespace, [])) if isinstance(row, dict)]
+                      for namespace in ("entities", "bindings", "calls")}
+    def source_path(match: re.Match[str]) -> str:
+        namespace, filtered = match.group(1), int(match.group(2))
+        indices = source_indices[namespace]
+        return f"$.runtimeProgram.{namespace}[{indices[filtered]}]" if filtered < len(indices) else match.group(0)
+    errors = [issue.row() for issue in issues]
+    for error in errors:
+        error["path"] = re.sub(r"\$\.runtimeProgram\.(entities|bindings|calls)\[(\d+)\]", source_path, error["path"])
+    return {"schema": "infini.runtime-program-validation.v1", "ok": not issues, "errors": errors, "stats": stats}
 
 
 def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:

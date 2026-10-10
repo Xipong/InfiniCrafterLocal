@@ -6,6 +6,7 @@ import inspect
 from pathlib import Path
 from dataclasses import replace
 from types import MappingProxyType, ModuleType
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from copy import deepcopy
 import pytest
 from infini_local.core.runtime_authoring import (
@@ -65,7 +66,7 @@ from infini_local.pipelines import llm_authoring_pipeline as pipeline
         pytest.param("inputs", "input", INPUT_KIND_REGISTRY, id="inputs"),
         pytest.param("bindingActions", "action", BINDING_ACTION_REGISTRY, id="binding-actions"),
         pytest.param("events", "event", EVENT_KIND_REGISTRY, id="events"),
-        pytest.param("capabilities", "fn", CAPABILITY_REGISTRY, id="capabilities"),
+        pytest.param("capabilities", "fn", {cap.name: cap for cap in visible_capabilities()}, id="capabilities"),
     ],
 )
 def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
@@ -308,11 +309,9 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
         bindings=[
             {
                 "input": "primary_use",
-                "usePolicy": {
-                    "action": {"kind": "use_item_body", "targetId": "item"},
-                    "stackCost": 0,
-                    "contactDamage": True,
-                },
+                "action": {"kind": "use_item_body", "targetId": "item"},
+                "stackCost": 0,
+                "contactDamage": True,
             }
         ],
     )

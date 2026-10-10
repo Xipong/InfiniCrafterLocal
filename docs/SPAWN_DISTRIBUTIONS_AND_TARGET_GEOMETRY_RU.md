@@ -36,7 +36,7 @@
   "fn": "spawn_entity_from_hit_target",
   "target": "parent",
   "params": {
-    "event": "on_hit",
+    "when": "on_hit",
     "entity": "child",
     "count": 3,
     "damageBasis": "live_parent",
@@ -58,7 +58,7 @@
 
 Все листья `geometry` обязательны. `beforeProbability` лежит в `0..1` и хранится как `double`; `hitboxMaxSideFactor` — в `0..2`; clearance и positional jitter — в `0..128` px; before direction jitter — в `0..π`; after fan spread — в `0..2π`; countdown — целое `0..600`. `count=1..12`, multiplier `0..4`, delay `0..600` world ticks. Damage и knockback независимо выбирают `authored_child|live_parent` по [контракту A9](CHILD_COMBAT_INHERITANCE_RU.md).
 
-Ребёнок должен явно иметь `configure_spawn(placement=item_use_origin, aim=velocity, offsetPx=0)` и не иметь `spawn_over_target`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child; менять уже валидный child запрещено. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
+Ребёнок должен явно иметь `configure_spawn(position={at:activation_origin}, aim=velocity, offsetPx=0)` и не иметь `spawn_over_target`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child; менять уже валидный child запрещено. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
 
 ### Точная формула
 

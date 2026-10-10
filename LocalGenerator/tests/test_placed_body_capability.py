@@ -24,7 +24,7 @@ TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
 def placed():
     document = _dual_use_placeable()
     document["runtimeProgram"]["calls"].append(dict(
-        id="placed_body", fn=FN, target="item",
+        id="placed_body", fn=FN,
         params={"placementCallId": "install_tile", **TRANSFORM}))
     return document
 
@@ -49,8 +49,8 @@ def test_explicit_capability_has_required_schema_and_exact_compiler_projection()
     assert len(receipts) == len(TRANSFORM) + 1
     assert {r["authoredPath"].rsplit(".",1)[-1] for r in receipts} == {"placementCallId", *TRANSFORM}
     association = next(r for r in receipts if r["authoredPath"].endswith(".placementCallId"))
-    assert any(p.endswith(".target") for p in association["authoredPaths"])
-    assert any(p.endswith(".usePolicy.action.placementCallId") for p in association["authoredPaths"])
+    assert any(p.endswith(".kind") and ".entities[" in p for p in association["authoredPaths"])
+    assert any(p.endswith(".action.placementCallId") for p in association["authoredPaths"])
     assert json.dumps(document, sort_keys=True) == before
 
 @pytest.mark.parametrize("fault", ["unknown", "wrong-fn", "cross-item", "wall", "tile-and-wall", "unused", "duplicate"])
@@ -191,7 +191,7 @@ def test_frozen_repair_closes_only_causal_leaf_or_duplicate_index(fault, repair)
         assert permission["paths"] == [f"params.{leaf}"]
         incoming = copy.deepcopy(row)
         incoming["params"].update({leaf: "install_tile" if fault == "reference" else 1, "renderSizePx":512, "flipY":True})
-        incoming["target"] = "arbitrary"
+        incoming["id"] = row["id"]  # identity remains exact; transform companions are hostile
         patch = {"note":"exact leaf", "callsUpsert":[incoming]}
         expected["runtimeProgram"]["calls"][-1]["params"][leaf] = incoming["params"][leaf]
     else:
@@ -327,46 +327,54 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
-    from beam_contract_checks import without_declared_beam_neutrals
-    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
-    from captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
-    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical
-
-    # The old full-document hashes remain archival. New Author names deliberately
-    # change compiler provenance and registry diagnostic counts, not delivery DTOs.
-    # Declared beam/targeting neutrals are explicit successors, not legacy rewrites.
-    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
-    for row in corpus["cases"]:
-        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
-        delivered = historical_spawn_velocity_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(_delivery_wire(compiled)))))
-        assert "placedBody" not in delivered["runtimeProgram"]
-        assert delivered == row["expectedDeliveryWire"]
-        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
-def test_absent_member_keeps_complete_legacy_compiled_bytes():
+def test_absent_member_keeps_complete_historical_wire_bytes():
+    """Keep the original cec64b6 complete-wire oracle, including provenance."""
     from captured_parent_combat_author import historical_child_combat_wire
     from captured_item_alias_wire import historical_item_alias_wire
-    from captured_spawn_velocity_author import historical_spawn_velocity_wire
     from beam_contract_checks import without_declared_beam_neutrals
-    baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
+    from tests.captured_projectile_author import without_captured_projectile_alias_delta
+
+    fixture = Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json"
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == "41c670ba3fd12a44a2436bc6226bf815628e3d4c64d04f4efd3cc586b628a43a"
+    baseline = json.loads(fixture.read_text())
     actual = {}
     for name in baseline:
-        final = historical_item_alias_wire(historical_spawn_velocity_wire(historical_child_combat_wire(
-            without_declared_targeting_neutrals(without_declared_beam_neutrals(
-                compile_runtime_program(build_runtime_fixture(name)))))))
-        # Compose historical child combat and declared neutral reversals. The
-        # archive also predates ammo and the curve's exact inventory requirements.
+        authored = build_runtime_fixture(name)
+        compiled = compile_runtime_program(authored)
+        assert validate_runtime_wire(compiled)["ok"]
+        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=authored, final_document=compiled)["ok"]
+        final = historical_item_alias_wire(without_declared_targeting_neutrals(
+            without_declared_beam_neutrals(without_captured_projectile_alias_delta(
+                historical_child_combat_wire(compiled)))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
                       "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
-        added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
-        assert checks["requirements"] == 31 + added_requirements
-        checks["exclusiveGroups"] = ["ammo_role", "controller", "movement"]
-        checks["requirements"] -= 2 + added_requirements  # exact c3d0d3d inventory: 29 requirements
+        checks["requirements"] = 28
+        checks["exclusiveGroups"] = ["controller", "movement"]
         actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 
+def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from captured_spawn_velocity_author import captured_spawn_velocity_author
+    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical, _historical_spawn_defaults
+    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
+
+    from beam_contract_checks import without_declared_beam_neutrals
+    from sentry_contract_checks import without_declared_targeting_neutrals
+
+    # Full-document hashes remain archival: fresh Author paths deliberately
+    # change provenance. Compare delivery choices, removing only the newly
+    # explicit at-position zero DTO defaults with an exact assertion.
+    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
+    for row in corpus["cases"]:
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
+        delivered = _historical_spawn_defaults(_delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))), row["expectedDeliveryWire"])
+        assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
+        assert delivered == row["expectedDeliveryWire"]
+        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""
@@ -388,7 +396,10 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
             if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
                 continue
             row["id"] = "combined_" + str(len(calls))
-            row["target"] = owner if fn == "set_projectile_hitbox_curve" else "item"
+            if fn == "set_projectile_hitbox_curve":
+                row["target"] = owner
+            else:
+                row.pop("target", None)
             calls.append(row)
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)

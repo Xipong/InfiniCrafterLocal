@@ -150,7 +150,7 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
 
     schema = program_schema.author_item_response_schema()
     runtime = schema["properties"]["runtimeProgram"]["properties"]
-    worst = max(runtime["calls"]["items"]["oneOf"], key=lambda branch: len(branch["properties"]["params"]["properties"]))
+    worst = max(runtime["calls"]["items"]["oneOf"], key=lambda branch: len(branch["properties"].get("params", {}).get("properties", {})))
     fn = worst["properties"]["fn"]["const"]
     item = build_capability_witness(fn)
     call = next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == fn)

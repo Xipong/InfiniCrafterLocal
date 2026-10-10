@@ -1,6 +1,7 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 import re
@@ -164,14 +165,11 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     compiled_after = compile_runtime_program(prepared)
     assert validate_runtime_wire(compiled_after)["ok"]
     assert compiled_after == compiled_before
-    placement = [row for row in prepared["runtimeProgram"]["bindings"] if row["usePolicy"]["action"]["kind"] == "place_item"]
+    placement = [row for row in prepared["runtimeProgram"]["bindings"] if row["action"]["kind"] == "place_item"]
     if fixture_name == "fishing_platform_tool":
         assert placement == [{
             "id": "alternate_place", "input": "alternate_use",
-            "usePolicy": {
-                "action": {"kind": "place_item", "targetId": "item", "placementCallId": "platform_result"},
-                "stackCost": 1, "contactDamage": False,
-            },
+            "action": {"kind": "place_item", "placementCallId": "platform_result"},
         }]
         assert next(row["params"] for row in prepared["runtimeProgram"]["calls"] if row["id"] == "platform_result") == {
             "tileId": 19, "placeStyle": 0,
@@ -286,25 +284,24 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
         "reason",
     }
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
-    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v4"
+    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v5"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
     author_binding = card["runtimeProgram"]["bindings"][0]
-    assert set(author_binding) == {"id", "input", "usePolicy"}
-    assert set(author_binding["usePolicy"]) == {"action", "stackCost", "contactDamage", "stackConsumeChancePercent"}
-    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
+    assert set(author_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
+    assert set(author_binding["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
     assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
     prompt_payload = build_llm_author_payload({}, {}, {}, {}, "binding-card")
     binding_guide = prompt_payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
-    assert "bindings[].usePolicy.action.targetId" in binding_guide
+    assert "bindings[].action.targetId" in binding_guide
     assert "bindings[].target" not in binding_guide
 
     repair_card = author_item_repair_prompt_shape_card()
     repair_schema = author_item_repair_response_schema()
     repair_binding = repair_card["bindingsUpsert"][0]
-    assert set(repair_binding) == {"id", "input", "usePolicy"}
-    assert repair_binding["usePolicy"] == author_binding["usePolicy"]
+    assert set(repair_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
+    assert repair_binding == author_binding
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(
         isinstance(repair_card[key], list)
@@ -370,7 +367,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
     tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
     tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedScale=2)
     light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
-    light.update(id="independent_light", target=tool["target"])
+    light.update(id="independent_light")
     doc["runtimeProgram"]["calls"].append(light)
     before = copy.deepcopy(doc)
     assert validate_runtime_program(doc)["ok"], "advisory non-effect explanation must not ban intentional inactive composition"
@@ -389,6 +386,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
         pytest.param(fn, key, value, id=fn + "-" + key)
         for fn, key, value in (
             ("heal_owner_on_event", "network_authority", "owner_execute_sync"),
+            ("pull_owner_to_event_target", "network_authority", "owner_execute_sync"),
             ("apply_status_on_event", "network_authority", "owner_execute_sync"),
             ("chain_damage_on_event", "network_authority", "owner_execute_sync"),
             ("damage_area_on_event", "network_authority", "server_execute"),
@@ -396,7 +394,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
             (
                 "pull_on_event",
                 "authority_by_effect",
-                {"on_hit:target_to_owner": "owner_request_server_execute", "owner_to_target": "owner_execute_sync"},
+                {"on_hit:target_to_owner": "owner_request_server_execute", "on_hit:target_to_entity": "owner_request_server_execute"},
             ),
         )
     ],
@@ -439,15 +437,14 @@ UNIT_MEANINGS = {
     "configure_spawn": {"velocity": "initial velocity", "count": "root binding"},
     "set_projectile_hitbox": {"drawScale": "visual scale"},
     "set_projectile_damage": {"knockback": "Projectile.knockBack"},
-    "set_projectile_collision": {"extraUpdates": "per world tick", "localNpcHitCooldownEngineUnits": "engine"},
+    "set_projectile_collision": {"updatesPerTick": "per world tick", "immunity": "engine"},
     "move_gravity_arc": {"gravityVelocityPerUpdate": "per projectile update"},
-    "move_bounce": {"gravityVelocityPerUpdate": "per projectile update"},
     "move_sine_homing": {"waveVelocityCoefficient": "0.03"},
     "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
     "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
     "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
     "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "hard geometric"},
-    "pull_on_event": {"strength": "velocity", "radiusTiles": "no directTarget"},
+    "pull_on_event": {"strength": "velocity", "radiusTiles": "no active direct target"},
     "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
 }
 EXPLICIT_MEANINGS = [
@@ -483,17 +480,16 @@ EXPLICIT_MEANINGS = [
     ("chain_damage_on_event", "damageMultiplier", "damageDone"),
     ("chain_damage_on_event", "damageMultiplier", "at least 1"),
     ("chain_damage_on_event", "damageMultiplier", "before target defense"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "unscaled"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "-1"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "once"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "0..600"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "owner"),
-    ("set_projectile_collision", "localNpcHitCooldownEngineUnits", "extraUpdates"),
+    ("set_projectile_collision", "immunity", "unscaled"),
+    ("set_projectile_collision", "immunity", "once"),
+    ("set_projectile_collision", "immunity", "0..600"),
+    ("set_projectile_collision", "immunity", "owner"),
+    ("set_projectile_collision", "immunity", "updatesPerTick"),
     ("configure_accessory", "lifeRegenHpPerSecond", "+2"),
     ("configure_accessory", "lifeRegenHpPerSecond", "+1 HP/s"),
     ("configure_accessory", "lifeRegenHpPerSecond", "-2"),
     ("configure_accessory", "lifeRegenHpPerSecond", "-1 HP/s"),
-    ("move_drift", "velocityRetention", "1 + extraUpdates"),
+    ("move_drift", "velocityRetention", "updatesPerTick"),
     ("configure_spawn", "velocity", "No peer reroll"),
 ]
 
@@ -573,7 +569,7 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
                 ("fieldGuide", "stackCost", "", "whole generated item"),
                 ("fieldGuide", "stackCost", "", "stackCost=1"),
                 ("fieldGuide", "bindingTarget", "", "contactDamage=true"),
-                ("fieldGuide", "bindingTarget", "", "bindings[].usePolicy.action.targetId"),
+                ("fieldGuide", "bindingTarget", "", "bindings[].action.targetId"),
                 ("bindingActions", "place_item", "constructionMeaning", "stackCost=1"),
                 ("bindingActions", "place_item", "constructionMeaning", "returned"),
                 ("bindingActions", "place_item", "constructionMeaning", "item_body.on_use"),
@@ -592,10 +588,10 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
         pytest.param("fieldGuide", "paramNotation", "", p, id="numeric-guide-" + p)
         for p in (
             "per projectile update",
-            "extraUpdates",
+            "updatesPerTick",
             "world ticks",
-            "1 + extraUpdates",
-            "localNpcHitCooldownEngineUnits",
+            "updatesPerTick updates",
+            "immunity.localCooldown",
             "15",
             "0.15",
             "bonusPercent",
@@ -624,8 +620,9 @@ def test_serialized_construction_guide_keeps_specific_obligations(packet, sectio
     assert phrase in value
     assert "bindings[].target" not in catalog["fieldGuide"]["bindingTarget"]
     assert "free_projectile" in {r["kind"] for r in catalog["entityKinds"]}
-    cooldown = cards_from(catalog)["set_projectile_collision"]["params"]["localNpcHitCooldownEngineUnits"]
-    assert cooldown["min"] == -1 and cooldown["max"] == 600
+    immunity = cards_from(catalog)["set_projectile_collision"]["params"]["immunity"]["shape"]
+    cooldown = next(row["properties"]["localCooldown"] for row in immunity["oneOf"] if row.get("type") == "object")
+    assert cooldown["minimum"] == 0 and cooldown["maximum"] == 600
     assert "per projectile update" in cards_from(catalog)["move_drift"]["does"]
 
 

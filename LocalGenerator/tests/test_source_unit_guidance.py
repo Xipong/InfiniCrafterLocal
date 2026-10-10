@@ -151,7 +151,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
                     if (row["source"], row["fn"]) == (scoped["source"], scoped["fn"]))
         assert scoped["fields"].items() <= full["fields"].items()
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
-    for clock in ("60/s", "1 + extraUpdates", "world ticks", "per projectile update", "localNpcHitCooldownEngineUnits"):
+    for clock in ("60/s", "updatesPerTick", "world ticks", "per projectile update", "immunity.localCooldown"):
         assert clock in units["paramNotation"]
     report = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, report["errors"])

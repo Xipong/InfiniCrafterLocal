@@ -21,7 +21,7 @@ def _fixture(sentry=None, pool=None, placement="item_use_origin"):
     root = next(c["target"] for c in doc["runtimeProgram"]["calls"] if c["fn"] == "target_and_fire")
     for call in doc["runtimeProgram"]["calls"]:
         if call["fn"] == "configure_spawn" and call["target"] == root:
-            call["params"]["placement"] = placement
+            call["params"]["position"] = {"at": "activation_origin" if placement == "item_use_origin" else placement}
     for ident, fn, params in (("native", "set_projectile_sentry", {"enabled": sentry}),
                               ("pool", "set_descendant_concurrency", {"maxActive": pool})):
         if next(iter(params.values())) is not None:

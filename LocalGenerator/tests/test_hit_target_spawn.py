@@ -35,7 +35,7 @@ def event_wire(wire, call):
 def test_target_geometry_and_child_velocity_have_exact_provider_inverse_and_native_wire(velocity, probability):
     document, call = fixture()
     call["params"]["geometry"]["beforeProbability"] = probability
-    call["params"].update(event="on_crit", damageBasis="live_parent", delayTicks=11)
+    call["params"].update(when="on_crit", damageBasis="live_parent", delayTicks=11)
     spawn = next(row for row in document["runtimeProgram"]["calls"]
                  if row["fn"] == "configure_spawn" and row["target"] == call["params"]["entity"])
     spawn["params"]["velocity"] = deepcopy(velocity)
@@ -83,7 +83,7 @@ def test_missing_geometry_leaf_repair_cannot_rewrite_probability_event_or_child(
     permission = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
     assert permission["paths"] == [f"params.geometry.{name}"]
     candidate = deepcopy(call)
-    candidate["params"].update(entity="item", event="on_crit", count=12)
+    candidate["params"].update(entity="item", when="on_crit", count=12)
     candidate["params"]["geometry"] = {key: (value if key == name else 0) for key, value in original.items()}
     patch, audit = filter_repair_patch_scope(document, {"note": "fill exact missing leaf", "callsUpsert": [candidate]}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
@@ -144,11 +144,11 @@ def test_retarget_repair_keeps_existing_child_design_frozen_and_compiles_new_com
     document, call = fixture()
     calls = document["runtimeProgram"]["calls"]
     child_id = call["params"]["entity"]
-    child_calls = [deepcopy(row) for row in calls if row["target"] == child_id]
-    old_spawn = next(row for row in calls if row["target"] == child_id and row["fn"] == "configure_spawn")
+    child_calls = [deepcopy(row) for row in calls if row.get("target") == child_id]
+    old_spawn = next(row for row in calls if row.get("target") == child_id and row["fn"] == "configure_spawn")
     old_spawn["params"]["aim"] = "cursor"  # Valid independent design, incompatible with this reference.
     calls.append({"id": "keep_original_child", "fn": "spawn_entity_on_event", "target": call["target"],
-                  "params": {"event": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,
+                  "params": {"when": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,
                              "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1, "delayTicks": 0}})
     report = validate_runtime_program(document)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 from dataclasses import dataclass, field
 import hashlib
@@ -188,13 +189,9 @@ def _sparse_event_item(fn, event):
         selected = spawn
     else:
         selected = {"id": "pull_case", "fn": fn, "target": spawn["target"],
-                    "params": {"event": event, "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
+                    "params": {"when": event, "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
         calls.append(selected)
-    selected["params"]["event"] = event
-    if event == "periodic":
-        selected["params"]["periodTicks"] = 6
-    else:
-        selected["params"].pop("periodTicks", None)
+    selected["params"]["when"] = {"everyTicks": 6} if event == "periodic" else event
     next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
     return item, selected
 
@@ -235,25 +232,19 @@ def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptanc
     local = CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"]
     provider = contract._provider_strict_projection(local)
     _, selected = _sparse_event_item(fn, "on_hit")
-    missing = object()
-    for event in [*local["properties"]["event"]["enum"], "unknown_event", None, False]:
-        for period in [missing, None, False, 5, 6, 3600, 3601, 6.5, "6"]:
-            sparse = {**selected["params"], "event": event}
-            if period is not missing:
-                sparse["periodTicks"] = period
-            encoded = _encode_nullable_fixture(sparse, local)
-            # Explicit local null is invalid; provider optional null is exactly
-            # omission, so compare its declared inverse, not literal null.
-            expected = copy.deepcopy(sparse)
-            if period is None and event in local["properties"]["event"]["enum"] and event != "periodic":
-                expected.pop("periodTicks")
-            source_valid = Draft202012Validator(local).is_valid(expected)
-            sent_valid = Draft202012Validator(provider).is_valid(encoded)
-            assert source_valid == sent_valid, (fn, event, period)
-            if event == "periodic":
-                assert sent_valid is (type(period) is int and 6 <= period <= 3600), period
-            elif event in local["properties"]["event"]["enum"] and period in (missing, None):
-                assert source_valid and sent_valid
+    valid_encoding = _encode_nullable_fixture(selected["params"], local)
+    choices = [event for event in CAPABILITY_REGISTRY[fn].allowed_events if event != "periodic"]
+    choices += ["unknown_event", "periodic", None, False, {}]
+    choices += [{"everyTicks": period} for period in (None, False, 5, 6, 3600, 3601, 6.5, "6")]
+    for when in choices:
+        sparse = {**selected["params"], "when": when}
+        encoded = {**valid_encoding, "when": when}
+        source_valid = Draft202012Validator(local).is_valid(sparse)
+        sent_valid = Draft202012Validator(provider).is_valid(encoded)
+        assert source_valid == sent_valid, (fn, when)
+        if isinstance(when, dict):
+            period = when.get("everyTicks")
+            assert sent_valid is (type(period) is int and 6 <= period <= 3600), when
     assert CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"] == local
 
 
@@ -265,7 +256,7 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.pipelines import author_item_contract as contract
 
-    local = binding_schema() if domain == "bindings" else {"oneOf": [cap.provider_variant_schema() for cap in CAPABILITY_REGISTRY.values()]}
+    local = binding_schema() if domain == "bindings" else {"oneOf": [cap.provider_variant_schema() for cap in visible_capabilities()]}
     provider = contract._provider_strict_projection(local)
     assert len(provider["anyOf"]) == len(local["oneOf"])
     for branch in local["oneOf"]:
@@ -276,14 +267,15 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             selector = "fn"
         else:
             input_kind = branch["properties"]["input"]["const"]
-            action_kind = branch["properties"]["usePolicy"]["properties"]["action"]["properties"]["kind"]["const"]
-            row = {"id": "binding_probe", "input": input_kind, "usePolicy": {
-                "action": {"kind": action_kind, "targetId": "item"},
-                "stackCost": branch["properties"]["usePolicy"]["properties"]["stackCost"].get("const", 0), "contactDamage": False}}
-            if "stackConsumeChancePercent" in branch["properties"]["usePolicy"]["properties"]:
-                row["usePolicy"]["stackConsumeChancePercent"] = 35
-            if action_kind == "place_item":
-                row["usePolicy"]["action"]["placementCallId"] = "place_call"
+            from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
+            from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
+            action_kind = branch["properties"].get("action", {}).get("properties", {}).get("kind", {}).get("const")
+            action_kind = action_kind or INPUT_KIND_REGISTRY[input_kind].allowed_actions[0]
+            row = {"id": "binding_probe", **complete_transaction(input_name=input_kind, action_name=action_kind,
+                target="item", stack_cost_value=branch["properties"].get("stackCost", {}).get("const", 1 if action_kind == "place_item" else 0),
+                contact_damage_value=False, placement_call="place_call" if action_kind == "place_item" else "")}
+            if "stackConsumeChancePercent" in branch["properties"]:
+                row["stackConsumeChancePercent"] = 35
             selector = "input"
         assert Draft202012Validator(local).is_valid(row)
         encoded = _encode_nullable_fixture(row, branch)
@@ -301,7 +293,7 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             assert not Draft202012Validator(local).is_valid(sparse_bad), sparse_bad
             assert not Draft202012Validator(provider).is_valid(sent_bad), sent_bad
         if domain == "calls":
-            for key, child in branch["properties"]["params"]["properties"].items():
+            for key, child in branch["properties"].get("params", {}).get("properties", {}).items():
                 for limit, step in [("minimum", -1), ("maximum", 1)]:
                     if limit not in child:
                         continue
@@ -325,11 +317,11 @@ def test_subscription_inverse_never_hides_invalid_values_or_guesses_a_branch(con
     elif control == "required-null":
         params["strength"] = None
     elif control == "periodic-null":
-        params["event"] = "periodic"
+        params["when"] = {"everyTicks": None}
     elif control == "unknown-event":
-        params["event"] = "unknown_event"
+        params["when"] = "unknown_event"
     elif control == "missing-event":
-        params.pop("event")
+        params.pop("when")
     elif control == "unknown-fn":
         call["fn"] = "unknown_function"
     elif control == "missing-fn":
@@ -343,22 +335,25 @@ def test_subscription_inverse_never_hides_invalid_values_or_guesses_a_branch(con
         if control == "reordered-provider":
             branches.reverse()
         else:
-            cases = next(branch for branch in branches if branch["properties"]["fn"]["const"] == "pull_on_event")["properties"]["params"]["anyOf"]
-            case = next(branch for branch in cases if "on_hit" in branch["properties"]["event"]["enum"])
-            case["properties"]["periodTicks"] = case["properties"]["periodTicks"]["anyOf"][0]
+            case = next(branch for branch in branches if branch["properties"]["fn"]["const"] == "pull_on_event")["properties"]["params"]
+            case["properties"]["delayTicks"] = case["properties"]["delayTicks"]["anyOf"][0]
     before = copy.deepcopy(encoded)
     response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
     restored = author._prepare_parsed_author_item(encoded, response_format=response_format)
     rows = restored["runtimeProgram"]["calls"]
     restored_call = next(row for row in rows if isinstance(row, dict) and row.get("id") == "pull_case")
-    if control in {"unknown-event", "missing-event", "unknown-fn", "missing-fn"}:
+    if control in {"unknown-fn", "missing-fn"}:
         assert restored_call["params"] == params
-    elif control in {"periodic-null", "different-wrapper"}:
-        assert "periodTicks" in restored_call["params"] and restored_call["params"]["periodTicks"] is None
-        if control == "periodic-null":
-            assert "delayTicks" not in restored_call["params"]
+    elif control == "different-wrapper":
+        assert restored_call["params"]["delayTicks"] is None
     else:
-        assert "periodTicks" not in restored_call["params"] and "delayTicks" not in restored_call["params"]
+        assert "delayTicks" not in restored_call["params"]
+        if control == "periodic-null":
+            assert restored_call["params"]["when"] == {"everyTicks": None}
+        if control == "unknown-event":
+            assert restored_call["params"]["when"] == "unknown_event"
+        if control == "missing-event":
+            assert "when" not in restored_call["params"]
         if control in {"bad-neighbour", "required-null"}:
             assert restored_call["params"]["strength"] == params["strength"]
         if control == "array-null":
@@ -382,12 +377,12 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
 
     item, selected = _sparse_event_item("pull_on_event", "periodic")
     expected = copy.deepcopy(item)
-    selected["params"].pop("periodTicks")
+    selected["params"]["when"].pop("everyTicks")
     before = copy.deepcopy(item)
     failure = validate_runtime_program(item)
     assert not failure["ok"]
     corrected = copy.deepcopy(selected)
-    corrected["params"].update(periodTicks=6, strength=2)  # hostile valid sibling: must stay frozen at 1
+    corrected["params"].update(when={"everyTicks": 6}, strength=2)  # hostile valid sibling: must stay frozen at 1
     patch = {"note": "exact missing period", "callsUpsert": [corrected], "realizationReplacement": item["realization"]}
     encoded = _encode_nullable_fixture(patch, contract.author_item_repair_response_schema())
     monkeypatch.setattr(author, "USE_LLM", True)
@@ -402,7 +397,7 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     original_filter = author.filter_repair_patch_scope
     def observe(current, delta, scope):
         premerge.append(copy.deepcopy(delta))
-        assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params.periodTicks"]}]
+        assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params.when.everyTicks"]}]
         return original_filter(current, delta, scope)
     monkeypatch.setattr(author, "llm_chat_json", respond)
     monkeypatch.setattr(author, "filter_repair_patch_scope", observe)
@@ -467,7 +462,13 @@ def test_subscription_projection_rejects_unproved_future_compositions(shape):
     elif shape == "non-finite-const":
         source = {"const": float("nan")}
     elif shape.startswith("conditional-"):
-        source = CAPABILITY_REGISTRY["pull_on_event"].provider_variant_schema()["properties"]["params"]
+        source = {"type": "object", "additionalProperties": False,
+                  "properties": {"event": {"type": "string", "enum": ["on_hit", "periodic"]},
+                                 "periodTicks": {"type": "integer", "minimum": 6},
+                                 "delayTicks": {"type": "integer", "minimum": 0}},
+                  "required": ["event"],
+                  "if": {"properties": {"event": {"const": "periodic"}}, "required": ["event"]},
+                  "then": {"required": ["periodTicks"]}}
         if shape == "conditional-optional-selector":
             source["required"].remove("event")
         elif shape == "conditional-unbounded-selector":

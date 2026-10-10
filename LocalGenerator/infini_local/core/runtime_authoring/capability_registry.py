@@ -9,12 +9,19 @@ from typing import Any, Final, Iterable, Mapping
 
 from infini_local.core.repair_merge import json_values_equal
 
-from infini_local.core.runtime_authoring.binding_use_policy import (
-    STACK_COST_RULE,
-    action_kind,
-    contact_damage as binding_contact_damage,
-    target_id as binding_target_id,
+STACK_COST_RULE = (
+    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "and the placed generated item is returned by the placement ledger when broken. "
+    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
+    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
+    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
+    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
+    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
+    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
+    "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
+    "the existing 100 percent debit. This never controls ammo saving or placement escrow."
 )
+
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
     DAMAGE_CLASS_TOKENS,
@@ -25,7 +32,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v4"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v5"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -301,6 +308,26 @@ class ParamProjection:
 
 
 @dataclass(frozen=True, slots=True)
+class OmissionCondition:
+    """Exact consumer branches where a declared neutral field is inactive."""
+
+    target_kinds: tuple[str, ...] = ()
+    param_equals: tuple[tuple[str, Any], ...] = ()
+    target_capabilities: tuple[str, ...] = ()
+
+    def allows(self, params: Mapping[str, Any], kind: str, capabilities: Iterable[str]) -> bool:
+        names = frozenset(capabilities)
+        return (kind in self.target_kinds
+                or any(key in params and type(params[key]) is type(value) and params[key] == value
+                       for key, value in self.param_equals)
+                or any(name in names for name in self.target_capabilities))
+
+    def card(self) -> dict[str, Any]:
+        return {"anyTargetKind": list(self.target_kinds), "anyExactParam": dict(self.param_equals),
+                "anyTargetCapability": list(self.target_capabilities)}
+
+
+@dataclass(frozen=True, slots=True)
 class ParamSpec:
     kind: str
     description: str
@@ -329,6 +356,7 @@ class ParamSpec:
     wire_enum: Mapping[Any, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_offset: int = 0
     min_properties: int | None = None
+    omission_condition: OmissionCondition | None = None
     wire_presence_requires_receipt: bool = False
 
     @property
@@ -633,8 +661,8 @@ class CapabilitySpec:
     # Persisted wire-only provenance, never a second accepted Author grammar.
     # Entries contain exact projections of retired authored parameter paths.
     retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
-    fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_action: str = ""
+    fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_presence_path: str = ""  # Optional whole component selected only by this capability.
 
     def provider_variant_schema(self) -> dict[str, Any]:
@@ -670,11 +698,12 @@ class CapabilitySpec:
             },
             "required": ["id", "fn", "target", "params"],
         }
-        if self.name in {"spawn_entity_on_event", "pull_on_event"}:
-            variant["properties"]["params"]["if"] = {
-                "properties": {"event": {"const": "periodic"}}, "required": ["event"],
-            }
-            variant["properties"]["params"]["then"] = {"required": ["periodTicks"]}
+        if self.target_kinds == ("item_body",):
+            del variant["properties"]["target"]
+            variant["required"].remove("target")
+        if not self.params:
+            del variant["properties"]["params"]
+            variant["required"].remove("params")
         return variant
 
     def prompt_card(self) -> dict[str, Any]:
@@ -710,6 +739,8 @@ class CapabilitySpec:
                 row["consumerConstraint"] = spec.consumer_constraint()
             if spec.structured:
                 row["shape"] = spec.schema()
+            if spec.omission_condition is not None:
+                row["omissionAllowedOnlyWhen"] = spec.omission_condition.card()
             params[name] = row
         card: dict[str, Any] = {
             "fn": self.name,
@@ -847,6 +878,7 @@ def _p(
     wire_enum: Mapping[Any, Any] | None = None,
     wire_offset: int = 0,
     min_properties: int | None = None,
+    omission_condition: OmissionCondition | None = None,
     wire_presence_requires_receipt: bool = False,
 ) -> ParamSpec:
     return ParamSpec(
@@ -877,6 +909,7 @@ def _p(
         wire_enum=MappingProxyType(dict(wire_enum or {})),
         wire_offset=wire_offset,
         min_properties=min_properties,
+        omission_condition=omission_condition,
         wire_presence_requires_receipt=wire_presence_requires_receipt,
     )
 
@@ -913,8 +946,8 @@ def _cap(
     meaningful_for_stationary: bool = False,
     effect_groupable: bool = False,
     retained_receipt_params: Mapping[str, ParamSpec] | None = None,
-    fixed_wire_literals: Mapping[str, Any] | None = None,
     wire_action: str = "",
+    fixed_wire_literals: Mapping[str, Any] | None = None,
     wire_presence_path: str = "",
 ) -> CapabilitySpec:
     target_values = tuple(targets)
@@ -951,8 +984,8 @@ def _cap(
         meaningful_for_stationary=meaningful_for_stationary,
         effect_groupable=effect_groupable,
         retained_receipt_params=MappingProxyType(dict(retained_receipt_params or {})),
-        fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
         wire_action=wire_action,
+        fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
         wire_presence_path=wire_presence_path,
     )
 
@@ -1087,6 +1120,63 @@ _ARMOR_PRIMITIVES = _equipment_params(armor=True)
 _RETAINED_ARMOR_SET_PARAMS = {name: spec for name, spec in _equipment_params(armor=True, group_set_bonuses=False).items() if name.startswith("setBonus")}
 PLACEMENT_CAPABILITIES: Final[tuple[str, ...]] = ("configure_tile_placement", "configure_wall_placement")
 
+def _immunity_param() -> ParamSpec:
+    return _p("union", "Choose owner_shared, once_per_npc, or {localCooldown:0..600} raw unscaled engine counts; independent of penetration and updatesPerTick.",
+              semantic_type="terraria_npc_immunity", alternatives=(
+        _p("string", "Terraria shared owner immunity; this projectile has no separate NPC timer", enum=("owner_shared",),
+           wire_literals={"npcImmunityMode": "owner", "localNpcHitCooldownTicks": -1}),
+        _p("string", "This projectile may hit each NPC once", enum=("once_per_npc",),
+           wire_literals={"npcImmunityMode": "local", "localNpcHitCooldownTicks": -1}),
+        _p("object", "Per-projectile NPC immunity with explicit engine cooldown counts", properties={
+            "localCooldown": _p("integer", "Raw unscaled Projectile.localNPCHitCooldown, including 0; not seconds/world ticks",
+                                minimum=0, maximum=600, units="engine units: local NPC cooldown counts",
+                                wire_name="localNpcHitCooldownTicks"),
+        }, wire_literals={"npcImmunityMode": "local"}),
+    ))
+
+
+_SPAWN_ANCHORS: Final[Mapping[str, str]] = MappingProxyType({
+    "activation_origin": "item_use_origin", "owner_center": "owner_center",
+    "cursor": "cursor", "ground_at_cursor": "ground_at_cursor",
+    "native_resting_spot": "native_resting_spot",
+})
+
+
+def _spawn_position_param() -> ParamSpec:
+    def anchor() -> ParamSpec:
+        return _p("string", "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+                  enum=_SPAWN_ANCHORS, wire_enum=_SPAWN_ANCHORS, wire_name="placement")
+    return _p("union", "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
+              semantic_type="spawn_position", alternatives=(
+        _p("object", "At the explicit anchor, with no vertical offset", properties={"at": anchor()},
+           wire_literals={"overTarget.heightTiles": 0, "overTarget.delayTicks": 0}),
+        _p("object", "Above the explicit anchor", properties={
+            "above": anchor(), "heightTiles": _p("number", "Vertical offset above the selected anchor", minimum=1,
+                maximum=80, units="tiles", wire_name="overTarget.heightTiles"),
+            "activationDelayTicks": _p("integer", "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay", minimum=0, maximum=600, units="ticks", wire_name="overTarget.delayTicks"),
+        }),
+    ))
+
+
+def _event_when_param(events: Iterable[str]) -> ParamSpec:
+    allowed = tuple(events)
+    ordinary = tuple(event for event in allowed if event != "periodic")
+    variants = [_p("string", "Execute on this exact emitted event", enum=ordinary, wire_name="event")] if ordinary else []
+    if "periodic" in allowed:
+        variants.append(_p("object", "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash", properties={
+            "everyTicks": _p("integer", "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                             minimum=6, maximum=3600, units="ticks", wire_name="periodTicks"),
+        }, wire_literals={"event": "periodic"}))
+    return (_p("union", "Exact event or explicit periodic interval", alternatives=variants, semantic_type="runtime_event_trigger")
+            if len(variants) > 1 else replace(variants[0], semantic_type="runtime_event_trigger"))
+
+
+def authored_event(params: Mapping[str, Any]) -> str:
+    """Read the explicit current Author trigger, including malformed-value diagnostics."""
+    when = params.get("when")
+    if isinstance(when, str):
+        return when
+    return "periodic" if isinstance(when, Mapping) else ""
 def _spawn_velocity() -> ParamSpec:
     def speed(description: str, wire: str) -> ParamSpec:
         return _p("number", description, minimum=0, maximum=80,
@@ -1385,9 +1475,9 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
         lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
                          "runtimeProgram.calls[].params.placementCallId",
-                         "runtimeProgram.bindings[].usePolicy.action.kind",
-                         "runtimeProgram.bindings[].usePolicy.action.targetId",
-                         "runtimeProgram.bindings[].usePolicy.action.placementCallId"),
+                         "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.targetId",
+                         "runtimeProgram.bindings[].action.placementCallId"),
     ),
     _cap(
         "require_use_condition",
@@ -1517,18 +1607,18 @@ _CAPS: list[CapabilitySpec] = [
         PROJECTILE_ENTITY_KINDS,
         {
             "velocity": _spawn_velocity(),
-            "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended", minimum=1, maximum=12),
-            "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
+            "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it", minimum=1, maximum=12, required=False, default=1, neutral=1, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
+            "spreadRadians": _p("number", "Total angular spread. May be omitted only for child_projectile, whose producers override it", minimum=0, maximum=6.283185307179586, units="radians", required=False, default=0, neutral=0, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim axis and forward offset: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction. none is zero velocity for the constant variant; radial/disk sample their own directions independently.", enum=("cursor", "facing", "velocity", "none")),
-            "placement": _p("string", "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot")),
+            "aim": _p("string", "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
+            "position": _spawn_position_param(),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::SpawnRuntimeEntity",
         wire=("runtimeProgram.entities[].spawn.*",),
         provenance="shot count/spread/aim/placement extracted from all roots",
         repair_group="spawn",
-        retained_receipt_params={"speedPxPerUpdate": _p("number", "Retained constant-speed wire-only provenance.", minimum=0, maximum=80, wire_name="speedPxPerTick")},
+        retained_receipt_params={"placement": _p("string", "Retained old spawn anchor provenance", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot")), "speedPxPerUpdate": _p("number", "Retained constant-speed wire-only provenance.", minimum=0, maximum=80, wire_name="speedPxPerTick")},
     ),
     _cap(
         "set_projectile_concurrency",
@@ -1716,17 +1806,21 @@ _CAPS: list[CapabilitySpec] = [
         {
             "tileCollide": _p("boolean", "Collide with solid tiles"),
             "ignoreWater": _p("boolean", "Ignore Terraria liquid drag; false keeps vanilla water interaction"),
-            "bounceCount": _p("integer", "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts", minimum=0, maximum=32),
+            "bounceCount": _p("integer", "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts", minimum=0, maximum=32, required=False, default=0, neutral=0, omission_condition=OmissionCondition(param_equals=(("tileCollide", False),), target_capabilities=("move_boomerang", "move_returning_glaive", "move_flail_tether"))),
             "pierce": _p("integer", "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name", minimum=-1, maximum=100),
-            "extraUpdates": _p("integer", "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)", minimum=0, maximum=5),
-            "npcImmunityMode": _p("string", "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers", enum=("owner", "local")),
-            "localNpcHitCooldownEngineUnits": _p("integer", "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds", minimum=-1, maximum=600, units="engine units: local NPC cooldown counts", wire_name="localNpcHitCooldownTicks"),
+            "updatesPerTick": _p("integer", "Total Projectile AI/movement updates per world tick; does not rescale any per-update parameter", minimum=1, maximum=6, wire_offset=-1, wire_name="extraUpdates"),
+            "immunity": _immunity_param(),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults/OnTileCollide",
         wire=("runtimeProgram.entities[].collision.*",),
         provenance="existing tile/bounce/pierce fields",
         repair_group="collision",
+        retained_receipt_params={
+            "extraUpdates": _p("integer", "Retained extra AI update provenance", minimum=0, maximum=5),
+            "npcImmunityMode": _p("string", "Retained immunity mode provenance", enum=("owner", "local")),
+            "localNpcHitCooldownEngineUnits": _p("integer", "Retained raw immunity cooldown provenance", minimum=-1, maximum=600, wire_name="localNpcHitCooldownTicks"),
+        },
     ),
 ]
 
@@ -1740,6 +1834,8 @@ def _movement(
     targets: Iterable[str] = PROJECTILE_ENTITY_KINDS,
     cs: str = _MOVEMENT_OWNER,
     provenance: str,
+    decision: str = "expose",
+    retained_receipt_params: Mapping[str, ParamSpec] | None = None,
 ) -> CapabilitySpec:
     return _cap(
         name,
@@ -1753,6 +1849,8 @@ def _movement(
         provenance=provenance,
         repair_group="movement",
         lowering=("runtimeProgram.entities[].movement.code", "runtimeProgram.entities[].movement.params"),
+        decision=decision,
+        retained_receipt_params=retained_receipt_params,
     )
 
 
@@ -1762,11 +1860,11 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
     }, provenance="existing movement code 1"),
-    _movement("move_gravity_arc", "Apply downward velocity acceleration per projectile update.", 2, {
+    _movement("move_gravity_arc", "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate bounceCount. Gravity alone does not guarantee rolling, resting or an explosion.", 2, {
         "gravityVelocityPerUpdate": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick"),
     }, provenance="existing movement code 2"),
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
-        "velocityRetention": _p("number", "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
+        "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }, provenance="existing movement code 3"),
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
         "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
@@ -1777,7 +1875,7 @@ _CAPS.extend([
     }, provenance="existing movement code 5"),
     _movement("move_bounce", "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate authored bounceCount. Bounces reflect collided axes with 0.78 retained velocity; this does not guarantee rolling, resting or an explosion.", 6, {
         "gravityVelocityPerUpdate": _p("number", "Add to vertical velocity (pixels/update) per projectile update", minimum=0.001, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick"),
-    }, provenance="existing movement code 6"),
+    }, provenance="existing movement code 6; retained wire provenance only, fresh Author uses move_gravity_arc", decision="internal"),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
@@ -1801,11 +1899,13 @@ _CAPS.extend([
         "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 12"),
-    _movement("move_proximity_missile", "Home; proximity inside proximityRadiusPx triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.", 13, {
+    _movement("move_proximity_missile", "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.", 13, {
         "rangeTiles": _p("number", "Detection/search radius", minimum=1, maximum=120, units="tiles"),
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
-        "proximityRadiusPx": _p("integer", "Trigger radius", minimum=4, maximum=512, units="pixels"),
-    }, provenance="existing movement code 13"),
+        "triggerRadiusTiles": _p("number", "Trigger radius on the exact 1/16-tile pixel lattice", minimum=0.25, maximum=32, multiple_of=1 / 16, wire_multiplier=16, wire_name="proximityRadiusPx", units="tiles"),
+    }, provenance="existing movement code 13", retained_receipt_params={
+        "proximityRadiusPx": _p("integer", "Retained integer pixel radius provenance", minimum=4, maximum=512),
+    }),
     _movement("move_returning_glaive", "Fly, spin and return to the owner.", 14, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
@@ -1908,6 +2008,7 @@ _CAPS.extend([
         wire=("runtimeProgram.entities[].spawn.overTarget.*",),
         provenance="overhead barrage placement extracted from root family",
         repair_group="spawn",
+        decision="internal",
     ),
     _cap(
         "spawn_entity_on_event",
@@ -1915,7 +2016,7 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source event", enum=EVENT_KINDS),
+            "when": _event_when_param(EVENT_KINDS),
             "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Spawn count", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
@@ -1923,7 +2024,6 @@ _CAPS.extend([
             "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
             "delayTicks": _p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"),
-            "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
@@ -1940,8 +2040,8 @@ _CAPS.extend([
         "event",
         PROJECTILE_ENTITY_KINDS,
         {
-            "event": _p("string", "Exact direct-contact source event", enum=("on_hit", "on_crit")),
-            "entity": _p("string", "Referenced moving child; its spawn placement must be item_use_origin, aim velocity, offsetPx 0, with no spawn_over_target", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
+            "when": _event_when_param(("on_hit", "on_crit")),
+            "entity": _p("string", "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
             "geometry": _hit_target_spawn_geometry(),
             "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
@@ -1968,7 +2068,7 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source hit event", enum=("on_hit", "on_crit")),
+            "when": _event_when_param(("on_hit", "on_crit")),
             "entity": _p("string", "Independent free/child projectile with explicit origin/velocity spawn, zero offset and no over-target adapter", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId",
                          reference=ReferenceSpec("entity", ("free_projectile", "child_projectile"), False, True)),
             "stepCount": _p("integer", "Maximum planned links, one child per link; bounded by the shared activation spawn budget", minimum=1, maximum=12, units="projectiles"),
@@ -1994,7 +2094,7 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
+            "when": _event_when_param(("on_hit", "on_crit")),
             "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id"),
             "durationTicks": _p("integer", "Status duration", minimum=1, maximum=21600, units="ticks"),
         },
@@ -2014,8 +2114,8 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source event", enum=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill")),
-            "radiusPx": _p("integer", "Damage radius", minimum=8, maximum=768, units="pixels"),
+            "when": _event_when_param(("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill")),
+            "radiusTiles": _p("number", "Damage radius on the exact 1/16-tile pixel lattice", minimum=0.5, maximum=48, multiple_of=1 / 16, wire_multiplier=16, wire_name="radiusPx", units="tiles"),
             "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=4),
         },
         multiplicity="many_per_target",
@@ -2033,7 +2133,7 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
+            "when": _event_when_param(("on_hit", "on_crit")),
             "count": _p("integer", "Maximum instantly damaged radial targets", minimum=1, maximum=12),
             "rangeTiles": _p("number", "Fixed search radius from the original event position", minimum=1, maximum=60, units="tiles"),
             "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=2),
@@ -2052,19 +2152,41 @@ _CAPS.extend([
         "event",
         PROJECTILE_ENTITY_KINDS,
         {
-            "event": _p("string", "Source event", enum=("on_hit", "periodic", "on_expire")),
-            "mode": _p("string", "Pull direction", enum=("target_to_owner", "target_to_entity", "owner_to_target")),
+            "when": _event_when_param(("on_hit", "periodic", "on_expire")),
+            "mode": _p("string", "Pull direction", enum=("target_to_owner", "target_to_entity")),
             "strength": _p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4, units="engine units: velocity impulse coefficient per event"),
-            "radiusTiles": _p("number", "NPC search radius only with no directTarget; ignored for owner_to_target", minimum=1, maximum=60, units="tiles"),
-            "periodTicks": _p("integer", "Required for periodic event", required=False, minimum=6, maximum=3600, units="ticks"),
+            "radiusTiles": _p("number", "NPC search radius with no active direct target; also used by on_hit if its target became inactive", minimum=1, maximum=60, units="tiles"),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
         wire=("runtimeProgram.entities[].events[].*",),
+        retained_receipt_params={
+            "mode": _p("string", "Prior saved pull direction domain", enum=("target_to_owner", "owner_to_target", "target_to_entity")),
+        },
         provenance="pull modes extracted from impact executor",
         repair_group="event_pull",
         events=("on_hit", "periodic", "on_expire"),
+    ),
+    _cap(
+        "pull_owner_to_event_target",
+        "Pull the owning player toward the active direct target recorded by the event. No target means no movement; it never searches for a replacement NPC.",
+        "event",
+        PROJECTILE_ENTITY_KINDS,
+        {
+            "when": _event_when_param(("on_hit", "periodic", "on_expire")),
+            "strength": _p("number", "Player velocity impulse toward the event's active direct target", minimum=0.01,
+                           maximum=4, units="engine units: velocity impulse coefficient per event"),
+        },
+        multiplicity="many_per_target",
+        py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        wire=("runtimeProgram.entities[].events[].*",),
+        provenance="exact owner branch of pull_on_event; radius is not consumed by this branch",
+        repair_group="event_pull",
+        events=("on_hit", "periodic", "on_expire"),
+        wire_action="pull_on_event",
+        fixed_wire_literals={"mode": "owner_to_target", "radiusTiles": 1},
     ),
     _cap(
         "heal_owner_on_event",
@@ -2072,7 +2194,7 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
+            "when": _event_when_param(("on_hit", "on_crit")),
             "damageFraction": _p("number", "Fraction of damageDone healed (0.15 = 15%), capped by maxHeal; not a whole-number percent", minimum=0.001, maximum=1),
             "maxHeal": _p("integer", "Per-event heal cap", minimum=1, maximum=200, units="HP"),
         },
@@ -2090,7 +2212,7 @@ _CAPS.extend([
         "event",
         PROJECTILE_ENTITY_KINDS,
         {
-            "event": _p("string", "Source event", enum=("on_hit", "on_tile_collision", "on_expire")),
+            "when": _event_when_param(("on_hit", "on_tile_collision", "on_expire")),
             "rangeTiles": _p("integer", "Maximum movement range", minimum=1, maximum=120, units="tiles"),
             "cooldownTicks": _p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"),
             "safeTileOnly": _p("boolean", "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check"),
@@ -2280,7 +2402,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "periodic": EventKindSpec(
         "periodic", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), (),
-        "Bounded periodic event; each action must declare periodTicks >= 6.",
+        "Bounded periodic event; each action must select when={everyTicks:n} with n >= 6.",
     ),
     "on_release": EventKindSpec(
         "on_release", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),
@@ -2352,16 +2474,21 @@ def event_alternative_is_present(
     def binding_present(requirement: EventBindingRequirement) -> bool:
         allowed_inputs = set(requirement.any_of_inputs)
         allowed_actions = set(requirement.any_of_actions)
-        return any(
-            str(row.get("input") or "") in allowed_inputs
-            and (not allowed_actions or action_kind(row) in allowed_actions)
-            and binding_target_id(row) == target_id
-            and (
-                requirement.required_contact_damage is None
-                or binding_contact_damage(row) is requirement.required_contact_damage
-            )
-            for row in binding_rows
-        )
+        for row in binding_rows:
+            raw_action = row.get("action")
+            action: Mapping[str, Any] = raw_action if isinstance(raw_action, Mapping) else {}
+            input_name = row.get("input")
+            inp = INPUT_KIND_REGISTRY.get(input_name) if isinstance(input_name, str) else None
+            action_name = action.get("kind")
+            if action_name is None and inp is not None and len(inp.allowed_actions) == 1:
+                action_name = inp.allowed_actions[0]
+            if (isinstance(input_name, str) and input_name in allowed_inputs
+                and (not allowed_actions or isinstance(action_name, str) and action_name in allowed_actions)
+                and action.get("targetId") == target_id
+                and (requirement.required_contact_damage is None or
+                     (row.get("contactDamage") is True) is requirement.required_contact_damage)):
+                return True
+        return False
 
     return (
         all(call_present(requirement) for requirement in alternative.required_calls)
@@ -2489,10 +2616,11 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         for name in param_fields:
             if name == "event":
                 continue
-            mapped.append(f"runtimeProgram.entities[].events[].{name}")
+            mapped.append("runtimeProgram.entities[].events[].entityId" if name == "entity" else f"runtimeProgram.entities[].events[].{name}")
+        mapped.extend(f"runtimeProgram.entities[].events[].{name}" for name in cap.fixed_wire_literals)
         if cap.name == "move_owner_on_event":
             mapped.append("runtimeProgram.entities[].events[].mode")  # fixed DTO discriminator for the only executed destination
-        return tuple(mapped)
+        return tuple(dict.fromkeys(mapped))
     if cap.name == "emit_light_while_active":
         return tuple(f"runtimeProgram.entities[].light.{name}" for name in cap.params)
     raise RuntimeError(f"missing exact wire contract for capability {cap.name}")
@@ -2603,12 +2731,11 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
         return "server_execute", {"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync"}
     if cap.name == "pull_on_event":
         return "server_execute", {
-            "owner_to_target": "owner_execute_sync",
             "target_to_owner": "server_execute", "target_to_entity": "server_execute",
             "on_hit:target_to_owner": "owner_request_server_execute",
             "on_hit:target_to_entity": "owner_request_server_execute",
         }
-    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "select_targets_and_emit_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use"}:
+    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "select_targets_and_emit_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use", "pull_owner_to_event_target"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
         return "owner_execute_sync", {}
@@ -2645,10 +2772,10 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return tuple(rows)
     if cap.name == "select_targets_and_emit_on_event":
         return (
-            RequirementSpec("event_available", param="event", message="The source entity must actually emit the selected hit event."),
+            RequirementSpec("event_available", param="when", message="The source entity must actually emit the selected hit event."),
             RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-                equals={"placement": "item_use_origin", "aim": "velocity", "offsetPx": 0},
-                message="The emission reference requires configure_spawn placement=item_use_origin, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
+                equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
+                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
             RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
                 message="The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter."),
         )
@@ -2683,7 +2810,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     if cap.name in {"channel_beam", "charge_then_release"}:
         rows = [RequirementSpec("item_capability_param", capability="configure_item_use", target="item_body", param="channel", equals=True, message="channel controller requires channel=true on item_body")]
         if cap.name == "charge_then_release":
-            rows.append(RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")), message="released projectile needs an explicit post-release movement"))
+            rows.append(RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement" and row.decision == "expose")), message="released projectile needs an explicit post-release movement"))
         return tuple(rows)
     if cap.name == "present_placed_item_sprite":
         return (
@@ -2694,7 +2821,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                             message="Only one explicit placed-body presentation may reference a placement call."),
         )
     if cap.name in PLACEMENT_CAPABILITIES:
-        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding usePolicy.action.placementCallId."),)
+        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding action.placementCallId."),)
     if cap.name == "configure_placeable":
         return (
             RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
@@ -2702,7 +2829,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                 kind="binding_action_reference",
                 target="item_body",
                 any_of=("place_item",),
-                message="configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+                message="configure_placeable must be referenced by exactly one binding action.placementCallId.",
             ),
         )
     if cap.name == "configure_tool":
@@ -2764,11 +2891,11 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             message="Positive equipped light requires explicit lightColor; no hidden white fallback.",
         ))
     if cap.category == "event":
-        requirements = [RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event")]
+        requirements = [RequirementSpec("event_available", param="when", message="target entity must actually emit the selected event")]
         if cap.name == "spawn_entity_from_hit_target":
             requirements.extend((
                 RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-                    equals={"placement": "item_use_origin", "aim": "velocity", "offsetPx": 0},
+                    equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
                     message="Exact hit-target geometry requires a child configured for event origin/direction without another position transform."),
                 RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
                     message="Exact hit-target geometry cannot coexist with the child's over-target displacement or telegraph."),
@@ -2916,16 +3043,23 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
 
 
 def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
-    if cap.category == "event":
-        action = cap.wire_action or cap.name
-        cap = replace(cap, fixed_wire_literals=MappingProxyType({
-            **cap.fixed_wire_literals, "action": action, "actionCode": EVENT_ACTION_OPCODE[action],
-        }))
     if cap.effect_groupable:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
             "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
                 required=False, pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="id", semantic_type="item_effect_group_identity"),
+        }))
+    if cap.category == "event" and not cap.wire_action:
+        retained = {**cap.retained_receipt_params, "event": _p("string", "Retained prior event source provenance", enum=cap.allowed_events)}
+        if "periodic" in cap.allowed_events:
+            retained["periodTicks"] = _p("integer", "Retained prior periodic interval provenance", minimum=6, maximum=3600)
+        if cap.name == "damage_area_on_event":
+            retained["radiusPx"] = _p("integer", "Retained integer pixel radius provenance", minimum=8, maximum=768)
+        cap = replace(cap, retained_receipt_params=MappingProxyType(retained))
+    if cap.category == "event":
+        wire_action = cap.wire_action or cap.name
+        cap = replace(cap, fixed_wire_literals=MappingProxyType({
+            **cap.fixed_wire_literals, "action": wire_action, "actionCode": EVENT_ACTION_OPCODE[wire_action],
         }))
     if cap.category == "event" and "delayTicks" not in cap.params:
         cap = replace(cap, params=MappingProxyType({
@@ -2973,7 +3107,10 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         exclusive_group=exclusive_group,
         position_ownership=position_ownership,
         emitted_events=emitted,
-        requirements=_requirements_for(cap),
+        prompt_visible=cap.prompt_visible and cap.decision == "expose",
+        requirements=(*_requirements_for(cap), *(RequirementSpec("conditional_omission", param=name,
+            message="This parameter is required outside its declared inactive consumer branch")
+            for name, spec in params.items() if spec.omission_condition is not None)),
         dependencies=tuple(dict.fromkeys(
             requirement.capability
             for requirement in _requirements_for(cap)
@@ -3000,7 +3137,7 @@ if len(CAPABILITY_REGISTRY) != len(_ENRICHED_CAPS):
     raise RuntimeError("duplicate capability name in CAPABILITY_REGISTRY")
 
 MOVEMENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
-    cap.name for cap in _ENRICHED_CAPS if cap.category == "movement"
+    cap.name for cap in _ENRICHED_CAPS if cap.category == "movement" and cap.decision == "expose"
 )
 EVENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
     cap.name for cap in _ENRICHED_CAPS if cap.category == "event"
@@ -3059,15 +3196,15 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
         "paramNotation": (
             "Every listed param is required unless marked optional; optional params may be omitted. "
             "In a full Author object, an optional param with an explicit card default may be omitted "
-            "to select exactly that neutral value; this is not universal and never replaces an invalid present value. "
+            "to select exactly that neutral value only when its omissionAllowedOnlyWhen condition holds; this is not universal and never replaces an invalid present value. "
             "A neutral annotation alone does not make a required param optional. "
             "All requires/conditional dependencies still apply to the combined params; optional fields "
             "cannot leave a selected effect incomplete or inert. "
             "Other optional zero-neutral params make no authored nonzero effect when absent. "
             "Suffix units: Ticks=ticks (60/s), Tiles=tiles (16 px), Px=pixels, Radians=radians. "
-            "Projectile movement/velocity is per projectile update (1 + extraUpdates updates per world tick); "
+            "Projectile movement/velocity is per projectile update (updatesPerTick updates per world tick); "
             "authored durations and event intervals "
-            "ending Ticks remain world ticks; localNpcHitCooldownEngineUnits is raw (see card). "
+            "ending Ticks remain world ticks; immunity.localCooldown is raw engine counts (see card). "
             "Percent/percentage-point/chance cards use percent-scale values (15 means 15%, not 0.15): "
             "bonusPercent=15 adds +0.15 to a damage modifier; CritChancePercentagePoints=15 adds "
             "15 raw crit-chance points; manaCostReductionPercentagePoints=15 subtracts 0.15 from "
@@ -3095,13 +3232,14 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             }),
         },
         "bindingTarget": (
-            "bindings[].usePolicy.action.targetId is the exact entity acted on. The selected action's targets list "
+            "bindings[].action.targetId is the exact entity acted on. The selected action's targets list "
             "is the entity-kind allowlist; spawn_entity targets the entity created, while "
             "use_item_body targets the item body being used. Only place_item additionally requires "
-            "bindings[].usePolicy.action.placementCallId; every other action must omit that key. "
-            "usePolicy.contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
+            "bindings[].action.placementCallId; every other action must omit that key. "
+            "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; place_item/hold/equipped require false."
+            "It does not select primaryEntityId or projectile held ownership; omit fixed contactDamage for place_item/hold/equipped. "
+            "Omit action.targetId for item_body-only actions with one declared item_body; projectile targets remain explicit."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",

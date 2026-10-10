@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 from typing import Any, Mapping, Sequence
 
@@ -201,7 +202,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
     )
     field_guide["bindingTarget"] += (
-        " Every binding owns one usePolicy with action, stackCost and contactDamage; no call/global shadows it. "
+        " Every binding directly owns action, stackCost and contactDamage. Omit only declared fixed branch constants; active non-placement stack/contact remain independent required choices. Item-only targets use the unique declared item_body; projectile targets remain explicit. Zero-parameter calls omit params. "
         "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
         "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
         "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
@@ -274,7 +275,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "on_expire": "Natural lifetime expiry and move_proximity_missile proximity detonation; not a general catch/collision event. A kill before the final lifetime update does not emit on_expire. Do not promise an on_expire effect at an earlier final bounce/collision.",
         "on_kill": "Projectile termination event, including collision death, penetration exhaustion, proximity detonation, natural expiry and ordinary return-to-owner completion or controller cancellation. Only explicitly attached actions execute; termination does not imply an explosion.",
         "on_tile_collision": "Emitted at each tile collision, including a bounce.",
-        "periodic": "periodTicks is required on periodic event calls. item_body periodic runs while held (HoldItem), not merely equipped.",
+        "periodic": "Periodic event calls require when={everyTicks:n}; n is an explicit integer from 6 to 3600. item_body periodic runs while held (HoldItem), not merely equipped.",
     }
     for event in events:
         if event["event"] in event_detail:

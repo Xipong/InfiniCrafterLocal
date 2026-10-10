@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind as binding_action_kind
+
 """Non-archetypal v5 runtime-program acceptance fixtures.
 
 Each fixture is a complete Author response.  The helper intentionally writes every
@@ -11,6 +13,7 @@ from copy import deepcopy
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
+    CAPABILITY_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
 )
@@ -49,14 +52,14 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
     }
 
 
-def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "item_use_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
+def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "activation_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
     return {
         "velocity": {"constantSpeedPxPerUpdate": speed},
         "count": count,
         "spreadRadians": 0.0,
         "offsetPx": int(offset),
         "aim": aim,
-        "placement": placement,
+        "position": {"at": placement},
     }
 
 
@@ -79,9 +82,8 @@ def _collision(*, tile: bool = True, bounce: int = 0, pierce: int = 1) -> dict[s
         "ignoreWater": False,
         "bounceCount": bounce,
         "pierce": pierce,
-        "extraUpdates": 0,
-        "npcImmunityMode": "local",
-        "localNpcHitCooldownEngineUnits": 10,
+        "updatesPerTick": 1,
+        "immunity": {"localCooldown": 10},
     }
 
 
@@ -116,10 +118,15 @@ class _Builder:
         action_row: dict[str, Any] = {"kind": action, "targetId": target}
         if action == "place_item":
             action_row["placementCallId"] = placement_call_id
-        self.bindings.append({
+        from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+        if BINDING_ACTION_REGISTRY[action].target_kinds == ("item_body",):
+            action_row.pop("targetId")
+        if len(INPUT_KIND_REGISTRY[input_kind].allowed_actions) == 1:
+            action_row.pop("kind")
+        row: dict[str, Any] = {
             "id": binding_id,
             "input": input_kind,
-            "usePolicy": {
+            **{
                 "action": action_row,
                 "stackCost": stack_cost,
                 "contactDamage": (
@@ -128,10 +135,21 @@ class _Builder:
                     and action != "place_item"
                 ),
             },
-        })
+        }
+        if not action_row:
+            row.pop("action")
+        if input_kind not in {"primary_use", "alternate_use"} or action == "place_item":
+            row.pop("stackCost")
+            row.pop("contactDamage")
+        self.bindings.append(row)
 
     def call(self, call_id: str, fn: str, target: str, params: dict[str, Any]) -> None:
-        self.calls.append({"id": call_id, "fn": fn, "target": target, "params": deepcopy(params)})
+        row = {"id": call_id, "fn": fn, "target": target}
+        if CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",):
+            row.pop("target")
+        if CAPABILITY_REGISTRY[fn].params:
+            row["params"] = deepcopy(params)
+        self.calls.append(row)
 
     def projectile(
         self,
@@ -144,7 +162,7 @@ class _Builder:
         damage_class: str = "generic",
         tile: bool = True,
         pierce: int = 1,
-        placement: str = "item_use_origin",
+        placement: str = "activation_origin",
         aim: str = "cursor",
         movement: str | None = "move_straight",
         movement_params: dict[str, Any] | None = None,
@@ -175,7 +193,7 @@ class _Builder:
                 "plannedPlayerActions": [
                     {
                         "input": str(row["input"]),
-                        "intent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
+                        "intent": f"Execute the authored {binding_action_kind(row)} action.",
                     }
                     for row in self.bindings
                 ] or [{"input": "passive_or_event", "intent": "Execute the authored passive or event-driven behavior."}],
@@ -189,8 +207,8 @@ class _Builder:
                         "summary": "Every fixture draft action is represented by the explicit runtime program.",
                         "actionChecks": [
                             {
-                                "plannedIntent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
-                                "implementedBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "plannedIntent": f"Execute the authored {binding_action_kind(row)} action.",
+                                "implementedBehavior": f"The binding executes {binding_action_kind(row)}.",
                                 "runtimeRefs": [str(row["id"])],
                                 "result": "aligned",
                                 "intentionality": "intentional",
@@ -212,7 +230,7 @@ class _Builder:
                         "behaviorChecks": [
                             {
                                 "runtimeRefs": [str(row["id"])],
-                                "programBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "programBehavior": f"The binding executes {binding_action_kind(row)}.",
                                 "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
                                 "result": "aligned",
                                 "reason": "The fixture report is the accepted description of this explicit binding lane.",
@@ -244,7 +262,7 @@ def _workbench_blade() -> dict[str, Any]:
     b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationTicks": 24}, width=64, height=34)
     b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
-    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"})
+    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"when": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"})
     return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
@@ -254,7 +272,7 @@ def _umbrella_grenade() -> dict[str, Any]:
     b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"gravityVelocityPerUpdate": 0.25}, width=18, height=18)
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
-    b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"event": "on_expire", "radiusPx": 112, "damageMultiplier": 1.4})
+    b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"when": "on_expire", "radiusTiles": 7, "damageMultiplier": 1.4})
     return b.finish(primary_entity_id="umbrella_guard", composition="The umbrella is a literal brace and its weighted tip becomes a grenade.", parent_a="umbrella canopy and shaft", parent_b="grenade charge")
 
 
@@ -262,7 +280,7 @@ def _door_on_chain() -> dict[str, Any]:
     b = _Builder("door_on_chain", name="Door on a Chain", mechanic="Swings a literal reinforced door from a bounded tether.", damage=48)
     b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=180, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeed": 14}, width=36, height=72)
     b.bind("primary_chain", "primary_use", "spawn_entity", "chained_door")
-    b.call("door_stun", "apply_status_on_event", "chained_door", {"event": "on_hit", "buffId": 31, "durationTicks": 90})
+    b.call("door_stun", "apply_status_on_event", "chained_door", {"when": "on_hit", "buffId": 31, "durationTicks": 90})
     return b.finish(primary_entity_id="chained_door", composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
 
 
@@ -270,8 +288,8 @@ def _returning_potion() -> dict[str, Any]:
     b = _Builder("returning_potion", name="Returning Tonic", mechanic="Throws a potion flask that returns and heals its owner on a hit.", damage=24)
     b.projectile("tonic_flask", "free_projectile", speed=12, lifetime=180, damage=24, damage_class="magic", tile=True, pierce=2, movement="move_boomerang", movement_params={"returnAfterTicks": 36, "returnSpeed": 15}, width=18, height=24)
     b.bind("primary_tonic", "primary_use", "spawn_entity", "tonic_flask")
-    b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"event": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
-    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"event": "on_hit", "buffId": 20, "durationTicks": 120})
+    b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"when": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
+    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"when": "on_hit", "buffId": 20, "durationTicks": 120})
     return b.finish(primary_entity_id="tonic_flask", composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
 
 

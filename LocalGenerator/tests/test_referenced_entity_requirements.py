@@ -23,12 +23,15 @@ def constrained_reference(monkeypatch):
         "entity", ("free_projectile", "child_projectile"), False, True))
     requirements = (*source.requirements,
         registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-            equals={"placement": "item_use_origin", "aim": "velocity", "offsetPx": 0},
+            equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
             message="The emission reference needs explicit origin/velocity spawn without offset."),
         registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
             message="The explicit emission reference cannot carry a second origin/telegraph adapter."))
     cap = replace(source, name="probe_reference_adapter", params=MappingProxyType(params), requirements=requirements)
+    # Make this retired technical capability visible only in the isolated
+    # generic-framework registry so its presence is a valid independent choice.
     mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
+    mapping["spawn_over_target"] = replace(mapping["spawn_over_target"], decision="expose", prompt_visible=True)
     for owner in (registry, validator, repair_scope):
         monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", mapping)
     return cap
@@ -51,11 +54,11 @@ def _doc(*, compatible_alternative=False):
 
 def _new_child(doc, name):
     entity = {"id": name, "kind": "child_projectile"}
-    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row["target"] == "nail"]
+    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row.get("target") == "nail"]
     for row in calls:
         row["target"] = name; row["id"] = row["id"].replace("nail", name)
         if row["fn"] == "configure_spawn":
-            row["params"].update(aim="velocity", placement="item_use_origin", offsetPx=0)
+            row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetPx=0)
     return entity, calls
 
 

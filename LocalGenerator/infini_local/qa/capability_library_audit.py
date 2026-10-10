@@ -23,6 +23,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     NETWORK_AUTHORITIES,
     CapabilitySpec,
+    ParamSpec,
+    visible_capabilities,
     capability_provider_union,
     compact_capability_catalog,
     runtime_authoring_registry_manifest,
@@ -56,6 +58,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "conditional_omission",
     "non_neutral_param",
     "event_available",
     "referenced_entity_capability_params",
@@ -179,19 +182,13 @@ def _clamp_bounds(text: str, class_name: str, constants: Mapping[str, float]) ->
     return out
 
 
-def _numeric_parameter_leaves(params, prefix=""):
-    for name, spec in params.items():
-        path = f"{prefix}.{name}" if prefix else name
-        if spec.alternatives:
-            for branch in spec.alternatives:
-                if branch.properties:
-                    yield from _numeric_parameter_leaves(branch.properties, path)
-                elif branch.kind in {"integer", "number"}:
-                    yield path, branch
-        elif spec.properties:
-            yield from _numeric_parameter_leaves(spec.properties, path)
-        elif spec.kind in {"integer", "number"}:
-            yield path, spec
+def _numeric_parameter_leaves(spec: ParamSpec, name: str) -> list[tuple[str, ParamSpec]]:
+    if spec.alternatives:
+        return [leaf for variant in spec.alternatives for leaf in _numeric_parameter_leaves(variant, name)]
+    if spec.properties:
+        return [leaf for key, child in spec.properties.items()
+                for leaf in _numeric_parameter_leaves(child, f"{name}.{key}")]
+    return [(name, spec)] if spec.kind in {"integer", "number"} else []
 
 
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
@@ -226,7 +223,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
     }
     rows: list[dict[str, Any]] = []
-    for cap in CAPABILITY_REGISTRY.values():
+    for cap in visible_capabilities():
         if cap.category in {"movement", "controller"} and cap.name != "target_and_fire":
             class_name = "RuntimeParamsSpec"
         elif cap.name == "target_and_fire":
@@ -238,12 +235,14 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         else:
             continue
         default_class = class_name
-        for param_name, spec in _numeric_parameter_leaves(cap.params):
-            field = spec.wire_name or param_name.rsplit(".", 1)[-1]
+        for param_name, spec in (leaf for name, param in cap.params.items()
+                                 for leaf in _numeric_parameter_leaves(param, name)):
+            wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            field = wire_name
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
                            "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
             field = field.rsplit(".", 1)[-1]
-            csharp_name = field[:1].upper() + field[1:]
+            csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
             if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
@@ -312,14 +311,17 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                     csharp = (1.0, constants.get("InfiniRuntimeLimits.MaxRuntimeLifetimeTicks", 21600.0))
                 else:
                     continue
-            authored = (float(spec.minimum), float(spec.maximum)) if spec.minimum is not None and spec.maximum is not None else None
+            authored = (spec.minimum, spec.maximum) if spec.minimum is not None and spec.maximum is not None else None
+            projected = (spec.to_wire(authored[0]), spec.to_wire(authored[1])) if authored else None
             rows.append({
                 "capability": cap.name,
                 "param": param_name,
+                "wireParam": wire_name,
                 "csharpClass": class_name,
                 "authorBounds": list(authored) if authored else None,
+                "wireBounds": list(projected) if projected else None,
                 "csharpBounds": list(csharp),
-                "preserved": bool(authored and authored[0] >= csharp[0] and authored[1] <= csharp[1]),
+                "preserved": bool(projected and projected[0] >= csharp[0] and projected[1] <= csharp[1]),
             })
     from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
     placed = placed_body_surface_audit(text.encode())
@@ -364,7 +366,7 @@ def capability_library_audit() -> dict[str, Any]:
     bounded_numeric_params = 0
     semantic_params = 0
     exact_wire_paths = 0
-    for cap in CAPABILITY_REGISTRY.values():
+    for cap in visible_capabilities():
         base = f"capabilities.{cap.name}"
         if not cap.summary or not cap.category or not cap.component_slot:
             error("incomplete_capability_identity", base, "summary/category/componentSlot must be declared")
@@ -577,22 +579,22 @@ def capability_library_audit() -> dict[str, Any]:
         "inputs": len(INPUT_KIND_REGISTRY),
         "bindingActions": len(BINDING_ACTION_REGISTRY),
         "events": len(EVENT_KIND_REGISTRY),
-        "parameters": sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
+        "parameters": sum(len(cap.params) for cap in visible_capabilities()),
         "numericParameters": numeric_params,
         "boundedNumericParameters": bounded_numeric_params,
         "semanticParameters": semantic_params,
         "typedEntityReferences": reference_params,
         "typedCallReferences": call_reference_params,
-        "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),
+        "requirements": sum(len(cap.requirements) for cap in visible_capabilities()),
         "bindingDependencyEdges": sum(len(row.required_item_capabilities_any_of) for row in INPUT_KIND_REGISTRY.values()) + sum(len(row.required_item_capabilities_any_of) for row in BINDING_ACTION_REGISTRY.values()),
-        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in CAPABILITY_REGISTRY.values()),
-        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in CAPABILITY_REGISTRY.values()),
+        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in visible_capabilities()),
+        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in visible_capabilities()),
         "exactWirePaths": exact_wire_paths,
         "globalTechnicalLowerers": len(GLOBAL_TECHNICAL_LOWERINGS),
         "globalTechnicalLowererOutputs": global_lowerer_output_count,
         "exclusiveGroups": {name: sorted(values) for name, values in known_slots.items()},
         "authorityDistribution": {
-            authority: sum(cap.network_authority == authority for cap in CAPABILITY_REGISTRY.values())
+            authority: sum(cap.network_authority == authority for cap in visible_capabilities())
             for authority in NETWORK_AUTHORITIES
         },
         "rangeParityRows": len(bound_rows),

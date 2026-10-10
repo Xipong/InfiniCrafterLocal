@@ -38,7 +38,7 @@ Child может встретить стену, промахнуться или 
 
 | Параметр | Область | Исполняемое значение |
 |---|---|---|
-| `event` | `on_hit`, `on_crit` | Реальный hit-event source entity |
+| `when` | `on_hit`, `on_crit` | Реальный hit-event source entity |
 | `entity` | ID `free_projectile` или `child_projectile` | Отдельно объявленная совместимая entity |
 | `stepCount` | integer 1…12 | Максимум звеньев, один child на звено |
 | `stepRangeTiles` | number 1…60 | Включительный геометрический radius каждого поиска; 1 tile = 16 px |
@@ -58,7 +58,7 @@ Child может встретить стену, промахнуться или 
   "fn": "select_targets_and_emit_on_event",
   "target": "bolt",
   "params": {
-    "event": "on_hit",
+    "when": "on_hit",
     "entity": "arc_child",
     "stepCount": 2,
     "stepRangeTiles": 22.5,
@@ -97,7 +97,7 @@ origin, ненулевой direction и exclusion snapshot своего anchor. 
 список. LOS ограничивает первоначальный выбор; он не меняет child tileCollide
 или ownerHitCheck и не гарантирует свободный путь во время полёта.
 
-Referenced child должен иметь явные `placement=item_use_origin`,
+Referenced child должен иметь явные `position={at:activation_origin}`,
 `aim=velocity`, `offsetPx=0`, без `spawn_over_target`. Иначе его отдельный
 origin adapter спорил бы с выбранной операцией. Registry requirements,
 строгий wire и C# boundary отвергают такую композицию. Compiler не меняет

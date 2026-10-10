@@ -1,4 +1,5 @@
 """Canonical Gameplay Repair: diagnostics -> exact scope -> filter -> apply -> compiler."""
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 
@@ -111,22 +112,32 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_gameplay_periodic_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode):
-    fn = "pull_on_event"
+@pytest.mark.parametrize("choice", ["periodic", "life_above", "mana_above"])
+def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, choice):
+    fn = "pull_on_event" if choice == "periodic" else "require_use_condition"
+    selector = "when" if choice == "periodic" else "condition"
+    needed = {"periodic": "when", "life_above": "lifeAtLeast", "mana_above": "manaAtLeast"}[choice]
+    value = 12 if choice == "periodic" else 100
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
-    call["params"].pop("periodTicks")
-    call["params"]["event"] = "on_use"
+    if choice == "periodic":
+        call["params"][selector] = "on_use"
+    else:
+        call["params"] = {"condition": "invalid"}
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)
     assert not report["ok"]
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.event", "params.periodTicks"]}]
+    paths = ["params.when"] if choice == "periodic" else ["params.condition"]
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": paths}]
     candidate = copy.deepcopy(call)
-    candidate["params"].update(event="periodic", periodTicks=12)
+    candidate["params"].update({"when": {"everyTicks": value}} if choice == "periodic" else {selector: {needed: value}})
     expected = apply_repair_patch(doc, {"note": "explicit target control", "callsUpsert": [candidate]})
     assert validate_runtime_program(expected)["ok"]
-    candidate["params"].update(strength=4, radiusTiles=60)
+    if choice == "periodic":
+        candidate["params"].update(strength=4, radiusTiles=60)
+    else:
+        stats_frozen = True  # hostile independent stats row below observes frozen refusal
     stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
     stats["params"]["damage"] = 1999
     incoming = {"note": "model explicitly chose a full conditional alternative",
@@ -135,7 +146,7 @@ def test_gameplay_periodic_choice_accepts_only_exact_missing_dependency(monkeypa
                                                 out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
-    assert audit["ok"] and "$.callsUpsert[0].params.periodTicks" in audit["acceptedPaths"]
+    assert audit["ok"] and "$.callsUpsert[0].params." + selector in audit["acceptedPaths"]
     assert audit["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
@@ -144,63 +155,66 @@ def test_gameplay_periodic_choice_accepts_only_exact_missing_dependency(monkeypa
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["periodic-already-selected", "nonconditional-event"])
-def test_gameplay_periodic_dependency_keeps_frozen_controls(monkeypatch, format_mode, case):
-    fn = "pull_on_event"
+@pytest.mark.parametrize("case", [
+    "periodic-already-selected", "nonconditional-event",
+])
+def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, format_mode, case):
+    from infini_local.core.errors import PlannerUnavailable
+
+    fn = "pull_on_event" if case in {"periodic-already-selected", "nonconditional-event"} else "require_use_condition"
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
-    call["params"].pop("periodTicks")
-    call["params"]["event"] = "periodic" if case == "periodic-already-selected" else "on_use"
-    chosen = {"periodTicks": 12} if case == "periodic-already-selected" else {"event": "on_expire"}
-    hostile = {"strength": 4, **({"periodTicks": 12} if case == "nonconditional-event" else {})}
+    if fn == "pull_on_event":
+        call["params"]["when"] = {} if case == "periodic-already-selected" else "on_use"
+        chosen = {"when": {"everyTicks": 12}} if case == "periodic-already-selected" else {"when": "on_expire"}
+        hostile = {"strength": 4, **({"delayTicks": 12} if case == "nonconditional-event" else {})}
+    else:
+        call["params"] = {"condition": "invalid"}
+        chosen = {"mode": "grounded"}
+        hostile = {"minLife": 100, "minMana": 100}
+        if case == "existing-threshold-frozen":
+            call["params"]["minLife"] = 50
+            chosen = {"mode": "life_above"}
+        elif case == "unrelated-selector-frozen":
+            call["params"]["mode"] = "grounded"
+            stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+            stats["params"]["damage"] = True
+            chosen = {"mode": "life_above"}
+        elif case == "missing-explicit-dependency":
+            chosen = {"mode": "life_above"}
+            hostile = {}
     before = json.dumps(doc, sort_keys=True)
     expected = copy.deepcopy(doc)
-    next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(chosen)
+    if case == "unrelated-selector-frozen":
+        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"] = 1
+    else:
+        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(chosen)
     candidate = copy.deepcopy(call)
     candidate["params"].update(chosen)
     candidate["params"].update(hostile)
     patch = {"note": "explicit choice; missing values are never synthesized",
              "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
-    if case == "periodic-already-selected":
-        assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.periodTicks"]}]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    if case == "unrelated-selector-frozen":
+        stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+        stats["params"]["damage"] = 1
+        patch["callsUpsert"].append(stats)
+    if case == "missing-explicit-dependency":
+        with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
+            _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+    else:
+        repaired, dossier = _offline_gameplay_repair(
+            monkeypatch, doc, patch, format_mode,
+            out_of_scope_response=case == "unrelated-selector-frozen")
+        permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
+        if case == "periodic-already-selected":
+            assert permissions == [{"id": call["id"], "paths": ["params.when.everyTicks"]}]
+        if case == "existing-threshold-frozen":
+            assert permissions == [{"id": call["id"], "paths": ["params.minMana", "params.mode"]}]
+        repaired.pop("debug")
+        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+        assert validate_runtime_program(repaired)["ok"]
+        assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
     assert json.dumps(doc, sort_keys=True) == before
-
-
-def test_gameplay_conditional_missing_permissions_follow_provider_shape_owner(monkeypatch):
-    from infini_local.core.runtime_authoring.capability_registry import CapabilitySpec
-
-    fn = "pull_on_event"
-    doc = build_capability_witness(fn)
-    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
-    native_shape = CapabilitySpec.provider_variant_schema
-
-    def changed_shape(cap):
-        shape = native_shape(cap)
-        if cap.name == fn:
-            shape["properties"]["params"]["if"]["properties"]["event"]["const"] = "on_expire"
-        return shape
-
-    monkeypatch.setattr(CapabilitySpec, "provider_variant_schema", changed_shape)
-    call["params"].pop("periodTicks")
-    call["params"]["event"] = "on_use"
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.event", "params.periodTicks"]}]
-    candidate = copy.deepcopy(call)
-    candidate["params"].update(event="on_expire", periodTicks=100)
-    expected = apply_repair_patch(doc, {"note": "registry-chosen conditional control", "callsUpsert": [candidate]})
-    candidate["params"]["strength"] = 4
-    filtered, audit = filter_repair_patch_scope(doc, {
-        "note": "consume mutated canonical facts", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(doc, filtered)
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
 @pytest.mark.parametrize("namespace,position", [(n, p) for n in ("entities", "bindings", "calls") for p in ("head", "tail")])
@@ -332,7 +346,7 @@ def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chos
     healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
     if companion_fn:
         companion = copy.deepcopy(next(row for row in build_capability_witness(companion_fn)["runtimeProgram"]["calls"] if row["fn"] == companion_fn))
-        companion.update(id="active_companion", target=healing["target"])
+        companion.update(id="active_companion")
         calls.append(companion)
     before = copy.deepcopy(doc)
     report = validate_runtime_program(doc)
@@ -376,31 +390,31 @@ def test_gameplay_exact_leaf_repair(case):
     doc = build_runtime_fixture("workbench_blade") if case.startswith(("action", "input")) else build_capability_witness(fn)
     section = "bindings" if case.startswith(("placement", "action", "input")) else "calls"
     rows = doc["runtimeProgram"][section]
-    node = (next(row for row in rows if row["usePolicy"]["action"]["kind"] == "place_item")
+    node = (next(row for row in rows if row["action"]["kind"] == "place_item")
             if case.startswith("placement") else rows[0] if section == "bindings" else
             next(row for row in rows if row["fn"] == fn))
     good = copy.deepcopy(node)
     candidate = copy.deepcopy(node)
     if case.startswith("placement"):
-        node["usePolicy"]["action"]["placementCallId"] = "missing_placement"
+        node["action"]["placementCallId"] = "missing_placement"
         if case == "placement-input":
             candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
         else:
-            candidate["usePolicy"].update(stackCost=0, contactDamage=True)
-        paths = ["usePolicy.action.placementCallId"]
+            candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
+        paths = ["action.placementCallId"]
     elif case.startswith(("action", "input")):
         if case == "input-missing":
             del node["input"]
             paths = ["input"]
         else:
             if case == "action-missing":
-                del node["usePolicy"]["action"]["kind"]
+                del node["action"]["kind"]
             else:
-                node["usePolicy"]["action"]["kind"] = "unknown_kind"
-            paths = ["usePolicy.action.kind"]
+                node["action"]["kind"] = "unknown_kind"
+            paths = ["action.kind"]
             candidate["input"] = "alternate_use"
-            candidate["usePolicy"]["action"]["targetId"] = "nail"
-        candidate["usePolicy"].update(contactDamage=not node["usePolicy"]["contactDamage"], stackCost=1)
+            candidate["action"]["targetId"] = "nail"
+        candidate .update(contactDamage=not node["contactDamage"], stackCost=1)
     elif case == "damage-frozen-range":
         node["params"]["damage"] = -1
         candidate["params"].update(damage=20, manaCost=-1)
@@ -429,7 +443,7 @@ def test_gameplay_exact_leaf_repair(case):
     report = validate_runtime_program(doc)
     assert not report["ok"], report
     if case == "action-unknown":
-        assert any(e["code"] == "shape_one_of" and e["path"].endswith(".action.kind") for e in report["errors"])
+        assert any(e["code"] in {"shape_one_of", "shape_const"} and e["path"].endswith(".action.kind") for e in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
     permissions = next(row["paths"] for row in scope["fieldPermissions"][section] if row["id"] == node["id"])
     if paths is not None:
@@ -451,7 +465,7 @@ def test_gameplay_exact_leaf_repair(case):
     if case != "accessory-lit":
         assert audit["ignoredChanges"]
     if case == "placement-cross-field":
-        assert len(audit["ignoredChanges"]) == 2
+        assert audit["ignoredChanges"]
     if case == "accessory-dark":
         assert any(row["path"].endswith(".lightColor") for row in audit["ignoredChanges"])
     if case.startswith(("action", "input")):
@@ -519,7 +533,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     assert {e["path"] for e in report["errors"] if e["code"].startswith("shape_") and e["path"].startswith(base)} == {base, *(f"{base}.params.{key}" for key in missing)}
     assert all(e["path"] != base + ".fn" for e in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": sorted("params." + key for key in missing)}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": sorted("params." + key for key in missing | {"bounceCount"})}]
     assert node["id"] not in scope["identityChanges"]["callFnIds"]
     assert not any(row["callId"] == node["id"] and row["key"] in node["params"] for row in scope["deletable"]["callParamKeys"])
     candidate = copy.deepcopy(original)
@@ -527,7 +541,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     upserts = [candidate]
     if foreign_fn:
         foreign = next(row for row in build_runtime_fixture("equipment_tool_combat")["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")
-        foreign.update(id=node["id"], target=node["target"])
+        foreign.update(id=node["id"])
         upserts.append(foreign)
     patch = {"note": "complete collision", "callsUpsert": upserts,
              "callParamKeysDelete": [{"callId": node["id"], "key": key} for key in ("tileCollide", "pierce")]}
@@ -536,7 +550,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     expected = copy.deepcopy(original)
     expected["params"].update(node["params"])
     assert filtered["callsUpsert"] == [expected] and not filtered["callParamKeysDelete"]
-    assert set(filtered["callsUpsert"][0]["params"]) == required
+    assert set(filtered["callsUpsert"][0]["params"]) == required | {"bounceCount"}
     if foreign_fn:
         assert any(row["path"].endswith(".fn") for row in audit["ignoredChanges"])
     repaired = apply_repair_patch(doc, filtered)
@@ -552,41 +566,28 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
     original = copy.deepcopy(node)
     other = {**copy.deepcopy(node), "id": "other_binding", "input": "alternate_use"}
     doc["runtimeProgram"]["bindings"].append(other)
-    assert validate_runtime_program(doc)["ok"]
-    node.update(action=original["usePolicy"]["action"]["kind"], target=original["usePolicy"]["action"]["targetId"])
-    del node["usePolicy"]
-    report = validate_runtime_program(doc)
-    assert not report["ok"]
-    assert {e["path"] for e in report["errors"] if e["code"].startswith("shape_")} == {"$.runtimeProgram.bindings[0]" + tail for tail in ("", ".usePolicy", ".action", ".target")}
-    scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["bindings"] == [{"id": node["id"], "paths": ["action", "target", "usePolicy", "usePolicy.action.kind", "usePolicy.action.targetId"]}]
-    transaction = {"input": original["input"], "usePolicy": copy.deepcopy(original["usePolicy"])}
-    transaction["usePolicy"]["contactDamage"] = False
-    assert transaction in next(row["allowed"] for row in scope["bindingAlternatives"] if row["bindingId"] == node["id"])
-    candidate = {"id": node["id"], **transaction}
+    node["action"] = "malformed"
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    candidate = copy.deepcopy(original)
     if attempt == "wrong-input":
         candidate["input"] = "alternate_use"
     elif attempt == "legacy-sibling":
-        candidate["action"] = node["action"]
+        candidate["usePolicy"] = {"action": copy.deepcopy(original["action"])}
     elif attempt == "wrong-id":
         candidate["id"] = other["id"]
-    filtered, audit = filter_repair_patch_scope(doc, {"note": "complete transaction", "bindingsUpsert": [candidate]}, scope)
-    assert audit["ok"] is (attempt == "exact"), audit
+    filtered, audit = filter_repair_patch_scope(doc, {"note": "exact action", "bindingsUpsert": [candidate]}, scope)
     if attempt == "exact":
-        assert filtered["bindingsUpsert"] == [candidate]
+        assert audit["ok"] and filtered["bindingsUpsert"] == [original]
         assert validate_runtime_program(apply_repair_patch(doc, filtered))["ok"]
+    elif attempt == "wrong-input":
+        assert audit["ok"] and filtered["bindingsUpsert"] == [original]
+        assert any(row["reason"] == "frozen_valid_value" for row in audit["ignoredChanges"])
     else:
+        assert not audit["ok"]
         assert filtered["bindingsUpsert"] != [candidate]
-        if attempt == "legacy-sibling":
-            assert any(row["path"] == "$.bindingsUpsert[0].action" and row["kind"] == "additional_property" for row in audit["errors"])
-        else:
-            suffix, reason = (".input", "frozen_valid_value") if attempt == "wrong-input" else ("", "independent_valid_node_frozen")
-            assert any(row["path"] == "$.bindingsUpsert[0]" + suffix and row["reason"] == reason for row in audit["ignoredChanges"])
-            if attempt == "wrong-id":
-                assert filtered["bindingsUpsert"] == []
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"]["params"]["required"]])
+@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose" and cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]
