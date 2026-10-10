@@ -2810,6 +2810,7 @@
                           "target_and_fire",
                           "spawn_over_target",
                           "spawn_entity_on_event",
+                          "select_targets_and_emit_on_event",
                           "apply_status_on_event",
                           "damage_area_on_event",
                           "chain_damage_on_event",

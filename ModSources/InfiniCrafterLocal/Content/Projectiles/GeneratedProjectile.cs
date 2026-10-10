@@ -28,6 +28,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private string _generatedItemId = "";
     private string _entityId = "";
     private bool _configured;
+    private bool _runtimePayloadRejected;
     private int _childDepth;
     private int _remainingSpawnBudget; // peer-visible snapshot only; not owner authority
     private RuntimeSpawnBudget? _activationSpawnBudget;
@@ -47,6 +48,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private uint _beamLastManaTick;
     private readonly float[] _beamScanSamples = new float[3];
     private int _lastTarget = -1;
+    private RuntimeInitialNpcExclusion _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
     private int _lastOwnerVectorSyncAge = -1000;
     private Vector2 _initialDirection = Vector2.UnitX;
     private Vector2 _spawnCenter;
@@ -126,6 +128,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int syncedActivationDelay = _activationDelayTicks;
         _data = data;
         _entity = entity;
+        _runtimePayloadRejected = false;
         _generatedItemId = data.Id;
         _entityId = entity.Id;
         _childDepth = Math.Clamp(childDepth, 0, data.RuntimeProgram.Limits.MaxChildDepth);
@@ -160,6 +163,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
+            _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
             _beamManaClockStarted = false;
             _beamLastManaTick = 0;
             _vfxSourceToken=0;
@@ -255,6 +259,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         RuntimeSpawnBudget? activationBudget = null,
         int? rootDamageOverride = null,
         float? rootKnockbackOverride = null,
+        RuntimeInitialNpcExclusion? initialNpcExclusion = null,
+        RuntimeSpawnTransform? initialTransform = null,
         float? rootSpeedOverride = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
@@ -271,12 +277,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             return 0;
         if (remainingSpawnBudget <= 0)
             return 0;
+        // A requested exclusion cannot silently become an unprotected child.
+        if (initialNpcExclusion is { } exclusion && !exclusion.CanApply)
+            return 0;
+        if (initialTransform is { } transform && !transform.IsValid)
+            return 0;
 
         int spawned = 0;
         try
         {
             Vector2 cursor = Main.MouseWorld;
-            Vector2 position = entity.Spawn.Placement switch
+            Vector2 position = initialTransform?.Position ?? (entity.Spawn.Placement switch
             {
                 "owner_center" => owner.MountedCenter,
                 "cursor" => cursor,
@@ -284,19 +295,19 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 "above_cursor" => cursor - Vector2.UnitY * Math.Max(16f, entity.Spawn.OverTarget.HeightTiles * 16f),
                 "native_resting_spot" => NativeRestingSpot(owner, entity),
                 _ => origin,
-            };
-            if (entity.Spawn.OverTarget.HeightTiles > 0f && entity.Spawn.Placement != "above_cursor")
+            });
+            if (initialTransform is null && entity.Spawn.OverTarget.HeightTiles > 0f && entity.Spawn.Placement != "above_cursor")
                 position -= Vector2.UnitY * entity.Spawn.OverTarget.HeightTiles * 16f;
 
-            Vector2 baseDirection = entity.Spawn.Aim switch
+            Vector2 baseDirection = initialTransform?.Direction.SafeNormalize(Vector2.Zero) ?? (entity.Spawn.Aim switch
             {
                 "cursor" => (cursor - position).SafeNormalize(new Vector2(owner.direction, 0f)),
                 "facing" => new Vector2(owner.direction, 0f),
                 "velocity" => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
                 "none" => Vector2.Zero,
                 _ => aimDirection.SafeNormalize(new Vector2(owner.direction, 0f)),
-            };
-            if (baseDirection != Vector2.Zero)
+            });
+            if (initialTransform is null && baseDirection != Vector2.Zero)
                 position += baseDirection * entity.Spawn.OffsetPx;
 
             int availableOwnerSlots = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
@@ -339,11 +350,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 {
                     generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
                         activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0);
+                    generated.SetInitialNpcExclusion(initialNpcExclusion ?? RuntimeInitialNpcExclusion.None);
                 }
                 catch
                 {
-                    // A failed configuration must not leave a partial actor
-                    // outside its admission pool or execute terminal effects.
+                    // A partial actor must not outlive failed admission or run
+                    // terminal effects outside its caller's reservation.
                     projectile.active = false;
                     throw;
                 }
@@ -361,6 +373,13 @@ public sealed partial class GeneratedProjectile : ModProjectile
             throw;
         }
         return spawned;
+    }
+
+    internal void SetInitialNpcExclusion(RuntimeInitialNpcExclusion exclusion)
+    {
+        if (!exclusion.CanApply)
+            throw new System.IO.InvalidDataException("initial NPC exclusion no longer names its captured incarnation");
+        _initialNpcExclusion = exclusion;
     }
 
     internal static bool CanAdmitEntityBatch(GeneratedItemData data, RuntimeEntitySpec entity, int ownerId, int count)
@@ -407,6 +426,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
 
     private bool TryHydrate()
     {
+        if (_runtimePayloadRejected) return false;
         if (_configured) return true;
         _pendingHydrationTicks++;
         if (_generatedItemId.Length > 0 && _entityId.Length > 0)

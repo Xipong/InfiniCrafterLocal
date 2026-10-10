@@ -153,7 +153,10 @@ def test_library_audit_and_shared_notation_have_no_missing_boundary():
     assert metrics["capabilities"] == len(CAPABILITY_REGISTRY)
     assert metrics["publicCapabilities"] == metrics["verticalSliceCount"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
     assert metrics["boundedNumericParameters"] == metrics["numericParameters"]
-    assert metrics["typedEntityReferences"] == 2 and metrics["requirements"] >= 10
+    assert metrics["typedEntityReferences"] == sum(
+        1 for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values()
+        if spec.reference is not None and spec.reference.namespace == "entity")
+    assert metrics["requirements"] >= 10
     guide = runtime_authoring_prompt_field_guide()
     assert "unless marked optional" in guide["paramNotation"]
     for suffix, unit in (("Ticks", "ticks"), ("Tiles", "tiles"), ("Px", "pixels"), ("Radians", "radians")):
@@ -444,7 +447,7 @@ MOD = Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal"
         pytest.param(
             surfaces.event_surface_audit,
             "Common/Models/RuntimeProgramSpec.cs",
-            b"public int DelayTicks { get; set; }\n    public int PeriodTicks { get; set; }",
+            b"public int PeriodTicks { get; set; }",
             b"public int UncataloguedDelay { get; init; }\n    ",
             "scheduler",
             "Common/Runtime/RuntimeDelayedActionScheduler.cs",
