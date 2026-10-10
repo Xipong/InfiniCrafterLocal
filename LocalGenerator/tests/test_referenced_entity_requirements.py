@@ -25,13 +25,10 @@ def constrained_reference(monkeypatch):
         registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
             equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
             message="The emission reference needs explicit origin/velocity spawn without offset."),
-        registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
-            message="The explicit emission reference cannot carry a second origin/telegraph adapter."))
+        registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="emit_light_while_active",
+            message="This test-local reference forbids an independently valid light capability."))
     cap = replace(source, name="probe_reference_adapter", params=MappingProxyType(params), requirements=requirements)
-    # Make this retired technical capability visible only in the isolated
-    # generic-framework registry so its presence is a valid independent choice.
     mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
-    mapping["spawn_over_target"] = replace(mapping["spawn_over_target"], decision="expose", prompt_visible=True)
     for owner in (registry, validator, repair_scope):
         monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", mapping)
     return cap
@@ -97,12 +94,12 @@ def test_reference_without_capability_is_not_a_supporting_dependency(constrained
     spawn = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "nail_spawn")
     spawn["params"]["aim"] = "velocity"
     assert validate_runtime_program(doc)["ok"]
-    doc["runtimeProgram"]["calls"].append({"id": "nail_telegraph", "target": "nail", "fn": "spawn_over_target",
-        "params": {"heightTiles": 3, "delayTicks": 0}})
+    doc["runtimeProgram"]["calls"].append({"id": "nail_telegraph", "target": "nail", "fn": "emit_light_while_active",
+        "params": {"strength": 0.5, "color": "orange"}})
     report = validate_runtime_program(doc)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert "spawn_over_target" not in scope["capabilitySubset"]
+    assert "emit_light_while_active" not in scope["capabilitySubset"]
     assert scope["fieldPermissions"]["calls"] == [{"id": "probe_reference", "paths": ["params.entity"]}]
     assert "nail_telegraph" not in scope["mutable"]["callIds"]
 
@@ -135,7 +132,7 @@ def test_reference_repair_can_create_complete_child_without_touching_existing_no
     assert scope["create"]["entities"]["allowed"]
     assert set(scope["create"]["entities"]["allowedKinds"]) == {"free_projectile", "child_projectile"}
     assert scope["create"]["calls"]["allowedTargetIds"] == []
-    assert "spawn_over_target" not in scope["create"]["calls"]["allowedFns"]
+    assert "emit_light_while_active" not in scope["create"]["calls"]["allowedFns"]
     entity, calls = _new_child(doc, "selected_nail")
     candidate = deepcopy(_probe(doc)); candidate["params"]["entity"] = entity["id"]
     patch = {"note": "explicit complete replacement child", "entitiesUpsert": [entity], "callsUpsert": [candidate, *calls]}

@@ -98,7 +98,7 @@ def _get(document, path):
 def author_cards():
     _, user, _ = build_initial_author_request({}, {}, {}, {}, "unit-proof", model_name="test-model")
     cards = {c["fn"]: c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert set(cards) == {cap.name for cap in visible_capabilities()}
     return cards
 
 

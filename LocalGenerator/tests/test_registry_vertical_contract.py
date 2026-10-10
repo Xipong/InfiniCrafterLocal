@@ -83,13 +83,13 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
         )
 
 
-@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn, spec in CAPABILITY_REGISTRY.items() if spec.prompt_visible and spec.decision == "expose"])
+@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn in (cap.name for cap in visible_capabilities())])
 def test_registered_capability_survives_schema_card_projection_compiler_and_wire(fn):
     cap = CAPABILITY_REGISTRY[fn]
     variants = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {v["properties"]["fn"]["const"] for v in variants} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
-    assert len(capability_provider_union()) == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
-    assert {c["fn"] for c in compact_capability_catalog()} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert {v["properties"]["fn"]["const"] for v in variants} == {cap.name for cap in visible_capabilities()}
+    assert len(capability_provider_union()) == len(visible_capabilities())
+    assert {c["fn"] for c in compact_capability_catalog()} == {cap.name for cap in visible_capabilities()}
     assert all("*" not in p for p in cap.final_wire_paths)
     full, compact = cap.prompt_card(), cap.author_prompt_card()
     assert {k: v for k, v in compact.items() if k != "params"} == {k: v for k, v in full.items() if k != "params"}
@@ -99,8 +99,7 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     for name, spec in cap.params.items():
         row, original = compact["params"][name], full["params"][name]
         if fn != "add_equipment_damage_bonus":
-            assert all(any(path.endswith("." + field) for path in cap.final_wire_paths)
-                       for field in spec.wire_field_names(name)), (fn, name)
+            assert all(any(p.endswith("." + wire_name) for p in cap.final_wire_paths) for wire_name in spec.wire_field_names(name)), (fn, name)
         meaning = row.get("meaning", "")
         if fn == "configure_armor" and name.startswith("setBonus") and name != "setBonuses":
             meaning = guide["setBonusParamPrefix"] + meaning

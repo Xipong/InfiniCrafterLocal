@@ -433,11 +433,15 @@ def _validate_target_emission(event: Mapping[str, Any], entities: list[Mapping[s
                 source = CAPABILITY_REGISTRY[requirement.capability]
                 for key, required_value in requirement.equals.items():
                     spec = source.params[key]
-                    for projection in spec.projected_fields(required_value, key):
+                    # Requirements are authored values; compare their canonical
+                    # leaf projection, including typed union aliases, to wire.
+                    for projected in spec.projected_fields(required_value, key):
                         value: Any = spawn
-                        for part in projection.wire_path.split("."):
+                        for part in projected.wire_path.split("."):
                             value = value.get(part) if isinstance(value, Mapping) else None
-                        valid = valid and type(value) is type(projection.value) and value == projection.value
+                        same_type = (type(value) is type(projected.value)
+                                     or type(value) in (int, float) and type(projected.value) in (int, float))
+                        valid = valid and same_type and value == projected.value
             elif requirement.kind == "referenced_entity_without_capability" and requirement.capability == "spawn_over_target":
                 over = spawn.get("overTarget", {})
                 valid = valid and isinstance(over, Mapping) and all(

@@ -76,8 +76,8 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
     assert _expand_constraint_references(
         {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
          for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
-    assert set(expected) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
-    assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in CAPABILITY_REGISTRY.values() if c.prompt_visible and c.decision == "expose")
+    assert set(expected) == {cap.name for cap in visible_capabilities()}
+    assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in visible_capabilities())
     assert {r["input"] for r in catalog["inputs"] if r["exclusive"]} == {n for n, s in INPUT_KIND_REGISTRY.items() if s.exclusive}
     guide = catalog["fieldGuide"]
     assert guide["damageClass"]["builtInTokens"] == list(DAMAGE_CLASS_TOKENS)
@@ -138,9 +138,9 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
     assert _expand_constraint_references(
         {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
          for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
-    assert set(expected) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert set(expected) == {cap.name for cap in visible_capabilities()}
     assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (
-        len(expected), sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values() if cap.prompt_visible and cap.decision == "expose"),
+        len(visible_capabilities()), sum(len(cap.params) for cap in visible_capabilities()),
     )
     assert (a, b) == parents_before
 
@@ -343,7 +343,7 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     report = planner_prompt_usability_report(a, b, a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["visibleCapabilities"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
+    assert report["visibleCapabilities"] == len(visible_capabilities())
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 

@@ -51,7 +51,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
-    assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert set(cards) == {cap.name for cap in visible_capabilities()}
     assert _expand_constraint_references(
         {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
          for fn, card in cards.items()}, catalog["fieldGuide"]["consumerConstraints"]) == canonical

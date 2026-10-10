@@ -101,7 +101,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    assert len(capabilities) == sum(c.prompt_visible and c.decision == "expose" for c in author.CAPABILITY_REGISTRY.values())
+    assert len(capabilities) == sum(cap.prompt_visible and cap.decision == "expose" for cap in author.CAPABILITY_REGISTRY.values())
     assert {card["fn"] for card in capabilities} == {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
     assert first["messages"][1]["content"] == first_user

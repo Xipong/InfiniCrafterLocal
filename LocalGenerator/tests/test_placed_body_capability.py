@@ -370,7 +370,11 @@ def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts(
     # explicit at-position zero DTO defaults with an exact assertion.
     corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
     for row in corpus["cases"]:
-        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
+        authored = captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"])))
+        compiled = compile_runtime_program(authored)
+        assert validate_runtime_wire(compiled)["ok"]
+        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=authored, final_document=compiled)["ok"]
         delivered = _historical_spawn_defaults(_delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))), row["expectedDeliveryWire"])
         assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
         assert delivered == row["expectedDeliveryWire"]

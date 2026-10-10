@@ -13,7 +13,7 @@
 
 ```json
 {
-  "event": "on_hit",
+  "when": "on_hit",
   "entity": "child_shard",
   "count": 3,
   "spreadRadians": 0.75,
