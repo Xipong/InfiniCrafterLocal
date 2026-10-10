@@ -110,6 +110,14 @@ internal static partial class EngineRuntimeChecks
         }
         [JsonConverter(typeof(ValueConverter))] public float Value { get; set; }
     }
+    public sealed class PiRawProbe
+    {
+        public sealed class ValueConverter : RawJsonFloatDomainConverter
+        {
+            public ValueConverter() : base("0", "3.141592653589793") { }
+        }
+        [JsonConverter(typeof(ValueConverter))] public float Value { get; set; }
+    }
     public sealed class NullableRawProbe
     {
         public sealed class ValueConverter : RawJsonNullableFloatDomainConverter
@@ -144,13 +152,19 @@ internal static partial class EngineRuntimeChecks
         {
             NullableRawProbe parsed = Parse<NullableRawProbe>(literal);
             string json = JsonSerializer.Serialize(parsed);
-            Equal(parsed.Value, JsonSerializer.Deserialize<NullableRawProbe>(json)!.Value, "nullable float storage roundtrip");
+            Equal(parsed.Value!.Value, JsonSerializer.Deserialize<NullableRawProbe>(json)!.Value!.Value, "nullable float storage roundtrip");
         }
         // Nonzero collapsing to 0 is allowed when the only declared neutral is 1.
         Equal(0f, Parse<NullableRawProbe>("1e-1000").Value!.Value, "no undeclared neutral policy");
         var absent = JsonSerializer.Deserialize<NullableRawProbe>("{}")!;
         Equal(false, absent.Value.HasValue, "nullable omission is not present null");
         Equal("{}", JsonSerializer.Serialize(absent), "alternate serializer keeps omission");
+
+        var endpoint = Parse<PiRawProbe>("3.141592653589793");
+        string endpointWire = JsonSerializer.Serialize(endpoint);
+        Equal(endpoint.Value, JsonSerializer.Deserialize<PiRawProbe>(endpointWire)!.Value, "nonexact decimal endpoint retains identical stored float roundtrip");
+        Equal(true, endpointWire.Contains("3.141592653589793", StringComparison.Ordinal), "writer uses exact declared endpoint representative");
+        Refused<PiRawProbe>("3.141592653589793000000000001");
 
         const string splitLiteral = "0.90000000000000000000000000000000000000000000000001";
         var first = new RawNumericSegment(Encoding.UTF8.GetBytes(splitLiteral[..18]));

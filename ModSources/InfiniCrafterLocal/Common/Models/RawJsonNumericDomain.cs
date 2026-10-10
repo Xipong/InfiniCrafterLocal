@@ -43,12 +43,17 @@ internal sealed class RawJsonFloatDomain
 {
     private readonly ExactDecimal _minimum, _maximum;
     private readonly ExactDecimal? _neutral;
-    private readonly float _storedNeutral;
+    private readonly float _storedNeutral, _storedMinimum, _storedMaximum;
+    private readonly string _minimumLiteral, _maximumLiteral;
 
     internal RawJsonFloatDomain(string minimum, string maximum, string? neutral)
     {
         _minimum = ExactDecimal.Parse(minimum);
         _maximum = ExactDecimal.Parse(maximum);
+        _minimumLiteral = minimum;
+        _maximumLiteral = maximum;
+        _storedMinimum = float.Parse(minimum, NumberStyles.Float, CultureInfo.InvariantCulture);
+        _storedMaximum = float.Parse(maximum, NumberStyles.Float, CultureInfo.InvariantCulture);
         if (_minimum.CompareTo(_maximum) > 0) throw new ArgumentException("numeric domain is reversed");
         if (neutral is not null)
         {
@@ -79,8 +84,20 @@ internal sealed class RawJsonFloatDomain
     internal void Write(Utf8JsonWriter writer, float value)
     {
         if (!float.IsFinite(value)) throw new JsonException("numeric value must have finite float storage");
-        RequireDomain(ExactDecimal.Parse(value.ToString("R", CultureInfo.InvariantCulture)));
-        writer.WriteNumberValue(value);
+        ExactDecimal rendered = ExactDecimal.Parse(value.ToString("R", CultureInfo.InvariantCulture));
+        // A valid decimal endpoint can round to a binary32 whose shortest text
+        // lies outside that decimal domain (e.g. pi -> 3.1415927f). Serialize the
+        // declared endpoint only for that exact stored endpoint: it reads back
+        // to identical float bits, without accepting/clamping an outside source.
+        if (rendered.CompareTo(_minimum) < 0 && value == _storedMinimum)
+            writer.WriteRawValue(_minimumLiteral);
+        else if (rendered.CompareTo(_maximum) > 0 && value == _storedMaximum)
+            writer.WriteRawValue(_maximumLiteral);
+        else
+        {
+            RequireDomain(rendered);
+            writer.WriteNumberValue(value);
+        }
     }
 
     private void RequireDomain(ExactDecimal value)
