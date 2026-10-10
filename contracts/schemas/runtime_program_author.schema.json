@@ -3606,10 +3606,17 @@
                 "additionalProperties": false,
                 "properties": {
                   "gravityVelocityPerUpdate": {
-                    "description": "Add to vertical velocity (pixels/update) per projectile update",
+                    "description": "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
                     "maximum": 2,
-                    "minimum": 0.001,
+                    "minimum": -2,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: vertical velocity increment per update"
                   }
