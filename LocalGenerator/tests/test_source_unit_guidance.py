@@ -65,8 +65,8 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     source = _source()
     request, packet = _author_request(monkeypatch, mode, source)
     guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
-    assert "sourceWireUnits" in guide, "Author lacks the scoped wire-to-Author unit glossary"
-    glossary = guide["sourceWireUnits"]
+    assert "sourceWireUnits" not in guide, "parent-dependent paths must stay outside the static catalog"
+    glossary = packet["sourceWireUnits"]
     assert glossary["fieldColumns"] == ["authorParam", "sourceToAuthor", "authorUnits"]
     for path in ("raw.item.axePower", "raw.generatedParent.gameplay.axePower"):
         assert _mapping(glossary, path, "configure_tool") == [
@@ -141,7 +141,15 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     assert "units" in packet["runtimeExecutionTruth"], "Gameplay Repair has no canonical clock/unit guide"
     units = packet["runtimeExecutionTruth"]["units"]
     author_guide = author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
-    assert units == {key: author_guide[key] for key in ("paramNotation", "sourceWireUnits")}
+    assert units["paramNotation"] == author_guide["paramNotation"]
+    # Repair keeps the complete registry glossary; Author sends only source
+    # paths present in its raw parents. Both preserve the same reading rules.
+    assert {key: value for key, value in units["sourceWireUnits"].items() if key != "scopes"} == {
+        key: value for key, value in author_packet["sourceWireUnits"].items() if key != "scopes"}
+    for scoped in author_packet["sourceWireUnits"]["scopes"]:
+        full = next(row for row in units["sourceWireUnits"]["scopes"]
+                    if (row["source"], row["fn"]) == (scoped["source"], scoped["fn"]))
+        assert scoped["fields"].items() <= full["fields"].items()
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
     for clock in ("60/s", "1 + extraUpdates", "world ticks", "per projectile update", "localNpcHitCooldownEngineUnits"):
         assert clock in units["paramNotation"]
@@ -199,7 +207,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         assert first["response_format"] == second["response_format"]
         assert "UNTRUSTED" not in prefix
         assert "UNTRUSTED" in suffix
-        assert "sourceWireUnits" in prefix
+        assert ("sourceWireUnits" in prefix) is (root != "A")
         assert set(static) == set(author._AUTHOR_CACHE_PREFIX_KEYS if root == "A" else author._REPAIR_CACHE_PREFIX_KEYS)
         raw = changed["parents"][root]["packet"]["raw"]
         assert raw["item"]["axePower"] == 13
@@ -207,13 +215,16 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         for section in ("accessory", "armor", "gameplay"):
             assert json.dumps(raw["generatedParent"][section]) == json.dumps(variant["generatedData"][section])
         changed["parents"][root] = copy.deepcopy(packet["parents"][root])
+        if root == "A":
+            assert changed["sourceWireUnits"] != packet["sourceWireUnits"]
+            changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
         assert changed == packet
         if root == "A":
             parts = static_instruction_prefix_parts(second)
             assert parts is not None
             _, static_text, dynamic_text = parts
             assert "UNTRUSTED" not in static_text
-            assert set(json.loads(dynamic_text)) == {"recipeKey", "parents", "balanceCorridor"}
+            assert set(json.loads(dynamic_text)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
             assert json.loads(dynamic_text)["parents"]["A"]["packet"]["raw"] == raw
         else:
             assert static_instruction_prefix_parts(second) is None
@@ -233,8 +244,12 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
         "identityAmount": replace(spec, wire_name="same", wire_divisor=1, units="probe units"),
     }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.not_a_param"))
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary})
-    _, packet = _author_request(monkeypatch, mode, _source())
-    glossary = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["sourceWireUnits"]
+    source = _source()
+    source["generatedData"]["armor"]["unfamiliar"] = 0.2
+    source["generatedData"]["gameplay"]["generatedBuff"]["another"] = 7
+    source["generatedData"]["accessory"]["same"] = 3
+    _, packet = _author_request(monkeypatch, mode, source)
+    glossary = packet["sourceWireUnits"]
     assert _mapping(glossary, "raw.generatedParent.armor.unfamiliar", arbitrary.name) == [
         "arbitraryPercent", "source * 37", "probe percent"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.another", arbitrary.name) == [
