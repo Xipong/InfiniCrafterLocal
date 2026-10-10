@@ -290,7 +290,7 @@ def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = F
 
 
 def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, CONTROLLER_OPCODE, MOVEMENT_OPCODE
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, CONTROLLER_OPCODE, MOVEMENT_OPCODE, PROJECTILE_MODIFIER_COMPONENTS
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
     events_by_entity: dict[str, list[str]] = {}
     for row in runtime_event_inventory(data):
@@ -317,9 +317,12 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             "movement": copy.deepcopy(dict(movement)),
             "controller": copy.deepcopy(dict(controller)),
             "driverMeaningReadOnly": driver_meanings,
+            "modifierMeaningReadOnly": {
+                member: CAPABILITY_REGISTRY[fn].summary for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items() if member in entity
+            } | ({"whipUsesOwnerGravity": CAPABILITY_REGISTRY["orient_whip_to_owner_gravity"].summary} if entity.get("whipUsesOwnerGravity") is True else {}),
             "events": sorted(set(events_by_entity.get(str(entity.get("id") or ""), []))),
             "hitbox": copy.deepcopy(entity.get("hitbox") or {}),
-            **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision", "hitboxCurve") if field in entity},
+            **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision", "hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity") if field in entity},
         })
     return rows
 
@@ -364,11 +367,11 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
                 "world": "q_item * s_world * W",
                 "held": "q_item * player.GetAdjustedItemScale(held) (G already included once)",
                 "heldRegistryOnly": "q_item * baseScale * clamp(G, .25, 4)",
-                "body": "q_selected * P when accepted hitboxCurve.mirrorToSprite=true, with P=D*E*curveScale(active age); otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred.",
+                "body": "q_selected * P when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present, with P=D*E*curveScale(active age) from that explicit visual owner; otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred.",
                 "liveBodyCopy": "q_selected * clamp(P, .1, 8) * slot.Scale; absent R retains historical max(.05, P*slot.Scale)",
                 "detachedBodyCopy": "q_selected * existing dimensionless pose/slot multiplier; capture/network pose remains dimensionless",
                 "visibleAlphaExtent": "alpha-bbox pixels * q_selected * independent draw multipliers",
-                "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror. Never change accepted gameplay to force equality.",
+                "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror or visualScaleCurve. An independent hitbox curve does not multiply visual scale. Never change accepted gameplay to force equality.",
             },
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
