@@ -216,6 +216,9 @@ public sealed class VfxSlotSpec
     // Absent persisted selectors retain Item1; explicit null is not absence.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SoundId { get => _soundId; set => _soundId = value ?? throw new InvalidDataException("soundId cannot be null"); }
+    private VfxSoundSpec? _sound;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxSoundSpec? Sound { get => _sound; set => _sound = value ?? throw new InvalidDataException("sound cannot be null"); }
     [JsonRequired] public float FadeIn { get; set; }
     [JsonRequired] public float FadeOut { get; set; }
     public int SlotSeed { get; set; }
@@ -263,7 +266,12 @@ public sealed class VfxSlotSpec
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
         if (SoundId is not null) {
             if (rendererKind != InfiniVfxRendererKind.SoundCue) throw new InvalidDataException("soundId is owned only by soundCue");
-            _ = ResolveSoundStyle(); // exact finite selector; never trim/guess/substitute
+            _ = ResolveSoundSample(); // exact finite selector; never trim/guess/substitute
+        }
+        if (Sound is not null) {
+            if (rendererKind != InfiniVfxRendererKind.SoundCue) throw new InvalidDataException("sound is owned only by soundCue");
+            if (SoundId is null) throw new InvalidDataException("explicit sound requires an exact soundId");
+            Sound.NormalizeAndValidate();
         }
         VfxLibraryValidation.Validate(this,rendererKind);
         bool materialBranch = rendererKind is InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath;
@@ -316,30 +324,104 @@ public sealed class VfxSlotSpec
         BakedCommandCount = BakedCommands.Length;
     }
 
-    // Shared item/projectile projection: exact authored SoundID member only.
-    // null is exclusively old-wire absence; unknown present values fail closed.
-    internal SoundStyle ResolveSoundStyle() => SoundId switch
+    // Shared playback projection for item, projectile and detached occurrences.
+    // Old-wire absence keeps every previous native/alpha/phase behavior exactly.
+    internal SoundStyle ResolveSoundStyle()
+    {
+        SoundStyle sample = ResolveSoundSample();
+        return Sound is { } sound ? sound.ApplyTo(sample) : sample with {
+            Volume = Math.Clamp(Alpha, 0.05f, 1f),
+            Pitch = Math.Clamp(PhaseOffset * 0.25f, -0.5f, 0.5f),
+        };
+    }
+
+    // Exact finite SoundID identity; only persisted selector absence selects Item1.
+    private SoundStyle ResolveSoundSample() => SoundId switch
     {
         null or "Item1" => SoundID.Item1,
         "Item2" => SoundID.Item2,
         "Item3" => SoundID.Item3,
         "Item4" => SoundID.Item4,
+        "Item5" => SoundID.Item5,
+        "Item7" => SoundID.Item7,
         "Item8" => SoundID.Item8,
         "Item9" => SoundID.Item9,
+        "Item10" => SoundID.Item10,
+        "Item11" => SoundID.Item11,
+        "Item12" => SoundID.Item12,
+        "Item13" => SoundID.Item13,
         "Item14" => SoundID.Item14,
+        "Item15" => SoundID.Item15,
+        "Item17" => SoundID.Item17,
         "Item20" => SoundID.Item20,
         "Item21" => SoundID.Item21,
+        "Item26" => SoundID.Item26,
+        "Item28" => SoundID.Item28,
         "Item29" => SoundID.Item29,
+        "Item31" => SoundID.Item31,
+        "Item33" => SoundID.Item33,
+        "Item34" => SoundID.Item34,
+        "Item36" => SoundID.Item36,
+        "Item37" => SoundID.Item37,
+        "Item38" => SoundID.Item38,
+        "Item40" => SoundID.Item40,
+        "Item41" => SoundID.Item41,
+        "Item42" => SoundID.Item42,
         "Item43" => SoundID.Item43,
-        "Dig" => SoundID.Dig,
-        "Tink" => SoundID.Tink,
-        "Grab" => SoundID.Grab,
-        "Shatter" => SoundID.Shatter,
-        "Splash" => SoundID.Splash,
+        "Item44" => SoundID.Item44,
+        "Item46" => SoundID.Item46,
+        "Item51" => SoundID.Item51,
+        "Item54" => SoundID.Item54,
+        "Item57" => SoundID.Item57,
+        "Item58" => SoundID.Item58,
+        "Item60" => SoundID.Item60,
+        "Item62" => SoundID.Item62,
+        "Item69" => SoundID.Item69,
+        "Item70" => SoundID.Item70,
+        "Item71" => SoundID.Item71,
+        "Item72" => SoundID.Item72,
+        "Item73" => SoundID.Item73,
+        "Item74" => SoundID.Item74,
+        "Item76" => SoundID.Item76,
+        "Item77" => SoundID.Item77,
+        "Item78" => SoundID.Item78,
+        "Item82" => SoundID.Item82,
+        "Item83" => SoundID.Item83,
+        "Item84" => SoundID.Item84,
+        "Item85" => SoundID.Item85,
+        "Item88" => SoundID.Item88,
+        "Item89" => SoundID.Item89,
+        "Item91" => SoundID.Item91,
+        "Item93" => SoundID.Item93,
+        "Item94" => SoundID.Item94,
+        "Item97" => SoundID.Item97,
+        "Item98" => SoundID.Item98,
+        "Item99" => SoundID.Item99,
+        "Item102" => SoundID.Item102,
+        "Item103" => SoundID.Item103,
+        "Item105" => SoundID.Item105,
+        "Item106" => SoundID.Item106,
+        "Item107" => SoundID.Item107,
+        "Item108" => SoundID.Item108,
+        "Item109" => SoundID.Item109,
+        "Item110" => SoundID.Item110,
+        "Item113" => SoundID.Item113,
+        "Item117" => SoundID.Item117,
+        "Item123" => SoundID.Item123,
+        "Item124" => SoundID.Item124,
+        "Item152" => SoundID.Item152,
+        "Item157" => SoundID.Item157,
+        "Item158" => SoundID.Item158,
+        "Item169" => SoundID.Item169,
         "Coins" => SoundID.Coins,
-        "Unlock" => SoundID.Unlock,
+        "Dig" => SoundID.Dig,
+        "Grab" => SoundID.Grab,
         "MaxMana" => SoundID.MaxMana,
         "ResearchComplete" => SoundID.ResearchComplete,
+        "Shatter" => SoundID.Shatter,
+        "Splash" => SoundID.Splash,
+        "Tink" => SoundID.Tink,
+        "Unlock" => SoundID.Unlock,
         _ => throw new InvalidDataException($"invalid VFX soundId '{SoundId}'"),
     };
 

@@ -35,3 +35,16 @@ python -m infini_local.qa.primitive_loss_audit
 ## Запрещённый shortcut
 
 `create_<weapon>` с выбором entity/movement/delivery/lifecycle внутри — whole-weapon macro. Один exact API adapter может писать несколько обязательных technical fields лишь при declared finite outputs и доказанной эквивалентности. Facade constants, prose/name/category routers, legacy importer, arbitrary VM/generated C#, hidden repair API и mandatory classifier/judge не заменяют vertical slice.
+
+
+## Типизированные параметры и точные wire-проекции
+
+Если Author объединяет связанные поля, описывайте форму и отображение в каноническом `ParamSpec`, а не отдельным provider/compiler словарём:
+
+- `properties` задаёт закрытый object с вложенными `ParamSpec`; `alternatives` задаёт union, где ровно одна форма должна соответствовать Author. `min_properties` сохраняет явное требование непустого объекта.
+- `wire_name` задаёт относительный DTO-путь листа, включая вложенный путь. `wire_enum`, `wire_offset`, `wire_multiplier` и `wire_divisor` описывают точное преобразование единиц или конечное отображение значений; округление и догадка о варианте запрещены.
+- `wire_literals` принадлежит выбранному варианту параметра. Литерал получает receipt `alias_lowering` от точного пути выбранного Author-параметра. Обычные листья получают `delivered` от фактического вложенного пути.
+- `CapabilitySpec.fixed_wire_literals` содержит значения, однозначно выбранные самим `fn`, с ключами относительно компонента. Compiler использует `write_derived` от `.fn`; audit требует точных value, output, call identity и единственного полного покрытия.
+- `CapabilitySpec.retained_receipt_params` хранит только конечные старые скалярные проекции для аудита уже сохранённого wire без Author. Это не дополнительная Author schema, не importer и не разрешение компилировать старый синтаксис. При наличии Author источником истины остаются только текущие `params`.
+
+`core/schema_validation.py` владеет единственным `strict_schema_errors`; полный Author/Repair и `ParamSpec.selected_variant` используют этот же валидатор без цикла registry → program_schema. Не добавляйте второй shape matcher. Для нового варианта нужны проверки действительного compiler/receipt/Repair пути, неоднозначных и недопустимых форм, сохранения sibling-полей и старой wire-only provenance. Подробный контракт: [TYPED_AUTHOR_PARAMETER_PROJECTIONS_RU.md](TYPED_AUTHOR_PARAMETER_PROJECTIONS_RU.md).

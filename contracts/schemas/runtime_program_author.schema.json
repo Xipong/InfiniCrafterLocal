@@ -5442,6 +5442,23 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "count": {
+                    "default": 1,
+                    "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
+                    "maximum": 4,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "spawn_or_target_count",
+                    "x-infini-units": "projectiles/volley"
+                  },
+                  "hardRange": {
+                    "default": false,
+                    "description": "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "intervalTicks": {
                     "description": "Firing interval",
                     "maximum": 3600,
@@ -5451,12 +5468,19 @@
                     "x-infini-units": "ticks"
                   },
                   "rangeTiles": {
-                    "description": "Soft target range: previous target may be chosen outside it after distance discount",
+                    "description": "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount",
                     "maximum": 120,
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
+                  },
+                  "requireLineOfSight": {
+                    "default": false,
+                    "description": "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "sameTargetBias": {
                     "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
@@ -5484,6 +5508,33 @@
                       ]
                     },
                     "x-infini-semanticType": "runtime_entity_id"
+                  },
+                  "spreadRadians": {
+                    "default": 0.0,
+                    "description": "Full symmetric fan angle for this firing volley; count=1 has zero angular offset",
+                    "maximum": 0.75,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "targetPolicy": {
+                    "default": "distance_score",
+                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score",
+                    "enum": [
+                      "distance_score",
+                      "player_assigned_first"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "distance_score",
+                    "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [
