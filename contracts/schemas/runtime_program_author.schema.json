@@ -4754,6 +4754,22 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "damageBasis": {
+                    "description": "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)",
+                    "enum": [
+                      "authored_child",
+                      "live_parent"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "damageMultiplier": {
+                    "description": "Multiply the selected damage basis exactly once; zero preserves a zero-damage child",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
                   "intervalTicks": {
                     "description": "Firing interval",
                     "maximum": 3600,
@@ -4761,6 +4777,15 @@
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
+                  },
+                  "knockbackBasis": {
+                    "description": "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time",
+                    "enum": [
+                      "authored_child",
+                      "live_parent"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "rangeTiles": {
                     "description": "Soft target range: previous target may be chosen outside it after distance discount",
@@ -4802,7 +4827,10 @@
                   "shotEntity",
                   "intervalTicks",
                   "rangeTiles",
-                  "sameTargetBias"
+                  "sameTargetBias",
+                  "damageBasis",
+                  "knockbackBasis",
+                  "damageMultiplier"
                 ],
                 "type": "object"
               },
@@ -4924,8 +4952,17 @@
                     "type": "integer",
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
+                  "damageBasis": {
+                    "description": "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source",
+                    "enum": [
+                      "authored_child",
+                      "live_parent"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "damageMultiplier": {
-                    "description": "Multiplier applied to the referenced child entity's authored base damage",
+                    "description": "Multiply the selected damage basis exactly once; zero preserves a zero-damage child",
                     "maximum": 4,
                     "minimum": 0,
                     "type": "number",
@@ -4975,6 +5012,15 @@
                     "type": "string",
                     "x-infini-semanticType": "runtime_event_kind"
                   },
+                  "knockbackBasis": {
+                    "description": "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source",
+                    "enum": [
+                      "authored_child",
+                      "live_parent"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "periodTicks": {
                     "description": "Required for periodic event",
                     "maximum": 3600,
@@ -4997,6 +5043,8 @@
                   "entity",
                   "count",
                   "spreadRadians",
+                  "damageBasis",
+                  "knockbackBasis",
                   "damageMultiplier",
                   "delayTicks"
                 ],

@@ -4231,11 +4231,37 @@
         "runtimeProgram.entities[].targeting.shotEntityId",
         "runtimeProgram.entities[].targeting.intervalTicks",
         "runtimeProgram.entities[].targeting.rangeTiles",
-        "runtimeProgram.entities[].targeting.sameTargetBias"
+        "runtimeProgram.entities[].targeting.sameTargetBias",
+        "runtimeProgram.entities[].targeting.damageBasis",
+        "runtimeProgram.entities[].targeting.knockbackBasis",
+        "runtimeProgram.entities[].targeting.damageMultiplier"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "damageBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
         "intervalTicks": {
           "enum": [],
           "kind": "integer",
@@ -4245,6 +4271,19 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "knockbackBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "rangeTiles": {
           "enum": [],
@@ -4292,7 +4331,7 @@
       "positionOwnership": "owns_stationary_position",
       "promptVisibility": true,
       "provenance": "stationary targeting/firing split from the retired sentry macro",
-      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
+      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4401,6 +4440,8 @@
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].damageBasis",
+        "runtimeProgram.entities[].events[].knockbackBasis",
         "runtimeProgram.entities[].events[].damageMultiplier",
         "runtimeProgram.entities[].events[].delayTicks",
         "runtimeProgram.entities[].events[].periodTicks"
@@ -4416,6 +4457,19 @@
           "reference": null,
           "required": true,
           "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "damageBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
           "units": ""
         },
         "damageMultiplier": {
@@ -4481,6 +4535,19 @@
           "semanticType": "runtime_event_kind",
           "units": ""
         },
+        "knockbackBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "periodTicks": {
           "enum": [],
           "kind": "integer",
@@ -4505,7 +4572,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "split/child/field/helper spawning extracted from secondary macros",
-      "purpose": "Spawn a referenced authored entity when one supported event occurs.",
+      "purpose": "Spawn a referenced authored entity when one supported event occurs. Explicit combat bases select the child's authored stats or the event-owning projectile's actual damage/knockback. Delayed actions snapshot live parent stats when enqueued, including terminal events; player/class modifiers are not applied again. Item-body events can select only authored_child.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4513,6 +4580,36 @@
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
           "param": "event",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "stationary_projectile",
+            "temporary_helper",
+            "field",
+            "child_projectile"
+          ],
+          "equals": "live_parent",
+          "kind": "param_requires_target_kind",
+          "message": "live_parent requires the actual event-owning projectile; an item-body event must explicitly select authored_child.",
+          "param": "damageBasis",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "stationary_projectile",
+            "temporary_helper",
+            "field",
+            "child_projectile"
+          ],
+          "equals": "live_parent",
+          "kind": "param_requires_target_kind",
+          "message": "live_parent requires the actual event-owning projectile; an item-body event must explicitly select authored_child.",
+          "param": "knockbackBasis",
           "target": "same_target"
         }
       ],
