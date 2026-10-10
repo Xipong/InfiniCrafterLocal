@@ -46,6 +46,8 @@ internal static partial class EngineRuntimeChecks
         (string Name, Action Check)[] checks = {
             ("nearest event damage retains radial native selection and direct-target exclusion", NearestDamageRetainsTheSingleCenterNativeAction),
             ("target bias saved DTO range and native distance-score discount", TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount),
+            ("signed vertical acceleration native DTO active updates and hydration", SignedVerticalAccelerationUsesNativeDtoAndEveryActiveUpdate),
+            ("signed vertical acceleration activation delay and update rate", SignedVerticalAccelerationWaitsForActivationThenPreservesAuthoredRate),
             ("raw numeric helper signed nullable neutral domains", RawNumericHelperSignedNullableAndNeutralDomains),
             ("hitbox raw numeric outside domain", HitboxRawNumericDomainRefusesOutsideBeforeNarrowing),
             ("hitbox raw numeric serialization cache network", HitboxRawNumericEndpointsSurviveSerializationCacheNetwork),
