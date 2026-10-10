@@ -401,15 +401,103 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "configure_weapon_ammo",
+      "componentSlot": "weapon_ammo",
+      "conflicts": [
+        "exclusive_group:ammo_role"
+      ],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "ammo_role",
+      "finalWirePaths": [
+        "runtimeProgram.weaponAmmo",
+        "runtimeProgram.weaponAmmo.ammoCategory",
+        "runtimeProgram.weaponAmmo.speedBasis"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "ammoCategory": {
+          "enum": [
+            "arrow",
+            "bullet",
+            "candy_corn",
+            "coin",
+            "dart",
+            "fallen_star",
+            "flare",
+            "gel",
+            "jack_o_lantern",
+            "nail_friendly",
+            "rocket",
+            "snowball",
+            "solution",
+            "stake",
+            "stynger_bolt"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_ammo_id_category",
+          "units": ""
+        },
+        "speedBasis": {
+          "enum": [
+            "authored_spawn",
+            "native_shot"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restores native weapon-side ammo requirement/conservation and combat contribution without retired bow/gun classifiers; native ammo projectile AI remains outside this capability",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "primary_use|spawn_entity",
+            "alternate_use|spawn_entity"
+          ],
+          "kind": "binding_tuple_present",
+          "message": "Weapon ammo requires an explicit active spawn_entity shot; hold/equipped events or item effects are not native ammo consumers.",
+          "target": "any_entity"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.weaponAmmo"
+      ]
+    },
+    {
+      "authorityByEffect": {},
       "capability": "configure_vanilla_ammo_item",
       "componentSlot": "ammo_item",
-      "conflicts": [],
+      "conflicts": [
+        "exclusive_group:ammo_role"
+      ],
       "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
-      "exclusiveGroup": "",
+      "exclusiveGroup": "ammo_role",
       "finalWirePaths": [
         "gameplay.ammoCategory",
         "gameplay.ammoProjectileId",

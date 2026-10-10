@@ -904,6 +904,23 @@ _CAPS: list[CapabilitySpec] = [
         repair_group="item_contact",
     ),
     _cap(
+        "configure_weapon_ammo",
+        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+        "item",
+        ("item_body",),
+        {
+            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks", enum=VANILLA_AMMO_CATEGORY_TOKENS),
+            "speedBasis": _p("string", "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative", enum=("authored_spawn", "native_shot")),
+        },
+        py=_COMPILER_OWNER,
+        cs="GeneratedItemData.Apply.cs::ApplyToItem/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+        wire=("runtimeProgram.weaponAmmo", "runtimeProgram.weaponAmmo.ammoCategory", "runtimeProgram.weaponAmmo.speedBasis"),
+        provenance="restores native weapon-side ammo requirement/conservation and combat contribution without retired bow/gun classifiers; native ammo projectile AI remains outside this capability",
+        repair_group="weapon_ammo",
+        lowering=("runtimeProgram.weaponAmmo",),
+        lowering_inputs=("runtimeProgram.calls[].fn",),
+    ),
+    _cap(
         "configure_vanilla_ammo_item",
         "Mark this generated item as one exact vanilla ammo category and projectile. Sets Item.ammo and Item.shoot; it does not configure a weapon to consume ammo.",
         "item",
@@ -1851,6 +1868,8 @@ if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
+    if cap.name == "configure_weapon_ammo":
+        return ("runtimeProgram.weaponAmmo", *(f"runtimeProgram.weaponAmmo.{name}" for name in cap.params))
     if cap.name == "present_placed_item_sprite":
         base = "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
         return (base, *(f"{base}.{name}" for name in cap.params if name != "placementCallId"))
@@ -1933,7 +1952,7 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 def _component_slot(cap: CapabilitySpec) -> str:
     direct = {
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
-        "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
+        "configure_vanilla_ammo_item": "ammo_item", "configure_weapon_ammo": "weapon_ammo", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
@@ -1957,6 +1976,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "configure_item_use": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
         "configure_item_contact_hitbox": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
         "configure_vanilla_ammo_item": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+        "configure_weapon_ammo": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
         "restore_resources_on_use": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "apply_vanilla_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
         "apply_generated_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
@@ -1988,6 +2008,8 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
 
 
 def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
+    if cap.name == "configure_weapon_ammo":
+        return "owner_execute_sync", {}
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
     if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:
@@ -2013,6 +2035,12 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "configure_weapon_ammo":
+        return (RequirementSpec(
+            "binding_tuple_present", target="any_entity",
+            any_of=("primary_use|spawn_entity", "alternate_use|spawn_entity"),
+            message="Weapon ammo requires an explicit active spawn_entity shot; hold/equipped events or item effects are not native ammo consumers.",
+        ),)
     if cap.name == "add_equipment_damage_bonus":
         return (RequirementSpec(
             "capability_group_present", target="item_body", any_of=("configure_accessory", "configure_armor"),
@@ -2182,6 +2210,8 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     if cap.category == "movement":
         exclusive_group = "movement"
         position_ownership = "velocity_or_position_controller"
+    elif cap.name in {"configure_weapon_ammo", "configure_vanilla_ammo_item"}:
+        exclusive_group = "ammo_role"
     elif cap.category == "controller":
         exclusive_group = "controller"
         position_ownership = {

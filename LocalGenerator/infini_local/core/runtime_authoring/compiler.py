@@ -166,6 +166,12 @@ def _compile_item_call(
             "contactForgivenessPx": "contactForgivenessPx",
         })
         return
+    if fn == "configure_weapon_ammo":
+        ammo: dict[str, Any] = {}
+        project(ammo, "runtimeProgram.weaponAmmo", {name: name for name in CAPABILITY_REGISTRY[fn].params})
+        ctx.write_derived(call=call, path="runtimeProgram.weaponAmmo", value=ammo, target=runtime, key="weaponAmmo",
+                          source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        return
     if fn == "configure_vanilla_ammo_item":
         project(gameplay, "gameplay", {
             "ammoCategory": "ammoCategory",

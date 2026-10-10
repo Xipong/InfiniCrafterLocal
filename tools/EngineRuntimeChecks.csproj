@@ -51,6 +51,7 @@
     <Compile Include="EngineRuntimeChecks.VfxPreview.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />
+    <Compile Include="EngineRuntimeChecks.WeaponAmmo.cs" />
     <Compile Include="EngineRuntimeChecks.Whip.cs" />
     <Compile Include="EngineRuntimeChecks.Proximity.cs" />
     <Compile Include="EngineRuntimeChecks.BudgetPeer.cs" />

@@ -1888,6 +1888,7 @@
                           "configure_item_stats",
                           "configure_item_use",
                           "configure_item_contact_hitbox",
+                          "configure_weapon_ammo",
                           "configure_vanilla_ammo_item",
                           "restore_resources_on_use",
                           "apply_vanilla_buff_on_use",

@@ -61,6 +61,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "configure_weapon_ammo",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "outputs": [
+        "runtimeProgram.weaponAmmo",
+        "runtimeProgram.weaponAmmo.ammoCategory",
+        "runtimeProgram.weaponAmmo.speedBasis"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "configure_vanilla_ammo_item",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
