@@ -723,7 +723,7 @@ class CapabilitySpec:
         if self.multiplicity != "single_per_target":
             card["multiplicity"] = self.multiplicity
         if self.effect_groupable:
-            card["effectGroups"] = "Optional params.effectGroupId partitions this component's multiplicity; an apply_item_effects binding selects the same exact ID. Omit both selectors for the existing default group. Mobility cooldown remains shared per player."
+            card["effectGroups"] = "Optional params.effectGroupId partitions this component's multiplicity and exclusive group ownership; an apply_item_effects binding selects the same exact ID. Omit both selectors for the existing default group. Mobility cooldown remains shared per player."
         if self.performance_budget != "bounded by runtime program limits":
             card["budget"] = self.performance_budget
         return card
@@ -976,7 +976,7 @@ _MODEL_OWNER = "InfiniCrafterLocal.Common.Models.RuntimeProgramSpec.cs"
 _COMPILER_OWNER = "infini_local.core.runtime_authoring.compiler::compile_runtime_program"
 
 
-def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
+def _equipment_params(*, armor: bool, group_set_bonuses: bool = True) -> Mapping[str, ParamSpec]:
     """One Author vocabulary for equipped effects and their exact DTO projection."""
     phase = "ModItem.UpdateEquip" if armor else "ModItem.UpdateAccessory"
 
@@ -1061,11 +1061,20 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                 runtime_minimum=safety[0] if safety else None,
                 runtime_maximum=safety[1] if safety else None,
                 execution_phase=set_phase)
+    if armor and group_set_bonuses:
+        grouped = {}
+        for name in tuple(p):
+            if name.startswith("setBonus"):
+                leaf = name[len("setBonus"):]
+                grouped[leaf[0].lower() + leaf[1:]] = p.pop(name)
+        p["setBonuses"] = _p("object", "Matching three-piece armor set bonuses, executed once by its head piece; exact setKey required for non-neutral effects", required=False, properties=grouped, min_properties=1)
     return MappingProxyType(p)
 
 
 _ACCESSORY_PRIMITIVES = _equipment_params(armor=False)
 _ARMOR_PRIMITIVES = _equipment_params(armor=True)
+_RETAINED_ARMOR_SET_PARAMS = {name: spec for name, spec in _equipment_params(armor=True, group_set_bonuses=False).items() if name.startswith("setBonus")}
+PLACEMENT_CAPABILITIES: Final[tuple[str, ...]] = ("configure_tile_placement", "configure_wall_placement")
 
 _CAPS: list[CapabilitySpec] = [
     _cap(
@@ -1104,17 +1113,18 @@ _CAPS: list[CapabilitySpec] = [
             "useStyle": _p("string", "Named Terraria ItemUseStyleID", enum=_USE_STYLE, wire_name="useStyleName"),
             "autoReuse": _p("boolean", "Allow repeated use while input is held"),
             "useTurn": _p("boolean", "Allow facing turn during use"),
-            "hideUseGraphic": _p("boolean", "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), empty/omitted heldSpriteVisibilityHint also hides the custom generated root; explicit on_release/after_charge keep it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless immediate is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag"),
+            "hideUseGraphic": _p("boolean", "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), customHeldSprite=inherit or omission also hides the custom generated root; explicit visible keeps it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless hidden is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag"),
             "disableMeleeHitbox": _p("boolean", "Disable vanilla item melee hitbox"),
             "channel": _p("boolean", "Keep use active while input is held"),
             "holdoutOffsetX": _p("integer", "Held draw offset X", minimum=-96, maximum=96, units="pixels", required=False, default=0, neutral=0),
             "holdoutOffsetY": _p("integer", "Held draw offset Y", minimum=-96, maximum=96, units="pixels", required=False, default=0, neutral=0),
             "handPose": _p("string", "Exact renderer hint", required=False, enum=("", "one_handed", "two_handed", "overhead", "forward")),
-            "heldSpriteVisibilityHint": _p("string", "Custom held-root visibility only, not gameplay release timing: immediate hides; on_release/after_charge explicitly keep while use is active (no different scheduling). Empty/omitted follows hideUseGraphic for declared-size presentations (visual.renderSizePx), and preserves historical keep behavior when that metadata is absent", required=False, enum=("", "immediate", "on_release", "after_charge"), wire_name="releaseTiming"),
+            "customHeldSprite": _p("string", "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic for declared-size presentations and historical keep behavior without that metadata. This does not schedule gameplay release or change vanilla hideUseGraphic.", required=False, enum=("hidden", "visible", "inherit"), wire_name="releaseTiming", wire_enum={"hidden": "immediate", "visible": "on_release", "inherit": ""}),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem/UseStyle",
         wire=("gameplay.useStyleName", "gameplay.autoReuse", "gameplay.useTurn", "gameplay.holdoutOffsetX", "gameplay.holdoutOffsetY", "gameplay.handPose", "gameplay.releaseTiming", "runtimeProgram.itemUse.*"),
+        retained_receipt_params={"heldSpriteVisibilityHint": _p("string", "Retained saved-wire visibility provenance", required=False, enum=("", "immediate", "on_release", "after_charge"), wire_name="releaseTiming")},
         provenance="existing use_affordance and explicit root affordance fields",
         repair_group="item_use",
         lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "runtimeProgram.itemUse.*"),
@@ -1259,7 +1269,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_placeable",
-        "Set a concrete tile/wall placement. The current runtime admits one layer per use: both IDs enabled is schema-valid but refused at runtime; this call cannot place both together.",
+        "Retained saved-wire provenance for the previous combined placement vocabulary; fresh Author selects one exact tile or wall operation.",
         "item_placeable",
         ("item_body",),
         {
@@ -1270,9 +1280,23 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="RuntimeProgramSpec.cs::RuntimeBindingActionSpec",
         wire=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
+        decision="internal",
         provenance="placement payload referenced by one exact binding transaction",
         repair_group="placeable",
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
+    ),
+    *(
+        _cap(
+            "configure_" + layer + "_placement", "Select one exact loaded " + layer + " and placement style for one referenced placement transaction.",
+            "item_placeable", ("item_body",),
+            {layer + "Id": _p("integer", "Exact loaded " + layer + " ID; copy from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_" + layer + "_id"),
+             "placeStyle": _p("integer", "Exact Item.placeStyle for the selected loaded placement", minimum=0, maximum=255)},
+            py=_COMPILER_OWNER, cs="RuntimeProgramSpec.cs::RuntimeBindingActionSpec",
+            wire=("runtimeProgram.bindings[].usePolicy.action.placement.*",),
+            provenance="lossless one-layer placement alias; the other layer is explicitly disabled by the selected operation",
+            repair_group="placeable",
+            fixed_wire_literals={inactive + "Id": -1},
+        ) for layer, inactive in (("tile", "wall"), ("wall", "tile"))
     ),
     _cap(
         "present_placed_item_sprite",
@@ -1280,7 +1304,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_placed_body",
         ("item_body",),
         {
-            "placementCallId": _p("string", "Exact same-item configure_placeable call executed by a place_item binding; tileId >= 0 and wallId = -1 only", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedBody"),
+            "placementCallId": _p("string", "Exact same-item configure_tile_placement call executed by a place_item binding; wall placements cannot carry this presentation", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedBody"),
             "renderSizePx": _p("integer", "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx", minimum=1, maximum=512, units="world pixels"),
             "footprintAnchorX": _p("number", "Normalized committed footprint rectangle X: 0 left, 1 right", minimum=0, maximum=1),
             "footprintAnchorY": _p("number", "Normalized committed footprint rectangle Y: 0 top, 1 bottom", minimum=0, maximum=1),
@@ -1311,13 +1335,21 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "mode": _p("string", "Use condition", enum=("grounded", "not_wet", "life_above", "mana_above"), wire_name="useConditionMode"),
-            "minLife": _p("integer", "Current HP (Player.statLife >= minLife) required for life_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinLife"),
-            "minMana": _p("integer", "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinMana"),
+            "condition": _p("string", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
+                _p("string", "Player is grounded", enum=("grounded",), wire_literals={"useConditionMode": "grounded"}),
+                _p("string", "Player is not wet", enum=("not_wet",), wire_literals={"useConditionMode": "not_wet"}),
+                _p("object", "Player.statLife >= the authored life threshold", properties={"lifeAtLeast": _p("integer", "Inclusive life threshold", minimum=0, maximum=1000, wire_name="useConditionMinLife")}, wire_literals={"useConditionMode": "life_above"}),
+                _p("object", "Player.statMana >= the authored mana threshold", properties={"manaAtLeast": _p("integer", "Inclusive mana threshold", minimum=0, maximum=1000, wire_name="useConditionMinMana")}, wire_literals={"useConditionMode": "mana_above"}),
+            )),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::CanUseItem",
         wire=("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
+        retained_receipt_params={
+            "mode": _p("string", "Use condition", enum=("grounded", "not_wet", "life_above", "mana_above"), wire_name="useConditionMode"),
+            "minLife": _p("integer", "Current HP (Player.statLife >= minLife) required for life_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinLife"),
+            "minMana": _p("integer", "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed", required=False, minimum=0, maximum=1000, wire_name="useConditionMinMana"),
+        },
         provenance="existing use_condition",
         repair_group="use_condition",
         lowering=("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
@@ -1340,11 +1372,11 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "move_player_on_use",
-        "Run one explicit bounded mobility action on successful use.",
+        "Run a bounded blink-to-cursor action on successful use; home recall has its own operation with no inactive blink fields.",
         "item_utility",
         ("item_body",),
         {
-            "mode": _p("string", "Mobility executor", enum=("recall_home", "blink_to_cursor"), wire_name="mobilityMode"),
+            "mode": _p("string", "Mobility executor", enum=("blink_to_cursor",), wire_name="mobilityMode"),
             "rangeTiles": _p("integer", "Maximum blink range", minimum=0, maximum=120, units="tiles", wire_name="mobilityRangeTiles"),
             "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"),
             "safeTileOnly": _p("boolean", "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check", wire_name="mobilitySafeTileOnly"),
@@ -1352,9 +1384,22 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::UseItem/InfiniCraftPlayer.Mobility.cs",
         wire=("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
+        retained_receipt_params={
+            "mode": _p("string", "Prior saved mobility executor domain", enum=("blink_to_cursor", "recall_home"), wire_name="mobilityMode"),
+        },
         provenance="existing mobility_effect",
         repair_group="mobility",
         lowering=("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
+        effect_groupable=True,
+    ),
+    _cap(
+        "recall_home_on_use", "Recall the owner home after a successful apply_item_effects use. The player mobility cooldown is shared with blink actions.",
+        "item_utility", ("item_body",),
+        {"cooldownTicks": _p("integer", "Shared player mobility cooldown after success", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks")},
+        py=_COMPILER_OWNER, cs="GeneratedItem.cs::ApplyItemEffects",
+        wire=("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
+        provenance="exact recall branch; blink-only range and safety are registered inactive constants",
+        repair_group="mobility", fixed_wire_literals={"mobilityMode": "recall_home", "mobilityRangeTiles": 0, "mobilitySafeTileOnly": False},
         effect_groupable=True,
     ),
     _cap(
@@ -1383,6 +1428,7 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="GeneratedArmorItems.cs/GeneratedItem.cs::UpdateEquip",
         wire=("armor.*",),
+        retained_receipt_params=_RETAINED_ARMOR_SET_PARAMS,
         provenance="existing armor_effect",
         repair_group="armor",
         lowering=("armor.*",),
@@ -2042,7 +2088,7 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
     "apply_item_effects": BindingActionSpec(
         "apply_item_effects", ("item_body",), ("primary_use", "alternate_use"),
         "The only active binding that enables authored item buffs/resource/mobility effects; combine with item_body.on_use events for simultaneous projectile spawns.",
-        ("restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use"),
+        ("restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use", "recall_home_on_use"),
     ),
     "place_item": BindingActionSpec(
         "place_item", ("item_body",), ("primary_use", "alternate_use"),
@@ -2268,8 +2314,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         "refresh_generated_effect_group_while_held": ("runtimeProgram.heldEffectGroupId",),
 
     }
-    if cap.name in item_paths:
-        paths = item_paths[cap.name]
+    if cap.name in PLACEMENT_CAPABILITIES:
+        return item_paths["configure_placeable"]
+    if cap.name in item_paths or cap.name == "recall_home_on_use":
+        paths = item_paths["move_player_on_use" if cap.name == "recall_home_on_use" else cap.name]
         if cap.effect_groupable:
             return (*paths, "runtimeProgram.effectGroups[].id",
                     *(p.replace("gameplay.", "runtimeProgram.effectGroups.", 1).replace("effectGroups.", "effectGroups[].", 1) for p in paths))
@@ -2344,6 +2392,10 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
         "set_projectile_sentry": "native_sentry", "set_descendant_concurrency": "spawn",
     }
+    if cap.name in PLACEMENT_CAPABILITIES:
+        return "placeable"
+    if cap.name == "recall_home_on_use":
+        return "item_mobility"
     if cap.name in direct:
         return direct[cap.name]
     if cap.category == "movement":
@@ -2393,6 +2445,10 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "emit_light_while_active": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
         "channel_beam": cap.csharp_owner,
     }
+    if cap.name in PLACEMENT_CAPABILITIES:
+        return item["configure_placeable"]
+    if cap.name == "recall_home_on_use":
+        return item["move_player_on_use"]
     if cap.name in item:
         return item[cap.name]
     if cap.category in {"movement", "controller"}:
@@ -2427,7 +2483,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
             "on_hit:target_to_owner": "owner_request_server_execute",
             "on_hit:target_to_entity": "owner_request_server_execute",
         }
-    if cap.name in {"spawn_entity_on_event", "move_owner_on_event", "move_player_on_use"}:
+    if cap.name in {"spawn_entity_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
         return "owner_execute_sync", {}
@@ -2474,12 +2530,14 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return tuple(rows)
     if cap.name == "present_placed_item_sprite":
         return (
-            RequirementSpec("executed_tile_placement_reference", capability="configure_placeable",
+            RequirementSpec("executed_tile_placement_reference", capability="configure_tile_placement",
                             param="placementCallId", any_of=("place_item",),
                             message="Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference."),
             RequirementSpec("unique_call_reference", param="placementCallId",
                             message="Only one explicit placed-body presentation may reference a placement call."),
         )
+    if cap.name in PLACEMENT_CAPABILITIES:
+        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding usePolicy.action.placementCallId."),)
     if cap.name == "configure_placeable":
         return (
             RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
@@ -2537,19 +2595,17 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return (RequirementSpec(
             kind="nonneutral_params_require_param",
             param="setKey",
-            nonzero_params=tuple(name for name in cap.params if name.startswith("setBonus")),
+            nonzero_params=("setBonuses",),
             message="A three-piece armor set bonus needs an explicit non-empty setKey shared by head, body and legs.",
         ), RequirementSpec(
             kind="nonneutral_params_require_exact_param", param="slot", equals="head",
-            nonzero_params=tuple(name for name in cap.params if name.startswith("setBonus")),
+            nonzero_params=("setBonuses",),
             message="Only the head piece executes an armor set bonus once a matching head, body and legs are equipped.",
         ), RequirementSpec(
             kind="positive_param_requires_param", param="lightColor",
             nonzero_params=("lightStrength",),
             message="Positive equipped light requires explicit lightColor; no hidden white fallback.",
         ))
-    if cap.name == "require_use_condition":
-        return (RequirementSpec("conditional_param", param="mode", any_of=("life_above:minLife", "mana_above:minMana"), message="threshold modes require their threshold parameter"),)
     if cap.category == "event":
         return (RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event"),)
     return ()
@@ -2644,6 +2700,10 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
             "charge_then_release": "owns_position_until_release",
             "target_and_fire": "owns_stationary_position",
         }[cap.name]
+    if cap.name in {"move_player_on_use", "recall_home_on_use"}:
+        exclusive_group = "item_mobility"
+    if cap.name in PLACEMENT_CAPABILITIES:
+        exclusive_group = "placeable"
     if cap.name in {"configure_item_contact_hitbox", "set_projectile_damage"}:
         emitted = ("on_hit", "on_crit")
     elif cap.name == "charge_then_release":

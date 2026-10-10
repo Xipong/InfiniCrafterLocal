@@ -62,7 +62,7 @@ def build_runtime_program_proof() -> dict[str, Any]:
         "schema": "infini.low-level-runtime-proof.v1",
         "ok": all_ok,
         "runtimeApi": "infini.runtime-program.v5",
-        "capabilityCount": len(CAPABILITY_REGISTRY),
+        "capabilityCount": sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values()),
         "prompt": prompt,
         "fixtures": fixture_rows,
     }

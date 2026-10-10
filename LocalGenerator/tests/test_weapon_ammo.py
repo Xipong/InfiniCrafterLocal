@@ -90,43 +90,49 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
     assert any(row["code"] == "missing_weapon_ammo_consumer" for row in report["errors"])
 
 
-def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_counters():
-    # Frozen base627 hashes predate this capability. Reversing only the two
-    # declared global inventory diagnostics must recover every original byte;
-    # gameplay, receipts and unrelated validation details remain fully pinned.
+def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neutrals():
+    # Keep the pre-ammo hashes unchanged. Item aliases intentionally replace
+    # source names/placement receipts, while #13 adds exact neutral targeting.
+    # Reverse only those asserted successors; every other compiled byte is pinned.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
+    from sentry_contract_checks import without_declared_targeting_neutrals
+    from beam_contract_checks import without_declared_beam_neutrals
+
     for name, expected_hash in baseline.items():
-        final = compile_runtime_program(build_runtime_fixture(name))
-        # #13 deliberately materializes five declared neutral omissions, with
-        # receipts. Reverse only this separately asserted notation projection
-        # for the historical pre-ammo byte oracle; do not overwrite its hashes.
-        neutral_targeting = {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
-                             "requireLineOfSight": False, "hardRange": False}
-        retired_paths = set()
-        for index, entity in enumerate(final["runtimeProgram"]["entities"]):
-            targeting = entity.get("targeting", {})
-            for field, value in neutral_targeting.items():
-                if field not in targeting:
-                    continue
-                path = f"runtimeProgram.entities[{index}].targeting.{field}"
-                receipt = [row for row in final["runtimeContract"]["finalWireReceipts"] if row["finalPath"] == path]
-                assert len(receipt) == 1 and receipt[0]["status"] == "declared_neutral_omission"
-                assert type(targeting[field]) is type(value) and targeting[field] == value
-                assert type(receipt[0]["value"]) is type(value) and receipt[0]["value"] == value
-                retired_paths.add(path)
-                del targeting[field]
-        final["runtimeContract"]["finalWireReceipts"] = [row for row in final["runtimeContract"]["finalWireReceipts"]
-                                                         if row["finalPath"] not in retired_paths]
-        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
+        final = without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))
+        rows = final["runtimeContract"]["finalWireReceipts"]
+        for row in rows:
+            if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
+                assert row["status"] == "delivered" and row["value"] in ("immediate", "on_release")
+                assert row["finalPath"] in ("gameplay.releaseTiming", "runtimeProgram.itemUse.releaseTiming")
+                row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
+        placement_calls = {row["callId"] for row in rows if row.get("fn") == "configure_tile_placement"}
+        for call_id in placement_calls:
+            selected = [row for row in rows if row.get("callId") == call_id]
+            assert len(selected) == 3
+            inactive = next(row for row in selected if row["finalPath"].endswith(".wallId"))
+            assert inactive["status"] == "technical_projection" and inactive["value"] == -1
+            assert inactive["authoredPath"].endswith(".fn")
+            inactive["status"] = "delivered"
+            inactive["authoredPath"] = inactive["authoredPath"].removesuffix("fn") + "params.wallId"
+            for row in selected:
+                assert row["fn"] == "configure_tile_placement"
+                row["fn"] = "configure_placeable"
+            positions = [i for i, row in enumerate(rows) if row.get("callId") == call_id]
+            ordered = [next(row for row in selected if row["finalPath"].endswith("." + field))
+                       for field in ("tileId", "wallId", "placeStyle")]
+            for i, row in zip(positions, ordered):
+                rows[i] = row
+        stats = final["runtimeContract"]["validation"]["stats"]
+        stats["capabilitiesUsed"] = sorted("configure_placeable" if fn == "configure_tile_placement" else fn
+                                           for fn in stats["capabilitiesUsed"])
+        checks = stats["registryDrivenChecks"]
+        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         added_modifier_caps = (
             "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
             "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
         )
-        # New capabilities add registry diagnostics, not old gameplay. Assert
-        # their exact declared contribution before reversing the historical
-        # counter; archived hashes and every gameplay/receipt byte stay frozen.
-        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()

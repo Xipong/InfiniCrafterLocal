@@ -931,6 +931,15 @@ def audit_compiler_receipts(
                     if _final_value(final_document, output) is _MISSING:
                         continue
                     matching = [r for r in rows if r["finalPath"] == output]
+                    # A different explicitly declared capability can own this
+                    # shared DTO leaf (including retained scalar projections).
+                    # Authenticate that claim through the same audit, rather
+                    # than demanding a duplicate receipt from this call.
+                    foreign = [r for r in receipt_rows if r.get("fn") and not r.get("lowererId")
+                               and r["finalPath"] == output
+                               and (r["fn"], r["callId"]) != (fn, call_id)]
+                    if not matching and len(foreign) == 1:
+                        continue
                     if len(matching) != 1:
                         violations.append({"fn": fn, "callId": call_id, "finalPath": output,
                                            "reason": "present parameter output lacks unique compiler receipt coverage"})

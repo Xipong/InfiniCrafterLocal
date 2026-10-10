@@ -45,7 +45,7 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
         "holdoutOffsetX": 0,
         "holdoutOffsetY": 0,
         "handPose": "one_handed",
-        "heldSpriteVisibilityHint": "on_release" if channel else "immediate",
+        "customHeldSprite": "visible" if channel else "hidden",
     }
 
 
@@ -280,7 +280,7 @@ def _fishing_platform_tool() -> dict[str, Any]:
     b.bind("primary_tool", "primary_use", "use_item_body", "item")
     b.bind("alternate_place", "alternate_use", "place_item", "item", stack_cost=1, placement_call_id="platform_result")
     b.call("tool_heads", "configure_tool", "item", {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedScale": 0.9})
-    b.call("platform_result", "configure_placeable", "item", {"tileId": 19, "wallId": -1, "placeStyle": 0})
+    b.call("platform_result", "configure_tile_placement", "item", {"tileId": 19, "placeStyle": 0})
     return b.finish(primary_entity_id="item", composition="A fishing rod carries a fold-out platform panel as a literal placeable result.", parent_a="fishing rod", parent_b="platform tile")
 
 
@@ -313,7 +313,7 @@ def _equipment_tool_combat() -> dict[str, Any]:
     b.call("harness_stats", "configure_accessory", "item", {"defensePoints": 4, "moveSpeedBonusPercent": 8, "genericCritChancePercentagePoints": 2, "damageReductionPercentagePoints": 2, "lightStrength": 0.35, "lightColor": "yellow"})
     b.call("harness_damage", "add_equipment_damage_bonus", "item", {"phase": "equipped", "damageClass": "generic", "bonusPercent": 5})
     b.call("mining_heads", "configure_tool", "item", {"pickPower": 55, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.85})
-    b.call("place_torch", "configure_placeable", "item", {"tileId": 4, "wallId": -1, "placeStyle": 0})
+    b.call("place_torch", "configure_tile_placement", "item", {"tileId": 4, "placeStyle": 0})
 
     return b.finish(primary_entity_id="item", composition="A mining harness retains its drill heads and installs its lamp as a literal tile.", parent_a="mining harness/tool", parent_b="placeable lamp")
 

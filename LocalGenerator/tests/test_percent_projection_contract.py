@@ -21,13 +21,22 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
-from test_registry_author_units import _get
+from test_registry_author_units import _get, _set_stat
+
+
+def _parameter_leaves(params, prefix=""):
+    for name, spec in params.items():
+        path = prefix + name
+        if spec.properties:
+            yield from _parameter_leaves(spec.properties, path + ".")
+        else:
+            yield path, spec
 
 
 PERCENT_PARAMS = tuple(
     (fn, name, spec)
     for fn, cap in CAPABILITY_REGISTRY.items()
-    for name, spec in cap.params.items()
+    for name, spec in _parameter_leaves(cap.params)
     if spec.wire_divisor == 100
 )
 
@@ -44,7 +53,7 @@ def percent_document(fn, name, value, *, companion=True):
     )
     if not companion:
         call["params"].pop("defensePoints", None)
-    call["params"][name] = value
+    _set_stat(call["params"], name, value)
     return doc, index, call
 
 
@@ -93,7 +102,7 @@ def test_nonneutral_percent_refused_at_exact_leaf_then_explicitly_repaired(fn, n
     assert scope["fieldPermissions"]["bindings"] == []
     assert scope["fieldPermissions"]["entities"] == []
     candidate = deepcopy(call)
-    candidate["params"][name] = 15.125
+    _set_stat(candidate["params"], name, 15.125)
     # A valid sibling/absence must remain frozen despite a useful correction.
     sibling = "damageClass" if fn == "add_equipment_damage_bonus" else "defensePoints"
     candidate["params"][sibling] = "magic" if sibling == "damageClass" else 77
@@ -105,7 +114,7 @@ def test_nonneutral_percent_refused_at_exact_leaf_then_explicitly_repaired(fn, n
     assert audit["ok"], audit
     fixed = apply_repair_patch(doc, filtered)
     expected = deepcopy(doc)
-    expected["runtimeProgram"]["calls"][index]["params"][name] = 15.125
+    _set_stat(expected["runtimeProgram"]["calls"][index]["params"], name, 15.125)
     assert _bytes(fixed) == _bytes(expected)
     assert_delivered(fixed, index, name, 15.125 / 100)
     assert _bytes(doc) == before
@@ -125,8 +134,13 @@ def test_projection_constraint_reaches_actual_author_and_serialized_repair(monke
     doc, _, _ = percent_document(fn, name, 5e-324)
     _, dossier = _capture_request(monkeypatch, doc, format_mode)
     for cards in (author_cards, dossier["existingBrokenCapabilityCards"]):
-        row = next(c for c in cards if c["fn"] == fn)["params"][name]
-        constraint = row["consumerConstraint"]
+        parts = name.split(".")
+        row = next(c for c in cards if c["fn"] == fn)["params"][parts[0]]
+        if len(parts) > 1:
+            row = row["shape"]
+            for part in parts[1:]:
+                row = row["properties"][part]
+        constraint = row["x-infini-consumerConstraint"] if len(parts) > 1 else row["consumerConstraint"]
         if isinstance(constraint, str):
             constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
         assert constraint == spec.schema()["x-infini-consumerConstraint"]
