@@ -81,7 +81,7 @@ internal static partial class EngineRuntimeChecks
             {
                 Vector2 start = new(10, 20), end = start + delta;
                 int index = count();
-                draw.Invoke(null, new object[] { texture, start, end, Color.White, 4f });
+                draw.Invoke(null, new object[] { texture, start, end, Color.White, 4f, false });
                 Equal(index + 1, count(), "line queues exactly one quad");
                 Vector3[] points = positions(index);
                 AssertVfxNear((start + end) * 0.5f, VfxVertexCenter(points), "line centered on authored segment");

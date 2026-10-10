@@ -646,13 +646,18 @@
       "authoredDecisionsPreserved": true,
       "capability": "channel_beam",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "outputs": [
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.rangeTiles",
         "runtimeProgram.entities[].controller.params.widthPx",
-        "runtimeProgram.entities[].controller.params.warmupTicks"
+        "runtimeProgram.entities[].controller.params.warmupTicks",
+        "runtimeProgram.entities[].controller.params.manaPayment",
+        "runtimeProgram.entities[].controller.params.initialDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.initialWidthMultiplier",
+        "runtimeProgram.entities[].controller.params.damageStartProgress",
+        "runtimeProgram.entities[].controller.params.raycastTiles"
       ]
     },
     {
