@@ -618,7 +618,7 @@ internal static partial class EngineRuntimeChecks
             var spriteProperty = typeof(InfiniMod).GetProperty("Sprites")!;
             var syncProperty = typeof(InfiniMod).GetProperty("AssetSync")!;
             var priorSprites = spriteProperty.GetValue(null); var priorSync = syncProperty.GetValue(null);
-            string sandbox = Path.Combine(Terraria.Program.SavePath, "asset-owner-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(sandbox);
+            string sandbox = Path.Combine(Terraria.Program.SavePath, "ao"); Directory.CreateDirectory(sandbox);
             bool observing = false; string? opened = null; byte[]? openedBytes = null; int validationsDuringDraw = 0;
             Action<string> open = path => {
                 if (!observing) return;
