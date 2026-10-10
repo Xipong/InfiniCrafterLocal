@@ -2415,7 +2415,8 @@
             "owner_center",
             "cursor",
             "ground_at_cursor",
-            "above_cursor"
+            "above_cursor",
+            "native_resting_spot"
           ],
           "kind": "string",
           "maximum": null,
@@ -2498,6 +2499,98 @@
       "promptVisibility": true,
       "provenance": "explicit optional per-entity live admission cap; no omission materialization",
       "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Late spawn refusal does not roll back other activation events or native item/mana costs. Capability absence adds no admission cap; no neutral/default is materialized, no name/category/movement routing and no other mechanic is selected.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_sentry",
+      "componentSlot": "native_sentry",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].nativeSentry"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "enabled": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "native sentry registration restored as an independent declared engine primitive",
+      "purpose": "Explicitly choose Projectile.sentry registration for this entity. enabled=true participates in the owner's native maxTurrets cap; Player.UpdateMaxTurrets runs immediately after each successful native sentry spawn and may retire the oldest sentry. Active item bindings project Item.sentry from their exact target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement or choose a weapon family. Omission preserves prior non-sentry behaviour.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_descendant_concurrency",
+      "componentSlot": "spawn",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].spawn.descendantMaxActive"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "maxActive": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 96,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pending or live descendants"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "sustained bounded descendant capacity without a monotonic 32-shot lifetime stop",
+      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget, with no fresh capacity created by network hydration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",

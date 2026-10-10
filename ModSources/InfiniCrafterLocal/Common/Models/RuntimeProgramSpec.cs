@@ -493,6 +493,13 @@ public static class RuntimeEntityRole
 
 public sealed class RuntimeEntitySpec
 {
+    private bool? _nativeSentry;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NativeSentry
+    {
+        get => _nativeSentry;
+        set => _nativeSentry = value ?? throw new InvalidDataException("nativeSentry must be an explicit boolean when present");
+    }
     public string Id { get; set; } = "";
     public string Kind { get; set; } = "";
     public string VisualRole { get; set; } = "";
@@ -544,7 +551,8 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
-            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
+            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
+                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -665,6 +673,18 @@ public sealed class RuntimeSpawnSpec
             _maxActive = value;
         }
     }
+    private int? _descendantMaxActive;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DescendantMaxActive
+    {
+        get => _descendantMaxActive;
+        set
+        {
+            if (value is null || value < 1 || value > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner)
+                throw new InvalidDataException("spawn.descendantMaxActive must be an explicit integer from 1 to the owner projectile ceiling");
+            _descendantMaxActive = value;
+        }
+    }
     public float SpreadRadians { get; set; }
     public int OffsetPx { get; set; }
     public string Aim { get; set; } = "cursor";
@@ -681,7 +701,7 @@ public sealed class RuntimeSpawnSpec
         Placement = RuntimeText.Safe(Placement, 48).ToLowerInvariant();
         if (Aim is not ("cursor" or "facing" or "velocity" or "none"))
             throw new InvalidDataException($"unknown spawn aim '{Aim}'");
-        if (Placement is not ("item_use_origin" or "owner_center" or "cursor" or "ground_at_cursor" or "above_cursor"))
+        if (Placement is not ("item_use_origin" or "owner_center" or "cursor" or "ground_at_cursor" or "above_cursor" or "native_resting_spot"))
             throw new InvalidDataException($"unknown spawn placement '{Placement}'");
         OverTarget ??= new RuntimeOverTargetSpec();
         OverTarget.Normalize();

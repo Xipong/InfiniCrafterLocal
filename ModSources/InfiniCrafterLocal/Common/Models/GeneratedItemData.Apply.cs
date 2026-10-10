@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Content.Projectiles;
 using System;
+using System.Linq;
 
 using Terraria;
 using Terraria.ID;
@@ -78,6 +79,9 @@ public sealed partial class GeneratedItemData
         // sword, bow, staff, sentry, furniture, or none of those.
         RuntimeBindingSpec? primary = RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
         RuntimeBindingSpec? alternate = RuntimeProgram.BindingForInput(RuntimeInputKind.AlternateUse);
+        item.sentry = new[] { primary, alternate }.Any(binding => binding is not null
+            && binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
+            && RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId)?.NativeSentry == true);
         bool spawnsRuntimeEntity = primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
             || alternate?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity;
         item.shoot = spawnsRuntimeEntity ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;

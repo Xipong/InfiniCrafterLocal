@@ -180,6 +180,10 @@ public sealed partial class GeneratedProjectile
 
     public override void OnKill(int timeLeft)
     {
+        // Release occupancy before terminal authored events, permitting a
+        // bounded replacement. Lifetime ledgers never refill from this path.
+        _spawnBudgetLease?.Release();
+        _spawnBudgetLease = null;
         if (_data is null || _entity is null) return;
         RuntimeHitPullBridge.RememberRetired(Projectile);
         if (!_expireEventRan && timeLeft <= 1)
