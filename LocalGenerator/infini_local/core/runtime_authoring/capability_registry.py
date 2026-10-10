@@ -1689,7 +1689,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         "on_use",
         ("item_body",),
         (),
-        "Emitted when an active item-body use binding succeeds.",
+        "Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target.",
         producer_binding_inputs=("primary_use", "alternate_use"),
         producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
         producer_binding_kinds=("item_body",),

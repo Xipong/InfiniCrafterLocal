@@ -122,7 +122,12 @@ def test_extension_cannot_be_smuggled_into_another_driver(component, code, name)
 def test_real_production_packet_and_nullable_inverse_expose_all_choices(monkeypatch, mode):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = build_initial_author_request({}, {}, {}, {}, "beam", model_name="test-model")
-    card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "channel_beam")
+    packet = json.loads(user)
+    card = next(c for c in packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "channel_beam")
+    profiles = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["consumerConstraints"]
+    for param in card["params"].values():
+        if isinstance(param.get("consumerConstraint"), str):
+            param["consumerConstraint"] = deepcopy(profiles[param["consumerConstraint"]])
     assert card == CAPABILITY_REGISTRY["channel_beam"].author_prompt_card()
     for term in ("CheckMana", "useTime", "LaserScan", "ownerHitCheck", "ModifyHitNPC", "three rays", "shortest"):
         assert term in json.dumps(card)
