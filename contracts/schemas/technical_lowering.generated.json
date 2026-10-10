@@ -374,6 +374,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_hitbox_curve",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "outputs": [
+        "runtimeProgram.entities[].hitboxCurve.startScale",
+        "runtimeProgram.entities[].hitboxCurve.endScale",
+        "runtimeProgram.entities[].hitboxCurve.startDelayTicks",
+        "runtimeProgram.entities[].hitboxCurve.durationTicks",
+        "runtimeProgram.entities[].hitboxCurve.curve",
+        "runtimeProgram.entities[].hitboxCurve.mirrorToSprite"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_collision",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",

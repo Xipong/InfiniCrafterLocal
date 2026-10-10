@@ -41,7 +41,7 @@ _FORBIDDEN_ROUTER_KEYS = {
 
 _RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
-_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events"})
+_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "hitboxCurve", "collision", "movement", "controller", "targeting", "light", "events"})
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
@@ -271,6 +271,28 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         entity_id = str(entity.get("id") or "")
         kind = str(entity.get("kind") or "")
         _reject_unknown(entity, _ENTITY_KEYS, entity_path, errors)
+        if "hitboxCurve" in entity:
+            curve_cap = CAPABILITY_REGISTRY["set_projectile_hitbox_curve"]
+            curve_schema = curve_cap.provider_variant_schema()["properties"]["params"]
+            curve = entity["hitboxCurve"]
+            curve_path = entity_path + ".hitboxCurve"
+            shape = strict_schema_errors(curve, curve_schema, path=curve_path)
+            if kind not in curve_cap.target_kinds or shape:
+                errors.append({"path": curve_path, "code": "invalid_hitbox_curve", "message": "Present hitboxCurve requires every explicit registry field, exact types, finite bounds and a projectile target."})
+                errors.extend(shape)
+            else:
+                movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
+                controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+                if controller.get("code") == 1 or movement.get("code") == 18 or (curve["mirrorToSprite"] and movement.get("code") == 15):
+                    errors.append({"path": curve_path, "code": "hitbox_curve_driver_conflict", "message": "Rectangle curves exclude beam/whip collisions; a sprite mirror excludes independent expanding-wave scale."})
+                contract = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
+                if "finalWireReceipts" in contract:
+                    receipts = contract["finalWireReceipts"]
+                    for name in curve_cap.params:
+                        final_path = curve_path.removeprefix("$.") + "." + name
+                        matches = [row for row in receipts if isinstance(row, Mapping) and row.get("fn") == curve_cap.name and row.get("finalPath") == final_path] if isinstance(receipts, list) else []
+                        if len(matches) != 1:
+                            errors.append({"path": curve_path + "." + name, "code": "missing_unique_hitbox_curve_receipt", "message": "A provenance-bearing wire must prove every present curve leaf exactly once on its actual entity."})
         component_specs = (
             ("visual", _VISUAL_KEYS), ("spawn", _SPAWN_KEYS), ("damage", _DAMAGE_KEYS),
             ("hitbox", _HITBOX_KEYS), ("collision", _COLLISION_KEYS), ("movement", _DRIVER_KEYS),

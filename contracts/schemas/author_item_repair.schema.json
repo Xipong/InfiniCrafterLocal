@@ -3398,6 +3398,116 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "set_projectile_hitbox_curve"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "curve": {
+                    "description": "linear: start+(end-start)*t; exponential: start*(end/start)^t; t clamps to 0..1",
+                    "enum": [
+                      "linear",
+                      "exponential"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "durationTicks": {
+                    "description": "Active world ticks from startScale to endScale",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "endScale": {
+                    "description": "Damage-rectangle multiplier at/after curve completion",
+                    "maximum": 8,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "dimensionless multiplier"
+                  },
+                  "mirrorToSprite": {
+                    "description": "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with move_expanding_wave, which independently owns dynamic sprite scale.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "startDelayTicks": {
+                    "description": "Active world ticks to hold startScale before interpolation",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "startScale": {
+                    "description": "Damage-rectangle multiplier before/start of the curve",
+                    "maximum": 8,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "dimensionless multiplier"
+                  }
+                },
+                "required": [
+                  "startScale",
+                  "endScale",
+                  "startDelayTicks",
+                  "durationTicks",
+                  "curve",
+                  "mirrorToSprite"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "set_projectile_collision"
               },
               "id": {

@@ -1906,6 +1906,7 @@
                           "set_projectile_damage",
                           "set_projectile_lifetime",
                           "set_projectile_hitbox",
+                          "set_projectile_hitbox_curve",
                           "set_projectile_collision",
                           "move_straight",
                           "move_slow_homing",

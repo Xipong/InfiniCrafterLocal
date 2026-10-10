@@ -326,5 +326,13 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 
 def test_absent_member_keeps_complete_legacy_compiled_bytes():
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name:hashlib.sha256(json.dumps(compile_runtime_program(build_runtime_fixture(name)), ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
+    actual = {}
+    for name in baseline:
+        compiled = compile_runtime_program(build_runtime_fixture(name))
+        checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        # The new capability adds registry checks even when it is absent. Preserve
+        # the frozen full-document baseline, adjusting only that proven counter.
+        assert checks["requirements"] == 28 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        checks["requirements"] = 28
+        actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
