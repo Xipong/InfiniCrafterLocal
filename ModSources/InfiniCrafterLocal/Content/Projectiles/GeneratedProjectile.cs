@@ -225,6 +225,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.tileCollide = entity.Collision.TileCollide;
         Projectile.ignoreWater = entity.Collision.IgnoreWater;
         Projectile.extraUpdates = entity.Collision.ExtraUpdates;
+        ApplyHitboxCurveVisual();
         _activationDelayTicks = AuthoredTicksToProjectileUpdates(entity.Spawn.OverTarget.DelayTicks);
         Projectile.usesLocalNPCImmunity = entity.Collision.NpcImmunityMode == "local";
         Projectile.localNPCHitCooldown = Projectile.usesLocalNPCImmunity
