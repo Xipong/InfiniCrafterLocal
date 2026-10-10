@@ -24,6 +24,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
+    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_event_produced
 from infini_local.core.runtime_authoring.program_schema import (
@@ -821,8 +822,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             meaningful = any(CAPABILITY_REGISTRY[fn].meaningful_for_stationary for fn in fns if fn in CAPABILITY_REGISTRY)
             if not meaningful:
                 allowed = tuple(sorted(
-                    name
-                    for name, cap in CAPABILITY_REGISTRY.items()
+                    cap.name
+                    for cap in visible_capabilities()
                     if kind in cap.target_kinds and cap.meaningful_for_stationary
                 ))
                 issues.append(ValidationIssue(

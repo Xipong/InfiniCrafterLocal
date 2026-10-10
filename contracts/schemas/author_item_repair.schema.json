@@ -4873,8 +4873,8 @@
                     "x-infini-units": "tiles"
                   },
                   "sameTargetBias": {
-                    "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
-                    "maximum": 1,
+                    "description": "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; the previous target may therefore lie outside that physical radius. This is a distance discount, not a hit probability",
+                    "maximum": 0.9,
                     "minimum": 0,
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar",
@@ -5245,7 +5245,7 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
-                "const": "chain_damage_on_event"
+                "const": "damage_nearest_on_event"
               },
               "id": {
                 "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
@@ -5255,13 +5255,6 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "count": {
-                    "description": "Maximum chained targets",
-                    "maximum": 12,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "spawn_or_target_count"
-                  },
                   "damageMultiplier": {
                     "description": "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone",
                     "maximum": 2,
@@ -5278,8 +5271,15 @@
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
                   },
+                  "maxTargets": {
+                    "description": "Maximum additional NPCs selected from the same event center, nearest first; the directly hit NPC is excluded",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "spawn_or_target_count"
+                  },
                   "rangeTiles": {
-                    "description": "Search radius",
+                    "description": "Inclusive physical search radius around the recorded event center, in tiles; it does not move between targets",
                     "maximum": 60,
                     "minimum": 1,
                     "type": "number",
@@ -5298,7 +5298,7 @@
                 },
                 "required": [
                   "when",
-                  "count",
+                  "maxTargets",
                   "rangeTiles",
                   "damageMultiplier"
                 ],

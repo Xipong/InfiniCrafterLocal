@@ -2,6 +2,8 @@
 
 Эта категория упрощает выбор уже существующего поведения снарядов. Канонические формы находятся в [`capability_registry.py`](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py); compiler, provider schema, validator, Repair и generated inventory получают их из одного registry. Runtime wire и C# executors сохраняют прежние имена, opcodes и единицы.
 
+Дополнение B15: [точное имя `damage_nearest_on_event` и fresh/wire диапазоны `sameTargetBias`](AUTHOR_EVENT_DOMAINS_RU.md) сохраняют те же consumers и прежнюю wire provenance, уточняя доступные новые решения Author.
+
 ## NPC immunity и число обновлений
 
 Полный пример collision:

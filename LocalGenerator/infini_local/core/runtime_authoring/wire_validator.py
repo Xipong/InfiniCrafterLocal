@@ -23,7 +23,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, matches_declared_scalar_projection
 from infini_local.core.runtime_authoring.validator import _has_non_neutral_generated_buff
 
 _MAX_MOVEMENT_CODE = 19
@@ -364,6 +364,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
         if isinstance(targeting, Mapping):
+            # Fresh Author and persisted wire deliberately have different
+            # domains for this existing native selector. Registry owns both;
+            # a delivery without provenance still obeys the retained wire type.
+            bias_spec = CAPABILITY_REGISTRY["target_and_fire"].retained_receipt_params["sameTargetBias"]
+            bias_key = bias_spec.wire_name or "sameTargetBias"
+            if bias_key in targeting and not matches_declared_scalar_projection(bias_spec, targeting[bias_key]):
+                errors.append({"path": f"{entity_path}.targeting.{bias_key}",
+                               "code": "invalid_retained_target_bias",
+                               "message": "Present target bias must match its declared persisted 0..1 domain without coercion or rewriting."})
             child = str(targeting.get("shotEntityId") or "")
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})

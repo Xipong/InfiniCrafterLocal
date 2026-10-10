@@ -4976,8 +4976,8 @@
                       "sameTargetBias": {
                         "type": "number",
                         "minimum": 0,
-                        "maximum": 1,
-                        "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
+                        "maximum": 0.9,
+                        "description": "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; the previous target may therefore lie outside that physical radius. This is a distance discount, not a hit probability",
                         "x-infini-units": "engine units: distance-score discount",
                         "x-infini-semanticType": "unitless_scalar"
                       }
@@ -5317,7 +5317,7 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
-                    "const": "chain_damage_on_event"
+                    "const": "damage_nearest_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -5351,18 +5351,18 @@
                         "description": "Execute on this exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "count": {
+                      "maxTargets": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Maximum chained targets",
+                        "description": "Maximum additional NPCs selected from the same event center, nearest first; the directly hit NPC is excluded",
                         "x-infini-semanticType": "spawn_or_target_count"
                       },
                       "rangeTiles": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 60,
-                        "description": "Search radius",
+                        "description": "Inclusive physical search radius around the recorded event center, in tiles; it does not move between targets",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },
@@ -5385,7 +5385,7 @@
                     },
                     "required": [
                       "when",
-                      "count",
+                      "maxTargets",
                       "rangeTiles",
                       "damageMultiplier"
                     ]

@@ -2463,6 +2463,24 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "placement": {
+          "priorAuthorSchema": {
+            "description": "Retained old spawn anchor provenance",
+            "enum": [
+              "item_use_origin",
+              "owner_center",
+              "cursor",
+              "ground_at_cursor",
+              "above_cursor"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "placement"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -2831,6 +2849,43 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "extraUpdates": {
+          "priorAuthorSchema": {
+            "description": "Retained extra AI update provenance",
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wireFields": [
+            "extraUpdates"
+          ]
+        },
+        "localNpcHitCooldownEngineUnits": {
+          "priorAuthorSchema": {
+            "description": "Retained raw immunity cooldown provenance",
+            "maximum": 600,
+            "minimum": -1,
+            "type": "integer"
+          },
+          "wireFields": [
+            "localNpcHitCooldownTicks"
+          ]
+        },
+        "npcImmunityMode": {
+          "priorAuthorSchema": {
+            "description": "Retained immunity mode provenance",
+            "enum": [
+              "owner",
+              "local"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "npcImmunityMode"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -3657,6 +3712,19 @@
       "purpose": "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "proximityRadiusPx": {
+          "priorAuthorSchema": {
+            "description": "Retained integer pixel radius provenance",
+            "maximum": 512,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "wireFields": [
+            "proximityRadiusPx"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4264,7 +4332,7 @@
         "sameTargetBias": {
           "enum": [],
           "kind": "number",
-          "maximum": 1,
+          "maximum": 0.9,
           "minimum": 0,
           "reference": null,
           "required": true,
@@ -4300,6 +4368,19 @@
       "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "sameTargetBias": {
+          "priorAuthorSchema": {
+            "description": "Persisted bias domain remains 0..1; the native selector saturates 0.9..1 at 0.9. Wire-only provenance does not admit these values to fresh Author",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "wireFields": [
+            "sameTargetBias"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4500,6 +4581,40 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_use",
+              "on_spawn",
+              "on_hit",
+              "on_crit",
+              "on_tile_collision",
+              "on_expire",
+              "on_kill",
+              "periodic",
+              "on_release",
+              "channel_complete"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        },
+        "periodTicks": {
+          "priorAuthorSchema": {
+            "description": "Retained prior periodic interval provenance",
+            "maximum": 3600,
+            "minimum": 6,
+            "type": "integer"
+          },
+          "wireFields": [
+            "periodTicks"
+          ]
+        }
+      },
       "safetyLimits": "max 12 per action, program child depth <= 3, total event spawn budget <= 32",
       "status": "refactored",
       "targetKinds": [
@@ -4596,6 +4711,21 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "on_crit"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4701,6 +4831,35 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "on_crit",
+              "on_tile_collision",
+              "on_expire",
+              "on_kill"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        },
+        "radiusPx": {
+          "priorAuthorSchema": {
+            "description": "Retained integer pixel radius provenance",
+            "maximum": 768,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "wireFields": [
+            "radiusPx"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4716,7 +4875,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -4740,16 +4899,6 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "count": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 12,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "spawn_or_target_count",
-          "units": ""
-        },
         "damageMultiplier": {
           "enum": [],
           "kind": "number",
@@ -4769,6 +4918,16 @@
           "required": false,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "maxTargets": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
         },
         "rangeTiles": {
           "enum": [],
@@ -4796,8 +4955,8 @@
       },
       "positionOwnership": "none",
       "promptVisibility": true,
-      "provenance": "chain/lightning arc extracted from on-hit opcode",
-      "purpose": "Chain bounded damage from the hit target to nearby NPCs.",
+      "provenance": "exact nearest-area alias of retained event action 4; no new chain algorithm",
+      "purpose": "Damage up to maxTargets nearest chaseable NPCs within one radius of the recorded event center, excluding the directly hit NPC. Every target is ranked from that same center and receives the same authored base-damage multiplier; no sequential hopping or distance falloff.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4922,6 +5081,47 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "periodic",
+              "on_expire"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        },
+        "mode": {
+          "priorAuthorSchema": {
+            "description": "Prior pull discriminator includes the owner branch now selected by its explicit capability",
+            "enum": [
+              "target_to_owner",
+              "target_to_entity",
+              "owner_to_target"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "mode"
+          ]
+        },
+        "periodTicks": {
+          "priorAuthorSchema": {
+            "description": "Retained prior periodic interval provenance",
+            "maximum": 3600,
+            "minimum": 6,
+            "type": "integer"
+          },
+          "wireFields": [
+            "periodTicks"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5102,6 +5302,21 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "on_crit"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5212,6 +5427,22 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "on_tile_collision",
+              "on_expire"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5284,6 +5515,128 @@
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "chain_damage_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "internal",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0.05,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": false,
+      "provenance": "retained event action 4 and prior Author paths; fresh Author uses damage_nearest_on_event",
+      "purpose": "Damage up to maxTargets nearest chaseable NPCs within one radius of the recorded event center, excluding the directly hit NPC. Every target is ranked from that same center and receives the same authored base-damage multiplier; no sequential hopping or distance falloff.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "retainedWireProvenance": {
+        "event": {
+          "priorAuthorSchema": {
+            "description": "Retained prior event source provenance",
+            "enum": [
+              "on_hit",
+              "on_crit"
+            ],
+            "type": "string"
+          },
+          "wireFields": [
+            "event"
+          ]
+        }
+      },
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
         "owner_attached_projectile",
         "free_projectile",
         "stationary_projectile",

@@ -747,7 +747,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
       "outputs": [
@@ -835,6 +835,22 @@
       "outputs": [
         "runtimeProgram.entities[].light.strength",
         "runtimeProgram.entities[].light.color"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "chain_damage_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].rangeTiles",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
       ]
     }
   ],

@@ -404,7 +404,8 @@ def test_item_effects_require_their_executable_binding(fn):
     [
         fn
         for fn, cap in CAPABILITY_REGISTRY.items()
-        if cap.category == "event" and "delayTicks" in cap.params and fn != "spawn_entity_on_event"
+        if cap.category == "event" and cap.prompt_visible and cap.decision == "expose"
+        and "delayTicks" in cap.params and fn != "spawn_entity_on_event"
     ],
 )
 def test_each_declared_event_delay_reaches_real_wire(fn):
@@ -534,7 +535,8 @@ def test_source_receipt_projection_rejects_bool_for_identity_integer():
     assert not validate_runtime_program(source)["ok"]  # Separate audit-only bug, not compiler admission.
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)
     assert not report["ok"], report
-    assert any("not the declared projection" in v["reason"] for v in report["violations"]), report
+    assert any("originating Author parameter is outside its current declared domain" == v["reason"]
+               for v in report["violations"]), report
 
 
 @pytest.mark.parametrize(

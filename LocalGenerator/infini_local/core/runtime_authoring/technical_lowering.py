@@ -209,11 +209,17 @@ def _parameter_outputs(fn: str, name: str, *, retained: bool = False) -> tuple[s
     ))
 
 
-def _retained_projection_value_matches(spec: Any, value: Any) -> bool:
-    """Verify the exact range/type of an explicitly retained scalar wire projection.
+def _valid_current_source_parameter(spec: Any, value: Any) -> bool:
+    """Fresh source evidence obeys its current ParamSpec, never retained domains."""
+    from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
+    return not strict_schema_errors(value, spec.schema()) and spec.consumer_value_error(value) is None
 
-    This cannot recover the missing Author; it only verifies that the persisted
-    receipt is one admitted value at its finite declared old wire path.
+
+def matches_declared_scalar_projection(spec: Any, value: Any) -> bool:
+    """Verify the exact range/type of a registry-declared scalar wire projection.
+
+    This cannot recover the missing Author; it verifies that the persisted
+    receipt/wire value is admitted at its declared scalar projection path.
     """
     from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
     if spec.structured:
@@ -599,14 +605,13 @@ def audit_compiler_receipts(
             r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
         ) if fn and not lowerer_id else None
         if (authored_document is None and parameter_match is not None and cap is not None
-            and parameter_match.group(2) not in cap.params
             and parameter_match.group(2) in cap.retained_receipt_params):
             name = parameter_match.group(2)
             retained_spec = cap.retained_receipt_params[name]
             expected_paths = _parameter_outputs(fn, name, retained=True)
             if (receipt.get("status") != "delivered" or authored_paths
                 or not any(path_matches(candidate, path) for candidate in expected_paths)
-                or not _retained_projection_value_matches(retained_spec, receipt.get("value"))):
+                or not matches_declared_scalar_projection(retained_spec, receipt.get("value"))):
                 violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
                                    "finalPath": path, "reason": "retained wire provenance has no exact declared prior projection"})
             continue
@@ -640,6 +645,13 @@ def audit_compiler_receipts(
                         "finalPath": path,
                         "expectedPaths": list(expected_paths),
                         "reason": "wrong capability output for authored parameter",
+                    })
+                if (authored_document is None and receipt.get("status") == "delivered"
+                    and not matches_declared_scalar_projection(spec, receipt.get("value"))):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
+                        "reason": "wire scalar value is outside its declared projection domain",
                     })
             if match is not None and cap is not None and match.group(2) in cap.params and is_omission:
                 name = match.group(2)
@@ -695,6 +707,12 @@ def audit_compiler_receipts(
                         "callId": str(receipt.get("callId") or ""), "fn": fn,
                         "authoredPath": authored_path, "finalPath": path,
                         "reason": "authored parameter absent from originating call",
+                    })
+                elif not _valid_current_source_parameter(cap.params[match.group(2)], source_params[match.group(2)]):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
+                        "reason": "originating Author parameter is outside its current declared domain",
                     })
                 elif not _same_receipt_value(receipt.get("value"), cap.params[match.group(2)].to_wire(source_params[match.group(2)])):
                     violations.append({
@@ -990,6 +1008,7 @@ __all__ = [
     "declared_global_inputs_for",
     "declared_global_outputs_for",
     "declared_outputs_for",
+    "matches_declared_scalar_projection",
     "path_matches",
     "primary_binding_role",
     "primary_binding_role_receipt",
