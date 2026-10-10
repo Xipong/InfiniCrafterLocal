@@ -518,7 +518,7 @@ def repair_author_item_after_failure(
             + bounded_json_dumps(scope["nonRepairableErrors"], max_chars=5000)
         )
     local_repair_schema = author_item_repair_response_schema(
-        capability_names=runtime_repair_schema_capabilities(scope))
+        capability_names=runtime_repair_schema_capabilities(scope), require_realization=True)
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "

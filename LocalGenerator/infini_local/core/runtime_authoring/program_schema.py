@@ -276,12 +276,16 @@ def author_item_response_schema() -> dict[str, Any]:
     }
 
 
-def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+def author_item_repair_schema(
+    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+) -> dict[str, Any]:
     """Canonical patch shape, optionally restricted to request-visible calls.
 
     None requests the complete local contract. An explicit empty set permits
     only an empty callsUpsert array, never the full catalog. Scope permissions
-    and the frozen merge remain separate authorities after parsing.
+    and the frozen merge remain separate authorities after parsing. The LLM
+    request requires the existing realizationReplacement field; generic patch
+    utilities keep its omission-as-no-change semantics.
     """
     variants = capability_provider_union()
     if capability_names is not None:
@@ -365,7 +369,7 @@ def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) 
             "realizationReplacement": realization_schema(),
             "note": _strict_string(min_len=1, max_len=500),
         },
-        "required": ["note"],
+        "required": ["note", "realizationReplacement"] if require_realization else ["note"],
     }
 
 
