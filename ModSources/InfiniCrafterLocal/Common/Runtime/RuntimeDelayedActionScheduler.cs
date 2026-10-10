@@ -36,6 +36,7 @@ internal static class RuntimeDelayedActionScheduler
         Vector2 Direction,
         int DamageDone,
         RuntimeParentCombat ParentCombat,
+        RuntimeHitTargetSpawnSnapshot? HitTargetSpawn,
         int ChildDepth,
         uint EnqueuedTick,
         uint DueTick,
@@ -132,6 +133,16 @@ internal static class RuntimeDelayedActionScheduler
                 RuntimeProgramExecutor.EventSpawnDamageMultiplier(action), parentCombat, out _, out _))
             return false;
 
+        RuntimeHitTargetSpawnSnapshot? hitTargetSpawn = null;
+        if (action.HitTargetSpawn is { } geometry)
+        {
+            if (action.ActionCode != RuntimeEventActionCode.SpawnEntity || !sourceEntity.IsProjectileEntity
+                || action.Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || !RuntimeHitTargetSpawnSnapshot.TryCapture(geometry, target, direction, out var captured))
+                return false;
+            hitTargetSpawn = captured;
+        }
+
         int reservedSpawnBudget = 0;
         if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
         {
@@ -139,6 +150,9 @@ internal static class RuntimeDelayedActionScheduler
             if (reservedSpawnBudget <= 0)
                 return false;
         }
+
+        if (hitTargetSpawn is { } launch)
+            hitTargetSpawn = launch with { Seed = Main.rand.Next() };
 
         uint enqueuedTick = Main.GameUpdateCount;
         uint dueTick = unchecked(enqueuedTick + (uint)Math.Clamp(action.DelayTicks, 1, 600));
@@ -148,7 +162,7 @@ internal static class RuntimeDelayedActionScheduler
             sourceProjectile, projectileSlot, sourceProjectile?.identity ?? 0,
             sourceProjectile?.type ?? 0, sourceModProjectile,
             target?.whoAmI ?? -1, target, target is null ? 0 : RuntimeHitNpcGeneration.Get(target),
-            position, direction, damageDone, parentCombat,
+            position, direction, damageDone, parentCombat, hitTargetSpawn,
             childDepth, enqueuedTick, dueTick, reservedSpawnBudget, budget, ownerHitReceipt));
         return true;
     }
@@ -237,7 +251,7 @@ internal static class RuntimeDelayedActionScheduler
                 pending.ChildDepth,
                 pending.Budget,
                 pending.ReservedSpawnBudget,
-                parentCombat: pending.ParentCombat);
+                parentCombat: pending.ParentCombat, hitTargetSpawn: pending.HitTargetSpawn);
             ExecutedThisTick++;
         }
     }

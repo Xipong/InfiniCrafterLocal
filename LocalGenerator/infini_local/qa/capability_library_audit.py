@@ -33,6 +33,11 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "ordered_params",
+    "present_param_requires_target_kind",
+    "present_param_requires_param_value",
+    "present_param_forbids_capability",
+    "referenced_param_presence_requires_value",
     "param_requires_target_kind",
     "capability_present",
     "capability_group_present",
@@ -51,6 +56,8 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "conditional_param",
     "non_neutral_param",
     "event_available",
+    "referenced_entity_capability_params",
+    "referenced_entity_without_capability",
 })
 
 
@@ -164,6 +171,21 @@ def _clamp_bounds(text: str, class_name: str, constants: Mapping[str, float]) ->
     return out
 
 
+def _numeric_parameter_leaves(params, prefix=""):
+    for name, spec in params.items():
+        path = f"{prefix}.{name}" if prefix else name
+        if spec.alternatives:
+            for branch in spec.alternatives:
+                if branch.properties:
+                    yield from _numeric_parameter_leaves(branch.properties, path)
+                elif branch.kind in {"integer", "number"}:
+                    yield path, branch
+        elif spec.properties:
+            yield from _numeric_parameter_leaves(spec.properties, path)
+        elif spec.kind in {"integer", "number"}:
+            yield path, spec
+
+
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     root = _repo_root()
     dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "RuntimeProgramSpec.cs"
@@ -174,7 +196,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         for name in (
             "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
-            "RuntimeEventActionSpec", "RuntimeItemContactSpec",
+            "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
         )
     }
     property_map: dict[str, tuple[str, str]] = {
@@ -199,18 +221,18 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             class_name = property_map[cap.name][0]
         else:
             continue
-        bounds = class_bounds[class_name]
-        for param_name, spec in cap.params.items():
-            if spec.kind not in {"integer", "number"}:
-                continue
-            csharp_name = {
-                "shotEntity": "ShotEntityId",
-                "entity": "EntityId",
-            }.get(param_name, param_name[:1].upper() + param_name[1:])
+        default_class = class_name
+        for param_name, spec in _numeric_parameter_leaves(cap.params):
+            field = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
+                           "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
+            field = field.rsplit(".", 1)[-1]
+            csharp_name = field[:1].upper() + field[1:]
+            bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
-            if cap.name == "target_and_fire" and param_name == "damageMultiplier":
-                from infini_local.qa.primitive_loss_audit import nullable_float_rejection_bounds
-                reject_bounds = nullable_float_rejection_bounds(text.encode(), class_name, csharp_name)
+            if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
+                from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
+                reject_bounds = nullable_number_rejection_bounds(text.encode(), class_name, csharp_name)
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
@@ -322,6 +344,18 @@ def capability_library_audit() -> dict[str, Any]:
                 error("unknown_requirement_kind", f"{base}.requirements", requirement.kind)
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
+            if requirement.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}:
+                reference_param = cap.params.get(requirement.param)
+                if reference_param is None or reference_param.reference is None or reference_param.reference.namespace != "entity":
+                    error("invalid_reference_requirement_param", f"{base}.requirements", requirement.param)
+                required_cap = CAPABILITY_REGISTRY.get(requirement.capability)
+                if requirement.kind == "referenced_entity_capability_params":
+                    if not isinstance(requirement.equals, Mapping) or not requirement.equals:
+                        error("empty_reference_requirement_params", f"{base}.requirements", requirement.param)
+                    elif required_cap is not None:
+                        for name in requirement.equals:
+                            if name not in required_cap.params:
+                                error("unknown_reference_requirement_exact_param", f"{base}.requirements", name)
             for name in requirement.any_of:
                 if requirement.kind == "capability_group_present" and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)

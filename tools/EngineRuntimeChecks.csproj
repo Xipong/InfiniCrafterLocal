@@ -72,6 +72,8 @@
     <Compile Include="EngineRuntimeChecks.MobilityConsumption.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
     <Compile Include="EngineRuntimeChecks.DelayedNpcIncarnation.cs" />
+    <Compile Include="EngineRuntimeChecks.InitialNpcExclusion.cs" />
+    <Compile Include="EngineRuntimeChecks.SpawnDistributions.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
     <Compile Include="EngineRuntimeChecks.ParentTooltip.cs" />
     <Compile Include="EngineRuntimeChecks.ParentMotion.cs" />

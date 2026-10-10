@@ -44,6 +44,15 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("sampled launch strict DTO and old saved absence", SampledLaunchDtoRejectsInvalidAndPreservesOldAbsence),
+            ("sampled velocity seeded geometry and area moments", SampledVelocitySeededGeometryAndAreaMoments),
+            ("sampled velocity native spawn owner authority", SampledVelocityReachesNativeSpawnOnlyOnOwner),
+            ("sampled velocity delay ExtraAI and hydration", SampledVelocityDelayExtraAiAndHydrationPreserveChosenVector),
+            ("hit target captured hitbox branch endpoints and seed", HitTargetGeometryUsesCapturedHitboxAndExactBranchEndpoints),
+            ("hit target delayed native boundary and reservation ownership", HitTargetDelayedNativeBoundaryAndReservationOwnership),
+            ("initial NPC exclusion exact incarnation and counter", InitialNpcExclusionUsesExactIncarnationAndCounter),
+            ("initial NPC exclusion ExtraAI remaining and v2 absence", InitialNpcExclusionExtraAiPreservesRemainingAndOldAbsence),
+            ("explicit spawn transform native boundary", ExplicitSpawnTransformRejectsInvalidBeforeNativeBoundary),
             ("bugfix251 grounded native support", GroundedConditionRequiresNativeSupport),
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),

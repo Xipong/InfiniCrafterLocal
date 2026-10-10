@@ -138,7 +138,8 @@ public sealed partial class GeneratedProjectile
     }
 
     public override bool? CanHitNPC(NPC target)
-        => !_configured || _activationDelayTicks > 0 || _entity?.Damage.Enabled != true ? false : null;
+        => !_configured || _activationDelayTicks > 0 || _entity?.Damage.Enabled != true
+            || _initialNpcExclusion.AppliesTo(target) ? false : null;
 
     public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
     {

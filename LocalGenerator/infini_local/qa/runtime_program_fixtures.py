@@ -51,7 +51,7 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
 
 def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "item_use_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
     return {
-        "speedPxPerUpdate": speed,
+        "velocity": {"constantSpeedPxPerUpdate": speed},
         "count": count,
         "spreadRadians": 0.0,
         "offsetPx": int(offset),

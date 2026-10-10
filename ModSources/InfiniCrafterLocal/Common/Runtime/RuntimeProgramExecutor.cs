@@ -89,7 +89,8 @@ internal static class RuntimeProgramExecutor
         int childDepth,
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget = 0,
-        RuntimeParentCombat? parentCombat = null)
+        RuntimeParentCombat? parentCombat = null,
+        RuntimeHitTargetSpawnSnapshot? hitTargetSpawn = null)
     {
         if (!HasActionAuthority(action, owner))
         {
@@ -99,8 +100,14 @@ internal static class RuntimeProgramExecutor
         switch (action.ActionCode)
         {
             case RuntimeEventActionCode.SpawnEntity:
+                if (action.HitTargetSpawn is not null && (!sourceEntity.IsProjectileEntity
+                    || action.Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)))
+                {
+                    budget.Return(reservedSpawnBudget);
+                    return;
+                }
                 SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget,
-                    parentCombat ?? RuntimeParentCombat.Capture(source, owner));
+                    parentCombat ?? RuntimeParentCombat.Capture(source, owner), directTarget, hitTargetSpawn);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (directTarget is { active: true })
@@ -143,7 +150,9 @@ internal static class RuntimeProgramExecutor
         int childDepth,
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget,
-        RuntimeParentCombat parentCombat)
+        RuntimeParentCombat parentCombat,
+        NPC? directTarget,
+        RuntimeHitTargetSpawnSnapshot? hitTargetSpawn)
     {
         int available = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Remaining;
         if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
@@ -164,6 +173,12 @@ internal static class RuntimeProgramExecutor
             budget.Return(reservedSpawnBudget);
             return;
         }
+        if (action.HitTargetSpawn is not null)
+        {
+            SpawnHitTargetChildren(data, action, target, owner, source, direction, directTarget,
+                childDepth, budget, reservedSpawnBudget, damageOverride, knockbackOverride, hitTargetSpawn);
+            return;
+        }
         int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
         int requested = Math.Min(action.Count, granted);
         int spawned = requested > 0 ? GeneratedProjectile.SpawnRuntimeEntity(
@@ -182,6 +197,63 @@ internal static class RuntimeProgramExecutor
             rootDamageOverride: damageOverride,
             rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
+    }
+
+    private static void SpawnHitTargetChildren(
+        GeneratedItemData data, RuntimeEventActionSpec action, RuntimeEntitySpec child,
+        Player owner, IEntitySource source, Vector2 direction, NPC? directTarget,
+        int childDepth, RuntimeSpawnBudget budget, int reservedSpawnBudget,
+        int? damageOverride, float? knockbackOverride, RuntimeHitTargetSpawnSnapshot? admittedSnapshot)
+    {
+        RuntimeHitTargetSpawnSpec spec = action.HitTargetSpawn!;
+        if (!spec.IsValid || !RuntimeEventActionSpec.SupportsTargetEmission(child)
+            || action.DamageBasis is null || action.KnockbackBasis is null
+            || action.Count < 1 || action.Count > 12 || action.SpreadRadians != 0f
+            || !float.IsFinite(action.DamageMultiplier) || action.DamageMultiplier < 0f || action.DamageMultiplier > 4f)
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        RuntimeHitTargetSpawnSnapshot snapshot;
+        if (admittedSnapshot is { } captured)
+            snapshot = captured;
+        else if (!RuntimeHitTargetSpawnSnapshot.TryCapture(spec, directTarget, direction, out snapshot))
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
+        int unattempted = granted;
+        try
+        {
+            int count = Math.Min(Math.Min(action.Count, granted), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                - GeneratedProjectile.CountActiveGeneratedProjectiles(owner.whoAmI));
+            if (count <= 0 || !GeneratedProjectile.CanAdmitEntityBatch(data, child, owner.whoAmI, count))
+                return;
+            if (admittedSnapshot is null)
+                snapshot = snapshot with { Seed = Main.rand.Next() };
+            if (!RuntimeHitTargetSpawn.TryPlan(spec, snapshot, count, out var transforms, out var velocitySeeds))
+                return;
+            for (int i = 0; i < count; i++)
+            {
+                // Transfer exactly one reservation before dispatch. The callee
+                // refunds its attempted slot on exception; this finally owns
+                // only those slots which have not yet crossed the boundary.
+                unattempted--;
+                int spawned = GeneratedProjectile.SpawnRuntimeEntity(data, child.Id, owner, source,
+                    transforms[i].Position, transforms[i].Direction, childDepth + 1, 1,
+                    requestedCount: 1, spreadOverride: 0f,
+                    damageMultiplier: EventSpawnDamageMultiplier(action), activationBudget: budget,
+                    rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride,
+                    initialNpcExclusion: snapshot.Exclusion, initialTransform: transforms[i],
+                    initialVelocitySeed: velocitySeeds[i]);
+                budget.Return(1 - spawned);
+            }
+        }
+        finally
+        {
+            budget.Return(unattempted);
+        }
     }
 
     // Item stats are projected into Gameplay; projectile stats belong to the exact

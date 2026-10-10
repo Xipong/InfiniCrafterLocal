@@ -14,6 +14,7 @@ from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_
 from infini_local.pipelines import visual_generation_pipeline as visual
 from tests.test_visual_presentation_metadata import kit
 from tests.captured_parent_combat_author import captured_parent_combat_author
+from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
 
 
 _TYPE_PAIRS = [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)]
@@ -107,7 +108,7 @@ def _historical_names(document):
         if pair and pair[0] in row.get("params", {}):
             assert pair[1] not in row["params"]
             row["params"][pair[1]] = row["params"].pop(pair[0])
-    return captured_parent_combat_author(projected)
+    return captured_spawn_velocity_author(captured_parent_combat_author(projected))
 
 
 def test_replay_frozen_provenance():

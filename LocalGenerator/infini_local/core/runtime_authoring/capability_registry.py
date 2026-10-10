@@ -6,6 +6,8 @@ import struct
 from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
+from infini_local.core.repair_merge import json_values_equal
+
 from infini_local.core.runtime_authoring.binding_use_policy import (
     STACK_COST_RULE,
     action_kind,
@@ -105,6 +107,7 @@ class RequirementSpec:
     any_of: tuple[str, ...] = ()
     nonzero_params: tuple[str, ...] = ()
     message: str = ""
+    other_param: str = ""
 
     def card(self) -> dict[str, Any]:
         out: dict[str, Any] = {"kind": self.kind, "target": self.target}
@@ -112,13 +115,15 @@ class RequirementSpec:
             out["capability"] = self.capability
         if self.param:
             out["param"] = self.param
-            out["equals"] = self.equals
+            out["equals"] = dict(self.equals) if isinstance(self.equals, Mapping) else self.equals
         if self.any_of:
             out["anyOf"] = list(self.any_of)
         if self.nonzero_params:
             out["nonzeroParams"] = list(self.nonzero_params)
         if self.message:
             out["message"] = self.message
+        if self.other_param:
+            out["otherParam"] = self.other_param
         return out
 
 
@@ -542,6 +547,7 @@ class CapabilitySpec:
     # Entries contain exact projections of retired authored parameter paths.
     retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    wire_action: str = ""
 
     def provider_variant_schema(self) -> dict[str, Any]:
         properties = {name: spec.schema() for name, spec in self.params.items()}
@@ -815,6 +821,7 @@ def _cap(
     meaningful_for_stationary: bool = False,
     retained_receipt_params: Mapping[str, ParamSpec] | None = None,
     fixed_wire_literals: Mapping[str, Any] | None = None,
+    wire_action: str = "",
 ) -> CapabilitySpec:
     target_values = tuple(targets)
     target_set = set(target_values)
@@ -850,6 +857,7 @@ def _cap(
         meaningful_for_stationary=meaningful_for_stationary,
         retained_receipt_params=MappingProxyType(dict(retained_receipt_params or {})),
         fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
+        wire_action=wire_action,
     )
 
 
@@ -973,6 +981,55 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
 
 _ACCESSORY_PRIMITIVES = _equipment_params(armor=False)
 _ARMOR_PRIMITIVES = _equipment_params(armor=True)
+
+def _spawn_velocity() -> ParamSpec:
+    def speed(description: str, wire: str) -> ParamSpec:
+        return _p("number", description, minimum=0, maximum=80,
+                  units="pixels/projectile update", semantic_type="initial_velocity_speed",
+                  neutral=0, consumer_storage="float32", wire_name=wire)
+
+    variants = [_p("object", "Exact constant-speed deterministic fan; preserves the established wire.", properties={
+        "constantSpeedPxPerUpdate": speed("Initial velocity magnitude; each extra update moves this many pixels before movement/collisions.", "speedPxPerTick"),
+    })]
+    for name, kind, description in (
+        ("fanSpeed", "fan_speed", "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."),
+        ("radial", "radial", "Sample each direction uniformly over the full circle and speed uniformly between min and max."),
+        ("disk", "disk", "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."),
+        ("cone", "cone", "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."),
+    ):
+        fields = {"maxSpeedPxPerUpdate": speed("Upper sampled speed, inclusive at the degenerate min=max boundary.", "velocityDistribution.maxSpeedPxPerUpdate")}
+        if kind != "disk":
+            fields = {"minSpeedPxPerUpdate": speed("Lower sampled speed; must not exceed maxSpeedPxPerUpdate.", "velocityDistribution.minSpeedPxPerUpdate"), **fields}
+        if kind == "cone":
+            fields["halfAngleRadians"] = _p("number", "Uniform signed angular jitter around each existing fan direction.",
+                minimum=0, maximum=math.pi, units="radians", semantic_type="radians", neutral=0,
+                consumer_storage="float32", wire_name="velocityDistribution.halfAngleRadians")
+        variants.append(_p("object", description, properties={name: _p("object", description,
+            properties=fields, wire_literals={"velocityDistribution.kind": kind, "speedPxPerTick": 0})}))
+    return _p("union", "Select exactly one initial velocity rule. Owner samples a seeded batch once; native projectile state synchronizes the result. No peer reroll or inferred distribution.",
+              alternatives=variants, semantic_type="initial_velocity_distribution", wire_presence_requires_receipt=True)
+
+
+def _hit_target_spawn_geometry() -> ParamSpec:
+    fields = {}
+    for name, maximum, units, meaning in (
+        ("beforeProbability", 1, "probability", "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance."),
+        ("hitboxMaxSideFactor", 2, "hitbox max-side factor", "Clearance radius uses max(target.width,target.height) times this factor, plus clearancePx."),
+        ("clearancePx", 128, "pixels", "Additional target-centre clearance, explicitly added to the selected hitbox radius."),
+        ("beforePositionJitterRadiusPx", 128, "pixels", "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter."),
+        ("beforeDirectionJitterRadians", math.pi, "radians", "Before-target direction gets uniform signed jitter within this half-angle around the event direction."),
+        ("afterFanSpreadRadians", math.tau, "radians", "After-target directions use the deterministic inclusive fan over all child indices; each origin lies on its own ray."),
+    ):
+        fields[name] = _p("number", meaning, minimum=0, maximum=maximum, units=units,
+            semantic_type="spawn_geometry", consumer_storage="float64" if name == "beforeProbability" else "float32", neutral=0,
+            wire_name="hitTargetSpawn." + name)
+    fields["initialIgnoreCountdownUpdates"] = _p("integer", "Exact initial NPC exclusion counter, decremented before collision: 10 blocks before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
+        minimum=0, maximum=600, units="projectile AI countdown updates", semantic_type="initial_target_exclusion_countdown",
+        wire_name="hitTargetSpawn.initialIgnoreCountdownUpdates")
+    return _p("object", "Explicit hit-target-relative origin and direction sampling. Capture target geometry/event direction and owner seed at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
+              properties=fields, wire_literals={"spreadRadians": 0},
+              semantic_type="hit_target_spawn_geometry", wire_presence_requires_receipt=True)
+
 
 _CAPS: list[CapabilitySpec] = [
     _cap(
@@ -1286,11 +1343,11 @@ _CAPS: list[CapabilitySpec] = [
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
-            "speedPxPerUpdate": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update", wire_name="speedPxPerTick"),
+            "velocity": _spawn_velocity(),
             "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
+            "aim": _p("string", "Initial aim axis and forward offset: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction. none is zero velocity for the constant variant; radial/disk sample their own directions independently.", enum=("cursor", "facing", "velocity", "none")),
             "placement": _p("string", "Spawn position", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor")),
         },
         py=_COMPILER_OWNER,
@@ -1298,6 +1355,7 @@ _CAPS: list[CapabilitySpec] = [
         wire=("runtimeProgram.entities[].spawn.*",),
         provenance="shot count/spread/aim/placement extracted from all roots",
         repair_group="spawn",
+        retained_receipt_params={"speedPxPerUpdate": _p("number", "Retained constant-speed wire-only provenance.", minimum=0, maximum=80, wire_name="speedPxPerTick")},
     ),
     _cap(
         "set_projectile_concurrency",
@@ -1581,6 +1639,31 @@ _CAPS.extend([
         repair_group="event_spawn",
         events=EVENT_KINDS,
         budget="max 12 per action, program child depth <= 3, total event spawn budget <= 32",
+    ),
+    _cap(
+        "spawn_entity_from_hit_target",
+        "Emit authored moving children from explicit before/after geometry around the actually hit NPC. Capture its centre, size, event direction and owner seed at event admission, including delay. Each child uses its own authored velocity rule; geometry does not promise a re-hit or inherit a hidden parent-speed formula.",
+        "event",
+        PROJECTILE_ENTITY_KINDS,
+        {
+            "event": _p("string", "Exact direct-contact source event", enum=("on_hit", "on_crit")),
+            "entity": _p("string", "Referenced moving child; its spawn placement must be item_use_origin, aim velocity, offsetPx 0, with no spawn_over_target", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
+            "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
+            "geometry": _hit_target_spawn_geometry(),
+            "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "knockbackBasis": _p("string", "Child knockback source, selected independently of damage", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageMultiplier": _p("number", "Multiply the selected damage exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
+            "delayTicks": _p("integer", "World-tick delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted", minimum=0, maximum=600, units="ticks"),
+        },
+        multiplicity="many_per_target",
+        py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        wire=("runtimeProgram.entities[].events[].*",),
+        wire_action="spawn_entity_on_event",
+        provenance="explicit target-relative split geometry and initial NPC exclusion extracted from the retired split macro",
+        repair_group="event_spawn",
+        events=("on_hit", "on_crit"),
+        budget="max 12 per action, program child depth <= 3, shared event spawn budget <= 32; no reservation is recreated on hydration",
     ),
     _cap(
         "apply_status_on_event",
@@ -2062,10 +2145,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         return tuple(f"runtimeProgram.entities[].spawn.overTarget.{name}" for name in cap.params)
     if cap.category == "event":
         mapped = ["runtimeProgram.entities[].events[].event", "runtimeProgram.entities[].events[].action", "runtimeProgram.entities[].events[].actionCode"]
-        for name in cap.params:
+        for name in param_fields:
             if name == "event":
                 continue
-            mapped.append("runtimeProgram.entities[].events[].entityId" if name == "entity" else f"runtimeProgram.entities[].events[].{name}")
+            mapped.append(f"runtimeProgram.entities[].events[].{name}")
         if cap.name == "move_owner_on_event":
             mapped.append("runtimeProgram.entities[].events[].mode")  # fixed DTO discriminator for the only executed destination
         return tuple(mapped)
@@ -2145,7 +2228,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
             "on_hit:target_to_owner": "owner_request_server_execute",
             "on_hit:target_to_entity": "owner_request_server_execute",
         }
-    if cap.name in {"spawn_entity_on_event", "move_owner_on_event", "move_player_on_use"}:
+    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "move_owner_on_event", "move_player_on_use"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
         return "owner_execute_sync", {}
@@ -2157,6 +2240,25 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "configure_spawn":
+        moving = ("owner_attached_projectile", "free_projectile", "child_projectile")
+        rows = [RequirementSpec("present_param_requires_target_kind", param=f"velocity.{variant}", any_of=moving,
+            message="Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.")
+            for variant in ("fanSpeed", "radial", "disk", "cone")]
+        rows.extend(RequirementSpec("ordered_params", param=f"velocity.{variant}.minSpeedPxPerUpdate",
+            other_param=f"velocity.{variant}.maxSpeedPxPerUpdate",
+            message="Minimum sampled speed must not exceed the explicitly authored maximum.")
+            for variant in ("fanSpeed", "radial", "cone"))
+        rows.extend(RequirementSpec("present_param_requires_param_value", param=f"velocity.{variant}", other_param="aim",
+            any_of=("cursor", "facing", "velocity"), message="The selected directional distribution requires an explicit non-zero aim axis.")
+            for variant in ("fanSpeed", "cone"))
+        rows.extend(RequirementSpec("present_param_requires_param_value", param=f"velocity.{variant}", other_param="spreadRadians", equals=0,
+            message="Radial/disk directions own the full distribution; select zero deterministic fan spread.")
+            for variant in ("radial", "disk"))
+        rows.extend(RequirementSpec("present_param_forbids_capability", param=f"velocity.{variant}", capability=controller,
+            message="This controller owns launch velocity; select the explicit constant-speed variant.")
+            for variant in ("fanSpeed", "radial", "disk", "cone") for controller in ("charge_then_release", "channel_beam"))
+        return tuple(rows)
     if cap.name == "add_equipment_damage_bonus":
         return (RequirementSpec(
             "capability_group_present", target="item_body", any_of=("configure_accessory", "configure_armor"),
@@ -2249,7 +2351,20 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return (RequirementSpec("conditional_param", param="mode", any_of=("life_above:minLife", "mana_above:minMana"), message="threshold modes require their threshold parameter"),)
     if cap.category == "event":
         requirements = [RequirementSpec("event_available", param="event", message="target entity must actually emit the selected event")]
+        if cap.name == "spawn_entity_from_hit_target":
+            requirements.extend((
+                RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
+                    equals={"placement": "item_use_origin", "aim": "velocity", "offsetPx": 0},
+                    message="Exact hit-target geometry requires a child configured for event origin/direction without another position transform."),
+                RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
+                    message="Exact hit-target geometry cannot coexist with the child's over-target displacement or telegraph."),
+            ))
         if cap.name == "spawn_entity_on_event":
+            requirements.append(RequirementSpec(
+                "referenced_param_presence_requires_value", param="spreadRadians", other_param="entity",
+                capability="configure_spawn", any_of=("velocity.radial", "velocity.disk"), equals=0,
+                message="A radial/disk child owns its complete direction distribution; this event must explicitly select spreadRadians=0.",
+            ))
             requirements.extend(RequirementSpec(
                 "param_requires_target_kind", param=name, equals="live_parent",
                 any_of=PROJECTILE_ENTITY_KIND_ORDER,
@@ -2257,6 +2372,60 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             ) for name in ("damageBasis", "knockbackBasis"))
         return tuple(requirements)
     return ()
+
+
+def referenced_entity_requirement_satisfied(
+    requirement: RequirementSpec,
+    entity_id: str,
+    calls_by_target: Mapping[str, Iterable[Mapping[str, Any]]],
+) -> bool:
+    """Evaluate declared reference constraints without changing another entity."""
+    matches = [row for row in calls_by_target.get(entity_id, ())
+               if row.get("fn") == requirement.capability]
+    if requirement.kind == "referenced_entity_without_capability":
+        return not matches
+    if requirement.kind != "referenced_entity_capability_params":
+        raise ValueError(f"unsupported entity reference requirement {requirement.kind!r}")
+    required_cap = CAPABILITY_REGISTRY.get(requirement.capability)
+    if required_cap is None or len(matches) != 1 or not isinstance(requirement.equals, Mapping):
+        return False
+    params = matches[0].get("params")
+    if not isinstance(params, Mapping):
+        return False
+    for name, expected in requirement.equals.items():
+        if name not in params or name not in required_cap.params:
+            return False
+        value = params[name]
+        if required_cap.params[name].kind == "number":
+            # JSON number accepts 0 and 0.0, but false cannot satisfy numeric 0.
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or isinstance(expected, bool) or not isinstance(expected, (int, float))
+                    or value != expected):
+                return False
+        elif not json_values_equal(value, expected):
+            return False
+    return True
+
+
+def compatible_entity_reference_ids(
+    cap: CapabilitySpec,
+    param_name: str,
+    source_entity_id: str,
+    entities_by_id: Mapping[str, Mapping[str, Any]],
+    calls_by_target: Mapping[str, Iterable[Mapping[str, Any]]],
+) -> tuple[str, ...]:
+    """Exact kind/self/declared-child compatibility; global graph validation follows."""
+    spec = cap.params.get(param_name)
+    reference = spec.reference if spec is not None else None
+    if reference is None or reference.namespace != "entity":
+        return ()
+    requirements = [row for row in cap.requirements if row.param == param_name
+                    and row.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}]
+    return tuple(entity_id for entity_id, entity in entities_by_id.items()
+                 if (reference.allow_self or entity_id != source_entity_id)
+                 and (not reference.target_kinds or entity.get("kind") in reference.target_kinds)
+                 and all(referenced_entity_requirement_satisfied(row, entity_id, calls_by_target)
+                         for row in requirements))
 
 
 def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpec:
@@ -2269,6 +2438,9 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
         semantic_type = "runtime_entity_id"
     elif cap.name == "spawn_entity_on_event" and name == "entity":
         reference = ReferenceSpec("entity", PROJECTILE_ENTITY_KIND_ORDER, False, True)
+        semantic_type = "runtime_entity_id"
+    elif cap.name == "spawn_entity_from_hit_target" and name == "entity":
+        reference = ReferenceSpec("entity", ("free_projectile", "child_projectile"), False, True)
         semantic_type = "runtime_entity_id"
     elif name in {"buffId"}:
         semantic_type = "terraria_buff_id"
@@ -2317,7 +2489,23 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
     return replace(spec, semantic_type=semantic_type, reference=reference)
 
 
+EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
+    "spawn_entity_on_event": 1,
+    "apply_status_on_event": 2,
+    "damage_area_on_event": 3,
+    "chain_damage_on_event": 4,
+    "pull_on_event": 5,
+    "heal_owner_on_event": 6,
+    "move_owner_on_event": 7,
+})
+
+
 def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
+    if cap.category == "event":
+        action = cap.wire_action or cap.name
+        cap = replace(cap, fixed_wire_literals=MappingProxyType({
+            **cap.fixed_wire_literals, "action": action, "actionCode": EVENT_ACTION_OPCODE[action],
+        }))
     if cap.category == "event" and "delayTicks" not in cap.params:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
@@ -2362,12 +2550,12 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         dependencies=tuple(dict.fromkeys(
             requirement.capability
             for requirement in _requirements_for(cap)
-            if requirement.capability
+            if requirement.capability and requirement.kind not in {"present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value"}
         )),
         conflicts=(f"exclusive_group:{exclusive_group}",) if exclusive_group else (),
         network_authority=authority,
         authority_by_effect=MappingProxyType(dict(by_effect)),
-        activation_spawn_count_param="count" if cap.name == "spawn_entity_on_event" else "",
+        activation_spawn_count_param="count" if (cap.wire_action or cap.name) == "spawn_entity_on_event" else "",
         meaningful_for_stationary=(cap.category == "event" or cap.name in {"set_projectile_damage", "target_and_fire", "emit_light_while_active"}),
     )
 
@@ -2421,15 +2609,7 @@ CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "charge_then_release": 2,
     "target_and_fire": 3,
 })
-EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
-    "spawn_entity_on_event": 1,
-    "apply_status_on_event": 2,
-    "damage_area_on_event": 3,
-    "chain_damage_on_event": 4,
-    "pull_on_event": 5,
-    "heal_owner_on_event": 6,
-    "move_owner_on_event": 7,
-})
+
 
 
 def visible_capabilities() -> tuple[CapabilitySpec, ...]:
@@ -2614,5 +2794,7 @@ __all__ = [
     "capability_inventory_rows",
     "capability_provider_union",
     "compact_capability_catalog",
+    "compatible_entity_reference_ids",
+    "referenced_entity_requirement_satisfied",
     "visible_capabilities",
 ]

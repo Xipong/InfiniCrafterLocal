@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using Microsoft.Xna.Framework;
@@ -13,7 +14,7 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private const byte RuntimeNetVersion = 2;
+    private const byte RuntimeNetVersion = 4;
     private const byte VfxEventNetVersion = 5;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
@@ -52,13 +53,21 @@ public sealed partial class GeneratedProjectile
         writer.Write(_controllerTimer);
         writer.Write(_lastTarget);
         writer.Write(VfxSourceToken());
+        _initialNpcExclusion.Write(writer);
+        writer.Write(_sampledInitialVelocity.HasValue);
+        if (_sampledInitialVelocity is { } sampled)
+        {
+            writer.Write(sampled.X);
+            writer.Write(sampled.Y);
+        }
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
     {
         try
         {
-            if (reader.ReadByte() != RuntimeNetVersion)
+            byte runtimeVersion = reader.ReadByte();
+            if (runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion)
                 throw new InvalidDataException("unsupported generated runtime projectile payload");
             _generatedItemId = (reader.ReadString() ?? "").Trim();
             _entityId = (reader.ReadString() ?? "").Trim();
@@ -77,17 +86,39 @@ public sealed partial class GeneratedProjectile
             _lastTarget = reader.ReadInt32();
             long sourceToken=reader.ReadInt64();
             if(sourceToken==0)throw new InvalidDataException("missing VFX source generation");
+            RuntimeInitialNpcExclusion receivedExclusion = runtimeVersion == 2
+                ? RuntimeInitialNpcExclusion.None : RuntimeInitialNpcExclusion.Read(reader);
+            byte receivedVelocityPresence = runtimeVersion >= 4 ? reader.ReadByte() : (byte)0;
+            if (receivedVelocityPresence > 1)
+                throw new InvalidDataException("invalid sampled launch presence");
+            Vector2? receivedVelocity = receivedVelocityPresence == 1
+                ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
+            if (receivedVelocity is { } sampled && (!float.IsFinite(sampled.X) || !float.IsFinite(sampled.Y)))
+                throw new InvalidDataException("non-finite sampled launch velocity");
+            // An owner already executing this exact physical source retains its
+            // local counter. Relayed observations cannot extend or clear immunity.
+            bool retainOwnerExclusion = _activationSpawnBudget is not null
+                && _vfxSourceToken == sourceToken
+                && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+                && Main.player[Projectile.owner] is { active: true } owner
+                && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
+            if (!retainOwnerExclusion) _initialNpcExclusion = receivedExclusion;
+            if (!retainOwnerExclusion) _sampledInitialVelocity = receivedVelocity;
             if(_vfxSourceToken!=sourceToken){
                 _presentationGeneration=new object();_presentationRetired=false;
                 _vfxState=new InfiniVfxState {SourceKey=$"net:{Projectile.owner}:{sourceToken}:{_generatedItemId}:{_entityId}"};
             }
             _vfxSourceToken=sourceToken;
+            _runtimePayloadRejected = false;
             _preserveSyncedStateOnHydrate = true;
             _configured = false;
             TryHydrate();
         }
         catch
         {
+            _runtimePayloadRejected = true;
+            _data = null;
+            _entity = null;
             _configured = false;
             _preserveSyncedStateOnHydrate = false;
             Projectile.friendly = false;

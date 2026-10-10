@@ -20,6 +20,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     CapabilitySpec,
     RequirementSpec,
+    compatible_entity_reference_ids,
+    referenced_entity_requirement_satisfied,
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
@@ -42,6 +44,9 @@ MAX_EVENT_SPAWNS_PER_ACTIVATION = 32
 # are handled separately by the provider/strict-schema boundary. Every code in
 # this set must have an explicit conditional-Repair policy.
 VALIDATION_ERROR_CODES = frozenset({
+    "unordered_param_range",
+    "unsupported_param_variant_target_kind",
+    "incompatible_param_variant",
     "ambiguous_global_id",
     "binding_dependency",
     "capability_event_incompatible",
@@ -87,6 +92,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "unsupported_param_target_kind",
     "wrong_binding_target_kind",
     "wrong_reference_target_kind",
+    "reference_requirements_unsatisfied",
     "wrong_target_kind",
 })
 
@@ -310,6 +316,47 @@ def _validate_requirement(
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
 
+    def nested_param(name: str, source: Mapping[str, Any] = params) -> Any:
+        value: Any = source
+        for part in name.split("."):
+            value = value.get(part) if isinstance(value, Mapping) else None
+        return value
+
+    if requirement.kind == "referenced_param_presence_requires_value":
+        referenced_id = params.get(requirement.other_param)
+        for row in calls_by_target.get(str(referenced_id), []):
+            referenced_params = row.get("params")
+            if (row.get("fn") == requirement.capability and isinstance(referenced_params, Mapping)
+                    and any(nested_param(name, referenced_params) is not None for name in requirement.any_of)
+                    and nested_param(requirement.param) != requirement.equals):
+                return ValidationIssue(f"{path}.params.{requirement.param}", "incompatible_param_variant",
+                    requirement.message, (str(requirement.equals),), (str(call.get("id") or ""), str(referenced_id)))
+        return None
+
+    if requirement.kind == "ordered_params":
+        minimum, maximum = nested_param(requirement.param), nested_param(requirement.other_param)
+        if type(minimum) in (int, float) and type(maximum) in (int, float) and minimum > maximum:
+            return ValidationIssue(f"{path}.params.{requirement.param}", "unordered_param_range",
+                requirement.message, related_ids=(str(call.get("id") or ""),))
+        return None
+    if requirement.kind == "present_param_requires_target_kind":
+        if nested_param(requirement.param) is not None and entities_by_id.get(target_id, {}).get("kind") not in requirement.any_of:
+            return ValidationIssue(f"{path}.params.{requirement.param.rsplit('.', 1)[0]}",
+                "unsupported_param_variant_target_kind", requirement.message,
+                related_ids=(str(call.get("id") or ""), target_id))
+        return None
+    if requirement.kind == "present_param_requires_param_value":
+        expected = requirement.any_of or (requirement.equals,)
+        if nested_param(requirement.param) is not None and nested_param(requirement.other_param) not in expected:
+            return ValidationIssue(f"{path}.params.{requirement.other_param}", "incompatible_param_variant",
+                requirement.message, tuple(str(value) for value in expected), (str(call.get("id") or ""),))
+        return None
+    if requirement.kind == "present_param_forbids_capability":
+        if nested_param(requirement.param) is not None and requirement.capability in fns:
+            return ValidationIssue(f"{path}.params.{requirement.param.rsplit('.', 1)[0]}", "incompatible_param_variant",
+                requirement.message, related_ids=(str(call.get("id") or ""), target_id))
+        return None
+
     if requirement.kind == "param_requires_target_kind":
         if (params.get(requirement.param) == requirement.equals
                 and entities_by_id.get(target_id, {}).get("kind") not in requirement.any_of):
@@ -318,6 +365,16 @@ def _validate_requirement(
             return ValidationIssue(f"{path}.params.{requirement.param}",
                                    "unsupported_param_target_kind", requirement.message,
                                    allowed, (str(call.get("id") or ""), target_id))
+        return None
+
+    if requirement.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}:
+        referenced_id = params.get(requirement.param)
+        if not isinstance(referenced_id, str) or referenced_id not in entities_by_id:
+            return None  # Shape/reference ownership emits its exact missing leaf.
+        if not referenced_entity_requirement_satisfied(requirement, referenced_id, calls_by_target):
+            allowed = compatible_entity_reference_ids(cap, requirement.param, target_id, entities_by_id, calls_by_target)
+            return ValidationIssue(f"{path}.params.{requirement.param}", "reference_requirements_unsatisfied",
+                                   requirement.message, allowed, (str(call.get("id") or ""), referenced_id))
         return None
 
     if requirement.kind in {"executed_tile_placement_reference", "unique_call_reference"}:
