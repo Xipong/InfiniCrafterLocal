@@ -446,6 +446,7 @@ def _renderer_material(data, renderer):
     raw["slots"][0].update(rendererKind=renderer)
     if renderer == "soundCue":
         raw["slots"][0]["soundId"] = "Item1"
+        raw["slots"][0]["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
     if renderer == "impactSprite":
         raw["slots"][0].update(textureRole="impact", spritePrompt="one transparent impact sprite")
     return raw

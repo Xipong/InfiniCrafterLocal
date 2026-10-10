@@ -694,12 +694,13 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
 
         for param_name, param_spec in cap.params.items():
             if param_name in params:
-                consumer_error = param_spec.consumer_value_error(params[param_name])
-                if consumer_error is not None:
-                    issues.append(ValidationIssue(
-                        f"$.runtimeProgram.calls[{index}].params.{param_name}", "consumer_representability", consumer_error,
-                        ("author a non-neutral value representable by the declared consumer or exact neutral",),
-                    ))
+                for leaf_name, leaf_spec, leaf_value in param_spec.leaf_values(params[param_name], param_name):
+                    consumer_error = leaf_spec.consumer_value_error(leaf_value)
+                    if consumer_error is not None:
+                        issues.append(ValidationIssue(
+                            f"$.runtimeProgram.calls[{index}].params.{leaf_name}", "consumer_representability", consumer_error,
+                            ("author a non-neutral value representable by the declared consumer or exact neutral",),
+                        ))
             ref = param_spec.reference
             if ref is None or ref.namespace != "entity" or param_name not in params:
                 continue

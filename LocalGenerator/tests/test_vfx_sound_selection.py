@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,17 +13,17 @@ from tests.test_repair_vfx_contract import _offline_transport
 from tests.vfx_material_fixtures import _data, _legacy
 
 # Exact installed Terraria.ID.SoundID members; no weapon/archetype aliases.
-SOUND_IDS = (
-    "Item1", "Item2", "Item3", "Item4", "Item8", "Item9", "Item14", "Item20", "Item21", "Item29", "Item43",
-    "Dig", "Tink", "Grab", "Shatter", "Splash", "Coins", "Unlock", "MaxMana", "ResearchComplete",
-)
+_INVENTORY = json.loads((Path(__file__).parent / "fixtures/vfx_sound_inventory.json").read_text())
+SOUND_IDS = tuple(sorted(set(_INVENTORY["historicalCatalog"].values()) | set(_INVENTORY["precedingCatalog"]),
+                         key=lambda value: (0, int(value[4:])) if value.startswith("Item") else (1, value)))
 
 
 def _sound(data, sound_id: Any = "Item4", *, projectile=False):
     raw = _legacy(data)
     slot = raw["slots"][0]
     slot.update(id="explicit_sound", rendererKind="soundCue", channel="sound", lane="cue",
-                emissionMode="none", particleSystemId="none", textureRole="none", soundId=sound_id)
+                emissionMode="none", particleSystemId="none", textureRole="none", soundId=sound_id,
+                sound={"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12})
     if projectile:
         slot.update(entityId=next(e["id"] for e in data["runtimeProgram"]["entities"] if e["kind"] != "item_body"), event="on_spawn")
     return raw
@@ -71,9 +72,10 @@ def test_fresh_sound_requires_explicit_choice_but_legacy_wire_absence_stays_abse
     data = _data()
     raw = _sound(data)
     raw["slots"][0].pop("soundId")
+    raw["slots"][0].pop("sound")
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId"}
+    assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId", "$.slots[0].sound"}
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "legacy-sound")
     before = copy.deepcopy(data)
     assert vfx.validate_vfx_manifest_wire(data)["ok"]
@@ -175,6 +177,7 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
     raw = _sound(data, sound_id)
     if sound_id is None:
         raw["slots"][0].pop("soundId")
+        raw["slots"][0].pop("sound")
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "cache-sound")
     before = copy.deepcopy(data)
     assert world_storage.is_deliverable_recipe_payload(data, check_assets=False)

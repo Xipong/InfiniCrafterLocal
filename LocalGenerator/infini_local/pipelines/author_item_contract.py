@@ -215,6 +215,75 @@ def _union_discriminator_paths(branches: list[Mapping[str, Any]]) -> list[tuple[
     return selected if not remaining else []
 
 
+def _required_object_schemas(schema: Mapping[str, Any], prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], Mapping[str, Any]]:
+    """Only an explicit object type and required ancestors prove key presence."""
+    if schema.get("type") != "object":
+        return {}
+    result = {prefix: schema}
+    properties = schema.get("properties") or {}
+    for key in schema.get("required") or []:
+        child = properties.get(key)
+        if isinstance(child, Mapping):
+            result.update(_required_object_schemas(child, (*prefix, key)))
+    return result
+
+
+def _selector_at_path(path: tuple[str, ...], selector: Mapping[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(dict(selector))
+    for key in reversed(path):
+        result = {"type": "object", "properties": {key: result}, "required": [key]}
+    return result
+
+
+def _object_key_selector(schema: Mapping[str, Any]) -> dict[str, Any]:
+    # This selects only the explicit structural alternative. No numeric bounds,
+    # optional values or unrelated gameplay constraints participate in selection.
+    result = {"type": "object", "required": list(schema.get("required") or [])}
+    if schema.get("additionalProperties") is False and not schema.get("patternProperties"):
+        result.update(properties={key: {} for key in schema.get("properties") or {}},
+                      additionalProperties=False)
+    return result
+
+
+def _union_pair_selectors(left: Mapping[str, Any], right: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Return narrow, disjoint guards only when a pair's separation is proved."""
+    kinds = [branch.get("type") for branch in (left, right)]
+    known = {"string", "null", "object", "array", "boolean", "integer", "number"}
+    if all(isinstance(kind, str) and kind in known for kind in kinds):
+        # JSON integer is contained in number; bool is a separate JSON kind.
+        domains = [{"integer", "number"} if kind in {"integer", "number"} else {kind} for kind in kinds]
+        if domains[0].isdisjoint(domains[1]):
+            return {"type": kinds[0]}, {"type": kinds[1]}
+    finite = [_required_finite_domains(branch) for branch in (left, right)]
+    for path in sorted(finite[0].keys() & finite[1].keys()):
+        if not any(_literal_equal(a, b) for a in finite[0][path] for b in finite[1][path]):
+            return tuple(_selector_at_path(path, {"enum": domain[path]}) for domain in finite)
+    objects = [_required_object_schemas(branch) for branch in (left, right)]
+    for path in sorted(objects[0].keys() & objects[1].keys()):
+        pair = [objects[0][path], objects[1][path]]
+        for required_side, closed_side in (pair, pair[::-1]):
+            if (
+                closed_side.get("additionalProperties") is False
+                and not closed_side.get("patternProperties")
+                and set(required_side.get("required") or []) - set(closed_side.get("properties") or {})
+            ):
+                return tuple(_selector_at_path(path, _object_key_selector(branch)) for branch in pair)
+    return None
+
+
+def _pairwise_union_selectors(branches: list[Mapping[str, Any]]) -> list[list[dict[str, Any]]] | None:
+    """Every pair must be disjoint, possibly by different declared selectors."""
+    selectors: list[list[dict[str, Any]]] = [[] for _branch in branches]
+    for left in range(len(branches)):
+        for right in range(left + 1, len(branches)):
+            pair = _union_pair_selectors(branches[left], branches[right])
+            if pair is None:
+                return None
+            selectors[left].append(pair[0])
+            selectors[right].append(pair[1])
+    return selectors
+
+
 def _union_branch_index(value: Any, branches: list[Mapping[str, Any]], paths: list[tuple[str, ...]] | None = None) -> int | None:
     if paths is None:
         paths = _union_discriminator_paths(branches)
@@ -223,6 +292,7 @@ def _union_branch_index(value: Any, branches: list[Mapping[str, Any]], paths: li
         # still guards nullable decoding; object type alone must not select
         # that branch for an unknown/out-of-scope function.
         paths = list(_required_finite_domains(branches[0]))
+    pairwise = _pairwise_union_selectors(branches) if not paths and len(branches) > 1 else None
     candidates = []
     for index, branch in enumerate(branches):
         if paths:
@@ -239,9 +309,13 @@ def _union_branch_index(value: Any, branches: list[Mapping[str, Any]], paths: li
                     matches = False
                     break
         else:
-            # Only proven non-overlapping JSON types; never validate whole rows
-            # to choose a different capability because some parameter is invalid.
-            matches = _disjoint_union_types(branches) and not strict_schema_errors(value, {"type": branch["type"]})
+            # Validate only the proven selector guards, never complete rows: an
+            # invalid neighbouring parameter must remain available to Repair.
+            matches = (
+                all(not strict_schema_errors(value, selector) for selector in pairwise[index])
+                if pairwise is not None
+                else _disjoint_union_types(branches) and not strict_schema_errors(value, {"type": branch["type"]})
+            )
         if matches:
             candidates.append(index)
     return candidates[0] if len(candidates) == 1 else None
@@ -317,9 +391,10 @@ def _provider_subset_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
         if (
             "anyOf" in schema or not isinstance(branches, list) or not branches
             or not all(isinstance(branch, Mapping) for branch in branches)
-            or not (_disjoint_union_types(branches) or _union_discriminator_paths(branches))
+            or not (_disjoint_union_types(branches) or _union_discriminator_paths(branches)
+                    or _pairwise_union_selectors(branches) is not None)
         ):
-            raise ValueError("Unproved provider oneOf: branches need complete disjoint required finite discriminators or types")
+            raise ValueError("Unproved provider oneOf: every pair needs disjoint types, required finite domains or required keys forbidden by a closed object")
         out["anyOf"] = out.pop("oneOf")
     return out
 
