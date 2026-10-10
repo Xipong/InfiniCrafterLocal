@@ -19,10 +19,10 @@ def _groups(fn="restore_resources_on_use"):
     call = next(c for c in program["calls"] if c["fn"] == fn)
     call["params"]["effectGroupId"] = "first"
     binding = program["bindings"][0]
-    binding["usePolicy"]["action"]["effectGroupId"] = "first"
+    binding["action"]["effectGroupId"] = "first"
     alternate = deepcopy(binding)
     alternate.update(id="alternate_effect", input="alternate_use")
-    alternate["usePolicy"]["action"]["effectGroupId"] = "second"
+    alternate["action"]["effectGroupId"] = "second"
     other = deepcopy(call)
     other["id"] = "second_effect"
     other["params"]["effectGroupId"] = "second"
@@ -81,11 +81,11 @@ def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(fir
     effects = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] in {first, second}]
     if owner == "same":
         effects[1]["params"]["effectGroupId"] = "first"
-        doc["runtimeProgram"]["bindings"][1]["usePolicy"]["action"]["effectGroupId"] = "first"
+        doc["runtimeProgram"]["bindings"][1]["action"]["effectGroupId"] = "first"
     elif owner in {"default", "named-default"}:
         for index in ([0, 1] if owner == "default" else [1]):
             effects[index]["params"].pop("effectGroupId")
-            doc["runtimeProgram"]["bindings"][index]["usePolicy"]["action"].pop("effectGroupId")
+            doc["runtimeProgram"]["bindings"][index]["action"].pop("effectGroupId")
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     if owner in {"same", "default"}:
@@ -163,7 +163,7 @@ def test_named_and_default_effects_remain_independent():
     doc = _groups()
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "second_effect")
     del call["params"]["effectGroupId"]
-    del doc["runtimeProgram"]["bindings"][1]["usePolicy"]["action"]["effectGroupId"]
+    del doc["runtimeProgram"]["bindings"][1]["action"]["effectGroupId"]
     final = compile_runtime_program(doc)
     assert len(final["runtimeProgram"]["effectGroups"]) == 1
     assert final["gameplay"]["healLife"] == 0 and final["gameplay"]["healMana"] == 35
@@ -219,7 +219,7 @@ def test_held_refresh_cannot_repeat_instant_heal_native_buffs_or_mobility(extra)
 @pytest.mark.parametrize("value", [None, True, 3, [], {}, "", "Wrong", "a" * 49])
 def test_effect_identity_is_strict_and_not_a_semantic_family(value):
     doc = _groups()
-    doc["runtimeProgram"]["bindings"][0]["usePolicy"]["action"]["effectGroupId"] = value
+    doc["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = value
     assert not validate_runtime_program(doc)["ok"]
     final = compile_runtime_program(_groups())
     final.pop("runtimeContract")
@@ -232,21 +232,21 @@ def test_repair_retargets_only_invalid_reference_and_keeps_effects_frozen(held):
     doc = build_capability_witness("refresh_generated_effect_group_while_held") if held else _groups()
     rows = doc["runtimeProgram"]["calls" if held else "bindings"]
     row = next(r for r in rows if r.get("fn") == "refresh_generated_effect_group_while_held") if held else rows[0]
-    holder = row["params"] if held else row["usePolicy"]["action"]
+    holder = row["params"] if held else row["action"]
     expected = holder["effectGroupId"]
     holder["effectGroupId"] = "missing"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     corrected = deepcopy(row)
-    (corrected["params"] if held else corrected["usePolicy"]["action"])["effectGroupId"] = expected
+    (corrected["params"] if held else corrected["action"])["effectGroupId"] = expected
     if not held:
-        corrected["usePolicy"]["stackCost"] = 1
+        corrected["stackCost"] = 1
     key = "callsUpsert" if held else "bindingsUpsert"
     filtered, audit = filter_repair_patch_scope(doc, {"note": "Repair exact reference only", key: [corrected]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, filtered)
     assert validate_runtime_program(repaired)["ok"]
     if not held:
-        assert repaired["runtimeProgram"]["bindings"][0]["usePolicy"]["stackCost"] == 0
+        assert repaired["runtimeProgram"]["bindings"][0]["stackCost"] == 0
     if not held:
         assert repaired["runtimeProgram"]["calls"] == doc["runtimeProgram"]["calls"]
 
@@ -256,7 +256,7 @@ def test_unbound_group_repair_names_only_the_existing_group_in_new_consumer():
     doc["runtimeProgram"]["bindings"].pop()
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     allowed = scope["create"]["bindings"]["allowedTransactions"]
-    assert allowed and all(row["usePolicy"]["action"].get("effectGroupId") == "second" for row in allowed)
+    assert allowed and all(row["action"].get("effectGroupId") == "second" for row in allowed)
     candidate = {"id": "repaired_alternate", **deepcopy(allowed[0])}
     filtered, audit = filter_repair_patch_scope(doc, {"note": "Attach authored existing group", "bindingsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
@@ -342,15 +342,15 @@ def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatc
     doc = _groups()
     alternate = doc["runtimeProgram"]["bindings"].pop()
     primary = doc["runtimeProgram"]["bindings"][0]
-    primary["usePolicy"]["action"]["effectGroupId"] = "missing"
+    primary["action"]["effectGroupId"] = "missing"
     before = json.dumps(doc, sort_keys=True)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert any(row["input"] == "alternate_use" and row["usePolicy"]["action"]["effectGroupId"] == "second"
+    assert any(row["input"] == "alternate_use" and row["action"]["effectGroupId"] == "second"
                for row in scope["create"]["bindings"]["allowedTransactions"])
     corrected = deepcopy(primary)
-    corrected["usePolicy"]["action"]["effectGroupId"] = "first"
+    corrected["action"]["effectGroupId"] = "first"
     expected = apply_repair_patch(doc, {"note": "model chooses both exact consumers", "bindingsUpsert": [corrected, alternate]})
-    corrected["usePolicy"]["stackCost"] = 1
+    corrected["stackCost"] = 1
     hostile = deepcopy(doc["runtimeProgram"]["calls"][0])
     hostile["params"]["damage"] = 999
     incoming = {"note": "explicit selector and independent alternate", "realizationReplacement": doc["realization"],
@@ -395,7 +395,7 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
     doc = _groups("apply_generated_buff_on_use")
     bindings = doc["runtimeProgram"]["bindings"]
     alternate = bindings.pop()
-    bindings[0]["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "item"}
+    bindings[0]["action"] = {"kind": "use_item_body"}
     held = deepcopy(next(row for row in build_capability_witness("refresh_generated_effect_group_while_held")["runtimeProgram"]["calls"]
                          if row["fn"] == "refresh_generated_effect_group_while_held"))
     held.update(id="held_selector")
@@ -406,7 +406,7 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
     expected = apply_repair_patch(doc, {"note": "two model-chosen consumers", "callsUpsert": [fixed], "bindingsUpsert": [alternate]})
     assert validate_runtime_program(expected)["ok"]
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert any(row["usePolicy"]["action"].get("effectGroupId") == "second"
+    assert any(row["action"].get("effectGroupId") == "second"
                for row in scope["create"]["bindings"]["allowedTransactions"])
     repaired, _ = _offline_gameplay_repair(monkeypatch, doc,
         {"note": "held first and explicit alternate second", "realizationReplacement": doc["realization"],
@@ -448,7 +448,7 @@ def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode,
     doc = _groups() if case == "broken-active" else build_capability_witness("refresh_generated_effect_group_while_held")
     if case == "broken-active":
         doc["runtimeProgram"]["bindings"].pop()
-        doc["runtimeProgram"]["bindings"][0]["usePolicy"]["action"]["effectGroupId"] = "missing"
+        doc["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "missing"
     elif case == "nonempty-held":
         next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")["params"]["effectGroupId"] = "missing"
     else:
@@ -465,7 +465,7 @@ def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode,
 def _chance_groups(chance=35):
     doc = _groups()
     for binding in doc["runtimeProgram"]["bindings"]:
-        binding["usePolicy"].update(stackCost=1, stackConsumeChancePercent=chance)
+        binding.update(stackCost=1, stackConsumeChancePercent=chance)
     # Deliberately reverse the source order: receipts must resolve exact IDs,
     # not assume source and sorted final binding coordinates agree.
     doc["runtimeProgram"]["bindings"].reverse()
@@ -493,7 +493,7 @@ def test_named_effect_selection_and_stack_probability_compile_independently(chan
     # Adding probability must not rewrite any pre-existing grouped projection.
     omitted = deepcopy(doc)
     for binding in omitted["runtimeProgram"]["bindings"]:
-        del binding["usePolicy"]["stackConsumeChancePercent"]
+        del binding["stackConsumeChancePercent"]
     expected = compile_runtime_program(omitted)
     for binding in bindings:
         del binding["usePolicy"]["stackConsumeChancePercent"]
@@ -547,7 +547,7 @@ def test_combined_provider_preparation_preserves_presence_and_exact_compilation(
     doc = _chance_groups(chance)
     if chance is None:
         for binding in doc["runtimeProgram"]["bindings"]:
-            del binding["usePolicy"]["stackConsumeChancePercent"]
+            del binding["stackConsumeChancePercent"]
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     request, user, system = author.build_initial_author_request({}, {}, {}, {}, "combined-offline", model_name="offline-no-model")
@@ -574,11 +574,11 @@ def test_combined_real_frozen_repair_preserves_the_other_binding_lanes(monkeypat
     binding_id = binding["id"]
     expected = deepcopy(doc)
     if invalid_leaf == "chance":
-        binding["usePolicy"]["stackConsumeChancePercent"] = 101
-        path = "usePolicy.stackConsumeChancePercent"
+        binding["stackConsumeChancePercent"] = 101
+        path = "stackConsumeChancePercent"
     elif invalid_leaf == "group":
-        binding["usePolicy"]["action"]["effectGroupId"] = "missing"
-        path = "usePolicy.action.effectGroupId"
+        binding["action"]["effectGroupId"] = "missing"
+        path = "action.effectGroupId"
     else:
         binding["input"] = []
         path = "input"
@@ -586,11 +586,11 @@ def test_combined_real_frozen_repair_preserves_the_other_binding_lanes(monkeypat
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"]["bindings"] == [{"id": binding_id, "paths": [path]}]
     corrected = deepcopy(expected["runtimeProgram"]["bindings"][0])
-    corrected["usePolicy"]["contactDamage"] = True
+    corrected["contactDamage"] = True
     if invalid_leaf != "chance":
-        corrected["usePolicy"]["stackConsumeChancePercent"] = 99
+        corrected["stackConsumeChancePercent"] = 99
     if invalid_leaf != "group":
-        corrected["usePolicy"]["action"]["effectGroupId"] = "first"
+        corrected["action"]["effectGroupId"] = "first"
     if invalid_leaf != "input":
         corrected["input"] = "primary_use"
     incoming = {"note": "explicit exact leaf only", "realizationReplacement": doc["realization"], "bindingsUpsert": [corrected]}

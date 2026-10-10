@@ -6,13 +6,13 @@ from typing import Any
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
     ACTIVE_USE_INPUTS,
-    action,
-    action_kind,
-    contact_damage,
+    wire_action as action,
+    wire_action_kind as action_kind,
+    wire_contact_damage as contact_damage,
     placeable_input_contract,
-    stack_cost,
+    wire_stack_cost as stack_cost,
+    wire_target_id as binding_target_id,
     stack_chance_error,
-    target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
@@ -898,7 +898,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         cost = stack_cost(binding)
         if cost not in {0, 1}:
             errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "invalid_stack_cost", "message": "stackCost must be exactly 0 or 1."})
-        if reason := stack_chance_error(binding):
+        if reason := stack_chance_error({"input": binding.get("input"), **policy}):
             errors.append({"path": f"{binding_path}.usePolicy.stackConsumeChancePercent", "code": "invalid_stack_chance", "message": reason})
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
@@ -1035,7 +1035,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "equip_passive has no compiled accessory/armor capability."})
 
     placeable_roles_valid, placeable_role_message = placeable_input_contract(
-        row for row in bindings if isinstance(row, Mapping)
+        {"input": row.get("input"), **dict(row["usePolicy"])}
+        for row in bindings if isinstance(row, Mapping) and isinstance(row.get("usePolicy"), Mapping)
     )
     if not placeable_roles_valid:
         errors.append({

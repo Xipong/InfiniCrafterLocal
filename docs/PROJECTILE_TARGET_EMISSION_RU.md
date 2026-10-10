@@ -97,7 +97,7 @@ origin, ненулевой direction и exclusion snapshot своего anchor. 
 список. LOS ограничивает первоначальный выбор; он не меняет child tileCollide
 или ownerHitCheck и не гарантирует свободный путь во время полёта.
 
-Referenced child должен иметь явные `position={"at":"activation_origin"}`,
+Referenced child должен иметь явные `position={at:activation_origin}`,
 `aim=velocity`, `offsetPx=0`, без `spawn_over_target`. Иначе его отдельный
 origin adapter спорил бы с выбранной операцией. Registry requirements,
 строгий wire и C# boundary отвергают такую композицию. Compiler не меняет

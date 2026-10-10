@@ -7,37 +7,51 @@ from typing import Any, Iterable, Mapping
 ACTIVE_USE_INPUTS = frozenset({"primary_use", "alternate_use"})
 PLACE_ITEM_ACTION = "place_item"
 ITEM_BODY_ACTION = "use_item_body"
-STACK_COST_RULE = (
-    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
-    "and the placed generated item is returned by the placement ledger when broken. "
-    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
-    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
-    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
-    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
-    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
-    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
-    "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
-    "the existing 100 percent debit. This never controls ammo saving or placement escrow."
-)
+
 
 
 def use_policy(binding: Mapping[str, Any]) -> Mapping[str, Any]:
-    value = binding.get("usePolicy")
+    """Read current Author lanes only; saved wire has explicit separate readers."""
+    return binding
+
+
+def action(binding: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = binding.get("action")
     return value if isinstance(value, Mapping) else {}
 
 
-def action(policy_or_binding: Mapping[str, Any]) -> Mapping[str, Any]:
-    policy = (
-        use_policy(policy_or_binding)
-        if "usePolicy" in policy_or_binding
-        else policy_or_binding
-    )
-    value = policy.get("action")
+def wire_action(binding: Mapping[str, Any]) -> Mapping[str, Any]:
+    policy = binding.get("usePolicy")
+    value = policy.get("action") if isinstance(policy, Mapping) else None
     return value if isinstance(value, Mapping) else {}
+
+
+def wire_action_kind(binding: Mapping[str, Any]) -> str:
+    return str(wire_action(binding).get("kind") or "")
+
+
+def wire_target_id(binding: Mapping[str, Any]) -> str:
+    return str(wire_action(binding).get("targetId") or "")
+
+
+def wire_stack_cost(binding: Mapping[str, Any]) -> int:
+    policy = binding.get("usePolicy")
+    value = policy.get("stackCost") if isinstance(policy, Mapping) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else -1
+
+
+def wire_contact_damage(binding: Mapping[str, Any]) -> bool:
+    policy = binding.get("usePolicy")
+    return isinstance(policy, Mapping) and policy.get("contactDamage") is True
 
 
 def action_kind(binding: Mapping[str, Any]) -> str:
-    return str(action(binding).get("kind") or "")
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
+    explicit = action(binding).get("kind")
+    if explicit is not None:
+        return str(explicit)
+    inp = INPUT_KIND_REGISTRY.get(binding.get("input")) if isinstance(binding.get("input"), str) else None
+    return inp.allowed_actions[0] if inp is not None and len(inp.allowed_actions) == 1 else ""
 
 
 def target_id(binding: Mapping[str, Any]) -> str:
@@ -49,6 +63,8 @@ def placement_call_id(binding: Mapping[str, Any]) -> str:
 
 
 def stack_cost(binding: Mapping[str, Any]) -> int:
+    if "stackCost" not in binding:
+        return 1 if action_kind(binding) == PLACE_ITEM_ACTION else 0 if binding.get("input") not in ACTIVE_USE_INPUTS else -1
     value = use_policy(binding).get("stackCost")
     return value if isinstance(value, int) and not isinstance(value, bool) else -1
 
@@ -133,14 +149,18 @@ def complete_transaction(
         action_row["placementCallId"] = placement_call
     elif placement_call:
         raise ValueError("placementCallId is legal only for place_item")
-    return {
-        "input": input_name,
-        "usePolicy": {
-            "action": action_row,
-            "stackCost": stack_cost_value,
-            "contactDamage": contact_damage_value,
-        },
-    }
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+    if BINDING_ACTION_REGISTRY[action_name].target_kinds == ("item_body",):
+        action_row.pop("targetId")
+    if len(INPUT_KIND_REGISTRY[input_name].allowed_actions) == 1:
+        action_row.pop("kind")
+    row: dict[str, Any] = {"input": input_name}
+    if action_row:
+        row["action"] = action_row
+    if input_name in ACTIVE_USE_INPUTS and action_name != PLACE_ITEM_ACTION:
+        row["stackCost"] = stack_cost_value
+        row["contactDamage"] = contact_damage_value
+    return row
 
 
 def project_to_wire(
@@ -185,10 +205,10 @@ def placed_body_binding_ids(data: Mapping[str, Any]) -> tuple[str, ...]:
         return ()
     item_id = runtime.get("itemEntityId")
     return tuple(str(binding.get("id") or "") for binding in runtime.get("bindings", [])
-                 if isinstance(binding, Mapping) and action_kind(binding) == PLACE_ITEM_ACTION
-                 and target_id(binding) == item_id
-                 and isinstance(action(binding).get("placement"), Mapping)
-                 and "placedBody" in action(binding)["placement"])
+                 if isinstance(binding, Mapping) and wire_action_kind(binding) == PLACE_ITEM_ACTION
+                 and wire_target_id(binding) == item_id
+                 and isinstance(wire_action(binding).get("placement"), Mapping)
+                 and "placedBody" in wire_action(binding)["placement"])
 
 
 __all__ = [

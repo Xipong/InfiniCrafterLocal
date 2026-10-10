@@ -7,9 +7,9 @@
 <a id="response"></a>
 ## Author response
 
-Текущий root содержит `name`, `category`, `concept`, `runtimeProgram`, `realization`. `runtimeContract` с compiler receipts не authored root field. `runtimeProgram` задаёт `apiVersion`, Author `schema`, один `primaryEntityId`, явные `entities[]` (`id/kind`), `bindings[]` (`id/input/usePolicy`) и `calls[]` (`id/fn/target/params`). Exact required/optional keys — в schema, не в этом сокращённом перечне.
+Текущий root содержит `name`, `category`, `concept`, `runtimeProgram`, `realization`. `runtimeContract` с compiler receipts не authored root field. `runtimeProgram` задаёт `apiVersion`, Author `schema`, один `primaryEntityId`, явные `entities[]` (`id/kind`), `bindings[]` (`id/input/action/stackCost/contactDamage`) и `calls[]` (`id/fn/target/params`). Exact required/optional keys — в schema, не в этом сокращённом перечне.
 
-`usePolicy` атомарно задаёт `action`, `stackCost`, `contactDamage`. Calls присоединяют одну capability к одной entity; typed references связывают entities. Movement, controller, damage, targeting, input, attachment, body contact, lifecycle и event topology остаются независимыми решениями Author. Weapon macro и routing по name/category/prose запрещены; schema/validator не выбирают содержательную замену.
+Current Author `infini.runtime-program.authoring.v5` задаёт независимые flat lanes `action`, `stackCost`, `contactDamage`. Saved wire v3 сохраняет nested `usePolicy`. Fixed passive/placement constants, unique declared item-body-only targets и zero-arg `params` отсутствуют в source и раскрываются только private exact lowerer после admission. Эти boilerplate fields запрещены для fresh Author; projectile/mixed targets и active non-placement stack/contact остаются явными model choices. Calls присоединяют одну capability к одной entity; typed references связывают entities. Movement, controller, damage, targeting, input, attachment, body contact, lifecycle и event topology остаются независимыми решениями Author. Weapon macro и routing по name/category/prose запрещены; schema/validator не выбирают содержательную замену.
 
 <a id="primary-use"></a>
 ## Primary и независимые use lanes
@@ -21,7 +21,7 @@ Item graphic/body-contact representation принадлежит `item_body`. Pro
 Один exclusive input имеет один root binding, но **не одну damage lane**. `contactDamage` независим от `action`; например, Starfury-like tuple (фрагмент binding, не полный response):
 
 ```json
-{"input":"primary_use","usePolicy":{"action":{"kind":"spawn_entity","targetId":"falling_star"},"stackCost":0,"contactDamage":true}}
+{"input":"primary_use","action":{"kind":"spawn_entity","targetId":"falling_star"},"stackCost":0,"contactDamage":true}
 ```
 
 При primary body он сохраняет item hitbox и spawn-ит secondary projectile, который не отбирает `heldProj`/animation. `place_item`, `hold`, `equipped` требуют `contactDamage=false`: consumers эту contact lane не исполняют. Flail/yoyo/whip/holdout — примеры explicit projectile ownership, не распознаваемые families. Edge-case fixtures: `workbench_blade` (body + projectile), `door_on_chain` (projectile-owned flail); внешние [Starfury](https://terraria.wiki.gg/wiki/Starfury)/[Flails](https://terraria.wiki.gg/wiki/Flails) поясняют примеры, но authority — текущие consumers.

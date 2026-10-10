@@ -165,14 +165,11 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     compiled_after = compile_runtime_program(prepared)
     assert validate_runtime_wire(compiled_after)["ok"]
     assert compiled_after == compiled_before
-    placement = [row for row in prepared["runtimeProgram"]["bindings"] if row["usePolicy"]["action"]["kind"] == "place_item"]
+    placement = [row for row in prepared["runtimeProgram"]["bindings"] if row["action"]["kind"] == "place_item"]
     if fixture_name == "fishing_platform_tool":
         assert placement == [{
             "id": "alternate_place", "input": "alternate_use",
-            "usePolicy": {
-                "action": {"kind": "place_item", "targetId": "item", "placementCallId": "platform_result"},
-                "stackCost": 1, "contactDamage": False,
-            },
+            "action": {"kind": "place_item", "placementCallId": "platform_result"},
         }]
         assert next(row["params"] for row in prepared["runtimeProgram"]["calls"] if row["id"] == "platform_result") == {
             "tileId": 19, "placeStyle": 0,
@@ -287,25 +284,24 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
         "reason",
     }
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
-    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v4"
+    assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v5"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
     author_binding = card["runtimeProgram"]["bindings"][0]
-    assert set(author_binding) == {"id", "input", "usePolicy"}
-    assert set(author_binding["usePolicy"]) == {"action", "stackCost", "contactDamage", "stackConsumeChancePercent"}
-    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
+    assert set(author_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
+    assert set(author_binding["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
     assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
     prompt_payload = build_llm_author_payload({}, {}, {}, {}, "binding-card")
     binding_guide = prompt_payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
-    assert "bindings[].usePolicy.action.targetId" in binding_guide
+    assert "bindings[].action.targetId" in binding_guide
     assert "bindings[].target" not in binding_guide
 
     repair_card = author_item_repair_prompt_shape_card()
     repair_schema = author_item_repair_response_schema()
     repair_binding = repair_card["bindingsUpsert"][0]
-    assert set(repair_binding) == {"id", "input", "usePolicy"}
-    assert repair_binding["usePolicy"] == author_binding["usePolicy"]
+    assert set(repair_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
+    assert repair_binding == author_binding
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(
         isinstance(repair_card[key], list)
@@ -371,7 +367,7 @@ def test_tool_applicability_is_registry_advice_not_an_activation_rewrite(monkeyp
     tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
     tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedScale=2)
     light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
-    light.update(id="independent_light", target=tool["target"])
+    light.update(id="independent_light")
     doc["runtimeProgram"]["calls"].append(light)
     before = copy.deepcopy(doc)
     assert validate_runtime_program(doc)["ok"], "advisory non-effect explanation must not ban intentional inactive composition"
@@ -573,7 +569,7 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
                 ("fieldGuide", "stackCost", "", "whole generated item"),
                 ("fieldGuide", "stackCost", "", "stackCost=1"),
                 ("fieldGuide", "bindingTarget", "", "contactDamage=true"),
-                ("fieldGuide", "bindingTarget", "", "bindings[].usePolicy.action.targetId"),
+                ("fieldGuide", "bindingTarget", "", "bindings[].action.targetId"),
                 ("bindingActions", "place_item", "constructionMeaning", "stackCost=1"),
                 ("bindingActions", "place_item", "constructionMeaning", "returned"),
                 ("bindingActions", "place_item", "constructionMeaning", "item_body.on_use"),

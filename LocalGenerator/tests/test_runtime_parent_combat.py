@@ -29,7 +29,7 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
 
     document = build_runtime_fixture("held_and_deployed")
     calls = document["runtimeProgram"]["calls"]
-    held = next(row for row in calls if row["target"] == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
+    held = next(row for row in calls if row.get("target") == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
     held.update(fn="channel_beam", params={
         "rangeTiles": 20, "widthPx": 12, "warmupTicks": 12, "manaPayment": "each_use_time",
         "initialDamageMultiplier": 0.35, "initialWidthMultiplier": 0.22,
@@ -41,7 +41,7 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
         count=4, spreadRadians=0.6, targetPolicy="player_assigned_first", requireLineOfSight=True, hardRange=True,
     )
     calls.extend([
-        {"id": "ammo", "fn": "configure_weapon_ammo", "target": "item",
+        {"id": "ammo", "fn": "configure_weapon_ammo",
          "params": {"ammoCategory": "arrow", "speedBasis": "native_shot"}},
         {"id": "native", "fn": "set_projectile_sentry", "target": "deployed_lantern", "params": {"enabled": True}},
         {"id": "pool", "fn": "set_descendant_concurrency", "target": "deployed_lantern", "params": {"maxActive": 12}},

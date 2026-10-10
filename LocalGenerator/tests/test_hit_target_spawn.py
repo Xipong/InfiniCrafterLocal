@@ -144,8 +144,8 @@ def test_retarget_repair_keeps_existing_child_design_frozen_and_compiles_new_com
     document, call = fixture()
     calls = document["runtimeProgram"]["calls"]
     child_id = call["params"]["entity"]
-    child_calls = [deepcopy(row) for row in calls if row["target"] == child_id]
-    old_spawn = next(row for row in calls if row["target"] == child_id and row["fn"] == "configure_spawn")
+    child_calls = [deepcopy(row) for row in calls if row.get("target") == child_id]
+    old_spawn = next(row for row in calls if row.get("target") == child_id and row["fn"] == "configure_spawn")
     old_spawn["params"]["aim"] = "cursor"  # Valid independent design, incompatible with this reference.
     calls.append({"id": "keep_original_child", "fn": "spawn_entity_on_event", "target": call["target"],
                   "params": {"when": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,

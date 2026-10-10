@@ -1145,7 +1145,7 @@
             "place_item"
           ],
           "kind": "binding_action_reference",
-          "message": "configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "message": "configure_placeable must be referenced by exactly one binding action.placementCallId.",
           "target": "item_body"
         }
       ],
@@ -1209,7 +1209,7 @@
             "place_item"
           ],
           "kind": "binding_action_reference",
-          "message": "The placement call must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "message": "The placement call must be referenced by exactly one binding action.placementCallId.",
           "target": "item_body"
         }
       ],
@@ -1273,7 +1273,7 @@
             "place_item"
           ],
           "kind": "binding_action_reference",
-          "message": "The placement call must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "message": "The placement call must be referenced by exactly one binding action.placementCallId.",
           "target": "item_body"
         }
       ],
@@ -6653,7 +6653,7 @@
             }
           },
           "kind": "referenced_entity_capability_params",
-          "message": "The emission reference requires configure_spawn position={at: activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity.",
+          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity.",
           "param": "entity",
           "target": "same_target"
         },

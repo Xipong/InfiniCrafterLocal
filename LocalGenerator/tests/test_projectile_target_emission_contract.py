@@ -45,7 +45,7 @@ def _event(wire):
 
 def _child_spawn(doc):
     return next(row for row in doc["runtimeProgram"]["calls"]
-                if row["target"] == _call(doc)["params"]["entity"] and row["fn"] == "configure_spawn")
+                if row.get("target") == _call(doc)["params"]["entity"] and row["fn"] == "configure_spawn")
 
 
 def test_child_reference_requirements_do_not_expand_source_entity_dependency_scope():
@@ -145,11 +145,11 @@ def test_saved_wire_cannot_invent_any_missing_emission_parameter(name):
 
 
 @pytest.mark.parametrize("name,value", [
-    ("aim", "cursor"), ("aim", "facing"), ("placement", "owner_center"),
-    ("placement", "cursor"), ("offsetPx", 1),
+    ("aim", "cursor"), ("aim", "facing"), ("position", {"at": "owner_center"}),
+    ("position", {"at": "cursor"}), ("offsetPx", 1),
 ])
 def test_reference_refuses_incompatible_child_without_rewriting_it(name, value):
-    doc = _doc(); _child_spawn(doc)["params"]["position" if name == "placement" else name] = {"at": value} if name == "placement" else value
+    doc = _doc(); _child_spawn(doc)["params"][name] = value
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]
@@ -167,7 +167,7 @@ def test_reference_refuses_incompatible_child_without_rewriting_it(name, value):
 def _copy_child(doc, name):
     entity = deepcopy(next(row for row in doc["runtimeProgram"]["entities"] if row["id"] == "witness_child"))
     entity["id"] = name
-    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row["target"] == "witness_child"]
+    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row.get("target") == "witness_child"]
     for row in calls:
         row["id"] = name + "_" + row["id"]
         row["target"] = name
@@ -290,13 +290,10 @@ def test_receipt_forgery_cannot_change_selection_under_a_valid_author_claim():
 
 def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     doc = build_runtime_fixture("returning_potion")
-    from captured_parent_combat_author import historical_child_combat_wire
-    wire = historical_child_combat_wire(compile_runtime_program(doc))
-    # Current at-position alias explicitly carries the old zero DTO, not a new choice.
+    wire = compile_runtime_program(doc)
     for entity in wire["runtimeProgram"]["entities"]:
         if "overTarget" in entity.get("spawn", {}):
-            assert entity["spawn"]["overTarget"] == {"heightTiles": 0, "delayTicks": 0}
-            del entity["spawn"]["overTarget"]
+            assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
     fingerprint = hashlib.sha256(json.dumps(wire["runtimeProgram"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
     assert not any(key in json.dumps(wire["runtimeProgram"]) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
@@ -346,6 +343,8 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = _doc()
+    binding = doc["runtimeProgram"]["bindings"][0]
+    binding.update(stackCost=1, stackConsumeChancePercent=37)
     calls = doc["runtimeProgram"]["calls"]
     emission = _call(doc)
     child_spawn = _child_spawn(doc)
@@ -365,7 +364,10 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
             if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
                 continue
             row["id"] = "combined_" + str(len(calls))
-            row["target"] = owner if fn == "set_projectile_hitbox_curve" else "item"
+            if fn == "set_projectile_hitbox_curve":
+                row["target"] = owner
+            else:
+                row.pop("target", None)
             calls.append(row)
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
@@ -396,6 +398,8 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
         assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source,
                                        final_document=wire)["ok"]
     assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "authored_spawn"}
+    assert wire["runtimeProgram"]["bindings"][0]["usePolicy"]["stackConsumeChancePercent"] == 37
+    assert wire["runtimeProgram"]["bindings"][0]["usePolicy"]["stackCost"] == 1
     assert wire["runtimeProgram"]["heldEffectGroupId"] == "witness"
     assert [group["id"] for group in wire["runtimeProgram"]["effectGroups"]] == ["witness"]
     assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
@@ -415,9 +419,12 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     hostile_geometry["params"]["geometry"]["beforeProbability"] = 0.5
     hostile_combat = deepcopy(next(row for row in calls if row["id"] == "combined_parent_combat"))
     hostile_combat["params"]["damageBasis"] = "authored_child"
+    hostile_binding = deepcopy(binding)
+    hostile_binding["stackConsumeChancePercent"] = 90
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
         {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
-         "callsUpsert": [candidate, frozen, hostile_spawn, hostile_emission, hostile_combat, hostile_geometry]},
+         "callsUpsert": [candidate, frozen, hostile_spawn, hostile_emission, hostile_combat, hostile_geometry],
+         "bindingsUpsert": [hostile_binding]},
         format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

@@ -202,7 +202,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
     )
     field_guide["bindingTarget"] += (
-        " Every binding owns one usePolicy with action, stackCost and contactDamage; no call/global shadows it. "
+        " Every binding directly owns action, stackCost and contactDamage. Omit only declared fixed branch constants; active non-placement stack/contact remain independent required choices. Item-only targets use the unique declared item_body; projectile targets remain explicit. Zero-parameter calls omit params. "
         "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
         "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
         "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."

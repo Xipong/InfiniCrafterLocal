@@ -100,20 +100,18 @@ def deterministic_low_level_plan(
                 {
                     "id": "bind_primary",
                     "input": "primary_use",
-                    "usePolicy": {
-                        "action": {"kind": "spawn_entity", "targetId": "held_body"},
-                        "stackCost": 0,
-                        "contactDamage": False,
-                    },
+                    "action": {"kind": "spawn_entity", "targetId": "held_body"},
+                    "stackCost": 0,
+                    "contactDamage": False,
                 },
             ],
             "calls": [
                 {
-                    "id": "call_item_stats", "fn": "configure_item_stats", "target": "item",
+                    "id": "call_item_stats", "fn": "configure_item_stats",
                     "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "useTimeTicks": 24, "useAnimationTicks": 24, "manaCost": 0, "rarity": 2, "valueCopper": 15000, "maxStack": 1, "craftYield": 1, "widthPx": 40, "heightPx": 40, "scale": 1.0},
                 },
                 {
-                    "id": "call_item_use", "fn": "configure_item_use", "target": "item",
+                    "id": "call_item_use", "fn": "configure_item_use",
                     "params": {"useStyle": "shoot", "autoReuse": True, "useTurn": True, "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "two_handed", "customHeldSprite": "hidden"},
                 },
                 {

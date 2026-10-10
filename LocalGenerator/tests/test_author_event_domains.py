@@ -127,7 +127,7 @@ def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities()
     target = witness(document)["target"]
     calls = document["runtimeProgram"]["calls"]
     document["runtimeProgram"]["calls"] = [
-        row for row in calls if row["target"] != target or not CAPABILITY_REGISTRY[row["fn"]].meaningful_for_stationary
+        row for row in calls if row.get("target") != target or not CAPABILITY_REGISTRY[row["fn"]].meaningful_for_stationary
     ]
     report = validate_runtime_program(document)
     issue = next(row for row in report["errors"] if row["code"] == "inert_stationary_entity")
@@ -156,11 +156,8 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             # A6 makes five formerly absent targeting neutrals explicit. The
             # frozen wire remains admitted wire-only, but cannot authenticate a
             # complete current compilation until those exact receipts exist.
-            from tests.captured_projectile_author import project_captured_projectile_call
-            current_source = deepcopy(row["source"])
-            for item_call in current_source["runtimeProgram"]["calls"]:
-                if item_call["fn"] == "configure_item_use":
-                    project_captured_projectile_call(item_call)
+            from test_runtime_program_v5_seed_replay import _current_author_seed
+            current_source = _current_author_seed(row["source"])
             from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
             from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
             current_source = captured_spawn_velocity_author(captured_parent_combat_author(current_source))
@@ -193,6 +190,15 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
                     assert len(matches) == 1
                     assert json.dumps(updated, sort_keys=True) == json.dumps(matches[0], sort_keys=True)
                     receipt.update(updated)
+            # Authenticate current v5 binding lanes independently before isolating
+            # the five old targeting omissions. No archive bytes are rewritten.
+            from infini_local.core.runtime_authoring.technical_lowering import _final_value
+            current_lanes = {"author_binding_lanes", "primary_entity_to_binding_role"}
+            current_rows = [receipt for receipt in current_rows if receipt.get("lowererId") not in current_lanes]
+            for receipt in fresh["runtimeContract"]["finalWireReceipts"]:
+                if receipt.get("lowererId") in current_lanes:
+                    assert json.dumps(_final_value(current_wire, receipt["finalPath"]), sort_keys=True) == json.dumps(receipt["value"], sort_keys=True)
+                    current_rows.append(deepcopy(receipt))
             violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=current_wire)["violations"]
             assert len(violations) == 5
             assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
@@ -207,12 +213,9 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             call = witness(source)
             call["fn"] = NEW
             call["params"]["maxTargets"] = call["params"].pop("count")
-            from tests.captured_projectile_author import project_captured_projectile_call
-            for item_call in source["runtimeProgram"]["calls"]:
-                if item_call["fn"] == "configure_item_use":
-                    project_captured_projectile_call(item_call)
+            from test_runtime_program_v5_seed_replay import _current_author_seed
             from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
-            fresh, _ = compile_and_check(captured_spawn_velocity_author(source))
+            fresh, _ = compile_and_check(captured_spawn_velocity_author(_current_author_seed(source)))
             assert fresh["runtimeProgram"] == wire["runtimeProgram"]
             assert fresh["gameplay"] == wire["gameplay"]
 

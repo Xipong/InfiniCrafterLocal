@@ -9,12 +9,19 @@ from typing import Any, Final, Iterable, Mapping
 
 from infini_local.core.repair_merge import json_values_equal
 
-from infini_local.core.runtime_authoring.binding_use_policy import (
-    STACK_COST_RULE,
-    action_kind,
-    contact_damage as binding_contact_damage,
-    target_id as binding_target_id,
+STACK_COST_RULE = (
+    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "and the placed generated item is returned by the placement ledger when broken. "
+    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
+    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
+    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
+    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
+    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
+    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
+    "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
+    "the existing 100 percent debit. This never controls ammo saving or placement escrow."
 )
+
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
     DAMAGE_CLASS_TOKENS,
@@ -25,7 +32,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v4"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v5"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -693,6 +700,12 @@ class CapabilitySpec:
             },
             "required": ["id", "fn", "target", "params"],
         }
+        if self.target_kinds == ("item_body",):
+            del variant["properties"]["target"]
+            variant["required"].remove("target")
+        if not self.params:
+            del variant["properties"]["params"]
+            variant["required"].remove("params")
         return variant
 
     def prompt_card(self) -> dict[str, Any]:
@@ -1139,17 +1152,6 @@ _SPAWN_ANCHORS: Final[Mapping[str, str]] = MappingProxyType({
     "native_resting_spot": "native_resting_spot",
 })
 
-EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
-    "spawn_entity_on_event": 1,
-    "apply_status_on_event": 2,
-    "damage_area_on_event": 3,
-    "chain_damage_on_event": 4,
-    "pull_on_event": 5,
-    "heal_owner_on_event": 6,
-    "move_owner_on_event": 7,
-    "select_targets_and_emit_on_event": 8,
-})
-
 
 def _spawn_position_param() -> ParamSpec:
     def anchor() -> ParamSpec:
@@ -1186,8 +1188,6 @@ def authored_event(params: Mapping[str, Any]) -> str:
     if isinstance(when, str):
         return when
     return "periodic" if isinstance(when, Mapping) else ""
-
-
 def _spawn_velocity() -> ParamSpec:
     def speed(description: str, wire: str) -> ParamSpec:
         return _p("number", description, minimum=0, maximum=80,
@@ -1486,9 +1486,9 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
         lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
                          "runtimeProgram.calls[].params.placementCallId",
-                         "runtimeProgram.bindings[].usePolicy.action.kind",
-                         "runtimeProgram.bindings[].usePolicy.action.targetId",
-                         "runtimeProgram.bindings[].usePolicy.action.placementCallId"),
+                         "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.targetId",
+                         "runtimeProgram.bindings[].action.placementCallId"),
     ),
     _cap(
         "require_use_condition",
@@ -1621,7 +1621,7 @@ _CAPS: list[CapabilitySpec] = [
             "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it", minimum=1, maximum=12, required=False, default=1, neutral=1, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "spreadRadians": _p("number", "Total angular spread. May be omitted only for child_projectile, whose producers override it", minimum=0, maximum=6.283185307179586, units="radians", required=False, default=0, neutral=0, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim axis and forward offset: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction. none is zero velocity for the constant variant; radial/disk sample their own directions independently.", enum=("cursor", "facing", "velocity", "none")),
+            "aim": _p("string", "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
             "position": _spawn_position_param(),
         },
         py=_COMPILER_OWNER,
@@ -2055,7 +2055,7 @@ _CAPS.extend([
         PROJECTILE_ENTITY_KINDS,
         {
             "when": _event_when_param(("on_hit", "on_crit")),
-            "entity": _p("string", "Referenced moving child; its position must be {at:activation_origin}, aim velocity, offsetPx 0, with no spawn_over_target", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
+            "entity": _p("string", "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
             "geometry": _hit_target_spawn_geometry(),
             "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
@@ -2499,16 +2499,21 @@ def event_alternative_is_present(
     def binding_present(requirement: EventBindingRequirement) -> bool:
         allowed_inputs = set(requirement.any_of_inputs)
         allowed_actions = set(requirement.any_of_actions)
-        return any(
-            str(row.get("input") or "") in allowed_inputs
-            and (not allowed_actions or action_kind(row) in allowed_actions)
-            and binding_target_id(row) == target_id
-            and (
-                requirement.required_contact_damage is None
-                or binding_contact_damage(row) is requirement.required_contact_damage
-            )
-            for row in binding_rows
-        )
+        for row in binding_rows:
+            raw_action = row.get("action")
+            action: Mapping[str, Any] = raw_action if isinstance(raw_action, Mapping) else {}
+            input_name = row.get("input")
+            inp = INPUT_KIND_REGISTRY.get(input_name) if isinstance(input_name, str) else None
+            action_name = action.get("kind")
+            if action_name is None and inp is not None and len(inp.allowed_actions) == 1:
+                action_name = inp.allowed_actions[0]
+            if (isinstance(input_name, str) and input_name in allowed_inputs
+                and (not allowed_actions or isinstance(action_name, str) and action_name in allowed_actions)
+                and action.get("targetId") == target_id
+                and (requirement.required_contact_damage is None or
+                     (row.get("contactDamage") is True) is requirement.required_contact_damage)):
+                return True
+        return False
 
     return (
         all(call_present(requirement) for requirement in alternative.required_calls)
@@ -2795,7 +2800,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             RequirementSpec("event_available", param="when", message="The source entity must actually emit the selected hit event."),
             RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
                 equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
-                message="The emission reference requires configure_spawn position={at: activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
+                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
             RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
                 message="The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter."),
         )
@@ -2841,7 +2846,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                             message="Only one explicit placed-body presentation may reference a placement call."),
         )
     if cap.name in PLACEMENT_CAPABILITIES:
-        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding usePolicy.action.placementCallId."),)
+        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding action.placementCallId."),)
     if cap.name == "configure_placeable":
         return (
             RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
@@ -2849,7 +2854,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                 kind="binding_action_reference",
                 target="item_body",
                 any_of=("place_item",),
-                message="configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+                message="configure_placeable must be referenced by exactly one binding action.placementCallId.",
             ),
         )
     if cap.name == "configure_tool":
@@ -3050,7 +3055,25 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
     return replace(spec, semantic_type=semantic_type, reference=reference)
 
 
+EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
+    "spawn_entity_on_event": 1,
+    "apply_status_on_event": 2,
+    "damage_area_on_event": 3,
+    "chain_damage_on_event": 4,
+    "pull_on_event": 5,
+    "heal_owner_on_event": 6,
+    "move_owner_on_event": 7,
+    "select_targets_and_emit_on_event": 8,
+})
+
+
 def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
+    if cap.effect_groupable:
+        cap = replace(cap, params=MappingProxyType({
+            **cap.params,
+            "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                required=False, pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="id", semantic_type="item_effect_group_identity"),
+        }))
     if cap.category == "event" and not cap.wire_action:
         retained = {**cap.retained_receipt_params, "event": _p("string", "Retained prior event source provenance", enum=cap.allowed_events)}
         if "periodic" in cap.allowed_events:
@@ -3062,12 +3085,6 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         wire_action = cap.wire_action or cap.name
         cap = replace(cap, fixed_wire_literals=MappingProxyType({
             **cap.fixed_wire_literals, "action": wire_action, "actionCode": EVENT_ACTION_OPCODE[wire_action],
-        }))
-    if cap.effect_groupable:
-        cap = replace(cap, params=MappingProxyType({
-            **cap.params,
-            "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
-                required=False, pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="id", semantic_type="item_effect_group_identity"),
         }))
     if cap.category == "event" and "delayTicks" not in cap.params:
         cap = replace(cap, params=MappingProxyType({
@@ -3182,6 +3199,8 @@ CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "charge_then_release": 2,
     "target_and_fire": 3,
 })
+
+
 def visible_capabilities() -> tuple[CapabilitySpec, ...]:
     """Return the current canonical registry projection.
 
@@ -3238,13 +3257,14 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             }),
         },
         "bindingTarget": (
-            "bindings[].usePolicy.action.targetId is the exact entity acted on. The selected action's targets list "
+            "bindings[].action.targetId is the exact entity acted on. The selected action's targets list "
             "is the entity-kind allowlist; spawn_entity targets the entity created, while "
             "use_item_body targets the item body being used. Only place_item additionally requires "
-            "bindings[].usePolicy.action.placementCallId; every other action must omit that key. "
-            "usePolicy.contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
+            "bindings[].action.placementCallId; every other action must omit that key. "
+            "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; place_item/hold/equipped require false."
+            "It does not select primaryEntityId or projectile held ownership; omit fixed contactDamage for place_item/hold/equipped. "
+            "Omit action.targetId for item_body-only actions with one declared item_body; projectile targets remain explicit."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",

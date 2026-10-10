@@ -201,7 +201,7 @@ def test_root_spawn_fields_are_omittable_only_for_exact_child_kind():
         if root_binding:
             binding = deepcopy(document["runtimeProgram"]["bindings"][0])
             binding.update(id="alternate_child", input="alternate_use")
-            binding["usePolicy"]["action"]["targetId"] = "witness_child"
+            binding["action"]["targetId"] = "witness_child"
             document["runtimeProgram"]["bindings"].append(binding)
         errors = validate_runtime_program(document)["errors"]
         assert {r["path"].rsplit(".", 1)[-1] for r in errors if r["code"] == "missing_dependency_param"} == {"count", "spreadRadians"}
@@ -274,7 +274,7 @@ def test_repair_resolves_movement_conflict_before_conditional_bounce_omission(de
     collision["params"]["tileCollide"] = True
     motion = selected(document)
     document["runtimeProgram"]["calls"].append({
-        "id": "other_motion", "fn": "move_straight", "target": motion["target"], "params": {},
+        "id": "other_motion", "fn": "move_straight", "target": motion["target"],
     })
     errors = validate_runtime_program(document)["errors"]
     assert {row["code"] for row in errors} == {"exclusive_component_conflict"}

@@ -32,8 +32,8 @@
     "spawnBudgetCapabilities": 3,
     "stationaryMeaningfulCapabilities": 14,
     "exactWirePaths": 446,
-    "globalTechnicalLowerers": 7,
-    "globalTechnicalLowererOutputs": 151,
+    "globalTechnicalLowerers": 8,
+    "globalTechnicalLowererOutputs": 162,
     "exclusiveGroups": {
       "ammo_role": [
         "configure_vanilla_ammo_item",

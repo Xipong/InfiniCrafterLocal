@@ -133,6 +133,70 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 selected = [index for index, paths in enumerate(const_paths)
                             if discriminators and all(_authored_const_matches(value, key, paths[key])
                                                       for key in discriminators)]
+                all_identity_paths = {key for key in set().union(*(set(paths) for paths in const_paths))
+                                      if all(isinstance(paths[key], str) for paths in const_paths if key in paths)
+                                      and _authored_const_value(value, key)[0]}
+                identity_selected = [index for index, paths in enumerate(const_paths)
+                                     if all_identity_paths and all(key in paths and _authored_const_matches(value, key, paths[key])
+                                                                   for key in all_identity_paths)]
+                for selector in (set.intersection(*(set(paths) for paths in const_paths))
+                                 if const_paths and any(set(paths) != set(const_paths[0]) for paths in const_paths) else set()):
+                    present, actual = _authored_const_value(value, selector)
+                    if (present and all(isinstance(paths[selector], str) for paths in const_paths)
+                            and not any(_authored_const_matches(value, selector, paths[selector]) for paths in const_paths)):
+                        selector_path = path
+                        for part in selector:
+                            selector_path = json_path_child(selector_path, part)
+                        if not any(row["path"] == selector_path for row in errors):
+                            add("one_of" if exclusive else "any_of", selector_path)
+                if len(identity_selected) == 1:
+                    # Exact string identity outranks foreign numeric constraints.
+                    # A forbidden fixed cost is not evidence for another action.
+                    selected = identity_selected
+                if len(selected) != 1:
+                    # A closed branch may omit an inner discriminator entirely.
+                    # Use present exact consts hierarchically: input first, then
+                    # action.kind only among compatible branches. Never choose
+                    # by error count or absent foreign branch literals.
+                    all_paths = set().union(*(set(paths) for paths in const_paths))
+                    variant_paths = {key for key in all_paths if len({repr((type(paths[key]), paths[key]))
+                                     for paths in const_paths if key in paths}) > 1}
+                    present_paths = {key for key in variant_paths if _authored_const_value(value, key)[0]}
+                    # A present selector that is unknown everywhere is diagnosed
+                    # at that leaf; compatible other selectors still expose only
+                    # errors shared by their remaining declared branches.
+                    unknown = {key for key in present_paths if not any(key in paths and _authored_const_matches(value, key, paths[key]) for paths in const_paths)}
+                    compatible = [i for i, paths in enumerate(const_paths) if present_paths - unknown and
+                                  all(key in paths and _authored_const_matches(value, key, paths[key]) for key in present_paths - unknown)]
+                    if unknown and compatible and present_paths != discriminators:
+                        for key in unknown:
+                            error_path = path
+                            for part in key:
+                                error_path = json_path_child(error_path, part)
+                            add("one_of" if exclusive else "any_of", error_path)
+                    exact = [i for i, paths in enumerate(const_paths)
+                             if present_paths and all(key in paths and _authored_const_matches(value, key, paths[key])
+                                                      for key in present_paths)]
+                    if unknown and compatible and present_paths != discriminators:
+                        selected = compatible
+                    elif exact:
+                        selected = exact
+                    elif present_paths != discriminators:
+                        # A known outer selector plus an unknown inner selector
+                        # owns only that causal leaf, never the complete row.
+                        for key in present_paths:
+                            others = present_paths - {key}
+                            candidates = [paths for paths in const_paths if others and
+                                          all(other in paths and _authored_const_matches(value, other, paths[other]) for other in others)]
+                            if candidates and all(key in paths for paths in candidates) and not any(
+                                _authored_const_matches(value, key, paths[key]) for paths in candidates
+                            ):
+                                error_path = path
+                                for part in key:
+                                    error_path = json_path_child(error_path, part)
+                                if not any(row["path"] == error_path for row in errors):
+                                    add("one_of" if exclusive else "any_of", error_path)
+                                break
                 if not selected and not discriminators:
                     # Typed parameter unions use JSON type or an explicitly
                     # supplied property name as their discriminator. Preserve
