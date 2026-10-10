@@ -98,7 +98,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, Math.Abs(minAcross + 2f) < 0.001f && Math.Abs(maxAcross - 2f) < 0.001f, "width centered and measured in pixels");
             }
             int before = count();
-            draw.Invoke(null, new object[] { texture, Vector2.One, Vector2.One, Color.White, 4f });
+            draw.Invoke(null, new object[] { texture, Vector2.One, Vector2.One, Color.White, 4f, false });
             Equal(before, count(), "zero segment queues nothing");
         });
     }
