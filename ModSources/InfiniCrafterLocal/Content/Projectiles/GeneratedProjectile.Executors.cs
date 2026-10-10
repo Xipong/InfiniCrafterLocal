@@ -31,7 +31,7 @@ public sealed partial class GeneratedProjectile
             if (_activationDelayTicks == 0)
             {
                 Projectile.alpha = 0;
-                Projectile.friendly = _entity.Damage.Enabled && _entity.Damage.Damage > 0;
+                Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
                 Projectile.netUpdate = true;
             }
             return;

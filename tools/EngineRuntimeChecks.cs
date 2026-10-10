@@ -373,6 +373,23 @@ internal static partial class EngineRuntimeChecks
             Attach(projectile).Configure(new GeneratedItemData(), Entity(), 0, 8, Vector2.UnitX);
             Equal(damage, projectile.damage, "spawn damage");
             Equal(damage, projectile.originalDamage, "spawn originalDamage");
+            foreach (bool enabled in new[] { false, true })
+            foreach (bool hydrated in new[] { false, true })
+            foreach (int delay in new[] { 0, 2 })
+            {
+                var child = Entity(); child.Kind = RuntimeEntityKind.ChildProjectile;
+                child.Damage.Enabled = enabled; child.Damage.Damage = 0;
+                child.Spawn.OverTarget.DelayTicks = delay;
+                var live = new Projectile { active = true, damage = damage, originalDamage = damage,
+                    knockBack = 3f, timeLeft = 60, velocity = Vector2.UnitX };
+                var host = Attach(live);
+                if (hydrated) typeof(GeneratedProjectile).GetField("_activationDelayTicks",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, delay);
+                host.Configure(new GeneratedItemData(), child, 0, 8, Vector2.UnitX, preserveSyncedState: hydrated);
+                Equal(enabled && damage > 0 && delay == 0, live.friendly, "live child collision eligibility at configuration");
+                for (int tick = 0; tick < delay; tick++) host.AI();
+                Equal(enabled && damage > 0, live.friendly, "live child collision eligibility after activation delay");
+            }
         }
     }
 
