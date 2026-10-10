@@ -350,6 +350,13 @@
                               "allowSelf": true,
                               "graphEdge": false
                             }
+                          },
+                          "effectGroupId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 48,
+                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects."
                           }
                         },
                         "required": [
@@ -657,6 +664,13 @@
                               "allowSelf": true,
                               "graphEdge": false
                             }
+                          },
+                          "effectGroupId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 48,
+                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects."
                           }
                         },
                         "required": [
@@ -1402,6 +1416,12 @@
                         "type": "boolean",
                         "description": "Set Terraria Item.potion rules including Quick Heal eligibility and potion-sickness use gating; not a duration; false allows non-potion healing",
                         "x-infini-semanticType": "bounded_text"
+                      },
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
@@ -1461,6 +1481,12 @@
                         "description": "Buff duration",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"
+                      },
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
@@ -1621,12 +1647,66 @@
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 0,
                         "x-infini-neutral": 0
+                      },
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
                       "durationTicks",
                       "lightStrength",
                       "lightColor"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "refresh_generated_effect_group_while_held"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact existing named generated-buff group",
+                        "x-infini-semanticType": "item_effect_group_reference"
+                      }
+                    },
+                    "required": [
+                      "effectGroupId"
                     ]
                   }
                 },
@@ -2133,6 +2213,12 @@
                         "type": "boolean",
                         "description": "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check",
                         "x-infini-semanticType": "bounded_text"
+                      },
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [

@@ -265,7 +265,7 @@ def check_world_transactions() -> None:
     obligations = [
         (item, "ConsumeItem", ("RuntimeBindingAction.PlaceItem", "StackCost == 1 && ConsumeAcceptedPlacementReceipt(player)"), ()),
         (item, "UseItem", ("Action.Kind != RuntimeBindingAction.PlaceItem", "RuntimeEventKind.OnUse"), ()),
-        (item, "ApplyActiveUseProjection", ("Item.mana = Math.Max(0, Data.Gameplay.ManaCost)", "bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects", "Data.ApplyUseEffectFields(Item, applyingItemEffects)"), ()),
+        (item, "ApplyActiveUseProjection", ("Item.mana = Math.Max(0, Data.Gameplay.ManaCost)", "bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects", "Data.ApplyUseEffectFields(Item, applyingItemEffects, binding)"), ()),
         (item, "BindingUsesItemBodyContact", ("UsePolicy.ContactDamage",), ("RuntimeBindingAction", "TargetId")),
         (ledger, "AuthorizePlacement", ("PendingAuthorizations.Count", "MaxCellsPerGroup", "MaxGroups", "data.ToNetworkJson()"), ()),
         (ledger, "TryCommitAuthorizedPlacement", ("MaxCells - committedCells.Count", "Groups.Count >= MaxGroups"), ()),
@@ -310,7 +310,19 @@ def check_world_transactions() -> None:
     apply_fields = stripped(read("Common/Models/GeneratedItemData.Apply.cs"))
     for field in ("healLife", "healMana", "buffType", "buffTime"):
         authored = {"buffType": "BuffCode"}.get(field, field[0].upper() + field[1:])
-        require(apply_fields, f"item.{field} = enabled ? Math.Max(0, Gameplay.{authored}) : 0;", "binding-scoped use effects")
+        require(apply_fields, f"item.{field} = enabled ? Math.Max(0, effects.{authored}) : 0;", "binding-scoped use effects")
+    require(apply_fields, "IItemEffectsSpec effects = binding is null ? PrimaryUseEffects : EffectsForBinding(binding);", "exact selected use effect group")
+    require(stripped(method_body(item, "ApplyItemEffects")), "Data.EffectsForBinding(binding)", "selected utility/mobility group")
+    held_effects = stripped(method_body(item, "RefreshHeldEffectGroup"))
+    for token in ("ReferenceEquals(player.HeldItem, Item)", "InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player)",
+                  "TryGetEffectGroup(Data.RuntimeProgram.HeldEffectGroupId)", "previous.Tick == tick",
+                  "tick - previous.SnapshotTick >= 30", "ApplyGeneratedUtilityBuff(buff"):
+        require(held_effects, token, "explicit held utility refresh")
+    quick_use = read("Common/Systems/GeneratedQuickUseSystem.cs")
+    require(stripped(method_body(quick_use, "Within<T>")), "ProjectPrimaryEffectCandidates(player.inventory)", "native quick-use candidate primary projection")
+    primary_candidates = stripped(method_body(quick_use, "ProjectPrimaryEffectCandidates"))
+    require(primary_candidates, "BindingForInput(RuntimeInputKind.PrimaryUse)", "native quick-use exact primary group")
+    require(primary_candidates, "generated.Data.ApplyUseEffectFields(item", "native quick-use refreshes selected fields before native scan")
     for body in (apply_fields, stripped(method_body(item, "ApplyActiveUseProjection"))):
         if not re.search(r"\b(?:item|Item)\.consumable\s*=\s*[^;]*\|\|\s*(?:Data\.)?Gameplay\.AmmoCategory\.Length\s*>\s*0\s*;", body):
             fail("ammo remains vanilla consumable: ammo cost is independent of direct use")
@@ -496,7 +508,7 @@ def check_runtime_contract() -> None:
     forbid(dto, 'public const string Passive = "passive"', "RuntimeProgramSpec.cs")
     require(normalize, "Gameplay.AmmoProjectileId >= ProjectileID.Count", "GeneratedItemData.Normalize.cs")
     apply = read("Common/Models/GeneratedItemData.Apply.cs")
-    for needle in ["item.potion = enabled && Gameplay.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
+    for needle in ["item.potion = enabled && effects.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
         require(apply, needle, "GeneratedItemData.Apply.cs")
     forbid(apply, "item.potion = Gameplay.HealLife > 0", "GeneratedItemData.Apply.cs")
     require(apply, "RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner", "GeneratedItemData.Apply.cs")

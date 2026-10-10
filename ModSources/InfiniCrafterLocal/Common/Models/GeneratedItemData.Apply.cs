@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Content.Projectiles;
 using System;
+using System.IO;
 
 using Terraria;
 using Terraria.ID;
@@ -122,13 +123,21 @@ public sealed partial class GeneratedItemData
         StampAppliedTrace(item);
     }
 
-    internal void ApplyUseEffectFields(Item item, bool enabled)
+    internal IItemEffectsSpec EffectsForBinding(RuntimeBindingSpec? binding)
+        => binding?.UsePolicy.Action.EffectGroupId is string id
+            ? RuntimeProgram.TryGetEffectGroup(id) ?? throw new InvalidDataException($"missing effect group '{id}'")
+            : Gameplay;
+
+    internal IItemEffectsSpec PrimaryUseEffects => EffectsForBinding(RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse));
+
+    internal void ApplyUseEffectFields(Item item, bool enabled, RuntimeBindingSpec? binding = null)
     {
-        item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 0;
-        item.healMana = enabled ? Math.Max(0, Gameplay.HealMana) : 0;
-        item.potion = enabled && Gameplay.Potion;
-        item.buffType = enabled ? Math.Max(0, Gameplay.BuffCode) : 0;
-        item.buffTime = enabled ? Math.Max(0, Gameplay.BuffTime) : 0;
+        IItemEffectsSpec effects = binding is null ? PrimaryUseEffects : EffectsForBinding(binding);
+        item.healLife = enabled ? Math.Max(0, effects.HealLife) : 0;
+        item.healMana = enabled ? Math.Max(0, effects.HealMana) : 0;
+        item.potion = enabled && effects.Potion;
+        item.buffType = enabled ? Math.Max(0, effects.BuffCode) : 0;
+        item.buffTime = enabled ? Math.Max(0, effects.BuffTime) : 0;
     }
 
     private static void ConfigureNonUsableEquipmentItem(Item item)

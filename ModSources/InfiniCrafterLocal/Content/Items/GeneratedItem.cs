@@ -38,6 +38,8 @@ public partial class GeneratedItem : ModItem
     // Native direct use calls UseItem before ConsumeItem in the same world tick.
     private (Player? Player, Item? Item, GeneratedItemData? Data,
         RuntimeBindingSpec? Binding, uint Tick, bool Succeeded) _pureMobilityUseOutcome;
+    private (Player? Player, Item? Item, GeneratedItemData? Data,
+        RuntimeItemEffectGroupSpec? Group, uint Tick, uint SnapshotTick) _heldEffectRefresh;
 
 
     private static void Warn(string context, Exception ex)
@@ -241,7 +243,7 @@ public partial class GeneratedItem : ModItem
         // manaCost is the authored item-use cost for every active use binding.
         Item.mana = Math.Max(0, Data.Gameplay.ManaCost);
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
-        Data.ApplyUseEffectFields(Item, applyingItemEffects);
+        Data.ApplyUseEffectFields(Item, applyingItemEffects, binding);
         bool spawning = action.Kind == RuntimeBindingAction.SpawnEntity;
         Item.shoot = spawning ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
         Item.shootSpeed = spawning
@@ -319,7 +321,7 @@ public partial class GeneratedItem : ModItem
         ResetPureMobilityUseOutcome();
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
-        if (binding is null || !GeneratedQuickUseSystem.AcceptsBinding(player, binding, Data.Gameplay)) return false;
+        if (binding is null || !GeneratedQuickUseSystem.AcceptsBinding(player, binding, Data.EffectsForBinding(binding))) return false;
         ApplyActiveUseProjection(binding);
         string blocked = UseBlockedReason(player, Data.Gameplay);
         if (!string.IsNullOrWhiteSpace(blocked))
@@ -400,7 +402,7 @@ public partial class GeneratedItem : ModItem
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects)
         {
-            bool mobilitySucceeded = ApplyItemEffects(player);
+            bool mobilitySucceeded = ApplyItemEffects(player, binding);
             if (IsPureMobilityUse(binding))
             {
                 _pureMobilityUseOutcome = (player, Item, Data, binding, Main.GameUpdateCount, mobilitySucceeded);
@@ -423,13 +425,14 @@ public partial class GeneratedItem : ModItem
 
     private bool IsPureMobilityUse(RuntimeBindingSpec binding)
     {
+        IItemEffectsSpec effects = Data.EffectsForBinding(binding);
         if (binding.UsePolicy.Action.Kind != RuntimeBindingAction.ApplyItemEffects
-            || string.IsNullOrWhiteSpace(Data.Gameplay.MobilityMode)
+            || string.IsNullOrWhiteSpace(effects.MobilityMode)
             || binding.UsePolicy.ContactDamage || Item.shoot > ProjectileID.None
             || Item.healLife > 0 || Item.healMana > 0 || Item.buffType > 0
-            || Data.Gameplay.GeneratedBuff?.HasAnyEffect == true)
+            || effects.GeneratedBuff?.HasAnyEffect == true)
             return false;
-        foreach (BuffEntrySpec buff in Data.Gameplay.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
+        foreach (BuffEntrySpec buff in effects.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
             if (buff.BuffCode > 0 && buff.BuffTime > 0)
                 return false;
         RuntimeEntitySpec? body = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId);
@@ -450,9 +453,9 @@ public partial class GeneratedItem : ModItem
         return succeeded;
     }
 
-    private bool ApplyItemEffects(Player player)
+    private bool ApplyItemEffects(Player player, RuntimeBindingSpec binding)
     {
-        GameplaySpec gp = Data.Gameplay;
+        IItemEffectsSpec gp = Data.EffectsForBinding(binding);
         foreach (BuffEntrySpec buff in gp.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
             if (buff.BuffCode > 0 && buff.BuffTime > 0)
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
@@ -467,9 +470,27 @@ public partial class GeneratedItem : ModItem
     internal static int RootBindingSpawnCapacity(RuntimeEntitySpec entity)
         => Math.Clamp(entity.Spawn.Count, 1, InfiniRuntimeLimits.MaxRuntimeSpawnCount);
 
+    private void RefreshHeldEffectGroup(Player player)
+    {
+        if (player is not { active: true, dead: false } || !ReferenceEquals(player.HeldItem, Item)
+            || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player)
+            || Data.RuntimeProgram.TryGetEffectGroup(Data.RuntimeProgram.HeldEffectGroupId) is not { GeneratedBuff: { HasAnyEffect: true } buff } group)
+            return;
+        var previous = _heldEffectRefresh;
+        uint tick = Main.GameUpdateCount;
+        bool same = ReferenceEquals(previous.Player, player) && ReferenceEquals(previous.Item, Item)
+            && ReferenceEquals(previous.Data, Data) && ReferenceEquals(previous.Group, group);
+        if (same && previous.Tick == tick) return;
+        bool snapshot = !same || tick < previous.SnapshotTick || tick - previous.SnapshotTick >= 30;
+        player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(buff,
+            syncNetwork: Main.netMode == NetmodeID.Server && snapshot);
+        _heldEffectRefresh = (player, Item, Data, group, tick, snapshot ? tick : previous.SnapshotTick);
+    }
+
     public override void HoldItem(Player player)
     {
         EnsureRuntimeHydration(player);
+        RefreshHeldEffectGroup(player);
         GameplaySpec gp = Data.Gameplay;
         if (gp.HoldLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {

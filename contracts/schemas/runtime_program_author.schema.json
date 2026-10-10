@@ -175,6 +175,13 @@
                   "action": {
                     "additionalProperties": false,
                     "properties": {
+                      "effectGroupId": {
+                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string"
+                      },
                       "kind": {
                         "const": "apply_item_effects"
                       },
@@ -482,6 +489,13 @@
                   "action": {
                     "additionalProperties": false,
                     "properties": {
+                      "effectGroupId": {
+                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string"
+                      },
                       "kind": {
                         "const": "apply_item_effects"
                       },
@@ -1217,6 +1231,12 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "effectGroupId": {
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_identity"
+                  },
                   "healLife": {
                     "description": "Life restored",
                     "maximum": 500,
@@ -1296,6 +1316,12 @@
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
+                  },
+                  "effectGroupId": {
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_identity"
                   }
                 },
                 "required": [
@@ -1347,6 +1373,12 @@
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
+                  },
+                  "effectGroupId": {
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_identity"
                   },
                   "jumpSpeedBonusPxPerTick": {
                     "default": 0,
@@ -1462,6 +1494,54 @@
                   "durationTicks",
                   "lightStrength",
                   "lightColor"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "refresh_generated_effect_group_while_held"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "effectGroupId": {
+                    "description": "Exact existing named generated-buff group",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_reference"
+                  }
+                },
+                "required": [
+                  "effectGroupId"
                 ],
                 "type": "object"
               },
@@ -1946,6 +2026,12 @@
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
                     "x-infini-units": "ticks"
+                  },
+                  "effectGroupId": {
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_identity"
                   },
                   "mode": {
                     "description": "Mobility executor",

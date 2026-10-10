@@ -69,6 +69,11 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
         },
     }
     required = ["kind", "targetId"]
+    if action_name == "apply_item_effects":
+        properties["effectGroupId"] = {
+            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+        }
     if action_name == "place_item":
         properties["placementCallId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),

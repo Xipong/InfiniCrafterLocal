@@ -67,6 +67,8 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "consumer_representability": {"strategy": "patch_exact_param", "llmRepairable": True, "allowNodeDelete": False},
     "ambiguous_global_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
+    "missing_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
+    "invalid_held_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
     "capability_event_incompatible": {"strategy": "patch_exact_event", "llmRepairable": True, "allowNodeDelete": False},
     "child_depth_budget": {"strategy": "patch_graph_edge_or_count", "llmRepairable": True, "allowNodeDelete": True},
     "dual_use_placeable_input_contract": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
@@ -1321,7 +1323,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if json_path_relative(path, f"$.{field}") is not None:
                 metadata_fields.add(field)
 
-        if code == "unknown_registry_requirement":
+        if code in {"missing_effect_group", "invalid_held_effect_group"}:
+            # The invalid reference leaf is mutable; all candidate definitions
+            # remain read-only context. Never synthesize a group or its effects.
+            for candidate in rows["calls"]:
+                candidate_cap = CAPABILITY_REGISTRY.get(str(candidate.get("fn") or ""))
+                if candidate_cap is not None and candidate_cap.effect_groupable:
+                    context["calls"].add(str(candidate.get("id") or ""))
+        elif code == "unknown_registry_requirement":
             pass
         elif code in {"duplicate_id", "ambiguous_global_id", "duplicate_placed_body_reference"}:
             # IDs are structural identity.  Do not let Repair rename a valid
@@ -1681,6 +1690,18 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
 
         elif code == "missing_binding_dependency" and node_namespace == "calls" and node_id:
             capability = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+            effect_group_id = _mapping(node_row.get("params")).get("effectGroupId") if capability is not None and capability.effect_groupable else None
+            if isinstance(effect_group_id, str) and any(
+                str(other.get("code") or "") == "missing_effect_group"
+                or (capability.name == "apply_generated_buff_on_use" and str(other.get("code") or "") == "invalid_held_effect_group")
+                for other in error_rows
+            ):
+                # A broken existing selector is repaired at its own exact leaf.
+                # Its dependent group must not force an extra consumer as well;
+                # final merged validation still requires every group to be used.
+                requirement_row["repairStrategy"] = "resolve_existing_effect_group_reference"
+                context["calls"].add(node_id)
+                continue
             node_target_id = str(node_row.get("target") or "")
             owner_item_target_id = sole_item_entity_id
             authorized_capabilities = {
@@ -1833,6 +1854,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             and bool(required_target)
                             and binding_target_id(row) == required_target
                         )
+                        if isinstance(effect_group_id, str):
+                            for row in allowed_rows:
+                                if action_kind(row) == "apply_item_effects":
+                                    row["usePolicy"]["action"]["effectGroupId"] = effect_group_id
                     elif capability_requirement.kind == "binding_tuple_present":
                         required_patterns: list[tuple[str, str, bool | None]] = []
                         for value in capability_requirement.any_of:

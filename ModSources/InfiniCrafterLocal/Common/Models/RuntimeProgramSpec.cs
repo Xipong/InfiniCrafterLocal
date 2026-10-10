@@ -33,6 +33,21 @@ public sealed class RuntimeProgramSpec
     public RuntimeBindingSpec[] Bindings { get; set; } = Array.Empty<RuntimeBindingSpec>();
     public RuntimeItemUseSpec ItemUse { get; set; } = new();
     public RuntimeItemContactSpec ItemContact { get; set; } = new();
+    private RuntimeItemEffectGroupSpec[]? _effectGroups;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeItemEffectGroupSpec[]? EffectGroups
+    {
+        get => _effectGroups;
+        set => _effectGroups = value is { Length: > 0 and <= 48 } ? value
+            : throw new InvalidDataException("present effectGroups requires 1..48 named groups");
+    }
+    private string? _heldEffectGroupId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? HeldEffectGroupId
+    {
+        get => _heldEffectGroupId;
+        set => _heldEffectGroupId = RuntimeItemEffectGroupSpec.RequireId(value);
+    }
 
     public bool HasExecutableBinding => Bindings.Any(x => x is not null && RuntimeBindingSpec.IsActiveInput(x.Input));
 
@@ -82,6 +97,14 @@ public sealed class RuntimeProgramSpec
         if (PrimaryOwner != expectedOwner)
             throw new InvalidDataException($"runtimeProgram.primaryOwner must be '{expectedOwner}' for primary entity '{PrimaryEntityId}'");
 
+        var groupIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RuntimeItemEffectGroupSpec? group in EffectGroups ?? Array.Empty<RuntimeItemEffectGroupSpec>())
+        {
+            if (group is null) throw new InvalidDataException("effectGroups contains null");
+            group.NormalizeAndValidate();
+            if (!groupIds.Add(group.Id)) throw new InvalidDataException($"duplicate effect group '{group.Id}'");
+        }
+        var usedGroups = new HashSet<string>(StringComparer.Ordinal);
         var bindingIds = new HashSet<string>(StringComparer.Ordinal);
         var exclusiveInputs = new HashSet<string>(StringComparer.Ordinal);
         foreach (RuntimeBindingSpec? binding in Bindings)
@@ -93,6 +116,11 @@ public sealed class RuntimeProgramSpec
                 throw new InvalidDataException($"duplicate runtime binding id '{binding.Id}'");
             string bindingTarget = binding.UsePolicy.Action.TargetId;
             string bindingAction = binding.UsePolicy.Action.Kind;
+            if (binding.UsePolicy.Action.EffectGroupId is string groupId)
+            {
+                if (!groupIds.Contains(groupId)) throw new InvalidDataException($"binding '{binding.Id}' selects missing effect group '{groupId}'");
+                usedGroups.Add(groupId);
+            }
             if (!entityIds.Contains(bindingTarget))
                 throw new InvalidDataException($"binding '{binding.Id}' targets unknown entity '{bindingTarget}'");
             if (RuntimeBindingSpec.IsExclusiveInput(binding.Input) && !exclusiveInputs.Add(binding.Input))
@@ -115,6 +143,15 @@ public sealed class RuntimeProgramSpec
             if (binding.Role != expectedRole)
                 throw new InvalidDataException($"binding '{binding.Id}' role must be '{expectedRole}' for target '{bindingTarget}'");
         }
+
+        if (HeldEffectGroupId is string heldId)
+        {
+            if (TryGetEffectGroup(heldId)?.IsGeneratedBuffOnly != true)
+                throw new InvalidDataException("heldEffectGroupId must select a generated-buff-only group");
+            usedGroups.Add(heldId);
+        }
+        if (!groupIds.SetEquals(usedGroups))
+            throw new InvalidDataException("every named effect group requires an exact active binding or held consumer");
 
         bool hasPlaceUse = Bindings.Any(x =>
             x is not null
@@ -223,6 +260,9 @@ public sealed class RuntimeProgramSpec
 
     public RuntimeBindingSpec? BindingForInput(string input)
         => Bindings.FirstOrDefault(x => x is not null && string.Equals(x.Input, input, StringComparison.Ordinal));
+
+    public RuntimeItemEffectGroupSpec? TryGetEffectGroup(string? id)
+        => id is null ? null : EffectGroups?.FirstOrDefault(x => x is not null && x.Id == id);
 }
 
 public sealed class RuntimeLimitsSpec
@@ -406,6 +446,13 @@ public sealed class RuntimeBindingActionSpec
     public string Kind { get; set; } = "";
     public string TargetId { get; set; } = "";
     public RuntimePlacementSpec? Placement { get; set; }
+    private string? _effectGroupId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectGroupId
+    {
+        get => _effectGroupId;
+        set => _effectGroupId = RuntimeItemEffectGroupSpec.RequireId(value);
+    }
 
     public void NormalizeAndValidate()
     {
@@ -413,6 +460,8 @@ public sealed class RuntimeBindingActionSpec
         TargetId = RuntimeText.Id(TargetId);
         if (!RuntimeBindingAction.IsKnown(Kind))
             throw new InvalidDataException($"unknown runtime binding action '{Kind}'");
+        if (EffectGroupId is not null && Kind != RuntimeBindingAction.ApplyItemEffects)
+            throw new InvalidDataException("only apply_item_effects may select an effectGroupId");
         if (Kind == RuntimeBindingAction.PlaceItem)
         {
             if (Placement is null)

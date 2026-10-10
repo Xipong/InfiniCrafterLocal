@@ -456,7 +456,7 @@ def test_gameplay_exact_leaf_repair(case):
         paths = ["params.damage"]
     elif case.startswith("buff"):
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
-            if name not in {"durationTicks", "lightColor"}:
+            if name not in {"durationTicks", "lightColor"} and spec.neutral is not None:
                 if case == "buff-sparse" and not spec.required:
                     node["params"].pop(name, None)
                 else:
