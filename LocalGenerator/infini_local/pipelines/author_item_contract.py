@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_API_VERSION,
@@ -357,13 +357,22 @@ def _finite_required_cases(schema: Mapping[str, Any]) -> list[dict[str, Any]]:
         or not any(_literal_equal(value, predicate["const"]) for value in child["enum"])
     ):
         raise ValueError("Unproved provider conditional: incomplete finite discriminator or unknown required addition")
-    cases = []
+    # Only requiredness differs across these cases. Share one complete branch
+    # per identical required set instead of copying it once per enum literal.
+    # Enum values remain explicit, disjoint and in their original order.
+    cases_by_required: dict[tuple[str, ...], dict[str, Any]] = {}
     for value in child["enum"]:
-        case = copy.deepcopy({key: value for key, value in schema.items() if key not in {"if", "then"}})
-        case["properties"][selector]["enum"] = [value]
+        case_required = [*required]
         if _literal_equal(value, predicate["const"]):
-            case["required"] = [*required, *(key for key in additions if key not in required)]
-        cases.append(case)
+            case_required.extend(key for key in additions if key not in case_required)
+        signature = tuple(case_required)
+        if signature not in cases_by_required:
+            case = copy.deepcopy({key: child for key, child in schema.items() if key not in {"if", "then"}})
+            case["properties"][selector]["enum"] = []
+            case["required"] = case_required
+            cases_by_required[signature] = case
+        cases_by_required[signature]["properties"][selector]["enum"].append(copy.deepcopy(value))
+    cases = list(cases_by_required.values())
     if len(cases) > 1 and not _union_discriminator_paths(cases):
         raise ValueError("Unproved provider conditional: overlapping enum cases")
     return cases
@@ -390,7 +399,7 @@ def _provider_subset_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _provider_strict_projection(schema: Any) -> Any:
+def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) -> Any:
     """Lossless provider-only subset + optional-property transport encoding.
 
     Unsupported/unproved compositions fail closed. Do not recurse through JSON
@@ -399,14 +408,19 @@ def _provider_strict_projection(schema: Any) -> Any:
     if not isinstance(schema, Mapping):
         return copy.deepcopy(schema)
     source = _provider_subset_shape(schema)
-    out = copy.deepcopy(source)
+    # Gameplay Author/Repair cards already carry these annotations. Other callers
+    # (including Visual) keep their original schema guidance unless opted in.
+    out = {key: copy.deepcopy(child) for key, child in source.items()
+           if not omit_annotations or (key != "description" and not key.startswith("x-infini-"))}
     for key in ("properties", "$defs"):
         if isinstance(source.get(key), Mapping):
-            out[key] = {name: _provider_strict_projection(child) for name, child in source[key].items()}
+            out[key] = {name: _provider_strict_projection(child, omit_annotations=omit_annotations)
+                        for name, child in source[key].items()}
     if isinstance(source.get("items"), Mapping):
-        out["items"] = _provider_strict_projection(source["items"])
+        out["items"] = _provider_strict_projection(source["items"], omit_annotations=omit_annotations)
     if isinstance(source.get("anyOf"), list):
-        out["anyOf"] = [_provider_strict_projection(branch) for branch in source["anyOf"]]
+        out["anyOf"] = [_provider_strict_projection(branch, omit_annotations=omit_annotations)
+                        for branch in source["anyOf"]]
     if "const" in source:
         try:
             json.dumps(source["const"], allow_nan=False)
@@ -429,11 +443,11 @@ def _provider_strict_projection(schema: Any) -> Any:
 
 
 def author_item_provider_response_schema() -> dict[str, Any]:
-    return _provider_strict_projection(author_item_response_schema())
+    return _provider_strict_projection(author_item_response_schema(), omit_annotations=True)
 
 
-def author_item_repair_response_schema() -> dict[str, Any]:
-    return copy.deepcopy(_repair_schema())
+def author_item_repair_response_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+    return copy.deepcopy(_repair_schema(capability_names=capability_names))
 
 
 def author_item_repair_prompt_shape_card() -> dict[str, Any]:
@@ -485,8 +499,12 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
     return placeholders
 
 
-def author_item_provider_repair_response_schema(*_: Any, **__: Any) -> dict[str, Any]:
-    return _provider_strict_projection(author_item_repair_response_schema())
+def author_item_provider_repair_response_schema(
+    *_: Any, local_schema: Mapping[str, Any] | None = None, **__: Any,
+) -> dict[str, Any]:
+    return _provider_strict_projection(
+        local_schema if local_schema is not None else author_item_repair_response_schema(),
+        omit_annotations=True)
 
 
 def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
@@ -532,7 +550,10 @@ def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: 
                 and key in (provider.get("required") or [])
                 and isinstance(wrapper, list) and len(wrapper) == 2
                 and wrapper[1] == {"type": "null"}
-                and wrapper[0] == _provider_strict_projection(child_local)
+                # Both exact supported projections are lossless; Visual retains
+                # annotations while Gameplay Author/Repair omit their duplication.
+                and (wrapper[0] == _provider_strict_projection(child_local, omit_annotations=True)
+                     or wrapper[0] == _provider_strict_projection(child_local))
             )
             if nullable_optional and isinstance(wrapper, list):
                 if child is None:

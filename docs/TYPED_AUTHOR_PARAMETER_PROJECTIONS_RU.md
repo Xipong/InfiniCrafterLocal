@@ -23,7 +23,9 @@ Author request и Repair inverse, проверяет границы и отка�
 
 `wire_literals` принадлежит явно выбранному варианту. Его constants имеют статус receipt `alias_lowering` и source path самого выбора; код не делает вид, будто отсутствующий scalar был передан моделью. Полный конечный список source/output pairs выводится `projection_paths()`, а список wire fields — `wire_field_names()`. Дублирование одного output несколькими решениями в одном варианте отвергается.
 
-Compiler сохраняет точные nested source paths в receipts. Source-aware audit повторяет declared projection и требует отдельный receipt для каждого output. Подмена пути/значения, исчезновение части проекции и неизвестный вариант дают RED. Wire-only audit проверяет конечную пару source/output и фактический wire, но не заявляет проверку отсутствующего Author.
+Compiler сохраняет точные nested source paths в receipts. Source-aware audit проверяет текущие schema/type/domain через `ParamSpec.projected_fields`, связывает final entity ID с точным target исходного call и final event ID с его callId независимо от сортировки arrays. Требуется единственное полное покрытие outputs. Подмена source-only target, согласованная подмена wire+receipt owner, bool/int/float, исчезновение или дублирование receipts дают RED.
+
+Wire-only audit удостоверяет только согласованность заявленных source/output paths с wire, не происхождение отсутствующего Author (`authoredSourceChecked=false`). `ParamSpec.matches_projection_records` требует ровно один полный registered variant: нельзя собрать discriminator одной ветви с domain/outputs другой. Проверяются и текущие scalar domains; прежние domains допустимы лишь через явный `retained_receipt_params`, включая прежний domain параметра с сохранившимся именем. Ни одна проверка не меняет принятые wire/receipt bytes.
 
 Numeric/consumer validation идёт по присутствующим реальным leaves. Neutral omission остаётся отдельным контрактом: object grouping не объявляет новые defaults.
 

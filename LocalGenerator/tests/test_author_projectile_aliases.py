@@ -47,7 +47,7 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
     assert entity["spawn"]["speedPxPerTick"] == 8  # no update-rate rescaling
     relevant = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("callId") == call["id"]]
     assert len([r for r in relevant if ".params.immunity" in r["authoredPath"]]) == 2
-    assert any(r["authoredPath"].endswith(".updatesPerTick") and r["value"] == updates - 1 for r in relevant)
+    assert any(r.get("authoredPath", "").endswith(".updatesPerTick") and r["value"] == updates - 1 for r in relevant)
 
 
 @pytest.mark.parametrize("name,value", [
@@ -384,3 +384,71 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
     report = audit_compiler_receipts(parameters, authored_document={"runtimeProgram": {"calls": source_calls}})
     assert not report["ok"]
     assert any(row["reason"] == "retained wire capability is not a current Author source" for row in report["violations"])
+
+@pytest.mark.parametrize("attack", ["source-targets", "receipt-owners"])
+def test_actual_collision_alias_binds_source_target_to_exact_wire_owner(attack):
+    document = build_capability_witness("spawn_entity_on_event")
+    calls = [r for r in document["runtimeProgram"]["calls"] if r["fn"] == "set_projectile_collision"]
+    assert len(calls) == 2
+    for cooldown, call in enumerate(calls, 10):
+        call["params"]["immunity"] = {"localCooldown": cooldown}
+    wire = compile_runtime_program(document)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
+    if attack == "source-targets":
+        calls[0]["target"], calls[1]["target"] = calls[1]["target"], calls[0]["target"]
+        assert validate_runtime_program(document)["ok"]
+    else:
+        entities = wire["runtimeProgram"]["entities"]
+        indices = [next(i for i, e in enumerate(entities) if e["id"] == c["target"]) for c in calls]
+        for row in receipts:
+            if row.get("callId") in {c["id"] for c in calls}:
+                a, b = (f"entities[{i}]" for i in indices)
+                row["finalPath"] = row["finalPath"].replace(a, "OWNER_SWAP").replace(b, a).replace("OWNER_SWAP", b)
+        a, b = indices
+        entities[a]["collision"], entities[b]["collision"] = entities[b]["collision"], entities[a]["collision"]
+    assert not audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
+
+
+@pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "spawn-domain"])
+@pytest.mark.parametrize("source_available", [False, True])
+def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attack, source_available):
+    fn = "configure_spawn" if attack == "spawn-domain" else "set_projectile_collision"
+    document = build_capability_witness(fn)
+    call = selected(document)
+    if fn == "configure_spawn":
+        call["params"]["position"] = {"above": "cursor", "heightTiles": 1, "activationDelayTicks": 0}
+    else:
+        call["params"]["immunity"] = {"localCooldown": 19}
+    wire = compile_runtime_program(document)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
+    if attack == "spawn-domain":
+        entity["spawn"]["overTarget"]["heightTiles"] = 0.5
+        next(r for r in receipts if r.get("authoredPath", "").endswith(".position.heightTiles"))["value"] = 0.5
+    elif attack == "cooldown-domain":
+        entity["collision"]["localNpcHitCooldownTicks"] = 601
+        next(r for r in receipts if r.get("authoredPath", "").endswith(".immunity.localCooldown"))["value"] = 601
+    else:
+        row = next(r for r in receipts if r.get("callId") == call["id"] and r["finalPath"].endswith(".npcImmunityMode"))
+        if attack == "hybrid-variant":
+            entity["collision"]["npcImmunityMode"] = row["value"] = "owner"
+        elif attack == "missing-literal":
+            receipts.remove(row)
+        else:
+            receipts.append(deepcopy(row))
+    assert not audit_compiler_receipts(receipts, authored_document=document if source_available else None,
+                                       final_document=wire)["ok"]
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_retained_spawn_outputs_keep_their_separate_exact_capability_owner(missing):
+    corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
+    wire = deepcopy(next(row["wire"] for row in corpus["cases"] if row["fn"] == "spawn_over_target"))
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    if missing:
+        receipts[:] = [r for r in receipts if not (r.get("fn") == "spawn_over_target"
+                                                   and r["finalPath"].endswith(".overTarget.heightTiles"))]
+    before = deepcopy(wire)
+    assert audit_compiler_receipts(receipts, final_document=wire)["ok"] is not missing
+    assert wire == before
