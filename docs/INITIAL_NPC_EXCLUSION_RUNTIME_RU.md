@@ -26,8 +26,11 @@ collision updates. Activation delay также расходует счётчик
 точно выбранный NPC, обычные native immunity, tile collision и projectile movement
 не меняются. Возможность столкнуться с другой NPC определяется её обычным hit path.
 
-Generated projectile ExtraAI v3 добавляет slot, generation и **remaining** counter.
-Принимается и v2 с точным отсутствием нового состояния. Авторитетный local owner
+Generated projectile ExtraAI v3 добавил slot, generation и **remaining** counter.
+Текущий v4 сохраняет этот layout и добавляет optional sampled initial velocity
+для [распределений скорости](SPAWN_DISTRIBUTIONS_AND_TARGET_GEOMETRY_RU.md). Для
+старого constant wire принимаются v2/v3; v2 имеет точное отсутствие exclusion.
+Авторитетный local owner
 не продлевает и не очищает собственный countdown от same-source observation.
 Hydration сохраняет состояние, новая Configure очищает. Peer snapshot не выдаёт
 spawn budget. Это синхронизация выбранного owner состояния, не server proof hit.
@@ -56,7 +59,7 @@ host деактивируется без terminal effects. Root spawn (`childDep
 ## Проверки
 
 Добавлены native EngineRuntimeChecks для реальных `AI`, `CanHitNPC`, NPC token
-decoder, `Transform`, v2/v3 projectile ExtraAI, owner/peer hydration и malformed
+decoder, `Transform`, v2/v3/v4 projectile ExtraAI, owner/peer hydration и malformed
 positive-counter/zero-token payload. Native spawn entry-intercept проверяет
 точную геометрию и возврат reservation на exception, не подменяя создание
 снаряда фиктивным объектом. .NET/tModLoader/game здесь недоступны:

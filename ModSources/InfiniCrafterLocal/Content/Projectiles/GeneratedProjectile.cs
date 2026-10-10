@@ -11,6 +11,7 @@ using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.ModLoader;
+using Terraria.Utilities;
 
 namespace InfiniCrafterLocal.Content.Projectiles;
 
@@ -51,6 +52,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private RuntimeInitialNpcExclusion _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
     private int _lastOwnerVectorSyncAge = -1000;
     private Vector2 _initialDirection = Vector2.UnitX;
+    private Vector2? _sampledInitialVelocity;
     private Vector2 _spawnCenter;
     private readonly List<Vector2> _whipPoints = new(32);
     private InfiniVfxState _vfxState = new();
@@ -159,6 +161,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
             }
         }
         _initialDirection = initialDirection.SafeNormalize(Vector2.UnitX);
+        if (!preserveSyncedState)
+            _sampledInitialVelocity = entity.Spawn.VelocityDistribution is null ? null : Projectile.velocity;
+        else if ((entity.Spawn.VelocityDistribution is null) != (_sampledInitialVelocity is null))
+            throw new System.IO.InvalidDataException("sampled launch state does not match this entity's exact velocity variant");
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
@@ -261,6 +267,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         float? rootKnockbackOverride = null,
         RuntimeInitialNpcExclusion? initialNpcExclusion = null,
         RuntimeSpawnTransform? initialTransform = null,
+        int? initialVelocitySeed = null,
         float? rootSpeedOverride = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
@@ -272,6 +279,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
         // that activation receive this same ledger for subsequent event actions.
         activationBudget ??= new RuntimeSpawnBudget(data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         if (entity is null || !entity.IsProjectileEntity || !entity.Spawn.Enabled)
+            return 0;
+        // Independently selected speed owners cannot both be realized. Refuse
+        // the conflict before sampling or admission; never override either choice.
+        if (rootSpeedOverride.HasValue && entity.Spawn.VelocityDistribution is not null)
             return 0;
         if (childDepth > data.RuntimeProgram.Limits.MaxChildDepth)
             return 0;
@@ -324,14 +335,32 @@ public sealed partial class GeneratedProjectile : ModProjectile
             // Refuse the effective whole batch; never clip an authored multi-shot batch.
             if (!CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
                 return 0;
+            if (!entity.Spawn.AcceptsEmissionSpread(spreadOverride ?? entity.Spawn.SpreadRadians))
+                return 0;
             float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
+            if (entity.Spawn.VelocityDistribution is not null
+                && (entity.IsStationary || entity.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
+                return 0;
+            // One owner seed after batch admission. Peers observe the actual
+            // chosen native vectors, and activation delay never rerolls them.
+            UnifiedRandom? velocityRandom = entity.Spawn.VelocityDistribution is null ? null : new UnifiedRandom(initialVelocitySeed ?? Main.rand.Next());
             for (int i = 0; i < count; i++)
             {
                 float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
                 Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
-                Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * (rootSpeedOverride ?? entity.Spawn.SpeedPxPerTick);
-                // A supplied value is final native shooting or explicitly selected
-                // live-parent child combat; never repeat player/class modifiers.
+                Vector2 velocity = Vector2.Zero;
+                if (!entity.IsStationary)
+                {
+                    if (entity.Spawn.VelocityDistribution is null)
+                        velocity = direction * (rootSpeedOverride ?? entity.Spawn.SpeedPxPerTick);
+                    else if (!RuntimeSpawnVelocity.TrySample(entity.Spawn, direction, velocityRandom, out velocity))
+                        return spawned;
+                }
+                Vector2 initialDirection = entity.Spawn.VelocityDistribution is not null && velocity.LengthSquared() > 0f
+                    ? velocity.SafeNormalize(Vector2.UnitX)
+                    : direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction;
+                // A supplied value is final native root combat or explicitly selected
+                // live-parent child combat. Never apply player/class modifiers again.
                 // Null retains the independently authored child lane.
                 int damage = entity.Damage.Enabled
                     ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
@@ -348,7 +377,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                     continue;
                 try
                 {
-                    generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
+                    generated.Configure(data, entity, childDepth, activationBudget.Remaining, initialDirection,
                         activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0);
                     generated.SetInitialNpcExclusion(initialNpcExclusion ?? RuntimeInitialNpcExclusion.None);
                 }

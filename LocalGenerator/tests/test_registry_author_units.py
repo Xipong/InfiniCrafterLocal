@@ -27,7 +27,6 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 FN = "apply_generated_buff_on_use"
 
 RENAMES = (
-    ("configure_spawn", "speedPxPerTick", "speedPxPerUpdate", 7.125, "spawn"),
     ("set_projectile_collision", "localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits", -1, "collision"),
     ("move_gravity_arc", "gravityPerTick", "gravityVelocityPerUpdate", 0.1875, "movement.params"),
     ("move_bounce", "gravityPerTick", "gravityVelocityPerUpdate", 0.1875, "movement.params"),
@@ -161,9 +160,8 @@ def test_identity_rename_reaches_packet_projector_and_frozen_wire(monkeypatch, a
     ],
 )
 def test_renamed_receipt_identity_cannot_be_forged(monkeypatch, field, path):
-    _registry_with_rename(monkeypatch, "configure_spawn", "speedPxPerTick", "speedPxPerUpdate")
-    call, rows, final = _project("configure_spawn", "speedPxPerUpdate", 7.125)
-    next(r for r in rows if r.get("authoredPath", "").endswith(".speedPxPerUpdate"))[field] = path
+    call, rows, final = _project("configure_spawn", "velocity", {"constantSpeedPxPerUpdate": 7.125})
+    next(r for r in rows if r.get("authoredPath", "").endswith(".velocity.constantSpeedPxPerUpdate"))[field] = path
     assert not technical_lowering.audit_compiler_receipts(
         rows, authored_document={"runtimeProgram": {"calls": [call]}}, final_document=final
     )["ok"]

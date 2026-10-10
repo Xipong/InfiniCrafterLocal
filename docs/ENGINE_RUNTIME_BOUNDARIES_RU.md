@@ -53,6 +53,8 @@ Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair у�
 
 Consumers: `GeneratedItem.RootBindingSpawnCapacity/Shoot`, `GeneratedProjectile.SpawnRuntimeEntity/Configure`, [`GeneratedProjectile.Executors.cs`](../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs), scheduler. [`GeneratedProjectile.NetSync.cs`](../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs) передаёт **наблюдаемый** remaining count; remote scratch ledger не должен затирать полученный snapshot при terminal hooks.
 
+[Распределение начальной скорости и hit-target geometry](SPAWN_DISTRIBUTIONS_AND_TARGET_GEOMETRY_RU.md) выбираются явно в Author. Owner сохраняет sampled velocity в native instance/ExtraAI v4, а delayed target action — geometry и seed на admission. Exact NPC exclusion использует remaining countdown до collision; `0` отключает также incarnation cancellation guard. Multi-emission передаёт каждую reservation callee до spawn; exception callee возвращает attempted остаток, caller возвращает только unattempted. Старый constant wire сохраняет прежнюю execution projection и принимает v2/v3 transport без новой velocity state.
+
 Точные hard ceilings принадлежат [`InfiniRuntimeLimits.cs`](../ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs), не этой таблице:
 
 | Лимит | Текущий ceiling / scope |

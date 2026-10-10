@@ -13,7 +13,6 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
-    EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
     PROJECTILE_MODIFIER_COMPONENTS,
     RUNTIME_PROGRAM_API_VERSION,
@@ -389,38 +388,23 @@ def _compile_entity_call(
     if fn == "emit_light_while_active":
         project(component("light"), f"{base}.light", p)
         return
-    if fn in EVENT_ACTION_OPCODE:
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is not None and cap.category == "event":
         events = entity.setdefault("events", [])
-        event_row: dict[str, Any] = {
-            "id": str(call.get("id") or ""),
-            "event": p.pop("event"),
-            "action": fn,
-            "actionCode": EVENT_ACTION_OPCODE[fn],
-        }
-        if fn in {"spawn_entity_on_event", "select_targets_and_emit_on_event"}:
-            event_row["entityId"] = p.pop("entity")
-        if fn == "move_owner_on_event":
-            event_row["mode"] = "blink_to_event_position"  # C# DTO discriminator; not an authored branch
-        event_row.update(p)
+        event_row: dict[str, Any] = {"id": str(call.get("id") or "")}
         events.append(event_row)
-        event_index = len(events) - 1
-        for key, value in event_row.items():
-            if key == "id":
-                continue
-            if key in {"action", "actionCode"} or (fn == "move_owner_on_event" and key == "mode"):
-                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
-            elif key == "entityId":
-                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.entity"
-            else:
-                authored_path = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.{key}"
-            ctx.receipts.append({
-                "callId": str(call.get("id") or ""),
-                "fn": fn,
-                "authoredPath": authored_path,
-                "finalPath": f"{base}.events[{event_index}].{key}",
-                "value": copy.deepcopy(value),
-                "status": "technical_projection" if key in {"action", "actionCode"} or (fn == "move_owner_on_event" and key == "mode") else "delivered",
-            })
+        event_base = f"{base}.events[{len(events) - 1}]"
+        # Keep the established event receipt order while every authored field,
+        # including nested parameters, uses the registry's exact projection.
+        project(event_row, event_base, {"event": p.pop("event")})
+        source_fn = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn"
+        for key, value in cap.fixed_wire_literals.items():
+            ctx.write_derived(call=call, path=f"{event_base}.{key}", value=value,
+                              target=event_row, key=key, source=source_fn)
+        if fn == "move_owner_on_event":
+            ctx.write_derived(call=call, path=f"{event_base}.mode", value="blink_to_event_position",
+                              target=event_row, key="mode", source=source_fn)
+        project(event_row, event_base, p)
         return
     raise AssertionError(f"unhandled runtime entity capability {fn}")
 
@@ -594,7 +578,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         fn = str(call.get("fn") or "")
         if fn in {"configure_tile_placement", "configure_wall_placement", "present_placed_item_sprite"}:
             continue
-        if target == item_entity_id and fn not in EVENT_ACTION_OPCODE:
+        if target == item_entity_id and CAPABILITY_REGISTRY[fn].category != "event":
             _compile_item_call(
                 ctx,
                 call,

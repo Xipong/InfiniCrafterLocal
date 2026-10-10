@@ -98,7 +98,8 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     for name, spec in cap.params.items():
         row, original = compact["params"][name], full["params"][name]
         if fn != "add_equipment_damage_bonus":
-            assert all(any(p.endswith("." + field) for p in cap.final_wire_paths) for field in spec.wire_field_names(name)), (fn, name)
+            assert all(any(path.endswith("." + field) for path in cap.final_wire_paths)
+                       for field in spec.wire_field_names(name)), (fn, name)
         meaning = row.get("meaning", "")
         if fn == "configure_armor" and name.startswith("setBonus") and name != "setBonuses":
             meaning = guide["setBonusParamPrefix"] + meaning
@@ -153,10 +154,9 @@ def test_library_audit_and_shared_notation_have_no_missing_boundary():
     assert metrics["capabilities"] == len(CAPABILITY_REGISTRY)
     assert metrics["publicCapabilities"] == metrics["verticalSliceCount"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
     assert metrics["boundedNumericParameters"] == metrics["numericParameters"]
-    assert metrics["typedEntityReferences"] == sum(
-        1 for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values()
-        if spec.reference is not None and spec.reference.namespace == "entity")
-    assert metrics["requirements"] >= 10
+    expected_references = sum(spec.reference is not None and spec.reference.namespace == "entity"
+                              for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values())
+    assert metrics["typedEntityReferences"] == expected_references and metrics["requirements"] >= 10
     guide = runtime_authoring_prompt_field_guide()
     assert "unless marked optional" in guide["paramNotation"]
     for suffix, unit in (("Ticks", "ticks"), ("Tiles", "tiles"), ("Px", "pixels"), ("Radians", "radians")):
@@ -434,7 +434,7 @@ MOD = Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal"
         pytest.param(
             surfaces.event_surface_audit,
             "Common/Models/RuntimeProgramSpec.cs",
-            b"public float DamageMultiplier { get; set; } = 1f;",
+            b'public string EntityId { get; set; } = "";',
             b"public float UncataloguedBlast { get; set; } = 1f;\n    ",
             "executor",
             "Common/Runtime/RuntimeProgramExecutor.cs",

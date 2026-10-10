@@ -497,13 +497,16 @@ def test_equipment_dependencies_refuse_invalid_composition_before_projection(fn,
         ("configure_accessory", "defensePoints", 1, True),
         ("configure_tool", "axePowerTooltipPercent", 5, True),
         ("configure_accessory", "moveSpeedBonusPercent", 100, True),
-        ("configure_spawn", "speedPxPerUpdate", -0.0, 0.0),
+        ("configure_spawn", "velocity.constantSpeedPxPerUpdate", -0.0, 0.0),
     ],
 )
 def test_source_receipt_projection_rejects_equal_numeric_representation_forgery(fn, param, source_value, forged):
     source = build_capability_witness(fn)
     call = _call(source, fn)
-    call["params"][param] = source_value
+    slot = call["params"]
+    for part in param.split(".")[:-1]:
+        slot = slot[part]
+    slot[param.rsplit(".", 1)[-1]] = source_value
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
@@ -519,7 +522,8 @@ def test_source_receipt_projection_rejects_equal_numeric_representation_forgery(
     frozen = deepcopy((source, wire))
     report = audit_compiler_receipts(rows, authored_document=source, final_document=wire)
     assert not report["ok"], report
-    assert any("not the declared projection" in v["reason"] for v in report["violations"]), report
+    expected_reason = "exact authored variant projection" if "." in param else "not the declared projection"
+    assert any(expected_reason in v["reason"] for v in report["violations"]), report
     assert (source, wire) == frozen
     # Coherently forged wire/receipt values do not authenticate their source.
     standalone = audit_compiler_receipts(rows, final_document=wire)

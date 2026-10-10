@@ -327,15 +327,33 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
+def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from beam_contract_checks import without_declared_beam_neutrals
+    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
+    from captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
+    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical
+
+    # The old full-document hashes remain archival. New Author names deliberately
+    # change compiler provenance and registry diagnostic counts, not delivery DTOs.
+    # Declared beam/targeting neutrals are explicit successors, not legacy rewrites.
+    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
+    for row in corpus["cases"]:
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
+        delivered = historical_spawn_velocity_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(_delivery_wire(compiled)))))
+        assert "placedBody" not in delivered["runtimeProgram"]
+        assert delivered == row["expectedDeliveryWire"]
+        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
 def test_absent_member_keeps_complete_legacy_compiled_bytes():
     from captured_parent_combat_author import historical_child_combat_wire
     from captured_item_alias_wire import historical_item_alias_wire
+    from captured_spawn_velocity_author import historical_spawn_velocity_wire
     from beam_contract_checks import without_declared_beam_neutrals
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
     actual = {}
     for name in baseline:
-        final = historical_item_alias_wire(historical_child_combat_wire(without_declared_targeting_neutrals(
-            without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))))
+        final = historical_item_alias_wire(historical_spawn_velocity_wire(historical_child_combat_wire(
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(
+                compile_runtime_program(build_runtime_fixture(name)))))))
         # Compose historical child combat and declared neutral reversals. The
         # archive also predates ammo and the curve's exact inventory requirements.
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
@@ -344,8 +362,8 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
         added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         assert checks["requirements"] == 31 + added_requirements
-        checks["exclusiveGroups"] = ["controller", "movement"]
-        checks["requirements"] -= 3 + added_requirements
+        checks["exclusiveGroups"] = ["ammo_role", "controller", "movement"]
+        checks["requirements"] -= 2 + added_requirements  # exact c3d0d3d inventory: 29 requirements
         actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 
