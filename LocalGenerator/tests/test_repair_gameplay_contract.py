@@ -36,9 +36,15 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_
             payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
             validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
             if out_of_scope_response:
-                # The scoped grammar rejects these independent capability rows.
-                # Still simulate a provider violating its declared schema so the
-                # frozen merge remains tested as a second, local boundary.
+                # Foreign hostile rows are not nullable choices offered by the
+                # scoped grammar. Keep their literal sparse bytes after encoding.
+                scope = json.loads(request["messages"][1]["content"])["repairScope"]
+                mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
+                payload["callsUpsert"] = [
+                    encoded if original["id"] in mutable_ids else copy.deepcopy(original)
+                    for original, encoded in zip(incoming["callsUpsert"], payload["callsUpsert"])
+                ]
+                # A provider violating its grammar still meets frozen local merge.
                 assert not validator.is_valid(payload)
             else:
                 validator.validate(payload)
@@ -402,7 +408,7 @@ def test_gameplay_exact_leaf_repair(case):
         paths = ["params.damage"]
     elif case.startswith("buff"):
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
-            if name not in {"durationTicks", "lightColor"}:
+            if name not in {"durationTicks", "lightColor"} and spec.neutral is not None:
                 if case == "buff-sparse" and not spec.required:
                     node["params"].pop(name, None)
                 else:

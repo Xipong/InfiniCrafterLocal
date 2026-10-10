@@ -133,6 +133,8 @@ def project_to_wire(
         "kind": kind,
         "targetId": str(authored_action["targetId"]),
     }
+    if "effectGroupId" in authored_action:
+        wire_action["effectGroupId"] = str(authored_action["effectGroupId"])
     if kind == PLACE_ITEM_ACTION:
         call_id = str(authored_action["placementCallId"])
         call = placement_calls_by_id[call_id]

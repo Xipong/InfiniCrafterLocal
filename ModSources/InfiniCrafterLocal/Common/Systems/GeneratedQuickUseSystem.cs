@@ -58,7 +58,7 @@ public sealed class GeneratedQuickUseSystem : ModSystem
 
     internal static bool IsNativeQuickUse(Player player) => ReferenceEquals(_player, player);
 
-    internal static bool AcceptsBinding(Player player, RuntimeBindingSpec binding, GameplaySpec gameplay)
+    internal static bool AcceptsBinding(Player player, RuntimeBindingSpec binding, IItemEffectsSpec gameplay)
         => !IsNativeQuickUse(player)
             || binding.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects
                 && (_kind == QuickUseKind.Heal ? gameplay.HealLife > 0 : gameplay.HealMana > 0);
@@ -67,8 +67,26 @@ public sealed class GeneratedQuickUseSystem : ModSystem
     {
         Player? previousPlayer = _player; QuickUseKind previousKind = _kind;
         _player = player; _kind = kind;
-        try { return invoke(); }
+        try
+        {
+            // Native selectors may inspect healLife/healMana before CanUseItem.
+            // A previous manual alternate use must not hide the primary group.
+            ProjectPrimaryEffectCandidates(player.inventory);
+            if (player.useVoidBag()) ProjectPrimaryEffectCandidates(player.bank4.item);
+            return invoke();
+        }
         finally { _player = previousPlayer; _kind = previousKind; }
+    }
+
+    private static void ProjectPrimaryEffectCandidates(Item[] items)
+    {
+        foreach (Item item in items)
+        {
+            if (item?.ModItem is not GeneratedItem generated || generated.Data.RuntimeProgram.EffectGroups is null)
+                continue;
+            RuntimeBindingSpec? primary = generated.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse);
+            generated.Data.ApplyUseEffectFields(item, primary?.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects, primary);
+        }
     }
 
     private static bool? AfterNativeUseItem(Func<Item, Player, bool?> orig, Item item, Player player)

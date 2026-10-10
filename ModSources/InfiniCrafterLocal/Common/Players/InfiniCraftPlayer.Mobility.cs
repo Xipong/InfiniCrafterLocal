@@ -147,10 +147,10 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
-    public bool TryRunGeneratedMobility(GameplaySpec? gameplay)
+    public bool TryRunGeneratedMobility(IItemEffectsSpec? gameplay)
         => TryRunGeneratedMobility(gameplay, null);
 
-    private bool TryRunGeneratedMobility(GameplaySpec? gameplay, Vector2? requestedTarget)
+    private bool TryRunGeneratedMobility(IItemEffectsSpec? gameplay, Vector2? requestedTarget)
     {
         _lastGeneratedMobilityFailureMessage = "";
         if (gameplay is null)
@@ -252,7 +252,7 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
-    private bool TryBlinkToCursor(GameplaySpec gameplay)
+    private bool TryBlinkToCursor(IItemEffectsSpec gameplay)
     {
         if (!InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(Player))
         {
@@ -262,7 +262,7 @@ public sealed partial class InfiniCraftPlayer
         return TryBlinkToTarget(gameplay, Main.MouseWorld);
     }
 
-    private bool TryBlinkToTarget(GameplaySpec gameplay, Vector2 target)
+    private bool TryBlinkToTarget(IItemEffectsSpec gameplay, Vector2 target)
     {
         if (Player.dead)
         {

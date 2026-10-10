@@ -616,6 +616,7 @@ class CapabilitySpec:
     authority_by_effect: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     activation_spawn_count_param: str = ""
     meaningful_for_stationary: bool = False
+    effect_groupable: bool = False
     # Persisted wire-only provenance, never a second accepted Author grammar.
     # Entries contain exact projections of retired authored parameter paths.
     retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
@@ -713,6 +714,8 @@ class CapabilitySpec:
             card["requires"] = [row.card() for row in self.requirements]
         if self.multiplicity != "single_per_target":
             card["multiplicity"] = self.multiplicity
+        if self.effect_groupable:
+            card["effectGroups"] = "Optional params.effectGroupId partitions this component's multiplicity and exclusive group ownership; an apply_item_effects binding selects the same exact ID. Omit both selectors for the existing default group. Mobility cooldown remains shared per player."
         if self.performance_budget != "bounded by runtime program limits":
             card["budget"] = self.performance_budget
         return card
@@ -787,6 +790,7 @@ class CapabilitySpec:
             "wirePaths": list(self.final_wire_paths),
             "csharpOwner": self.csharp_owner,
             "multiplicity": self.multiplicity,
+            "effectGroupable": self.effect_groupable,
             "budget": self.performance_budget,
             "activationSpawnCountParam": self.activation_spawn_count_param or None,
             "meaningfulForStationary": self.meaningful_for_stationary,
@@ -889,6 +893,7 @@ def _cap(
     authority_by_effect: Mapping[str, str] | None = None,
     activation_spawn_count_param: str = "",
     meaningful_for_stationary: bool = False,
+    effect_groupable: bool = False,
     retained_receipt_params: Mapping[str, ParamSpec] | None = None,
     fixed_wire_literals: Mapping[str, Any] | None = None,
 ) -> CapabilitySpec:
@@ -924,6 +929,7 @@ def _cap(
         authority_by_effect=MappingProxyType(dict(authority_by_effect or {})),
         activation_spawn_count_param=activation_spawn_count_param,
         meaningful_for_stationary=meaningful_for_stationary,
+        effect_groupable=effect_groupable,
         retained_receipt_params=MappingProxyType(dict(retained_receipt_params or {})),
         fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
     )
@@ -1178,6 +1184,7 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing healing item fields",
         repair_group="resource_restore",
         lowering=("gameplay.healLife", "gameplay.healMana", "gameplay.potion"),
+        effect_groupable=True,
     ),
     _cap(
         "apply_vanilla_buff_on_use",
@@ -1195,6 +1202,7 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing apply_player_effect_on_use buff path",
         repair_group="use_buffs",
         lowering=("gameplay.buffCode", "gameplay.buffTime", "gameplay.extraBuffs[]"),
+        effect_groupable=True,
     ),
     _cap(
         "apply_generated_buff_on_use",
@@ -1218,6 +1226,17 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing generated-buff executor",
         repair_group="generated_buff",
         lowering=("gameplay.generatedBuff.*",),
+        effect_groupable=True,
+    ),
+    _cap(
+        "refresh_generated_effect_group_while_held",
+        "Refresh the one named generated utility buff group every world tick while this exact item is held. Its explicit duration controls lingering after release. The group may contain only apply_generated_buff_on_use; no healing, teleport, native buff or invisible projectile is inferred.",
+        "item_utility", ("item_body",),
+        {"effectGroupId": _p("string", "Exact existing named generated-buff group", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="heldEffectGroupId", semantic_type="item_effect_group_reference")},
+        py=_COMPILER_OWNER, cs="Content/Items/GeneratedItem.cs::HoldItem",
+        wire=("runtimeProgram.heldEffectGroupId",),
+        provenance="restored explicit held generated utility buff refresh", repair_group="held_generated_buff",
+        authority="owner_execute_sync",
     ),
     _cap(
         "configure_tool",
@@ -1360,6 +1379,7 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing mobility_effect",
         repair_group="mobility",
         lowering=("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
+        effect_groupable=True,
     ),
     _cap(
         "recall_home_on_use", "Recall the owner home after a successful apply_item_effects use. The player mobility cooldown is shared with blink actions.",
@@ -1369,6 +1389,7 @@ _CAPS: list[CapabilitySpec] = [
         wire=("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
         provenance="exact recall branch; blink-only range and safety are registered inactive constants",
         repair_group="mobility", fixed_wire_literals={"mobilityMode": "recall_home", "mobilityRangeTiles": 0, "mobilitySafeTileOnly": False},
+        effect_groupable=True,
     ),
     _cap(
         "configure_accessory",
@@ -2188,14 +2209,17 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         "require_use_condition": ("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
         "add_hold_light": ("gameplay.holdLightStrength", "gameplay.holdLightColorName"),
         "move_player_on_use": ("gameplay.mobilityMode", "gameplay.mobilityRangeTiles", "gameplay.mobilityCooldownTicks", "gameplay.mobilitySafeTileOnly"),
+        "refresh_generated_effect_group_while_held": ("runtimeProgram.heldEffectGroupId",),
 
     }
     if cap.name in PLACEMENT_CAPABILITIES:
         return item_paths["configure_placeable"]
-    if cap.name == "recall_home_on_use":
-        return item_paths["move_player_on_use"]
-    if cap.name in item_paths:
-        return item_paths[cap.name]
+    if cap.name in item_paths or cap.name == "recall_home_on_use":
+        paths = item_paths["move_player_on_use" if cap.name == "recall_home_on_use" else cap.name]
+        if cap.effect_groupable:
+            return (*paths, "runtimeProgram.effectGroups[].id",
+                    *(p.replace("gameplay.", "runtimeProgram.effectGroups.", 1).replace("effectGroups.", "effectGroups[].", 1) for p in paths))
+        return paths
     if cap.name in {"configure_accessory", "configure_armor"}:
         prefix = "accessory" if cap.name == "configure_accessory" else "armor"
         return (f"{prefix}.enabled", *(f"{prefix}.{name}" for name in param_fields))
@@ -2248,6 +2272,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
         "configure_vanilla_ammo_item": "ammo_item", "configure_weapon_ammo": "weapon_ammo", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
+        "refresh_generated_effect_group_while_held": "held_generated_buff",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
@@ -2279,6 +2304,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "restore_resources_on_use": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "apply_vanilla_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
         "apply_generated_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+        "refresh_generated_effect_group_while_held": "Content/Items/GeneratedItem.cs::HoldItem",
         "configure_tool": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "configure_placeable": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "present_placed_item_sprite": "Common/Models/RuntimeProgramSpec.cs::Validate",
@@ -2503,6 +2529,12 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
 
 
 def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
+    if cap.effect_groupable:
+        cap = replace(cap, params=MappingProxyType({
+            **cap.params,
+            "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                required=False, pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="id", semantic_type="item_effect_group_identity"),
+        }))
     if cap.category == "event" and "delayTicks" not in cap.params:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
