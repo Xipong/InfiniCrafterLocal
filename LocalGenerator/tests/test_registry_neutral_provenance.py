@@ -25,6 +25,8 @@ DECLARED = {
                      "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
     "configure_item_stats": {"manaCost": 0},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
+    "target_and_fire": {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
+                        "requireLineOfSight": False, "hardRange": False},
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,
         "oreSenseEnabled": False,
