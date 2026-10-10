@@ -234,8 +234,7 @@ def test_only_declared_authored_to_wire_paths_are_auditable(receipt, reason):
                 "slot": "head",
                 "setKey": "tested_set",
                 "defensePoints": 5,
-                "setBonusManaCostReductionPercentagePoints": 10,
-                "setBonusMinionSlotsBonus": 2,
+                "setBonuses": {"manaCostReductionPercentagePoints": 10, "minionSlotsBonus": 2},
             },
             None,
             {"armor.defense": 5, "armor.setBonusManaCostReduction": 0.10, "armor.setBonusMinionSlots": 2},
@@ -291,7 +290,9 @@ def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, p
             assert any(r.get("callId") == "class_bonus" and r.get("finalPath") == path and r["value"] == pytest.approx(value) for r in rows)
     for param in params or {}:
         if param not in {"slot", "setKey"}:
-            assert any(r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param) for r in rows)
+            leaves = [f"{param}.{key}" for key in params[param]] if isinstance(params[param], dict) else [param]
+            for leaf in leaves:
+                assert any(r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + leaf) for r in rows)
     if fn == "configure_item_stats":
         index = source["runtimeProgram"]["calls"].index(call)
         row = _receipt(rows, "gameplay.useTime")

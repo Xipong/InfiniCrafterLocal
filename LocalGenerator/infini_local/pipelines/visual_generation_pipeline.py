@@ -358,7 +358,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             "axis": "forwardAngleDegrees is the final PNG local forward-axis in degrees: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. It describes pixels, not AI movement. Describe this pose in the same authored prompt; reuse inherits root pixels and axis, never a second inferred axis.",
             "heldRootVisibility": {
                 "hideUseGraphic": CAPABILITY_REGISTRY["configure_item_use"].params["hideUseGraphic"].description,
-                "heldSpriteVisibilityHint": CAPABILITY_REGISTRY["configure_item_use"].params["heldSpriteVisibilityHint"].description,
+                "customHeldSprite": CAPABILITY_REGISTRY["configure_item_use"].params["customHeldSprite"].description,
                 "wireHint": "runtimeProgram.itemUse.releaseTiming",
             },
             "formulas": {

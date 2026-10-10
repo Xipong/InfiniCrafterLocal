@@ -71,8 +71,10 @@ from infini_local.pipelines import llm_authoring_pipeline as pipeline
 )
 def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
     rows = runtime_authoring_registry_manifest()[key]
-    assert {r[identity] for r in rows} == set(registry)
-    assert len(rows) == len(registry)
+    expected = ({name for name, cap in registry.items() if cap.prompt_visible and cap.decision == "expose"}
+                if key == "capabilities" else set(registry))
+    assert {r[identity] for r in rows} == expected
+    assert len(rows) == len(expected)
     if key == "capabilities":
         assert all(r["slot"] and r["authority"] for r in rows)
         assert all(
@@ -99,7 +101,7 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
         if fn != "add_equipment_damage_bonus":
             assert all(any(p.endswith("." + wire_name) for p in cap.final_wire_paths) for wire_name in spec.wire_field_names(name)), (fn, name)
         meaning = row.get("meaning", "")
-        if fn == "configure_armor" and name.startswith("setBonus"):
+        if fn == "configure_armor" and name.startswith("setBonus") and name != "setBonuses":
             meaning = guide["setBonusParamPrefix"] + meaning
         elif fn == "configure_armor" and not meaning:
             meaning = CAPABILITY_REGISTRY["configure_accessory"].params[name].description
@@ -133,7 +135,7 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     if cap.params:
         rows = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
         direct = next(
-            (r for r in rows if r.get("fn") == fn and r.get("status") == "delivered" and ".params." in str(r.get("authoredPath") or "")),
+            (r for r in rows if r.get("fn") == fn and r.get("status") in {"delivered", "alias_lowering"} and ".params." in str(r.get("authoredPath") or "")),
             None,
         )
         if direct is None:
@@ -149,7 +151,8 @@ def test_library_audit_and_shared_notation_have_no_missing_boundary():
     report = capability_library_audit()
     assert report["ok"] and report["score"] == report["scoreMax"], report["issues"]
     metrics = report["metrics"]
-    assert metrics["capabilities"] == metrics["verticalSliceCount"] == len(visible_capabilities())
+    assert metrics["capabilities"] == len(CAPABILITY_REGISTRY)
+    assert metrics["publicCapabilities"] == metrics["verticalSliceCount"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
     assert metrics["boundedNumericParameters"] == metrics["numericParameters"]
     assert metrics["typedEntityReferences"] == 2 and metrics["requirements"] >= 10
     guide = runtime_authoring_prompt_field_guide()

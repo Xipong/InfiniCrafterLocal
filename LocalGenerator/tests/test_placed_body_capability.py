@@ -67,7 +67,9 @@ def test_bad_placement_association_rejects_without_rewriting(fault):
     elif fault == "duplicate": document["runtimeProgram"]["calls"].append({**copy.deepcopy(body), "id":"duplicate_body"})
     before = json.dumps(document, sort_keys=True)
     report = validate_runtime_program(document)
-    code = "duplicate_placed_body_reference" if fault == "duplicate" else "placed_body_placement_reference"
+    code = ("duplicate_placed_body_reference" if fault == "duplicate"
+            else "shape_additional_property" if fault == "tile-and-wall"
+            else "placed_body_placement_reference")
     assert code in {r["code"] for r in report["errors"]}, report
     with pytest.raises(ValueError): compile_runtime_program(document)
     assert json.dumps(document, sort_keys=True) == before
@@ -325,7 +327,7 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_complete_legacy_compiled_bytes():
+def test_absent_member_keeps_frozen_full_wire_bytes_with_composed_alias_receipts():
     from beam_contract_checks import without_declared_beam_neutrals
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
 

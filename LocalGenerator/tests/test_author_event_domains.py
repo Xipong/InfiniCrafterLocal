@@ -156,14 +156,24 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             # A6 makes five formerly absent targeting neutrals explicit. The
             # frozen wire remains admitted wire-only, but cannot authenticate a
             # complete current compilation until those exact receipts exist.
-            assert validate_runtime_program(row["source"])["ok"]
-            violations = source_audit["violations"]
+            from tests.captured_projectile_author import project_captured_projectile_call
+            current_source = deepcopy(row["source"])
+            for item_call in current_source["runtimeProgram"]["calls"]:
+                if item_call["fn"] == "configure_item_use":
+                    project_captured_projectile_call(item_call)
+            assert validate_runtime_program(current_source)["ok"]
+            current_rows = deepcopy(receipts)
+            for receipt in current_rows:
+                if receipt.get("fn") == "configure_item_use" and receipt["authoredPath"].endswith(".heldSpriteVisibilityHint"):
+                    assert receipt["value"] in {"", "immediate", "on_release"}
+                    receipt["authoredPath"] = receipt["authoredPath"].removesuffix("heldSpriteVisibilityHint") + "customHeldSprite"
+            violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=wire)["violations"]
             assert len(violations) == 5
             assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
             assert {v["authoredPath"].rsplit(".", 1)[1] for v in violations} == {
                 "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"}
             from sentry_contract_checks import without_declared_targeting_neutrals
-            fresh, _ = compile_and_check(deepcopy(row["source"]))
+            fresh, _ = compile_and_check(current_source)
             projected = without_declared_targeting_neutrals(fresh)
             assert projected["runtimeProgram"] == wire["runtimeProgram"]
             assert projected["gameplay"] == wire["gameplay"]
@@ -172,6 +182,10 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             call = witness(source)
             call["fn"] = NEW
             call["params"]["maxTargets"] = call["params"].pop("count")
+            from tests.captured_projectile_author import project_captured_projectile_call
+            for item_call in source["runtimeProgram"]["calls"]:
+                if item_call["fn"] == "configure_item_use":
+                    project_captured_projectile_call(item_call)
             fresh, _ = compile_and_check(source)
             assert fresh["runtimeProgram"] == wire["runtimeProgram"]
             assert fresh["gameplay"] == wire["gameplay"]

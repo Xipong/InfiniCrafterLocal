@@ -117,9 +117,20 @@ internal static partial class EngineRuntimeChecks
         FieldInfo ticks = typeof(InfiniCraftPlayer).GetField("_generatedBuffTicks", MobilityConsumptionFlags)!;
         FieldInfo entries = typeof(InfiniCraftPlayer).GetField("_activeGeneratedUtilityBuffs", MobilityConsumptionFlags)!;
         int snapshots = 0;
-        // Count requests at the actual production sender boundary; no socket claim.
-        using var sender = new Hook(typeof(InfiniCraftPlayer).GetMethod("SendGeneratedBuffState", MobilityConsumptionFlags)!,
-            (Action<InfiniCraftPlayer, int, int>)((_, _, _) => snapshots++));
+        // Patch the real caller's exact send instruction, not a late callee
+        // detour which can be bypassed by a previously inlined native call.
+        // Utility admission/aggregation and snapshot policy remain production.
+        using var sender = new MonoMod.RuntimeDetour.ILHook(
+            typeof(InfiniCraftPlayer).GetMethod(nameof(InfiniCraftPlayer.ApplyGeneratedUtilityBuff))!, il => {
+                var sites = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Where(il.Body.Instructions,
+                    ins => ins.OpCode == Mono.Cecil.Cil.OpCodes.Call
+                        && ins.Operand is Mono.Cecil.MethodReference method
+                        && method.DeclaringType.FullName == typeof(InfiniCraftPlayer).FullName
+                        && method.Name == "SendGeneratedBuffState" && method.Parameters.Count == 2));
+                Equal(1, sites.Length, "one exact held utility snapshot sender call site");
+                var cursor = new MonoMod.Cil.ILCursor(il); cursor.Goto(sites[0]); cursor.Remove();
+                cursor.EmitDelegate<Action<InfiniCraftPlayer, int, int>>((_, _, _) => snapshots++);
+            });
         WithPlayer((player, generated) =>
         {
             PrepareMobilityConsumptionPlayer(player);

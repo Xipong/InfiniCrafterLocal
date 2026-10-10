@@ -100,7 +100,7 @@ def _grouped_armor(monkeypatch):
     document = build_capability_witness("configure_armor")
     cap = registry.CAPABILITY_REGISTRY["configure_armor"]
     params = dict(cap.params)
-    old = params.pop("setBonusAggroPoints")
+    old = params["setBonuses"].properties["aggroPoints"]
     params["setBonuses"] = ParamSpec("object", "Explicit set bonuses", required=False,
                                     min_properties=1, properties={"aggroPoints": old})
     modified = dict(registry.CAPABILITY_REGISTRY)
@@ -435,13 +435,18 @@ def test_wire_output_cannot_be_claimed_by_two_distinct_calls():
 
 def test_retained_same_name_domain_is_wire_only_not_author_permission(monkeypatch):
     document = build_capability_witness("move_player_on_use")
-    wire = compiler.compile_runtime_program(document)  # accepted old recall_home
+    wire = compiler.compile_runtime_program(document)
+    call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    call["params"]["mode"] = wire["gameplay"]["mobilityMode"] = "recall_home"
+    for row in wire["runtimeContract"]["finalWireReceipts"]:
+        if row.get("callId") == call["id"] and row.get("authoredPath", "").endswith(".params.mode"):
+            row["value"] = "recall_home"
     receipts = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
     cap = registry.CAPABILITY_REGISTRY["move_player_on_use"]
     params = dict(cap.params)
     params["mode"] = replace(params["mode"], enum=("blink_to_cursor",))
     changed = dict(registry.CAPABILITY_REGISTRY)
-    changed[cap.name] = replace(cap, params=params, retained_receipt_params={"mode": cap.params["mode"]})
+    changed[cap.name] = replace(cap, params=params, retained_receipt_params={"mode": cap.retained_receipt_params["mode"]})
     monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", changed)
     before = deepcopy(wire)
     assert technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]

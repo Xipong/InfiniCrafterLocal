@@ -35,6 +35,9 @@ C# base: [`ModSources/InfiniCrafterLocal/`](ModSources/InfiniCrafterLocal/FOLDER
 | Item projection/hooks | `Common/Models/GeneratedItemData.Apply.cs`, `Content/Items/GeneratedItem.cs` |
 | Bindings/events/delays/hit receipt | `Common/Runtime/RuntimeProgramExecutor.cs`, `RuntimeDelayedActionScheduler.cs`, `RuntimeHitPullBridge.cs` |
 | Entity lifecycle/net/visual | `Content/Projectiles/GeneratedProjectile.cs` |
+| Named item effects / exact use selectors | `Common/Models/RuntimeItemEffectGroupSpec.cs`, `Content/Items/GeneratedItem.cs` (`EffectsForBinding`); [контракт](docs/NAMED_ITEM_EFFECT_GROUPS_RU.md) |
+| Weapon ammo / spawn reservation ledger | `Common/Models/RuntimeWeaponAmmoSpec.cs`, `Common/Runtime/RuntimeSpawnBudget.cs`; native shot и event child — разные lanes |
+| Hitbox curve / raw JSON numeric admission | `Common/Models/RuntimeProgramSpec.cs`, `RawJsonNumericDomain.cs` в том же directory, `Content/Projectiles/GeneratedProjectile.Executors.cs` |
 | VFX DTO/rendering | `Common/Models/VfxManifestSpec.cs`; [VFX owners](ModSources/InfiniCrafterLocal/Common/VFX/FOLDER_DOCS_RU.md) |
 | Station lanes/world journal | `Common/Players/InfiniCraftPlayer.MultiDev.cs`, `Common/Systems/GeneratedStationEscrowStateSystem.cs` |
 | Placed-item world returns | `Common/Systems/GeneratedPlacementLedgerSystem.cs` |
