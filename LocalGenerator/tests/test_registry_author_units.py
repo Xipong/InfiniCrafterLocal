@@ -1,6 +1,6 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, visible_capabilities
 from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
@@ -122,7 +122,7 @@ def test_identity_rename_reaches_packet_projector_and_frozen_wire(monkeypatch, a
         if isinstance(value, float):
             assert all(struct.pack("!d", _get(final, r["finalPath"])) == struct.pack("!d", value) for r in selected)
         assert technical_lowering.audit_compiler_receipts(
-            receipts, authored_document={"runtimeProgram": {"calls": [call]}}, final_document=final
+            receipts, authored_document={"runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": [call]}}, final_document=final
         )["ok"]
     authored = build_capability_witness(fn)
     call = next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "witness_call")
@@ -162,7 +162,7 @@ def test_renamed_receipt_identity_cannot_be_forged(monkeypatch, field, path):
     call, rows, final = _project("configure_spawn", "velocity", {"constantSpeedPxPerUpdate": 7.125})
     next(r for r in rows if r.get("authoredPath", "").endswith(".velocity.constantSpeedPxPerUpdate"))[field] = path
     assert not technical_lowering.audit_compiler_receipts(
-        rows, authored_document={"runtimeProgram": {"calls": [call]}}, final_document=final
+        rows, authored_document={"runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": [call]}}, final_document=final
     )["ok"]
 
 

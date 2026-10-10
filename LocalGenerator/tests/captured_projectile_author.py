@@ -30,6 +30,13 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
                            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
     added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
     assert added_requirements == 9
+    # B15 retains one independent old opcode-4 receipt owner, never fresh admission.
+    current = CAPABILITY_REGISTRY["damage_nearest_on_event"]
+    retained = CAPABILITY_REGISTRY["chain_damage_on_event"]
+    assert current.wire_action == retained.name and retained.decision == "internal"
+    assert current.requirements == retained.requirements and len(retained.requirements) == 1
+    assert checks["requirements"] == 35 + added_requirements + len(retained.requirements)
+    checks["requirements"] -= len(retained.requirements)
     assert checks["requirements"] == 35 + added_requirements
     checks["requirements"] -= 4  # Three branch proofs and the explicit owner-pull event.
     removed = set()

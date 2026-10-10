@@ -659,7 +659,9 @@ class CapabilitySpec:
     meaningful_for_stationary: bool = False
     effect_groupable: bool = False
     # Persisted wire-only provenance, never a second accepted Author grammar.
-    # Entries contain exact projections of retired authored parameter paths.
+    # Entries contain exact projections of retired authored parameter paths or
+    # their prior domains. An overlapping current name applies only when the
+    # original Author is absent; it never widens fresh schema or Repair.
     retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_action: str = ""
     fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
@@ -824,6 +826,13 @@ class CapabilitySpec:
                     break
         return card
 
+    def retained_wire_provenance(self) -> dict[str, Any]:
+        """One machine-only projection shared by registry and inventory exports."""
+        return {
+            name: {"priorAuthorSchema": spec.schema(), "wireFields": list(spec.wire_field_names(name))}
+            for name, spec in self.retained_receipt_params.items()
+        }
+
     def audit_card(self) -> dict[str, Any]:
         """Complete machine projection; hook/wire/authority are not LLM design choices."""
         card = self.prompt_card()
@@ -845,6 +854,8 @@ class CapabilitySpec:
             "emitsEvents": list(self.emitted_events),
             "exclusiveGroup": self.exclusive_group or None,
         })
+        if self.retained_receipt_params:
+            card["retainedWireProvenance"] = self.retained_wire_provenance()
         return card
 
 
@@ -1978,7 +1989,7 @@ _CAPS.extend([
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
             "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
-            "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1, units="engine units: distance-score discount"),
+            "sameTargetBias": _p("number", "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability", minimum=0, maximum=0.9, units="engine units: distance-score discount"),
             "damageBasis": _p("string", "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4, wire_presence_requires_receipt=True),
@@ -1993,6 +2004,9 @@ _CAPS.extend([
         wire=("runtimeProgram.entities[].controller.*", "runtimeProgram.entities[].targeting.*"),
         provenance="stationary targeting/firing split from the retired sentry macro",
         repair_group="targeting",
+        retained_receipt_params={
+            "sameTargetBias": _p("number", "Persisted bias domain remains 0..1; the native selector saturates 0.9..1 at 0.9. Wire-only provenance does not admit these values to fresh Author", minimum=0, maximum=1),
+        },
     ),
     _cap(
         "spawn_over_target",
@@ -2127,24 +2141,24 @@ _CAPS.extend([
         events=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill"),
     ),
     _cap(
-        "chain_damage_on_event",
-        "Apply instantaneous radial multi-target damage to a bounded nearest-NPC list around the original hit position. "
-        "No moving projectiles or advancing search anchor; the direct hit target is excluded.",
+        "damage_nearest_on_event",
+        "Damage up to maxTargets nearest chaseable NPCs within one radius of the recorded event center, excluding the directly hit NPC. Every target is ranked from that same center and receives the same authored base-damage multiplier; no sequential hopping or distance falloff.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "when": _event_when_param(("on_hit", "on_crit")),
-            "count": _p("integer", "Maximum instantly damaged radial targets", minimum=1, maximum=12),
-            "rangeTiles": _p("number", "Fixed search radius from the original event position", minimum=1, maximum=60, units="tiles"),
+            "maxTargets": _p("integer", "Maximum additional NPCs selected from the same event center, nearest first; the directly hit NPC is excluded", minimum=1, maximum=12, wire_name="count", semantic_type="spawn_or_target_count"),
+            "rangeTiles": _p("number", "Inclusive physical search radius around the recorded event center, in tiles; it does not move between targets", minimum=1, maximum=60, units="tiles"),
             "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=2),
         },
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
         wire=("runtimeProgram.entities[].events[].*",),
-        provenance="chain/lightning arc extracted from on-hit opcode",
-        repair_group="event_chain",
+        provenance="exact nearest-area alias of retained event action 4; no new chain algorithm",
+        repair_group="event_nearest_damage",
         events=("on_hit", "on_crit"),
+        wire_action="chain_damage_on_event",
     ),
     _cap(
         "pull_on_event",
@@ -2161,12 +2175,12 @@ _CAPS.extend([
         py=_COMPILER_OWNER,
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
         wire=("runtimeProgram.entities[].events[].*",),
-        retained_receipt_params={
-            "mode": _p("string", "Prior saved pull direction domain", enum=("target_to_owner", "owner_to_target", "target_to_entity")),
-        },
         provenance="pull modes extracted from impact executor",
         repair_group="event_pull",
         events=("on_hit", "periodic", "on_expire"),
+        retained_receipt_params={
+            "mode": _p("string", "Prior pull discriminator includes the owner branch now selected by its explicit capability", enum=("target_to_owner", "target_to_entity", "owner_to_target")),
+        },
     ),
     _cap(
         "pull_owner_to_event_target",
@@ -2241,6 +2255,17 @@ _CAPS.extend([
         repair_group="entity_light",
     ),
 ])
+
+
+# Keep the old discriminator and parameter provenance readable from saved wire.
+# This is a registry-only retained entry, never a second fresh Author grammar.
+for _capability in tuple(_CAPS):
+    if _capability.name == "damage_nearest_on_event":
+        _prior_params = {("count" if name == "maxTargets" else name): spec
+                         for name, spec in _capability.params.items()}
+        _CAPS.append(replace(_capability, name="chain_damage_on_event", decision="internal",
+                             wire_action="", params=MappingProxyType(_prior_params),
+                             provenance="retained event action 4 and prior Author paths; fresh Author uses damage_nearest_on_event"))
 
 
 ENTITY_KIND_REGISTRY: Final[Mapping[str, EntityKindSpec]] = MappingProxyType({
@@ -2725,7 +2750,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
         return "owner_execute_sync", {}
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
-    if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:
+    if (cap.wire_action or cap.name) in {"apply_status_on_event", "chain_damage_on_event"}:
         return "owner_execute_sync", {}
     if cap.name == "damage_area_on_event":
         return "server_execute", {"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync"}
@@ -3140,7 +3165,7 @@ MOVEMENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
     cap.name for cap in _ENRICHED_CAPS if cap.category == "movement" and cap.decision == "expose"
 )
 EVENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
-    cap.name for cap in _ENRICHED_CAPS if cap.category == "event"
+    cap.name for cap in _ENRICHED_CAPS if cap.category == "event" and cap.prompt_visible and cap.decision == "expose"
 )
 ITEM_CAPABILITIES: Final[frozenset[str]] = frozenset(
     cap.name for cap in _ENRICHED_CAPS if cap.target_kinds == ("item_body",)
@@ -3213,7 +3238,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "equipped piece (combined as 1-product(1-p)). Raw crit points need not equal final crit: "
             "Default receives no Generic modifiers, Summon crit is nonstandard, modded DamageClass "
             "may override inheritance. By contrast damageMultiplier=1 multiplies authored base by 1 "
-            "(AoE/chain floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
+            "(AoE/nearest-event damage floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
             "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
             "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
             "has no fan; pierce=-1 is infinite and tileId/wallId=-1 disables placement. "
@@ -3299,6 +3324,7 @@ def capability_inventory_rows() -> list[dict[str, Any]]:
             "decision": cap.decision,
             "finalWirePaths": list(cap.final_wire_paths),
             "technicalLoweringOutputs": list(cap.technical_lowering_outputs),
+            **({"retainedWireProvenance": cap.retained_wire_provenance()} if cap.retained_receipt_params else {}),
         })
     return rows
 

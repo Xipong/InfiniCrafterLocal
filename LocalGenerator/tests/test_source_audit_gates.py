@@ -73,6 +73,29 @@ def test_csharp_policy_accepts_repository(gates, csharp_sources):
 
 
 @pytest.mark.parametrize("path,before,after", [
+    ("Common/Models/RuntimeProgramSpec.cs", "SameTargetBias, 0f, 1f", "SameTargetBias, 0f, 0.9f"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "Math.Clamp(sameTargetBias, 0f, 0.9f)", "Math.Clamp(sameTargetBias, 0f, 1f)"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "Math.Clamp(targeting.SameTargetBias, 0f, 0.9f)", "Math.Clamp(targeting.SameTargetBias, 0f, 1f)"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "score = npc.whoAmI == _lastTarget", "score = npc.whoAmI == -1"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "FindFiringTarget(range, _entity.Targeting)", "FindNearestNpc(Projectile.Center, range)"),
+    ("Common/Runtime/RuntimeProgramExecutor.cs", "npc.CanBeChasedBy() && npc != directTarget &&", "npc.CanBeChasedBy() &&"),
+    ("Common/Runtime/RuntimeProgramExecutor.cs", "Vector2.DistanceSquared(right.Center, center)", "Vector2.DistanceSquared(right.Center, left.Center)"),
+    ("Common/Runtime/RuntimeProgramExecutor.cs", "Math.Clamp(action.Count, 1, 12)", "Math.Clamp(action.Count, 1, 8)"),
+])
+def test_event_domain_gate_rejects_alias_and_retained_domain_consumer_mutants(gates, csharp_sources, monkeypatch, path, before, after):
+    _, scanner = gates
+    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
+    scanner.ERRORS.clear()
+    scanner.check_event_domain_contracts()
+    assert scanner.ERRORS == []
+    assert before in csharp_sources[path]
+    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
+    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
+    scanner.check_event_domain_contracts()
+    assert any("event domains" in row for row in scanner.ERRORS)
+
+
+@pytest.mark.parametrize("path,before,after", [
     ("Common/Models/RuntimeProgramSpec.cs", "GravityPerTick, -2f, 2f", "GravityPerTick, 0f, 2f"),
     ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 2: Projectile.velocity.Y += p.GravityPerTick;", "case 2: Projectile.velocity.Y += Math.Abs(p.GravityPerTick);"),
     ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 6: Projectile.velocity.Y += p.GravityPerTick;", "case 6: Projectile.velocity.Y += p.GravityPerTick * 2;"),

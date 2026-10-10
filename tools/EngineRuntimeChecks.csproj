@@ -69,6 +69,7 @@
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
     <Compile Include="EngineRuntimeChecks.UnitBoundaries.cs" />
+    <Compile Include="EngineRuntimeChecks.EventDomains.cs" />
     <Compile Include="EngineRuntimeChecks.VerticalAcceleration.cs" />
     <Compile Include="EngineRuntimeChecks.Tooltips.cs" />
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />

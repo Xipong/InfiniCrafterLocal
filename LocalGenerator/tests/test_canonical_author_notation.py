@@ -25,6 +25,10 @@ def test_current_noarg_call_has_no_params_property_and_no_old_author_admission()
         bad = deepcopy(source)
         bad["runtimeProgram"]["schema"] = version
         assert not validate_runtime_program(bad)["ok"]
+        from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+        audit = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=bad, final_document=wire)
+        assert not audit["ok"]
+        assert audit["violations"][0]["reason"] == "source provenance requires the sole current Author grammar"
     bad = deepcopy(source)
     next(row for row in bad["runtimeProgram"]["calls"] if row["id"] == noarg["id"])["params"] = {}
     report = validate_runtime_program(bad)
@@ -53,6 +57,8 @@ def test_flat_active_binding_preserves_independent_contact_and_stack_lanes():
     binding = bad["runtimeProgram"]["bindings"][0]
     binding["usePolicy"] = {key: binding.pop(key) for key in ("action", "stackCost", "contactDamage")}
     assert not validate_runtime_program(bad)["ok"]
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=bad, final_document=wire)["ok"]
 
 
 def test_fixed_branches_and_unique_arbitrary_body_references_are_exact():

@@ -28,7 +28,9 @@ Repair выдаёт разрешение только для неверного 
 
 `tools/EngineRuntimeChecks.VerticalAcceleration.cs` подготовлен для реального strict JSON reader и production `GeneratedProjectile.AI()`: две проверки охватывают четыре сетевые роли, N=1/2/6, signed/zero/float32 epsilon, неизменность X, задержку активации и отсутствие повторного запуска при hydration. Helpers изолируют actor arrays и роль, не заменяют ускорение, DTO или AI. Это method-level native checks, не симуляция Terraria world/network loop.
 
-C# build, запуск EngineRuntimeChecks и игровые SP/MP smoke требуют .NET 8, stable tModLoader, ParticleLibrary и Luminance. В среде подготовки PR они **notRun**; portable/source проверки не выдаются за выполненный игровой тест.
+C# build, запуск EngineRuntimeChecks и игровые SP/MP smoke требуют .NET 8, stable tModLoader, ParticleLibrary и Luminance. В исходной среде подготовки PR они были **notRun**; это историческое ограничение не заменяется portable/source проверками.
+
+При локальной композиции PR #26 ← проверенный #24/#14 выполнены parent-owned linked-native build (0 warnings, 0 errors) и четыре canonical checks: два signed vertical acceleration, один target bias, один nearest event damage; 4 PASS, 0 FAIL. DLL SHA-256: `bd0179e03c049457296a980fe0ffcad8d4f141ddc04ebf64187324b511331009`. Все 177 compile inputs сверены с замороженным manifest; Python/docs resolution их не меняет. Это headless method-level evidence, не игровые SP/MP, world/network loop или GPU smoke.
 
 ## Владельцы
 

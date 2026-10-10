@@ -723,6 +723,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
         if isinstance(targeting, Mapping):
+            # Fresh Author and persisted wire deliberately have different
+            # domains for this existing native selector. Registry owns both;
+            # a delivery without provenance still obeys the retained wire type.
+            bias_spec = CAPABILITY_REGISTRY["target_and_fire"].retained_receipt_params["sameTargetBias"]
+            bias_key = bias_spec.wire_name or "sameTargetBias"
+            if bias_key in targeting and not bias_spec.matches_scalar_projection(targeting[bias_key]):
+                errors.append({"path": f"{entity_path}.targeting.{bias_key}",
+                               "code": "invalid_retained_target_bias",
+                               "message": "Present target bias must match its declared persisted 0..1 domain without coercion or rewriting."})
             _validate_child_combat(targeting, "target_and_fire", kind,
                                    isinstance(controller, Mapping) and type(controller.get("code")) is int
                                    and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
