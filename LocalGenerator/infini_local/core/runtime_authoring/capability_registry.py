@@ -37,6 +37,13 @@ ENTITY_KINDS: Final[tuple[str, ...]] = (
 )
 PROJECTILE_ENTITY_KIND_ORDER: Final[tuple[str, ...]] = ENTITY_KINDS[1:]
 PROJECTILE_ENTITY_KINDS: Final[frozenset[str]] = frozenset(PROJECTILE_ENTITY_KIND_ORDER)
+PROJECTILE_MODIFIER_COMPONENTS: Final[Mapping[str, str]] = MappingProxyType({
+    "set_projectile_turn_modifier": "turnModifier",
+    "set_projectile_speed_modifier": "speedModifier",
+    "set_projectile_homing_modifier": "homingModifier",
+    "attract_npcs_while_active": "npcAttraction",
+    "set_projectile_visual_scale_curve": "visualScaleCurve",
+})
 VISUAL_ROLE_BY_ENTITY_KIND: Final[Mapping[str, str]] = MappingProxyType({
     "item_body": "inventory_item",
     "owner_attached_projectile": "held_body",
@@ -621,6 +628,7 @@ class CapabilitySpec:
     # Entries contain exact projections of retired authored parameter paths.
     retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    wire_presence_path: str = ""  # Optional whole component selected only by this capability.
 
     def provider_variant_schema(self) -> dict[str, Any]:
         properties = {name: spec.schema() for name, spec in self.params.items()}
@@ -794,6 +802,7 @@ class CapabilitySpec:
             "budget": self.performance_budget,
             "activationSpawnCountParam": self.activation_spawn_count_param or None,
             "meaningfulForStationary": self.meaningful_for_stationary,
+            **({"wirePresencePath": self.wire_presence_path} if self.wire_presence_path else {}),
             "acceptedEvents": list(self.allowed_events),
             "emitsEvents": list(self.emitted_events),
             "exclusiveGroup": self.exclusive_group or None,
@@ -896,6 +905,7 @@ def _cap(
     effect_groupable: bool = False,
     retained_receipt_params: Mapping[str, ParamSpec] | None = None,
     fixed_wire_literals: Mapping[str, Any] | None = None,
+    wire_presence_path: str = "",
 ) -> CapabilitySpec:
     target_values = tuple(targets)
     target_set = set(target_values)
@@ -932,6 +942,7 @@ def _cap(
         effect_groupable=effect_groupable,
         retained_receipt_params=MappingProxyType(dict(retained_receipt_params or {})),
         fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
+        wire_presence_path=wire_presence_path,
     )
 
 
@@ -1558,9 +1569,83 @@ _CAPS: list[CapabilitySpec] = [
             "mirrorToSprite": _p("boolean", "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with move_expanding_wave, which independently owns dynamic sprite scale."),
         },
         py=_COMPILER_OWNER, cs="GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox",
-        wire=("runtimeProgram.entities[].hitboxCurve.*",),
+        wire=("runtimeProgram.entities[].hitboxCurve.*",), wire_presence_path="runtimeProgram.entities[].hitboxCurve",
         provenance="restored explicit active-age damage rectangle growth; legacy movement15 visual scale no longer implies collision",
         repair_group="hitbox_curve",
+    ),
+    _cap(
+        "set_projectile_turn_modifier",
+        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+        "motion_modifier", ("free_projectile", "child_projectile"),
+        {
+            "turnRadiansPerUpdate": _p("number", "Signed velocity rotation on each active projectile AI update", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0),
+            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+        }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+        wire=("runtimeProgram.entities[].turnModifier.*",), wire_presence_path="runtimeProgram.entities[].turnModifier", provenance="explicit orthogonal turn with active-age phase", repair_group="turn_modifier",
+    ),
+    _cap(
+        "set_projectile_speed_modifier",
+        "After movement and turn, multiply velocity on each active projectile update and clamp its magnitude to the authored cap. Values below one slow; above one accelerate. Phase timing is in world ticks, while the multiplier is explicitly per projectile update.",
+        "motion_modifier", ("free_projectile", "child_projectile"),
+        {
+            "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per active projectile update", minimum=0.8, maximum=1.2, units="dimensionless multiplier/update", consumer_storage="float32", neutral=1),
+            "maxSpeed": _p("number", "Inclusive magnitude cap applied after the multiplication", minimum=0.1, maximum=80, units="pixels/projectile update", consumer_storage="float32"),
+            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+        }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+        wire=("runtimeProgram.entities[].speedModifier.*",), wire_presence_path="runtimeProgram.entities[].speedModifier", provenance="explicit acceleration/retention independent of turn and homing", repair_group="speed_modifier",
+    ),
+    _cap(
+        "set_projectile_homing_modifier",
+        "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+        "motion_modifier", ("free_projectile", "child_projectile"),
+        {
+            "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),
+            "maxTurnRadiansPerUpdate": _p("number", "Maximum absolute rotation toward the target each active projectile update; values at least pi can fully turn toward the target", minimum=0.0001, maximum=3.2, units="radians/projectile update", consumer_storage="float32"),
+            "requireLineOfSight": _p("boolean", "Require native CanHitLine from projectile box to candidate box before selecting it"),
+            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+        }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
+        wire=("runtimeProgram.entities[].homingModifier.*",), wire_presence_path="runtimeProgram.entities[].homingModifier", provenance="explicit delayed homing independent of movement slot", repair_group="homing_modifier",
+        budget="one bounded native NPC-array scan per active projectile update",
+    ),
+    _cap(
+        "attract_npcs_while_active",
+        "Independent server NPC attraction every active projectile update, after movement/modifiers, without changing projectile velocity or selecting a movement family. Scan NPC slots in index order, require chaseable positive-resistance targets within hard range, then apply at most maxTargets. Uses native resistance clamped 0.1..1. No periodic event clock or owner hit callback is substituted.",
+        "active_effect", PROJECTILE_ENTITY_KINDS,
+        {
+            "rangeTiles": _p("number", "Hard pull radius from projectile center", minimum=1, maximum=80, units="tiles", consumer_storage="float32"),
+            "strengthPerUpdate": _p("number", "Additive NPC velocity impulse coefficient per projectile AI update before falloff and resistance", minimum=0.001, maximum=4, units="NPC velocity units/projectile update", consumer_storage="float32"),
+            "falloff": _p("string", "constant=1; linear=max(0,1-distance/radius), including zero at radius", enum=("constant", "linear")),
+            "maxTargets": _p("integer", "Maximum accepted NPC slots per projectile update", minimum=1, maximum=16),
+            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+        }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
+        wire=("runtimeProgram.entities[].npcAttraction.*",), wire_presence_path="runtimeProgram.entities[].npcAttraction", provenance="independent NPC attraction and explicit radial falloff; no coupled hidden projectile drag", repair_group="npc_attraction",
+        budget="one bounded native NPC-array scan, at most authored 1..16 targets/update",
+    ),
+    _cap(
+        "set_projectile_visual_scale_curve",
+        "Set sprite/generic body scale to authored drawScale times visual.scale times an independent time curve. Linear or exponential interpolation uses active world ticks. This does not change damage or tile collision. Beam/whip line drivers are excluded because their exact body geometry uses collision dimensions. A separate gameplay hitbox curve can coexist only with its mirrorToSprite=false; no_asset still deliberately hides the body.",
+        "entity_visual", PROJECTILE_ENTITY_KINDS,
+        {
+            "startScale": _p("number", "Visual multiplier before/start of the curve", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
+            "endScale": _p("number", "Visual multiplier at/after curve completion", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
+            "startDelayTicks": _p("integer", "Active world ticks to hold startScale", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Active world ticks from startScale to endScale", minimum=1, maximum=21600, units="ticks"),
+            "curve": _p("string", "linear=start+(end-start)*t; exponential=start*(end/start)^t; t clamped 0..1", enum=("linear", "exponential")),
+        }, py=_COMPILER_OWNER, cs="GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
+        wire=("runtimeProgram.entities[].visualScaleCurve.*",), wire_presence_path="runtimeProgram.entities[].visualScaleCurve", provenance="independent multiplicative visual growth with explicit phase", repair_group="visual_scale_curve",
+    ),
+    _cap(
+        "orient_whip_to_owner_gravity",
+        "Mirror the existing whip sweep and bend around its explicitly aimed axis when owner.gravDir is inverted. Does not change authored aim, range or damage; collision and body use the same whip points. Choosing this fn supplies the sole true wire marker.",
+        "entity_collision", ("owner_attached_projectile",), {},
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.Executors.cs::BuildWhipPoints",
+        wire=("runtimeProgram.entities[].whipUsesOwnerGravity",), provenance="explicit owner-gravity orientation for existing whip geometry", repair_group="whip_gravity",
+        lowering=("runtimeProgram.entities[].whipUsesOwnerGravity",), lowering_inputs=("runtimeProgram.calls[].fn",),
+        fixed_wire_literals={"whipUsesOwnerGravity": True}, wire_presence_path="runtimeProgram.entities[].whipUsesOwnerGravity",
     ),
     _cap(
         "set_projectile_collision",
@@ -2261,6 +2346,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         return tuple(f"runtimeProgram.entities[].hitbox.{name}" for name in cap.params)
     if cap.name == "set_projectile_hitbox_curve":
         return tuple(f"runtimeProgram.entities[].hitboxCurve.{name}" for name in cap.params)
+    if cap.name in PROJECTILE_MODIFIER_COMPONENTS:
+        return tuple(f"runtimeProgram.entities[].{PROJECTILE_MODIFIER_COMPONENTS[cap.name]}.{name}" for name in cap.params)
+    if cap.name == "orient_whip_to_owner_gravity":
+        return ("runtimeProgram.entities[].whipUsesOwnerGravity",)
     if cap.name == "set_projectile_collision":
         return tuple(f"runtimeProgram.entities[].collision.{name}" for name in param_fields)
     if cap.category == "movement":
@@ -2287,6 +2376,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 
 
 def _component_slot(cap: CapabilitySpec) -> str:
+    if cap.name in PROJECTILE_MODIFIER_COMPONENTS:
+        return PROJECTILE_MODIFIER_COMPONENTS[cap.name]
+    if cap.name == "orient_whip_to_owner_gravity":
+        return "whip_gravity"
     direct = {
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
         "configure_vanilla_ammo_item": "ammo_item", "configure_weapon_ammo": "weapon_ammo", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
@@ -2315,6 +2408,11 @@ def _component_slot(cap: CapabilitySpec) -> str:
 
 
 def _csharp_owner_for(cap: CapabilitySpec) -> str:
+    if cap.name in PROJECTILE_MODIFIER_COMPONENTS:
+        method = {"attract_npcs_while_active": "ApplyNpcAttraction", "set_projectile_homing_modifier": "ApplyHomingModifier", "set_projectile_visual_scale_curve": "ApplyVisualScaleCurve"}.get(cap.name, "ApplyActiveModifiers")
+        return "Content/Projectiles/GeneratedProjectile.Modifiers.cs::" + method
+    if cap.name == "orient_whip_to_owner_gravity":
+        return "Content/Projectiles/GeneratedProjectile.Executors.cs::BuildWhipPoints"
     item = {
         "configure_item_stats": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "configure_item_use": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
@@ -2365,6 +2463,13 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
         return "owner_execute_sync", {}
     if cap.name == "channel_beam":
         return "owner_execute_sync", {"sustain_mana": "owner_execute_sync", "beam_geometry": "native_local_collision_and_visual", "NPC_source_damage": "native_projectile_hit_authority"}
+
+    if cap.name == "attract_npcs_while_active":
+        return "server_execute", {}
+    if cap.name == "set_projectile_visual_scale_curve":
+        return "client_visual_only", {}
+    if cap.category == "motion_modifier":
+        return "owner_execute_sync", {}
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
     if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:
@@ -2390,18 +2495,27 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
-    if cap.name == "set_projectile_hitbox_curve":
-        return (
-            RequirementSpec("capability_present", capability="set_projectile_hitbox", message="A hitbox curve multiplies the same entity's explicit static hitbox."),
-            RequirementSpec("capability_absent", any_of=("channel_beam", "move_whip_lash"), message="Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly."),
-            RequirementSpec("capability_absent", param="mirrorToSprite", equals=True, any_of=("move_expanding_wave",), message="mirrorToSprite=true owns dynamic sprite scale; move_expanding_wave is a second owner. Disable the mirror or choose one scale owner."),
-        )
+
     if cap.name == "configure_weapon_ammo":
         return (RequirementSpec(
             "binding_tuple_present", target="any_entity",
             any_of=("primary_use|spawn_entity", "alternate_use|spawn_entity"),
             message="Weapon ammo requires an explicit active spawn_entity shot; hold/equipped events or item effects are not native ammo consumers.",
         ),)
+
+    if cap.category == "motion_modifier":
+        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release", "target_and_fire"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),)
+    if cap.name == "set_projectile_visual_scale_curve":
+        return (RequirementSpec("capability_absent", any_of=("move_expanding_wave", "channel_beam", "move_whip_lash"), message="A visual scale curve excludes another scale owner and special beam/whip line geometry that does not consume sprite scale."),)
+    if cap.name == "orient_whip_to_owner_gravity":
+        return (RequirementSpec("capability_present", capability="move_whip_lash", message="Owner-gravity orientation requires the same entity's explicit whip geometry."),
+                RequirementSpec("capability_absent", any_of=("channel_beam",), message="Beam geometry takes precedence and would leave whip gravity orientation unconsumed."))
+    if cap.name == "set_projectile_hitbox_curve":
+        return (
+            RequirementSpec("capability_present", capability="set_projectile_hitbox", message="A hitbox curve multiplies the same entity's explicit static hitbox."),
+            RequirementSpec("capability_absent", any_of=("channel_beam", "move_whip_lash"), message="Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly."),
+            RequirementSpec("capability_absent", param="mirrorToSprite", equals=True, any_of=("move_expanding_wave", "set_projectile_visual_scale_curve"), message="mirrorToSprite=true owns dynamic sprite scale; expanding-wave movement or a visual scale curve is a second owner. Disable the mirror or choose one scale owner."),
+        )
     if cap.name == "add_equipment_damage_bonus":
         return (RequirementSpec(
             "capability_group_present", target="item_body", any_of=("configure_accessory", "configure_armor"),
@@ -2618,7 +2732,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         network_authority=authority,
         authority_by_effect=MappingProxyType(dict(by_effect)),
         activation_spawn_count_param="count" if cap.name == "spawn_entity_on_event" else "",
-        meaningful_for_stationary=(cap.category == "event" or cap.name in {"set_projectile_damage", "target_and_fire", "emit_light_while_active"}),
+        meaningful_for_stationary=(cap.category == "event" or cap.name in {"set_projectile_damage", "target_and_fire", "emit_light_while_active", "attract_npcs_while_active"}),
     )
 
 

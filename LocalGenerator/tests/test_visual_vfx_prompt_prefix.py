@@ -462,7 +462,7 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
     presentation = packet["spritePresentationReadOnly"]
     assert presentation["formulas"]["q"] == "R / max(actual final PNG frame width, height)"
     assert presentation["formulas"]["held"] == "q_item * player.GetAdjustedItemScale(held) (G already included once)"
-    assert presentation["formulas"]["body"] == "q_selected * P when accepted hitboxCurve.mirrorToSprite=true, with P=D*E*curveScale(active age); otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred."
+    assert presentation["formulas"]["body"] == "q_selected * P when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present, with P=D*E*curveScale(active age) from that explicit visual owner; otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred."
     assert "alpha-bbox" in presentation["units"] and "positive clockwise" in presentation["axis"]
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     use = CAPABILITY_REGISTRY["configure_item_use"].params

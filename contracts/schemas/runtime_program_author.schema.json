@@ -4292,6 +4292,524 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "set_projectile_turn_modifier"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationTicks": {
+                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "startDelayTicks": {
+                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "turnRadiansPerUpdate": {
+                    "description": "Signed velocity rotation on each active projectile AI update",
+                    "maximum": 0.5,
+                    "minimum": -0.5,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "radians/projectile update"
+                  }
+                },
+                "required": [
+                  "turnRadiansPerUpdate",
+                  "startDelayTicks",
+                  "durationTicks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "free_projectile",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_speed_modifier"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationTicks": {
+                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "maxSpeed": {
+                    "description": "Inclusive magnitude cap applied after the multiplication",
+                    "maximum": 80,
+                    "minimum": 0.1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "pixels/projectile update"
+                  },
+                  "speedMultiplierPerUpdate": {
+                    "description": "Velocity multiplier per active projectile update",
+                    "maximum": 1.2,
+                    "minimum": 0.8,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "dimensionless multiplier/update"
+                  },
+                  "startDelayTicks": {
+                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  }
+                },
+                "required": [
+                  "speedMultiplierPerUpdate",
+                  "maxSpeed",
+                  "startDelayTicks",
+                  "durationTicks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "free_projectile",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_homing_modifier"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationTicks": {
+                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "maxTurnRadiansPerUpdate": {
+                    "description": "Maximum absolute rotation toward the target each active projectile update; values at least pi can fully turn toward the target",
+                    "maximum": 3.2,
+                    "minimum": 0.0001,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "radians/projectile update"
+                  },
+                  "rangeTiles": {
+                    "description": "Hard target radius from this projectile center",
+                    "maximum": 120,
+                    "minimum": 1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tiles"
+                  },
+                  "requireLineOfSight": {
+                    "description": "Require native CanHitLine from projectile box to candidate box before selecting it",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "startDelayTicks": {
+                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  }
+                },
+                "required": [
+                  "rangeTiles",
+                  "maxTurnRadiansPerUpdate",
+                  "requireLineOfSight",
+                  "startDelayTicks",
+                  "durationTicks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "free_projectile",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "attract_npcs_while_active"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationTicks": {
+                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "falloff": {
+                    "description": "constant=1; linear=max(0,1-distance/radius), including zero at radius",
+                    "enum": [
+                      "constant",
+                      "linear"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "maxTargets": {
+                    "description": "Maximum accepted NPC slots per projectile update",
+                    "maximum": 16,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "rangeTiles": {
+                    "description": "Hard pull radius from projectile center",
+                    "maximum": 80,
+                    "minimum": 1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tiles"
+                  },
+                  "startDelayTicks": {
+                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "strengthPerUpdate": {
+                    "description": "Additive NPC velocity impulse coefficient per projectile AI update before falloff and resistance",
+                    "maximum": 4,
+                    "minimum": 0.001,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "NPC velocity units/projectile update"
+                  }
+                },
+                "required": [
+                  "rangeTiles",
+                  "strengthPerUpdate",
+                  "falloff",
+                  "maxTargets",
+                  "startDelayTicks",
+                  "durationTicks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_visual_scale_curve"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "curve": {
+                    "description": "linear=start+(end-start)*t; exponential=start*(end/start)^t; t clamped 0..1",
+                    "enum": [
+                      "linear",
+                      "exponential"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "durationTicks": {
+                    "description": "Active world ticks from startScale to endScale",
+                    "maximum": 21600,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "endScale": {
+                    "description": "Visual multiplier at/after curve completion",
+                    "maximum": 8,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "dimensionless multiplier"
+                  },
+                  "startDelayTicks": {
+                    "description": "Active world ticks to hold startScale",
+                    "maximum": 21600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "ticks"
+                  },
+                  "startScale": {
+                    "description": "Visual multiplier before/start of the curve",
+                    "maximum": 8,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "dimensionless multiplier"
+                  }
+                },
+                "required": [
+                  "startScale",
+                  "endScale",
+                  "startDelayTicks",
+                  "durationTicks",
+                  "curve"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "orient_whip_to_owner_gravity"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "set_projectile_collision"
               },
               "id": {

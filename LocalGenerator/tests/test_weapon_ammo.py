@@ -128,7 +128,11 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
                                            for fn in stats["capabilitiesUsed"])
         checks = stats["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
-        assert checks["requirements"] == 31 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        added_modifier_caps = (
+            "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
+        )
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
