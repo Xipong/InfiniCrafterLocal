@@ -96,6 +96,7 @@ def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed():
     assert runtime_repair_schema_capabilities({}) == []
     local = _local({})
     assert local["properties"]["callsUpsert"]["maxItems"] == 0
+    assert contract.author_item_repair_prompt_shape_card(capability_names=[])["callsUpsert"] == []
     for rows, valid in [([], True), ([{"id": "illegal"}], False)]:
         patch = {"note": "no call changes", "callsUpsert": rows}
         assert Draft202012Validator(local).is_valid(patch) is valid

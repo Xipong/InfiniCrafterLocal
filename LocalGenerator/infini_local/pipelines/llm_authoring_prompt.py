@@ -22,6 +22,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS, ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TOKENS,
 )
 from infini_local.pipelines.author_item_contract import (
+    RUNTIME_ROW_SHAPE_RULE,
     author_item_prompt_shape_card,
     primary_entity_llm_invariant,
 )
@@ -196,13 +197,8 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide = runtime_authoring_prompt_field_guide()
     if include_source_units:
         field_guide.update(runtime_units_for_llm())
-    field_guide["stackCost"] = (
-        "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
-        "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item. "
-        "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
-    )
     field_guide["bindingTarget"] += (
-        " Every binding directly owns action, stackCost and contactDamage. Omit only declared fixed branch constants; active non-placement stack/contact remain independent required choices. Item-only targets use the unique declared item_body; projectile targets remain explicit. Zero-parameter calls omit params. "
+        " Bindings use the selected input/action's exact shape. Omit declared fixed branch constants; active non-placement stack/contact remain independent required choices. Item-only targets use the unique declared item_body; projectile targets remain explicit. Zero-parameter calls omit params. "
         "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
         "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
         "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
@@ -263,7 +259,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if action["action"] == "place_item":
             action["constructionMeaning"] = (
                 "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
-                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body; stackCost=1 and contactDamage=false. "
+                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. Author omits stackCost and contactDamage; Lowery writes fixed stackCost=1 and contactDamage=false. "
                 "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
                 "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
             )
@@ -281,6 +277,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if event["event"] in event_detail:
             event["constructionMeaning"] = event_detail[event["event"]]
     capabilities = compact_capability_catalog()
+    field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
         "Each param consumerConstraint names one complete rule in fieldGuide.consumerConstraints. "

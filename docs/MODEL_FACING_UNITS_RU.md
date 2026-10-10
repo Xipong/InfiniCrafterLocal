@@ -39,7 +39,7 @@ Projectile `extraUpdates=N` даёт N+1 AI/movement updates/world tick. `speedP
 
 При отсутствии steering/collision грубая дальность projectile в tiles: `speedPxPerUpdate × (1+extraUpdates) × lifetimeTicks / 16`; controller может полностью изменить оценку. Минимальный event period берётся из registry, не из этой формулы.
 
-Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `speedPxPerUpdate=9`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `placement=owner_center`; `move_gravity_arc` — `accelY=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
+Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `velocity={"constantSpeedPxPerUpdate":9}`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `position={"at":"owner_center"}`; `move_gravity_arc` — `accelY=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
 
 <a id="gameplay"></a>
 ## Важные отличия единиц от обещаний
