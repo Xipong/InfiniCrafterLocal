@@ -15,6 +15,7 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_program,
 )
 from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
+from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
 from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
 from infini_local.pipelines.author_item_contract import (
     author_item_response_schema,
@@ -286,10 +287,11 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
     assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v5"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
-    author_binding = card["runtimeProgram"]["bindings"][0]
-    assert set(author_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
-    assert set(author_binding["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
-    assert "role" not in author_binding
+    author_bindings = card["runtimeProgram"]["bindings"]
+    assert len(author_bindings) == 6
+    assert all(not strict_schema_errors(row, binding_schema()) for row in author_bindings)
+    assert {row["input"] for row in author_bindings} == set(INPUT_KIND_REGISTRY)
+    assert "role" not in json.dumps(author_bindings)
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
     prompt_payload = build_llm_author_payload({}, {}, {}, {}, "binding-card")
@@ -299,9 +301,8 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
 
     repair_card = author_item_repair_prompt_shape_card()
     repair_schema = author_item_repair_response_schema()
-    repair_binding = repair_card["bindingsUpsert"][0]
-    assert set(repair_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
-    assert repair_binding == author_binding
+    assert repair_card["bindingsUpsert"] == author_bindings
+    assert repair_card["callsUpsert"] == card["runtimeProgram"]["calls"]
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(
         isinstance(repair_card[key], list)
@@ -319,9 +320,9 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert isinstance(repair_card["metadataPatch"], dict)
     assert isinstance(repair_card["realizationReplacement"], dict)
     assert isinstance(repair_card["note"], str)
-    call = card["runtimeProgram"]["calls"][0]
+    call = next(row for row in card["runtimeProgram"]["calls"] if "target" in row and "params" in row)
     assert "existing" in call["target"] and "compatible" in call["target"]
-    assert "non-optional" in str(call["params"]) and "conditional" in str(call["params"])
+    assert "required" in str(call["params"]) and "conditional" in str(call["params"])
     assert evaluation["planVsProgram"]["verdict"] == "aligned|changed|uncertain"
     assert evaluation["programVsReport"]["verdict"] == "aligned|mismatch|uncertain"
     for part, rows in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
@@ -604,7 +605,8 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
             "damageFraction=0.15",
             "homingStrength=0.15",
             "pierce=-1",
-            "tileId/wallId=-1",
+            "configure_tile_placement selects tileId>=0",
+            "configure_wall_placement selects wallId>=0",
             "Default receives no Generic",
             "Summon crit is nonstandard",
         )

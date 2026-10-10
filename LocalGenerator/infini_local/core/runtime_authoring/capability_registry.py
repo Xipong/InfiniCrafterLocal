@@ -10,14 +10,14 @@ from typing import Any, Final, Iterable, Mapping
 from infini_local.core.repair_merge import json_values_equal
 
 STACK_COST_RULE = (
-    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "For place_item, Author omits stackCost and contactDamage; Lowery writes fixed stackCost=1 and contactDamage=false. "
+    "For hold/equipped, Author omits both fields; Lowery writes fixed stackCost=0 and contactDamage=false. "
+    "The placement stack is spent only after accepted placement "
     "and the placed generated item is returned by the placement ledger when broken. "
-    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
-    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
-    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
-    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
-    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
-    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
+    "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
+    "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item. "
+    "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
+    " In a complete Author binding, optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
     "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
     "the existing 100 percent debit. This never controls ammo saving or placement escrow."
 )
@@ -1499,7 +1499,7 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "condition": _p("string", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
+            "condition": _p("union", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
                 _p("string", "Player is grounded", enum=("grounded",), wire_literals={"useConditionMode": "grounded"}),
                 _p("string", "Player is not wet", enum=("not_wet",), wire_literals={"useConditionMode": "not_wet"}),
                 _p("object", "Player.statLife >= the authored life threshold", properties={"lifeAtLeast": _p("integer", "Inclusive life threshold", minimum=0, maximum=1000, wire_name="useConditionMinLife")}, wire_literals={"useConditionMode": "life_above"}),
@@ -1882,7 +1882,7 @@ _CAPS.extend([
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
         "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }, provenance="existing movement code 3"),
-    _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
+    _movement("move_orbit", "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.", 4, {
         "radiusTiles": _p("number", "Fixed orbit radius around the owner", minimum=1, maximum=80, units="tiles", wire_name="rangeTiles"),
     }, provenance="existing movement code 4", retained_receipt_params={
         "rangeTiles": _p("number", "Retained orbit radius provenance", minimum=1, maximum=80, units="tiles"),
@@ -1899,7 +1899,7 @@ _CAPS.extend([
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
         "waveVelocityCoefficient": _p("number", "Raw lateral velocity coefficient: sin(age×0.18) × waveVelocityCoefficient × 0.03 before velocity direction normalization; not displacement pixels", minimum=0, maximum=64, units="engine units: lateral velocity coefficient", wire_name="waveAmplitude"),
     }, provenance="existing movement code 7"),
-    _movement("move_phase", "Phase-drift with explicit tile collision still controlled separately.", 8, {
+    _movement("move_phase", "Couple a sinusoidal velocity-direction wobble with reduced opacity. This does not itself disable tile collision; tile collision is controlled separately.", 8, {
         "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians AND alpha = int(80×strength); not collision phasing", minimum=0, maximum=1, units="engine units: coupled rotation/alpha coefficient"),
     }, provenance="existing movement code 8"),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
@@ -1909,11 +1909,11 @@ _CAPS.extend([
     _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
         "turnRadiansPerUpdate": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update", wire_name="turnRadiansPerTick"),
     }, provenance="existing movement code 10"),
-    _movement("move_vortex_orb", "Run the existing vortex-orb controller.", 11, {
+    _movement("move_vortex_orb", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.99 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 11, {
         "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 11"),
-    _movement("move_blackhole_pull", "Run the existing black-hole pull controller.", 12, {
+    _movement("move_blackhole_pull", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.985 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 12, {
         "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 12"),
@@ -1928,7 +1928,7 @@ _CAPS.extend([
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 14"),
-    _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
+    _movement("move_expanding_wave", "Add to the projectile's visual scale, then clamp it to the authored cap. Collision size and damage do not grow with this scale; use an independent hitbox curve for growing contact geometry.", 15, {
         "scaleGrowthPerUpdate": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5, wire_name="scalePerTick", units="engine units: scale increment per update"),
         "maxScale": _p("number", "Projectile.scale cap (not a pixel radius)", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
@@ -1936,7 +1936,7 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
-    _movement("move_yoyo_hover", "Follow owner cursor inside a leash and return on release.", 17, {
+    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
         "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
     }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro", retained_receipt_params={
@@ -3231,6 +3231,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "Every listed param is required unless marked optional; optional params may be omitted. "
             "In a full Author object, an optional param with an explicit card default may be omitted "
             "to select exactly that neutral value only when its omissionAllowedOnlyWhen condition holds; this is not universal and never replaces an invalid present value. "
+            "For full one-shot Author generation, prefer explicit values for params with omissionAllowedOnlyWhen; permitted omissions remain valid. "
             "A neutral annotation alone does not make a required param optional. "
             "All requires/conditional dependencies still apply to the combined params; optional fields "
             "cannot leave a selected effect incomplete or inert. "
@@ -3250,7 +3251,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "(AoE/nearest-event damage floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
             "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
             "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
-            "has no fan; pierce=-1 is infinite and tileId/wallId=-1 disables placement. "
+            "has no fan; pierce=-1 is infinite. configure_tile_placement selects tileId>=0; configure_wall_placement selects wallId>=0. The inactive -1 placement field exists only in wire. "
             "Use each card's own bounds/units; no universal zero neutral."
         ),
         "stackCost": STACK_COST_RULE,

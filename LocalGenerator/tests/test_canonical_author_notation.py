@@ -278,15 +278,19 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
 
 def test_real_author_card_explains_forbidden_implied_call_fields(monkeypatch):
     import json
+    from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
     request, _, _ = build_initial_author_request({}, {}, {}, {}, "current-call-grammar", model_name="offline")
     packet = json.loads(request["messages"][1]["content"])
-    call = packet["requiredJsonShape"]["runtimeProgram"]["calls"][0]
-    assert "omit" in call["target"] and "item_body" in call["target"]
-    assert "zero" in json.dumps(call["params"]) and "omit" in json.dumps(call["params"])
-    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
-    assert "usePolicy" not in guide and "omit" in guide
+    calls = packet["requiredJsonShape"]["runtimeProgram"]["calls"]
+    assert {frozenset(row) for row in calls} == {
+        frozenset(variant["properties"]) for variant in capability_provider_union()
+    } == {frozenset(keys) for keys in (("id", "fn", "params"), ("id", "fn", "target", "params"), ("id", "fn", "target"))}
+    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
+    assert "Item-body-only calls omit target" in guide["rowShapes"]
+    assert "zero-argument calls omit params" in guide["rowShapes"]
+    assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["bindingTarget"]
 
 
 def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes():

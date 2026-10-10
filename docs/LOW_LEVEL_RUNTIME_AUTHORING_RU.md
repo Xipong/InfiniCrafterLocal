@@ -24,9 +24,9 @@ Item graphic/body-contact representation принадлежит `item_body`. Pro
 {"input":"primary_use","action":{"kind":"spawn_entity","targetId":"falling_star"},"stackCost":0,"contactDamage":true}
 ```
 
-При primary body он сохраняет item hitbox и spawn-ит secondary projectile, который не отбирает `heldProj`/animation. `place_item`, `hold`, `equipped` требуют `contactDamage=false`: consumers эту contact lane не исполняют. Flail/yoyo/whip/holdout — примеры explicit projectile ownership, не распознаваемые families. Edge-case fixtures: `workbench_blade` (body + projectile), `door_on_chain` (projectile-owned flail); внешние [Starfury](https://terraria.wiki.gg/wiki/Starfury)/[Flails](https://terraria.wiki.gg/wiki/Flails) поясняют примеры, но authority — текущие consumers.
+При primary body он сохраняет item hitbox и spawn-ит secondary projectile, который не отбирает `heldProj`/animation. Для `place_item`, `hold`, `equipped` Author опускает `contactDamage`; Lowery записывает в wire фиксированное `false`, поскольку consumers эту contact lane не исполняют. Flail/yoyo/whip/holdout — примеры explicit projectile ownership, не распознаваемые families. Edge-case fixtures: `workbench_blade` (body + projectile), `door_on_chain` (projectile-owned flail); внешние [Starfury](https://terraria.wiki.gg/wiki/Starfury)/[Flails](https://terraria.wiki.gg/wiki/Flails) поясняют примеры, но authority — текущие consumers.
 
-`stackCost=1` расходует **целую единицу** generated item на active use; projectile return не возвращает предмет и не является hidden charge counter. Reusable throw выбирает `0`. `place_item` требует `1`; предмет escrowed в world placement ledger и возвращается тем же generated item при сломе, не «навсегда расходуется». Reusable hybrid с placement и active `spawn_entity/use_item_body` при `stackCost=0` требует `maxStack=1`: одна durable вещь меняет inventory/placed form. One-shot non-placement use с cost `1` не подпадает под этот конкретный maxStack rule.
+`stackCost=1` расходует **целую единицу** generated item на active use; projectile return не возвращает предмет и не является hidden charge counter. Reusable throw выбирает `0`. Для `place_item` Author опускает `stackCost`, а Lowery записывает фиксированное `1`; предмет escrowed в world placement ledger и возвращается тем же generated item при сломе, не «навсегда расходуется». Reusable hybrid с placement и active `spawn_entity/use_item_body` при `stackCost=0` требует `maxStack=1`: одна durable вещь меняет inventory/placed form. One-shot non-placement use с cost `1` не подпадает под этот конкретный maxStack rule.
 
 Явная optional `stackConsumeChancePercent` (0..100) разрешена только active non-placement
 binding с `stackCost=1`: вероятность применяется после completed use. Отсутствие
@@ -46,13 +46,16 @@ Construction facts живут у своих owners, а не в повторны�
 
 | Место в packet | Правило построения |
 |---|---|
-| `requiredJsonShape.runtimeProgram.calls` | Совместимый existing target, exact params выбранной capability, все non-optional и условно обязательные поля |
+| `requiredJsonShape.runtimeProgram.calls` | Формы верхних ключей из canonical schema: item-only без target, noarg без params, прочие с обоими полями; значения параметров принадлежат карточке выбранной capability |
+| `requiredJsonShape.runtimeProgram.bindings` | Шесть отдельных примеров из binding schema: active spawn/body/effects, placement, hold, equipped; это формы, не одна композиция или design defaults |
 | `catalog.fieldGuide` | Units/ranges и refs через targetKinds/allowSelf/graphEdge; отсутствие не создаёт неявной нейтрали |
 | `catalog.entityKinds` | Required components/position driver; stationary contact без target-and-fire не firing turret; free projectile use создаёт independent instance, не singleton minion |
 | `catalog.inputs/bindingActions` | Один root action; hold/equipped passive, активное действие требует active-use binding; independent contact lane, placement/escrow |
 | `catalog.events` | On-use/hit/crit producers, terminal distinctions, explicit periodic timing |
 | Capability cards | Channel/charge/release, cadence/animation, reusable hybrid bounds |
 | Глобальные invariants | ID uniqueness, exact primary ownership, acyclic graph и spawn/depth budgets |
+
+Author и Repair используют одну проекцию формы call. В Repair показываются только формы, встречающиеся в scoped `callsUpsert` union; пустой union даёт пустой список примеров. Конкретные чужие capabilities не предлагаются как образцы. `readOnlySourceFragments.brokenFragments` остаётся источником полного существующего узла: копируются его обязательные поля, разрешено менять только точные permissions, принятые optional значения и отсутствие сохраняются. Формы binding получают ключи и selector literals от `program_schema.py`; единичные учебные значения принадлежат prose owner и никогда не подставляются в Author или Repair. Offline tests проверяют эти формы и реальные packets в `json_object`/`json_schema`; улучшение first-Author success rate ими не измеряется.
 
 Форма `realization.selfEvaluation.planVsProgram` запрашивается у Author и Repair для полезной самопроверки, но её отсутствие или ошибки оформления остаются только raw shape diagnostics: сами по себе они не отменяют craft и не вызывают Gameplay Repair. Код не дописывает и не исправляет отчёт. Это изменение границы приёмки диагностического поля, не runtime-преобразование или fallback. `description`, `playerExperience`, `programVsReport` и их контейнеры сохраняют строгую проверку; gameplay choices/refs/dependencies и schema-derived resource bounds также остаются обязательными. Разрешённый `realizationReplacement` в Repair подчиняется той же границе; permissions и frozen-first merge не расширяются.
 
