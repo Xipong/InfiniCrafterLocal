@@ -168,6 +168,56 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
     }
 
 
+def _omission_context_allows(
+    cap: Any, name: str, receipt: Mapping[str, Any], *,
+    authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
+) -> bool:
+    condition = cap.params[name].omission_condition
+    if condition is None:
+        return True
+    if authored_document is not None:
+        program = authored_document.get("runtimeProgram", {})
+        if not isinstance(program, Mapping):
+            return False
+        calls = program.get("calls", [])
+        source = next((row for row in calls if isinstance(row, Mapping)
+                       and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name), None)
+        if not isinstance(source, Mapping) or not isinstance(source.get("params"), Mapping):
+            return False
+        target = source.get("target")
+        kind = next((str(row.get("kind") or "") for row in program.get("entities", [])
+                     if isinstance(row, Mapping) and row.get("id") == target), "")
+        return condition.allows(source["params"], kind,
+                                (str(row.get("fn") or "") for row in calls
+                                 if isinstance(row, Mapping) and row.get("target") == target))
+    # Saved receipts have no Author source. Verify the same finite inactive
+    # consumer branch against delivered wire, without reconstructing Author.
+    if final_document is None:
+        return False
+    path = str(receipt.get("finalPath") or "")
+    entity_match = re.match(r"runtimeProgram\.entities\[\d+\]", path)
+    if entity_match is None:
+        return False
+    entity_path = entity_match.group(0)
+    if _final_value(final_document, entity_path + ".kind") in condition.target_kinds:
+        return True
+    field = cap.params[name].wire_name or name
+    component_path = path.removesuffix("." + field)
+    for selector, expected in condition.param_equals:
+        selector_spec = cap.params[selector]
+        wire_path = component_path + "." + (selector_spec.wire_name or selector)
+        if _same_receipt_value(_final_value(final_document, wire_path), selector_spec.to_wire(expected)):
+            return True
+    for capability in condition.target_capabilities:
+        owner = CAPABILITY_REGISTRY[capability]
+        for pattern in owner.final_wire_paths:
+            if pattern.startswith("runtimeProgram.entities[].") and pattern.endswith(".name"):
+                wire_path = pattern.replace("runtimeProgram.entities[]", entity_path, 1)
+                if _final_value(final_document, wire_path) == capability:
+                    return True
+    return False
+
+
 def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None, *, retained: bool = False) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
     spec = (cap.retained_receipt_params if retained else cap.params)[name]
@@ -433,6 +483,13 @@ def audit_compiler_receipts(
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
     violations: list[dict[str, Any]] = []
+    for source_call in source_calls:
+        if not isinstance(source_call, Mapping):
+            continue
+        cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
+        if cap is not None and (not cap.prompt_visible or cap.decision != "expose"):
+            violations.append({"fn": cap.name, "callId": str(source_call.get("id") or ""),
+                               "reason": "retained wire capability is not a current Author source"})
     receipt_rows: list[Mapping[str, Any]] = []
     for receipt_index, receipt in enumerate(receipts):
         row_path = f"$.runtimeContract.finalWireReceipts[{receipt_index}]"
@@ -686,6 +743,12 @@ def audit_compiler_receipts(
                         "authoredPath": authored_path, "finalPath": path,
                         "reason": "omission receipt lacks an exact declared neutral default/projection",
                     })
+            if (match is not None and cap is not None and match.group(2) in cap.params and is_omission
+                    and not _omission_context_allows(cap, match.group(2), receipt,
+                        authored_document=authored_document, final_document=final_document)):
+                violations.append({"callId": str(receipt.get("callId") or ""), "fn": fn,
+                                   "authoredPath": authored_path, "finalPath": path,
+                                   "reason": "neutral omission is outside its declared inactive consumer branch"})
             if match is None or cap is None or match.group(2) not in cap.params:
                 violations.append({
                     "callId": str(receipt.get("callId") or ""),

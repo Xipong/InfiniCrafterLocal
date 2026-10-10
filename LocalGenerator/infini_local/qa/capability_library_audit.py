@@ -23,6 +23,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     NETWORK_AUTHORITIES,
     CapabilitySpec,
+    ParamSpec,
+    visible_capabilities,
     capability_provider_union,
     compact_capability_catalog,
     runtime_authoring_registry_manifest,
@@ -48,6 +50,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "conditional_omission",
     "non_neutral_param",
     "event_available",
 })
@@ -163,6 +166,15 @@ def _clamp_bounds(text: str, class_name: str, constants: Mapping[str, float]) ->
     return out
 
 
+def _numeric_parameter_leaves(spec: ParamSpec, name: str) -> list[tuple[str, ParamSpec]]:
+    if spec.alternatives:
+        return [leaf for variant in spec.alternatives for leaf in _numeric_parameter_leaves(variant, name)]
+    if spec.properties:
+        return [leaf for key, child in spec.properties.items()
+                for leaf in _numeric_parameter_leaves(child, f"{name}.{key}")]
+    return [(name, spec)] if spec.kind in {"integer", "number"} else []
+
+
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     root = _repo_root()
     dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "RuntimeProgramSpec.cs"
@@ -188,7 +200,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
     }
     rows: list[dict[str, Any]] = []
-    for cap in CAPABILITY_REGISTRY.values():
+    for cap in visible_capabilities():
         if cap.category in {"movement", "controller"} and cap.name != "target_and_fire":
             class_name = "RuntimeParamsSpec"
         elif cap.name == "target_and_fire":
@@ -199,17 +211,15 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             class_name = property_map[cap.name][0]
         else:
             continue
-        bounds = class_bounds[class_name]
-        for param_name, spec in cap.params.items():
-            if spec.kind not in {"integer", "number"}:
-                continue
-            csharp_name = {
-                "shotEntity": "ShotEntityId",
-                "entity": "EntityId",
-            }.get(param_name, param_name[:1].upper() + param_name[1:])
+        for param_name, spec in (leaf for name, param in cap.params.items()
+                                 for leaf in _numeric_parameter_leaves(param, name)):
+            wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            field_class = "RuntimeOverTargetSpec" if wire_name.startswith("overTarget.") else class_name
+            field = wire_name.rsplit(".", 1)[-1]
+            csharp_name = field[:1].upper() + field[1:]
             if cap.name == "set_descendant_concurrency":
                 csharp_name = "DescendantMaxActive"
-            csharp = bounds.get(csharp_name)
+            csharp = class_bounds[field_class].get(csharp_name)
             if cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
                 # Explicit new options reject outside their interval; a missing
                 # or weakened guard must be visible, not skipped as "no clamp".
@@ -267,14 +277,17 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                     csharp = (1.0, constants.get("InfiniRuntimeLimits.MaxRuntimeLifetimeTicks", 21600.0))
                 else:
                     continue
-            authored = (float(spec.minimum), float(spec.maximum)) if spec.minimum is not None and spec.maximum is not None else None
+            authored = (spec.minimum, spec.maximum) if spec.minimum is not None and spec.maximum is not None else None
+            projected = (spec.to_wire(authored[0]), spec.to_wire(authored[1])) if authored else None
             rows.append({
                 "capability": cap.name,
                 "param": param_name,
-                "csharpClass": class_name,
+                "wireParam": wire_name,
+                "csharpClass": field_class,
                 "authorBounds": list(authored) if authored else None,
+                "wireBounds": list(projected) if projected else None,
                 "csharpBounds": list(csharp),
-                "preserved": bool(authored and authored[0] >= csharp[0] and authored[1] <= csharp[1]),
+                "preserved": bool(projected and projected[0] >= csharp[0] and projected[1] <= csharp[1]),
             })
     from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
     placed = placed_body_surface_audit(text.encode())
@@ -319,7 +332,7 @@ def capability_library_audit() -> dict[str, Any]:
     bounded_numeric_params = 0
     semantic_params = 0
     exact_wire_paths = 0
-    for cap in CAPABILITY_REGISTRY.values():
+    for cap in visible_capabilities():
         base = f"capabilities.{cap.name}"
         if not cap.summary or not cap.category or not cap.component_slot:
             error("incomplete_capability_identity", base, "summary/category/componentSlot must be declared")
@@ -520,22 +533,22 @@ def capability_library_audit() -> dict[str, Any]:
         "inputs": len(INPUT_KIND_REGISTRY),
         "bindingActions": len(BINDING_ACTION_REGISTRY),
         "events": len(EVENT_KIND_REGISTRY),
-        "parameters": sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
+        "parameters": sum(len(cap.params) for cap in visible_capabilities()),
         "numericParameters": numeric_params,
         "boundedNumericParameters": bounded_numeric_params,
         "semanticParameters": semantic_params,
         "typedEntityReferences": reference_params,
         "typedCallReferences": call_reference_params,
-        "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),
+        "requirements": sum(len(cap.requirements) for cap in visible_capabilities()),
         "bindingDependencyEdges": sum(len(row.required_item_capabilities_any_of) for row in INPUT_KIND_REGISTRY.values()) + sum(len(row.required_item_capabilities_any_of) for row in BINDING_ACTION_REGISTRY.values()),
-        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in CAPABILITY_REGISTRY.values()),
-        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in CAPABILITY_REGISTRY.values()),
+        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in visible_capabilities()),
+        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in visible_capabilities()),
         "exactWirePaths": exact_wire_paths,
         "globalTechnicalLowerers": len(GLOBAL_TECHNICAL_LOWERINGS),
         "globalTechnicalLowererOutputs": global_lowerer_output_count,
         "exclusiveGroups": {name: sorted(values) for name, values in known_slots.items()},
         "authorityDistribution": {
-            authority: sum(cap.network_authority == authority for cap in CAPABILITY_REGISTRY.values())
+            authority: sum(cap.network_authority == authority for cap in visible_capabilities())
             for authority in NETWORK_AUTHORITIES
         },
         "rangeParityRows": len(bound_rows),

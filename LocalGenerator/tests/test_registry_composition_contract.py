@@ -386,7 +386,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
                 "role": "secondary",
                 "target": "nail" if mutation == "cycle" else "workbench_blade",
                 "params": {
-                    "event": "on_hit",
+                    "when": "on_hit",
                     "entity": "workbench_blade" if mutation == "cycle" else "nail",
                     "count": 1 if mutation == "cycle" else 12,
                     "spreadRadians": 0.0,

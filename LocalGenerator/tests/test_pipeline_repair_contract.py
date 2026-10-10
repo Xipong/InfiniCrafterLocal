@@ -16,7 +16,7 @@ import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.repair_merge import merge_frozen_subtree
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope, compile_runtime_program, filter_repair_patch_scope, REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES, runtime_event_inventory, runtime_repair_fragments, runtime_repair_scope_schema, strict_schema_errors, validate_repair_patch_scope, validate_runtime_program, VALIDATION_ERROR_CODES
-from infini_local.core.runtime_authoring.capability_registry import EventBindingRequirement, EventDependencyAlternative, RequirementSpec
+from infini_local.core.runtime_authoring.capability_registry import EventBindingRequirement, EventDependencyAlternative, RequirementSpec, visible_capabilities
 from infini_local.core.vfx_manifest import VFX_REPAIR_PATCH_SCHEMA, _apply_vfx_repair_patch, _build_vfx_repair_scope, validate_vfx_director_output, vfx_director_surface
 from infini_local.pipelines.combine_validation import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
@@ -370,7 +370,7 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
     binding["usePolicy"]["contactDamage"] = scenario == "no-optional-geometry"
     event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
     event_call["target"] = "item"
-    event_call["params"]["event"] = "on_use" if scenario == "placement" else "on_hit"
+    event_call["params"]["when"] = "on_use" if scenario == "placement" else "on_hit"
     if scenario == "placement":
         binding["usePolicy"] = {"action": {"kind": "place_item", "targetId": "item", "placementCallId": "place_bench"}, "stackCost": 1, "contactDamage": False}
         program["calls"].append({"id": "place_bench", "fn": "configure_tile_placement", "target": "item", "params": {"tileId": 18, "placeStyle": 0}})
@@ -505,7 +505,7 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
         program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
         event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
         event_call["target"] = "item"
-        event_call["params"]["event"] = "on_hit"
+        event_call["params"]["when"] = "on_hit"
     program["bindings"].append(duplicate)
     report = validate_runtime_program(current)
     assert [e["code"] for e in report["errors"]] == (["duplicate_exclusive_input", "missing_binding_dependency"] if scenario == "tool" else ["event_not_emitted"])
@@ -882,10 +882,10 @@ def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() 
     binding["usePolicy"]["contactDamage"] = False
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
-    event_call["params"]["event"] = "on_use"
+    event_call["params"]["when"] = "on_use"
     call_index = program["calls"].index(event_call)
     scope = build_runtime_repair_scope(current, [{
-        "path": f"$.runtimeProgram.calls[{call_index}].params.event",
+        "path": f"$.runtimeProgram.calls[{call_index}].params.when",
         "code": "event_not_emitted",
         "message": "Synthetic exact event target contract.",
         "allowed": [
@@ -931,10 +931,10 @@ def test_event_repair_preserves_complete_binding_alternatives_without_cross_prod
     )))
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
-    event_call["params"]["event"] = "on_use"
+    event_call["params"]["when"] = "on_use"
     call_index = program["calls"].index(event_call)
     scope = build_runtime_repair_scope(current, [{
-        "path": f"$.runtimeProgram.calls[{call_index}].params.event",
+        "path": f"$.runtimeProgram.calls[{call_index}].params.when",
         "code": "event_not_emitted",
         "message": "Synthetic complete event-alternative contract.",
         "allowed": [
@@ -1143,7 +1143,7 @@ def test_gameplay_scope_can_fix_existing_dependency_parameter() -> None:
     collision = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "workbench_blade_collision")
     collision["params"]["tileCollide"] = False
     event_call = next(row for row in current["runtimeProgram"]["calls"] if row["id"] == "shed_nails")
-    event_call["params"]["event"] = "on_tile_collision"
+    event_call["params"]["when"] = "on_tile_collision"
     report = validate_runtime_program(current)
     assert any(row["code"] == "event_not_emitted" for row in report["errors"])
     scope = build_runtime_repair_scope(current, report["errors"])
@@ -1171,7 +1171,7 @@ def test_incompatible_event_repair_requires_model_authored_exact_producer_call()
         row for row in current["runtimeProgram"]["calls"]
         if row["id"] == "door_stun"
     )
-    event_call["params"]["event"] = "on_spawn"
+    event_call["params"]["when"] = "on_spawn"
     report = validate_runtime_program(current)
     event_error = next(
         row for row in report["errors"]
@@ -1191,7 +1191,7 @@ def test_incompatible_event_repair_requires_model_authored_exact_producer_call()
     assert scope["blockerPlan"]["supportingCapabilityNames"] == ["set_projectile_damage"]
 
     repaired_event = copy.deepcopy(event_call)
-    repaired_event["params"]["event"] = "on_hit"
+    repaired_event["params"]["when"] = "on_hit"
     incomplete = _empty_gameplay_patch()
     incomplete["callsUpsert"] = [repaired_event]
     _, incomplete_audit = filter_repair_patch_scope(current, incomplete, scope)
@@ -1220,7 +1220,7 @@ def test_unselected_event_alternative_cannot_smuggle_its_support_call() -> None:
     )
     collision["params"]["tileCollide"] = False
     event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
-    event_call["params"]["event"] = "on_spawn"
+    event_call["params"]["when"] = "on_spawn"
     event_error = next(
         row for row in validate_runtime_program(current)["errors"]
         if row["code"] == "capability_event_incompatible"
@@ -1242,7 +1242,7 @@ def test_unselected_event_alternative_cannot_smuggle_its_support_call() -> None:
     intrinsic_patch["callsUpsert"] = [
         {
             **copy.deepcopy(event_call),
-            "params": {**event_call["params"], "event": "on_expire"},
+            "params": {**event_call["params"], "when": "on_expire"},
         },
         copy.deepcopy(damage_call),
     ]
@@ -1257,7 +1257,7 @@ def test_unselected_event_alternative_cannot_smuggle_its_support_call() -> None:
     hit_patch["callsUpsert"] = [
         {
             **copy.deepcopy(event_call),
-            "params": {**event_call["params"], "event": "on_hit"},
+            "params": {**event_call["params"], "when": "on_hit"},
         },
         damage_call,
     ]
@@ -1287,7 +1287,7 @@ def test_event_repair_must_also_close_independent_required_component() -> None:
     )
     program["calls"] = [row for row in program["calls"] if row["id"] != lifetime["id"]]
     event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
-    event_call["params"]["event"] = "on_spawn"
+    event_call["params"]["when"] = "on_spawn"
 
     report = validate_runtime_program(current)
     assert {
@@ -1296,7 +1296,7 @@ def test_event_repair_must_also_close_independent_required_component() -> None:
     }.issubset({row["code"] for row in report["errors"]})
     scope = build_runtime_repair_scope(current, report["errors"])
     repaired_event = copy.deepcopy(event_call)
-    repaired_event["params"]["event"] = "on_expire"
+    repaired_event["params"]["when"] = "on_expire"
 
     incomplete = _empty_gameplay_patch()
     incomplete["callsUpsert"] = [repaired_event]
@@ -1320,7 +1320,7 @@ def test_selected_event_any_of_binding_adds_exactly_one_input_root() -> None:
     program["bindings"][0]["input"] = "hold"
     event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
     event_call["target"] = "item"
-    event_call["params"]["event"] = "equipped"
+    event_call["params"]["when"] = "equipped"
     event_error = next(
         row for row in validate_runtime_program(current)["errors"]
         if row["code"] == "capability_event_incompatible"
@@ -1329,7 +1329,7 @@ def test_selected_event_any_of_binding_adds_exactly_one_input_root() -> None:
 
     repaired_event = {
         **copy.deepcopy(event_call),
-        "params": {**event_call["params"], "event": "on_use"},
+        "params": {**event_call["params"], "when": "on_use"},
     }
     primary_binding = _binding_row("repair_primary_use", "primary_use", "use_item_body", "item")
     alternate_binding = _binding_row("repair_alternate_use", "alternate_use", "use_item_body", "item")
@@ -1388,7 +1388,7 @@ def test_gameplay_blocker_extraction_sends_only_direct_and_supporting_capabiliti
     )
     assert set(movement_requirement["requiredOneOfCapabilities"]) == direct
     assert len(movement_scope["capabilitySubset"]) < len(gameplay_stage.CAPABILITY_REGISTRY)
-    assert len(movement_scope["capabilitySubset"]) < len(CAPABILITY_REGISTRY)
+    assert len(movement_scope["capabilitySubset"]) < len(visible_capabilities())
     assert set(movement_scope["capabilitySubset"]) == (
         set(movement_scope["blockerPlan"]["directCapabilityNames"])
         | set(movement_scope["blockerPlan"]["supportingCapabilityNames"])
@@ -1681,7 +1681,8 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
         for card in dossier[key]
     }
     assert card_fns == set(dossier["repairScope"]["capabilitySubset"])
-    assert len(card_fns) == 20
+    assert len(card_fns) == 19
+    assert "move_bounce" not in card_fns and "move_gravity_arc" in card_fns
     assert "channel_beam" not in card_fns
     assert "charge_then_release" not in card_fns
     _, author_payload, _ = gameplay_stage.build_initial_author_request(

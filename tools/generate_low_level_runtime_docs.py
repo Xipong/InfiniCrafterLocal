@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     RUNTIME_WIRE_SCHEMA,
+    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.technical_lowering import (  # noqa: E402
     GLOBAL_TECHNICAL_LOWERINGS,
@@ -50,30 +51,43 @@ def esc(value: Any) -> str:
             .replace("|", "\\|").replace("\n", "<br>"))
 
 
-def params_cell(cap: Any) -> str:
-    rows: list[str] = []
-    for name, spec in cap.params.items():
+def param_shape(spec: Any) -> str:
+    if spec.alternatives:
+        shape = "oneOf(" + " | ".join(param_shape(variant) for variant in spec.alternatives) + ")"
+    elif spec.kind == "object":
+        shape = "closed object{" + ", ".join(
+            f"{name}{'' if child.required else '?'}: {param_shape(child)}"
+            for name, child in spec.properties.items()
+        ) + "}"
+    else:
         shape = spec.kind
         if spec.enum:
-            shape += "{" + ",".join(map(str, spec.enum)) + "}"
+            shape += "{" + ",".join(json.dumps(value) for value in spec.enum) + "}"
         elif spec.minimum is not None or spec.maximum is not None:
             shape += f"[{spec.minimum}..{spec.maximum}]"
-        if spec.units:
-            shape += f" {spec.units}"
-        if spec.default is not None:
-            shape += f"; optional, omitted = {json.dumps(spec.default)}"
-        if spec.reference is not None:
-            shape += " -> entity:" + ",".join(spec.reference.target_kinds)
-        if not spec.required and spec.default is None:
-            shape += "; required=false"
-        if spec.multiple_of is not None:
-            shape += f"; multipleOf={spec.multiple_of}"
-        if spec.pattern:
-            shape += f"; pattern=`{spec.pattern}`"
-        if spec.consumer_storage:
-            shape += f"; consumer={spec.consumer_storage}, neutral={json.dumps(spec.neutral)}"
-        rows.append(f"`{name}`: {shape}")
-    return "<br>".join(rows) if rows else "—"
+    if spec.units:
+        shape += f" {spec.units}"
+    if spec.default is not None:
+        shape += f"; optional, omitted = {json.dumps(spec.default)}"
+    if spec.omission_condition is not None:
+        shape += "; omissionAllowedOnlyWhen=" + json.dumps(spec.omission_condition.card(), sort_keys=True)
+    if spec.reference is not None:
+        shape += " -> entity:" + ",".join(spec.reference.target_kinds)
+    if not spec.required and spec.default is None:
+        shape += "; required=false"
+    if spec.min_properties is not None:
+        shape += f"; minProperties={spec.min_properties}"
+    if spec.multiple_of is not None:
+        shape += f"; multipleOf={spec.multiple_of}"
+    if spec.pattern:
+        shape += f"; pattern=`{spec.pattern}`"
+    if spec.consumer_storage:
+        shape += f"; consumer={spec.consumer_storage}, neutral={json.dumps(spec.neutral)}"
+    return shape
+
+
+def params_cell(cap: Any) -> str:
+    return "<br>".join(f"`{name}`: {param_shape(spec)}" for name, spec in cap.params.items()) or "—"
 
 
 def event_input_cell(cap: Any) -> str:
@@ -99,7 +113,9 @@ def inventory_markdown() -> str:
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
-        f"Inventory: **{len(CAPABILITY_REGISTRY)} capabilities**, **{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
+        f"Inventory: **{len(visible_capabilities())} public capabilities**, "
+        f"**{len(CAPABILITY_REGISTRY) - len(visible_capabilities())} internal retained entries**, "
+        f"**{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
         f"**{len(INPUT_KIND_REGISTRY)} inputs**, **{len(BINDING_ACTION_REGISTRY)} binding actions**, "
         f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
         f"errors={audit['errorCount']}, warnings={audit['warningCount']}.",
@@ -112,7 +128,7 @@ def inventory_markdown() -> str:
         "## Классификация",
         "",
         "- **expose** — Gameplay Author видит capability и сам выбирает её.",
-        "- **internal** — техническая реализация одной точной capability, не отдельное дизайнерское решение.",
+        "- **internal** — техническая реализация или сохранённое описание старого wire; отсутствует в новом Author, provider schema и Repair alternatives.",
         "- **split** — механика извлечена из старого high-level macro и доступна отдельно.",
         "- **delete** — мёртвое/дублирующее поведение удалено.",
         "",
@@ -182,7 +198,9 @@ def inventory_markdown() -> str:
         "",
         "Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. "
         "`required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. "
-        "Пропуски полного Author и Repair различаются: [boundary](../lowery.md#boundary).",
+        "Пропуски полного Author и Repair различаются: [boundary](../lowery.md#boundary). "
+        "`omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. "
+        "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](PROJECTILE_AUTHOR_API_RU.md).",
         "",
         "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | prompt | status | external reference | решение |",
         "|---|---|---|---|---|---|---|---|---|---:|---|---|---|",
@@ -309,7 +327,7 @@ def audit_markdown() -> str:
         "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
         "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
         "[`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.",
-        f"- Каталог покрывает реализованные {len(CAPABILITY_REGISTRY)} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
+        f"- Публичный каталог покрывает реализованные {len(visible_capabilities())} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
         "",
         '<a id="assessment"></a>',
         "",
@@ -366,7 +384,7 @@ def lowering_markdown() -> str:
         "",
         "- **Receipt shape.** Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`.",
         "- **Exact delivery.** `audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Global primary/visual-role receipts дополнительно связываются с exact source identity/kind и final identity, включая отсортированные bindings; требуется уникальное полное покрытие. Source→declared projection→receipt сравнивается с учётом JSON-типа и представления (включая signed zero). Wire-only audit явно возвращает `authoredSourceChecked=false`: согласованный wire не удостоверяет отсутствующий Author. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
-        "- **Declared omission.** Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Старые корректные явные значения не меняются.",
+        "- **Declared omission.** Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Если объявлен `omission_condition`, дополнительно проверяется exact kind, selector или capability того же target; wire-only audit требует соответствующий final-wire контекст. Старые корректные явные значения не меняются.",
         "",
         '<a id="retired"></a>',
         "",

@@ -13,6 +13,7 @@ from infini_local.core.runtime_authoring import (
 from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
 from infini_local.pipelines import visual_generation_pipeline as visual
 from tests.test_visual_presentation_metadata import kit
+from tests.captured_projectile_author import project_captured_projectile_call
 
 
 _TYPE_PAIRS = [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)]
@@ -118,6 +119,7 @@ def _historical_names(document):
         elif row.get("fn") == "configure_placeable" and params.get("tileId") == -1:
             row["fn"] = "configure_wall_placement"
             del params["tileId"]
+        project_captured_projectile_call(row)
     return projected
 
 

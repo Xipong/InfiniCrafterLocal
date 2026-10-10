@@ -356,7 +356,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             errors.append({"path": path, "code": "invalid_projectile_concurrency",
                                            "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
                 if "placement" in component:
-                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
+                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].retained_receipt_params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
                         errors.append(issue)
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)

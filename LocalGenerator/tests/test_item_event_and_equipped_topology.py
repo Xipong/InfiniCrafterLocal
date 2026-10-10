@@ -26,7 +26,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def _body_event(document: dict, event: str) -> None:
     document["runtimeProgram"]["calls"].append({
         "id": "body_status", "fn": "apply_status_on_event", "target": "item",
-        "params": {"event": event, "buffId": 20, "durationTicks": 60},
+        "params": {"when": event, "buffId": 20, "durationTicks": 60},
     })
 
 
@@ -46,7 +46,7 @@ def test_spawn_binding_emits_item_body_on_use_even_with_projectile_target() -> N
     authored = build_runtime_fixture("workbench_blade")
     authored["runtimeProgram"]["calls"].append({
         "id": "body_use_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
     })
     assert strict_author_shape_report(authored)["ok"]
@@ -184,12 +184,12 @@ def test_incompatible_event_projection_respects_frozen_contact_and_action_target
     next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_use", "on_hit", "on_crit"],
         "relatedIds": ["item"], "message": "synthetic incompatible event selection",
     }])
@@ -206,7 +206,7 @@ def test_incompatible_event_with_no_executable_event_can_remove_only_invalid_cal
     next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
     _body_event(authored, "on_hit")
     broken = next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "body_status")
-    broken["params"]["event"] = "on_use"
+    broken["params"]["when"] = "on_use"
     report = validate_runtime_program(authored)
     assert "capability_event_incompatible" in {row["code"] for row in report["errors"]}
     scope = build_runtime_repair_scope(authored, report["errors"])
@@ -228,12 +228,12 @@ def test_incompatible_event_repair_can_update_existing_contact_without_changing_
     binding["usePolicy"]["contactDamage"] = False
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
-        "params": {"event": "on_use", "entity": "nail", "count": 1,
+        "params": {"when": "on_use", "entity": "nail", "count": 1,
                    "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_hit"],
         "relatedIds": ["item"], "message": "synthetic event choice",
     }])
@@ -247,7 +247,7 @@ def test_incompatible_event_repair_can_update_existing_contact_without_changing_
     other["input"] = "alternate_use"
     authored["runtimeProgram"]["bindings"].append(other)
     closed = build_runtime_repair_scope(authored, [{
-        "path": f"$.runtimeProgram.calls[{index}].params.event",
+        "path": f"$.runtimeProgram.calls[{index}].params.when",
         "code": "capability_event_incompatible", "allowed": ["on_hit"],
         "relatedIds": ["item"], "message": "synthetic event choice",
     }])

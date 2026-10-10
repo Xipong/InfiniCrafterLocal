@@ -31,10 +31,10 @@ _ITEM_BASE_USE = {
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
     "handPose": "one_handed", "customHeldSprite": "hidden",
 }
-_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "placement": "item_use_origin"}
+_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
-_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10}
+_COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}
 
 
 def _value(spec: ParamSpec, name: str) -> Any:
@@ -88,13 +88,14 @@ def _params(fn: str) -> dict[str, Any]:
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
         "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2},
-        "spawn_entity_on_event": {"event": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0},
-        "apply_status_on_event": {"event": "on_hit", "buffId": 20, "durationTicks": 60},
-        "damage_area_on_event": {"event": "on_hit", "radiusPx": 48, "damageMultiplier": 0.5},
-        "chain_damage_on_event": {"event": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
-        "pull_on_event": {"event": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8, "periodTicks": 12},
-        "heal_owner_on_event": {"event": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
-        "move_owner_on_event": {"event": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0},
+        "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
+        "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
+        "chain_damage_on_event": {"when": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
+        "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8},
+        "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
+        "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
+        "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out

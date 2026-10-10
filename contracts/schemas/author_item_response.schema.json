@@ -3422,7 +3422,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 80,
-                        "description": "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with extraUpdates=1 moves ~20 px/world tick",
+                        "description": "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with updatesPerTick=2 moves ~20 px/world tick",
                         "x-infini-units": "pixels/projectile update",
                         "x-infini-semanticType": "unitless_scalar"
                       },
@@ -3430,16 +3430,20 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended",
-                        "x-infini-semanticType": "spawn_or_target_count"
+                        "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it",
+                        "x-infini-semanticType": "spawn_or_target_count",
+                        "default": 1,
+                        "x-infini-neutral": 1
                       },
                       "spreadRadians": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 6.283185307179586,
-                        "description": "Total angular spread",
+                        "description": "Total angular spread. May be omitted only for child_projectile, whose producers override it",
                         "x-infini-units": "radians",
-                        "x-infini-semanticType": "radians"
+                        "x-infini-semanticType": "radians",
+                        "default": 0,
+                        "x-infini-neutral": 0
                       },
                       "offsetPx": {
                         "type": "integer",
@@ -3460,27 +3464,76 @@
                         "description": "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "placement": {
-                        "type": "string",
-                        "enum": [
-                          "item_use_origin",
-                          "owner_center",
-                          "cursor",
-                          "ground_at_cursor",
-                          "above_cursor",
-                          "native_resting_spot"
+                      "position": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string",
+                                "enum": [
+                                  "activation_origin",
+                                  "owner_center",
+                                  "cursor",
+                                  "ground_at_cursor",
+                                  "native_resting_spot"
+                                ],
+                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle"
+                              }
+                            },
+                            "required": [
+                              "at"
+                            ],
+                            "additionalProperties": false,
+                            "description": "At the explicit anchor, with no vertical offset"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "above": {
+                                "type": "string",
+                                "enum": [
+                                  "activation_origin",
+                                  "owner_center",
+                                  "cursor",
+                                  "ground_at_cursor",
+                                  "native_resting_spot"
+                                ],
+                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle"
+                              },
+                              "heightTiles": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 80,
+                                "description": "Vertical offset above the selected anchor",
+                                "x-infini-units": "tiles"
+                              },
+                              "activationDelayTicks": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 600,
+                                "description": "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay",
+                                "x-infini-units": "ticks"
+                              }
+                            },
+                            "required": [
+                              "above",
+                              "heightTiles",
+                              "activationDelayTicks"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Above the explicit anchor"
+                          }
                         ],
-                        "description": "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle",
-                        "x-infini-semanticType": "bounded_text"
+                        "description": "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
+                        "x-infini-semanticType": "spawn_position"
                       }
                     },
                     "required": [
                       "speedPxPerUpdate",
-                      "count",
-                      "spreadRadians",
                       "offsetPx",
                       "aim",
-                      "placement"
+                      "position"
                     ]
                   }
                 },
@@ -3913,7 +3966,9 @@
                         "minimum": 0,
                         "maximum": 32,
                         "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
-                        "x-infini-semanticType": "bounce_count"
+                        "x-infini-semanticType": "bounce_count",
+                        "default": 0,
+                        "x-infini-neutral": 0
                       },
                       "pierce": {
                         "type": "integer",
@@ -3922,39 +3977,57 @@
                         "description": "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
                         "x-infini-semanticType": "penetration_count"
                       },
-                      "extraUpdates": {
+                      "updatesPerTick": {
                         "type": "integer",
-                        "minimum": 0,
-                        "maximum": 5,
-                        "description": "Terraria Projectile.extraUpdates: adds this many AI/movement updates per world tick (1 + extraUpdates total)",
-                        "x-infini-semanticType": "extra_ai_updates"
-                      },
-                      "npcImmunityMode": {
-                        "type": "string",
-                        "enum": [
-                          "owner",
-                          "local"
-                        ],
-                        "description": "owner uses Terraria shared owner immunity; local gives this projectile its own NPC timers",
-                        "x-infini-semanticType": "terraria_npc_immunity_mode"
-                      },
-                      "localNpcHitCooldownEngineUnits": {
-                        "type": "integer",
-                        "minimum": -1,
-                        "maximum": 600,
-                        "description": "Required in both immunity modes; ignored in owner mode, which uses shared owner immunity. In npcImmunityMode=local: direct unscaled Projectile.localNPCHitCooldown, not a world-tick duration. -1 lets this projectile hit each NPC only once; 0..600 are engine local cooldown counts. With extraUpdates>0 do not infer elapsed seconds",
-                        "x-infini-units": "engine units: local NPC cooldown counts",
+                        "minimum": 1,
+                        "maximum": 6,
+                        "description": "Total Projectile AI/movement updates per world tick; does not rescale any per-update parameter",
                         "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "immunity": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "owner_shared"
+                            ],
+                            "description": "Terraria shared owner immunity; this projectile has no separate NPC timer"
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "once_per_npc"
+                            ],
+                            "description": "This projectile may hit each NPC once"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "localCooldown": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 600,
+                                "description": "Raw unscaled Projectile.localNPCHitCooldown, including 0; not seconds/world ticks",
+                                "x-infini-units": "engine units: local NPC cooldown counts"
+                              }
+                            },
+                            "required": [
+                              "localCooldown"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Per-projectile NPC immunity with explicit engine cooldown counts"
+                          }
+                        ],
+                        "description": "Choose owner_shared, once_per_npc, or {localCooldown:0..600} raw unscaled engine counts; independent of penetration and updatesPerTick.",
+                        "x-infini-semanticType": "terraria_npc_immunity"
                       }
                     },
                     "required": [
                       "tileCollide",
                       "ignoreWater",
-                      "bounceCount",
                       "pierce",
-                      "extraUpdates",
-                      "npcImmunityMode",
-                      "localNpcHitCooldownEngineUnits"
+                      "updatesPerTick",
+                      "immunity"
                     ]
                   }
                 },
@@ -4166,7 +4239,7 @@
                         "type": "number",
                         "minimum": 0.8,
                         "maximum": 1.05,
-                        "description": "Multiply velocity each projectile update (1 + extraUpdates per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
+                        "description": "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
                         "x-infini-units": "engine units: velocity multiplier per update",
                         "x-infini-semanticType": "unitless_scalar"
                       }
@@ -4292,61 +4365,6 @@
                     "required": [
                       "returnAfterTicks",
                       "returnSpeed"
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "fn",
-                  "target",
-                  "params"
-                ]
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
-                  },
-                  "fn": {
-                    "const": "move_bounce"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "owner_attached_projectile",
-                        "free_projectile",
-                        "stationary_projectile",
-                        "temporary_helper",
-                        "field",
-                        "child_projectile"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
-                  },
-                  "params": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "gravityVelocityPerUpdate": {
-                        "type": "number",
-                        "minimum": 0.001,
-                        "maximum": 2,
-                        "description": "Add to vertical velocity (pixels/update) per projectile update",
-                        "x-infini-units": "engine units: vertical velocity increment per update",
-                        "x-infini-semanticType": "unitless_scalar"
-                      }
-                    },
-                    "required": [
-                      "gravityVelocityPerUpdate"
                     ]
                   }
                 },
@@ -4782,19 +4800,20 @@
                         "x-infini-units": "engine units: velocity lerp fraction",
                         "x-infini-semanticType": "unitless_scalar"
                       },
-                      "proximityRadiusPx": {
-                        "type": "integer",
-                        "minimum": 4,
-                        "maximum": 512,
-                        "description": "Trigger radius",
-                        "x-infini-units": "pixels",
-                        "x-infini-semanticType": "pixels"
+                      "triggerRadiusTiles": {
+                        "type": "number",
+                        "minimum": 0.25,
+                        "maximum": 32,
+                        "multipleOf": 0.0625,
+                        "description": "Trigger radius on the exact 1/16-tile pixel lattice",
+                        "x-infini-units": "tiles",
+                        "x-infini-semanticType": "tiles"
                       }
                     },
                     "required": [
                       "rangeTiles",
                       "homingStrength",
-                      "proximityRadiusPx"
+                      "triggerRadiusTiles"
                     ]
                   }
                 },
@@ -5506,70 +5525,6 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
-                    "const": "spawn_over_target"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "owner_attached_projectile",
-                        "free_projectile",
-                        "stationary_projectile",
-                        "temporary_helper",
-                        "field",
-                        "child_projectile"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
-                  },
-                  "params": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "heightTiles": {
-                        "type": "number",
-                        "minimum": 1,
-                        "maximum": 80,
-                        "description": "Vertical spawn height",
-                        "x-infini-units": "tiles",
-                        "x-infini-semanticType": "tiles"
-                      },
-                      "delayTicks": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 600,
-                        "description": "Telegraph delay",
-                        "x-infini-units": "ticks",
-                        "x-infini-semanticType": "ticks"
-                      }
-                    },
-                    "required": [
-                      "heightTiles",
-                      "delayTicks"
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "fn",
-                  "target",
-                  "params"
-                ]
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
-                  },
-                  "fn": {
                     "const": "spawn_entity_on_event"
                   },
                   "target": {
@@ -5595,22 +5550,43 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
-                        "type": "string",
-                        "enum": [
-                          "on_use",
-                          "on_spawn",
-                          "on_hit",
-                          "on_crit",
-                          "on_tile_collision",
-                          "on_expire",
-                          "on_kill",
-                          "periodic",
-                          "on_release",
-                          "channel_complete"
+                      "when": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_use",
+                              "on_spawn",
+                              "on_hit",
+                              "on_crit",
+                              "on_tile_collision",
+                              "on_expire",
+                              "on_kill",
+                              "on_release",
+                              "channel_complete"
+                            ],
+                            "description": "Execute on this exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "everyTicks": {
+                                "type": "integer",
+                                "minimum": 6,
+                                "maximum": 3600,
+                                "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                                "x-infini-units": "ticks"
+                              }
+                            },
+                            "required": [
+                              "everyTicks"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash"
+                          }
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Exact event or explicit periodic interval",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "entity": {
                         "type": "string",
@@ -5660,39 +5636,16 @@
                         "description": "Delay after event",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"
-                      },
-                      "periodTicks": {
-                        "type": "integer",
-                        "minimum": 6,
-                        "maximum": 3600,
-                        "description": "Required for periodic event",
-                        "x-infini-units": "ticks",
-                        "x-infini-semanticType": "ticks"
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "entity",
                       "count",
                       "spreadRadians",
                       "damageMultiplier",
                       "delayTicks"
-                    ],
-                    "if": {
-                      "properties": {
-                        "event": {
-                          "const": "periodic"
-                        }
-                      },
-                      "required": [
-                        "event"
-                      ]
-                    },
-                    "then": {
-                      "required": [
-                        "periodTicks"
-                      ]
-                    }
+                    ]
                   }
                 },
                 "required": [
@@ -5737,14 +5690,14 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
+                      "when": {
                         "type": "string",
                         "enum": [
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "buffId": {
                         "type": "integer",
@@ -5772,7 +5725,7 @@
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "buffId",
                       "durationTicks"
                     ]
@@ -5820,7 +5773,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
+                      "when": {
                         "type": "string",
                         "enum": [
                           "on_hit",
@@ -5829,16 +5782,17 @@
                           "on_expire",
                           "on_kill"
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "radiusPx": {
-                        "type": "integer",
-                        "minimum": 8,
-                        "maximum": 768,
-                        "description": "Damage radius",
-                        "x-infini-units": "pixels",
-                        "x-infini-semanticType": "pixels"
+                      "radiusTiles": {
+                        "type": "number",
+                        "minimum": 0.5,
+                        "maximum": 48,
+                        "multipleOf": 0.0625,
+                        "description": "Damage radius on the exact 1/16-tile pixel lattice",
+                        "x-infini-units": "tiles",
+                        "x-infini-semanticType": "tiles"
                       },
                       "damageMultiplier": {
                         "type": "number",
@@ -5858,8 +5812,8 @@
                       }
                     },
                     "required": [
-                      "event",
-                      "radiusPx",
+                      "when",
+                      "radiusTiles",
                       "damageMultiplier"
                     ]
                   }
@@ -5906,14 +5860,14 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
+                      "when": {
                         "type": "string",
                         "enum": [
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "count": {
                         "type": "integer",
@@ -5948,7 +5902,7 @@
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "count",
                       "rangeTiles",
                       "damageMultiplier"
@@ -5996,22 +5950,42 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
-                        "type": "string",
-                        "enum": [
-                          "on_hit",
-                          "periodic",
-                          "on_expire"
+                      "when": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_hit",
+                              "on_expire"
+                            ],
+                            "description": "Execute on this exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "everyTicks": {
+                                "type": "integer",
+                                "minimum": 6,
+                                "maximum": 3600,
+                                "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                                "x-infini-units": "ticks"
+                              }
+                            },
+                            "required": [
+                              "everyTicks"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash"
+                          }
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Exact event or explicit periodic interval",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "mode": {
                         "type": "string",
                         "enum": [
                           "target_to_owner",
-                          "target_to_entity",
-                          "owner_to_target"
+                          "target_to_entity"
                         ],
                         "description": "Pull direction",
                         "x-infini-semanticType": "bounded_text"
@@ -6028,17 +6002,9 @@
                         "type": "number",
                         "minimum": 1,
                         "maximum": 60,
-                        "description": "NPC search radius only with no directTarget; ignored for owner_to_target",
+                        "description": "NPC search radius with no active direct target; also used by on_hit if its target became inactive",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
-                      },
-                      "periodTicks": {
-                        "type": "integer",
-                        "minimum": 6,
-                        "maximum": 3600,
-                        "description": "Required for periodic event",
-                        "x-infini-units": "ticks",
-                        "x-infini-semanticType": "ticks"
                       },
                       "delayTicks": {
                         "type": "integer",
@@ -6051,26 +6017,107 @@
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "mode",
                       "strength",
                       "radiusTiles"
-                    ],
-                    "if": {
-                      "properties": {
-                        "event": {
-                          "const": "periodic"
-                        }
-                      },
-                      "required": [
-                        "event"
-                      ]
-                    },
-                    "then": {
-                      "required": [
-                        "periodTicks"
-                      ]
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "pull_owner_to_event_target"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
                     }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_hit",
+                              "on_expire"
+                            ],
+                            "description": "Execute on this exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "everyTicks": {
+                                "type": "integer",
+                                "minimum": 6,
+                                "maximum": 3600,
+                                "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
+                                "x-infini-units": "ticks"
+                              }
+                            },
+                            "required": [
+                              "everyTicks"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash"
+                          }
+                        ],
+                        "description": "Exact event or explicit periodic interval",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "strength": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 4,
+                        "description": "Player velocity impulse toward the event's active direct target",
+                        "x-infini-units": "engine units: velocity impulse coefficient per event",
+                        "x-infini-semanticType": "effect_strength"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks",
+                        "x-infini-neutral": 0
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "strength"
+                    ]
                   }
                 },
                 "required": [
@@ -6115,14 +6162,14 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
+                      "when": {
                         "type": "string",
                         "enum": [
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "damageFraction": {
                         "type": "number",
@@ -6150,7 +6197,7 @@
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "damageFraction",
                       "maxHeal"
                     ]
@@ -6197,15 +6244,15 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "event": {
+                      "when": {
                         "type": "string",
                         "enum": [
                           "on_hit",
                           "on_tile_collision",
                           "on_expire"
                         ],
-                        "description": "Source event",
-                        "x-infini-semanticType": "runtime_event_kind"
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "rangeTiles": {
                         "type": "integer",
@@ -6239,7 +6286,7 @@
                       }
                     },
                     "required": [
-                      "event",
+                      "when",
                       "rangeTiles",
                       "cooldownTicks",
                       "safeTileOnly"

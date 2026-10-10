@@ -5,7 +5,7 @@ import argparse, json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 
 PARENT_A = {"id":"workbench","name":"Workbench","damage":0,"useTime":20,"tags":["furniture"],"category":"placeable"}

@@ -57,12 +57,15 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
         "ignoreWater",
         "bounceCount",
         "pierce",
-        "extraUpdates",
-        "npcImmunityMode",
-        "localNpcHitCooldownEngineUnits",
+        "updatesPerTick",
+        "immunity",
     )
-    assert collision.params["npcImmunityMode"].enum == ("owner", "local")
-    assert collision.params["localNpcHitCooldownEngineUnits"].minimum == -1
+    assert (collision.params["updatesPerTick"].minimum, collision.params["updatesPerTick"].maximum) == (1, 6)
+    variants = collision.params["immunity"].alternatives
+    assert [spec.enum for spec in variants[:2]] == [("owner_shared",), ("once_per_npc",)]
+    cooldown = variants[2].properties["localCooldown"]
+    assert (cooldown.minimum, cooldown.maximum) == (0, 600)
+    assert "Raw unscaled Projectile.localNPCHitCooldown" in cooldown.description
 
 
 def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:

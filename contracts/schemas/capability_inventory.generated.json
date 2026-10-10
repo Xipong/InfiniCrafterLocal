@@ -1111,7 +1111,7 @@
         }
       },
       "positionOwnership": "none",
-      "promptVisibility": true,
+      "promptVisibility": false,
       "provenance": "placement payload referenced by one exact binding transaction",
       "purpose": "Retained saved-wire provenance for the previous combined placement vocabulary; fresh Author selects one exact tile or wall operation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
@@ -2587,6 +2587,8 @@
         "runtimeProgram.entities[].spawn.spreadRadians",
         "runtimeProgram.entities[].spawn.offsetPx",
         "runtimeProgram.entities[].spawn.aim",
+        "runtimeProgram.entities[].spawn.overTarget.heightTiles",
+        "runtimeProgram.entities[].spawn.overTarget.delayTicks",
         "runtimeProgram.entities[].spawn.placement"
       ],
       "multiplicity": "single_per_target",
@@ -2613,7 +2615,7 @@
           "maximum": 12,
           "minimum": 1,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "spawn_or_target_count",
           "units": ""
         },
@@ -2627,21 +2629,14 @@
           "semanticType": "pixels",
           "units": "pixels"
         },
-        "placement": {
-          "enum": [
-            "item_use_origin",
-            "owner_center",
-            "cursor",
-            "ground_at_cursor",
-            "above_cursor",
-            "native_resting_spot"
-          ],
-          "kind": "string",
+        "position": {
+          "enum": [],
+          "kind": "union",
           "maximum": null,
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "bounded_text",
+          "semanticType": "spawn_position",
           "units": ""
         },
         "speedPxPerUpdate": {
@@ -2660,7 +2655,7 @@
           "maximum": 6.283185307179586,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "radians",
           "units": "radians"
         }
@@ -2670,7 +2665,22 @@
       "provenance": "shot count/spread/aim/placement extracted from all roots",
       "purpose": "Set this entity spawn cardinality per activation, initial direction and position; cardinality is separate from the optional set_projectile_concurrency live cap, not a singleton guarantee. Does not choose movement or damage.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "conditional_omission",
+          "message": "This parameter is required outside its declared inactive consumer branch",
+          "param": "count",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "conditional_omission",
+          "message": "This parameter is required outside its declared inactive consumer branch",
+          "param": "spreadRadians",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -3062,18 +3072,8 @@
           "maximum": 32,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "bounce_count",
-          "units": ""
-        },
-        "extraUpdates": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 5,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "extra_ai_updates",
           "units": ""
         },
         "ignoreWater": {
@@ -3086,27 +3086,14 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "localNpcHitCooldownEngineUnits": {
+        "immunity": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": -1,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: local NPC cooldown counts"
-        },
-        "npcImmunityMode": {
-          "enum": [
-            "owner",
-            "local"
-          ],
-          "kind": "string",
+          "kind": "union",
           "maximum": null,
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "terraria_npc_immunity_mode",
+          "semanticType": "terraria_npc_immunity",
           "units": ""
         },
         "pierce": {
@@ -3128,6 +3115,16 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "updatesPerTick": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 6,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -3135,7 +3132,15 @@
       "provenance": "existing tile/bounce/pierce fields",
       "purpose": "Set exact Terraria tile/liquid collision, penetration, update rate and NPC immunity mode.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "conditional_omission",
+          "message": "This parameter is required outside its declared inactive consumer branch",
+          "param": "bounceCount",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -3288,7 +3293,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 2",
-      "purpose": "Apply downward velocity acceleration per projectile update.",
+      "purpose": "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate bounceCount. Gravity alone does not guarantee rolling, resting or an explosion.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3484,7 +3489,7 @@
         "exclusive_group:movement"
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
-      "decision": "expose",
+      "decision": "internal",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -3509,8 +3514,8 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "promptVisibility": true,
-      "provenance": "existing movement code 6",
+      "promptVisibility": false,
+      "provenance": "existing movement code 6; retained wire provenance only, fresh Author uses move_gravity_arc",
       "purpose": "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate authored bounceCount. Bounces reflect collided axes with 0.78 retained velocity; this does not guarantee rolling, resting or an explosion.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
@@ -3935,16 +3940,6 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: velocity lerp fraction"
         },
-        "proximityRadiusPx": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 512,
-          "minimum": 4,
-          "reference": null,
-          "required": true,
-          "semanticType": "pixels",
-          "units": "pixels"
-        },
         "rangeTiles": {
           "enum": [],
           "kind": "number",
@@ -3954,12 +3949,22 @@
           "required": true,
           "semanticType": "tiles",
           "units": "tiles"
+        },
+        "triggerRadiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 32,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 13",
-      "purpose": "Home; proximity inside proximityRadiusPx triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
+      "purpose": "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4551,7 +4556,6 @@
             "move_accelerate",
             "move_blackhole_pull",
             "move_boomerang",
-            "move_bounce",
             "move_drift",
             "move_expanding_wave",
             "move_flail_tether",
@@ -4743,7 +4747,7 @@
       "componentSlot": "spawn_over_target",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
-      "decision": "expose",
+      "decision": "internal",
       "dependencies": [
         "configure_spawn"
       ],
@@ -4779,7 +4783,7 @@
         }
       },
       "positionOwnership": "none",
-      "promptVisibility": true,
+      "promptVisibility": false,
       "provenance": "overhead barrage placement extracted from root family",
       "purpose": "Spawn this entity above the cursor/target with an explicit telegraph delay.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
@@ -4829,12 +4833,12 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
         "runtimeProgram.entities[].events[].damageMultiplier",
-        "runtimeProgram.entities[].events[].delayTicks",
-        "runtimeProgram.entities[].events[].periodTicks"
+        "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -4891,37 +4895,6 @@
           "semanticType": "runtime_entity_id",
           "units": ""
         },
-        "event": {
-          "enum": [
-            "on_use",
-            "on_spawn",
-            "on_hit",
-            "on_crit",
-            "on_tile_collision",
-            "on_expire",
-            "on_kill",
-            "periodic",
-            "on_release",
-            "channel_complete"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_kind",
-          "units": ""
-        },
-        "periodTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
-          "minimum": 6,
-          "reference": null,
-          "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
         "spreadRadians": {
           "enum": [],
           "kind": "number",
@@ -4931,6 +4904,16 @@
           "required": true,
           "semanticType": "radians",
           "units": "radians"
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -4943,7 +4926,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5015,7 +4998,7 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
+        "when": {
           "enum": [
             "on_hit",
             "on_crit"
@@ -5025,7 +5008,7 @@
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "runtime_event_kind",
+          "semanticType": "runtime_event_trigger",
           "units": ""
         }
       },
@@ -5039,7 +5022,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5107,7 +5090,17 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
+        "radiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 48,
+          "minimum": 0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "when": {
           "enum": [
             "on_hit",
             "on_crit",
@@ -5120,18 +5113,8 @@
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "runtime_event_kind",
+          "semanticType": "runtime_event_trigger",
           "units": ""
-        },
-        "radiusPx": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 768,
-          "minimum": 8,
-          "reference": null,
-          "required": true,
-          "semanticType": "pixels",
-          "units": "pixels"
         }
       },
       "positionOwnership": "none",
@@ -5144,7 +5127,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5217,19 +5200,6 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
-          "enum": [
-            "on_hit",
-            "on_crit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_kind",
-          "units": ""
-        },
         "rangeTiles": {
           "enum": [],
           "kind": "number",
@@ -5239,6 +5209,19 @@
           "required": true,
           "semanticType": "tiles",
           "units": "tiles"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -5251,7 +5234,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5272,7 +5255,6 @@
       "authorityByEffect": {
         "on_hit:target_to_entity": "owner_request_server_execute",
         "on_hit:target_to_owner": "owner_request_server_execute",
-        "owner_to_target": "owner_execute_sync",
         "target_to_entity": "server_execute",
         "target_to_owner": "server_execute"
       },
@@ -5293,10 +5275,10 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].strength",
         "runtimeProgram.entities[].events[].radiusTiles",
-        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
@@ -5312,25 +5294,10 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
-          "enum": [
-            "on_hit",
-            "periodic",
-            "on_expire"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_kind",
-          "units": ""
-        },
         "mode": {
           "enum": [
             "target_to_owner",
-            "target_to_entity",
-            "owner_to_target"
+            "target_to_entity"
           ],
           "kind": "string",
           "maximum": null,
@@ -5339,16 +5306,6 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
-        },
-        "periodTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
-          "minimum": 6,
-          "reference": null,
-          "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
         },
         "radiusTiles": {
           "enum": [],
@@ -5369,6 +5326,16 @@
           "required": true,
           "semanticType": "effect_strength",
           "units": "engine units: velocity impulse coefficient per event"
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -5381,7 +5348,92 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "pull_owner_to_event_target",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "periodic",
+        "on_expire"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
+        "runtimeProgram.entities[].events[].strength",
+        "runtimeProgram.entities[].events[].delayTicks",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].radiusTiles"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "strength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.01,
+          "reference": null,
+          "required": true,
+          "semanticType": "effect_strength",
+          "units": "engine units: velocity impulse coefficient per event"
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "exact owner branch of pull_on_event; radius is not consumed by this branch",
+      "purpose": "Pull the owning player toward the active direct target recorded by the event. No target means no movement; it never searches for a replacement NPC.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5442,19 +5494,6 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
-          "enum": [
-            "on_hit",
-            "on_crit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_kind",
-          "units": ""
-        },
         "maxHeal": {
           "enum": [],
           "kind": "integer",
@@ -5464,6 +5503,19 @@
           "required": true,
           "semanticType": "life_points",
           "units": "HP"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -5476,7 +5528,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],
@@ -5541,20 +5593,6 @@
           "semanticType": "ticks",
           "units": "ticks"
         },
-        "event": {
-          "enum": [
-            "on_hit",
-            "on_tile_collision",
-            "on_expire"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_kind",
-          "units": ""
-        },
         "rangeTiles": {
           "enum": [],
           "kind": "integer",
@@ -5574,6 +5612,20 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_tile_collision",
+            "on_expire"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -5586,7 +5638,7 @@
           "equals": null,
           "kind": "event_available",
           "message": "target entity must actually emit the selected event",
-          "param": "event",
+          "param": "when",
           "target": "same_target"
         }
       ],

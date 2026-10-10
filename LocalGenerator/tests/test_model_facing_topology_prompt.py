@@ -1,6 +1,7 @@
 """Exercise construction facts in the actual serialized Author request."""
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, compact_capability_catalog
@@ -67,7 +68,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     for card in cards.values():
         for name, param in card["params"].items():
             assert param.get("optional", False) is not CAPABILITY_REGISTRY[card["fn"]].params[name].required
-    assert "periodTicks" in cards["spawn_entity_on_event"]["params"]
+    assert "everyTicks" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
     assert "requires" in cards["spawn_entity_on_event"]
 
 

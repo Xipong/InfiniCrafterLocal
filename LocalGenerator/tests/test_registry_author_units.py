@@ -1,5 +1,6 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
@@ -28,9 +29,7 @@ FN = "apply_generated_buff_on_use"
 
 RENAMES = (
     ("configure_spawn", "speedPxPerTick", "speedPxPerUpdate", 7.125, "spawn"),
-    ("set_projectile_collision", "localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits", -1, "collision"),
     ("move_gravity_arc", "gravityPerTick", "gravityVelocityPerUpdate", 0.1875, "movement.params"),
-    ("move_bounce", "gravityPerTick", "gravityVelocityPerUpdate", 0.1875, "movement.params"),
     ("move_spiral", "turnRadiansPerTick", "turnRadiansPerUpdate", -0.1875, "movement.params"),
     ("move_expanding_wave", "scalePerTick", "scaleGrowthPerUpdate", 0.1875, "movement.params"),
     ("move_accelerate", "acceleration", "speedMultiplierPerUpdate", 1.125, "movement.params"),
@@ -410,7 +409,7 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
             "fn": fn,
             "target": call["target"],
             "params": {
-                "event": "periodic",
+                "when": {},
                 "mode": "target_to_entity",
                 "strength": 1,
                 "radiusTiles": 8,
@@ -418,22 +417,21 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
         }
         doc["runtimeProgram"]["calls"].append(call)
     else:
-        call["params"].update(event="periodic")
+        call["params"].update(when={})
     params = call["params"]
-    params.pop("periodTicks", None)
+    params["when"] = {}
     assert not strict_author_shape_report(doc)["ok"]
     report = validate_runtime_program(doc)
     assert not report["ok"]
-    assert any(r["path"].endswith(".params.periodTicks") for r in report["errors"])
+    assert any(r["path"].endswith(".params.when.everyTicks") for r in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.periodTicks"]}]
-    assert "periodTicks" in json.dumps(scope)
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.when.everyTicks"]}]
+    assert "everyTicks" in json.dumps(scope)
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
-    params["periodTicks"] = 6
+    params["when"] = {"everyTicks": 6}
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
-    params["event"] = "on_hit"
-    params.pop("periodTicks")
+    params["when"] = "on_hit"
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
 
 
@@ -442,16 +440,16 @@ def test_periodic_missing_fields_are_reported_once_by_canonical_shape():
 
     cap = CAPABILITY_REGISTRY["spawn_entity_on_event"]
     schema = cap.provider_variant_schema()["properties"]["params"]
-    assert schema["then"]["required"] == ["periodTicks"]
+    when = schema["properties"]["when"]["oneOf"]
+    assert next(row for row in when if row.get("type") == "object")["required"] == ["everyTicks"]
     doc = build_runtime_fixture("workbench_blade")
     params = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == cap.name)["params"]
-    params["event"] = "periodic"
-    params.pop("periodTicks", None)
+    params["when"] = {}
     params.pop("count")
     errors = strict_schema_errors(params, schema)
     paths = [row["path"] for row in errors if row["kind"] == "required"]
     assert paths.count("$.count") == 1
-    assert paths.count("$.periodTicks") == 1
+    assert paths.count("$.when.everyTicks") == 1
 
 
 def test_generated_lowery_names_current_binding_target_path():

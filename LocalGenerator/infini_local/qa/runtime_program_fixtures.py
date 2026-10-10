@@ -49,14 +49,14 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
     }
 
 
-def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "item_use_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
+def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "activation_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
     return {
         "speedPxPerUpdate": speed,
         "count": count,
         "spreadRadians": 0.0,
         "offsetPx": int(offset),
         "aim": aim,
-        "placement": placement,
+        "position": {"at": placement},
     }
 
 
@@ -79,9 +79,8 @@ def _collision(*, tile: bool = True, bounce: int = 0, pierce: int = 1) -> dict[s
         "ignoreWater": False,
         "bounceCount": bounce,
         "pierce": pierce,
-        "extraUpdates": 0,
-        "npcImmunityMode": "local",
-        "localNpcHitCooldownEngineUnits": 10,
+        "updatesPerTick": 1,
+        "immunity": {"localCooldown": 10},
     }
 
 
@@ -144,7 +143,7 @@ class _Builder:
         damage_class: str = "generic",
         tile: bool = True,
         pierce: int = 1,
-        placement: str = "item_use_origin",
+        placement: str = "activation_origin",
         aim: str = "cursor",
         movement: str | None = "move_straight",
         movement_params: dict[str, Any] | None = None,
@@ -244,7 +243,7 @@ def _workbench_blade() -> dict[str, Any]:
     b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationTicks": 24}, width=64, height=34)
     b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
-    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0})
+    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"when": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0})
     return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
@@ -254,7 +253,7 @@ def _umbrella_grenade() -> dict[str, Any]:
     b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"gravityVelocityPerUpdate": 0.25}, width=18, height=18)
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
-    b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"event": "on_expire", "radiusPx": 112, "damageMultiplier": 1.4})
+    b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"when": "on_expire", "radiusTiles": 7, "damageMultiplier": 1.4})
     return b.finish(primary_entity_id="umbrella_guard", composition="The umbrella is a literal brace and its weighted tip becomes a grenade.", parent_a="umbrella canopy and shaft", parent_b="grenade charge")
 
 
@@ -262,7 +261,7 @@ def _door_on_chain() -> dict[str, Any]:
     b = _Builder("door_on_chain", name="Door on a Chain", mechanic="Swings a literal reinforced door from a bounded tether.", damage=48)
     b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=180, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeed": 14}, width=36, height=72)
     b.bind("primary_chain", "primary_use", "spawn_entity", "chained_door")
-    b.call("door_stun", "apply_status_on_event", "chained_door", {"event": "on_hit", "buffId": 31, "durationTicks": 90})
+    b.call("door_stun", "apply_status_on_event", "chained_door", {"when": "on_hit", "buffId": 31, "durationTicks": 90})
     return b.finish(primary_entity_id="chained_door", composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
 
 
@@ -270,8 +269,8 @@ def _returning_potion() -> dict[str, Any]:
     b = _Builder("returning_potion", name="Returning Tonic", mechanic="Throws a potion flask that returns and heals its owner on a hit.", damage=24)
     b.projectile("tonic_flask", "free_projectile", speed=12, lifetime=180, damage=24, damage_class="magic", tile=True, pierce=2, movement="move_boomerang", movement_params={"returnAfterTicks": 36, "returnSpeed": 15}, width=18, height=24)
     b.bind("primary_tonic", "primary_use", "spawn_entity", "tonic_flask")
-    b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"event": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
-    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"event": "on_hit", "buffId": 20, "durationTicks": 120})
+    b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"when": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
+    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"when": "on_hit", "buffId": 20, "durationTicks": 120})
     return b.finish(primary_entity_id="tonic_flask", composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
 
 

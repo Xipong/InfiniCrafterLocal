@@ -118,7 +118,7 @@ def deterministic_low_level_plan(
                 },
                 {
                     "id": "call_spawn_held", "fn": "configure_spawn", "target": "held_body",
-                    "params": {"speedPxPerUpdate": 1.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "placement": "owner_center"},
+                    "params": {"speedPxPerUpdate": 1.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "position": {"at": "owner_center"}},
                 },
                 {
                     "id": "call_damage_held", "fn": "set_projectile_damage", "target": "held_body",
@@ -126,15 +126,15 @@ def deterministic_low_level_plan(
                 },
                 {"id": "call_life_held", "fn": "set_projectile_lifetime", "target": "held_body", "params": {"lifetimeTicks": 30}},
                 {"id": "call_hitbox_held", "fn": "set_projectile_hitbox", "target": "held_body", "params": {"widthPx": 64, "heightPx": 32, "drawScale": 1.0, "hitboxScale": 1.0}},
-                {"id": "call_collision_held", "fn": "set_projectile_collision", "target": "held_body", "params": {"tileCollide": False, "ignoreWater": False, "bounceCount": 0, "pierce": 3, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10}},
+                {"id": "call_collision_held", "fn": "set_projectile_collision", "target": "held_body", "params": {"tileCollide": False, "ignoreWater": False, "bounceCount": 0, "pierce": 3, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}},
                 {"id": "call_move_held", "fn": "move_forward_then_retract", "target": "held_body", "params": {"rangeTiles": 6.0, "durationTicks": 24}},
                 {
                     "id": "call_spawn_shards", "fn": "spawn_entity_on_event", "target": "held_body",
-                    "params": {"event": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0},
+                    "params": {"when": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0},
                 },
                 {
                     "id": "call_spawn_child", "fn": "configure_spawn", "target": "child_shard",
-                    "params": {"speedPxPerUpdate": 9.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "placement": "item_use_origin"},
+                    "params": {"speedPxPerUpdate": 9.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "position": {"at": "activation_origin"}},
                 },
                 {
                     "id": "call_damage_child", "fn": "set_projectile_damage", "target": "child_shard",
@@ -142,7 +142,7 @@ def deterministic_low_level_plan(
                 },
                 {"id": "call_life_child", "fn": "set_projectile_lifetime", "target": "child_shard", "params": {"lifetimeTicks": 120}},
                 {"id": "call_hitbox_child", "fn": "set_projectile_hitbox", "target": "child_shard", "params": {"widthPx": 10, "heightPx": 10, "drawScale": 0.7, "hitboxScale": 1.0}},
-                {"id": "call_collision_child", "fn": "set_projectile_collision", "target": "child_shard", "params": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": -1}},
+                {"id": "call_collision_child", "fn": "set_projectile_collision", "target": "child_shard", "params": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": "once_per_npc"}},
                 {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"gravityVelocityPerUpdate": 0.12}},
             ],
         },

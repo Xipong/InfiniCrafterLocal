@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 from pathlib import Path

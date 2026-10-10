@@ -14,6 +14,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
+    authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
@@ -382,6 +383,13 @@ def _validate_requirement(
             if mode == expected and required_param not in params:
                 return ValidationIssue(f"{path}.params.{required_param}", "missing_dependency_param", requirement.message, (required_param,))
         return None
+    if requirement.kind == "conditional_omission":
+        condition = cap.params[requirement.param].omission_condition
+        kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
+        target_capabilities = (str(row.get("fn") or "") for row in calls_by_target.get(target_id, ()))
+        if requirement.param not in params and (condition is None or not condition.allows(params, kind, target_capabilities)):
+            return ValidationIssue(f"{path}.params.{requirement.param}", "missing_dependency_param", requirement.message, (requirement.param,))
+        return None
     if requirement.kind == "binding_input_present":
         required_target = item_id if requirement.target == "item_body" else target_id
         if not any(
@@ -528,8 +536,7 @@ def _validate_requirement(
             return ValidationIssue(f"{path}.params", "inert_component", requirement.message, ("set one non-neutral effect", "remove the call"))
         return None
     if requirement.kind == "event_available":
-        raw_event = params.get(requirement.param)
-        event = raw_event if isinstance(raw_event, str) else ""
+        event = authored_event(params)
         kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
         ok, allowed, message = _event_available(
             event=event,
@@ -666,8 +673,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
         cap = CAPABILITY_REGISTRY.get(fn)
         entity = entities_by_id.get(target_id)
-        if cap is None:
-            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown capability '{fn}'.", tuple(CAPABILITY_REGISTRY), (call_id,)))
+        if cap is None or not cap.prompt_visible or cap.decision != "expose":
+            public_names = tuple(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose")
+            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown public capability '{fn}'.", public_names, (call_id,)))
             continue
         if entity is None:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "missing_entity_reference", f"Call '{call_id}' references missing entity '{target_id}'.", tuple(entities_by_id), (call_id, target_id)))
@@ -721,9 +729,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 event_referenced_entities.add(referenced_id)
 
         if cap.category == "event":
-            event = str(params.get("event") or "")
+            event = authored_event(params)
             if event not in cap.allowed_events:
-                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.event", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
+                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.when", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
 
         if cap.activation_spawn_count_param:
             raw_spawn_count = params.get(cap.activation_spawn_count_param)
@@ -818,7 +826,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue("$.runtimeProgram.entities", "unreachable_entity", f"Entity '{entity_id}' is not reached by a binding or typed entity reference.", ("bind it", "reference it", "delete it"), (entity_id,)))
         position_drivers = [CAPABILITY_REGISTRY[fn] for fn in fns if fn in CAPABILITY_REGISTRY and CAPABILITY_REGISTRY[fn].position_ownership != "none"]
         if kind_spec.requires_position_driver and not position_drivers:
-            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if kind in row.target_kinds and row.position_ownership != "none"))
+            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose" and kind in row.target_kinds and row.position_ownership != "none"))
             issues.append(ValidationIssue("$.runtimeProgram.calls", "missing_movement_component", f"{kind} '{entity_id}' requires explicit movement/controller; none is inferred.", allowed, (entity_id,)))
         if kind in {"stationary_projectile", "temporary_helper", "field"}:
             meaningful = any(CAPABILITY_REGISTRY[fn].meaningful_for_stationary for fn in fns if fn in CAPABILITY_REGISTRY)

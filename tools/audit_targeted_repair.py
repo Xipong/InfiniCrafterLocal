@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
     REPAIR_ERROR_POLICY,
     REPAIR_VALIDATION_ERROR_CODES,
     VALIDATION_ERROR_CODES,
@@ -23,6 +22,7 @@ from infini_local.core.runtime_authoring import (
     filter_repair_patch_scope,
     validate_runtime_program,
 )
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.pipelines.llm_authoring_pipeline import (
     build_gameplay_repair_dossier,
     build_initial_author_request,

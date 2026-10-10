@@ -95,12 +95,18 @@ def test_registry_concurrency_choice_reaches_actual_model_packet(monkeypatch, fo
     assert CAPABILITY in spawn["params"]["count"]["meaning"]
 
 
-def test_legacy_author_wire_stays_byte_identical_and_omission_stays_absent():
+def test_spawn_alias_keeps_historical_runtime_values_and_concurrency_absence():
     document = build_runtime_fixture("returning_potion")
     before = copy.deepcopy(document)
     compiled = compile_runtime_program(document)
     assert document == before
-    fingerprint = hashlib.sha256(json.dumps(compiled["runtimeProgram"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    historical = copy.deepcopy(compiled["runtimeProgram"])
+    for entity in historical["entities"]:
+        if "spawn" in entity:
+            # Fresh `position.at` now writes these two old zero DTO defaults.
+            # The captured hash remains unchanged; compare every other byte.
+            assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
+    fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     # Captured from the accepted old fixture before concurrency implementation.
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
     assert all("maxActive" not in row.get("spawn", {}) for row in compiled["runtimeProgram"]["entities"])
@@ -310,7 +316,7 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
     assert "separate" in cards["configure_spawn"]["does"]
     assert CAPABILITY in cards["configure_spawn"]["does"]
     for driver, phrases in (
-        ("move_bounce", ("adds gravity", "no horizontal friction")),
+        ("move_gravity_arc", ("adds gravity", "no horizontal friction")),
         ("move_boomerang", ("wall collision", "starts return", "disables tileCollide", "does not kill")),
     ):
         assert all(term in cards[driver]["does"] for term in phrases)
