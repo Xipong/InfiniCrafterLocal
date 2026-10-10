@@ -382,7 +382,14 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
         name = row["authoredPath"].split(".params.")[1]
         params[name] = row["value"]
     source_calls = [None] * source_index + [{"id": "witness_call", "fn": fn, "target": "old", "params": params}]
-    report = audit_compiler_receipts(parameters, authored_document={"runtimeProgram": {"calls": source_calls}})
+    source = {"runtimeProgram": {"calls": source_calls}}
+    missing_schema = audit_compiler_receipts(parameters, authored_document=source)
+    assert not missing_schema["ok"]
+    assert missing_schema["violations"][0]["reason"] == "source provenance requires the sole current Author grammar"
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA
+    report = audit_compiler_receipts(parameters, authored_document={
+        "runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": source_calls},
+    })
     assert not report["ok"]
     assert any(row["reason"] == "retained wire capability is not a current Author source" for row in report["violations"])
 

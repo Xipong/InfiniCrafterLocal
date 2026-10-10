@@ -248,34 +248,23 @@ def test_call_projection_authenticates_exact_entity_owner(monkeypatch, typed, at
 @pytest.mark.parametrize("alias", [False, True], ids=["legacy-chain", "pr26-nearest"])
 @pytest.mark.parametrize("attack", ["id-only", "coordinated-events"])
 def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, attack):
-    document = build_capability_witness("chain_damage_on_event")
+    document = build_capability_witness("damage_nearest_on_event")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     another = deepcopy(call)
     another.update(id="another_nearest")
-    another["params"]["count"] = 7
+    another["params"]["maxTargets"] = 7
     document["runtimeProgram"]["calls"].append(another)
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    if alias:
-        # Replay the exact #26 alias over compiler-produced action-4 wire.
-        # #10 intentionally does not admit/compile this future Author vocabulary.
-        cap = registry.CAPABILITY_REGISTRY["chain_damage_on_event"]
-        params = dict(cap.params)
-        params["maxTargets"] = replace(params.pop("count"), wire_name="count")
-        params["when"] = params["when"]
-        modified = dict(registry.CAPABILITY_REGISTRY)
-        modified["damage_nearest_on_event"] = replace(cap, name="damage_nearest_on_event", params=params,
-                                                     fixed_wire_literals={"action": "chain_damage_on_event", "actionCode": 4})
-        monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", modified)
-        for source in (call, another):
-            source["fn"] = "damage_nearest_on_event"
-            source["params"]["maxTargets"] = source["params"].pop("count")
-            source["params"]["when"] = source["params"]["when"]
+    if not alias:
+        # The same action-4 wire retains old scalar provenance without accepting
+        # that retired grammar as a fresh Author or inventing a source.
         for row in receipts:
-            if row.get("fn") == "chain_damage_on_event":
-                row["fn"] = "damage_nearest_on_event"
-                row["authoredPath"] = row["authoredPath"].replace(".params.count", ".params.maxTargets").replace(".params.event", ".params.when")
-    assert technical_lowering.audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
+            if row.get("fn") == "damage_nearest_on_event":
+                row["fn"] = "chain_damage_on_event"
+                row["authoredPath"] = row["authoredPath"].replace(".params.maxTargets", ".params.count").replace(".params.when", ".params.event")
+    checked_source = document if alias else None
+    assert technical_lowering.audit_compiler_receipts(receipts, authored_document=checked_source, final_document=wire)["ok"]
     entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
     events = entity["events"]
     assert len(events) == 2
@@ -289,7 +278,7 @@ def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, 
         for row in receipts:
             if row.get("callId") in {call["id"], another["id"]}:
                 row["finalPath"] = row["finalPath"].replace("events[0]", "events[x]").replace("events[1]", "events[0]").replace("events[x]", "events[1]")
-    for source in (None, document):
+    for source in (None, checked_source):
         assert not technical_lowering.audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
 
 

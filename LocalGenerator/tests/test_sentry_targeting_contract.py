@@ -96,7 +96,7 @@ def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(
         if isinstance(profile, str):
             param["consumerConstraint"] = deepcopy(catalog["fieldGuide"]["consumerConstraints"][profile])
     assert card == CAPABILITY_REGISTRY["target_and_fire"].author_prompt_card()
-    for term in ("Collision.CanHit", "hard geometric", "assigned NPC", "aim=velocity", "placement=item_use_origin"):
+    for term in ("Collision.CanHit", "hard geometric", "assigned NPC", "aim=velocity", "position={at:activation_origin}"):
         assert term in json.dumps(card)
     doc, call = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc

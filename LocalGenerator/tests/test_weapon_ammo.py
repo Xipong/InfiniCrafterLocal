@@ -92,7 +92,6 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
 
 def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neutrals():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
-    from captured_parent_combat_author import historical_child_combat_wire
     # Keep the pre-ammo hashes unchanged. Item aliases intentionally replace
     # source names/placement receipts, while #13 adds exact neutral targeting.
     # Reverse only those asserted successors; every other compiled byte is pinned.
@@ -103,10 +102,13 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
     from captured_item_alias_wire import historical_item_alias_wire
 
     for name, expected_hash in baseline.items():
-        from captured_spawn_velocity_author import historical_spawn_velocity_wire
+        authored = build_runtime_fixture(name)
+        compiled = compile_runtime_program(authored)
+        assert validate_runtime_wire(compiled)["ok"]
+        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=authored, final_document=compiled)["ok"]
         final = historical_item_alias_wire(without_captured_projectile_alias_delta(historical_child_combat_wire(
-            without_declared_targeting_neutrals(without_declared_beam_neutrals(
-                compile_runtime_program(build_runtime_fixture(name)))))))
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         added_modifier_caps = (

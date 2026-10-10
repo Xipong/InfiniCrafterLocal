@@ -825,12 +825,72 @@ def check_packet_ids() -> None:
         seen[value] = name
 
 
+def check_event_domain_contracts() -> None:
+    """Bind precise Author names/domains to the existing unchanged consumers."""
+    model = read("Common/Models/RuntimeProgramSpec.cs")
+    for class_name, next_class in (("RuntimeParamsSpec", "RuntimeTargetingSpec"), ("RuntimeTargetingSpec", "RuntimeLightSpec")):
+        scoped = model.split("public sealed class " + class_name, 1)[-1].split("public sealed class " + next_class, 1)[0]
+        code = re.sub(r"\s+", "", stripped(method_body(scoped, "Normalize")))
+        if "SameTargetBias=Math.Clamp(SameTargetBias,0f,1f);" not in code:
+            fail(f"event domains: {class_name} must retain its saved target-bias 0..1 domain")
+    executors = read("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    obligations = (
+        (executors, "FindNearestNpc", (
+            "float best = range;",
+            "if (npc.whoAmI == previous) distance *= 1f - Math.Clamp(sameTargetBias, 0f, 0.9f);",
+            "if (distance < best) { best = distance; selected = npc; }",
+        )),
+        (executors, "ApplyTargetAndFire", (
+            "FindFiringTarget(range, _entity.Targeting)",
+        )),
+        (executors, "FindFiringTarget", (
+            "if (targeting.HardRange == true && distance > range) return false;",
+            "score = npc.whoAmI == _lastTarget",
+            "distance * (1f - Math.Clamp(targeting.SameTargetBias, 0f, 0.9f))",
+            "if (targeting.HardRange != true && score >= range) return false;",
+            "Admitted(npc, out float score) && score < best",
+        )),
+        (read("Common/Runtime/RuntimeProgramExecutor.cs"), "ChainDamage", (
+            "npc.CanBeChasedBy() && npc != directTarget && Vector2.DistanceSquared(npc.Center, center) <= range * range",
+            "Vector2.DistanceSquared(left.Center, center).CompareTo(Vector2.DistanceSquared(right.Center, center))",
+            "Math.Min(candidates.Count, Math.Clamp(action.Count, 1, 12))",
+            "AuthoredEventDamage(data, sourceEntity)", "owner.ApplyDamageToNPC(npc, damage, 0f",
+        )),
+    )
+    for source, name, required in obligations:
+        code = re.sub(r"\s+", "", stripped(method_body(source, name)))
+        for token in required:
+            if re.sub(r"\s+", "", token) not in code:
+                fail(f"event domains: {name} loses declared native behavior `{token}`")
+
+
+def check_signed_vertical_acceleration() -> None:
+    """Bind the newly advertised signed domain to its unchanged native owner."""
+    model = read("Common/Models/RuntimeProgramSpec.cs")
+    params = model.split("public sealed class RuntimeParamsSpec", 1)[-1].split("public sealed class RuntimeTargetingSpec", 1)[0]
+    normalize = re.sub(r"\s+", "", stripped(method_body(params, "Normalize")))
+    if "GravityPerTick=Math.Clamp(GravityPerTick,-2f,2f);" not in normalize:
+        fail("signed vertical acceleration: native DTO must preserve the declared -2..2 range")
+    executors = read("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    movement = re.sub(r"\s+", "", stripped(method_body(executors, "RunMovement")))
+    for code in (2, 6):
+        if f"case{code}:Projectile.velocity.Y+=p.GravityPerTick;break;" not in movement:
+            fail(f"signed vertical acceleration: opcode {code} must add the signed value once per active update")
+    ai = re.sub(r"\s+", "", stripped(method_body(executors, "AI")))
+    if not re.search(r"if\(!controllerOwnsMotion\)(?:RunMovement\(\);|\{RunMovement\(\);ApplyActiveModifiers\(\);\})", ai):
+        fail("signed vertical acceleration: movement must respect an active position-owning controller")
+    if not re.search(r"if\(_activationDelayTicks>0\).*?return;\}.*?_age\+\+;.*?RunMovement\(\);", ai):
+        fail("signed vertical acceleration: activation delay must return before active movement")
+
+
 def main() -> int:
     check_balanced_sources()
     check_source_policies()
     check_runtime_contract()
     check_item_dispatch()
     check_projectile_dispatch()
+    check_event_domain_contracts()
+    check_signed_vertical_acceleration()
     check_network_boundaries()
     check_sampled_spawn_boundaries()
     check_client_source_contracts()
