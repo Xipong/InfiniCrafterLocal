@@ -295,7 +295,7 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     item = _broken_item()
     before = json.dumps(item)
     patch = _hostile_patch(item)  # Explicitly synthetic offline response, not model evidence.
-    repaired, request = _repair_with_response(monkeypatch, item, patch, mode)
+    repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
     packet = json.loads(request["messages"][1]["content"])
     units = packet["runtimeExecutionTruth"]["units"]
     assert len(json.dumps(units, separators=(",", ":"))) < 12_000
