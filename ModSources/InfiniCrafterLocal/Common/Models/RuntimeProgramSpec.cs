@@ -33,6 +33,13 @@ public sealed class RuntimeProgramSpec
     public RuntimeBindingSpec[] Bindings { get; set; } = Array.Empty<RuntimeBindingSpec>();
     public RuntimeItemUseSpec ItemUse { get; set; } = new();
     public RuntimeItemContactSpec ItemContact { get; set; } = new();
+    private RuntimeWeaponAmmoSpec? _weaponAmmo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeWeaponAmmoSpec? WeaponAmmo
+    {
+        get => _weaponAmmo;
+        set => _weaponAmmo = value ?? throw new InvalidDataException("present weaponAmmo cannot be null");
+    }
 
     public bool HasExecutableBinding => Bindings.Any(x => x is not null && RuntimeBindingSpec.IsActiveInput(x.Input));
 
@@ -53,6 +60,11 @@ public sealed class RuntimeProgramSpec
         Bindings ??= Array.Empty<RuntimeBindingSpec>();
         ItemUse ??= new RuntimeItemUseSpec();
         ItemContact ??= new RuntimeItemContactSpec();
+        WeaponAmmo?.NormalizeAndValidate();
+        if (WeaponAmmo is not null && !Bindings.Any(binding => binding is not null
+                && RuntimeBindingSpec.IsActiveInput(binding.Input)
+                && binding.UsePolicy?.Action?.Kind == RuntimeBindingAction.SpawnEntity))
+            throw new InvalidDataException("weaponAmmo requires an active spawn_entity binding; passive hold is not a native ammo shot");
         if (Entities.Length < 1 || Entities.Length > Limits.MaxEntityCount)
             throw new InvalidDataException($"runtimeProgram.entities must contain 1..{Limits.MaxEntityCount} rows");
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)

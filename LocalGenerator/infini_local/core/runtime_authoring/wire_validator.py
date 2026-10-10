@@ -57,7 +57,7 @@ _FORBIDDEN_ROUTER_KEYS = {
     "family",
 }
 
-_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
+_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "weaponAmmo"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
 _ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry"})
 _VISUAL_KEYS = frozenset({
@@ -352,6 +352,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         _reject_unknown(runtime_raw, _RUNTIME_KEYS, "$.runtimeProgram", errors)
     if not isinstance(runtime_raw, Mapping):
         errors.append({"path": "$.runtimeProgram", "code": "required_object", "message": "Compiled runtimeProgram object is required."})
+    if "weaponAmmo" in runtime:
+        ammo_cap = CAPABILITY_REGISTRY["configure_weapon_ammo"]
+        ammo_schema = {"type": "object", "additionalProperties": False,
+                       "properties": {name: spec.schema() for name, spec in ammo_cap.params.items()},
+                       "required": list(ammo_cap.params)}
+        for issue in strict_schema_errors(runtime["weaponAmmo"], ammo_schema, path="$.runtimeProgram.weaponAmmo"):
+            errors.append({**issue, "code": "invalid_weapon_ammo", "message": "weaponAmmo must contain exactly the registered category and explicit speed basis."})
     if runtime.get("apiVersion") != RUNTIME_PROGRAM_API_VERSION:
         errors.append({
             "path": "$.runtimeProgram.apiVersion",
@@ -662,6 +669,12 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     gameplay_raw = data.get("gameplay")
     gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
+    if "weaponAmmo" in runtime:
+        if not any(isinstance(binding, Mapping) and str(binding.get("input") or "") in ACTIVE_USE_INPUTS
+                   and action_kind(binding) == "spawn_entity" for binding in bindings):
+            errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "missing_weapon_ammo_consumer", "message": "weaponAmmo requires an active spawn_entity binding."})
+        if gameplay.get("ammoCategory"):
+            errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "ammo_role_conflict", "message": "One generated item cannot be both an ammo consumer and a native ammo stack."})
     retired_use_policy_fields = {
         "consumable",
         "consumeChancePercent",

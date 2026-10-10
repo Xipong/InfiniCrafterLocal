@@ -337,6 +337,13 @@ def check_world_transactions() -> None:
         require(body, "BindingUsesItemBodyContact", name)
         forbid(body, "PrimaryOwner", name)
     apply_fields = stripped(read("Common/Models/GeneratedItemData.Apply.cs"))
+    ammo_projection = stripped(method_body(read("Common/Models/GeneratedItemData.Apply.cs"), "ApplyWeaponAmmoField"))
+    require(ammo_projection, "activeSpawn && RuntimeProgram.WeaponAmmo", "explicit weapon ammo use lane")
+    require(ammo_projection, "TerrariaRuntimeVocabulary.ResolveAmmoCategory(ammo.AmmoCategory) : AmmoID.None", "exact weapon ammo category and inactive clearing")
+    require(stripped(method_body(item, "ApplyActiveUseProjection")), "Data.ApplyWeaponAmmoField(Item, spawning)", "selected active weapon ammo projection")
+    ammo_shoot = stripped(method_body(item, "Shoot"), keep_strings=True)
+    require(ammo_shoot, 'rootSpeedOverride: Data.RuntimeProgram.WeaponAmmo?.SpeedBasis == "native_shot" ? velocity.Length() : null', "ammo shot speed policy")
+    require(ammo_shoot, "rootDamageOverride: damage, rootKnockbackOverride: knockback", "native ammo combat arguments without second scaling")
     for field in ("healLife", "healMana", "buffType", "buffTime"):
         authored = {"buffType": "BuffCode"}.get(field, field[0].upper() + field[1:])
         require(apply_fields, f"item.{field} = enabled ? Math.Max(0, Gameplay.{authored}) : 0;", "binding-scoped use effects")
