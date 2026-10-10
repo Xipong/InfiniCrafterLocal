@@ -237,7 +237,7 @@ public sealed class GeneratedBuffSpec
     }
 }
 
-public sealed class GameplaySpec
+public sealed class GameplaySpec : IItemEffectsSpec
 {
     public string Kind { get; set; } = "generic"; // weapon, potion, accessory, furniture, material, generic
     public string Stage { get; set; } = "early";
