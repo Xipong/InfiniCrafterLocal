@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_API_VERSION,
@@ -446,8 +446,8 @@ def author_item_provider_response_schema() -> dict[str, Any]:
     return _provider_strict_projection(author_item_response_schema(), omit_annotations=True)
 
 
-def author_item_repair_response_schema() -> dict[str, Any]:
-    return copy.deepcopy(_repair_schema())
+def author_item_repair_response_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+    return copy.deepcopy(_repair_schema(capability_names=capability_names))
 
 
 def author_item_repair_prompt_shape_card() -> dict[str, Any]:
@@ -499,8 +499,12 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
     return placeholders
 
 
-def author_item_provider_repair_response_schema(*_: Any, **__: Any) -> dict[str, Any]:
-    return _provider_strict_projection(author_item_repair_response_schema(), omit_annotations=True)
+def author_item_provider_repair_response_schema(
+    *_: Any, local_schema: Mapping[str, Any] | None = None, **__: Any,
+) -> dict[str, Any]:
+    return _provider_strict_projection(
+        local_schema if local_schema is not None else author_item_repair_response_schema(),
+        omit_annotations=True)
 
 
 def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
