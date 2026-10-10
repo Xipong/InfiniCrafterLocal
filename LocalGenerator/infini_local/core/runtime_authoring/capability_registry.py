@@ -278,6 +278,16 @@ class EventKindSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class ParamProjection:
+    """One exact Author leaf/variant to relative wire-field projection."""
+
+    authored_path: str
+    wire_path: str
+    value: Any
+    literal: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class ParamSpec:
     kind: str
     description: str
@@ -300,6 +310,94 @@ class ParamSpec:
     neutral: Any = None
     execution_phase: str = ""
     consumer_storage: str = ""
+    properties: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    alternatives: tuple[ParamSpec, ...] = ()
+    wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    wire_enum: Mapping[Any, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    wire_offset: int = 0
+    min_properties: int | None = None
+
+    @property
+    def structured(self) -> bool:
+        return bool(self.properties or self.alternatives or self.wire_literals)
+
+    def selected_variant(self, value: Any) -> ParamSpec:
+        """Resolve exactly one declared variant; never guess an absent discriminator."""
+        if not self.alternatives:
+            return self
+        # Lazy import keeps schema shape at its canonical owner without a
+        # parallel shape matcher or a module initialization dependency cycle.
+        from infini_local.core.schema_validation import strict_schema_errors
+        matches = [variant for variant in self.alternatives
+                   if not strict_schema_errors(value, variant.schema())]
+        if len(matches) != 1:
+            raise ValueError("parameter requires exactly one explicit registered variant")
+        return matches[0]
+
+    def leaf_values(self, value: Any, name: str) -> tuple[tuple[str, ParamSpec, Any], ...]:
+        """Read present typed leaves for validation; absence is not materialized."""
+        try:
+            selected = self.selected_variant(value)
+        except ValueError:
+            return ()  # strict shape owns invalid/ambiguous variant diagnostics
+        if selected is not self:
+            return selected.leaf_values(value, name)
+        if self.kind == "object":
+            if not isinstance(value, Mapping):
+                return ()
+            return tuple(leaf for key, spec in self.properties.items() if key in value
+                         for leaf in spec.leaf_values(value[key], f"{name}.{key}"))
+        return ((name, self, value),)
+
+    def projected_fields(self, value: Any, name: str) -> tuple[ParamProjection, ...]:
+        """Project a validated value, retaining its exact nested source paths.
+
+        Objects group Author decisions only. Wire names are relative to the
+        capability's existing component; they may name a nested DTO field.
+        Literal fields belong to an explicitly selected variant, not a default.
+        """
+        selected = self.selected_variant(value)
+        if selected is not self:
+            return selected.projected_fields(value, name)
+        rows = [ParamProjection(name, key, item, True) for key, item in self.wire_literals.items()]
+        if self.kind == "object":
+            if not isinstance(value, Mapping):
+                raise ValueError("object parameter has no object value")
+            for key, spec in self.properties.items():
+                if key in value:
+                    rows.extend(spec.projected_fields(value[key], f"{name}.{key}"))
+        elif not self.wire_literals or self.wire_name:
+            rows.append(ParamProjection(name, self.wire_name or name.rsplit(".", 1)[-1], self.to_wire(value)))
+        destinations = [row.wire_path for row in rows]
+        if len(destinations) != len(set(destinations)):
+            raise ValueError("parameter projects multiple decisions into one wire field")
+        return tuple(rows)
+
+    def wire_field_names(self, name: str) -> tuple[str, ...]:
+        """Finite output inventory for every admitted variant, without values."""
+        if self.alternatives:
+            return tuple(dict.fromkeys(field_name for variant in self.alternatives
+                                       for field_name in variant.wire_field_names(name)))
+        outputs = list(self.wire_literals)
+        if self.kind == "object":
+            outputs.extend(field_name for key, spec in self.properties.items()
+                           for field_name in spec.wire_field_names(key))
+        elif not self.wire_literals or self.wire_name:
+            outputs.append(self.wire_name or name.rsplit(".", 1)[-1])
+        return tuple(dict.fromkeys(outputs))
+
+    def projection_paths(self, name: str) -> tuple[tuple[str, str, bool], ...]:
+        """Exact finite source/output pairs for source-free receipt inspection."""
+        if self.alternatives:
+            return tuple(dict.fromkeys(row for variant in self.alternatives
+                                       for row in variant.projection_paths(name)))
+        rows = [(name, key, True) for key in self.wire_literals]
+        if self.kind == "object":
+            rows.extend(row for key, spec in self.properties.items()
+                        for row in spec.projection_paths(f"{name}.{key}"))
+        elif not self.wire_literals or self.wire_name:
+            rows.append((name, self.wire_name or name.rsplit(".", 1)[-1], False))
+        return tuple(rows)
 
     def consumer_constraint(self) -> dict[str, Any]:
         if self.consumer_storage == "float64":
@@ -349,6 +447,14 @@ class ParamSpec:
 
     def to_wire(self, value: Any) -> Any:
         # Declared unit conversion, not a choice of mechanic or a numeric clamp.
+        if self.wire_enum:
+            if value not in self.wire_enum:
+                raise ValueError("undeclared wire enum value")
+            return self.wire_enum[value]
+        if self.wire_offset:
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError("integer offset requires an integer Author value")
+            return value + self.wire_offset
         if self.wire_boolean_true_value is not None:
             return self.wire_boolean_true_value if value else 0
         if self.wire_multiplier != 1:
@@ -365,7 +471,14 @@ class ParamSpec:
         return value
 
     def schema(self) -> dict[str, Any]:
-        out: dict[str, Any] = {"type": self.kind}
+        out: dict[str, Any] = ({"oneOf": [variant.schema() for variant in self.alternatives]}
+                               if self.alternatives else {"type": self.kind})
+        if self.kind == "object":
+            out.update({"properties": {name: spec.schema() for name, spec in self.properties.items()},
+                        "required": [name for name, spec in self.properties.items() if spec.required],
+                        "additionalProperties": False})
+            if self.min_properties is not None:
+                out["minProperties"] = self.min_properties
         if self.minimum is not None:
             out["minimum"] = self.minimum
         if self.maximum is not None:
@@ -424,6 +537,10 @@ class CapabilitySpec:
     authority_by_effect: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     activation_spawn_count_param: str = ""
     meaningful_for_stationary: bool = False
+    # Persisted wire-only provenance, never a second accepted Author grammar.
+    # Entries contain exact projections of retired authored parameter paths.
+    retained_receipt_params: Mapping[str, ParamSpec] = field(default_factory=lambda: MappingProxyType({}), compare=False)
+    fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
 
     def provider_variant_schema(self) -> dict[str, Any]:
         properties = {name: spec.schema() for name, spec in self.params.items()}
@@ -496,6 +613,8 @@ class CapabilitySpec:
                 row["neutral"] = spec.neutral
             if spec.consumer_storage:
                 row["consumerConstraint"] = spec.consumer_constraint()
+            if spec.structured:
+                row["shape"] = spec.schema()
             params[name] = row
         card: dict[str, Any] = {
             "fn": self.name,
@@ -623,6 +742,12 @@ def _p(
     neutral: Any = None,
     execution_phase: str = "",
     consumer_storage: str = "",
+    properties: Mapping[str, ParamSpec] | None = None,
+    alternatives: Iterable[ParamSpec] = (),
+    wire_literals: Mapping[str, Any] | None = None,
+    wire_enum: Mapping[Any, Any] | None = None,
+    wire_offset: int = 0,
+    min_properties: int | None = None,
 ) -> ParamSpec:
     return ParamSpec(
         kind=kind,
@@ -646,6 +771,12 @@ def _p(
         neutral=neutral,
         execution_phase=execution_phase,
         consumer_storage=consumer_storage,
+        properties=MappingProxyType(dict(properties or {})),
+        alternatives=tuple(alternatives),
+        wire_literals=MappingProxyType(dict(wire_literals or {})),
+        wire_enum=MappingProxyType(dict(wire_enum or {})),
+        wire_offset=wire_offset,
+        min_properties=min_properties,
     )
 
 
@@ -679,6 +810,8 @@ def _cap(
     authority_by_effect: Mapping[str, str] | None = None,
     activation_spawn_count_param: str = "",
     meaningful_for_stationary: bool = False,
+    retained_receipt_params: Mapping[str, ParamSpec] | None = None,
+    fixed_wire_literals: Mapping[str, Any] | None = None,
 ) -> CapabilitySpec:
     target_values = tuple(targets)
     target_set = set(target_values)
@@ -712,6 +845,8 @@ def _cap(
         authority_by_effect=MappingProxyType(dict(authority_by_effect or {})),
         activation_spawn_count_param=activation_spawn_count_param,
         meaningful_for_stationary=meaningful_for_stationary,
+        retained_receipt_params=MappingProxyType(dict(retained_receipt_params or {})),
+        fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
     )
 
 
@@ -1851,6 +1986,8 @@ if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
+    param_fields = tuple(dict.fromkeys(field_name for name, spec in cap.params.items()
+                                      for field_name in spec.wire_field_names(name)))
     if cap.name == "present_placed_item_sprite":
         base = "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
         return (base, *(f"{base}.{name}" for name in cap.params if name != "placementCallId"))
@@ -1884,7 +2021,7 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         return item_paths[cap.name]
     if cap.name in {"configure_accessory", "configure_armor"}:
         prefix = "accessory" if cap.name == "configure_accessory" else "armor"
-        return (f"{prefix}.enabled", *(f"{prefix}.{spec.wire_name or name}" for name, spec in cap.params.items()))
+        return (f"{prefix}.enabled", *(f"{prefix}.{name}" for name in param_fields))
     if cap.name == "add_equipment_damage_bonus":
         return tuple(
             equipment_damage_wire_path(phase, damage_class, armor=armor)
@@ -1893,9 +2030,9 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
             for damage_class in EQUIPMENT_DAMAGE_CLASSES
         )
     if cap.name == "configure_spawn":
-        return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items()]])
+        return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{name}" for name in param_fields]])
     if cap.name == "set_projectile_concurrency":
-        return tuple(f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items())
+        return tuple(f"runtimeProgram.entities[].spawn.{name}" for name in param_fields)
     if cap.name == "set_projectile_damage":
         return tuple(["runtimeProgram.entities[].damage.enabled", *[f"runtimeProgram.entities[].damage.{name}" for name in cap.params]])
     if cap.name == "set_projectile_lifetime":
@@ -1903,9 +2040,9 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name == "set_projectile_hitbox":
         return tuple(f"runtimeProgram.entities[].hitbox.{name}" for name in cap.params)
     if cap.name == "set_projectile_collision":
-        return tuple(f"runtimeProgram.entities[].collision.{spec.wire_name or name}" for name, spec in cap.params.items())
+        return tuple(f"runtimeProgram.entities[].collision.{name}" for name in param_fields)
     if cap.category == "movement":
-        return tuple(["runtimeProgram.entities[].movement.name", "runtimeProgram.entities[].movement.code", *[f"runtimeProgram.entities[].movement.params.{spec.wire_name or name}" for name, spec in cap.params.items()]])
+        return tuple(["runtimeProgram.entities[].movement.name", "runtimeProgram.entities[].movement.code", *[f"runtimeProgram.entities[].movement.params.{name}" for name in param_fields]])
     if cap.name in {"channel_beam", "charge_then_release"}:
         return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
     if cap.name == "target_and_fire":

@@ -152,7 +152,7 @@ def test_binding_alternatives_are_atomic(scenario, ok):
         assert all(k not in filtered["bindingsUpsert"][0] for k in ("action", "target"))
         assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
     else:
-        assert any(e.get("code") == "repair_scope_violation" or e.get("kind") in {"additional_property", "one_of", "exactly_one"} for e in audit["errors"])
+        assert any(e.get("code") == "repair_scope_violation" or e.get("kind") in {"additional_property", "one_of", "any_of", "exactly_one"} for e in audit["errors"])
 
 
 @pytest.mark.parametrize("authorized,candidate_author,expected", [(False, None, "gemini"), (True, None, None), (True, "gpt", "gemini")], ids=["omission-frozen", "authorized-omission-deletes", "authorization-not-rewrite"])

@@ -44,6 +44,20 @@ from infini_local.core.runtime_authoring.validator import (
 class _CompileContext:
     receipts: list[dict[str, Any]]
 
+    def project_parameter(self, *, call: Mapping[str, Any], param: str, value: Any,
+                          target: MutableMapping[str, Any], prefix: str) -> None:
+        """Execute the registry's exact leaf/variant projection with provenance."""
+        spec = CAPABILITY_REGISTRY[str(call["fn"])].params[param]
+        for row in spec.projected_fields(value, param):
+            destination = target
+            parts = row.wire_path.split(".")
+            for part in parts[:-1]:
+                destination = destination.setdefault(part, {})
+            self.write(call=call, path=f"{prefix}.{row.wire_path}", value=row.value,
+                       target=destination, key=parts[-1], authored_param=row.authored_path)
+            if row.literal:
+                self.receipts[-1]["status"] = "alias_lowering"
+
     def write(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str, authored_param: str | None = None) -> None:
         target[key] = copy.deepcopy(value)
         self.receipts.append({
@@ -118,10 +132,7 @@ def _compile_item_call(
     def project_equipment(target: dict[str, Any], prefix: str) -> None:
         for source, spec in CAPABILITY_REGISTRY[fn].params.items():
             if source in p:
-                destination = spec.wire_name or source
-                ctx.write(call=call, path=f"{prefix}.{destination}",
-                          value=spec.to_wire(p[source]), target=target,
-                          key=destination, authored_param=source)
+                ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
     if fn == "configure_item_stats":
         project(gameplay, "gameplay", {
@@ -279,10 +290,7 @@ def _compile_entity_call(
 
     def project(target: dict[str, Any], prefix: str, values: Mapping[str, Any]) -> None:
         for source, value in values.items():
-            spec = CAPABILITY_REGISTRY[fn].params[source]
-            destination = spec.wire_name or source
-            ctx.write(call=call, path=f"{prefix}.{destination}", value=spec.to_wire(value),
-                      target=target, key=destination, authored_param=source)
+            ctx.project_parameter(call=call, param=source, value=value, target=target, prefix=prefix)
 
     if fn == "configure_spawn":
         spawn = component("spawn")
