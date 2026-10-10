@@ -98,7 +98,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert prefix == other_prefix
     assert len(prefix) > 65000
     assert set(static) == {"priorityHeader", "gameplayAuthoringStages", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport"}
-    assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor"}
+    assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
     assert len(capabilities) == sum(cap.prompt_visible and cap.decision == "expose" for cap in author.CAPABILITY_REGISTRY.values())

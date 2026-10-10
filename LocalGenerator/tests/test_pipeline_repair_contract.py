@@ -1727,4 +1727,4 @@ def test_initial_author_packet_places_unchanged_contract_before_recipe_specific_
     assert "balanceCorridor" not in payload["runtimeCapabilityContract"]
     assert "primaryEntityOwnership" in payload["runtimeProgramInvariants"]
     assert "primaryEntitySelection" not in payload["runtimeProgramInvariants"]
-    assert list(payload)[-1] == "balanceCorridor"
+    assert list(payload)[-2:] == ["balanceCorridor", "sourceWireUnits"]

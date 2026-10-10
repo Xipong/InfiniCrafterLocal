@@ -57,7 +57,7 @@ Inventory: **53 public capabilities**, **2 internal retained entries**, **7 enti
 
 | event | source kinds | producer calls | producer binding inputs | producer-free base kinds | exact producer params | смысл |
 |---|---|---|---|---|---|---|
-| `on_use` | item_body | — | primary_use, alternate_use | — | — | Emitted when an active item-body use binding succeeds. |
+| `on_use` | item_body | — | primary_use, alternate_use | — | — | Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target. |
 | `on_spawn` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Emitted once when a runtime projectile entity activates. |
 | `on_hit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_damage | primary_use, alternate_use | — | — | Emitted after explicit contact/projectile damage hits an NPC. |
 | `on_crit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_damage | primary_use, alternate_use | — | — | Emitted after an explicitly damaging hit is critical. |
