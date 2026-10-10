@@ -290,6 +290,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -354,6 +361,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -770,6 +784,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -834,6 +855,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -1527,6 +1555,13 @@
                           "action": {
                             "additionalProperties": false,
                             "properties": {
+                              "effectGroupId": {
+                                "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string"
+                              },
                               "kind": {
                                 "const": "apply_item_effects"
                               },
@@ -1591,6 +1626,13 @@
                           "action": {
                             "additionalProperties": false,
                             "properties": {
+                              "effectGroupId": {
+                                "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string"
+                              },
                               "kind": {
                                 "const": "apply_item_effects"
                               },
@@ -2007,6 +2049,13 @@
                           "action": {
                             "additionalProperties": false,
                             "properties": {
+                              "effectGroupId": {
+                                "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string"
+                              },
                               "kind": {
                                 "const": "apply_item_effects"
                               },
@@ -2071,6 +2120,13 @@
                           "action": {
                             "additionalProperties": false,
                             "properties": {
+                              "effectGroupId": {
+                                "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string"
+                              },
                               "kind": {
                                 "const": "apply_item_effects"
                               },
@@ -2697,6 +2753,7 @@
                           "restore_resources_on_use",
                           "apply_vanilla_buff_on_use",
                           "apply_generated_buff_on_use",
+                          "refresh_generated_effect_group_while_held",
                           "configure_tool",
                           "configure_placeable",
                           "present_placed_item_sprite",
@@ -3324,6 +3381,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -3388,6 +3452,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -3804,6 +3875,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -3868,6 +3946,13 @@
                         "action": {
                           "additionalProperties": false,
                           "properties": {
+                            "effectGroupId": {
+                              "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                              "maxLength": 48,
+                              "minLength": 1,
+                              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                              "type": "string"
+                            },
                             "kind": {
                               "const": "apply_item_effects"
                             },
@@ -4465,6 +4550,13 @@
                               "action": {
                                 "additionalProperties": false,
                                 "properties": {
+                                  "effectGroupId": {
+                                    "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                    "maxLength": 48,
+                                    "minLength": 1,
+                                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                    "type": "string"
+                                  },
                                   "kind": {
                                     "const": "apply_item_effects"
                                   },
@@ -4529,6 +4621,13 @@
                               "action": {
                                 "additionalProperties": false,
                                 "properties": {
+                                  "effectGroupId": {
+                                    "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                    "maxLength": 48,
+                                    "minLength": 1,
+                                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                    "type": "string"
+                                  },
                                   "kind": {
                                     "const": "apply_item_effects"
                                   },
@@ -4945,6 +5044,13 @@
                               "action": {
                                 "additionalProperties": false,
                                 "properties": {
+                                  "effectGroupId": {
+                                    "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                    "maxLength": 48,
+                                    "minLength": 1,
+                                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                    "type": "string"
+                                  },
                                   "kind": {
                                     "const": "apply_item_effects"
                                   },
@@ -5009,6 +5115,13 @@
                               "action": {
                                 "additionalProperties": false,
                                 "properties": {
+                                  "effectGroupId": {
+                                    "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                                    "maxLength": 48,
+                                    "minLength": 1,
+                                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                    "type": "string"
+                                  },
                                   "kind": {
                                     "const": "apply_item_effects"
                                   },

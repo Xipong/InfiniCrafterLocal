@@ -157,6 +157,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             if fn == "add_equipment_damage_bonus":
                 calls.append(_call("base_equipment", "configure_accessory", "item", {"defensePoints": 1}))
             calls.append(_call("witness_call", fn, "item"))
+            if fn == "refresh_generated_effect_group_while_held":
+                effect = _params("apply_generated_buff_on_use")
+                effect["effectGroupId"] = _params(fn)["effectGroupId"]
+                calls.append(_call("held_utility_effect", "apply_generated_buff_on_use", "item", effect))
             action = "use_item_body"
             input_kind = "primary_use"
             if fn in {"configure_placeable", "present_placed_item_sprite"}:

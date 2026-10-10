@@ -591,11 +591,25 @@
       "finalWirePaths": [
         "gameplay.healLife",
         "gameplay.healMana",
-        "gameplay.potion"
+        "gameplay.potion",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].healLife",
+        "runtimeProgram.effectGroups[].healMana",
+        "runtimeProgram.effectGroups[].potion"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
+        },
         "healLife": {
           "enum": [],
           "kind": "integer",
@@ -677,7 +691,10 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "gameplay.extraBuffs[].buffCode",
-        "gameplay.extraBuffs[].buffTime"
+        "gameplay.extraBuffs[].buffTime",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffCode",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffTime"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -701,6 +718,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -745,7 +772,17 @@
         "gameplay.generatedBuff.movementSpeed",
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
-        "gameplay.generatedBuff.lifeRegen"
+        "gameplay.generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
+        "runtimeProgram.effectGroups[].generatedBuff.emitLightStrength",
+        "runtimeProgram.effectGroups[].generatedBuff.lightColorName",
+        "runtimeProgram.effectGroups[].generatedBuff.oreSenseRadiusTiles",
+        "runtimeProgram.effectGroups[].generatedBuff.movementSpeed",
+        "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
+        "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegen"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -759,6 +796,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         },
         "jumpSpeedBonusPxPerTick": {
           "enum": [],
@@ -873,6 +920,47 @@
           "target": "same_target"
         }
       ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "refresh_generated_effect_group_while_held",
+      "componentSlot": "held_generated_buff",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.heldEffectGroupId"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "item_effect_group_reference",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restored explicit held generated utility buff refresh",
+      "purpose": "Refresh the one named generated utility buff group every world tick while this exact item is held. Its explicit duration controls lingering after release. The group may contain only apply_generated_buff_on_use; no healing, teleport, native buff or invisible projectile is inferred.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1391,7 +1479,12 @@
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
         "gameplay.mobilityCooldownTicks",
-        "gameplay.mobilitySafeTileOnly"
+        "gameplay.mobilitySafeTileOnly",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].mobilityMode",
+        "runtimeProgram.effectGroups[].mobilityRangeTiles",
+        "runtimeProgram.effectGroups[].mobilityCooldownTicks",
+        "runtimeProgram.effectGroups[].mobilitySafeTileOnly"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -1405,6 +1498,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         },
         "mode": {
           "enum": [
