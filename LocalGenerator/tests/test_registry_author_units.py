@@ -34,7 +34,6 @@ RENAMES = (
     ("move_expanding_wave", "scalePerTick", "scaleGrowthPerUpdate", 0.1875, "movement.params"),
     ("move_accelerate", "acceleration", "speedMultiplierPerUpdate", 1.125, "movement.params"),
     ("move_sine_homing", "waveAmplitude", "waveVelocityCoefficient", 7.125, "movement.params"),
-    ("configure_item_use", "releaseTiming", "heldSpriteVisibilityHint", "on_release", "itemUse"),
     ("configure_vanilla_ammo_item", "shootSpeedPxPerTick", "shootSpeedContributionPxPerUpdate", 7.125, "gameplay"),
     ("restore_resources_on_use", "potionSickness", "usesPotionRules", True, "gameplay"),
     ("apply_generated_buff_on_use", "movementSpeed", "moveSpeedBonusFactor", 0.1875, "generatedBuff"),
@@ -100,7 +99,7 @@ def _get(document, path):
 def author_cards():
     _, user, _ = build_initial_author_request({}, {}, {}, {}, "unit-proof", model_name="test-model")
     cards = {c["fn"]: c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert set(cards) == set(CAPABILITY_REGISTRY)
+    assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     return cards
 
 
@@ -185,6 +184,21 @@ def test_fractional_author_unit_keeps_integer_saved_equipment_clamps():
     assert render() == (root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedEquipmentBounds.g.cs").read_text()
 
 
+def _stat_spec(fn, param):
+    parts = param.split(".")
+    spec = CAPABILITY_REGISTRY[fn].params[parts[0]]
+    for part in parts[1:]:
+        spec = spec.properties[part]
+    return spec
+
+
+def _set_stat(params, path, value):
+    parts = path.split(".")
+    for part in parts[:-1]:
+        params = params.setdefault(part, {})
+    params[parts[-1]] = value
+
+
 # The old engine domains are exhausted as visible pytest cases, not hidden loops.
 @pytest.mark.parametrize(
     "fn,param,path,author_per_engine,divisor,multiplier,old",
@@ -196,13 +210,13 @@ def test_fractional_author_unit_keeps_integer_saved_equipment_clamps():
             (FN, "manaRegenBonusPoints", "gameplay.generatedBuff.manaRegen", 1, 1, 1, range(121)),
             ("configure_accessory", "lifeRegenHpPerSecond", "accessory.lifeRegen", 0.5, 1, 2, range(-100, 201)),
             ("configure_armor", "lifeRegenHpPerSecond", "armor.lifeRegen", 0.5, 1, 2, range(-100, 201)),
-            ("configure_armor", "setBonusLifeRegenHpPerSecond", "armor.setBonusLifeRegen", 0.5, 1, 2, range(-100, 201)),
+            ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "armor.setBonusLifeRegen", 0.5, 1, 2, range(-100, 201)),
         )
         for old in domain
     ],
 )
 def test_discrete_author_units_exhaust_engine_domain(fn, param, path, author_per_engine, divisor, multiplier, old):
-    spec = CAPABILITY_REGISTRY[fn].params[param]
+    spec = _stat_spec(fn, param)
     # The human unit is an independent historical contract, not derived from
     # the current converter: corrupting a registry scale must not cancel out.
     assert (spec.wire_divisor, spec.wire_multiplier) == (divisor, multiplier)
@@ -213,7 +227,7 @@ def test_discrete_author_units_exhaust_engine_domain(fn, param, path, author_per
     assert spec.to_wire(human) * spec.wire_divisor / spec.wire_multiplier == human
     doc = build_capability_witness(fn)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-    call["params"][param] = human
+    _set_stat(call["params"], param, human)
     if fn == FN:
         call["params"]["oreSenseEnabled"] = True
     wire = compile_runtime_program(doc)
@@ -237,28 +251,32 @@ def test_discrete_author_units_exhaust_engine_domain(fn, param, path, author_per
             (FN, "lifeRegenHpPerSecond", "lifeRegen", 0, 60, 0.5, (0.25, 60.5)),
             ("configure_accessory", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
             ("configure_armor", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
-            ("configure_armor", "setBonusLifeRegenHpPerSecond", "setBonusLifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
+            ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "setBonusLifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
         )
         for bad in bads
     ],
 )
 def test_discrete_unit_schema_and_rejection(fn, param, old, minimum, maximum, step, bad):
-    spec = CAPABILITY_REGISTRY[fn].params[param]
+    spec = _stat_spec(fn, param)
     assert (spec.minimum, spec.maximum, spec.multiple_of) == (minimum, maximum, step)
     schema = next(s["properties"]["params"] for s in capability_provider_union() if s["properties"]["fn"]["const"] == fn)
-    assert param in schema["properties"] and old not in schema["properties"]
-    assert schema["properties"][param]["multipleOf"] == step
-    assert (param in schema["required"]) is spec.required
+    root_schema = schema
+    leaf = param.rsplit(".", 1)[-1]
+    for part in param.split(".")[:-1]:
+        schema = schema["properties"][part]
+    assert leaf in schema["properties"] and old not in root_schema["properties"]
+    assert schema["properties"][leaf]["multipleOf"] == step
+    assert (leaf in schema["required"]) is spec.required
     if spec.default is not None:
         assert schema["properties"][param]["default"] == 0
-    assert param in next(c["params"] for c in compact_capability_catalog() if c["fn"] == fn)
+    assert param.split(".")[0] in next(c["params"] for c in compact_capability_catalog() if c["fn"] == fn)
     doc = build_capability_witness(fn)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-    call["params"][param] = bad
+    _set_stat(call["params"], param, bad)
     assert not validate_runtime_program(doc)["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
-    call["params"][param] = 0
+    _set_stat(call["params"], param, 0)
     call["params"][old] = 2
     assert not validate_runtime_program(doc)["ok"]
 

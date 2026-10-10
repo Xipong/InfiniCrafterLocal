@@ -153,9 +153,10 @@ def test_tool_and_value_units_match_exact_terraria_fields() -> None:
 
 
 def test_held_sprite_visibility_is_only_presentation_metadata() -> None:
-    release = CAPABILITY_REGISTRY["configure_item_use"].params["heldSpriteVisibilityHint"]
-    assert release.enum == ("", "immediate", "on_release", "after_charge")
+    release = CAPABILITY_REGISTRY["configure_item_use"].params["customHeldSprite"]
+    assert release.enum == ("hidden", "visible", "inherit")
+    assert dict(release.wire_enum) == {"hidden": "immediate", "visible": "on_release", "inherit": ""}
     assert "Custom held-root visibility only" in release.description
     assert "not gameplay release timing" in release.description
-    assert "visual.renderSizePx" in release.description
-    assert "preserves historical keep behavior when that metadata is absent" in release.description
+    assert "declared-size presentations" in release.description
+    assert "historical keep behavior" in release.description

@@ -64,9 +64,9 @@ def _dual_use_placeable() -> dict[str, Any]:
     program = authored["runtimeProgram"]
     program["calls"].append({
         "id": "install_tile",
-        "fn": "configure_placeable",
+        "fn": "configure_tile_placement",
         "target": "item",
-        "params": {"tileId": 19, "wallId": -1, "placeStyle": 0},
+        "params": {"tileId": 19, "placeStyle": 0},
     })
     program["bindings"].append({
         "id": "alternate_install",
@@ -308,9 +308,9 @@ def test_repair_authorizes_one_complete_use_transaction_not_shadow_calls() -> No
     current = _upgrade_fixture("workbench_blade")
     current["runtimeProgram"]["calls"].append({
         "id": "placeable_without_binding",
-        "fn": "configure_placeable",
+        "fn": "configure_tile_placement",
         "target": "item",
-        "params": {"tileId": 4, "wallId": -1, "placeStyle": 0},
+        "params": {"tileId": 4, "placeStyle": 0},
     })
     report = validate_runtime_program(current)
     assert "missing_binding_dependency" in _codes(report)

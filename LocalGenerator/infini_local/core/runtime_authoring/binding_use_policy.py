@@ -147,6 +147,7 @@ def project_to_wire(
     binding: Mapping[str, Any],
     *,
     placement_calls_by_id: Mapping[str, Mapping[str, Any]],
+    placement_literals_by_fn: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Losslessly lower one validated authored transaction to its wire row."""
     policy = use_policy(binding)
@@ -161,7 +162,8 @@ def project_to_wire(
     if kind == PLACE_ITEM_ACTION:
         call_id = str(authored_action["placementCallId"])
         call = placement_calls_by_id[call_id]
-        wire_action["placement"] = copy.deepcopy(dict(call["params"]))
+        wire_action["placement"] = {**copy.deepcopy(dict(call["params"])),
+                                    **placement_literals_by_fn[str(call["fn"])]}
     wire_policy = {
         "action": wire_action,
         "stackCost": int(policy["stackCost"]),

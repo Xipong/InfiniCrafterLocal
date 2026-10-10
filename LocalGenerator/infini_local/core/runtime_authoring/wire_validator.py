@@ -285,6 +285,13 @@ def _item_effect_group_wire_schema() -> dict[str, Any]:
         properties.update({spec.wire_name or name: spec.schema() for name, spec in CAPABILITY_REGISTRY[fn].params.items() if name != "effectGroupId"})
     buff_properties = {spec.wire_name or name: spec.schema() for name, spec in CAPABILITY_REGISTRY["apply_vanilla_buff_on_use"].params.items() if name != "effectGroupId"}
     properties["mobilityMode"]["enum"] = ["", *properties["mobilityMode"]["enum"]]
+    # A fn-selected exact literal shares the same DTO domain as parameter
+    # projections; exposing it on wire does not accept a retired Author token.
+    for cap in CAPABILITY_REGISTRY.values():
+        if cap.effect_groupable:
+            for key, value in cap.fixed_wire_literals.items():
+                if key in properties and "enum" in properties[key] and value not in properties[key]["enum"]:
+                    properties[key]["enum"].append(value)
     properties["extraBuffs"] = {"type": "array", "maxItems": 48, "items": {
         "type": "object", "additionalProperties": False, "properties": buff_properties, "required": list(buff_properties)}}
     properties["generatedBuff"] = {"type": "object"}

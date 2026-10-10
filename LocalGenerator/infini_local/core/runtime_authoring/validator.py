@@ -417,8 +417,7 @@ def _validate_requirement(
             native = row.get("params")
             return (row.get("fn") == requirement.capability and row.get("target") == target_id
                     and isinstance(native, Mapping) and type(native.get("tileId")) is int
-                    and 0 <= native["tileId"] <= 65535 and type(native.get("wallId")) is int
-                    and native["wallId"] == -1
+                    and 0 <= native["tileId"] <= 65535
                     and any(action_kind(binding) in requirement.any_of
                             and binding_target_id(binding) == target_id
                             and placement_call_id(binding) == row.get("id")
@@ -583,7 +582,8 @@ def _validate_requirement(
     if requirement.kind == "nonneutral_params_require_param":
         declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         has_bonus = declared_cap is not None and any(
-            name in params and params[name] != declared_cap.params[name].neutral
+            name in params and any(value != leaf.neutral
+                                   for _, leaf, value in declared_cap.params[name].leaf_values(params[name], name))
             for name in requirement.nonzero_params
         )
         if has_bonus and not params.get(requirement.param):
@@ -595,7 +595,8 @@ def _validate_requirement(
     if requirement.kind == "nonneutral_params_require_exact_param":
         declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         has_bonus = declared_cap is not None and any(
-            name in params and params[name] != declared_cap.params[name].neutral
+            name in params and any(value != leaf.neutral
+                                   for _, leaf, value in declared_cap.params[name].leaf_values(params[name], name))
             for name in requirement.nonzero_params
         )
         if has_bonus and params.get(requirement.param) != requirement.equals:
@@ -741,7 +742,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
 
     calls_by_target = _calls_by_target(program)
     seen_single: set[tuple[str, str, str | None]] = set()
-    exclusive_components: dict[tuple[str, str], tuple[int, str]] = {}
+    exclusive_components: dict[tuple[str, str, str | None], tuple[int, str]] = {}
     event_edges: dict[str, set[str]] = {entity_id: set() for entity_id in entities_by_id}
     event_referenced_entities: set[str] = set()
     event_spawn_budget = 0
@@ -768,7 +769,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}]", "duplicate_single_component", f"{fn} may appear only once on '{target_id}'.", ("merge into one call", "delete duplicate"), (target_id, call_id)))
         seen_single.add(key)
         if cap.exclusive_group:
-            group_key = (target_id, cap.exclusive_group)
+            # Multiplicity and exclusivity share the same registry-declared
+            # owner: target plus explicit effect identity, never a semantic lane.
+            group_key = (target_id, cap.exclusive_group, key[2])
             if group_key in exclusive_components:
                 previous_index, previous_id = exclusive_components[group_key]
                 issues.append(ValidationIssue(
@@ -1009,17 +1012,17 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         referenced_call = calls_by_id.get(referenced_call_id)
         if (
             referenced_call is None
-            or str(referenced_call.get("fn") or "") != "configure_placeable"
+            or str(referenced_call.get("fn") or "") not in {"configure_tile_placement", "configure_wall_placement"}
             or str(referenced_call.get("target") or "") != binding_target_id(binding)
         ):
             issues.append(ValidationIssue(
                 f"$.runtimeProgram.bindings[{index}].usePolicy.action.placementCallId",
                 "missing_binding_dependency",
-                "place_item must reference one configure_placeable call on the same item target.",
+                "place_item must reference one configure_tile_placement or configure_wall_placement call on the same item target.",
                 tuple(
                     str(row.get("id") or "")
                     for row in item_calls
-                    if str(row.get("fn") or "") == "configure_placeable"
+                    if str(row.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
                 ),
                 (str(binding.get("id") or ""), referenced_call_id),
             ))

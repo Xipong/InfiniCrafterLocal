@@ -28,6 +28,25 @@ def _delivery_wire(compiled: dict[str, Any]) -> dict[str, Any]:
     return wire
 
 
+def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
+    """Express this frozen test corpus in the new Author shape; never import saves."""
+    current = deepcopy(authored)
+    for call in current["runtimeProgram"]["calls"]:
+        params = call["params"]
+        if call["fn"] == "configure_item_use" and "heldSpriteVisibilityHint" in params:
+            old = params.pop("heldSpriteVisibilityHint")
+            params["customHeldSprite"] = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}[old]
+        if call["fn"] == "configure_placeable":
+            if params["wallId"] == -1:
+                call["fn"] = "configure_tile_placement"
+                del params["wallId"]
+            else:
+                assert params["tileId"] == -1
+                call["fn"] = "configure_wall_placement"
+                del params["tileId"]
+    return current
+
+
 _HISTORICAL_DELIVERY_SHA256 = {
     "door_on_chain": "6ce7a898fcaa947880f5516184fbe5130098df0af498f91c7fdd2bf942f52f4f",
     "equipment_tool_combat": "1b1eab483aeac5ba4a4e6d0d93dc9e2269c54540b9173319ef9c1c35903efce8",
@@ -79,7 +98,7 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         )
         assert actual_capabilities == row["capabilities"]
 
-        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(authored)))
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(authored))))
         assert validate_runtime_wire(compiled)["ok"] is True
         actual_wire = historical_spawn_velocity_wire(historical_child_combat_wire(_delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))))
         assert actual_wire == row["expectedDeliveryWire"]

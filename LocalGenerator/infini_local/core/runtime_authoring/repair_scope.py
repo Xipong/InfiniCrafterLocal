@@ -898,7 +898,7 @@ def _complete_binding_transactions(
         call_ids = sorted(
             str(call.get("id") or "")
             for call in rows.get("calls", [])
-            if str(call.get("fn") or "") == "configure_placeable"
+            if str(call.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
             and str(call.get("target") or "") == target_id
             and str(call.get("id") or "")
         )

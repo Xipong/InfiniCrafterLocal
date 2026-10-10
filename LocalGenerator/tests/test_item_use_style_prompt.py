@@ -51,7 +51,7 @@ def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monk
 
 
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("hidden,hint", [(False, ""), (True, ""), (True, "on_release")])
+@pytest.mark.parametrize("hidden,hint", [(False, "inherit"), (True, "inherit"), (True, "visible")])
 def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_transport, monkeypatch, format_mode, hidden, hint):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
@@ -61,13 +61,13 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     author_card = next(c for c in author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "configure_item_use")
     good = build_runtime_fixture("returning_potion")  # Free projectile, not a replacement held body.
     use = next(c for c in good["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
-    use["params"].update(hideUseGraphic=hidden, heldSpriteVisibilityHint=hint)
+    use["params"].update(hideUseGraphic=hidden, customHeldSprite=hint)
     baseline = compile_runtime_program(good)
     broken = copy.deepcopy(good)
     next(c for c in broken["runtimeProgram"]["calls"] if c["id"] == use["id"])["params"]["useStyle"] = "invalid"
     report = validate_runtime_program(broken)
     hostile_use = copy.deepcopy(use)
-    hostile_use["params"].update(hideUseGraphic=not hidden, heldSpriteVisibilityHint="after_charge")
+    hostile_use["params"].update(hideUseGraphic=not hidden, customHeldSprite="visible")
     responses.append({"callsUpsert": [hostile_use], "realizationReplacement": good["realization"], "note": "repair useStyle only"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "visibility", failure_report={"stage": "validation", "errors": report["errors"]})
     repaired_packet = json.loads(requests[0]["messages"][1]["content"])
@@ -99,7 +99,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     descriptions += [p["spritePresentationReadOnly"]["heldRootVisibility"]["hideUseGraphic"] for p in visual_packets]
     descriptions += [p["runtimeVocabularyReadOnly" if i else "runtimeVocabulary"]["heldRootVisibility"]["hideUseGraphic"] for i, p in enumerate(vfx_packets)]
     for description in descriptions:
-        assert all(term in description for term in ("deliberate invisibility", "physical held-body replacement", "Free projectiles", "not", "heldSpriteVisibilityHint")), description
+        assert all(term in description for term in ("deliberate invisibility", "physical held-body replacement", "Free projectiles", "not", "customHeldSprite")), description
     for request in [author, *requests]:
         assert request["response_format"]["type"] == format_mode
     assert not responses

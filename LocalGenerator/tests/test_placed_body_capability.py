@@ -67,7 +67,9 @@ def test_bad_placement_association_rejects_without_rewriting(fault):
     elif fault == "duplicate": document["runtimeProgram"]["calls"].append({**copy.deepcopy(body), "id":"duplicate_body"})
     before = json.dumps(document, sort_keys=True)
     report = validate_runtime_program(document)
-    code = "duplicate_placed_body_reference" if fault == "duplicate" else "placed_body_placement_reference"
+    code = ("duplicate_placed_body_reference" if fault == "duplicate"
+            else "shape_additional_property" if fault == "tile-and-wall"
+            else "placed_body_placement_reference")
     assert code in {r["code"] for r in report["errors"]}, report
     with pytest.raises(ValueError): compile_runtime_program(document)
     assert json.dumps(document, sort_keys=True) == before
@@ -325,21 +327,19 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_complete_legacy_compiled_bytes():
-    from captured_parent_combat_author import historical_child_combat_wire
-    from captured_spawn_velocity_author import historical_spawn_velocity_wire
+def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
     from beam_contract_checks import without_declared_beam_neutrals
-    baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {}
-    for name in baseline:
-        compiled = historical_spawn_velocity_wire(historical_child_combat_wire(
-            without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))))
-        checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        # The new capability adds registry checks even when it is absent. Preserve
-        # the frozen full-document baseline, adjusting only that proven counter.
-        new_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
-                    "set_projectile_homing_modifier", "attract_npcs_while_active", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
-        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in new_caps)
-        checks["requirements"] = 29
-        actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    assert actual == baseline
+    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
+    from captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
+    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical
+
+    # The old full-document hashes remain archival. New Author names deliberately
+    # change compiler provenance and registry diagnostic counts, not delivery DTOs.
+    # Declared beam/targeting neutrals are explicit successors, not legacy rewrites.
+    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
+    for row in corpus["cases"]:
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
+        delivered = historical_spawn_velocity_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(_delivery_wire(compiled)))))
+        assert "placedBody" not in delivered["runtimeProgram"]
+        assert delivered == row["expectedDeliveryWire"]
+        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
