@@ -21,6 +21,7 @@
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.LiteralStackCost.cs" />
+    <Compile Include="EngineRuntimeChecks.StackChance.cs" />
     <Compile Include="EngineRuntimeChecks.Float32BuffIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffUI.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffDraw.cs" />

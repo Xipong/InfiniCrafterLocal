@@ -36,6 +36,8 @@ Calls с `effectGroupId:"healing"` и `effectGroupId:"escape"` должны яв
 
 Quick heal и quick mana выбирают только primary binding. Подготовка кандидатов обновляет native effect fields перед native selector, поэтому предыдущее альтернативное использование не прячет primary healing. Multiplayer quick-utility ticket по-прежнему фиксирует player/item/definition/primary binding; server admission и commit выбирают эту же primary group. Транспорт не повторяет native лечение или `UseItem`.
 
+[Optional вероятность расхода собственного стека](OWN_STACK_CHANCE_RU.md) — независимая binding policy. Она не маршрутизирует group selection и не подавляет успешно выполненные эффекты; exact input Repair сохраняет одновременно frozen group selector и probability. Held-refresh dedup не заменяет completed-use receipt расхода.
+
 Все группы и все предметы одного игрока используют прежний **единый player mobility cooldown**. Две разные группы recall/blink не создают независимые таймеры. Pure mobility attempt, отказанный после admission, не получает успешный stack-consumption receipt; удача primary не может оплатить отказавший alternate. Если группа содержит другие успешно выполненные эффекты, сохраняется прежняя mixed-use семантика без выдуманного общего rollback.
 
 ## Явный эффект удерживания

@@ -92,7 +92,7 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
     }
 
 
-def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]:
+def _binding_variant_schema(input_name: str, action_name: str, cost: int | None = None) -> dict[str, Any]:
     active_use = input_name in {"primary_use", "alternate_use"}
     may_contact = active_use and action_name != "place_item"
     return {
@@ -109,11 +109,15 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
                     "stackCost": (
                         {"const": 1}
                         if action_name == "place_item"
-                        else ({"type": "integer", "enum": [0, 1]} if active_use else {"const": 0})
+                        else ({"type": "integer", "const": cost} if active_use else {"const": 0})
                     ),
                     "contactDamage": (
                         {"type": "boolean"} if may_contact else {"const": False}
                     ),
+                    **({"stackConsumeChancePercent": {
+                        "type": "integer", "minimum": 0, "maximum": 100,
+                        "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    }} if may_contact and cost == 1 else {}),
                 },
                 "required": ["action", "stackCost", "contactDamage"],
             },
@@ -125,9 +129,10 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
 def binding_schema() -> dict[str, Any]:
     return {
         "oneOf": [
-            _binding_variant_schema(input_name, action_name)
+            _binding_variant_schema(input_name, action_name, cost)
             for input_name, input_spec in INPUT_KIND_REGISTRY.items()
             for action_name in input_spec.allowed_actions
+            for cost in ((0, 1) if input_name in {"primary_use", "alternate_use"} and action_name != "place_item" else (None,))
         ],
     }
 
@@ -385,6 +390,7 @@ def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) 
         },
         "required": ["note"],
     }
+
 
 
 def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int, int]:

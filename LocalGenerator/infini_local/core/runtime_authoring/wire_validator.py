@@ -11,6 +11,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     contact_damage,
     placeable_input_contract,
     stack_cost,
+    stack_chance_error,
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -74,7 +75,7 @@ _EVENT_KEYS = frozenset({
     "damageBasis", "knockbackBasis",
 })
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
-_USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
+_USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
@@ -638,6 +639,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         cost = stack_cost(binding)
         if cost not in {0, 1}:
             errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "invalid_stack_cost", "message": "stackCost must be exactly 0 or 1."})
+        if reason := stack_chance_error(binding):
+            errors.append({"path": f"{binding_path}.usePolicy.stackConsumeChancePercent", "code": "invalid_stack_chance", "message": reason})
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
             errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "required_boolean", "message": "contactDamage must be a boolean."})
@@ -723,6 +726,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         or bool(str(gameplay.get("mobilityMode") or ""))
     )
     has_equipment = accessory.get("enabled") is True or armor.get("enabled") is True
+    has_placement = any(isinstance(b, Mapping) and action_kind(b) == "place_item" for b in bindings)
     if "heldEffectGroupId" in runtime:
         held_id = runtime["heldEffectGroupId"]
         held_group = effect_groups.get(held_id) if isinstance(held_id, str) else None
@@ -740,6 +744,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(binding, Mapping):
             continue
         action_name = action_kind(binding)
+        chance_policy = binding.get("usePolicy")
+        chance = chance_policy.get("stackConsumeChancePercent") if isinstance(chance_policy, Mapping) else None
+        if (has_placement and action_name in {"spawn_entity", "use_item_body"}
+                and type(chance) is int and chance < 100 and gameplay.get("maxStack") != 1):
+            errors.append({"path": "$.gameplay.maxStack", "code": "hybrid_placeable_max_stack", "message": "A reusable placement hybrid with own-stack saving requires maxStack=1."})
         group_id = action(binding).get("effectGroupId")
         selected_effects = effect_groups.get(group_id) if isinstance(group_id, str) else None
         selected_has_effect = _item_effects_present(selected_effects) if selected_effects is not None else has_use_effect if group_id is None else False
