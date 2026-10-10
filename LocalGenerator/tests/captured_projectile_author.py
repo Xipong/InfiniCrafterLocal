@@ -25,8 +25,10 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     assert set(conditional) == {("configure_spawn", "count"), ("configure_spawn", "spreadRadians"),
                                 ("set_projectile_collision", "bounceCount")}
     assert len(CAPABILITY_REGISTRY["pull_owner_to_event_target"].requirements) == 1
-    assert checks["requirements"] == 33
-    checks["requirements"] = 29  # Three branch proofs and the explicit owner-pull event.
+    curve_requirements = len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+    assert curve_requirements == 3
+    assert checks["requirements"] == 33 + curve_requirements
+    checks["requirements"] = 29 + curve_requirements  # Reverse aliases only; retain accepted hitbox requirements.
     removed = set()
     for i, entity in enumerate(result["runtimeProgram"]["entities"]):
         spawn = entity.get("spawn", {})

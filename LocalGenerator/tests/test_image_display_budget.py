@@ -23,13 +23,17 @@ from infini_local.pipelines.visual_prompt_contracts import image_final_frame_pro
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def _accepted_visual_data(*, long_art: bool = False) -> dict:
+def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None = None) -> dict:
     author = build_runtime_fixture("workbench_blade")
     for call in author["runtimeProgram"]["calls"]:
         if call["fn"] == "configure_item_stats":
             call["params"]["scale"] = 1.25
         if call["fn"] == "set_projectile_hitbox":
             call["params"]["drawScale"] = 1.75 if call["target"] == "nail" else 1.5
+    if curve_mirror is not None:
+        for target in ("workbench_blade", "nail"):
+            author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "set_projectile_hitbox_curve", "target": target,
+                "params": {"startScale": .25, "endScale": 8, "startDelayTicks": 5, "durationTicks": 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
     data = compile_runtime_program(author)
     item_id = data["runtimeProgram"]["itemEntityId"]
     item_art = "Four short blades around a red glass vial, copper handle and oak brace."
@@ -227,3 +231,24 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     for owner, role in ((result["visual"], "item"), (result["runtimeProgram"]["entities"][2]["visual"], "runtime:child_projectile")):
         assert owner["spriteStatus"] == "generated"
         assert post.validate_processed_sprite(owner["spritePath"], role)["ok"]
+
+
+@pytest.mark.parametrize("curve_mirror", [None, False, True])
+def test_actual_image_jobs_preserve_curve_facts_for_shared_root_and_distinct_body(monkeypatch, tmp_path, curve_mirror):
+    data = _accepted_visual_data(curve_mirror=curve_mirror)
+    frozen = copy.deepcopy(data)
+    calls = _capture_backend(monkeypatch, tmp_path)
+    result = generation.maybe_generate_visual_assets(data)
+    assert len(calls) == 2, "the read-only curve must not create another image job for reuse"
+    root, distinct = (_framing(call["prompt"]) for call in calls)
+    shared = root["sharedEntityMultipliers"][0]
+    for actual, entity_id in ((shared, "workbench_blade"), (distinct, "nail")):
+        accepted = next(row for row in frozen["runtimeProgram"]["entities"] if row["id"] == entity_id)
+        assert ("hitboxCurve" in actual) == ("hitboxCurve" in accepted)
+        if curve_mirror is not None:
+            assert actual["hitboxCurve"] == accepted["hitboxCurve"]
+    for call in calls:
+        assert "without a clamp when accepted hitboxCurve.mirrorToSprite=true" in call["prompt"]
+        assert "Otherwise its existing clamp(Projectile.scale,0.1,8) remains" in call["prompt"]
+    for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
+        assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}

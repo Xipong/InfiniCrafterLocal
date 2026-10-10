@@ -292,7 +292,7 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     author_binding = card["runtimeProgram"]["bindings"][0]
     assert set(author_binding) == {"id", "input", "usePolicy"}
     assert set(author_binding["usePolicy"]) == {"action", "stackCost", "contactDamage"}
-    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId"}
+    assert set(author_binding["usePolicy"]["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
     assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
     assert isinstance(card["runtimeProgram"]["calls"][0]["params"], dict)
