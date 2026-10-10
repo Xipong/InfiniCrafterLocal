@@ -234,7 +234,8 @@
                               "x-infini-reference": {
                                 "allowSelf": false,
                                 "capabilities": [
-                                  "configure_placeable"
+                                  "configure_tile_placement",
+                                  "configure_wall_placement"
                                 ],
                                 "graphEdge": false,
                                 "namespace": "call"
@@ -513,7 +514,8 @@
                               "x-infini-reference": {
                                 "allowSelf": false,
                                 "capabilities": [
-                                  "configure_placeable"
+                                  "configure_tile_placement",
+                                  "configure_wall_placement"
                                 ],
                                 "graphEdge": false,
                                 "namespace": "call"
@@ -1069,7 +1071,8 @@
                                 "x-infini-reference": {
                                   "allowSelf": false,
                                   "capabilities": [
-                                    "configure_placeable"
+                                    "configure_tile_placement",
+                                    "configure_wall_placement"
                                   ],
                                   "graphEdge": false,
                                   "namespace": "call"
@@ -1348,7 +1351,8 @@
                                 "x-infini-reference": {
                                   "allowSelf": false,
                                   "capabilities": [
-                                    "configure_placeable"
+                                    "configure_tile_placement",
+                                    "configure_wall_placement"
                                   ],
                                   "graphEdge": false,
                                   "namespace": "call"
@@ -1894,10 +1898,13 @@
                           "apply_generated_buff_on_use",
                           "configure_tool",
                           "configure_placeable",
+                          "configure_tile_placement",
+                          "configure_wall_placement",
                           "present_placed_item_sprite",
                           "require_use_condition",
                           "add_hold_light",
                           "move_player_on_use",
+                          "recall_home_on_use",
                           "configure_accessory",
                           "configure_armor",
                           "add_equipment_damage_bonus",
@@ -2461,7 +2468,8 @@
                               "x-infini-reference": {
                                 "allowSelf": false,
                                 "capabilities": [
-                                  "configure_placeable"
+                                  "configure_tile_placement",
+                                  "configure_wall_placement"
                                 ],
                                 "graphEdge": false,
                                 "namespace": "call"
@@ -2740,7 +2748,8 @@
                               "x-infini-reference": {
                                 "allowSelf": false,
                                 "capabilities": [
-                                  "configure_placeable"
+                                  "configure_tile_placement",
+                                  "configure_wall_placement"
                                 ],
                                 "graphEdge": false,
                                 "namespace": "call"
@@ -3200,7 +3209,8 @@
                                     "x-infini-reference": {
                                       "allowSelf": false,
                                       "capabilities": [
-                                        "configure_placeable"
+                                        "configure_tile_placement",
+                                        "configure_wall_placement"
                                       ],
                                       "graphEdge": false,
                                       "namespace": "call"
@@ -3479,7 +3489,8 @@
                                     "x-infini-reference": {
                                       "allowSelf": false,
                                       "capabilities": [
-                                        "configure_placeable"
+                                        "configure_tile_placement",
+                                        "configure_wall_placement"
                                       ],
                                       "graphEdge": false,
                                       "namespace": "call"

@@ -205,7 +205,7 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
         if action["action"] == "place_item":
             action["constructionMeaning"] = (
                 "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
-                "placementCallId references one configure_placeable on the same item_body; stackCost=1 and contactDamage=false. "
+                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body; stackCost=1 and contactDamage=false. "
                 "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
                 "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
             )
@@ -225,9 +225,9 @@ def sharp_engine_fn_catalog_for_llm() -> dict[str, Any]:
     capabilities = compact_capability_catalog()
     for card in capabilities:
         if card["fn"] == "present_placed_item_sprite":
-            card["constructionMeaning"] = "placementCallId is an exact configure_placeable call id, not an entity reference: use the same item_body and exact place_item binding reference, tile-only. This operation explicitly selects that item's existing root PNG; no new image project/source field. Native support, solidity, wiring, mining, interaction and light remain native. Independent placed size/full-frame pivot/offset/flips/rotation are all required; no grip or forward-axis inference. Omit this call to retain native presentation. Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+            card["constructionMeaning"] = "placementCallId is an exact configure_tile_placement call id, not an entity reference: use the same item_body and exact place_item binding reference, tile-only. This operation explicitly selects that item's existing root PNG; no new image project/source field. Native support, solidity, wiring, mining, interaction and light remain native. Independent placed size/full-frame pivot/offset/flips/rotation are all required; no grip or forward-axis inference. Omit this call to retain native presentation. Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
         elif card["fn"] == "charge_then_release":
-            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. heldSpriteVisibilityHint is presentation, not release trigger."
+            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
         elif card["fn"] == "configure_item_use":
             card["constructionMeaning"] = "Timing is owned by configure_item_stats.useTimeTicks (cadence) and configure_item_stats.useAnimationTicks (animation duration), not params of this call. Here autoReuse repeats active use while held, and channel keeps that use active."
         elif card["fn"] == "configure_item_stats":
@@ -358,15 +358,16 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: di
     payload = build_llm_author_payload(a, b, ca, cb, key)
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     catalog_names = [row["fn"] for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]]
+    expected_names = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     return {
         "schema": "infini.low-level-author-prompt-usability.v1",
-        "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == set(CAPABILITY_REGISTRY),
+        "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == expected_names,
         "chars": len(encoded),
         "limit": PLANNER_PROMPT_LIMIT_CHARS,
         "headroom": PLANNER_PROMPT_LIMIT_CHARS - len(encoded),
         "visibleCapabilities": len(catalog_names),
-        "missingCapabilities": sorted(set(CAPABILITY_REGISTRY) - set(catalog_names)),
-        "extraCapabilities": sorted(set(catalog_names) - set(CAPABILITY_REGISTRY)),
+        "missingCapabilities": sorted(expected_names - set(catalog_names)),
+        "extraCapabilities": sorted(set(catalog_names) - expected_names),
         "containsWeaponMacro": any(
             name in encoded
             for name in (

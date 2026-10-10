@@ -140,6 +140,30 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "configure_tile_placement",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "configure_wall_placement",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "present_placed_item_sprite",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
@@ -192,6 +216,19 @@
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
       "capability": "move_player_on_use",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "outputs": [
+        "gameplay.mobilityMode",
+        "gameplay.mobilityRangeTiles",
+        "gameplay.mobilityCooldownTicks",
+        "gameplay.mobilitySafeTileOnly"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "recall_home_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
       "outputs": [

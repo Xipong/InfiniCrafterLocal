@@ -73,7 +73,7 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
             "x-infini-reference": {
                 "namespace": "call",
-                "capabilities": ["configure_placeable"],
+                "capabilities": ["configure_tile_placement", "configure_wall_placement"],
                 "allowSelf": False,
                 "graphEdge": False,
             },

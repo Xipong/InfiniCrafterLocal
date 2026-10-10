@@ -342,7 +342,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         stats = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats")
         stats["params"]["damage"] = 1999
         fixed = copy.deepcopy(use)
-        fixed["params"].update(useStyle="shoot", heldSpriteVisibilityHint="on_release")
+        fixed["params"].update(useStyle="shoot", customHeldSprite="visible")
         frozen_stats = copy.deepcopy(stats)
         frozen_stats["params"]["damage"] = 999
         patch["callsUpsert"] = [fixed, frozen_stats]
@@ -386,7 +386,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
         assert calls["item_use"]["params"]["useStyle"] == "shoot"
-        assert calls["item_use"]["params"]["heldSpriteVisibilityHint"] == "immediate"
+        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
         assert calls["item_stats"]["params"]["damage"] == 1999
         assert any(row["reason"] == "independent_valid_node_frozen" for row in repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"])
 
@@ -406,7 +406,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
     numeric_cases = {
         "huge-buff-first": ("apply_generated_buff_on_use", "miningSpeedMultiplier"),
         "huge-buff-later": ("apply_generated_buff_on_use", "manaRegenBonusPoints"),
-        "huge-placeable": ("configure_placeable", "tileId"),
+        "huge-placeable": ("configure_tile_placement", "tileId"),
         "huge-accessory": ("configure_accessory", "lightStrength"),
     }
     good = build_capability_witness(numeric_cases[case][0] if case in numeric_cases else "restore_resources_on_use")
