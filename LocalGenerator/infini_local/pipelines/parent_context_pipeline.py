@@ -6,8 +6,8 @@ import re
 from typing import Any
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
-    action_kind as binding_action_kind,
-    target_id as binding_target_id,
+    wire_action_kind as binding_action_kind,
+    wire_target_id as binding_target_id,
 )
 from infini_local.core.item_identity_tools import (
     dict_get_ci,

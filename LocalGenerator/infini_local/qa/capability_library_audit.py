@@ -237,13 +237,12 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         default_class = class_name
         for param_name, spec in (leaf for name, param in cap.params.items()
                                  for leaf in _numeric_parameter_leaves(param, name)):
-            field = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            field = wire_name
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
                            "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
             field = field.rsplit(".", 1)[-1]
-            csharp_name = field[:1].upper() + field[1:]
-            if cap.name == "set_descendant_concurrency":
-                csharp_name = "DescendantMaxActive"
+            csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
             if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
@@ -317,7 +316,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             rows.append({
                 "capability": cap.name,
                 "param": param_name,
-                "wireParam": spec.wire_name or param_name.rsplit(".", 1)[-1],
+                "wireParam": wire_name,
                 "csharpClass": class_name,
                 "authorBounds": list(authored) if authored else None,
                 "wireBounds": list(projected) if projected else None,

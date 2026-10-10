@@ -13,7 +13,7 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 def _fixture(chance=35):
     doc = build_runtime_fixture("workbench_blade")
-    policy = doc["runtimeProgram"]["bindings"][0]["usePolicy"]
+    policy = doc["runtimeProgram"]["bindings"][0]
     policy.update(stackCost=1, stackConsumeChancePercent=chance)
     return doc
 
@@ -53,16 +53,16 @@ def test_free_passive_or_placement_bindings_cannot_borrow_stack_rng(fixture_name
     authored = build_runtime_fixture(fixture_name)
     bindings = authored["runtimeProgram"]["bindings"]
     candidate = next(b for b in bindings if b["input"] == input_name)
-    if candidate["usePolicy"]["action"]["kind"] != "place_item":
-        candidate["usePolicy"]["stackCost"] = 0
-    candidate["usePolicy"]["stackConsumeChancePercent"] = 100
+    if candidate.get("action", {}).get("kind") != "place_item":
+        candidate["stackCost"] = 0
+    candidate["stackConsumeChancePercent"] = 100
     assert not validate_runtime_program(authored)["ok"]
 
 
 def test_saving_stack_on_reusable_placement_hybrid_keeps_one_physical_unit():
     authored = build_runtime_fixture("fishing_platform_tool")
     binding = next(b for b in authored["runtimeProgram"]["bindings"] if b["input"] == "primary_use")
-    binding["usePolicy"].update(stackCost=1, stackConsumeChancePercent=35)
+    binding.update(stackCost=1, stackConsumeChancePercent=35)
     assert validate_runtime_program(authored)["ok"]
     final = compile_runtime_program(authored)
     stats = next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
@@ -76,7 +76,7 @@ def test_saving_stack_on_reusable_placement_hybrid_keeps_one_physical_unit():
 @pytest.mark.parametrize("stack_cost", [True, False, 0.5, 2])
 def test_probability_requires_literal_integer_one_stack_cost(stack_cost):
     authored = _fixture()
-    authored["runtimeProgram"]["bindings"][0]["usePolicy"]["stackCost"] = stack_cost
+    authored["runtimeProgram"]["bindings"][0]["stackCost"] = stack_cost
     assert not validate_runtime_program(authored)["ok"]
 
 
@@ -103,18 +103,18 @@ def test_probability_repair_changes_only_invalid_leaf_and_omission_does_not_defa
     report = validate_runtime_program(authored)
     scope = build_runtime_repair_scope(authored, report["errors"])
     binding = deepcopy(authored["runtimeProgram"]["bindings"][0])
-    binding["usePolicy"]["stackConsumeChancePercent"] = 35
-    binding["usePolicy"]["contactDamage"] = False
+    binding["stackConsumeChancePercent"] = 35
+    binding["contactDamage"] = False
     patch = {"bindingsUpsert": [binding], "note": "Repair exact invalid probability."}
     filtered, audit = filter_repair_patch_scope(authored, patch, scope)
     repaired = apply_repair_patch(authored, filtered)
-    assert repaired["runtimeProgram"]["bindings"][0]["usePolicy"]["stackConsumeChancePercent"] == 35
-    assert repaired["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] is True
+    assert repaired["runtimeProgram"]["bindings"][0]["stackConsumeChancePercent"] == 35
+    assert repaired["runtimeProgram"]["bindings"][0]["contactDamage"] is True
     assert validate_runtime_program(repaired)["ok"]
     omitted = deepcopy(binding)
-    del omitted["usePolicy"]["stackConsumeChancePercent"]
+    del omitted["stackConsumeChancePercent"]
     filtered, _ = filter_repair_patch_scope(authored, {"bindingsUpsert": [omitted], "note": "No probability patch."}, scope)
-    assert apply_repair_patch(authored, filtered)["runtimeProgram"]["bindings"][0]["usePolicy"]["stackConsumeChancePercent"] == 101
+    assert apply_repair_patch(authored, filtered)["runtimeProgram"]["bindings"][0]["stackConsumeChancePercent"] == 101
 
 
 @pytest.mark.parametrize("input_value", [[], {}, ["primary_use"], None, True, 1, "PRIMARY_USE"])
@@ -146,7 +146,7 @@ def test_explicit_input_repair_uses_real_caller_without_host_coercion(monkeypatc
     corrected = deepcopy(binding)
     corrected["input"] = "primary_use"
     expected = apply_repair_patch(doc, {"note": "model explicitly selects input", "bindingsUpsert": [corrected]})
-    corrected["usePolicy"].update(stackConsumeChancePercent=99, contactDamage=False)
+    corrected.update(stackConsumeChancePercent=99, contactDamage=False)
     incoming = {"note": "explicit input only", "realizationReplacement": doc["realization"], "bindingsUpsert": [corrected]}
     repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

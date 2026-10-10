@@ -98,28 +98,27 @@ def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypat
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_binding_index_retains_current_nested_policy_in_serialized_request(monkeypatch, format_mode):
+def test_binding_index_retains_current_flat_lanes_in_serialized_request(monkeypatch, format_mode):
     item = _broken_held_and_deployed()
     _, dossier = _capture_request(monkeypatch, item, format_mode)
     assert dossier["immutableProgramIndex"]["bindings"] == item["runtimeProgram"]["bindings"]
-    assert all(row["usePolicy"]["action"]["targetId"] for row in dossier["immutableProgramIndex"]["bindings"])
+    assert all(row["action"]["targetId"] for row in dossier["immutableProgramIndex"]["bindings"])
 
 
-@pytest.mark.parametrize("policy", ["absent", None, {}, {"action": {"kind": None, "targetId": 0}}])
-def test_binding_index_never_falls_back_to_legacy_fields_or_materializes_absences(policy):
+@pytest.mark.parametrize("action_value", ["absent", None, {}, {"kind": None, "targetId": 0}])
+def test_binding_index_never_uses_legacy_wrapper_or_materializes_absences(action_value):
     from infini_local.core.runtime_authoring import runtime_repair_fragments
-
     item = _broken_held_and_deployed()
     binding = item["runtimeProgram"]["bindings"][0]
-    binding.update(action="legacy_action_must_not_win", target="legacy_target_must_not_win")
-    if policy == "absent":
-        binding.pop("usePolicy")
+    binding["usePolicy"] = {"action": {"kind": "legacy_must_not_win", "targetId": "legacy_must_not_win"}}
+    if action_value == "absent":
+        binding.pop("action")
     else:
-        binding["usePolicy"] = copy.deepcopy(policy)
+        binding["action"] = copy.deepcopy(action_value)
     before = copy.deepcopy(item)
     index = runtime_repair_fragments(item, {})["immutableIndex"]["bindings"]
-    assert index[0] == {key: value for key, value in binding.items() if key in {"id", "input", "usePolicy"}}
-    index[0]["usePolicy"] = {"action": "mutation must stay in projection"}
+    assert index[0] == {key: value for key, value in binding.items() if key in {"id", "input", "action", "stackCost", "contactDamage"}}
+    index[0]["action"] = {"kind": "mutation must stay in projection"}
     assert item == before
 
 
@@ -148,7 +147,7 @@ def test_readonly_projection_preserves_exact_values_absences_and_is_detached(mon
     projected = author.build_gameplay_repair_dossier(item, {}, {}, {}, {}, failure_report=validate_runtime_program(item))
     projected["acceptedItemContext"]["concept"]["plannedPlayerActions"][0]["intent"] = "only in detached view"
     _call(projected["acceptedItemContext"], "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
-    projected["immutableProgramIndex"]["bindings"][0]["usePolicy"]["action"]["targetId"] = "only in detached index"
+    projected["immutableProgramIndex"]["bindings"][0]["action"]["targetId"] = "only in detached index"
     assert item == before
 
 
@@ -178,7 +177,7 @@ def _hostile_patch(item):
     stats = copy.deepcopy(_call(item, "item_stats"))
     stats["params"].update(damage=1999, manaCost=77, knockback=17.0)
     binding = copy.deepcopy(item["runtimeProgram"]["bindings"][0])
-    binding["usePolicy"]["stackCost"] = 1
+    binding["stackCost"] = 1
     concept = copy.deepcopy(item["concept"])
     concept["coreMechanic"] = "HOSTILE: unrelated concept rewrite"
     replacement = copy.deepcopy(item["realization"])

@@ -51,7 +51,7 @@ def _doc(*, compatible_alternative=False):
 
 def _new_child(doc, name):
     entity = {"id": name, "kind": "child_projectile"}
-    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row["target"] == "nail"]
+    calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row.get("target") == "nail"]
     for row in calls:
         row["target"] = name; row["id"] = row["id"].replace("nail", name)
         if row["fn"] == "configure_spawn":

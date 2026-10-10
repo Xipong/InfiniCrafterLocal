@@ -90,14 +90,12 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
     assert any(row["code"] == "missing_weapon_ammo_consumer" for row in report["errors"])
 
 
-def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
+def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neutrals():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
-    from captured_spawn_velocity_author import historical_spawn_velocity_wire
-    from sentry_contract_checks import without_declared_targeting_neutrals
-
-    # Keep frozen base627 hashes; reverse only the proven test-local alias
-    # projection and two native-ammo inventory diagnostics. No omitted field
-    # is materialized, and every other gameplay/provenance byte stays pinned.
+    from captured_parent_combat_author import historical_child_combat_wire
+    # Keep the pre-ammo hashes unchanged. Item aliases intentionally replace
+    # source names/placement receipts, while #13 adds exact neutral targeting.
+    # Reverse only those asserted successors; every other compiled byte is pinned.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     from sentry_contract_checks import without_declared_targeting_neutrals
     from beam_contract_checks import without_declared_beam_neutrals
@@ -105,15 +103,17 @@ def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
     from captured_item_alias_wire import historical_item_alias_wire
 
     for name, expected_hash in baseline.items():
-        final = without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(historical_spawn_velocity_wire(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))))
+        from captured_spawn_velocity_author import historical_spawn_velocity_wire
+        final = historical_item_alias_wire(without_captured_projectile_alias_delta(historical_child_combat_wire(
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(
+                compile_runtime_program(build_runtime_fixture(name)))))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
+        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         added_modifier_caps = (
             "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
             "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
         )
-        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
@@ -136,13 +136,14 @@ def test_ammo_stack_and_weapon_consumer_are_an_explicit_unsupported_composition(
 
 def test_hold_only_spawner_is_not_a_native_ammo_consumer_and_repair_uses_existing_entity():
     doc = _weapon()
-    doc["runtimeProgram"]["bindings"][0]["input"] = "hold"
+    binding = doc["runtimeProgram"]["bindings"][0]
+    doc["runtimeProgram"]["bindings"][0] = {"id": binding["id"], "input": "hold", "action": {"targetId": binding["action"]["targetId"]}}
     report = validate_runtime_program(doc)
     assert any(row["code"] == "missing_binding_dependency" for row in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
     choices = scope["create"]["bindings"]["allowedTransactions"]
     assert choices and all(row["input"] in ("primary_use", "alternate_use")
-                           and row["usePolicy"]["action"]["kind"] == "spawn_entity" for row in choices)
+                           and row["action"]["kind"] == "spawn_entity" for row in choices)
     candidate = {"id": "active_ammo_use", **deepcopy(choices[0])}
     filtered, audit = filter_repair_patch_scope(doc, {"note": "Attach explicit active consumer", "bindingsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
@@ -205,9 +206,9 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
     doc = _weapon(speed="native_shot")
     binding = next(row for row in doc["runtimeProgram"]["bindings"]
                    if row["input"] in ("primary_use", "alternate_use")
-                   and row["usePolicy"]["action"]["kind"] == "spawn_entity")
+                   and row["action"]["kind"] == "spawn_entity")
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == binding["usePolicy"]["action"]["targetId"])
+                 if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
     spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
@@ -245,9 +246,9 @@ def test_native_ammo_and_velocity_keep_one_selected_root_speed_owner(speed, samp
     doc = _weapon(speed=speed)
     binding = next(row for row in doc["runtimeProgram"]["bindings"]
                    if row["input"] in ("primary_use", "alternate_use")
-                   and row["usePolicy"]["action"]["kind"] == "spawn_entity")
+                   and row["action"]["kind"] == "spawn_entity")
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == binding["usePolicy"]["action"]["targetId"])
+                 if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
     if sampled:
         spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
     assert validate_runtime_program(doc)["ok"] is accepted
@@ -266,14 +267,14 @@ def test_native_ammo_and_velocity_keep_one_selected_root_speed_owner(speed, samp
 def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_name, accepted):
     doc = _weapon(speed="native_shot")
     active = next(row for row in doc["runtimeProgram"]["bindings"]
-                  if row["input"] == "primary_use" and row["usePolicy"]["action"]["kind"] == "spawn_entity")
-    root_id = active["usePolicy"]["action"]["targetId"]
+                  if row["input"] == "primary_use" and row["action"]["kind"] == "spawn_entity")
+    root_id = active["action"]["targetId"]
     entity = deepcopy(next(row for row in doc["runtimeProgram"]["entities"] if row["id"] == root_id))
     entity["id"] = "sampled_side"
     doc["runtimeProgram"]["entities"].append(entity)
     copied = []
     for row in list(doc["runtimeProgram"]["calls"]):
-        if row["target"] == root_id:
+        if row.get("target") == root_id:
             copy = deepcopy(row)
             copy["id"] = "side_" + copy["id"]
             copy["target"] = "sampled_side"
@@ -283,8 +284,13 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
     doc["runtimeProgram"]["calls"].extend(copied)
     binding = deepcopy(active)
     binding.update(id="side_binding", input=input_name)
-    binding["usePolicy"]["action"]["targetId"] = "sampled_side"
-    binding["usePolicy"].update(stackCost=0, contactDamage=False)
+    binding["action"]["targetId"] = "sampled_side"
+    if input_name == "hold":
+        binding["action"].pop("kind")
+        binding.pop("stackCost")
+        binding.pop("contactDamage")
+    else:
+        binding.update(stackCost=0, contactDamage=False)
     doc["runtimeProgram"]["bindings"].append(binding)
     report = validate_runtime_program(doc)
     assert report["ok"] is accepted, report

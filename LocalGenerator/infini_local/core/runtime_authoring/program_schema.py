@@ -54,76 +54,53 @@ def entity_schema() -> dict[str, Any]:
     }
 
 
-def _binding_action_schema(action_name: str) -> dict[str, Any]:
-    properties: dict[str, Any] = {
-        "kind": {"const": action_name},
-        "targetId": {
+def _binding_action_schema(action_name: str, *, include_kind: bool = True) -> dict[str, Any]:
+    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, PLACEMENT_CAPABILITIES
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    if include_kind:
+        properties["kind"] = {"const": action_name}
+        required.append("kind")
+    action_spec = BINDING_ACTION_REGISTRY[action_name]
+    if action_spec.target_kinds != ("item_body",):
+        properties["targetId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "x-infini-reference": {
-                "namespace": "entity",
-                "targetKinds": list(ENTITY_KIND_REGISTRY),
-                "allowSelf": True,
-                "graphEdge": False,
-            },
-        },
-    }
-    required = ["kind", "targetId"]
-    if action_name == "apply_item_effects":
-        properties["effectGroupId"] = {
-            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+            "x-infini-reference": {"namespace": "entity", "targetKinds": list(action_spec.target_kinds),
+                                  "allowSelf": True, "graphEdge": False},
         }
+        required.append("targetId")
+    if action_name == "apply_item_effects":
+        properties["effectGroupId"] = _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN)
     if action_name == "place_item":
         properties["placementCallId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "x-infini-reference": {
-                "namespace": "call",
-                "capabilities": ["configure_tile_placement", "configure_wall_placement"],
-                "allowSelf": False,
-                "graphEdge": False,
-            },
+            "x-infini-reference": {"namespace": "call", "capabilities": list(PLACEMENT_CAPABILITIES),
+                                  "allowSelf": False, "graphEdge": False},
         }
         required.append("placementCallId")
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": properties,
-        "required": required,
-    }
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
 
 
 def _binding_variant_schema(input_name: str, action_name: str, cost: int | None = None) -> dict[str, Any]:
     active_use = input_name in {"primary_use", "alternate_use"}
-    may_contact = active_use and action_name != "place_item"
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "input": {"const": input_name},
-            "usePolicy": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "action": _binding_action_schema(action_name),
-                    "stackCost": (
-                        {"const": 1}
-                        if action_name == "place_item"
-                        else ({"type": "integer", "const": cost} if active_use else {"const": 0})
-                    ),
-                    "contactDamage": (
-                        {"type": "boolean"} if may_contact else {"const": False}
-                    ),
-                    **({"stackConsumeChancePercent": {
-                        "type": "integer", "minimum": 0, "maximum": 100,
-                        "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
-                    }} if may_contact and cost == 1 else {}),
-                },
-                "required": ["action", "stackCost", "contactDamage"],
-            },
-        },
-        "required": ["id", "input", "usePolicy"],
+    include_kind = len(INPUT_KIND_REGISTRY[input_name].allowed_actions) != 1
+    action_shape = _binding_action_schema(action_name, include_kind=include_kind)
+    properties: dict[str, Any] = {
+        "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+        "input": {"const": input_name},
     }
+    required = ["id", "input"]
+    if action_shape["properties"]:
+        properties["action"] = action_shape
+        required.append("action")
+    if active_use and action_name != "place_item":
+        properties["stackCost"] = {"type": "integer", "const": cost}
+        if cost == 1:
+            properties["stackConsumeChancePercent"] = {"type": "integer", "minimum": 0, "maximum": 100,
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving."}
+        properties["contactDamage"] = {"type": "boolean"}
+        required.extend(("stackCost", "contactDamage"))
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
 
 
 def binding_schema() -> dict[str, Any]:
@@ -580,7 +557,15 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         ("bindings", "bindingsUpsert", "bindingIdsDelete", "bindingIndicesDelete"),
         ("calls", "callsUpsert", "callIdsDelete", "callIndicesDelete"),
     ):
-        current_rows = list(program.get(list_key) or []) if isinstance(program, dict) else []
+        if not isinstance(program, dict):
+            return out  # Sparse Repair cannot sanitize an invalid root container.
+        original_rows = program.get(list_key)
+        operations = any(patch.get(key) for key in (upsert_key, delete_key, index_delete_key))
+        if not operations:
+            continue
+        if not isinstance(original_rows, list):
+            raise ValueError(f"gameplay Repair cannot apply row operations to malformed {list_key}")
+        current_rows = original_rows
         current_rows = delete_indices(current_rows, list(patch.get(index_delete_key) or []))
         current_rows = delete(current_rows, list(patch.get(delete_key) or []))
         program[list_key] = upsert(current_rows, list(patch.get(upsert_key) or []))

@@ -308,11 +308,9 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
         bindings=[
             {
                 "input": "primary_use",
-                "usePolicy": {
-                    "action": {"kind": "use_item_body", "targetId": "item"},
-                    "stackCost": 0,
-                    "contactDamage": True,
-                },
+                "action": {"kind": "use_item_body", "targetId": "item"},
+                "stackCost": 0,
+                "contactDamage": True,
             }
         ],
     )
