@@ -171,7 +171,7 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     assert json.dumps(forbidden) not in json.dumps(surfaces)
 
 @pytest.mark.parametrize("gate,path,old,new,diagnostic", [
-    pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Apply.cs', 'item.potion = enabled && Gameplay.Potion;', 'item.potion = Gameplay.HealLife > 0;', 'item.potion', id='inferred-potion'),
+    pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Apply.cs', 'item.potion = enabled && effects.Potion;', 'item.potion = Gameplay.HealLife > 0;', 'item.potion', id='inferred-potion'),
     pytest.param('check_runtime_contract', 'Common/Models/TerrariaRuntimeVocabulary.cs', 'ModContent.TryFind<DamageClass>(exact', 'ModContent.TryFind<DamageClass>(guessed', 'ModContent.TryFind', id='loose-class-lookup'),
     pytest.param('check_runtime_contract', 'Common/Services/GeneratorClient.cs', '=> TerrariaRuntimeVocabulary.CanonicalDamageClassToken', '=> LegacyDamageClassToken', 'CanonicalDamageClassToken', id='shadow-class-owner'),
     pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Normalize.cs', 'Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);', 'Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();', 'DamageClass', id='lowercased-class'),
@@ -232,7 +232,7 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_client_source_contracts', 'Common/Config/InfiniGameplayQolConfig.cs', 'RuntimeSpriteCacheMaxTextures = 512', 'RuntimeSpriteCacheMaxTextures = 600', 'runtime cache config parity', id='cache-config-drift'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', '!config.EnableInventoryAssetPrefetch', 'config.EnableInventoryAssetPrefetch', 'inventory prefetch', id='prefetch-optout-inverted'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', 'if (ensured >= maxItems)', 'if (ensured < maxItems)', 'inventory prefetch', id='unbounded-prefetch'),
-    pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 0;", "item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 1;", "binding-scoped use effects", id="disabled-heal-leak"),
+    pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "item.healLife = enabled ? Math.Max(0, effects.HealLife) : 0;", "item.healLife = enabled ? Math.Max(0, effects.HealLife) : 1;", "binding-scoped use effects", id="disabled-heal-leak"),
     pytest.param("check_world_transactions", "Content/Items/GeneratedItem.cs", "|| Data.Gameplay.AmmoCategory.Length > 0", "|| false", "ammo remains vanilla consumable", id="ammo-not-consumable"),
     pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "activeSpawn && RuntimeProgram.WeaponAmmo", "RuntimeProgram.WeaponAmmo", "explicit weapon ammo use lane", id="ammo-leaks-to-non-shot-use"),
     pytest.param("check_world_transactions", "Content/Items/GeneratedItem.cs", 'rootSpeedOverride: Data.RuntimeProgram.WeaponAmmo?.SpeedBasis == "native_shot" ? velocity.Length() : null', "rootSpeedOverride: velocity.Length()", "ammo shot speed policy", id="ammo-speed-overwrites-authored-choice"),
@@ -275,7 +275,7 @@ def test_source_gate_accepts_consistent_refactors(gates, monkeypatch, check, cha
 @pytest.mark.parametrize("path,old,new,diagnostic", [
     ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs", "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);", "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 50);", "axe_tooltip_percent_parity"),
     ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs", "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);", "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();", "modded_damage_class_case_preserved"),
-    ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs", "item.potion = enabled && Gameplay.Potion;", "item.potion = Gameplay.HealLife > 0;", "potion_flag_is_authored"),
+    ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs", "item.potion = enabled && effects.Potion;", "item.potion = Gameplay.HealLife > 0;", "potion_flag_is_authored"),
     ("lowery.md", "Gameplay Author-visible semantic aliases: **нет**", "Gameplay Author-visible semantic aliases: **allowed**", "lowery:Gameplay Author-visible "),
 ], ids=["axe-domain-drift", "case-normalized-modded-owner", "inferred-potion-authority", "restored-gameplay-aliases"])
 def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_path, path, old, new, diagnostic):

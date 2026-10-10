@@ -71,6 +71,7 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 
 | lowerer | authored inputs | wire outputs | adds design |
 |---|---|---|---|
+| binding_effect_group_identity | runtimeProgram.bindings[].id, runtimeProgram.bindings[].usePolicy.action.effectGroupId | runtimeProgram.bindings[].usePolicy.action.effectGroupId | false |
 | entity_kind_to_visual_role | runtimeProgram.entities[].kind | runtimeProgram.entities[].visualRole, runtimeProgram.entities[].visual.role | false |
 | primary_entity_to_binding_role | runtimeProgram.primaryEntityId, runtimeProgram.bindings[].usePolicy.action.targetId | runtimeProgram.bindings[].role | false |
 | primary_entity_kind_to_owner | runtimeProgram.primaryEntityId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.primaryOwner | false |

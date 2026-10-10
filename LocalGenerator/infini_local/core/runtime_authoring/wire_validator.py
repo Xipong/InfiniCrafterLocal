@@ -58,7 +58,7 @@ _FORBIDDEN_ROUTER_KEYS = {
     "family",
 }
 
-_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "weaponAmmo"})
+_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "effectGroups", "heldEffectGroupId", "weaponAmmo"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
 _ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry"})
 _VISUAL_KEYS = frozenset({
@@ -91,7 +91,7 @@ _EVENT_KEYS = frozenset({
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
-_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement"})
+_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
@@ -124,11 +124,11 @@ def _positive_integer_effect(value: Any, path: str, errors: list[dict[str, Any]]
     return value > 0
 
 
-def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]]) -> None:
+def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]], path: str = "$.gameplay.generatedBuff") -> None:
     """Check every present leaf; absent legacy leaves retain C# DTO defaults."""
-    specs = CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params
+    specs = {name: spec for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items() if name != "effectGroupId"}
     _reject_unknown(wire, frozenset(spec.wire_name or name for name, spec in specs.items()),
-                    "$.gameplay.generatedBuff", errors)
+                    path, errors)
     light = wire.get("emitLightStrength", 0)
     no_light = type(light) in (int, float) and light <= 0
     for name, spec in specs.items():
@@ -159,7 +159,7 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
                 except OverflowError:
                     valid = False
         if not valid:
-            errors.append({"path": f"$.gameplay.generatedBuff.{key}",
+            errors.append({"path": f"{path}.{key}",
                            "code": "invalid_generated_buff_field",
                            "message": "Value must match the declared generated-buff wire type and domain without coercion."})
 
@@ -193,6 +193,59 @@ def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
                 # An unbounded malformed integer cannot be a valid wire stat.
                 continue
     return _has_non_neutral_generated_buff(params)
+
+
+def _item_effect_group_wire_schema() -> dict[str, Any]:
+    """The accepted container surface is a projection of existing registry fields."""
+    properties = {"id": CAPABILITY_REGISTRY["restore_resources_on_use"].params["effectGroupId"].schema()}
+    for fn in ("restore_resources_on_use", "move_player_on_use"):
+        properties.update({spec.wire_name or name: spec.schema() for name, spec in CAPABILITY_REGISTRY[fn].params.items() if name != "effectGroupId"})
+    buff_properties = {spec.wire_name or name: spec.schema() for name, spec in CAPABILITY_REGISTRY["apply_vanilla_buff_on_use"].params.items() if name != "effectGroupId"}
+    properties["mobilityMode"]["enum"] = ["", *properties["mobilityMode"]["enum"]]
+    properties["extraBuffs"] = {"type": "array", "maxItems": 48, "items": {
+        "type": "object", "additionalProperties": False, "properties": buff_properties, "required": list(buff_properties)}}
+    properties["generatedBuff"] = {"type": "object"}
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": ["id"]}
+
+
+def _validate_effect_groups(runtime: Mapping[str, Any], errors: list[dict[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    """Named containers are literal destinations of the four existing item effects."""
+    groups: dict[str, Mapping[str, Any]] = {}
+    if "effectGroups" not in runtime:
+        return groups
+    rows = runtime["effectGroups"]
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 48:
+        errors.append({"path": "$.runtimeProgram.effectGroups", "code": "invalid_effect_groups", "message": "Present effectGroups must contain 1..48 explicit named groups."})
+        return groups
+    schema = _item_effect_group_wire_schema()
+    for index, row in enumerate(rows):
+        path = f"$.runtimeProgram.effectGroups[{index}]"
+        for issue in strict_schema_errors(row, schema, path=path):
+            errors.append({**issue, "code": "invalid_effect_group", "message": "Effect group must match the exact registered item-effect fields and domains."})
+        if not isinstance(row, Mapping):
+            continue
+        group_id = row.get("id")
+        if isinstance(group_id, str):
+            if group_id in groups:
+                errors.append({"path": f"{path}.id", "code": "duplicate_id", "message": "Effect group IDs must be unique."})
+            groups[group_id] = row
+        generated = row.get("generatedBuff")
+        if isinstance(generated, Mapping):
+            _validate_generated_buff(generated, errors, f"{path}.generatedBuff")
+            if type(generated.get("durationTicks")) is not int or not 1 <= generated["durationTicks"] <= 21600:
+                errors.append({"path": f"{path}.generatedBuff.durationTicks", "code": "invalid_effect_group", "message": "Named generated buff requires explicit 1..21600 duration."})
+        if not _item_effects_present(row):
+            errors.append({"path": path, "code": "empty_effect_group", "message": "Effect group must contain an executable explicit item effect."})
+    return groups
+
+
+def _item_effects_present(effects: Mapping[str, Any]) -> bool:
+    generated = effects.get("generatedBuff")
+    duration = generated.get("durationTicks") if isinstance(generated, Mapping) else None
+    return (any(type(effects.get(key)) is int and effects[key] > 0 for key in ("healLife", "healMana"))
+            or isinstance(effects.get("extraBuffs"), list) and bool(effects["extraBuffs"])
+            or isinstance(generated, Mapping) and type(duration) is int and duration > 0 and _generated_buff_has_effect(generated)
+            or effects.get("mobilityMode") in ("recall_home", "blink_to_cursor"))
 
 
 def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
@@ -606,6 +659,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": "$.runtimeProgram.primaryOwner", "code": "primary_owner_mismatch", "message": f"Primary entity kind {primary_kind!r} requires primaryOwner {expected_owner!r}."})
     exclusive_inputs: set[str] = set()
     binding_ids: set[str] = set()
+    effect_groups = _validate_effect_groups(runtime, errors)
+    used_effect_groups: set[str] = set()
     bindings = runtime.get("bindings") or []
     if not isinstance(bindings, list):
         errors.append({"path": "$.runtimeProgram.bindings", "code": "required_array", "message": "Compiled bindings must be an array."})
@@ -636,6 +691,12 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             _reject_unknown(action_row, _BINDING_ACTION_KEYS, f"{binding_path}.usePolicy.action", errors)
         input_name = str(binding.get("input") or "")
         action_name = action_kind(binding)
+        if "effectGroupId" in action_row:
+            group_id = action_row["effectGroupId"]
+            if action_name != "apply_item_effects" or not isinstance(group_id, str) or group_id not in effect_groups:
+                errors.append({"path": f"{binding_path}.usePolicy.action.effectGroupId", "code": "invalid_effect_group_reference", "message": "Only apply_item_effects may select an exact declared effect group."})
+            elif isinstance(group_id, str):
+                used_effect_groups.add(group_id)
         role = str(binding.get("role") or "")
         target = binding_target_id(binding)
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
@@ -747,11 +808,27 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         or bool(str(gameplay.get("mobilityMode") or ""))
     )
     has_equipment = accessory.get("enabled") is True or armor.get("enabled") is True
+    if "heldEffectGroupId" in runtime:
+        held_id = runtime["heldEffectGroupId"]
+        held_group = effect_groups.get(held_id) if isinstance(held_id, str) else None
+        if (held_group is None or not isinstance(held_group.get("generatedBuff"), Mapping)
+                or not _generated_buff_has_effect(held_group["generatedBuff"])
+                or any(held_group.get(key, 0) != 0 for key in ("healLife", "healMana", "mobilityRangeTiles", "mobilityCooldownTicks"))
+                or held_group.get("potion", False) is not False or held_group.get("extraBuffs", []) != []
+                or held_group.get("mobilityMode", "") != ""):
+            errors.append({"path": "$.runtimeProgram.heldEffectGroupId", "code": "invalid_held_effect_group", "message": "Held refresh must select exactly a generated-buff-only named group."})
+        else:
+            used_effect_groups.add(held_id)
+    for group_id in effect_groups.keys() - used_effect_groups:
+        errors.append({"path": "$.runtimeProgram.effectGroups", "code": "orphan_effect_group", "message": f"Effect group {group_id!r} has no exact binding or held consumer."})
     for index, binding in enumerate(bindings):
         if not isinstance(binding, Mapping):
             continue
         action_name = action_kind(binding)
-        if action_name == "apply_item_effects" and not has_use_effect:
+        group_id = action(binding).get("effectGroupId")
+        selected_effects = effect_groups.get(group_id) if isinstance(group_id, str) else None
+        selected_has_effect = _item_effects_present(selected_effects) if selected_effects is not None else has_use_effect if group_id is None else False
+        if action_name == "apply_item_effects" and not selected_has_effect:
             errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "apply_item_effects has no compiled item effect capability."})
         elif action_name == "equip_passive" and not has_equipment:
             errors.append({"path": f"$.runtimeProgram.bindings[{index}].usePolicy.action", "code": "binding_dependency", "message": "equip_passive has no compiled accessory/armor capability."})
