@@ -124,7 +124,7 @@ internal static partial class EngineRuntimeChecks
     private static void WeaponAmmoMissingAmmoAndIndependentUseLanes()
     {
         using var scope = new MobilityConsumptionNativeScope();
-        WithPlayer((player, _) =>
+        WithPlayer((player, generated) =>
         {
             PrepareMobilityConsumptionPlayer(player);
             var data = WeaponAmmoFixture("arrow", "native_shot");
@@ -169,7 +169,13 @@ internal static partial class EngineRuntimeChecks
             else if (mutation == "missing_speed") ammo.Remove("speedBasis");
             else if (mutation == "alias") ammo["ammoCategory"] = "bullets";
             else if (mutation == "native_projectile_policy") ammo["projectilePolicy"] = "native_ammo";
-            else if (mutation == "passive_only") runtime["bindings"]!.AsArray().RemoveAt(0);
+            else if (mutation == "passive_only")
+            {
+                JsonArray bindings = runtime["bindings"]!.AsArray();
+                for (int index = bindings.Count - 1; index >= 0; index--)
+                    if (RuntimeBindingSpec.IsActiveInput((string?)bindings[index]!["input"] ?? ""))
+                        bindings.RemoveAt(index);
+            }
             else
             {
                 root["gameplay"]!["ammoCategory"] = "bullet";
