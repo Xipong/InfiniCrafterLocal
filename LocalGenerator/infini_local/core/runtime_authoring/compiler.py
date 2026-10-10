@@ -331,14 +331,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.controller.name", value=fn, target=controller, key="name", source=source_fn)
         ctx.write_derived(call=call, path=f"{base}.controller.code", value=CONTROLLER_OPCODE[fn], target=controller, key="code", source=source_fn)
         if fn == "target_and_fire":
-            targeting = component("targeting")
-            for source_key, destination in {
-                "shotEntity": "shotEntityId",
-                "intervalTicks": "intervalTicks",
-                "rangeTiles": "rangeTiles",
-                "sameTargetBias": "sameTargetBias",
-            }.items():
-                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination, authored_param=source_key)
+            project(component("targeting"), f"{base}.targeting", p)
         else:
             controller_params = controller.setdefault("params", {})
             for key, value in p.items():

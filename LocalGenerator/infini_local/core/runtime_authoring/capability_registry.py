@@ -1428,14 +1428,19 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
+        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
-            "rangeTiles": _p("number", "Soft target range: previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
+            "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1, units="engine units: distance-score discount"),
+            "count": _p("integer", "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot", minimum=1, maximum=4, units="projectiles/volley", required=False, default=1, neutral=1),
+            "spreadRadians": _p("number", "Full symmetric fan angle for this firing volley; count=1 has zero angular offset", minimum=0, maximum=0.75, units="radians", required=False, default=0.0, neutral=0.0, consumer_storage="float32"),
+            "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score", enum=("distance_score", "player_assigned_first"), required=False, default="distance_score", neutral="distance_score"),
+            "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets", required=False, default=False, neutral=False),
+            "hardRange": _p("boolean", "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit", required=False, default=False, neutral=False),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1955,11 +1960,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name in {"channel_beam", "charge_then_release"}:
         return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
     if cap.name == "target_and_fire":
-        return (
-            "runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
-            "runtimeProgram.entities[].targeting.shotEntityId", "runtimeProgram.entities[].targeting.intervalTicks",
-            "runtimeProgram.entities[].targeting.rangeTiles", "runtimeProgram.entities[].targeting.sameTargetBias",
-        )
+        return ("runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
+                *(f"runtimeProgram.entities[].targeting.{spec.wire_name or name}" for name, spec in cap.params.items()))
     if cap.name == "spawn_over_target":
         return tuple(f"runtimeProgram.entities[].spawn.overTarget.{name}" for name in cap.params)
     if cap.category == "event":

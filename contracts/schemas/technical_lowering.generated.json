@@ -720,7 +720,12 @@
         "runtimeProgram.entities[].targeting.shotEntityId",
         "runtimeProgram.entities[].targeting.intervalTicks",
         "runtimeProgram.entities[].targeting.rangeTiles",
-        "runtimeProgram.entities[].targeting.sameTargetBias"
+        "runtimeProgram.entities[].targeting.sameTargetBias",
+        "runtimeProgram.entities[].targeting.count",
+        "runtimeProgram.entities[].targeting.spreadRadians",
+        "runtimeProgram.entities[].targeting.targetPolicy",
+        "runtimeProgram.entities[].targeting.requireLineOfSight",
+        "runtimeProgram.entities[].targeting.hardRange"
       ]
     },
     {

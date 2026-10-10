@@ -4474,11 +4474,36 @@
         "runtimeProgram.entities[].targeting.shotEntityId",
         "runtimeProgram.entities[].targeting.intervalTicks",
         "runtimeProgram.entities[].targeting.rangeTiles",
-        "runtimeProgram.entities[].targeting.sameTargetBias"
+        "runtimeProgram.entities[].targeting.sameTargetBias",
+        "runtimeProgram.entities[].targeting.count",
+        "runtimeProgram.entities[].targeting.spreadRadians",
+        "runtimeProgram.entities[].targeting.targetPolicy",
+        "runtimeProgram.entities[].targeting.requireLineOfSight",
+        "runtimeProgram.entities[].targeting.hardRange"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 4,
+          "minimum": 1,
+          "reference": null,
+          "required": false,
+          "semanticType": "spawn_or_target_count",
+          "units": "projectiles/volley"
+        },
+        "hardRange": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "intervalTicks": {
           "enum": [],
           "kind": "integer",
@@ -4498,6 +4523,16 @@
           "required": true,
           "semanticType": "tiles",
           "units": "tiles"
+        },
+        "requireLineOfSight": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "sameTargetBias": {
           "enum": [],
@@ -4530,12 +4565,35 @@
           "required": true,
           "semanticType": "runtime_entity_id",
           "units": ""
+        },
+        "spreadRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.75,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "radians",
+          "units": "radians"
+        },
+        "targetPolicy": {
+          "enum": [
+            "distance_score",
+            "player_assigned_first"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "owns_stationary_position",
       "promptVisibility": true,
       "provenance": "stationary targeting/firing split from the retired sentry macro",
-      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
+      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
