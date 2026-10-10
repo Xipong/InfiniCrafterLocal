@@ -321,6 +321,8 @@
         "runtimeProgram.entities[].spawn.spreadRadians",
         "runtimeProgram.entities[].spawn.offsetPx",
         "runtimeProgram.entities[].spawn.aim",
+        "runtimeProgram.entities[].spawn.overTarget.heightTiles",
+        "runtimeProgram.entities[].spawn.overTarget.delayTicks",
         "runtimeProgram.entities[].spawn.placement"
       ]
     },
@@ -704,12 +706,12 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
         "runtimeProgram.entities[].events[].damageMultiplier",
-        "runtimeProgram.entities[].events[].delayTicks",
-        "runtimeProgram.entities[].events[].periodTicks"
+        "runtimeProgram.entities[].events[].delayTicks"
       ]
     },
     {
@@ -768,11 +770,28 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].strength",
         "runtimeProgram.entities[].events[].radiusTiles",
-        "runtimeProgram.entities[].events[].periodTicks",
         "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "pull_owner_to_event_target",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].periodTicks",
+        "runtimeProgram.entities[].events[].strength",
+        "runtimeProgram.entities[].events[].delayTicks",
+        "runtimeProgram.entities[].events[].mode",
+        "runtimeProgram.entities[].events[].radiusTiles"
       ]
     },
     {
