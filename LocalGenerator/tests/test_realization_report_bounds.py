@@ -156,7 +156,8 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     call = next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == fn)
     for key, spec in CAPABILITY_REGISTRY[fn].params.items():
         if key not in call["params"]:
-            call["params"][key] = spec.enum[0] if spec.enum else spec.neutral
+            call["params"][key] = ({child: leaf.enum[0] if leaf.enum else leaf.neutral for child, leaf in spec.properties.items()}
+                                   if spec.properties else spec.enum[0] if spec.enum else spec.neutral)
     for name, source in (("calls", call), ("entities", item["runtimeProgram"]["entities"][0]), ("bindings", item["runtimeProgram"]["bindings"][0])):
         item["runtimeProgram"][name] = [dict(copy.deepcopy(source), id=f"max_{name}_{index}") for index in range(runtime[name]["maxItems"])]
     report_schema = schema["properties"]["realization"]["properties"]

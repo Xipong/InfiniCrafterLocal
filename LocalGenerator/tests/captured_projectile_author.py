@@ -9,6 +9,50 @@ from copy import deepcopy
 from typing import Any
 
 
+def without_captured_item_alias_delta(compiled: dict[str, Any]) -> dict[str, Any]:
+    """Reverse only item notation/provenance and its exact inventory delta."""
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+
+    result = deepcopy(compiled)
+    rows = result["runtimeContract"]["finalWireReceipts"]
+    for row in rows:
+        if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
+            assert row["status"] == "delivered" and row["value"] in ("immediate", "on_release")
+            assert row["finalPath"] in ("gameplay.releaseTiming", "runtimeProgram.itemUse.releaseTiming")
+            row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
+    placement_calls = {row["callId"] for row in rows if row.get("fn") == "configure_tile_placement"}
+    for call_id in placement_calls:
+        selected = [row for row in rows if row.get("callId") == call_id]
+        assert len(selected) == 3
+        inactive = next(row for row in selected if row["finalPath"].endswith(".wallId"))
+        assert inactive["status"] == "technical_projection" and inactive["value"] == -1
+        assert inactive["authoredPath"].endswith(".fn")
+        inactive["status"] = "delivered"
+        inactive["authoredPath"] = inactive["authoredPath"].removesuffix("fn") + "params.wallId"
+        for row in selected:
+            assert row["fn"] == "configure_tile_placement"
+            row["fn"] = "configure_placeable"
+        positions = [i for i, row in enumerate(rows) if row.get("callId") == call_id]
+        ordered = [next(row for row in selected if row["finalPath"].endswith("." + field))
+                   for field in ("tileId", "wallId", "placeStyle")]
+        for i, row in zip(positions, ordered):
+            rows[i] = row
+    stats = result["runtimeContract"]["validation"]["stats"]
+    stats["capabilitiesUsed"] = sorted("configure_placeable" if fn == "configure_tile_placement" else fn
+                                       for fn in stats["capabilitiesUsed"])
+    checks = stats["registryDrivenChecks"]
+    assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
+    checks["exclusiveGroups"] = ["ammo_role", "controller", "movement"]
+    assert {fn: len(CAPABILITY_REGISTRY[fn].requirements) for fn in
+            ("configure_tile_placement", "configure_wall_placement", "recall_home_on_use", "require_use_condition")} == {
+                "configure_tile_placement": 1, "configure_wall_placement": 1,
+                "recall_home_on_use": 1, "require_use_condition": 0,
+            }
+    # Two placement requirements plus recall, minus retired condition requirement.
+    checks["requirements"] -= 2
+    return result
+
+
 def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[str, Any]:
     """Reverse only proven alias/provenance deltas for frozen full-byte oracles.
 
@@ -18,7 +62,7 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_wire
 
     assert validate_runtime_wire(compiled)["ok"]
-    result = deepcopy(compiled)
+    result = without_captured_item_alias_delta(compiled)
     checks = result["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
     conditional = [(cap.name, name) for cap in CAPABILITY_REGISTRY.values()
                    for name, spec in cap.params.items() if spec.omission_condition is not None]
@@ -99,6 +143,17 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
 def project_captured_projectile_call(call: dict[str, Any]) -> None:
     params = call.get("params", {})
     fn = call.get("fn")
+    if fn == "configure_item_use" and "heldSpriteVisibilityHint" in params:
+        old = params.pop("heldSpriteVisibilityHint")
+        params["customHeldSprite"] = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}[old]
+    if fn == "configure_placeable":
+        if params["wallId"] == -1:
+            call["fn"] = "configure_tile_placement"
+            del params["wallId"]
+        else:
+            assert params["tileId"] == -1
+            call["fn"] = "configure_wall_placement"
+            del params["tileId"]
     if fn == "configure_spawn" and "placement" in params:
         anchor = params.pop("placement")
         assert anchor in {"item_use_origin", "ground_at_cursor", "cursor"}

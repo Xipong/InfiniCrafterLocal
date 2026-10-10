@@ -98,18 +98,18 @@ def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
     # projection and two native-ammo inventory diagnostics. No omitted field
     # is materialized, and every other gameplay/provenance byte stays pinned.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
+    from sentry_contract_checks import without_declared_targeting_neutrals
+    from beam_contract_checks import without_declared_beam_neutrals
+
     for name, expected_hash in baseline.items():
-        final = without_declared_targeting_neutrals(
-            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))
+        final = without_declared_targeting_neutrals(without_declared_beam_neutrals(
+            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name)))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
         added_modifier_caps = (
             "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
             "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
         )
-        # New capabilities add registry diagnostics, not old gameplay. Assert
-        # their exact declared contribution before reversing the historical
-        # counter; archived hashes and every gameplay/receipt byte stay frozen.
         assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28

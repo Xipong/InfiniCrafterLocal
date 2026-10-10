@@ -81,7 +81,7 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     use = cards["configure_item_use"]["constructionMeaning"]
     assert all(term in use for term in ("useTimeTicks", "useAnimationTicks", "autoReuse", "channel"))
     charge = cards["charge_then_release"]["constructionMeaning"]
-    assert all(term in charge for term in ("channel=true", "charged entity", "chargeTicks", "heldSpriteVisibilityHint", "presentation"))
+    assert all(term in charge for term in ("channel=true", "charged entity", "chargeTicks", "customHeldSprite", "presentation"))
     assert "While-selected HoldItem" in inputs["hold"]["constructionMeaning"]
     assert all(term in inputs["equipped"]["constructionMeaning"].lower() for term in ("passive", "runtime uses the first", "head only", "head/body/legs"))
     assert "requiredComponents" in entities["item_body"] and "configure_item_stats" in entities["item_body"]["requiredComponents"]

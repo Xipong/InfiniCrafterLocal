@@ -99,7 +99,7 @@ _REPLAY = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 def _historical_names(document):
     # Narrow test-only projection; archive and all unrelated values stay intact.
     projected = copy.deepcopy(document)
-    renames = {"configure_item_use": ("releaseTiming", "heldSpriteVisibilityHint"),
+    renames = {"configure_item_use": ("releaseTiming", "customHeldSprite"),
                "configure_spawn": ("speedPxPerTick", "speedPxPerUpdate"),
                "set_projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
     for row in projected.get("runtimeProgram", {}).get("calls", []) + projected.get("callsUpsert", []):
@@ -108,6 +108,18 @@ def _historical_names(document):
             assert pair[1] not in row["params"]
             row["params"][pair[1]] = row["params"].pop(pair[0])
         project_captured_projectile_call(row)
+        params = row.get("params", {})
+        if row.get("fn") == "configure_item_use" and "customHeldSprite" in params:
+            value = params["customHeldSprite"]
+            mapping = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}
+            if isinstance(value, str) and value in mapping:
+                params["customHeldSprite"] = mapping[value]
+        if row.get("fn") == "configure_placeable" and params.get("wallId") == -1:
+            row["fn"] = "configure_tile_placement"
+            del params["wallId"]
+        elif row.get("fn") == "configure_placeable" and params.get("tileId") == -1:
+            row["fn"] = "configure_wall_placement"
+            del params["tileId"]
     return projected
 
 
