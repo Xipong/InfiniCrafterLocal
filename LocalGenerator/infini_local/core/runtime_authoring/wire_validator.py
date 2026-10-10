@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from infini_local.core.runtime_authoring.compact_notation import audit_compact_source
-
 from collections.abc import Mapping
 from math import isfinite
 from typing import Any
@@ -576,13 +574,6 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             "message": "Compiler receipt audit found output paths not declared by the capability registry.",
             "details": lowering.get("violations") or [],
         })
-
-    if "compactAuthorSource" in contract or "compactSourceReceipts" in contract:
-        compact_audit = audit_compact_source(data)
-        if not compact_audit["ok"]:
-            errors.append({"path": "$.runtimeContract.compactAuthorSource", "code": "invalid_compact_author_provenance",
-                           "message": "Compact Author source/projection/receipts do not describe the compiled result.",
-                           "details": compact_audit["errors"]})
 
     return {
         "schema": "infini.runtime-program-wire-validation.v1",

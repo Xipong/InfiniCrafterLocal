@@ -1310,8 +1310,7 @@
                     "x-infini-semanticType": "life_points"
                   },
                   "healMana": {
-                    "default": 0,
-                    "description": "Mana restored; omission explicitly selects zero",
+                    "description": "Mana restored",
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
@@ -1326,6 +1325,7 @@
                 },
                 "required": [
                   "healLife",
+                  "healMana",
                   "usesPotionRules"
                 ],
                 "type": "object"
@@ -1586,23 +1586,19 @@
                 "additionalProperties": false,
                 "properties": {
                   "axePowerTooltipPercent": {
-                    "default": 0,
                     "description": "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5",
                     "maximum": 500,
                     "minimum": 0,
                     "multipleOf": 5,
                     "type": "integer",
-                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "tooltip percent"
                   },
                   "hammerPower": {
-                    "default": 0,
-                    "description": "Terraria Item.hammer tooltip power percent; omission explicitly selects zero",
+                    "description": "Terraria Item.hammer tooltip power percent",
                     "maximum": 1000,
                     "minimum": 0,
                     "type": "integer",
-                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "terraria_hammer_power"
                   },
                   "miningSpeedScale": {
@@ -1623,6 +1619,8 @@
                 },
                 "required": [
                   "pickPower",
+                  "axePowerTooltipPercent",
+                  "hammerPower",
                   "miningSpeedScale"
                 ],
                 "type": "object"

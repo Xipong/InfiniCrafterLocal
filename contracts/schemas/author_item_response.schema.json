@@ -1394,9 +1394,8 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 500,
-                        "description": "Mana restored; omission explicitly selects zero",
+                        "description": "Mana restored",
                         "x-infini-semanticType": "mana_points",
-                        "default": 0,
                         "x-infini-neutral": 0
                       },
                       "usesPotionRules": {
@@ -1407,6 +1406,7 @@
                     },
                     "required": [
                       "healLife",
+                      "healMana",
                       "usesPotionRules"
                     ]
                   }
@@ -1680,18 +1680,14 @@
                         "multipleOf": 5,
                         "description": "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5",
                         "x-infini-units": "tooltip percent",
-                        "x-infini-semanticType": "unitless_scalar",
-                        "default": 0,
-                        "x-infini-neutral": 0
+                        "x-infini-semanticType": "unitless_scalar"
                       },
                       "hammerPower": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 1000,
-                        "description": "Terraria Item.hammer tooltip power percent; omission explicitly selects zero",
-                        "x-infini-semanticType": "terraria_hammer_power",
-                        "default": 0,
-                        "x-infini-neutral": 0
+                        "description": "Terraria Item.hammer tooltip power percent",
+                        "x-infini-semanticType": "terraria_hammer_power"
                       },
                       "miningSpeedScale": {
                         "type": "number",
@@ -1704,6 +1700,8 @@
                     },
                     "required": [
                       "pickPower",
+                      "axePowerTooltipPercent",
+                      "hammerPower",
                       "miningSpeedScale"
                     ]
                   }

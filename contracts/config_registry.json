@@ -2895,20 +2895,6 @@
       "declarations": [
         {
           "default": 95,
-          "file": "LocalGenerator/infini_local/pipelines/compact_author_pipeline.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        },
-        {
-          "default": 95,
-          "file": "LocalGenerator/infini_local/pipelines/compact_author_pipeline.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        },
-        {
-          "default": 95,
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": null,
           "minimum": null,
@@ -2944,7 +2930,6 @@
       "minimum": null,
       "name": "INFINI_LLM_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/compact_author_pipeline.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
         "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
       ],
@@ -5647,7 +5632,7 @@
   ],
   "errors": [],
   "fieldCount": 231,
-  "fingerprint": "7af604fb34506b01a7e61d26f30b878c812c8adebf78b1c9ffcff0862f645cbc",
+  "fingerprint": "2730eda0d8aafdda6e971983cbe64756d070f7133bdba27bd9e354d250711c34",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

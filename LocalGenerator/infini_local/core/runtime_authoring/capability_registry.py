@@ -1063,7 +1063,7 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "healLife": _p("integer", "Life restored", minimum=0, maximum=500, neutral=0),
-            "healMana": _p("integer", "Mana restored; omission explicitly selects zero", minimum=0, maximum=500, neutral=0, required=False, default=0),
+            "healMana": _p("integer", "Mana restored", minimum=0, maximum=500, neutral=0),
             "usesPotionRules": _p("boolean", "Set Terraria Item.potion rules including Quick Heal eligibility and potion-sickness use gating; not a duration; false allows non-potion healing", wire_name="potion"),
         },
         py=_COMPILER_OWNER,
@@ -1120,8 +1120,8 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
-            "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5, neutral=0, required=False, default=0),
-            "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent; omission explicitly selects zero", minimum=0, maximum=1000, neutral=0, required=False, default=0),
+            "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
+            "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
             "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
         },
         py=_COMPILER_OWNER,
