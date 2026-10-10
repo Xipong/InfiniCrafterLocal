@@ -48,6 +48,8 @@ internal static partial class EngineRuntimeChecks
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),
             ("VFX sound selector silence and server controls", VfxSoundSelectorPreservesSilentAndServerControls),
+            ("VFX explicit sound strict DTO and pitch interval", VfxSoundControlsStrictDtoAndPitchInterval),
+            ("VFX explicit sound owns pitch and preserves native policies", VfxSoundControlsOwnPitchAndPreserveNativePolicies),
             ("quality250 NativeDirectUseStackCostIsLiteralUnderSaving", NativeDirectUseStackCostIsLiteralUnderSaving),
             ("quality250 NativeQuickHealStackCostUsesPrimaryUnderSaving", NativeQuickHealStackCostUsesPrimaryUnderSaving),
             ("RT02 NativeQuickUtilityOpenedVoidPrerequisite", RT02NativeQuickUtilityOpenedVoidPrerequisite),
