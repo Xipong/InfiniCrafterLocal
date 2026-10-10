@@ -103,7 +103,7 @@ def render() -> str:
         "## Authoring → wire boundary",
         "",
         f"- `{PRIMARY_ENTITY_AUTHOR_PATH}` — ровно один model-authored существующий entity id.",
-        "- Author bindings/calls не содержат `role`. Compiler сравнивает exact `binding.usePolicy.action.targetId` с exact `primaryEntityId`: equality → wire `primary`, иначе wire `secondary`. Эта one-to-one projection не выбирает entity, input, action, attachment, delivery или gameplay importance.",
+        "- Author bindings/calls не содержат `role`. Compiler сравнивает exact `binding.action.targetId` (либо exact unique item-body identity на registry-fixed ветви) с exact `primaryEntityId`: equality → wire `primary`, иначе wire `secondary`. Wire сохраняет `binding.usePolicy`; эта one-to-one projection не выбирает entity, input, action, attachment, delivery или gameplay importance.",
         "- `primaryOwner` выводится только из exact kind выбранной entity через `ENTITY_KIND_REGISTRY.projectile`; неизвестный kind fail-closed валидатором, а не становится projectile default.",
         "- Каждая такая projection имеет manifest row и compiler receipt с authored paths, exact final path и value.",
         f"- Repair может менять primary identity только через `{PRIMARY_ENTITY_SELECTION_FIELD}` и только выбирая один id из transaction candidates.",
