@@ -1,8 +1,25 @@
-# Карта PR по аудиту — 10 октября 2026
+# Карта PR по аудиту — финальное техническое ревью
 
-Пакет для выборочного ревью в `Xipong/InfiniCrafterLocal`. Эта страница описывает отдельные PR и их проверенные границы; наличие строки не означает merge в `main`. Исторические выводы остаются зафиксированным snapshot в `HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md`.
+Пакет #7–#27 в `Xipong/InfiniCrafterLocal`: ниже сначала финальные решения, затем исходный исторический proposal snapshot. Текущие canonical owners — [AGENT_INDEX_RU.md](../AGENT_INDEX_RU.md) и [PROJECT_MAP_RU.md](../PROJECT_MAP_RU.md). Исторические выводы сохранены в `HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md`.
 
-Открыто **21 PR**. Основная ветка на момент подготовки — `62762da1831771b376eb83efbab80530411ff3f1`. Новые изменения опубликованы в ветках PR; `main` не изменён.
+## Итог интеграции
+
+Все **21 PR (#7–#27) приняты** после технического и архитектурного ревью; подтверждённые дефекты исправлены на соответствующих ветках. Это результат current main, а не утверждение о первоначальных proposal heads. Исходный параллельный compact API #18 не сохранён: его заменяет единственная fresh grammar `authoring.v5`, без legacy admission. Persisted gameplay wire, readers и старые recipes сохранены.
+
+| PR | Итог и существенная граница |
+|---|---|
+| #7/#8/#9/#10 | Аудит, контекст Author/Repair и typed основание приняты; Repair остаётся exact-scope и frozen-first |
+| #11/#12/#13/#15/#16/#17 | Stack RNG, item aliases, sentry choices, named effect groups, один reservation/refund owner и native ammo приняты |
+| #18 | Переработан и принят как единственный Author v5; прежние v4/compact source отказываются, wire-only provenance не выдаётся за проверку Author |
+| #14/#24/#26 | Projected reference requirements, typed projectile aliases, signed gravity −2…2, nearest radial damage и fresh bias 0…0.9 совместимы с v5; retained wire bias 0…1 не расширяет fresh admission |
+| #19/#20/#21/#22/#23 | Beam/curves/sound/child combat/movement приняты; raw numeric admission проверяет original decimal до float32, native combat basis сохраняется |
+| #25/#27 | Physical projectile emission, exact dyadic target geometry, sampled launch и hit-relative snapshot приняты; не добавляют semantic router или whole-weapon presets |
+
+Final combined canonical Python suite — **9173 PASS / 0 FAIL, 109 test files, все четыре shards**; **16 portable gates PASS**, source-bound native harness **333 PASS / 0 FAIL** и реальный private SDK compile **0 warnings / 0 errors** проверены отдельно; точные результаты, scopes и merge commits доступны в PR reviews/CI. SDK pin включает 141 source/resource/project input, из них 107 файлов C#; headless harness pin — 186 inputs, 333 исполненных checks. Это разные единицы измерения, их нельзя складывать. World/GPU/MP/live и качество новой LLM-генерации не проверялись. Installed Windows mods/config/saves не менялись, опубликованный v0.4.254 не переиздавался.
+
+## Исходный proposal snapshot — исторический, не current status
+
+Следующие таблицы фиксируют первоначальные ветки, их counts и ограничения на момент подготовки. Их «Открыт»/«Draft», отсутствие .NET и opt-in compact mode **устарели** и не описывают принятый main. Первоначальная база — `62762da1831771b376eb83efbab80530411ff3f1`. Исходные pytest totals нельзя складывать или приписывать финальной композиции.
 
 ## Как выбирать
 

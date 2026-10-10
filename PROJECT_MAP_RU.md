@@ -5,6 +5,8 @@
 <a id="python"></a>
 ## LocalGenerator: куда идти за изменением
 
+Fresh source — только `authoring.v5`: flat independent `action`/`stackCost`/`contactDamage`, exact registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются admission paths. Persisted wire сохраняет `usePolicy` и имеет отдельные readers/retained provenance; retirement Author grammar не удаляет recipes.
+
 Python base: [`LocalGenerator/infini_local/`](LocalGenerator/infini_local/FOLDER_DOCS_RU.md). Public imports: `infini_local.core.runtime_authoring`, не deleted legacy compiler/root lowerers. Имена без directory в первых шести строках — `core/runtime_authoring/`; далее соседние bare filenames имеют тот же directory, что предшествующий path.
 
 | Изменение | Canonical owner относительно Python base |
@@ -31,6 +33,7 @@ C# base: [`ModSources/InfiniCrafterLocal/`](ModSources/InfiniCrafterLocal/FOLDER
 
 | Surface | Canonical source относительно C# base |
 |---|---|
+| Sampled launch / hit-target geometry / physical emission | `Common/Models/RuntimeProgramSpec.cs`, `Common/Runtime/RuntimeSpawnVelocity.cs`, `RuntimeProgramExecutor.cs`, `RuntimeHitNpcGeneration.cs`; exact target geometry и authority/refund имеют собственных владельцев |
 | Strict DTO/vocabulary/safety | `Common/Models/RuntimeProgramSpec.cs`, `TerrariaRuntimeVocabulary.cs`, `GeneratedEquipmentBounds.g.cs` |
 | Item projection/hooks | `Common/Models/GeneratedItemData.Apply.cs`, `Content/Items/GeneratedItem.cs` |
 | Bindings/events/delays/hit receipt | `Common/Runtime/RuntimeProgramExecutor.cs`, `RuntimeDelayedActionScheduler.cs`, `RuntimeHitPullBridge.cs` |
