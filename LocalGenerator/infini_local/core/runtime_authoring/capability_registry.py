@@ -115,6 +115,7 @@ class RequirementSpec:
     any_of: tuple[str, ...] = ()
     nonzero_params: tuple[str, ...] = ()
     message: str = ""
+    other_param: str = ""
 
     def card(self) -> dict[str, Any]:
         out: dict[str, Any] = {"kind": self.kind, "target": self.target}
@@ -129,6 +130,8 @@ class RequirementSpec:
             out["nonzeroParams"] = list(self.nonzero_params)
         if self.message:
             out["message"] = self.message
+        if self.other_param:
+            out["otherParam"] = self.other_param
         return out
 
 
@@ -1185,6 +1188,55 @@ def authored_event(params: Mapping[str, Any]) -> str:
     return "periodic" if isinstance(when, Mapping) else ""
 
 
+def _spawn_velocity() -> ParamSpec:
+    def speed(description: str, wire: str) -> ParamSpec:
+        return _p("number", description, minimum=0, maximum=80,
+                  units="pixels/projectile update", semantic_type="initial_velocity_speed",
+                  neutral=0, consumer_storage="float32", wire_name=wire)
+
+    variants = [_p("object", "Exact constant-speed deterministic fan; preserves the established wire.", properties={
+        "constantSpeedPxPerUpdate": speed("Initial velocity magnitude; each extra update moves this many pixels before movement/collisions.", "speedPxPerTick"),
+    })]
+    for name, kind, description in (
+        ("fanSpeed", "fan_speed", "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."),
+        ("radial", "radial", "Sample each direction uniformly over the full circle and speed uniformly between min and max."),
+        ("disk", "disk", "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."),
+        ("cone", "cone", "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."),
+    ):
+        fields = {"maxSpeedPxPerUpdate": speed("Upper sampled speed, inclusive at the degenerate min=max boundary.", "velocityDistribution.maxSpeedPxPerUpdate")}
+        if kind != "disk":
+            fields = {"minSpeedPxPerUpdate": speed("Lower sampled speed; must not exceed maxSpeedPxPerUpdate.", "velocityDistribution.minSpeedPxPerUpdate"), **fields}
+        if kind == "cone":
+            fields["halfAngleRadians"] = _p("number", "Uniform signed angular jitter around each existing fan direction.",
+                minimum=0, maximum=math.pi, units="radians", semantic_type="radians", neutral=0,
+                consumer_storage="float32", wire_name="velocityDistribution.halfAngleRadians")
+        variants.append(_p("object", description, properties={name: _p("object", description,
+            properties=fields, wire_literals={"velocityDistribution.kind": kind, "speedPxPerTick": 0})}))
+    return _p("union", "Select exactly one initial velocity rule. Owner samples a seeded batch once; native projectile state synchronizes the result. No peer reroll or inferred distribution.",
+              alternatives=variants, semantic_type="initial_velocity_distribution", wire_presence_requires_receipt=True)
+
+
+def _hit_target_spawn_geometry() -> ParamSpec:
+    fields = {}
+    for name, maximum, units, meaning in (
+        ("beforeProbability", 1, "probability", "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance."),
+        ("hitboxMaxSideFactor", 2, "hitbox max-side factor", "Clearance radius uses max(target.width,target.height) times this factor, plus clearancePx."),
+        ("clearancePx", 128, "pixels", "Additional target-centre clearance, explicitly added to the selected hitbox radius."),
+        ("beforePositionJitterRadiusPx", 128, "pixels", "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter."),
+        ("beforeDirectionJitterRadians", math.pi, "radians", "Before-target direction gets uniform signed jitter within this half-angle around the event direction."),
+        ("afterFanSpreadRadians", math.tau, "radians", "After-target directions use the deterministic inclusive fan over all child indices; each origin lies on its own ray."),
+    ):
+        fields[name] = _p("number", meaning, minimum=0, maximum=maximum, units=units,
+            semantic_type="spawn_geometry", consumer_storage="float64" if name == "beforeProbability" else "float32", neutral=0,
+            wire_name="hitTargetSpawn." + name)
+    fields["initialIgnoreCountdownUpdates"] = _p("integer", "Exact initial NPC exclusion counter, decremented before collision: 10 blocks before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
+        minimum=0, maximum=600, units="projectile AI countdown updates", semantic_type="initial_target_exclusion_countdown",
+        wire_name="hitTargetSpawn.initialIgnoreCountdownUpdates")
+    return _p("object", "Explicit hit-target-relative origin and direction sampling. Capture target geometry/event direction and owner seed at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
+              properties=fields, wire_literals={"spreadRadians": 0},
+              semantic_type="hit_target_spawn_geometry", wire_presence_requires_receipt=True)
+
+
 _CAPS: list[CapabilitySpec] = [
     _cap(
         "configure_item_stats",
@@ -1255,7 +1307,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_weapon_ammo",
-        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
         "item",
         ("item_body",),
         {
@@ -1565,11 +1617,11 @@ _CAPS: list[CapabilitySpec] = [
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
         {
-            "speedPxPerUpdate": _p("number", "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with updatesPerTick=2 moves ~20 px/world tick", minimum=0, maximum=80, units="pixels/projectile update", wire_name="speedPxPerTick"),
+            "velocity": _spawn_velocity(),
             "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it", minimum=1, maximum=12, required=False, default=1, neutral=1, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "spreadRadians": _p("number", "Total angular spread. May be omitted only for child_projectile, whose producers override it", minimum=0, maximum=6.283185307179586, units="radians", required=False, default=0, neutral=0, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
+            "aim": _p("string", "Initial aim axis and forward offset: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction. none is zero velocity for the constant variant; radial/disk sample their own directions independently.", enum=("cursor", "facing", "velocity", "none")),
             "position": _spawn_position_param(),
         },
         py=_COMPILER_OWNER,
@@ -1577,7 +1629,7 @@ _CAPS: list[CapabilitySpec] = [
         wire=("runtimeProgram.entities[].spawn.*",),
         provenance="shot count/spread/aim/placement extracted from all roots",
         repair_group="spawn",
-        retained_receipt_params={"placement": _p("string", "Retained old spawn anchor provenance", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot"))},
+        retained_receipt_params={"placement": _p("string", "Retained old spawn anchor provenance", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot")), "speedPxPerUpdate": _p("number", "Retained constant-speed wire-only provenance.", minimum=0, maximum=80, wire_name="speedPxPerTick")},
     ),
     _cap(
         "set_projectile_concurrency",
@@ -1930,7 +1982,7 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; selected damage is multiplied once without repeating player/class modifiers.",
+        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
@@ -1995,6 +2047,31 @@ _CAPS.extend([
         repair_group="event_spawn",
         events=EVENT_KINDS,
         budget="max 12 per action, program child depth <= 3, total event spawn budget <= 32",
+    ),
+    _cap(
+        "spawn_entity_from_hit_target",
+        "Emit authored moving children from explicit before/after geometry around the actually hit NPC. Capture its centre, size, event direction and owner seed at event admission, including delay. Each child uses its own authored velocity rule; geometry does not promise a re-hit or inherit a hidden parent-speed formula.",
+        "event",
+        PROJECTILE_ENTITY_KINDS,
+        {
+            "when": _event_when_param(("on_hit", "on_crit")),
+            "entity": _p("string", "Referenced moving child; its position must be {at:activation_origin}, aim velocity, offsetPx 0, with no spawn_over_target", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
+            "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
+            "geometry": _hit_target_spawn_geometry(),
+            "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "knockbackBasis": _p("string", "Child knockback source, selected independently of damage", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageMultiplier": _p("number", "Multiply the selected damage exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
+            "delayTicks": _p("integer", "World-tick delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted", minimum=0, maximum=600, units="ticks"),
+        },
+        multiplicity="many_per_target",
+        py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        wire=("runtimeProgram.entities[].events[].*",),
+        wire_action="spawn_entity_on_event",
+        provenance="explicit target-relative split geometry and initial NPC exclusion extracted from the retired split macro",
+        repair_group="event_spawn",
+        events=("on_hit", "on_crit"),
+        budget="max 12 per action, program child depth <= 3, shared event spawn budget <= 32; no reservation is recreated on hydration",
     ),
     _cap(
         "select_targets_and_emit_on_event",
@@ -2678,7 +2755,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
             "on_hit:target_to_owner": "owner_request_server_execute",
             "on_hit:target_to_entity": "owner_request_server_execute",
         }
-    if cap.name in {"spawn_entity_on_event", "select_targets_and_emit_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use", "pull_owner_to_event_target"}:
+    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "select_targets_and_emit_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use", "pull_owner_to_event_target"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
         return "owner_execute_sync", {}
@@ -2690,6 +2767,29 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "configure_spawn":
+        moving = ("owner_attached_projectile", "free_projectile", "child_projectile")
+        rows = [RequirementSpec("present_param_requires_target_kind", param=f"velocity.{variant}", any_of=moving,
+            message="Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.")
+            for variant in ("fanSpeed", "radial", "disk", "cone")]
+        rows.extend(RequirementSpec("ordered_params", param=f"velocity.{variant}.minSpeedPxPerUpdate",
+            other_param=f"velocity.{variant}.maxSpeedPxPerUpdate",
+            message="Minimum sampled speed must not exceed the explicitly authored maximum.")
+            for variant in ("fanSpeed", "radial", "cone"))
+        rows.extend(RequirementSpec("present_param_requires_param_value", param=f"velocity.{variant}", other_param="aim",
+            any_of=("cursor", "facing", "velocity"), message="The selected directional distribution requires an explicit non-zero aim axis.")
+            for variant in ("fanSpeed", "cone"))
+        rows.extend(RequirementSpec("present_param_requires_param_value", param=f"velocity.{variant}", other_param="spreadRadians", equals=0,
+            message="Radial/disk directions own the full distribution; select zero deterministic fan spread.")
+            for variant in ("radial", "disk"))
+        rows.extend(RequirementSpec("present_param_forbids_capability", param=f"velocity.{variant}", capability=controller,
+            message="This controller owns launch velocity; select the explicit constant-speed variant.")
+            for variant in ("fanSpeed", "radial", "disk", "cone") for controller in ("charge_then_release", "channel_beam"))
+        rows.append(RequirementSpec("present_params_forbid_item_capability_when_active_spawn",
+            param="velocity", any_of=tuple(f"velocity.{variant}" for variant in ("fanSpeed", "radial", "disk", "cone")),
+            capability="configure_weapon_ammo", other_param="speedBasis", equals="native_shot",
+            message="An active native_shot ammo root requires the constant-speed variant; sampled authored min/max and native shot magnitude cannot both own initial speed."))
+        return tuple(rows)
     if cap.name == "select_targets_and_emit_on_event":
         return (
             RequirementSpec("event_available", param="when", message="The source entity must actually emit the selected hit event."),
@@ -2812,7 +2912,20 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         ))
     if cap.category == "event":
         requirements = [RequirementSpec("event_available", param="when", message="target entity must actually emit the selected event")]
+        if cap.name == "spawn_entity_from_hit_target":
+            requirements.extend((
+                RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
+                    equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
+                    message="Exact hit-target geometry requires a child configured for event origin/direction without another position transform."),
+                RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
+                    message="Exact hit-target geometry cannot coexist with the child's over-target displacement or telegraph."),
+            ))
         if cap.name == "spawn_entity_on_event":
+            requirements.append(RequirementSpec(
+                "referenced_param_presence_requires_value", param="spreadRadians", other_param="entity",
+                capability="configure_spawn", any_of=("velocity.radial", "velocity.disk"), equals=0,
+                message="A radial/disk child owns its complete direction distribution; this event must explicitly select spreadRadians=0.",
+            ))
             requirements.extend(RequirementSpec(
                 "param_requires_target_kind", param=name, equals="live_parent",
                 any_of=PROJECTILE_ENTITY_KIND_ORDER,
@@ -2886,6 +2999,9 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
         semantic_type = "runtime_entity_id"
     elif cap.name == "spawn_entity_on_event" and name == "entity":
         reference = ReferenceSpec("entity", PROJECTILE_ENTITY_KIND_ORDER, False, True)
+        semantic_type = "runtime_entity_id"
+    elif cap.name == "spawn_entity_from_hit_target" and name == "entity":
+        reference = ReferenceSpec("entity", ("free_projectile", "child_projectile"), False, True)
         semantic_type = "runtime_entity_id"
     elif name in {"buffId"}:
         semantic_type = "terraria_buff_id"
@@ -3006,14 +3122,12 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         dependencies=tuple(dict.fromkeys(
             requirement.capability
             for requirement in _requirements_for(cap)
-            if requirement.capability and requirement.kind not in {
-                "referenced_entity_capability_params", "referenced_entity_without_capability"
-            }
+            if requirement.capability and requirement.kind not in {"present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value"}
         )),
         conflicts=(f"exclusive_group:{exclusive_group}",) if exclusive_group else (),
         network_authority=authority,
         authority_by_effect=MappingProxyType(dict(by_effect)),
-        activation_spawn_count_param=("count" if cap.name == "spawn_entity_on_event"
+        activation_spawn_count_param=("count" if (cap.wire_action or cap.name) == "spawn_entity_on_event"
                                       else "stepCount" if cap.name == "select_targets_and_emit_on_event" else ""),
         meaningful_for_stationary=(cap.category == "event" or cap.name in {"set_projectile_damage", "target_and_fire", "emit_light_while_active", "attract_npcs_while_active"}),
     )

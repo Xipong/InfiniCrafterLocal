@@ -175,10 +175,11 @@ Retarget/create проходит только если остальной frozen
 независимым существующим producer; изменение всего связанного graph требует
 согласованного полного Author draft.
 
-Ветка использует общий transform/exact-NPC-exclusion helper с A11. Здесь
-ExtraAI writer версии 3 и reader версий 2/3. При объединении с A11 нужно
-сохранить его writer 4 и reader 2/3/4, общий v3 exclusion segment и owner
-replay guard, затем A11 v4 state. Выбор всего старшего по git времени файла
+Композиция с A11 использует общий transform/exact-NPC-exclusion helper.
+ExtraAI writer версии 4 и reader версий 2/3/4 сохраняют общий v3 exclusion
+segment и owner replay guard, затем optional A11 sampled-velocity state.
+Отсутствие нового состояния в historical constant wire не дополняется.
+Выбор всего старшего по git времени файла
 `GeneratedProjectile.NetSync.cs` не является проверкой этого protocol.
 Общий spawn context/exception boundary должен остаться в одном экземпляре.
 Opcode A10=8 отличается от A11 alias для event-spawn opcode 1.
@@ -189,8 +190,12 @@ Portable проверки охватывают registry/schema, Author request, 
 receipt identity, referenced-entity Repair, budget/graph и исходный C#
 consumer. Точные результаты фиксируются в описании PR на проверенном commit.
 
-C# build, исполнение `EngineRuntimeChecks` и SP/MP game smoke — **notRun**:
-native tModLoader/ParticleLibrary/Luminance и .NET build environment в этой
-сессии отсутствуют. Исходный native harness и Python tests не заменяют
-реальный Terraria world loop, сетевую доставку и столкновения на tiles.
-Live LLM/image quality этой веткой не измеряется.
+При локальной композиции #27/#25/#22/#12 родитель отдельно выполнил linked
+canonical C#/tModLoader/FNA headless build и полный `EngineRuntimeChecks`:
+329 PASS, 0 FAIL, 0 compiler warnings/errors. Первый build отказал на
+byte-identical auto-merge duplicate `HasExactTargetEmissionOrigin`; удалена
+только вторая копия, затем fresh build и полный native rerun прошли.
+Receipt: `pr-27/native/combined25-parent/rerun-1/verified.json` в review
+artifacts; точные 184 compile inputs закреплены отдельным SHA256 manifest.
+Это не Terraria world loop, GPU, SP/MP game smoke или network-delivery
+проверка: эти режимы и Live LLM/image quality остаются **notRun**.

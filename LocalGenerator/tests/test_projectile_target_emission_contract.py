@@ -348,6 +348,13 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     doc = _doc()
     calls = doc["runtimeProgram"]["calls"]
     emission = _call(doc)
+    child_spawn = _child_spawn(doc)
+    child_spawn["params"]["velocity"] = {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}}
+    calls.append({"id": "combined_hit_target_geometry", "fn": "spawn_entity_from_hit_target",
+                  "target": emission["target"],
+                  "params": {**deepcopy(next(row["params"] for row in
+                      build_capability_witness("spawn_entity_from_hit_target")["runtimeProgram"]["calls"]
+                      if row["fn"] == "spawn_entity_from_hit_target")), "entity": emission["params"]["entity"]}})
     calls.append({"id": "combined_parent_combat", "fn": "spawn_entity_on_event", "target": emission["target"],
                   "params": {"when": "on_hit", "entity": emission["params"]["entity"], "count": 1,
                              "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0,
@@ -379,6 +386,12 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
                  if event["id"] == "combined_parent_combat")
     assert event["damageBasis"] == "live_parent" and event["knockbackBasis"] == "authored_child"
     assert _event(wire)["action"] == FN
+    sampled_child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == emission["params"]["entity"])
+    assert sampled_child["spawn"]["velocityDistribution"] == {"kind": "cone", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}
+    geometry = next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"]
+                    if event["id"] == "combined_hit_target_geometry")
+    assert geometry["action"] == "spawn_entity_on_event" and geometry["actionCode"] == 1
+    assert geometry["hitTargetSpawn"]["beforeProbability"] == 0.85
     for source in (None, accepted):
         assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source,
                                        final_document=wire)["ok"]
@@ -394,11 +407,18 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     candidate["params"].update(endScale=0.25, startScale=7)
     frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
+    hostile_spawn = deepcopy(child_spawn)
+    hostile_spawn["params"]["velocity"]["cone"]["maxSpeedPxPerUpdate"] = 12
+    hostile_emission = deepcopy(emission)
+    hostile_emission["params"]["selectionAnchor"] = "event_target"
+    hostile_geometry = deepcopy(next(row for row in calls if row["id"] == "combined_hit_target_geometry"))
+    hostile_geometry["params"]["geometry"]["beforeProbability"] = 0.5
     hostile_combat = deepcopy(next(row for row in calls if row["id"] == "combined_parent_combat"))
     hostile_combat["params"]["damageBasis"] = "authored_child"
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
         {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
-         "callsUpsert": [candidate, frozen, hostile_combat]}, format_mode, out_of_scope_response=True)
+         "callsUpsert": [candidate, frozen, hostile_spawn, hostile_emission, hostile_combat, hostile_geometry]},
+        format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     assert json.dumps(repaired["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)

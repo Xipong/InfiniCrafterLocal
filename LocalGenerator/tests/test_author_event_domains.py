@@ -162,7 +162,8 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
                 if item_call["fn"] == "configure_item_use":
                     project_captured_projectile_call(item_call)
             from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
-            current_source = captured_parent_combat_author(current_source)
+            from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
+            current_source = captured_spawn_velocity_author(captured_parent_combat_author(current_source))
             assert validate_runtime_program(current_source)["ok"]
             fresh, _ = compile_and_check(current_source)
             # The frozen wire intentionally predates explicit child combat too.
@@ -183,6 +184,15 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
                 if receipt.get("fn") == "configure_item_use" and receipt["authoredPath"].endswith(".heldSpriteVisibilityHint"):
                     assert receipt["value"] in {"", "immediate", "on_release"}
                     receipt["authoredPath"] = receipt["authoredPath"].removesuffix("heldSpriteVisibilityHint") + "customHeldSprite"
+                elif receipt.get("fn") == "configure_spawn" and receipt["authoredPath"].endswith(".params.speedPxPerUpdate"):
+                    # Authenticate the same constant-speed leaf against the fresh
+                    # source before isolating only the targeting omission gap.
+                    updated = {**receipt, "authoredPath": receipt["authoredPath"].removesuffix("speedPxPerUpdate") + "velocity.constantSpeedPxPerUpdate"}
+                    matches = [candidate for candidate in fresh["runtimeContract"]["finalWireReceipts"]
+                               if candidate.get("callId") == receipt["callId"] and candidate["finalPath"] == receipt["finalPath"]]
+                    assert len(matches) == 1
+                    assert json.dumps(updated, sort_keys=True) == json.dumps(matches[0], sort_keys=True)
+                    receipt.update(updated)
             violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=current_wire)["violations"]
             assert len(violations) == 5
             assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
@@ -201,7 +211,8 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             for item_call in source["runtimeProgram"]["calls"]:
                 if item_call["fn"] == "configure_item_use":
                     project_captured_projectile_call(item_call)
-            fresh, _ = compile_and_check(source)
+            from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
+            fresh, _ = compile_and_check(captured_spawn_velocity_author(source))
             assert fresh["runtimeProgram"] == wire["runtimeProgram"]
             assert fresh["gameplay"] == wire["gameplay"]
 

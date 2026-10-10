@@ -479,7 +479,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "restores native weapon-side ammo requirement/conservation and combat contribution without retired bow/gun classifiers; native ammo projectile AI remains outside this capability",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2859,13 +2859,19 @@
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
       "decision": "expose",
-      "dependencies": [],
+      "dependencies": [
+        "configure_weapon_ammo"
+      ],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
         "runtimeProgram.entities[].spawn.enabled",
         "runtimeProgram.entities[].spawn.speedPxPerTick",
+        "runtimeProgram.entities[].spawn.velocityDistribution.kind",
+        "runtimeProgram.entities[].spawn.velocityDistribution.minSpeedPxPerUpdate",
+        "runtimeProgram.entities[].spawn.velocityDistribution.maxSpeedPxPerUpdate",
+        "runtimeProgram.entities[].spawn.velocityDistribution.halfAngleRadians",
         "runtimeProgram.entities[].spawn.count",
         "runtimeProgram.entities[].spawn.spreadRadians",
         "runtimeProgram.entities[].spawn.offsetPx",
@@ -2922,16 +2928,6 @@
           "semanticType": "spawn_position",
           "units": ""
         },
-        "speedPxPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 80,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
-        },
         "spreadRadians": {
           "enum": [],
           "kind": "number",
@@ -2941,6 +2937,16 @@
           "required": false,
           "semanticType": "radians",
           "units": "radians"
+        },
+        "velocity": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "initial_velocity_distribution",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -2949,6 +2955,199 @@
       "purpose": "Set this entity spawn cardinality per activation, initial direction and position; cardinality is separate from the optional set_projectile_concurrency live cap, not a singleton guarantee. Does not choose movement or damage.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "child_projectile"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_target_kind",
+          "message": "Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.",
+          "param": "velocity.fanSpeed",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "child_projectile"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_target_kind",
+          "message": "Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.",
+          "param": "velocity.radial",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "child_projectile"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_target_kind",
+          "message": "Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.",
+          "param": "velocity.disk",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "owner_attached_projectile",
+            "free_projectile",
+            "child_projectile"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_target_kind",
+          "message": "Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.",
+          "param": "velocity.cone",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
+          "otherParam": "velocity.fanSpeed.maxSpeedPxPerUpdate",
+          "param": "velocity.fanSpeed.minSpeedPxPerUpdate",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
+          "otherParam": "velocity.radial.maxSpeedPxPerUpdate",
+          "param": "velocity.radial.minSpeedPxPerUpdate",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
+          "otherParam": "velocity.cone.maxSpeedPxPerUpdate",
+          "param": "velocity.cone.minSpeedPxPerUpdate",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_param_value",
+          "message": "The selected directional distribution requires an explicit non-zero aim axis.",
+          "otherParam": "aim",
+          "param": "velocity.fanSpeed",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "equals": null,
+          "kind": "present_param_requires_param_value",
+          "message": "The selected directional distribution requires an explicit non-zero aim axis.",
+          "otherParam": "aim",
+          "param": "velocity.cone",
+          "target": "same_target"
+        },
+        {
+          "equals": 0,
+          "kind": "present_param_requires_param_value",
+          "message": "Radial/disk directions own the full distribution; select zero deterministic fan spread.",
+          "otherParam": "spreadRadians",
+          "param": "velocity.radial",
+          "target": "same_target"
+        },
+        {
+          "equals": 0,
+          "kind": "present_param_requires_param_value",
+          "message": "Radial/disk directions own the full distribution; select zero deterministic fan spread.",
+          "otherParam": "spreadRadians",
+          "param": "velocity.disk",
+          "target": "same_target"
+        },
+        {
+          "capability": "charge_then_release",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.fanSpeed",
+          "target": "same_target"
+        },
+        {
+          "capability": "channel_beam",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.fanSpeed",
+          "target": "same_target"
+        },
+        {
+          "capability": "charge_then_release",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.radial",
+          "target": "same_target"
+        },
+        {
+          "capability": "channel_beam",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.radial",
+          "target": "same_target"
+        },
+        {
+          "capability": "charge_then_release",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.disk",
+          "target": "same_target"
+        },
+        {
+          "capability": "channel_beam",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.disk",
+          "target": "same_target"
+        },
+        {
+          "capability": "charge_then_release",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.cone",
+          "target": "same_target"
+        },
+        {
+          "capability": "channel_beam",
+          "equals": null,
+          "kind": "present_param_forbids_capability",
+          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
+          "param": "velocity.cone",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "velocity.fanSpeed",
+            "velocity.radial",
+            "velocity.disk",
+            "velocity.cone"
+          ],
+          "capability": "configure_weapon_ammo",
+          "equals": "native_shot",
+          "kind": "present_params_forbid_item_capability_when_active_spawn",
+          "message": "An active native_shot ammo root requires the constant-speed variant; sampled authored min/max and native shot magnitude cannot both own initial speed.",
+          "otherParam": "speedBasis",
+          "param": "velocity",
+          "target": "same_target"
+        },
         {
           "equals": null,
           "kind": "conditional_omission",
@@ -2980,6 +3179,17 @@
           },
           "wireFields": [
             "placement"
+          ]
+        },
+        "speedPxPerUpdate": {
+          "priorAuthorSchema": {
+            "description": "Retained constant-speed wire-only provenance.",
+            "maximum": 80,
+            "minimum": 0,
+            "type": "number"
+          },
+          "wireFields": [
+            "speedPxPerTick"
           ]
         }
       },
@@ -5766,7 +5976,7 @@
       "positionOwnership": "owns_stationary_position",
       "promptVisibility": true,
       "provenance": "stationary targeting/firing split from the retired sentry macro",
-      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; selected damage is multiplied once without repeating player/class modifiers.",
+      "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "retainedWireProvenance": {
@@ -6011,6 +6221,19 @@
         },
         {
           "anyOf": [
+            "velocity.radial",
+            "velocity.disk"
+          ],
+          "capability": "configure_spawn",
+          "equals": 0,
+          "kind": "referenced_param_presence_requires_value",
+          "message": "A radial/disk child owns its complete direction distribution; this event must explicitly select spreadRadians=0.",
+          "otherParam": "entity",
+          "param": "spreadRadians",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
             "owner_attached_projectile",
             "free_projectile",
             "stationary_projectile",
@@ -6078,6 +6301,188 @@
       "status": "refactored",
       "targetKinds": [
         "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "spawn_entity_from_hit_target",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforeProbability",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.hitboxMaxSideFactor",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.clearancePx",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforePositionJitterRadiusPx",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforeDirectionJitterRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.afterFanSpreadRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.initialIgnoreCountdownUpdates",
+        "runtimeProgram.entities[].events[].damageBasis",
+        "runtimeProgram.entities[].events[].knockbackBasis",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "count": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "damageBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "entity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": true,
+            "namespace": "entity",
+            "targetKinds": [
+              "free_projectile",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "runtime_entity_id",
+          "units": ""
+        },
+        "geometry": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "hit_target_spawn_geometry",
+          "units": ""
+        },
+        "knockbackBasis": {
+          "enum": [
+            "authored_child",
+            "live_parent"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "explicit target-relative split geometry and initial NPC exclusion extracted from the retired split macro",
+      "purpose": "Emit authored moving children from explicit before/after geometry around the actually hit NPC. Capture its centre, size, event direction and owner seed at event admission, including delay. Each child uses its own authored velocity rule; geometry does not promise a re-hit or inherit a hidden parent-speed formula.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": {
+            "aim": "velocity",
+            "offsetPx": 0,
+            "position": {
+              "at": "activation_origin"
+            }
+          },
+          "kind": "referenced_entity_capability_params",
+          "message": "Exact hit-target geometry requires a child configured for event origin/direction without another position transform.",
+          "param": "entity",
+          "target": "same_target"
+        },
+        {
+          "capability": "spawn_over_target",
+          "equals": null,
+          "kind": "referenced_entity_without_capability",
+          "message": "Exact hit-target geometry cannot coexist with the child's over-target displacement or telegraph.",
+          "param": "entity",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "max 12 per action, program child depth <= 3, shared event spawn budget <= 32; no reservation is recreated on hydration",
+      "status": "refactored",
+      "targetKinds": [
         "owner_attached_projectile",
         "free_projectile",
         "stationary_projectile",

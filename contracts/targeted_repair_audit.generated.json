@@ -9,7 +9,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 36399,
+      "dossierChars": 36268,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -41,7 +41,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 35953,
+      "dossierChars": 35822,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -87,7 +87,7 @@
         "move_whip_lash",
         "move_yoyo_hover"
       ],
-      "dossierChars": 48270,
+      "dossierChars": 48139,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -115,7 +115,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 42444,
+      "dossierChars": 42313,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -155,16 +155,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 140066,
-  "fullCapabilityCatalogCount": 67,
+  "fullAuthorPayloadChars": 160326,
+  "fullCapabilityCatalogCount": 68,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 50,
+    "declaredCodes": 53,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 49,
+    "emittedCodes": 52,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 50,
-    "runtimeDeclaredCodes": 49,
+    "policyCodes": 53,
+    "runtimeDeclaredCodes": 52,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

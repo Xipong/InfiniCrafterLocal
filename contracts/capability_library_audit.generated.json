@@ -14,29 +14,43 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 51,
+    "capabilities": 72,
+    "publicCapabilities": 68,
+    "retainedCapabilities": 4,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
     "events": 10,
-    "parameters": 183,
-    "numericParameters": 142,
-    "boundedNumericParameters": 142,
-    "semanticParameters": 183,
-    "typedEntityReferences": 2,
-    "requirements": 18,
-    "bindingDependencyEdges": 8,
-    "spawnBudgetCapabilities": 1,
-    "stationaryMeaningfulCapabilities": 10,
-    "exactWirePaths": 254,
-    "globalTechnicalLowerers": 5,
-    "globalTechnicalLowererOutputs": 97,
+    "parameters": 299,
+    "numericParameters": 211,
+    "boundedNumericParameters": 211,
+    "semanticParameters": 299,
+    "typedEntityReferences": 4,
+    "typedCallReferences": 1,
+    "requirements": 72,
+    "bindingDependencyEdges": 9,
+    "spawnBudgetCapabilities": 3,
+    "stationaryMeaningfulCapabilities": 14,
+    "exactWirePaths": 446,
+    "globalTechnicalLowerers": 7,
+    "globalTechnicalLowererOutputs": 151,
     "exclusiveGroups": {
+      "ammo_role": [
+        "configure_vanilla_ammo_item",
+        "configure_weapon_ammo"
+      ],
+      "placeable": [
+        "configure_tile_placement",
+        "configure_wall_placement"
+      ],
+      "item_mobility": [
+        "move_player_on_use",
+        "recall_home_on_use"
+      ],
       "movement": [
         "move_accelerate",
         "move_blackhole_pull",
         "move_boomerang",
-        "move_bounce",
         "move_drift",
         "move_expanding_wave",
         "move_flail_tether",
@@ -61,13 +75,13 @@
       ]
     },
     "authorityDistribution": {
-      "owner_request_server_execute": 10,
-      "server_execute": 4,
-      "owner_execute_sync": 35,
-      "client_visual_only": 2
+      "owner_request_server_execute": 13,
+      "server_execute": 3,
+      "owner_execute_sync": 49,
+      "client_visual_only": 3
     },
-    "rangeParityRows": 79,
-    "verticalSliceCount": 51
+    "rangeParityRows": 149,
+    "verticalSliceCount": 68
   },
   "issues": [],
   "errorCount": 0,
@@ -76,10 +90,15 @@
     {
       "capability": "configure_item_contact_hitbox",
       "param": "hitboxScale",
+      "wireParam": "hitboxScale",
       "csharpClass": "RuntimeItemContactSpec",
       "authorBounds": [
         0.5,
-        2.0
+        2
+      ],
+      "wireBounds": [
+        0.5,
+        2
       ],
       "csharpBounds": [
         0.5,
@@ -90,10 +109,15 @@
     {
       "capability": "configure_item_contact_hitbox",
       "param": "contactForgivenessPx",
+      "wireParam": "contactForgivenessPx",
       "csharpClass": "RuntimeItemContactSpec",
       "authorBounds": [
-        0.0,
-        64.0
+        0,
+        64
+      ],
+      "wireBounds": [
+        0,
+        64
       ],
       "csharpBounds": [
         0.0,
@@ -103,25 +127,155 @@
     },
     {
       "capability": "configure_spawn",
-      "param": "speedPxPerTick",
+      "param": "velocity.constantSpeedPxPerUpdate",
+      "wireParam": "speedPxPerTick",
       "csharpClass": "RuntimeSpawnSpec",
       "authorBounds": [
-        0.0,
-        80.0
+        0,
+        80
+      ],
+      "wireBounds": [
+        0,
+        80
       ],
       "csharpBounds": [
         0.0,
         80.0
       ],
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.fanSpeed.minSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.fanSpeed.maxSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.radial.minSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.radial.maxSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.disk.maxSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.cone.minSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.cone.maxSpeedPxPerUpdate",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "velocity.cone.halfAngleRadians",
+      "csharpClass": "RuntimeSpawnVelocitySpec",
+      "authorBounds": [
+        0,
+        3.141592653589793
+      ],
+      "csharpBounds": [
+        0.0,
+        3.141592653589793
+      ],
+      "admission": "reject_without_clamp",
       "preserved": true
     },
     {
       "capability": "configure_spawn",
       "param": "count",
+      "wireParam": "count",
       "csharpClass": "RuntimeSpawnSpec",
       "authorBounds": [
-        1.0,
-        12.0
+        1,
+        12
+      ],
+      "wireBounds": [
+        1,
+        12
       ],
       "csharpBounds": [
         1.0,
@@ -132,9 +286,14 @@
     {
       "capability": "configure_spawn",
       "param": "spreadRadians",
+      "wireParam": "spreadRadians",
       "csharpClass": "RuntimeSpawnSpec",
       "authorBounds": [
-        0.0,
+        0,
+        6.283185307179586
+      ],
+      "wireBounds": [
+        0,
         6.283185307179586
       ],
       "csharpBounds": [
@@ -146,10 +305,15 @@
     {
       "capability": "configure_spawn",
       "param": "offsetPx",
+      "wireParam": "offsetPx",
       "csharpClass": "RuntimeSpawnSpec",
       "authorBounds": [
-        -128.0,
-        256.0
+        -128,
+        256
+      ],
+      "wireBounds": [
+        -128,
+        256
       ],
       "csharpBounds": [
         -128.0,
@@ -158,12 +322,85 @@
       "preserved": true
     },
     {
+      "capability": "configure_spawn",
+      "param": "position.heightTiles",
+      "wireParam": "overTarget.heightTiles",
+      "csharpClass": "RuntimeOverTargetSpec",
+      "authorBounds": [
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
+      ],
+      "csharpBounds": [
+        0.0,
+        80.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "configure_spawn",
+      "param": "position.activationDelayTicks",
+      "wireParam": "overTarget.delayTicks",
+      "csharpClass": "RuntimeOverTargetSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_concurrency",
+      "param": "maxActive",
+      "csharpClass": "RuntimeSpawnSpec",
+      "authorBounds": [
+        1,
+        96
+      ],
+      "csharpBounds": [
+        1.0,
+        96.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "set_descendant_concurrency",
+      "param": "maxActive",
+      "csharpClass": "RuntimeSpawnSpec",
+      "authorBounds": [
+        1,
+        96
+      ],
+      "csharpBounds": [
+        1.0,
+        96.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
       "capability": "set_projectile_damage",
       "param": "damage",
+      "wireParam": "damage",
       "csharpClass": "RuntimeDamageSpec",
       "authorBounds": [
-        0.0,
-        2000.0
+        0,
+        2000
+      ],
+      "wireBounds": [
+        0,
+        2000
       ],
       "csharpBounds": [
         0.0,
@@ -174,10 +411,15 @@
     {
       "capability": "set_projectile_damage",
       "param": "knockback",
+      "wireParam": "knockback",
       "csharpClass": "RuntimeDamageSpec",
       "authorBounds": [
-        0.0,
-        20.0
+        0,
+        20
+      ],
+      "wireBounds": [
+        0,
+        20
       ],
       "csharpBounds": [
         0.0,
@@ -188,10 +430,15 @@
     {
       "capability": "set_projectile_hitbox",
       "param": "widthPx",
+      "wireParam": "widthPx",
       "csharpClass": "RuntimeHitboxSpec",
       "authorBounds": [
-        4.0,
-        192.0
+        4,
+        192
+      ],
+      "wireBounds": [
+        4,
+        192
       ],
       "csharpBounds": [
         4.0,
@@ -202,10 +449,15 @@
     {
       "capability": "set_projectile_hitbox",
       "param": "heightPx",
+      "wireParam": "heightPx",
       "csharpClass": "RuntimeHitboxSpec",
       "authorBounds": [
-        4.0,
-        192.0
+        4,
+        192
+      ],
+      "wireBounds": [
+        4,
+        192
       ],
       "csharpBounds": [
         4.0,
@@ -216,10 +468,15 @@
     {
       "capability": "set_projectile_hitbox",
       "param": "drawScale",
+      "wireParam": "drawScale",
       "csharpClass": "RuntimeHitboxSpec",
       "authorBounds": [
         0.25,
-        4.0
+        4
+      ],
+      "wireBounds": [
+        0.25,
+        4
       ],
       "csharpBounds": [
         0.25,
@@ -230,10 +487,15 @@
     {
       "capability": "set_projectile_hitbox",
       "param": "hitboxScale",
+      "wireParam": "hitboxScale",
       "csharpClass": "RuntimeHitboxSpec",
       "authorBounds": [
         0.25,
-        3.0
+        3
+      ],
+      "wireBounds": [
+        0.25,
+        3
       ],
       "csharpBounds": [
         0.25,
@@ -242,12 +504,473 @@
       "preserved": true
     },
     {
+      "capability": "set_projectile_hitbox_curve",
+      "param": "startScale",
+      "wireParam": "startScale",
+      "csharpClass": "RuntimeHitboxCurveSpec",
+      "authorBounds": [
+        0.25,
+        8
+      ],
+      "wireBounds": [
+        0.25,
+        8
+      ],
+      "csharpBounds": [
+        0.25,
+        8.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_hitbox_curve",
+      "param": "endScale",
+      "wireParam": "endScale",
+      "csharpClass": "RuntimeHitboxCurveSpec",
+      "authorBounds": [
+        0.25,
+        8
+      ],
+      "wireBounds": [
+        0.25,
+        8
+      ],
+      "csharpBounds": [
+        0.25,
+        8.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_hitbox_curve",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeHitboxCurveSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_hitbox_curve",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeHitboxCurveSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_turn_modifier",
+      "param": "turnRadiansPerUpdate",
+      "wireParam": "turnRadiansPerUpdate",
+      "csharpClass": "RuntimeTurnModifierSpec",
+      "authorBounds": [
+        -0.5,
+        0.5
+      ],
+      "wireBounds": [
+        -0.5,
+        0.5
+      ],
+      "csharpBounds": [
+        -0.5,
+        0.5
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_turn_modifier",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeTurnModifierSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_turn_modifier",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeTurnModifierSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_speed_modifier",
+      "param": "speedMultiplierPerUpdate",
+      "wireParam": "speedMultiplierPerUpdate",
+      "csharpClass": "RuntimeSpeedModifierSpec",
+      "authorBounds": [
+        0.8,
+        1.2
+      ],
+      "wireBounds": [
+        0.8,
+        1.2
+      ],
+      "csharpBounds": [
+        0.8,
+        1.2
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_speed_modifier",
+      "param": "maxSpeed",
+      "wireParam": "maxSpeed",
+      "csharpClass": "RuntimeSpeedModifierSpec",
+      "authorBounds": [
+        0.1,
+        80
+      ],
+      "wireBounds": [
+        0.1,
+        80
+      ],
+      "csharpBounds": [
+        0.1,
+        80.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_speed_modifier",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeSpeedModifierSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_speed_modifier",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeSpeedModifierSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_homing_modifier",
+      "param": "rangeTiles",
+      "wireParam": "rangeTiles",
+      "csharpClass": "RuntimeHomingModifierSpec",
+      "authorBounds": [
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
+      ],
+      "csharpBounds": [
+        1.0,
+        120.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_homing_modifier",
+      "param": "maxTurnRadiansPerUpdate",
+      "wireParam": "maxTurnRadiansPerUpdate",
+      "csharpClass": "RuntimeHomingModifierSpec",
+      "authorBounds": [
+        0.0001,
+        3.2
+      ],
+      "wireBounds": [
+        0.0001,
+        3.2
+      ],
+      "csharpBounds": [
+        0.0001,
+        3.2
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_homing_modifier",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeHomingModifierSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_homing_modifier",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeHomingModifierSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "attract_npcs_while_active",
+      "param": "rangeTiles",
+      "wireParam": "rangeTiles",
+      "csharpClass": "RuntimeNpcAttractionSpec",
+      "authorBounds": [
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
+      ],
+      "csharpBounds": [
+        1.0,
+        80.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "attract_npcs_while_active",
+      "param": "strengthPerUpdate",
+      "wireParam": "strengthPerUpdate",
+      "csharpClass": "RuntimeNpcAttractionSpec",
+      "authorBounds": [
+        0.001,
+        4
+      ],
+      "wireBounds": [
+        0.001,
+        4
+      ],
+      "csharpBounds": [
+        0.001,
+        4.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "attract_npcs_while_active",
+      "param": "maxTargets",
+      "wireParam": "maxTargets",
+      "csharpClass": "RuntimeNpcAttractionSpec",
+      "authorBounds": [
+        1,
+        16
+      ],
+      "wireBounds": [
+        1,
+        16
+      ],
+      "csharpBounds": [
+        1.0,
+        16.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "attract_npcs_while_active",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeNpcAttractionSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "attract_npcs_while_active",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeNpcAttractionSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_visual_scale_curve",
+      "param": "startScale",
+      "wireParam": "startScale",
+      "csharpClass": "RuntimeVisualScaleCurveSpec",
+      "authorBounds": [
+        0.25,
+        8
+      ],
+      "wireBounds": [
+        0.25,
+        8
+      ],
+      "csharpBounds": [
+        0.25,
+        8.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_visual_scale_curve",
+      "param": "endScale",
+      "wireParam": "endScale",
+      "csharpClass": "RuntimeVisualScaleCurveSpec",
+      "authorBounds": [
+        0.25,
+        8
+      ],
+      "wireBounds": [
+        0.25,
+        8
+      ],
+      "csharpBounds": [
+        0.25,
+        8.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_visual_scale_curve",
+      "param": "startDelayTicks",
+      "wireParam": "startDelayTicks",
+      "csharpClass": "RuntimeVisualScaleCurveSpec",
+      "authorBounds": [
+        0,
+        21600
+      ],
+      "wireBounds": [
+        0,
+        21600
+      ],
+      "csharpBounds": [
+        0.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_visual_scale_curve",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeVisualScaleCurveSpec",
+      "authorBounds": [
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
+      ],
+      "csharpBounds": [
+        1.0,
+        21600.0
+      ],
+      "preserved": true
+    },
+    {
       "capability": "set_projectile_collision",
       "param": "bounceCount",
+      "wireParam": "bounceCount",
       "csharpClass": "RuntimeCollisionSpec",
       "authorBounds": [
-        0.0,
-        32.0
+        0,
+        32
+      ],
+      "wireBounds": [
+        0,
+        32
       ],
       "csharpBounds": [
         0.0,
@@ -258,10 +981,15 @@
     {
       "capability": "set_projectile_collision",
       "param": "pierce",
+      "wireParam": "pierce",
       "csharpClass": "RuntimeCollisionSpec",
       "authorBounds": [
-        -1.0,
-        100.0
+        -1,
+        100
+      ],
+      "wireBounds": [
+        -1,
+        100
       ],
       "csharpBounds": [
         -1.0,
@@ -271,11 +999,16 @@
     },
     {
       "capability": "set_projectile_collision",
-      "param": "extraUpdates",
+      "param": "updatesPerTick",
+      "wireParam": "extraUpdates",
       "csharpClass": "RuntimeCollisionSpec",
       "authorBounds": [
-        0.0,
-        5.0
+        1,
+        6
+      ],
+      "wireBounds": [
+        0,
+        5
       ],
       "csharpBounds": [
         0.0,
@@ -285,11 +1018,16 @@
     },
     {
       "capability": "set_projectile_collision",
-      "param": "localNpcHitCooldownTicks",
+      "param": "immunity.localCooldown",
+      "wireParam": "localNpcHitCooldownTicks",
       "csharpClass": "RuntimeCollisionSpec",
       "authorBounds": [
-        -1.0,
-        600.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
       ],
       "csharpBounds": [
         -1.0,
@@ -300,10 +1038,15 @@
     {
       "capability": "move_slow_homing",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -314,10 +1057,15 @@
     {
       "capability": "move_slow_homing",
       "param": "homingStrength",
+      "wireParam": "homingStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
         0.001,
-        1.0
+        1
+      ],
+      "wireBounds": [
+        0.001,
+        1
       ],
       "csharpBounds": [
         0.0,
@@ -327,11 +1075,16 @@
     },
     {
       "capability": "move_gravity_arc",
-      "param": "gravityPerTick",
+      "param": "gravityVelocityPerUpdate",
+      "wireParam": "gravityPerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.001,
-        2.0
+        -2,
+        2
+      ],
+      "wireBounds": [
+        -2,
+        2
       ],
       "csharpBounds": [
         -2.0,
@@ -342,8 +1095,13 @@
     {
       "capability": "move_drift",
       "param": "velocityRetention",
+      "wireParam": "velocityRetention",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
+        0.8,
+        1.05
+      ],
+      "wireBounds": [
         0.8,
         1.05
       ],
@@ -356,10 +1114,15 @@
     {
       "capability": "move_orbit",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -370,10 +1133,15 @@
     {
       "capability": "move_boomerang",
       "param": "returnAfterTicks",
+      "wireParam": "returnAfterTicks",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        600.0
+        1,
+        600
+      ],
+      "wireBounds": [
+        1,
+        600
       ],
       "csharpBounds": [
         0.0,
@@ -384,10 +1152,15 @@
     {
       "capability": "move_boomerang",
       "param": "returnSpeed",
+      "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -396,26 +1169,17 @@
       "preserved": true
     },
     {
-      "capability": "move_bounce",
-      "param": "gravityPerTick",
-      "csharpClass": "RuntimeParamsSpec",
-      "authorBounds": [
-        0.001,
-        2.0
-      ],
-      "csharpBounds": [
-        -2.0,
-        2.0
-      ],
-      "preserved": true
-    },
-    {
       "capability": "move_sine_homing",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -426,10 +1190,15 @@
     {
       "capability": "move_sine_homing",
       "param": "homingStrength",
+      "wireParam": "homingStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
         0.001,
-        1.0
+        1
+      ],
+      "wireBounds": [
+        0.001,
+        1
       ],
       "csharpBounds": [
         0.0,
@@ -439,11 +1208,16 @@
     },
     {
       "capability": "move_sine_homing",
-      "param": "waveAmplitude",
+      "param": "waveVelocityCoefficient",
+      "wireParam": "waveAmplitude",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.0,
-        64.0
+        0,
+        64
+      ],
+      "wireBounds": [
+        0,
+        64
       ],
       "csharpBounds": [
         0.0,
@@ -454,10 +1228,15 @@
     {
       "capability": "move_phase",
       "param": "phaseStrength",
+      "wireParam": "phaseStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.0,
-        1.0
+        0,
+        1
+      ],
+      "wireBounds": [
+        0,
+        1
       ],
       "csharpBounds": [
         0.0,
@@ -467,9 +1246,14 @@
     },
     {
       "capability": "move_accelerate",
-      "param": "acceleration",
+      "param": "speedMultiplierPerUpdate",
+      "wireParam": "acceleration",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
+        1.0,
+        1.2
+      ],
+      "wireBounds": [
         1.0,
         1.2
       ],
@@ -482,10 +1266,15 @@
     {
       "capability": "move_accelerate",
       "param": "maxSpeed",
+      "wireParam": "maxSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -495,9 +1284,14 @@
     },
     {
       "capability": "move_spiral",
-      "param": "turnRadiansPerTick",
+      "param": "turnRadiansPerUpdate",
+      "wireParam": "turnRadiansPerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
+        -0.5,
+        0.5
+      ],
+      "wireBounds": [
         -0.5,
         0.5
       ],
@@ -510,10 +1304,15 @@
     {
       "capability": "move_vortex_orb",
       "param": "pullStrength",
+      "wireParam": "pullStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.0,
-        4.0
+        0,
+        4
+      ],
+      "wireBounds": [
+        0,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -524,10 +1323,15 @@
     {
       "capability": "move_vortex_orb",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -538,10 +1342,15 @@
     {
       "capability": "move_blackhole_pull",
       "param": "pullStrength",
+      "wireParam": "pullStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.0,
-        4.0
+        0,
+        4
+      ],
+      "wireBounds": [
+        0,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -552,10 +1361,15 @@
     {
       "capability": "move_blackhole_pull",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -566,10 +1380,15 @@
     {
       "capability": "move_proximity_missile",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -580,10 +1399,15 @@
     {
       "capability": "move_proximity_missile",
       "param": "homingStrength",
+      "wireParam": "homingStrength",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
         0.001,
-        1.0
+        1
+      ],
+      "wireBounds": [
+        0.001,
+        1
       ],
       "csharpBounds": [
         0.0,
@@ -593,11 +1417,16 @@
     },
     {
       "capability": "move_proximity_missile",
-      "param": "proximityRadiusPx",
+      "param": "triggerRadiusTiles",
+      "wireParam": "proximityRadiusPx",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        4.0,
-        512.0
+        0.25,
+        32
+      ],
+      "wireBounds": [
+        4,
+        512
       ],
       "csharpBounds": [
         0.0,
@@ -608,10 +1437,15 @@
     {
       "capability": "move_returning_glaive",
       "param": "returnAfterTicks",
+      "wireParam": "returnAfterTicks",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        600.0
+        1,
+        600
+      ],
+      "wireBounds": [
+        1,
+        600
       ],
       "csharpBounds": [
         0.0,
@@ -622,10 +1456,15 @@
     {
       "capability": "move_returning_glaive",
       "param": "returnSpeed",
+      "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -635,9 +1474,14 @@
     },
     {
       "capability": "move_expanding_wave",
-      "param": "scalePerTick",
+      "param": "scaleGrowthPerUpdate",
+      "wireParam": "scalePerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
+        0.001,
+        0.5
+      ],
+      "wireBounds": [
         0.001,
         0.5
       ],
@@ -650,10 +1494,15 @@
     {
       "capability": "move_expanding_wave",
       "param": "maxScale",
+      "wireParam": "maxScale",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
         0.25,
-        4.0
+        4
+      ],
+      "wireBounds": [
+        0.25,
+        4
       ],
       "csharpBounds": [
         0.1,
@@ -664,10 +1513,15 @@
     {
       "capability": "move_flail_tether",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        2.0,
-        60.0
+        2,
+        60
+      ],
+      "wireBounds": [
+        2,
+        60
       ],
       "csharpBounds": [
         0.0,
@@ -678,10 +1532,15 @@
     {
       "capability": "move_flail_tether",
       "param": "returnSpeed",
+      "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -692,10 +1551,15 @@
     {
       "capability": "move_yoyo_hover",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        2.0,
-        60.0
+        2,
+        60
+      ],
+      "wireBounds": [
+        2,
+        60
       ],
       "csharpBounds": [
         0.0,
@@ -706,10 +1570,15 @@
     {
       "capability": "move_yoyo_hover",
       "param": "returnSpeed",
+      "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        80.0
+        1,
+        80
+      ],
+      "wireBounds": [
+        1,
+        80
       ],
       "csharpBounds": [
         0.0,
@@ -720,10 +1589,15 @@
     {
       "capability": "move_whip_lash",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        2.0,
-        60.0
+        2,
+        60
+      ],
+      "wireBounds": [
+        2,
+        60
       ],
       "csharpBounds": [
         0.0,
@@ -734,10 +1608,15 @@
     {
       "capability": "move_whip_lash",
       "param": "segments",
+      "wireParam": "segments",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        3.0,
-        48.0
+        3,
+        48
+      ],
+      "wireBounds": [
+        3,
+        48
       ],
       "csharpBounds": [
         0.0,
@@ -748,10 +1627,15 @@
     {
       "capability": "move_forward_then_retract",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        20.0
+        1,
+        20
+      ],
+      "wireBounds": [
+        1,
+        20
       ],
       "csharpBounds": [
         0.0,
@@ -762,10 +1646,15 @@
     {
       "capability": "move_forward_then_retract",
       "param": "durationTicks",
+      "wireParam": "durationTicks",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        2.0,
-        240.0
+        2,
+        240
+      ],
+      "wireBounds": [
+        2,
+        240
       ],
       "csharpBounds": [
         0.0,
@@ -776,10 +1665,15 @@
     {
       "capability": "channel_beam",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -790,10 +1684,15 @@
     {
       "capability": "channel_beam",
       "param": "widthPx",
+      "wireParam": "widthPx",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        2.0,
-        128.0
+        2,
+        128
+      ],
+      "wireBounds": [
+        2,
+        128
       ],
       "csharpBounds": [
         0.0,
@@ -804,10 +1703,15 @@
     {
       "capability": "channel_beam",
       "param": "warmupTicks",
+      "wireParam": "warmupTicks",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.0,
-        600.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
       ],
       "csharpBounds": [
         0.0,
@@ -816,12 +1720,65 @@
       "preserved": true
     },
     {
-      "capability": "charge_then_release",
-      "param": "chargeTicks",
+      "capability": "channel_beam",
+      "param": "initialDamageMultiplier",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        600.0
+        0.01,
+        1
+      ],
+      "csharpBounds": [
+        0.01,
+        1.0
+      ],
+      "admission": "reject_without_clamp",
+      "consumerPrecisionPreserved": true,
+      "preserved": true
+    },
+    {
+      "capability": "channel_beam",
+      "param": "initialWidthMultiplier",
+      "csharpClass": "RuntimeParamsSpec",
+      "authorBounds": [
+        0.01,
+        1
+      ],
+      "csharpBounds": [
+        0.01,
+        1.0
+      ],
+      "admission": "reject_without_clamp",
+      "consumerPrecisionPreserved": true,
+      "preserved": true
+    },
+    {
+      "capability": "channel_beam",
+      "param": "damageStartProgress",
+      "csharpClass": "RuntimeParamsSpec",
+      "authorBounds": [
+        0,
+        1
+      ],
+      "csharpBounds": [
+        0.0,
+        1.0
+      ],
+      "admission": "reject_without_clamp",
+      "consumerPrecisionPreserved": true,
+      "preserved": true
+    },
+    {
+      "capability": "charge_then_release",
+      "param": "chargeTicks",
+      "wireParam": "chargeTicks",
+      "csharpClass": "RuntimeParamsSpec",
+      "authorBounds": [
+        1,
+        600
+      ],
+      "wireBounds": [
+        1,
+        600
       ],
       "csharpBounds": [
         0.0,
@@ -832,10 +1789,15 @@
     {
       "capability": "charge_then_release",
       "param": "powerMultiplier",
+      "wireParam": "powerMultiplier",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        1.0,
-        4.0
+        1,
+        4
+      ],
+      "wireBounds": [
+        1,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -846,10 +1808,15 @@
     {
       "capability": "target_and_fire",
       "param": "intervalTicks",
+      "wireParam": "intervalTicks",
       "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
-        6.0,
-        3600.0
+        6,
+        3600
+      ],
+      "wireBounds": [
+        6,
+        3600
       ],
       "csharpBounds": [
         0.0,
@@ -860,10 +1827,15 @@
     {
       "capability": "target_and_fire",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -874,10 +1846,15 @@
     {
       "capability": "target_and_fire",
       "param": "sameTargetBias",
+      "wireParam": "sameTargetBias",
       "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
-        0.0,
-        1.0
+        0,
+        0.9
+      ],
+      "wireBounds": [
+        0,
+        0.9
       ],
       "csharpBounds": [
         0.0,
@@ -886,40 +1863,81 @@
       "preserved": true
     },
     {
-      "capability": "spawn_over_target",
-      "param": "heightTiles",
-      "csharpClass": "RuntimeOverTargetSpec",
+      "capability": "target_and_fire",
+      "param": "damageMultiplier",
+      "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
+        0,
+        4
+      ],
+      "csharpBounds": [
+        0.0,
+        4.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "target_and_fire",
+      "param": "count",
+      "csharpClass": "RuntimeTargetingSpec",
+      "authorBounds": [
+        1,
+        4
+      ],
+      "csharpBounds": [
         1.0,
-        80.0
+        4.0
       ],
-      "csharpBounds": [
-        0.0,
-        80.0
-      ],
+      "admission": "reject_without_clamp",
       "preserved": true
     },
     {
-      "capability": "spawn_over_target",
-      "param": "delayTicks",
-      "csharpClass": "RuntimeOverTargetSpec",
+      "capability": "target_and_fire",
+      "param": "spreadRadians",
+      "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
-        0.0,
-        600.0
+        0,
+        0.75
       ],
       "csharpBounds": [
         0.0,
-        600.0
+        0.75
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_on_event",
+      "param": "when.everyTicks",
+      "wireParam": "periodTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        6,
+        3600
+      ],
+      "wireBounds": [
+        6,
+        3600
+      ],
+      "csharpBounds": [
+        0.0,
+        3600.0
       ],
       "preserved": true
     },
     {
       "capability": "spawn_entity_on_event",
       "param": "count",
+      "wireParam": "count",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        12.0
+        1,
+        12
+      ],
+      "wireBounds": [
+        1,
+        12
       ],
       "csharpBounds": [
         1.0,
@@ -930,9 +1948,14 @@
     {
       "capability": "spawn_entity_on_event",
       "param": "spreadRadians",
+      "wireParam": "spreadRadians",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        0.0,
+        0,
+        6.283185307179586
+      ],
+      "wireBounds": [
+        0,
         6.283185307179586
       ],
       "csharpBounds": [
@@ -944,10 +1967,15 @@
     {
       "capability": "spawn_entity_on_event",
       "param": "damageMultiplier",
+      "wireParam": "damageMultiplier",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        0.0,
-        4.0
+        0,
+        4
+      ],
+      "wireBounds": [
+        0,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -958,10 +1986,15 @@
     {
       "capability": "spawn_entity_on_event",
       "param": "delayTicks",
+      "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        0.0,
-        600.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
       ],
       "csharpBounds": [
         0.0,
@@ -970,26 +2003,243 @@
       "preserved": true
     },
     {
-      "capability": "spawn_entity_on_event",
-      "param": "periodTicks",
+      "capability": "spawn_entity_from_hit_target",
+      "param": "count",
+      "wireParam": "count",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        6.0,
-        3600.0
+        1,
+        12
+      ],
+      "wireBounds": [
+        1,
+        12
+      ],
+      "csharpBounds": [
+        1.0,
+        12.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.beforeProbability",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        1
       ],
       "csharpBounds": [
         0.0,
-        3600.0
+        1.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.hitboxMaxSideFactor",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        2
+      ],
+      "csharpBounds": [
+        0.0,
+        2.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.clearancePx",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        128
+      ],
+      "csharpBounds": [
+        0.0,
+        128.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.beforePositionJitterRadiusPx",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        128
+      ],
+      "csharpBounds": [
+        0.0,
+        128.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.beforeDirectionJitterRadians",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        3.141592653589793
+      ],
+      "csharpBounds": [
+        0.0,
+        3.141592653589793
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.afterFanSpreadRadians",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        6.283185307179586
+      ],
+      "csharpBounds": [
+        0.0,
+        6.283185307179586
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "geometry.initialIgnoreCountdownUpdates",
+      "csharpClass": "RuntimeHitTargetSpawnSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "damageMultiplier",
+      "wireParam": "damageMultiplier",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        4
+      ],
+      "wireBounds": [
+        0,
+        4
+      ],
+      "csharpBounds": [
+        0.0,
+        10.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "spawn_entity_from_hit_target",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "select_targets_and_emit_on_event",
+      "param": "stepCount",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        1,
+        12
+      ],
+      "csharpBounds": [
+        1.0,
+        12.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "select_targets_and_emit_on_event",
+      "param": "stepRangeTiles",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        1,
+        60
+      ],
+      "csharpBounds": [
+        1.0,
+        60.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "select_targets_and_emit_on_event",
+      "param": "initialIgnoreCountdownUpdates",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "select_targets_and_emit_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
       ],
       "preserved": true
     },
     {
       "capability": "apply_status_on_event",
       "param": "durationTicks",
+      "wireParam": "durationTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        21600.0
+        1,
+        21600
+      ],
+      "wireBounds": [
+        1,
+        21600
       ],
       "csharpBounds": [
         0.0,
@@ -998,12 +2248,36 @@
       "preserved": true
     },
     {
-      "capability": "damage_area_on_event",
-      "param": "radiusPx",
+      "capability": "apply_status_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        8.0,
-        768.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "damage_area_on_event",
+      "param": "radiusTiles",
+      "wireParam": "radiusPx",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0.5,
+        48
+      ],
+      "wireBounds": [
+        8,
+        768
       ],
       "csharpBounds": [
         0.0,
@@ -1014,10 +2288,15 @@
     {
       "capability": "damage_area_on_event",
       "param": "damageMultiplier",
+      "wireParam": "damageMultiplier",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
         0.05,
-        4.0
+        4
+      ],
+      "wireBounds": [
+        0.05,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -1026,12 +2305,36 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
-      "param": "count",
+      "capability": "damage_area_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        12.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "damage_nearest_on_event",
+      "param": "maxTargets",
+      "wireParam": "count",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        1,
+        12
+      ],
+      "wireBounds": [
+        1,
+        12
       ],
       "csharpBounds": [
         1.0,
@@ -1040,12 +2343,17 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "param": "rangeTiles",
+      "wireParam": "rangeTiles",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        60.0
+        1,
+        60
+      ],
+      "wireBounds": [
+        1,
+        60
       ],
       "csharpBounds": [
         0.0,
@@ -1054,12 +2362,17 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "param": "damageMultiplier",
+      "wireParam": "damageMultiplier",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
         0.05,
-        2.0
+        2
+      ],
+      "wireBounds": [
+        0.05,
+        2
       ],
       "csharpBounds": [
         0.0,
@@ -1068,12 +2381,55 @@
       "preserved": true
     },
     {
+      "capability": "damage_nearest_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "pull_on_event",
+      "param": "when.everyTicks",
+      "wireParam": "periodTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        6,
+        3600
+      ],
+      "wireBounds": [
+        6,
+        3600
+      ],
+      "csharpBounds": [
+        0.0,
+        3600.0
+      ],
+      "preserved": true
+    },
+    {
       "capability": "pull_on_event",
       "param": "strength",
+      "wireParam": "strength",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
         0.01,
-        4.0
+        4
+      ],
+      "wireBounds": [
+        0.01,
+        4
       ],
       "csharpBounds": [
         0.0,
@@ -1084,10 +2440,15 @@
     {
       "capability": "pull_on_event",
       "param": "radiusTiles",
+      "wireParam": "radiusTiles",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        60.0
+        1,
+        60
+      ],
+      "wireBounds": [
+        1,
+        60
       ],
       "csharpBounds": [
         0.0,
@@ -1097,11 +2458,35 @@
     },
     {
       "capability": "pull_on_event",
-      "param": "periodTicks",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        6.0,
-        3600.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "pull_owner_to_event_target",
+      "param": "when.everyTicks",
+      "wireParam": "periodTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        6,
+        3600
+      ],
+      "wireBounds": [
+        6,
+        3600
       ],
       "csharpBounds": [
         0.0,
@@ -1110,12 +2495,55 @@
       "preserved": true
     },
     {
+      "capability": "pull_owner_to_event_target",
+      "param": "strength",
+      "wireParam": "strength",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0.01,
+        4
+      ],
+      "wireBounds": [
+        0.01,
+        4
+      ],
+      "csharpBounds": [
+        0.0,
+        4.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "pull_owner_to_event_target",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
       "capability": "heal_owner_on_event",
       "param": "damageFraction",
+      "wireParam": "damageFraction",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
         0.001,
-        1.0
+        1
+      ],
+      "wireBounds": [
+        0.001,
+        1
       ],
       "csharpBounds": [
         0.0,
@@ -1126,10 +2554,15 @@
     {
       "capability": "heal_owner_on_event",
       "param": "maxHeal",
+      "wireParam": "maxHeal",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        200.0
+        1,
+        200
+      ],
+      "wireBounds": [
+        1,
+        200
       ],
       "csharpBounds": [
         0.0,
@@ -1138,12 +2571,36 @@
       "preserved": true
     },
     {
-      "capability": "move_owner_on_event",
-      "param": "rangeTiles",
+      "capability": "heal_owner_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        1.0,
-        120.0
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "move_owner_on_event",
+      "param": "rangeTiles",
+      "wireParam": "rangeTiles",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        1,
+        120
+      ],
+      "wireBounds": [
+        1,
+        120
       ],
       "csharpBounds": [
         0.0,
@@ -1154,10 +2611,15 @@
     {
       "capability": "move_owner_on_event",
       "param": "cooldownTicks",
+      "wireParam": "cooldownTicks",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
-        0.0,
-        3600.0
+        0,
+        3600
+      ],
+      "wireBounds": [
+        0,
+        3600
       ],
       "csharpBounds": [
         0.0,
@@ -1166,10 +2628,34 @@
       "preserved": true
     },
     {
+      "capability": "move_owner_on_event",
+      "param": "delayTicks",
+      "wireParam": "delayTicks",
+      "csharpClass": "RuntimeEventActionSpec",
+      "authorBounds": [
+        0,
+        600
+      ],
+      "wireBounds": [
+        0,
+        600
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
       "capability": "emit_light_while_active",
       "param": "strength",
+      "wireParam": "strength",
       "csharpClass": "RuntimeLightSpec",
       "authorBounds": [
+        0.01,
+        1.5
+      ],
+      "wireBounds": [
         0.01,
         1.5
       ],
@@ -1177,6 +2663,134 @@
         0.0,
         1.5
       ],
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "renderSizePx",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        1,
+        512
+      ],
+      "csharpBounds": [
+        1.0,
+        512.0
+      ],
+      "csharpStorage": "int",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "footprintAnchorX",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        0,
+        1
+      ],
+      "csharpBounds": [
+        0.0,
+        1.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "footprintAnchorY",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        0,
+        1
+      ],
+      "csharpBounds": [
+        0.0,
+        1.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "imagePivotX",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        0,
+        1
+      ],
+      "csharpBounds": [
+        0.0,
+        1.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "imagePivotY",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        0,
+        1
+      ],
+      "csharpBounds": [
+        0.0,
+        1.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "offsetXPx",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        -512,
+        512
+      ],
+      "csharpBounds": [
+        -512.0,
+        512.0
+      ],
+      "csharpStorage": "int",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "offsetYPx",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        -512,
+        512
+      ],
+      "csharpBounds": [
+        -512.0,
+        512.0
+      ],
+      "csharpStorage": "int",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "present_placed_item_sprite",
+      "param": "rotationDegrees",
+      "csharpClass": "RuntimePlacedBodySpec",
+      "authorBounds": [
+        -180,
+        180
+      ],
+      "csharpBounds": [
+        -180.0,
+        180.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
       "preserved": true
     }
   ]

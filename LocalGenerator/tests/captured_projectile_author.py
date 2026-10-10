@@ -62,7 +62,9 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_wire
 
     assert validate_runtime_wire(compiled)["ok"]
-    result = without_captured_item_alias_delta(compiled)
+    from tests.captured_spawn_velocity_author import historical_spawn_velocity_wire
+
+    result = without_captured_item_alias_delta(historical_spawn_velocity_wire(compiled))
     checks = result["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
     conditional = [(cap.name, name) for cap in CAPABILITY_REGISTRY.values()
                    for name, spec in cap.params.items() if spec.omission_condition is not None]
