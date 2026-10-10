@@ -73,6 +73,7 @@
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.MobilityConsumption.cs" />
+    <Compile Include="EngineRuntimeChecks.NamedItemEffects.cs" />
     <Compile Include="EngineRuntimeChecks.NetworkHit.cs" />
     <Compile Include="EngineRuntimeChecks.DelayedNpcIncarnation.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
