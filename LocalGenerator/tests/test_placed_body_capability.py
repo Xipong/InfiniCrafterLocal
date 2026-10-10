@@ -14,6 +14,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport
+from sentry_contract_checks import without_declared_targeting_neutrals
 
 FN = "present_placed_item_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
@@ -332,11 +333,11 @@ def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts(
 
     # The old full-document hashes remain archival. New Author names deliberately
     # change compiler provenance and registry diagnostic counts, not delivery DTOs.
-    # Newly declared beam neutrals are an explicit successor, not a legacy rewrite.
+    # Declared beam/targeting neutrals are explicit successors, not legacy rewrites.
     corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
     for row in corpus["cases"]:
         compiled = compile_runtime_program(_current_author_seed(row["authored"]))
-        delivered = without_declared_beam_neutrals(_delivery_wire(compiled))
+        delivered = without_declared_targeting_neutrals(without_declared_beam_neutrals(_delivery_wire(compiled)))
         assert "placedBody" not in delivered["runtimeProgram"]
         assert delivered == row["expectedDeliveryWire"]
         assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
