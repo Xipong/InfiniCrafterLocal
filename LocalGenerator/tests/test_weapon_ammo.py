@@ -103,7 +103,7 @@ def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
             without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29
+        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()

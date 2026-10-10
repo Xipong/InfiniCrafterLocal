@@ -330,10 +330,16 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
 
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name: hashlib.sha256(json.dumps(
-        without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))),
-        ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
+    actual = {}
+    for name in baseline:
+        compiled = without_declared_targeting_neutrals(without_declared_beam_neutrals(
+            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name)))))
+        checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        # Accepted ammo baseline already owns its registry counters. Reverse
+        # only the new curve's declared requirements, preserving frozen hashes.
+        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        checks["requirements"] = 29
+        actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 
 
