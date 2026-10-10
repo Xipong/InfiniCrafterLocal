@@ -78,8 +78,14 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         compiled = compile_runtime_program(authored)
         assert validate_runtime_wire(compiled)["ok"] is True
         actual_wire = _delivery_wire(compiled)
-        assert actual_wire == row["expectedDeliveryWire"]
-        digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
+        # The canonical Author now references planned actions by index. Its
+        # diagnostic report is copied exactly; historical saved reports remain
+        # unchanged and are not imported or synthesized by the compiler.
+        assert actual_wire["realization"] == authored["realization"]
+        expected_current_wire = deepcopy(row["expectedDeliveryWire"])
+        expected_current_wire["realization"] = deepcopy(authored["realization"])
+        assert actual_wire == expected_current_wire
+        digest = hashlib.sha256(_canonical(row["expectedDeliveryWire"]).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]
 
     drifted = deepcopy(cases[0]["expectedDeliveryWire"])

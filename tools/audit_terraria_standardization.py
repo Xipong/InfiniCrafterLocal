@@ -107,7 +107,7 @@ def report() -> dict[str, Any]:
         "configure_consumption" not in CAPABILITY_REGISTRY
         and '"stackCost"' in program_schema
         and "public int StackCost { get; set; }" in dto,
-        "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner",
+        "stack cost must have one flat Author binding owner, projected into wire usePolicy with no capability/global shadow owner",
     )
     check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionPxPerUpdate", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
     check("ammo_item_consumption_independent", bool(ammo and not any(r.capability == "configure_consumption" for r in ammo.requirements)), "ammo stack handling must remain independent from direct-use input costs")

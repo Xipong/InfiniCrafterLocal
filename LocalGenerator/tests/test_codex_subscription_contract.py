@@ -82,15 +82,19 @@ def test_subscription_author_schema_types_every_const_without_changing_literal_c
                 expected = source["if"]["properties"][selector]["const"]
                 events = source["properties"][selector]["enum"]
                 assert set(sent) == {"anyOf"}
-                assert len(sent["anyOf"]) == len(events)
-                for event, remote in zip(events, sent["anyOf"]):
+                assert len(sent["anyOf"]) == 2
+                sent_events = [event for branch in sent["anyOf"] for event in branch["properties"][selector]["enum"]]
+                assert sorted(sent_events) == sorted(events)
+                for remote in sent["anyOf"]:
+                    group = remote["properties"][selector]["enum"]
+                    assert expected not in group or group == [expected]
                     case = copy.deepcopy({key: value for key, value in source.items() if key not in {"if", "then"}})
-                    case["properties"][selector]["enum"] = [event]
-                    if event == expected:
+                    case["properties"][selector]["enum"] = group
+                    if expected in group:
                         case["required"] += [key for key in source["then"]["required"] if key not in case["required"]]
-                    compare(case, remote, path + ("event-case", event))
+                    compare(case, remote, path + ("event-case", tuple(group)))
                 return
-            expected_keys = set(source)
+            expected_keys = {key for key in source if key != "description" and not key.startswith("x-infini-")}
             if "oneOf" in source:
                 expected_keys = (expected_keys - {"oneOf"}) | {"anyOf"}
             if "properties" in source:
@@ -108,6 +112,9 @@ def test_subscription_author_schema_types_every_const_without_changing_literal_c
                     assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(sent).is_valid(candidate)
                 seen.append(path)
             for key, value in source.items():
+                if key == "description" or key.startswith("x-infini-"):
+                    assert key not in sent
+                    continue
                 if key == "properties":
                     for name, child in value.items():
                         remote = sent[key][name]
@@ -140,7 +147,7 @@ def test_subscription_author_schema_types_every_const_without_changing_literal_c
         static, dynamic = [item["content"][0]["text"] for item in wire["input"]]
         # Only object member framing changed; restore the exact logical text.
         assert static[:-1] + "," + dynamic[1:] == request["messages"][1]["content"]
-        assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor"}
+        assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     else:
         assert [item["content"][0]["text"] for item in wire["input"]] == [
             item["content"] for item in request["messages"] if item["role"] != "system"
@@ -254,6 +261,8 @@ def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptanc
 def test_subscription_disjoint_union_preserves_registered_variants_and_adversarial_rejection(domain):
     from jsonschema import Draft202012Validator
     from infini_local.core.runtime_authoring.program_schema import binding_schema
+    from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
     from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.pipelines import author_item_contract as contract
@@ -269,12 +278,15 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             selector = "fn"
         else:
             input_kind = branch["properties"]["input"]["const"]
-            action_kind = branch["properties"]["usePolicy"]["properties"]["action"]["properties"]["kind"]["const"]
-            row = {"id": "binding_probe", "input": input_kind, "usePolicy": {
-                "action": {"kind": action_kind, "targetId": "item"},
-                "stackCost": 1 if action_kind == "place_item" else 0, "contactDamage": False}}
-            if action_kind == "place_item":
-                row["usePolicy"]["action"]["placementCallId"] = "place_call"
+            actions = INPUT_KIND_REGISTRY[input_kind].allowed_actions
+            action_kind = (actions[0] if len(actions) == 1 else
+                           branch["properties"]["action"]["properties"]["kind"]["const"])
+            row = {"id": "binding_probe", **complete_transaction(
+                input_name=input_kind, action_name=action_kind, target="item",
+                stack_cost_value=1 if action_kind == "place_item" else 0,
+                contact_damage_value=False,
+                placement_call="place_call" if action_kind == "place_item" else "",
+            )}
             selector = "input"
         assert Draft202012Validator(local).is_valid(row)
         encoded = _encode_nullable_fixture(row, branch)
@@ -292,7 +304,7 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             assert not Draft202012Validator(local).is_valid(sparse_bad), sparse_bad
             assert not Draft202012Validator(provider).is_valid(sent_bad), sent_bad
         if domain == "calls":
-            for key, child in branch["properties"]["params"]["properties"].items():
+            for key, child in branch["properties"].get("params", {}).get("properties", {}).items():
                 for limit, step in [("minimum", -1), ("maximum", 1)]:
                     if limit not in child:
                         continue
@@ -335,7 +347,7 @@ def test_subscription_inverse_never_hides_invalid_values_or_guesses_a_branch(con
             branches.reverse()
         else:
             cases = next(branch for branch in branches if branch["properties"]["fn"]["const"] == "pull_on_event")["properties"]["params"]["anyOf"]
-            case = next(branch for branch in cases if branch["properties"]["event"]["enum"] == ["on_hit"])
+            case = next(branch for branch in cases if "on_hit" in branch["properties"]["event"]["enum"])
             case["properties"]["periodTicks"] = case["properties"]["periodTicks"]["anyOf"][0]
     before = copy.deepcopy(encoded)
     response_format = {"type": "json_schema", "json_schema": {"schema": provider}}

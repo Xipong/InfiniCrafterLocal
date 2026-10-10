@@ -18,7 +18,7 @@ from infini_local.core.runtime_authoring import (
     capability_provider_union,
     compact_capability_catalog,
 )
-from infini_local.core.runtime_authoring import compiler, technical_lowering
+from infini_local.core.runtime_authoring import capability_registry, compiler, technical_lowering
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -56,7 +56,7 @@ def _registry_with_rename(monkeypatch, fn, old, new):
         path.removesuffix("." + new) + "." + (spec.wire_name or old) if path.endswith("." + new) else path for path in cap.final_wire_paths
     )
     registry[fn] = replace(cap, params=MappingProxyType(params), final_wire_paths=paths)
-    monkeypatch.setattr(compiler, "CAPABILITY_REGISTRY", registry)
+    monkeypatch.setattr(capability_registry, "CAPABILITY_REGISTRY", registry)
     monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", registry)
     return registry[fn]
 
@@ -70,7 +70,7 @@ def _project(fn, new, value):
         "params": {
             # This test calls the isolated projector, not the full compiler
             # that materializes omissions. Author neutrals explicitly here.
-            **{name: spec.default for name, spec in compiler.CAPABILITY_REGISTRY[fn].params.items() if spec.default is not None},
+            **{name: spec.default for name, spec in capability_registry.CAPABILITY_REGISTRY[fn].params.items() if spec.default is not None},
             new: value,
         },
     }
@@ -285,7 +285,6 @@ def buff_document(name, value, companion):
             {
                 "id": "healing",
                 "fn": "restore_resources_on_use",
-                "target": next(c["target"] for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN),
                 "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False},
             }
         )
@@ -440,5 +439,5 @@ def test_generated_lowery_names_current_binding_target_path():
     root = Path(__file__).resolve().parents[2]
     projection = runpy.run_path(str(root / "tools/generate_lowery.py"))
     text = projection["render"]()
-    assert "exact `binding.usePolicy.action.targetId`" in text
+    assert "exact `binding.action.targetId`" in text
     assert "exact `binding.target`" not in text

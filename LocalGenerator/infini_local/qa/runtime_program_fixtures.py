@@ -11,9 +11,11 @@ from copy import deepcopy
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
+    CAPABILITY_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
 )
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind, complete_transaction
 
 
 def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: int = 24) -> dict[str, Any]:
@@ -113,25 +115,30 @@ class _Builder:
         stack_cost: int = 0,
         placement_call_id: str = "",
     ) -> None:
-        action_row: dict[str, Any] = {"kind": action, "targetId": target}
-        if action == "place_item":
-            action_row["placementCallId"] = placement_call_id
         self.bindings.append({
             "id": binding_id,
-            "input": input_kind,
-            "usePolicy": {
-                "action": action_row,
-                "stackCost": stack_cost,
-                "contactDamage": (
+            **complete_transaction(
+                input_name=input_kind,
+                action_name=action,
+                target=target,
+                stack_cost_value=stack_cost,
+                contact_damage_value=(
                     self.item_body_contact
                     and input_kind in {"primary_use", "alternate_use"}
                     and action != "place_item"
                 ),
-            },
+                placement_call=placement_call_id,
+            ),
         })
 
     def call(self, call_id: str, fn: str, target: str, params: dict[str, Any]) -> None:
-        self.calls.append({"id": call_id, "fn": fn, "target": target, "params": deepcopy(params)})
+        cap = CAPABILITY_REGISTRY[fn]
+        row: dict[str, Any] = {"id": call_id, "fn": fn}
+        if cap.target_kinds != ("item_body",):
+            row["target"] = target
+        if cap.params:
+            row["params"] = deepcopy(params)
+        self.calls.append(row)
 
     def projectile(
         self,
@@ -175,7 +182,7 @@ class _Builder:
                 "plannedPlayerActions": [
                     {
                         "input": str(row["input"]),
-                        "intent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
+                        "intent": f"Execute the authored {action_kind(row)} action.",
                     }
                     for row in self.bindings
                 ] or [{"input": "passive_or_event", "intent": "Execute the authored passive or event-driven behavior."}],
@@ -189,16 +196,16 @@ class _Builder:
                         "summary": "Every fixture draft action is represented by the explicit runtime program.",
                         "actionChecks": [
                             {
-                                "plannedIntent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
-                                "implementedBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "plannedActionIndex": index,
+                                "implementedBehavior": f"The binding executes {action_kind(row)}.",
                                 "runtimeRefs": [str(row["id"])],
                                 "result": "aligned",
                                 "intentionality": "intentional",
                                 "reason": "The fixture draft and binding were authored from the same explicit action.",
                             }
-                            for row in self.bindings
+                            for index, row in enumerate(self.bindings)
                         ] or [{
-                            "plannedIntent": "Execute the authored passive or event-driven behavior.",
+                            "plannedActionIndex": 0,
                             "implementedBehavior": "The runtime calls implement the passive or event-driven behavior.",
                             "runtimeRefs": [str(self.calls[0]["id"])],
                             "result": "aligned",
@@ -212,7 +219,7 @@ class _Builder:
                         "behaviorChecks": [
                             {
                                 "runtimeRefs": [str(row["id"])],
-                                "programBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "programBehavior": f"The binding executes {action_kind(row)}.",
                                 "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
                                 "result": "aligned",
                                 "reason": "The fixture report is the accepted description of this explicit binding lane.",

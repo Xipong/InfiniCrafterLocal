@@ -65,24 +65,18 @@ def _dual_use_placeable() -> dict[str, Any]:
     program["calls"].append({
         "id": "install_tile",
         "fn": "configure_placeable",
-        "target": "item",
         "params": {"tileId": 19, "wallId": -1, "placeStyle": 0},
     })
     program["bindings"].append({
         "id": "alternate_install",
         "input": "alternate_use",
-        "usePolicy": {
-            "action": {
-                "kind": "place_item",
-                "targetId": "item",
-                "placementCallId": "install_tile",
-            },
-            "stackCost": 1,
-            "contactDamage": False,
+        "action": {
+            "kind": "place_item",
+            "placementCallId": "install_tile",
         },
     })
     authored["realization"]["selfEvaluation"]["planVsProgram"]["actionChecks"].append({
-        "plannedIntent": "No corresponding initial action.",
+        "plannedActionIndex": None,
         "implementedBehavior": "Alternate use installs the exact authored tile.",
         "runtimeRefs": ["alternate_install", "install_tile"],
         "result": "added",
@@ -105,11 +99,9 @@ def _resource_use_placeable() -> dict[str, Any]:
     program["bindings"][0] = {
         "id": "primary_restore",
         "input": "primary_use",
-        "usePolicy": {
-            "action": {"kind": "apply_item_effects", "targetId": "item"},
-            "stackCost": 1,
-            "contactDamage": False,
-        },
+        "action": {"kind": "apply_item_effects"},
+        "stackCost": 1,
+        "contactDamage": False,
     }
     program["calls"] = [
         row for row in program["calls"]
@@ -118,7 +110,6 @@ def _resource_use_placeable() -> dict[str, Any]:
     program["calls"].append({
         "id": "restore_life",
         "fn": "restore_resources_on_use",
-        "target": "item",
         "params": {"healLife": 50, "healMana": 0, "usesPotionRules": True},
     })
     stats = next(row for row in program["calls"] if row["id"] == "item_stats")
@@ -132,7 +123,7 @@ def _resource_use_placeable() -> dict[str, Any]:
                 "summary": "The fixture's original tool lane became an explicit resource-use lane.",
                 "actionChecks": [
                     {
-                        "plannedIntent": "Use the primary action.",
+                        "plannedActionIndex": 0,
                         "implementedBehavior": "Primary use restores life and consumes one item.",
                         "runtimeRefs": ["primary_restore", "restore_life"],
                         "result": "changed",
@@ -140,7 +131,7 @@ def _resource_use_placeable() -> dict[str, Any]:
                         "reason": "The test explicitly replaces the primary tool behavior.",
                     },
                     {
-                        "plannedIntent": "Place the authored platform.",
+                        "plannedActionIndex": 1,
                         "implementedBehavior": "Alternate use places the authored platform.",
                         "runtimeRefs": ["alternate_place", "platform"],
                         "result": "aligned",
@@ -193,7 +184,7 @@ def test_pure_placeable_repairs_alternate_place_to_primary_without_creating_comb
                 "verdict": "changed",
                 "summary": "The resource-use lane was removed and placement moved to primary use.",
                 "actionChecks": [{
-                    "plannedIntent": "Place the authored platform.",
+                    "plannedActionIndex": 1,
                     "implementedBehavior": "Primary use places the authored platform.",
                     "runtimeRefs": ["alternate_place", "platform"],
                     "result": "changed",
@@ -233,7 +224,7 @@ def test_pure_placeable_repairs_alternate_place_to_primary_without_creating_comb
     assert validate_runtime_program(repaired)["ok"]
 
 
-def test_atomic_use_policy_is_the_only_author_and_wire_owner() -> None:
+def test_flat_author_transaction_projects_to_the_single_wire_use_policy_owner() -> None:
     authored = _dual_use_placeable()
     report = validate_runtime_program(authored)
     assert report["ok"], report["errors"]
@@ -267,11 +258,11 @@ def test_atomic_use_policy_is_the_only_author_and_wire_owner() -> None:
 
 def test_place_policy_is_structurally_closed_and_legacy_fragments_fail() -> None:
     free_place = _dual_use_placeable()
-    free_place["runtimeProgram"]["bindings"][-1]["usePolicy"]["stackCost"] = 0
-    assert "place_item_without_stack_cost" in _codes(validate_runtime_program(free_place))
+    free_place["runtimeProgram"]["bindings"][-1]["stackCost"] = 0
+    assert "shape_additional_property" in _codes(validate_runtime_program(free_place))
 
     wrong_contact = _dual_use_placeable()
-    wrong_contact["runtimeProgram"]["bindings"][-1]["usePolicy"]["contactDamage"] = True
+    wrong_contact["runtimeProgram"]["bindings"][-1]["contactDamage"] = True
     assert not validate_runtime_program(wrong_contact)["ok"]
 
     legacy = _upgrade_fixture("workbench_blade")
@@ -296,11 +287,20 @@ def test_single_policy_leaf_has_single_wire_leaf_blast_radius() -> None:
         row for row in changed["runtimeProgram"]["bindings"]
         if row["input"] == "primary_use"
     )
-    primary["usePolicy"]["stackCost"] = 1
+    primary["stackCost"] = 1
     left = compile_runtime_program(baseline)
     right = compile_runtime_program(changed)
+    final_path = "runtimeProgram.bindings[1].usePolicy.stackCost"
+    receipt_index = next(index for index, row in enumerate(left["runtimeContract"]["finalWireReceipts"])
+                         if row.get("finalPath") == final_path)
+    before_receipt = left["runtimeContract"]["finalWireReceipts"][receipt_index]
+    after_receipt = right["runtimeContract"]["finalWireReceipts"][receipt_index]
+    assert before_receipt["authoredPaths"][0] == "runtimeProgram.bindings[0]"
+    assert before_receipt["value"] == 0 and after_receipt["value"] == 1
+    assert {k: v for k, v in before_receipt.items() if k != "value"} == {k: v for k, v in after_receipt.items() if k != "value"}
     assert _changed_paths(left, right) == {
-        "$.runtimeProgram.bindings[1].usePolicy.stackCost",
+        f"$.{final_path}",
+        f"$.runtimeContract.finalWireReceipts[{receipt_index}].value",
     }
 
 
@@ -309,7 +309,6 @@ def test_repair_authorizes_one_complete_use_transaction_not_shadow_calls() -> No
     current["runtimeProgram"]["calls"].append({
         "id": "placeable_without_binding",
         "fn": "configure_placeable",
-        "target": "item",
         "params": {"tileId": 4, "wallId": -1, "placeStyle": 0},
     })
     report = validate_runtime_program(current)
@@ -319,14 +318,9 @@ def test_repair_authorizes_one_complete_use_transaction_not_shadow_calls() -> No
     allowed = scope["create"]["bindings"]["allowedTransactions"]
     assert allowed == [{
         "input": "alternate_use",
-        "usePolicy": {
-            "action": {
-                "kind": "place_item",
-                "targetId": "item",
-                "placementCallId": "placeable_without_binding",
-            },
-            "stackCost": 1,
-            "contactDamage": False,
+        "action": {
+            "kind": "place_item",
+            "placementCallId": "placeable_without_binding",
         },
     }]
     assert "configure_consumption" not in scope["create"]["calls"]["allowedFns"]
@@ -339,30 +333,30 @@ def test_repair_authorizes_one_complete_use_transaction_not_shadow_calls() -> No
     assert validate_runtime_program(repaired)["ok"]
 
 
-def test_repair_complete_transaction_changes_only_the_rejected_policy_leaf() -> None:
+def test_repair_complete_transaction_removes_only_the_forbidden_variant_constant() -> None:
     current = _dual_use_placeable()
     broken = current["runtimeProgram"]["bindings"][-1]
-    broken["usePolicy"]["stackCost"] = 0
+    broken["stackCost"] = 0
     report = validate_runtime_program(current)
     error = next(
         row for row in report["errors"]
-        if row["code"] == "place_item_without_stack_cost"
+        if row["code"] == "shape_additional_property" and row["path"].endswith(".stackCost")
     )
     scope = build_runtime_repair_scope(current, [error])
-    alternatives = next(
-        row["allowed"] for row in scope["bindingAlternatives"]
-        if row["bindingId"] == broken["id"]
-    )
-    assert len(alternatives) == 1
+    permission = next(row for row in scope["fieldPermissions"]["bindings"] if row["id"] == broken["id"])
+    assert permission["paths"] == ["stackCost"]
+    assert not scope["bindingAlternatives"]
 
     patch = _empty_patch()
-    patch["bindingsUpsert"] = [{"id": broken["id"], **alternatives[0]}]
+    native = copy.deepcopy(broken)
+    native.pop("stackCost")
+    patch["bindingsUpsert"] = [native]
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(current, filtered)
     assert validate_runtime_program(repaired)["ok"]
     assert _changed_paths(current, repaired) == {
-        "$.runtimeProgram.bindings[1].usePolicy.stackCost",
+        "$.runtimeProgram.bindings[1].stackCost",
     }
 
 

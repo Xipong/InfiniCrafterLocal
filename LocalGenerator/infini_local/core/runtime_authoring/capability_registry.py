@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 import math
+import re
 import struct
 from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
-from infini_local.core.runtime_authoring.binding_use_policy import (
-    STACK_COST_RULE,
-    action_kind,
-    contact_damage as binding_contact_damage,
-    target_id as binding_target_id,
-)
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
     DAMAGE_CLASS_TOKENS,
@@ -22,7 +17,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v4"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v5"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -580,6 +575,14 @@ class CapabilitySpec:
                 "properties": {"event": {"const": "periodic"}}, "required": ["event"],
             }
             variant["properties"]["params"]["then"] = {"required": ["periodTicks"]}
+        # Exact variants define these omissions as the sole Author notation.
+        # The compiler later projects the unique declared body and empty args.
+        if self.target_kinds == ("item_body",):
+            variant["properties"].pop("target")
+            variant["required"].remove("target")
+        if not self.params:
+            variant["properties"].pop("params")
+            variant["required"].remove("params")
         return variant
 
     def prompt_card(self) -> dict[str, Any]:
@@ -1173,11 +1176,11 @@ _CAPS: list[CapabilitySpec] = [
         provenance="literal registered same-item root-PNG projection selected only by this explicit operation",
         repair_group="placed_body",
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
-        lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
+        lowering_inputs=("runtimeProgram.calls[].fn",
                          "runtimeProgram.calls[].params.placementCallId",
-                         "runtimeProgram.bindings[].usePolicy.action.kind",
-                         "runtimeProgram.bindings[].usePolicy.action.targetId",
-                         "runtimeProgram.bindings[].usePolicy.action.placementCallId"),
+                         "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.placementCallId",
+                         "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"),
     ),
     _cap(
         "require_use_condition",
@@ -1819,7 +1822,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         "on_use",
         ("item_body",),
         (),
-        "Emitted when an active item-body use binding succeeds.",
+        "Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target.",
         producer_binding_inputs=("primary_use", "alternate_use"),
         producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
         producer_binding_kinds=("item_body",),
@@ -1911,47 +1914,6 @@ def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependenc
     if not alternatives and binding_requirement is not None:
         alternatives.append(EventDependencyAlternative(required_bindings=(binding_requirement,)))
     return tuple(alternatives)
-
-
-def event_alternative_is_present(
-    alternative: EventDependencyAlternative,
-    *,
-    target_id: str,
-    target_calls: Iterable[Mapping[str, Any]],
-    bindings: Iterable[Mapping[str, Any]],
-) -> bool:
-    call_rows = tuple(target_calls)
-    binding_rows = tuple(bindings)
-
-    def call_present(requirement: EventCallRequirement) -> bool:
-        expected = requirement.exact_params_dict()
-        for call in call_rows:
-            if str(call.get("fn") or "") != requirement.capability:
-                continue
-            raw_params = call.get("params")
-            params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
-            if all(params.get(key) == value for key, value in expected.items()):
-                return True
-        return False
-
-    def binding_present(requirement: EventBindingRequirement) -> bool:
-        allowed_inputs = set(requirement.any_of_inputs)
-        allowed_actions = set(requirement.any_of_actions)
-        return any(
-            str(row.get("input") or "") in allowed_inputs
-            and (not allowed_actions or action_kind(row) in allowed_actions)
-            and binding_target_id(row) == target_id
-            and (
-                requirement.required_contact_damage is None
-                or binding_contact_damage(row) is requirement.required_contact_damage
-            )
-            for row in binding_rows
-        )
-
-    return (
-        all(call_present(requirement) for requirement in alternative.required_calls)
-        and all(binding_present(requirement) for requirement in alternative.required_bindings)
-    )
 
 
 def event_dependency_descriptors(
@@ -2177,7 +2139,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                 kind="binding_action_reference",
                 target="item_body",
                 any_of=("place_item",),
-                message="configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+                message="configure_placeable must be referenced by exactly one binding action.placementCallId.",
             ),
         )
     if cap.name == "configure_tool":
@@ -2369,6 +2331,28 @@ CAPABILITY_REGISTRY: Final[Mapping[str, CapabilitySpec]] = MappingProxyType(
 if len(CAPABILITY_REGISTRY) != len(_ENRICHED_CAPS):
     raise RuntimeError("duplicate capability name in CAPABILITY_REGISTRY")
 
+
+def unique_item_body_id(entities: Iterable[object]) -> str:
+    """Return only the identity proved by exactly one declared item body.
+
+    Ambiguous or malformed declarations never choose a candidate. The canonical
+    validator and Repair keep those source fragments and their shape errors.
+    """
+    bodies = [row for row in entities if isinstance(row, Mapping) and row.get("kind") == "item_body"]
+    if len(bodies) != 1:
+        return ""
+    value = bodies[0].get("id")
+    return value if isinstance(value, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,47}", value) else ""
+
+
+def authored_call_target_id(call: Mapping[str, Any], entities: Iterable[object]) -> str:
+    """Resolve a call's canonical target without modifying its authored source."""
+    cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+    if cap is not None and cap.target_kinds == ("item_body",):
+        return unique_item_body_id(entities)
+    value = call.get("target")
+    return value if isinstance(value, str) else ""
+
 MOVEMENT_CAPABILITIES: Final[frozenset[str]] = frozenset(
     cap.name for cap in _ENRICHED_CAPS if cap.category == "movement"
 )
@@ -2431,11 +2415,25 @@ def compact_capability_catalog() -> list[dict[str, Any]]:
     return [cap.author_prompt_card() for cap in visible_capabilities()]
 
 
+STACK_COST_RULE = (
+    "The place_item variant omits stackCost and projects the exact cost 1; the stack is spent only after accepted placement "
+    "and the placed generated item is returned by the placement ledger when broken. "
+    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
+    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
+    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
+    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
+    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
+)
+
+
 def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
     """Project shared low-level field semantics without duplicating capability rules."""
     return {
         "stableIdPattern": r"^[a-z][a-z0-9_]{0,47}$",
         "paramNotation": (
+            "Calls use one flat ordered array. A capability whose targets is exactly [item_body] omits target; "
+            "it references the unique explicitly declared item_body. Every other call supplies its exact target. "
+            "A capability with no parameters omits params entirely. These omitted fields are forbidden extra fields. "
             "Every listed param is required unless marked optional; optional params may be omitted. "
             "In a full Author object, an optional param with an explicit card default may be omitted "
             "to select exactly that neutral value; this is not universal and never replaces an invalid present value. "
@@ -2474,13 +2472,16 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             }),
         },
         "bindingTarget": (
-            "bindings[].usePolicy.action.targetId is the exact entity acted on. The selected action's targets list "
-            "is the entity-kind allowlist; spawn_entity targets the entity created, while "
-            "use_item_body targets the item body being used. Only place_item additionally requires "
-            "bindings[].usePolicy.action.placementCallId; every other action must omit that key. "
-            "usePolicy.contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
+            "Bindings are flat: action, stackCost and contactDamage belong directly to the binding. "
+            "action.targetId is explicit only for actions whose targets are not exactly [item_body]; "
+            "item-only actions omit targetId and reference the unique declared item_body. "
+            "A one-action input omits action.kind; equipped has no action object, hold supplies action.targetId. "
+            "Only place_item additionally requires bindings[].action.placementCallId. "
+            "Active non-placement use explicitly selects stackCost and contactDamage; "
+            "place_item omits those variant constants (cost 1, no contact), hold/equipped omit them (cost 0, no contact). "
+            "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; place_item/hold/equipped require false."
+            "It does not select primaryEntityId or projectile held ownership."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",
@@ -2559,9 +2560,10 @@ def runtime_authoring_registry_manifest() -> dict[str, Any]:
 
 
 __all__ = [
+    "authored_call_target_id",
+    "unique_item_body_id",
     "runtime_authoring_registry_manifest",
     "runtime_authoring_prompt_field_guide",
-    "event_alternative_is_present",
     "event_dependency_alternatives",
     "event_dependency_descriptors",
     "RequirementSpec",

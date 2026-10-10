@@ -1,30 +1,34 @@
 # Gameplay Author — authored shape и construction contract
 
-[Generated boundary](../lowery.md) · [Source owners](../PROJECT_MAP_RU.md#python) · [Repair](TARGETED_REPAIR_PROTOCOL_RU.md) · [Neutral omissions](DECLARED_NEUTRAL_OMISSIONS_RU.md)
+[Generated boundary](../lowery.md) · [Source owners](../PROJECT_MAP_RU.md#python) · [Repair](TARGETED_REPAIR_PROTOCOL_RU.md) · [Neutral omissions](DECLARED_NEUTRAL_OMISSIONS_RU.md) · [Переход на Author v5](CANONICAL_AUTHOR_NOTATION_RU.md)
 
 Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
 
 <a id="response"></a>
 ## Author response
 
-Текущий root содержит `name`, `category`, `concept`, `runtimeProgram`, `realization`. `runtimeContract` с compiler receipts не authored root field. `runtimeProgram` задаёт `apiVersion`, Author `schema`, один `primaryEntityId`, явные `entities[]` (`id/kind`), `bindings[]` (`id/input/usePolicy`) и `calls[]` (`id/fn/target/params`). Exact required/optional keys — в schema, не в этом сокращённом перечне.
+Текущий root содержит `name`, `category`, `concept`, `runtimeProgram`, `realization`. `runtimeContract` с compiler receipts не authored root field. Единственная Author schema — `infini.runtime-program.authoring.v5`; отдельной compact/legacy формы нет. `runtimeProgram` задаёт `apiVersion`, `schema`, один `primaryEntityId`, явные `entities[]` (`id/kind`), плоские `bindings[]` и один упорядоченный массив `calls[]`. Групп `callGroups` нет; ID и порядок вызовов сохраняются.
 
-`usePolicy` атомарно задаёт `action`, `stackCost`, `contactDamage`. Calls присоединяют одну capability к одной entity; typed references связывают entities. Movement, controller, damage, targeting, input, attachment, body contact, lifecycle и event topology остаются независимыми решениями Author. Weapon macro и routing по name/category/prose запрещены; schema/validator не выбирают содержательную замену.
+Calls содержат `id/fn`, `target` только для capabilities с выбором entity и `params` только для capabilities с параметрами. У item-only capability target — единственный явно объявленный `item_body`, поэтому ключ `target` запрещён. У безаргументной capability запрещён даже `params:{}`. Это точная форма выбранной операции, а не default при ошибке.
+
+Binding задаёт одну атомарную транзакцию без Author-обёртки `usePolicy`. `primary_use/alternate_use` явно задают `action.kind`; для `spawn_entity` также обязателен `action.targetId`. Item-only actions не содержат `targetId`. Active non-placement binding явно задаёт `stackCost/contactDamage`. `place_item` содержит только `id/input/action(kind,placementCallId)` и выбирает константы `1/false`; `hold` содержит `id/input/action(targetId)` и выбирает `spawn_entity/0/false`; `equipped` содержит только `id/input` и выбирает `equip_passive/item_body/0/false`. Перечисленные константные ключи запрещены в Author, даже если прислано правильное значение. Compiler разворачивает этот выбранный вариант в прежний wire `usePolicy` с отдельными receipts. Exact required/optional keys принадлежат schema.
+
+Typed references связывают entities. Movement, controller, damage, targeting, input, attachment, body contact, lifecycle и event topology остаются независимыми решениями Author. Weapon macro и routing по name/category/prose запрещены; schema/validator не выбирают содержательную замену.
 
 <a id="primary-use"></a>
 ## Primary и независимые use lanes
 
-Author выбирает **один точный существующий** `primaryEntityId` для lifecycle/held representation. Calls/bindings не содержат authored `role`; compiler материализует wire `binding.role=primary` только при `binding.usePolicy.action.targetId == primaryEntityId`, иначе `secondary`; kind выбранной entity даёт `primaryOwner=item_body|projectile`. Это mandatory projection, не compression и не эвристика.
+Author выбирает **один точный существующий** `primaryEntityId` для lifecycle/held representation. Calls/bindings не содержат authored `role`; compiler материализует wire `binding.role=primary` только при совпадении точного target выбранного binding-варианта с `primaryEntityId`, иначе `secondary`. Для projectile target это явный `action.targetId`, для item-only action — единственный `item_body`. Kind выбранной primary entity даёт `primaryOwner=item_body|projectile`. Это mandatory projection, не compression и не эвристика.
 
 Item graphic/body-contact representation принадлежит `item_body`. Projectile может стать primary только при явно authored projectile lifecycle/held ownership. Узкий invariant: если все active bindings spawn-ят одну entity, `contactDamage=false` и `configure_item_use.hideUseGraphic=true`, exact spawn target должен стать owner — невидимый body use не представляет. Факт spawn, damage, категория и название сами по себе primary не выбирают.
 
 Один exclusive input имеет один root binding, но **не одну damage lane**. `contactDamage` независим от `action`; например, Starfury-like tuple (фрагмент binding, не полный response):
 
 ```json
-{"input":"primary_use","usePolicy":{"action":{"kind":"spawn_entity","targetId":"falling_star"},"stackCost":0,"contactDamage":true}}
+{"input":"primary_use","action":{"kind":"spawn_entity","targetId":"falling_star"},"stackCost":0,"contactDamage":true}
 ```
 
-При primary body он сохраняет item hitbox и spawn-ит secondary projectile, который не отбирает `heldProj`/animation. `place_item`, `hold`, `equipped` требуют `contactDamage=false`: consumers эту contact lane не исполняют. Flail/yoyo/whip/holdout — примеры explicit projectile ownership, не распознаваемые families. Edge-case fixtures: `workbench_blade` (body + projectile), `door_on_chain` (projectile-owned flail); внешние [Starfury](https://terraria.wiki.gg/wiki/Starfury)/[Flails](https://terraria.wiki.gg/wiki/Flails) поясняют примеры, но authority — текущие consumers.
+При primary body он сохраняет item hitbox и spawn-ит secondary projectile, который не отбирает `heldProj`/animation. `place_item`, `hold`, `equipped` выбирают `contactDamage=false` самой формой варианта: consumers эту contact lane не исполняют. Flail/yoyo/whip/holdout — примеры explicit projectile ownership, не распознаваемые families. Edge-case fixtures: `workbench_blade` (body + projectile), `door_on_chain` (projectile-owned flail); внешние [Starfury](https://terraria.wiki.gg/wiki/Starfury)/[Flails](https://terraria.wiki.gg/wiki/Flails) поясняют примеры, но authority — текущие consumers.
 
 `stackCost=1` расходует **целую единицу** generated item на active use; projectile return не возвращает предмет и не является hidden charge counter. Reusable throw выбирает `0`. `place_item` требует `1`; предмет escrowed в world placement ledger и возвращается тем же generated item при сломе, не «навсегда расходуется». Reusable hybrid с placement и active `spawn_entity/use_item_body` при `stackCost=0` требует `maxStack=1`: одна durable вещь меняет inventory/placed form. One-shot non-placement use с cost `1` не подпадает под этот конкретный maxStack rule.
 
@@ -45,7 +49,7 @@ Construction facts живут у своих owners, а не в повторны�
 | Capability cards | Channel/charge/release, cadence/animation, reusable hybrid bounds |
 | Глобальные invariants | ID uniqueness, exact primary ownership, acyclic graph и spawn/depth budgets |
 
-`planVsProgram.actionChecks` покрывает каждую planned action и executable input/event lane, включая aligned и added lanes; указывает exact runtime IDs, результат, intentionality и причину. `programVsReport.behaviorChecks` отдельно покрывает executable input/entity/event lanes против обоих report texts. Blanket aligned verdict не заменяет rows; непонятная семантика отмечается `uncertain`. `realization_execution_truth_for_llm()` остаётся источником Repair execution guidance; initial Author берёт оттуда диагностический selfEvaluation contract, а не новый judge-pass. Исторический builder замер — [отдельная запись](AUTHOR_DIRECT_CONSTRUCTION_RU.md#measurement), не обещание first-Author success rate.
+`planVsProgram.actionChecks` покрывает каждую planned action и executable input/event lane, включая aligned и added lanes; указывает `plannedActionIndex` (zero-based индекс в `concept.plannedPlayerActions`, либо `null`, если исходное действие не цитируется), exact runtime IDs, результат, intentionality и причину. Повторного `plannedIntent` нет; compiler не синтезирует текст и не сопоставляет intent по строке. Concept остаётся non-binding: schema проверяет тип и конечный диапазон индекса, но отсутствующий/невалидный sketch и расхождение замысла с программой не становятся отказом craft. `programVsReport.behaviorChecks` отдельно покрывает executable input/entity/event lanes против обоих report texts. Blanket aligned verdict не заменяет rows; непонятная семантика отмечается `uncertain`. `realization_execution_truth_for_llm()` остаётся источником Repair execution guidance; initial Author берёт оттуда диагностический selfEvaluation contract, а не новый judge-pass. Исторический builder замер — [отдельная запись](AUTHOR_DIRECT_CONSTRUCTION_RU.md#measurement), не обещание first-Author success rate.
 
 <a id="validation-events"></a>
 ## Validation, events и compilation

@@ -1,0 +1,628 @@
+{
+  "sourceAuthorHead": "9013256117587d0d30ae271a1fbe6b6cb8242367",
+  "foundationHead": "f5012379f3c814d1b22e0a69f2a676adb5272fae",
+  "compositions": {
+    "workbench_blade": {
+      "authoredChars": 5053,
+      "strictProviderChars": 5072,
+      "wireSha256": {
+        "runtimeProgram": "d6c25fb74bc652e8f75fd9edd8f1d8a457e5ab2748f5a08b25a8de215cf798c0",
+        "gameplay": "86b24d6edaebe5a678c40ff694496948a4e6c1da77595c6a99476b0331cb3f5c",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "umbrella_grenade": {
+      "authoredChars": 5789,
+      "strictProviderChars": 5807,
+      "wireSha256": {
+        "runtimeProgram": "95923c8d7523afc3848eb30636060666e729555311d98000549a0bff0fcb6ac2",
+        "gameplay": "afaa0cbadceaa46ccf9ada8fad349401b6ec6ae983c10e194a35c60b428a5705",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "door_on_chain": {
+      "authoredChars": 3738,
+      "strictProviderChars": 3756,
+      "wireSha256": {
+        "runtimeProgram": "ec9012934476ecaf15856e0ce553cd4474fb2278171ca995d27ba218c9dd1986",
+        "gameplay": "484f7b3506f12c7cab6d2485c9d30df0115a18900ce144b7d84e9bdfac649d8b",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "returning_potion": {
+      "authoredChars": 3917,
+      "strictProviderChars": 3953,
+      "wireSha256": {
+        "runtimeProgram": "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04",
+        "gameplay": "02f97bacf104e25b3999b9208ac9d53617097009f16990029b7e2bad0b92cf41",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "fishing_platform_tool": {
+      "authoredChars": 3876,
+      "strictProviderChars": 3876,
+      "wireSha256": {
+        "runtimeProgram": "1b41c92e2662f2c1ec0de829bb9f1b3c487b89c047e9ead49e57dd7065a352e4",
+        "gameplay": "06a2af5dc6d7b192cabe5f8f278256f8a8b320db4c9ab967333394f510a64f27",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "shield_and_disc": {
+      "authoredChars": 5539,
+      "strictProviderChars": 5539,
+      "wireSha256": {
+        "runtimeProgram": "c069667b6e43d35855a9893295b094818f8e80c1f261190a1c3b3305950a592f",
+        "gameplay": "6deb75fb3422b89193be2c2e5cff9f6ddfec260c414ed43f5fd775a4caccdd9c",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "held_and_deployed": {
+      "authoredChars": 6954,
+      "strictProviderChars": 6954,
+      "wireSha256": {
+        "runtimeProgram": "fb7f71ce7324f85cf7dfa894c1584e4f0b39792ab730a0e4ba5c2ceeaa262e88",
+        "gameplay": "93be3d8bf5864a23ad6092a910f56a957e7fe171b415c599a114c08a322f1934",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "equipment_tool_combat": {
+      "authoredChars": 5090,
+      "strictProviderChars": 5632,
+      "wireSha256": {
+        "runtimeProgram": "988ec99396135b8fdccb6c4f58013916285c797e36926f350b632ae66095a7f0",
+        "gameplay": "2e06eef0e0328eadcc99e83634908f4bf5acda8ae2874562744b72754f936eae",
+        "accessory": "e23b423241778a5c8484bd2569ce3c53f80843630acecf2510d4d0a4a8f6966a",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    }
+  },
+  "capabilities": {
+    "configure_item_stats": {
+      "authoredChars": 2041,
+      "strictProviderChars": 2041,
+      "wireSha256": {
+        "runtimeProgram": "76846cb48e52946ded652cfff6891b554b4e0bd17cbd684cd8567843fc590280",
+        "gameplay": "1e3f7913c49cf043a7fe4f1824feace41e9871c9358e208f85dd4b251e35746a",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_item_use": {
+      "authoredChars": 2459,
+      "strictProviderChars": 2459,
+      "wireSha256": {
+        "runtimeProgram": "30f1be657b9e949549c7ee620f072c07b21e6b55f908a67922d5cf0ce36935e4",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_item_contact_hitbox": {
+      "authoredChars": 2671,
+      "strictProviderChars": 2671,
+      "wireSha256": {
+        "runtimeProgram": "89cd5fc6dfccef7bcc7b4718e906899d20bd1c9332d9f0974a3eab95e5674659",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_vanilla_ammo_item": {
+      "authoredChars": 2707,
+      "strictProviderChars": 2707,
+      "wireSha256": {
+        "runtimeProgram": "30f1be657b9e949549c7ee620f072c07b21e6b55f908a67922d5cf0ce36935e4",
+        "gameplay": "a09cb3a94c3cad3ce099e7883c49c10b433950b188b31b69fea345cbca2c930a",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "restore_resources_on_use": {
+      "authoredChars": 2640,
+      "strictProviderChars": 2640,
+      "wireSha256": {
+        "runtimeProgram": "70d2ad48b9928b58b85355b3db3ca2d5953125d0d930eff5ea8a9b62f7a200ee",
+        "gameplay": "7a1d9cf9ec0050fd8a6e8915453b88685ee8707ac2a4c47666ebcafb4829960b",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "apply_vanilla_buff_on_use": {
+      "authoredChars": 2627,
+      "strictProviderChars": 2627,
+      "wireSha256": {
+        "runtimeProgram": "70d2ad48b9928b58b85355b3db3ca2d5953125d0d930eff5ea8a9b62f7a200ee",
+        "gameplay": "35258822baa46940ab2bca3a0e26261efad2eec52d6b3612c5ec97221bab5200",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "apply_generated_buff_on_use": {
+      "authoredChars": 2836,
+      "strictProviderChars": 2836,
+      "wireSha256": {
+        "runtimeProgram": "70d2ad48b9928b58b85355b3db3ca2d5953125d0d930eff5ea8a9b62f7a200ee",
+        "gameplay": "6a8bb46d2f95de0e12d4d2b3da36676a2fc95afb63ce51250e1d5ce35e090c3e",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_tool": {
+      "authoredChars": 2530,
+      "strictProviderChars": 2579,
+      "wireSha256": {
+        "runtimeProgram": "60c385c7a53adf43fbf7eaae3cdaf49e8f43209244bbabe90a3fb1c189094205",
+        "gameplay": "60778ff515f64db86be63bef0e9b9745835b291aea9611bc93ed02aca5e932c7",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_placeable": {
+      "authoredChars": 2607,
+      "strictProviderChars": 2607,
+      "wireSha256": {
+        "runtimeProgram": "2dd8380556907381b5559ae9785ce907bbd7a42590462239d421e4473651fd31",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "present_placed_item_sprite": {
+      "authoredChars": 2968,
+      "strictProviderChars": 2968,
+      "wireSha256": {
+        "runtimeProgram": "6b7271b6ec1c1935bb4b92df88d726745abf9b70548949e8e7555ed0d2c11cf9",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "require_use_condition": {
+      "authoredChars": 2575,
+      "strictProviderChars": 2605,
+      "wireSha256": {
+        "runtimeProgram": "30f1be657b9e949549c7ee620f072c07b21e6b55f908a67922d5cf0ce36935e4",
+        "gameplay": "87241aeb5fcfff52bb1cc6f9aae808450ed6046d3304da7669d90a7f3aa44939",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "add_hold_light": {
+      "authoredChars": 2525,
+      "strictProviderChars": 2525,
+      "wireSha256": {
+        "runtimeProgram": "30f1be657b9e949549c7ee620f072c07b21e6b55f908a67922d5cf0ce36935e4",
+        "gameplay": "049b6b7e64aac09da9ea3fbd55d5de0cb5b09b31a1c2b6fc2bd0e5b1b735c70b",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_player_on_use": {
+      "authoredChars": 2610,
+      "strictProviderChars": 2610,
+      "wireSha256": {
+        "runtimeProgram": "70d2ad48b9928b58b85355b3db3ca2d5953125d0d930eff5ea8a9b62f7a200ee",
+        "gameplay": "f142e83999bcdc7f2ec3ea43c383b1881f11ae082584ff1dd7a534609872224d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_accessory": {
+      "authoredChars": 2551,
+      "strictProviderChars": 3241,
+      "wireSha256": {
+        "runtimeProgram": "e38abe2a714aabd9379c72517a45bc7f5be53699df49583426612c6857699c8a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "bd5349aca9dec55114c929da29bea73b0923493bc468d9c6639658b538868375",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_armor": {
+      "authoredChars": 2552,
+      "strictProviderChars": 3669,
+      "wireSha256": {
+        "runtimeProgram": "e38abe2a714aabd9379c72517a45bc7f5be53699df49583426612c6857699c8a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "1f60113c7468f7ebfc4676d079f888b4428cbd987825ed51a524348fb3ad4f1c"
+      }
+    },
+    "add_equipment_damage_bonus": {
+      "authoredChars": 2751,
+      "strictProviderChars": 3441,
+      "wireSha256": {
+        "runtimeProgram": "e38abe2a714aabd9379c72517a45bc7f5be53699df49583426612c6857699c8a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "86e27af4288517c93961ff4b2b43d4a5890abedf732089d9a02836e18a3305d5",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "configure_spawn": {
+      "authoredChars": 3500,
+      "strictProviderChars": 3500,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "set_projectile_concurrency": {
+      "authoredChars": 3703,
+      "strictProviderChars": 3703,
+      "wireSha256": {
+        "runtimeProgram": "b00c65e5562148ca08648fa3b1e79ec0522612a1e6cdebaa49a99b4cb2ad9d22",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "set_projectile_damage": {
+      "authoredChars": 3542,
+      "strictProviderChars": 3542,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "set_projectile_lifetime": {
+      "authoredChars": 3556,
+      "strictProviderChars": 3556,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "set_projectile_hitbox": {
+      "authoredChars": 3542,
+      "strictProviderChars": 3542,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "set_projectile_collision": {
+      "authoredChars": 3563,
+      "strictProviderChars": 3563,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_straight": {
+      "authoredChars": 3493,
+      "strictProviderChars": 3493,
+      "wireSha256": {
+        "runtimeProgram": "1bbcd5ada4ea3296ed374fd16f20d350899184dd3a16543d850b4bf8bcb1c39a",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_slow_homing": {
+      "authoredChars": 3557,
+      "strictProviderChars": 3557,
+      "wireSha256": {
+        "runtimeProgram": "0d42c1ab6a0da215acb8fc4e4db4a5aaf32995dedc6541385235c4b7bd19fc18",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_gravity_arc": {
+      "authoredChars": 3550,
+      "strictProviderChars": 3550,
+      "wireSha256": {
+        "runtimeProgram": "8c519a809424de297bf01849192af2e836561d2e4a7d33a11d78194968deed79",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_drift": {
+      "authoredChars": 3489,
+      "strictProviderChars": 3489,
+      "wireSha256": {
+        "runtimeProgram": "bf30b7de0589e47c9ae187ce6d3c9b6209d9af3c73ff8647ec9daf86c8c75b58",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_orbit": {
+      "authoredChars": 3482,
+      "strictProviderChars": 3482,
+      "wireSha256": {
+        "runtimeProgram": "9f29be8874d2a139d43721a0f4dcaa852c06f9c95b7ca5b85739372cd1461d62",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_boomerang": {
+      "authoredChars": 3540,
+      "strictProviderChars": 3540,
+      "wireSha256": {
+        "runtimeProgram": "3ce9f1e18e7367bd006fe5d661854a832245de3a31dc11bf25791d67dfd2ce35",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_bounce": {
+      "authoredChars": 3505,
+      "strictProviderChars": 3505,
+      "wireSha256": {
+        "runtimeProgram": "d1350eab87e709e4cd0eb236ede3d56610a721857d4838ec6beca0c7f6040339",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_sine_homing": {
+      "authoredChars": 3587,
+      "strictProviderChars": 3587,
+      "wireSha256": {
+        "runtimeProgram": "0b05c78501711e84ad91622aaee1146aee803bd6c9e6c3dbd738ab6a02d0604b",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_phase": {
+      "authoredChars": 3485,
+      "strictProviderChars": 3485,
+      "wireSha256": {
+        "runtimeProgram": "2c3c88260e44f8ae28e2568b5dd734803e938b24f27cc470062899310909106f",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_accelerate": {
+      "authoredChars": 3556,
+      "strictProviderChars": 3556,
+      "wireSha256": {
+        "runtimeProgram": "4bd5eebf77e393aec1119c0d3f9aa708878c282d60a58f813b54c2eedbcad26e",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_spiral": {
+      "authoredChars": 3501,
+      "strictProviderChars": 3501,
+      "wireSha256": {
+        "runtimeProgram": "da43065cf780e71db96f9143064e2fc6e0cb34099b535ed83042c7f5673532f8",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_vortex_orb": {
+      "authoredChars": 3546,
+      "strictProviderChars": 3546,
+      "wireSha256": {
+        "runtimeProgram": "0787d09c1732245cb32747f47287406a6c2a73b02e4f6bd97c4fdd9746a8f20c",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_blackhole_pull": {
+      "authoredChars": 3582,
+      "strictProviderChars": 3582,
+      "wireSha256": {
+        "runtimeProgram": "d9954927dd19b65aaece999e6c63e6e3cb4ff7c7d2f836f20173993a2c036a9c",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_proximity_missile": {
+      "authoredChars": 3633,
+      "strictProviderChars": 3633,
+      "wireSha256": {
+        "runtimeProgram": "70db83cb1bac630e171b5ecc3baf7befab29c7bb3bb0fe3f8dafa8a666137668",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_returning_glaive": {
+      "authoredChars": 3603,
+      "strictProviderChars": 3603,
+      "wireSha256": {
+        "runtimeProgram": "43706a4aa0049acacdeb7e58b08591fce001f7e02b49b5510807e4d33bb86c1f",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_expanding_wave": {
+      "authoredChars": 3589,
+      "strictProviderChars": 3589,
+      "wireSha256": {
+        "runtimeProgram": "4a0e0359e7f9cdcb4c150714d2b485876dc0b2e9a93ad257e47a054dba106a90",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_flail_tether": {
+      "authoredChars": 3563,
+      "strictProviderChars": 3563,
+      "wireSha256": {
+        "runtimeProgram": "2de2f1bbc011c092315f69876e01ce3d0e719c1831b7943602384f25cfc3c8f8",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_yoyo_hover": {
+      "authoredChars": 3545,
+      "strictProviderChars": 3545,
+      "wireSha256": {
+        "runtimeProgram": "a028cd99d5ff2fe63e6493d5e5f7bafae6d08fff4336480eb83e8b3a6df2fd0c",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_whip_lash": {
+      "authoredChars": 3531,
+      "strictProviderChars": 3531,
+      "wireSha256": {
+        "runtimeProgram": "dee402302c934f8c58ff16c3a951e1b51452cbf9d9376b17fd67dc2274b5c994",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_forward_then_retract": {
+      "authoredChars": 3635,
+      "strictProviderChars": 3635,
+      "wireSha256": {
+        "runtimeProgram": "7c474039ffc5befab107bea3e30c8f91c274089631aec3698bcc6f4202594adf",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "channel_beam": {
+      "authoredChars": 3530,
+      "strictProviderChars": 3530,
+      "wireSha256": {
+        "runtimeProgram": "ea0fea64ff9b5a02a24331c740d39c63a175c09322bcdd0512249e39e09c3ff2",
+        "gameplay": "4e17546e7f07cd151ccb9756eb8764c83d50c6ee7a373da1448f8dac752aa6dc",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "charge_then_release": {
+      "authoredChars": 3664,
+      "strictProviderChars": 3664,
+      "wireSha256": {
+        "runtimeProgram": "272638581b31d5a4dd2d4d16d3d7b9557836d31869cfe00d185cee67153b4c2c",
+        "gameplay": "4e17546e7f07cd151ccb9756eb8764c83d50c6ee7a373da1448f8dac752aa6dc",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "target_and_fire": {
+      "authoredChars": 4625,
+      "strictProviderChars": 4625,
+      "wireSha256": {
+        "runtimeProgram": "67c264d64b5a0002df310c49366199bc3c1c29db97eaf0e0ed66727501eff7cc",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "spawn_over_target": {
+      "authoredChars": 3641,
+      "strictProviderChars": 3641,
+      "wireSha256": {
+        "runtimeProgram": "224318d8b8c11c4e7444831c14442c223f7cf8ccd1d84de9cfae40f5d5f1ac00",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "spawn_entity_on_event": {
+      "authoredChars": 4802,
+      "strictProviderChars": 4821,
+      "wireSha256": {
+        "runtimeProgram": "1d518f7b7be34d17ed6085680befe3e84d9265a143f5a0d0d24a9c983dbf8bf7",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "apply_status_on_event": {
+      "authoredChars": 3692,
+      "strictProviderChars": 3710,
+      "wireSha256": {
+        "runtimeProgram": "8259c193a78bad65d673ccbb3857b02f7e2f747f5d729012bc3109ef11aec6f6",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "damage_area_on_event": {
+      "authoredChars": 3689,
+      "strictProviderChars": 3707,
+      "wireSha256": {
+        "runtimeProgram": "1e4f9aa19ce711d3757112710fef79cf01635e4b8bba81d7352596c4cb672feb",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "chain_damage_on_event": {
+      "authoredChars": 3709,
+      "strictProviderChars": 3727,
+      "wireSha256": {
+        "runtimeProgram": "dcce19c9a974f5cc38576855ac7c03b04f32441100d66b71bad84a07f423afe4",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "pull_on_event": {
+      "authoredChars": 3662,
+      "strictProviderChars": 3680,
+      "wireSha256": {
+        "runtimeProgram": "74f46486d94bf90d96bce999aaaa0791459576ff93247f852983fe03e95088d9",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "heal_owner_on_event": {
+      "authoredChars": 3676,
+      "strictProviderChars": 3694,
+      "wireSha256": {
+        "runtimeProgram": "97d2e924b3b182800ba899d0461ad5ecec1381433d6a7e594def60f74873b8d1",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "move_owner_on_event": {
+      "authoredChars": 3697,
+      "strictProviderChars": 3715,
+      "wireSha256": {
+        "runtimeProgram": "39701069b884b179425a4bc63e7ed7967795bea247638baaf95593d46b432059",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    },
+    "emit_light_while_active": {
+      "authoredChars": 3693,
+      "strictProviderChars": 3693,
+      "wireSha256": {
+        "runtimeProgram": "ccecdedc5c656b4f01717c60f4dbd811953b2a5ce1d2c5233ec4f6bcd035b412",
+        "gameplay": "e20315d0a90745b15e351d4932557f4e85b5b533f9270268e33ef157624fcd5d",
+        "accessory": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146",
+        "armor": "5acf3ff77b4420677b5923071f303facaba7a9273a346284a667a275df325146"
+      }
+    }
+  }
+}

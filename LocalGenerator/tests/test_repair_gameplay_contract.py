@@ -14,7 +14,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
+def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_scope_response=False):
     """Exercise the real request/parser/scope/merge caller; only provider I/O is synthetic."""
     import socket
     from jsonschema import Draft202012Validator
@@ -34,7 +34,14 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
         payload = copy.deepcopy(incoming)
         if format_mode == "json_schema":
             payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
-            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
+            if out_of_scope_response:
+                # The scoped grammar rejects these independent capability rows.
+                # Still simulate a provider violating its declared schema so the
+                # frozen merge remains tested as a second, local boundary.
+                assert not validator.is_valid(payload)
+            else:
+                validator.validate(payload)
         return {"choices": [{"message": {"content": json.dumps(payload)}}],
                 "_debug": {"responseFormatType": format_mode}}
 
@@ -82,7 +89,8 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
     frozen["params"]["knockback" if leaf == "autoReuse" else "useStyle"] = 3 if leaf == "autoReuse" else "swing"
     incoming = {"note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
                 "callsUpsert": [candidate, frozen]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + leaf in audit["acceptedPaths"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
@@ -128,7 +136,8 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     stats["params"]["damage"] = 1999
     incoming = {"note": "model explicitly chose a full conditional alternative",
                 "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + needed in audit["acceptedPaths"]
@@ -189,7 +198,9 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, form
         with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
             _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
     else:
-        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+        repaired, dossier = _offline_gameplay_repair(
+            monkeypatch, doc, patch, format_mode,
+            out_of_scope_response=case == "unrelated-selector-frozen")
         permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
         if case == "periodic-already-selected":
             assert permissions == [{"id": call["id"], "paths": ["params.periodTicks"]}]
@@ -380,7 +391,7 @@ def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chos
     healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
     if companion_fn:
         companion = copy.deepcopy(next(row for row in build_capability_witness(companion_fn)["runtimeProgram"]["calls"] if row["fn"] == companion_fn))
-        companion.update(id="active_companion", target=healing["target"])
+        companion.update(id="active_companion")
         calls.append(companion)
     before = copy.deepcopy(doc)
     report = validate_runtime_program(doc)
@@ -424,31 +435,31 @@ def test_gameplay_exact_leaf_repair(case):
     doc = build_runtime_fixture("workbench_blade") if case.startswith(("action", "input")) else build_capability_witness(fn)
     section = "bindings" if case.startswith(("placement", "action", "input")) else "calls"
     rows = doc["runtimeProgram"][section]
-    node = (next(row for row in rows if row["usePolicy"]["action"]["kind"] == "place_item")
+    node = (next(row for row in rows if row["action"]["kind"] == "place_item")
             if case.startswith("placement") else rows[0] if section == "bindings" else
             next(row for row in rows if row["fn"] == fn))
     good = copy.deepcopy(node)
     candidate = copy.deepcopy(node)
     if case.startswith("placement"):
-        node["usePolicy"]["action"]["placementCallId"] = "missing_placement"
+        node["action"]["placementCallId"] = "missing_placement"
         if case == "placement-input":
             candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
         else:
-            candidate["usePolicy"].update(stackCost=0, contactDamage=True)
-        paths = ["usePolicy.action.placementCallId"]
+            candidate.update(stackCost=0, contactDamage=True)
+        paths = ["action.placementCallId"]
     elif case.startswith(("action", "input")):
         if case == "input-missing":
             del node["input"]
             paths = ["input"]
         else:
             if case == "action-missing":
-                del node["usePolicy"]["action"]["kind"]
+                del node["action"]["kind"]
             else:
-                node["usePolicy"]["action"]["kind"] = "unknown_kind"
-            paths = ["usePolicy.action.kind"]
+                node["action"]["kind"] = "unknown_kind"
+            paths = ["action.kind"]
             candidate["input"] = "alternate_use"
-            candidate["usePolicy"]["action"]["targetId"] = "nail"
-        candidate["usePolicy"].update(contactDamage=not node["usePolicy"]["contactDamage"], stackCost=1)
+            candidate["action"]["targetId"] = "nail"
+        candidate.update(contactDamage=not node["contactDamage"], stackCost=1)
     elif case == "damage-frozen-range":
         node["params"]["damage"] = -1
         candidate["params"].update(damage=20, manaCost=-1)
@@ -477,7 +488,7 @@ def test_gameplay_exact_leaf_repair(case):
     report = validate_runtime_program(doc)
     assert not report["ok"], report
     if case == "action-unknown":
-        assert any(e["code"] == "shape_one_of" and e["path"].endswith(".action.kind") for e in report["errors"])
+        assert any(e["code"].startswith("shape_") and e["path"].endswith(".action.kind") for e in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
     permissions = next(row["paths"] for row in scope["fieldPermissions"][section] if row["id"] == node["id"])
     if paths is not None:
@@ -487,6 +498,12 @@ def test_gameplay_exact_leaf_repair(case):
     patch = {"note": "repair diagnosed leaves", "realizationReplacement": copy.deepcopy(doc["realization"]), section + "Upsert": [candidate]}
     patch_before = json.dumps(patch)
     filtered, audit = filter_repair_patch_scope(doc, patch, scope)
+    if case == "placement-cross-field":
+        assert not audit["ok"]
+        assert filtered["bindingsUpsert"] == []
+        assert apply_repair_patch(doc, filtered) == doc
+        assert (json.dumps(doc), json.dumps(patch)) == (before, patch_before)
+        return
     assert audit["ok"], audit
     assert json.dumps(filtered[section + "Upsert"], sort_keys=True) == json.dumps([good], sort_keys=True), "filtered_exact_leaf_and_frozen_siblings"
     merged = apply_repair_patch(doc, filtered)
@@ -575,7 +592,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     upserts = [candidate]
     if foreign_fn:
         foreign = next(row for row in build_runtime_fixture("equipment_tool_combat")["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")
-        foreign.update(id=node["id"], target=node["target"])
+        foreign.update(id=node["id"])
         upserts.append(foreign)
     patch = {"note": "complete collision", "callsUpsert": upserts,
              "callParamKeysDelete": [{"callId": node["id"], "key": key} for key in ("tileCollide", "pierce")]}
@@ -601,15 +618,13 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
     other = {**copy.deepcopy(node), "id": "other_binding", "input": "alternate_use"}
     doc["runtimeProgram"]["bindings"].append(other)
     assert validate_runtime_program(doc)["ok"]
-    node.update(action=original["usePolicy"]["action"]["kind"], target=original["usePolicy"]["action"]["targetId"])
-    del node["usePolicy"]
+    node.update(action=original["action"]["kind"], target=original["action"]["targetId"])
     report = validate_runtime_program(doc)
     assert not report["ok"]
-    assert {e["path"] for e in report["errors"] if e["code"].startswith("shape_")} == {"$.runtimeProgram.bindings[0]" + tail for tail in ("", ".usePolicy", ".action", ".target")}
+    assert {e["path"] for e in report["errors"] if e["code"].startswith("shape_")} == {"$.runtimeProgram.bindings[0]" + tail for tail in ("", ".action", ".target")}
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["bindings"] == [{"id": node["id"], "paths": ["action", "target", "usePolicy", "usePolicy.action.kind", "usePolicy.action.targetId"]}]
-    transaction = {"input": original["input"], "usePolicy": copy.deepcopy(original["usePolicy"])}
-    transaction["usePolicy"]["contactDamage"] = False
+    assert scope["fieldPermissions"]["bindings"] == [{"id": node["id"], "paths": ["action", "action.kind", "action.targetId", "target"]}]
+    transaction = {key: copy.deepcopy(value) for key, value in original.items() if key != "id"}
     assert transaction in next(row["allowed"] for row in scope["bindingAlternatives"] if row["bindingId"] == node["id"])
     candidate = {"id": node["id"], **transaction}
     if attempt == "wrong-input":
@@ -619,14 +634,17 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
     elif attempt == "wrong-id":
         candidate["id"] = other["id"]
     filtered, audit = filter_repair_patch_scope(doc, {"note": "complete transaction", "bindingsUpsert": [candidate]}, scope)
-    assert audit["ok"] is (attempt == "exact"), audit
-    if attempt == "exact":
-        assert filtered["bindingsUpsert"] == [candidate]
+    assert audit["ok"] is (attempt in {"exact", "wrong-input"}), audit
+    if attempt in {"exact", "wrong-input"}:
+        expected = {**candidate, "input": original["input"]}
+        assert filtered["bindingsUpsert"] == [expected]
         assert validate_runtime_program(apply_repair_patch(doc, filtered))["ok"]
+        if attempt == "wrong-input":
+            assert any(row["path"].endswith(".input") and row["reason"] == "frozen_valid_value" for row in audit["ignoredChanges"])
     else:
         assert filtered["bindingsUpsert"] != [candidate]
         if attempt == "legacy-sibling":
-            assert any(row["path"] == "$.bindingsUpsert[0].action" and row["kind"] == "additional_property" for row in audit["errors"])
+            assert any(row["path"] == "$.bindingsUpsert[0].action" and row["kind"] in {"type", "one_of", "any_of"} for row in audit["errors"])
         else:
             suffix, reason = (".input", "frozen_valid_value") if attempt == "wrong-input" else ("", "independent_valid_node_frozen")
             assert any(row["path"] == "$.bindingsUpsert[0]" + suffix and row["reason"] == reason for row in audit["ignoredChanges"])
@@ -634,7 +652,7 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
                 assert filtered["bindingsUpsert"] == []
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"]["params"]["required"]])
+@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]
@@ -652,7 +670,7 @@ def test_oneof_exact_diagnostic_selection(case):
         expected = [failure, {"path": "$.value", "kind": "required"}]
         if case == "nested-unknown":
             value["policy"]["action"]["kind"] = "unknown"
-            expected = [failure, {"path": "$.policy.action.kind", "kind": "one_of"}]
+            expected = [failure, {"path": "$.value", "kind": "required"}, {"path": "$.policy.action.kind", "kind": "one_of"}]
         elif case == "nested-missing":
             value["policy"]["action"] = {}
             expected.append({"path": "$.policy.action.kind", "kind": "required"})
@@ -663,7 +681,7 @@ def test_oneof_exact_diagnostic_selection(case):
                 expected = [failure, {"path": "$.input", "kind": "required"}, {"path": "$.value", "kind": "required"}]
             else:
                 value["input"] = "unknown"
-                expected = [failure, {"path": "$.input", "kind": "one_of"}]
+                expected = [failure, {"path": "$.value", "kind": "required"}, {"path": "$.input", "kind": "one_of"}]
     elif case in {"valid", "multi-match"}:
         branch = {"type": "object", "properties": {"fn": {"const": "same"}}, "required": ["fn"]}
         branches = [branch, copy.deepcopy(branch) if case == "multi-match" else {"properties": {"fn": {"const": "other"}}}]
@@ -677,7 +695,12 @@ def test_oneof_exact_diagnostic_selection(case):
             branches.reverse()
         elif case in {"unknown-fn", "missing-fn", "empty"}:
             value = {"unknown-fn": {"fn": "unknown"}, "missing-fn": {"value": 1}, "empty": {}}[case]
-            expected = [failure]
+            common_errors = {
+                "unknown-fn": [{"path": "$.value", "kind": "required"}, {"path": "$.fn", "kind": "one_of"}],
+                "missing-fn": [{"path": "$.fn", "kind": "required"}],
+                "empty": [{"path": "$.fn", "kind": "required"}, {"path": "$.value", "kind": "required"}],
+            }
+            expected = [failure, *common_errors[case]]
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 

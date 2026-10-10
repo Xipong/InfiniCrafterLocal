@@ -23,7 +23,7 @@ TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
 def placed():
     document = _dual_use_placeable()
     document["runtimeProgram"]["calls"].append(dict(
-        id="placed_body", fn=FN, target="item",
+        id="placed_body", fn=FN,
         params={"placementCallId": "install_tile", **TRANSFORM}))
     return document
 
@@ -48,8 +48,8 @@ def test_explicit_capability_has_required_schema_and_exact_compiler_projection()
     assert len(receipts) == len(TRANSFORM) + 1
     assert {r["authoredPath"].rsplit(".",1)[-1] for r in receipts} == {"placementCallId", *TRANSFORM}
     association = next(r for r in receipts if r["authoredPath"].endswith(".placementCallId"))
-    assert any(p.endswith(".target") for p in association["authoredPaths"])
-    assert any(p.endswith(".usePolicy.action.placementCallId") for p in association["authoredPaths"])
+    assert any(p.endswith(".fn") for p in association["authoredPaths"])
+    assert any(p.endswith(".action.placementCallId") for p in association["authoredPaths"])
     assert json.dumps(document, sort_keys=True) == before
 
 @pytest.mark.parametrize("fault", ["unknown", "wrong-fn", "cross-item", "wall", "tile-and-wall", "unused", "duplicate"])
@@ -66,7 +66,8 @@ def test_bad_placement_association_rejects_without_rewriting(fault):
     elif fault == "duplicate": document["runtimeProgram"]["calls"].append({**copy.deepcopy(body), "id":"duplicate_body"})
     before = json.dumps(document, sort_keys=True)
     report = validate_runtime_program(document)
-    code = "duplicate_placed_body_reference" if fault == "duplicate" else "placed_body_placement_reference"
+    code = ("duplicate_placed_body_reference" if fault == "duplicate" else
+            "shape_additional_property" if fault == "cross-item" else "placed_body_placement_reference")
     assert code in {r["code"] for r in report["errors"]}, report
     with pytest.raises(ValueError): compile_runtime_program(document)
     assert json.dumps(document, sort_keys=True) == before
@@ -188,7 +189,6 @@ def test_frozen_repair_closes_only_causal_leaf_or_duplicate_index(fault, repair)
         assert permission["paths"] == [f"params.{leaf}"]
         incoming = copy.deepcopy(row)
         incoming["params"].update({leaf: "install_tile" if fault == "reference" else 1, "renderSizePx":512, "flipY":True})
-        incoming["target"] = "arbitrary"
         patch = {"note":"exact leaf", "callsUpsert":[incoming]}
         expected["runtimeProgram"]["calls"][-1]["params"][leaf] = incoming["params"][leaf]
     else:
@@ -203,6 +203,23 @@ def test_frozen_repair_closes_only_causal_leaf_or_duplicate_index(fault, repair)
     assert json.dumps(result, sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert validate_runtime_program(result)["ok"]
     assert validate_runtime_wire(compile_runtime_program(result))["ok"]
+
+
+def test_repair_rejects_forbidden_item_only_target_without_mutating_source():
+    document = placed()
+    row = document["runtimeProgram"]["calls"][-1]
+    row["params"]["imagePivotY"] = 2
+    before = copy.deepcopy(document)
+    report = validate_runtime_program(document)
+    scope = build_runtime_repair_scope(document, report["errors"])
+    incoming = copy.deepcopy(row)
+    incoming["params"]["imagePivotY"] = 1
+    incoming["target"] = "arbitrary"
+    filtered, audit = filter_repair_patch_scope(document, {"note": "forbidden key", "callsUpsert": [incoming]}, scope)
+    assert not audit["ok"]
+    assert any(error.get("path") == "$.callsUpsert[0].target" for error in audit["errors"])
+    assert document == before
+    assert not filtered.get("callsUpsert")
 
 
 def test_new_reference_requirements_and_bounds_are_in_canonical_audit():
@@ -324,7 +341,15 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_complete_legacy_compiled_bytes():
-    baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name:hashlib.sha256(json.dumps(compile_runtime_program(build_runtime_fixture(name)), ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
-    assert actual == baseline
+def test_absent_member_keeps_frozen_gameplay_payloads():
+    # Author notation changes report references and provenance receipts. The
+    # frozen engine payloads still prove that omitting this capability adds no
+    # placed representation or other gameplay change.
+    baseline = json.loads((Path(__file__).parent / "fixtures/author_notation_baseline.json").read_text())["compositions"]
+    for name, expected in baseline.items():
+        compiled = compile_runtime_program(build_runtime_fixture(name))
+        assert not any("placedBody" in binding["usePolicy"]["action"].get("placement", {})
+                       for binding in compiled["runtimeProgram"]["bindings"])
+        for section, digest in expected["wireSha256"].items():
+            actual = hashlib.sha256(json.dumps(compiled[section], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            assert actual == digest, (name, section)

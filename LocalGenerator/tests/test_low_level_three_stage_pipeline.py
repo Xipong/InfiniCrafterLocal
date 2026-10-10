@@ -12,6 +12,7 @@ import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program
+from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
 from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_hybrid_vfx_manifest, vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -28,17 +29,11 @@ def _binding_row(
     contact_damage: bool = False,
     placement_call_id: str = "",
 ) -> dict:
-    action = {"kind": action_name, "targetId": target_id}
-    if placement_call_id:
-        action["placementCallId"] = placement_call_id
     return {
         "id": binding_id,
-        "input": input_name,
-        "usePolicy": {
-            "action": action,
-            "stackCost": stack_cost,
-            "contactDamage": contact_damage,
-        },
+        **complete_transaction(input_name=input_name, action_name=action_name, target=target_id,
+                               stack_cost_value=stack_cost, contact_damage_value=contact_damage,
+                               placement_call=placement_call_id),
     }
 
 

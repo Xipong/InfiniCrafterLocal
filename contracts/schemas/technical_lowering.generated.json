@@ -158,11 +158,11 @@
       ],
       "technicalProjectionInputs": [
         "runtimeProgram.calls[].fn",
-        "runtimeProgram.calls[].target",
         "runtimeProgram.calls[].params.placementCallId",
-        "runtimeProgram.bindings[].usePolicy.action.kind",
-        "runtimeProgram.bindings[].usePolicy.action.targetId",
-        "runtimeProgram.bindings[].usePolicy.action.placementCallId"
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.placementCallId",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
       ]
     },
     {
@@ -849,7 +849,9 @@
       "id": "primary_entity_to_binding_role",
       "inputs": [
         "runtimeProgram.primaryEntityId",
-        "runtimeProgram.bindings[].usePolicy.action.targetId"
+        "runtimeProgram.bindings[]",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
       ],
       "outputs": [
         "runtimeProgram.bindings[].role"
@@ -860,6 +862,48 @@
         "binding target",
         "input",
         "action"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "equivalence": "flat explicit choices and exact input/action variant constants project to the unchanged wire policy; item-only actions reference the unique authored body",
+      "id": "author_binding_fields_to_wire",
+      "inputs": [
+        "runtimeProgram.bindings[]",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.kind",
+        "runtimeProgram.bindings[].usePolicy.action.targetId",
+        "runtimeProgram.bindings[].usePolicy.stackCost",
+        "runtimeProgram.bindings[].usePolicy.contactDamage"
+      ],
+      "preserves": [
+        "binding identity",
+        "input",
+        "action",
+        "target",
+        "stack cost",
+        "contact damage"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "equivalence": "a capability whose targetKinds is exactly item_body acts on the unique explicitly declared item body",
+      "id": "item_only_call_target_to_entity",
+      "inputs": [
+        "runtimeProgram.calls[].fn",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
+      ],
+      "outputs": [
+        "runtimeProgram.itemEntityId"
+      ],
+      "preserves": [
+        "capability identity",
+        "call identity",
+        "unique item body identity"
       ]
     },
     {

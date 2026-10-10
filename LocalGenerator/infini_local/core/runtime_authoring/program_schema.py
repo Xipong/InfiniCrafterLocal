@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping, NoReturn
 from infini_local.core.repair_merge import json_path_child
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.capability_registry import (
+    BINDING_ACTION_REGISTRY,
     ENTITY_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
@@ -54,20 +55,21 @@ def entity_schema() -> dict[str, Any]:
     }
 
 
-def _binding_action_schema(action_name: str) -> dict[str, Any]:
-    properties: dict[str, Any] = {
-        "kind": {"const": action_name},
-        "targetId": {
+def _binding_action_schema(input_name: str, action_name: str) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
+    if len(INPUT_KIND_REGISTRY[input_name].allowed_actions) != 1:
+        properties["kind"] = {"const": action_name}
+    action_spec = BINDING_ACTION_REGISTRY[action_name]
+    if action_spec.target_kinds != ("item_body",):
+        properties["targetId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
             "x-infini-reference": {
                 "namespace": "entity",
-                "targetKinds": list(ENTITY_KIND_REGISTRY),
+                "targetKinds": list(action_spec.target_kinds),
                 "allowSelf": True,
                 "graphEdge": False,
             },
-        },
-    }
-    required = ["kind", "targetId"]
+        }
     if action_name == "place_item":
         properties["placementCallId"] = {
             **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
@@ -78,42 +80,31 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
                 "graphEdge": False,
             },
         }
-        required.append("placementCallId")
     return {
         "type": "object",
         "additionalProperties": False,
         "properties": properties,
-        "required": required,
+        "required": list(properties),
     }
 
 
 def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]:
     active_use = input_name in {"primary_use", "alternate_use"}
-    may_contact = active_use and action_name != "place_item"
+    properties: dict[str, Any] = {
+        "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+        "input": {"const": input_name},
+    }
+    action = _binding_action_schema(input_name, action_name)
+    if action["properties"]:
+        properties["action"] = action
+    if active_use and action_name != "place_item":
+        properties["stackCost"] = {"type": "integer", "enum": [0, 1]}
+        properties["contactDamage"] = {"type": "boolean"}
     return {
         "type": "object",
         "additionalProperties": False,
-        "properties": {
-            "id": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "input": {"const": input_name},
-            "usePolicy": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "action": _binding_action_schema(action_name),
-                    "stackCost": (
-                        {"const": 1}
-                        if action_name == "place_item"
-                        else ({"type": "integer", "enum": [0, 1]} if active_use else {"const": 0})
-                    ),
-                    "contactDamage": (
-                        {"type": "boolean"} if may_contact else {"const": False}
-                    ),
-                },
-                "required": ["action", "stackCost", "contactDamage"],
-            },
-        },
-        "required": ["id", "input", "usePolicy"],
+        "properties": properties,
+        "required": list(properties),
     }
 
 
@@ -173,14 +164,17 @@ def realization_schema() -> dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "plannedIntent": _strict_string(min_len=1, max_len=280),
+            "plannedActionIndex": {
+                "anyOf": [{"type": "integer", "minimum": 0, "maximum": 7}, {"type": "null"}],
+                "description": "Explicit zero-based reference to the non-binding concept sketch, or null when no sketch action is referenced. Never match or regenerate intent prose.",
+            },
             "implementedBehavior": _strict_string(min_len=1, max_len=280),
             "runtimeRefs": copy.deepcopy(runtime_refs),
             "result": {"type": "string", "enum": ["aligned", "changed", "dropped", "added", "uncertain"]},
             "intentionality": {"type": "string", "enum": ["intentional", "accidental", "uncertain"]},
             "reason": _strict_string(min_len=1, max_len=400),
         },
-        "required": ["plannedIntent", "implementedBehavior", "runtimeRefs", "result", "intentionality", "reason"],
+        "required": ["plannedActionIndex", "implementedBehavior", "runtimeRefs", "result", "intentionality", "reason"],
     }
     mismatch = {
         "type": "object",
@@ -289,7 +283,24 @@ def author_item_response_schema() -> dict[str, Any]:
     }
 
 
-def author_item_repair_schema() -> dict[str, Any]:
+def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+    """Canonical patch shape, optionally restricted to request-visible calls.
+
+    None requests the complete local contract. An explicit empty set permits
+    only an empty callsUpsert array, never the full catalog. Scope permissions
+    and the frozen merge remain separate authorities after parsing.
+    """
+    variants = capability_provider_union()
+    if capability_names is not None:
+        requested = set(capability_names)
+        registered = {row["properties"]["fn"]["const"] for row in variants}
+        if requested - registered:
+            raise ValueError(f"Unknown Repair schema capabilities: {sorted(requested - registered)}")
+        variants = [row for row in variants if row["properties"]["fn"]["const"] in requested]
+    calls_schema = {"type": "array", "items": {"oneOf": variants}, "maxItems": 48} if variants else {
+        "type": "array", "maxItems": 0,
+        "items": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+    }
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -301,7 +312,7 @@ def author_item_repair_schema() -> dict[str, Any]:
             "bindingsUpsert": {"type": "array", "items": binding_schema(), "maxItems": 8},
             "bindingIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 8},
             "bindingIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 7}, "maxItems": 8},
-            "callsUpsert": {"type": "array", "items": {"oneOf": capability_provider_union()}, "maxItems": 48},
+            "callsUpsert": calls_schema,
             "callIdsDelete": {"type": "array", "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN), "maxItems": 48},
             "callIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 47}, "maxItems": 48},
             "callParamKeysDelete": {

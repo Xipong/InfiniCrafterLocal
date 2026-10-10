@@ -153,11 +153,29 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 if len(selected) == 1:
                     errors.extend(branch_results[selected[0]][: max(0, limit - len(errors))])
                 elif selected:
-                    # Relaxed value variants may share one registered identity.
-                    # Only errors common to every candidate have exact authority.
-                    errors.extend(row for row in branch_results[selected[0]]
-                                  if all(row in branch_results[index] for index in selected[1:]))
+                    if len(selected) < len(branches):
+                        # An exact outer selector can leave a smaller union
+                        # whose nested selector is not shared by all original
+                        # branches (e.g. active input -> explicit action.kind).
+                        # Narrow diagnostics only; acceptance was decided above.
+                        nested = strict_schema_errors(
+                            value, {"oneOf" if exclusive else "anyOf": [branches[index] for index in selected]},
+                            path=path, root=root_schema, limit=limit,
+                        )
+                        errors.extend(row for row in nested if row not in errors)
+                    else:
+                        # Relaxed value variants may share one registered identity.
+                        # Only errors common to every candidate have exact authority.
+                        errors.extend(row for row in branch_results[selected[0]]
+                                      if all(row in branch_results[index] for index in selected[1:]))
                 elif not selected:
+                    # A missing sole selector still has an exact required path.
+                    # Surface only structural errors true in every candidate;
+                    # never select a missing variant by its other field values.
+                    errors.extend(row for row in branch_results[0]
+                                  if row["kind"] in {"required", "additional_property", "type"}
+                                  and all(row in result for result in branch_results[1:])
+                                  and row not in errors)
                     present = {key for key in discriminators if _authored_const_value(value, key)[0]}
                     partial = [index for index, paths in enumerate(const_paths)
                                if present and all(_authored_const_matches(value, key, paths[key]) for key in present)]
@@ -166,7 +184,7 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                         # identical in every remaining branch, without guessing
                         # which nested variant the Author meant.
                         for row in branch_results[partial[0]]:
-                            if row["kind"] in {"required", "additional_property"} and all(row in branch_results[index] for index in partial[1:]):
+                            if row["kind"] in {"required", "additional_property", "type"} and all(row in branch_results[index] for index in partial[1:]):
                                 errors.append(row)
                                 if len(errors) >= limit:
                                     break
@@ -176,7 +194,7 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                         # without advertising any variant's const as expected.
                         for key in discriminators:
                             other_keys = present - {key}
-                            if not other_keys or key not in present:
+                            if key not in present:
                                 continue
                             candidates = [paths for paths in const_paths
                                           if all(_authored_const_matches(value, other, paths[other])
@@ -188,7 +206,16 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                                     error_path = json_path_child(error_path, part)
                                 add("one_of" if exclusive else "any_of", error_path)
                                 break
-        return errors[:limit]
+        # A guaranteed outer error can also occur in the selected sub-union.
+        # Keep one exact diagnostic rather than consuming the bounded report
+        # budget twice for the same invalid leaf.
+        unique_errors: list[dict[str, Any]] = []
+        for row in errors:
+            if row not in unique_errors:
+                unique_errors.append(row)
+            if len(unique_errors) >= limit:
+                break
+        return unique_errors[:limit]
 
     expected_type = schema.get("type")
     if isinstance(expected_type, str) and not _type_matches(value, expected_type):

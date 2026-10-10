@@ -38,6 +38,10 @@ def deterministic_low_level_plan(
             "parentAContribution": f"{parent_a} supplies the main held body.",
             "parentBContribution": f"{parent_b} supplies the emitted fragments.",
             "playerExperience": "A direct short-range strike followed by a small directional fragment burst.",
+            "plannedPlayerActions": [
+                {"input": "primary_use", "intent": "Primary use performs a bounded owner-attached strike."},
+                {"input": "passive_or_event", "intent": "A hit emits three child projectiles."},
+            ],
         },
         "realization": {
             "description": f"Literal {parent_a} body carrying visible {parent_b} fragments; the held body performs a bounded forward/retract strike.",
@@ -48,7 +52,7 @@ def deterministic_low_level_plan(
                     "summary": "The deterministic draft's single use action and fragment burst are represented by explicit bindings and calls.",
                     "actionChecks": [
                         {
-                            "plannedIntent": "Primary use performs a bounded owner-attached strike.",
+                            "plannedActionIndex": 0,
                             "implementedBehavior": "The primary_use binding spawns the held body with an explicit forward/retract motion component.",
                             "runtimeRefs": ["bind_primary", "call_move_held"],
                             "result": "aligned",
@@ -56,7 +60,7 @@ def deterministic_low_level_plan(
                             "reason": "The deterministic fixture authors the binding and motion call directly.",
                         },
                         {
-                            "plannedIntent": "A hit emits three child projectiles.",
+                            "plannedActionIndex": 1,
                             "implementedBehavior": "An on_hit event call spawns three explicit child shard projectiles.",
                             "runtimeRefs": ["call_spawn_shards", "call_spawn_child"],
                             "result": "aligned",
@@ -100,20 +104,18 @@ def deterministic_low_level_plan(
                 {
                     "id": "bind_primary",
                     "input": "primary_use",
-                    "usePolicy": {
-                        "action": {"kind": "spawn_entity", "targetId": "held_body"},
-                        "stackCost": 0,
-                        "contactDamage": False,
-                    },
+                    "action": {"kind": "spawn_entity", "targetId": "held_body"},
+                    "stackCost": 0,
+                    "contactDamage": False,
                 },
             ],
             "calls": [
                 {
-                    "id": "call_item_stats", "fn": "configure_item_stats", "target": "item",
+                    "id": "call_item_stats", "fn": "configure_item_stats",
                     "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "useTimeTicks": 24, "useAnimationTicks": 24, "manaCost": 0, "rarity": 2, "valueCopper": 15000, "maxStack": 1, "craftYield": 1, "widthPx": 40, "heightPx": 40, "scale": 1.0},
                 },
                 {
-                    "id": "call_item_use", "fn": "configure_item_use", "target": "item",
+                    "id": "call_item_use", "fn": "configure_item_use",
                     "params": {"useStyle": "shoot", "autoReuse": True, "useTurn": True, "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "two_handed", "heldSpriteVisibilityHint": "immediate"},
                 },
                 {

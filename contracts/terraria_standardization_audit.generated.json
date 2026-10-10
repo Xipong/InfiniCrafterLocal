@@ -254,7 +254,7 @@
     {
       "name": "consumption_is_binding_scoped",
       "ok": true,
-      "detail": "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner"
+      "detail": "stack cost must have one flat Author binding owner, projected into wire usePolicy with no capability/global shadow owner"
     },
     {
       "name": "ammo_item_is_explicit",

@@ -98,28 +98,30 @@ def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypat
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_binding_index_retains_current_nested_policy_in_serialized_request(monkeypatch, format_mode):
+def test_binding_index_retains_current_flat_transaction_in_serialized_request(monkeypatch, format_mode):
     item = _broken_held_and_deployed()
     _, dossier = _capture_request(monkeypatch, item, format_mode)
     assert dossier["immutableProgramIndex"]["bindings"] == item["runtimeProgram"]["bindings"]
-    assert all(row["usePolicy"]["action"]["targetId"] for row in dossier["immutableProgramIndex"]["bindings"])
+    assert all(row["action"]["targetId"] for row in dossier["immutableProgramIndex"]["bindings"])
 
 
-@pytest.mark.parametrize("policy", ["absent", None, {}, {"action": {"kind": None, "targetId": 0}}])
-def test_binding_index_never_falls_back_to_legacy_fields_or_materializes_absences(policy):
+@pytest.mark.parametrize("source_action", ["absent", None, {}, {"kind": None, "targetId": 0}])
+def test_binding_index_preserves_native_values_and_absences(source_action):
     from infini_local.core.runtime_authoring import runtime_repair_fragments
 
     item = _broken_held_and_deployed()
     binding = item["runtimeProgram"]["bindings"][0]
-    binding.update(action="legacy_action_must_not_win", target="legacy_target_must_not_win")
-    if policy == "absent":
-        binding.pop("usePolicy")
+    binding["usePolicy"] = {"action": {"kind": "legacy_action_must_not_win", "targetId": "legacy_target"}}
+    if source_action == "absent":
+        binding.pop("action")
     else:
-        binding["usePolicy"] = copy.deepcopy(policy)
+        binding["action"] = copy.deepcopy(source_action)
+    binding.pop("stackCost")
     before = copy.deepcopy(item)
     index = runtime_repair_fragments(item, {})["immutableIndex"]["bindings"]
-    assert index[0] == {key: value for key, value in binding.items() if key in {"id", "input", "usePolicy"}}
-    index[0]["usePolicy"] = {"action": "mutation must stay in projection"}
+    assert index[0] == {key: value for key, value in binding.items() if key in {"id", "input", "action", "stackCost", "contactDamage"}}
+    assert "usePolicy" not in index[0] and "stackCost" not in index[0]
+    index[0]["action"] = {"kind": "mutation must stay in projection"}
     assert item == before
 
 
@@ -148,7 +150,7 @@ def test_readonly_projection_preserves_exact_values_absences_and_is_detached(mon
     projected = author.build_gameplay_repair_dossier(item, {}, {}, {}, {}, failure_report=validate_runtime_program(item))
     projected["acceptedItemContext"]["concept"]["plannedPlayerActions"][0]["intent"] = "only in detached view"
     _call(projected["acceptedItemContext"], "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
-    projected["immutableProgramIndex"]["bindings"][0]["usePolicy"]["action"]["targetId"] = "only in detached index"
+    projected["immutableProgramIndex"]["bindings"][0]["action"]["targetId"] = "only in detached index"
     assert item == before
 
 
@@ -178,7 +180,7 @@ def _hostile_patch(item):
     stats = copy.deepcopy(_call(item, "item_stats"))
     stats["params"].update(damage=1999, manaCost=77, knockback=17.0)
     binding = copy.deepcopy(item["runtimeProgram"]["bindings"][0])
-    binding["usePolicy"]["stackCost"] = 1
+    binding["stackCost"] = 1
     concept = copy.deepcopy(item["concept"])
     concept["coreMechanic"] = "HOSTILE: unrelated concept rewrite"
     replacement = copy.deepcopy(item["realization"])
@@ -191,7 +193,7 @@ def _hostile_patch(item):
     }
 
 
-def _repair_with_response(monkeypatch, item, patch, format_mode):
+def _repair_with_response(monkeypatch, item, patch, format_mode, *, out_of_scope_response=False):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
@@ -203,7 +205,13 @@ def _repair_with_response(monkeypatch, item, patch, format_mode):
         payload = copy.deepcopy(patch)
         if format_mode == "json_schema":
             payload = _encode_nullable_fixture(payload, author_item_repair_response_schema())
-            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
+            if out_of_scope_response:
+                # Deliberately simulate a provider violating the request grammar.
+                # Even then, a useful allowed leaf survives frozen extra rewrites.
+                assert not validator.is_valid(payload)
+            else:
+                validator.validate(payload)
         return {"choices": [{"message": {"content": json.dumps(payload)}}],
                 "_debug": {"responseFormatType": format_mode}}
 
@@ -225,7 +233,7 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     assert scope["fieldPermissions"]["calls"] == [
         {"id": "held_lantern_pike_life", "paths": ["params.lifetimeTicks"]}]
     incoming = _hostile_patch(item)
-    repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode)
+    repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode, out_of_scope_response=True)
     dossier = json.loads(request["messages"][1]["content"])
     assert dossier["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert dossier["repairScope"] == scope

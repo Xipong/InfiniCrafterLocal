@@ -156,9 +156,7 @@ def test_captured_gameplay_repair_replay(section, case):
         expected_paths = replay.get("expectedMutableBindingPaths")
         if expected_paths is not None:
             actual = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["bindings"]}
-            projected = {identity: sorted("usePolicy.action.kind" if path == "action" else path for path in paths) for identity, paths in expected_paths.items()}
-            assert actual == projected
-            assert all("action" not in paths for paths in actual.values())
+            assert actual == {identity: sorted(paths) for identity, paths in expected_paths.items()}
             assert scope["retarget"]["bindingTargetIds"] == replay["expectedRetargetBindingTargetIds"]
         source_code = replay.get("createAllowedFnsFromErrorCode")
         if source_code is not None:

@@ -17,6 +17,7 @@ from infini_local.core.runtime_authoring import (
     validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.capability_registry import ParamSpec
+from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
 
 
 _ITEM_BASE_STATS = {
@@ -95,7 +96,13 @@ def _params(fn: str) -> dict[str, Any]:
 
 
 def _call(call_id: str, fn: str, target: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"id": call_id, "fn": fn, "target": target, "params": deepcopy(_params(fn) if params is None else params)}
+    cap = CAPABILITY_REGISTRY[fn]
+    row: dict[str, Any] = {"id": call_id, "fn": fn}
+    if cap.target_kinds != ("item_body",):
+        row["target"] = target
+    if cap.params:
+        row["params"] = deepcopy(_params(fn) if params is None else params)
+    return row
 
 
 def _binding(
@@ -107,17 +114,16 @@ def _binding(
     placement_call_id: str = "",
     contact_damage: bool = False,
 ) -> dict[str, Any]:
-    action: dict[str, Any] = {"kind": action_kind, "targetId": target}
-    if placement_call_id:
-        action["placementCallId"] = placement_call_id
     return {
         "id": binding_id,
-        "input": input_kind,
-        "usePolicy": {
-            "action": action,
-            "stackCost": 1 if action_kind == "place_item" else 0,
-            "contactDamage": contact_damage,
-        },
+        **complete_transaction(
+            input_name=input_kind,
+            action_name=action_kind,
+            target=target,
+            stack_cost_value=1 if action_kind == "place_item" else 0,
+            contact_damage_value=contact_damage,
+            placement_call=placement_call_id,
+        ),
     }
 
 
@@ -249,7 +255,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                     "verdict": "aligned",
                     "summary": "The witness draft selects the same public capability emitted by the program.",
                     "actionChecks": [{
-                        "plannedIntent": f"Execute {fn} through its public typed contract.",
+                        "plannedActionIndex": 0,
                         "implementedBehavior": f"The runtime program contains the {fn} capability call.",
                         "runtimeRefs": ["witness_call"],
                         "result": "aligned",

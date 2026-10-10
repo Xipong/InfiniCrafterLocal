@@ -317,8 +317,10 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     program = author.runtime_program_author_schema()
     binding_variants = program["properties"]["bindings"]["items"]["oneOf"]
     bindings = set().union(*(row["properties"] for row in binding_variants))
-    policy = set().union(*(row["properties"]["usePolicy"]["properties"] for row in binding_variants))
-    actions = set().union(*(row["properties"]["usePolicy"]["properties"]["action"]["properties"] for row in binding_variants))
+    # Author owns these fields directly. The compiler's mandatory projection
+    # wraps the same transaction in the unchanged wire UsePolicy DTO.
+    policy = bindings & {"action", "stackCost", "contactDamage"}
+    actions = set().union(*(row["properties"].get("action", {}).get("properties", {}) for row in binding_variants))
     prefixes = ("runtimeProgram.entities[].", "runtimeProgram.bindings[].usePolicy.action.placement.")
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     entity_components = {path[len(prefixes[0]):].split(".", 1)[0].replace("[]", "")
@@ -338,7 +340,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeProgramSpec": pascal(program["properties"]) | {
             "ItemEntityId", "PrimaryOwner", "Limits", "ItemUse", "ItemContact"},
         "RuntimeLimitsSpec": pascal(wire._LIMIT_KEYS),  # compiler-owned fixed safety budgets
-        "RuntimeBindingSpec": pascal(bindings) | {"Role"},
+        "RuntimeBindingSpec": pascal(bindings - policy) | {"Role", "UsePolicy"},
         "RuntimeBindingUsePolicySpec": pascal(policy),
         "RuntimeBindingActionSpec": (pascal(actions) - {"PlacementCallId"}) | {"Placement"},
         "RuntimePlacementSpec": pascal(placement_fields),

@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring import (
     apply_repair_patch,
     build_runtime_repair_scope,
     filter_repair_patch_scope,
+    runtime_repair_fragments,
     validate_runtime_program,
 )
 from infini_local.pipelines.llm_authoring_pipeline import (
@@ -28,6 +29,7 @@ from infini_local.pipelines.llm_authoring_pipeline import (
     build_initial_author_request,
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.qa.capability_witnesses import build_capability_witness
 
 SCHEMA = "infini.targeted-repair-audit.v1"
 
@@ -156,6 +158,62 @@ def _frozen_merge_probe() -> dict[str, Any]:
     }
 
 
+def _native_source_probe() -> dict[str, Any]:
+    source = build_runtime_fixture("workbench_blade")
+    program = source["runtimeProgram"]
+    program["primaryEntityId"] = "workbench_blade"
+    item_body = next(row for row in program["entities"] if row["kind"] == "item_body")
+    frozen_calls = copy.deepcopy(program["calls"])
+    frozen_bindings = copy.deepcopy(program["bindings"])
+    program["entities"].remove(item_body)
+    report = validate_runtime_program(source)
+    scope = build_runtime_repair_scope(source, report["errors"])
+    filtered, audit = filter_repair_patch_scope(
+        source,
+        {"note": "declare the missing item body", "entitiesUpsert": [item_body]},
+        scope,
+    )
+    repaired = apply_repair_patch(source, filtered)
+    missing_body_closed = bool(audit.get("ok") and validate_runtime_program(repaired).get("ok"))
+    source_omissions_preserved = (
+        repaired["runtimeProgram"]["calls"] == frozen_calls
+        and repaired["runtimeProgram"]["bindings"] == frozen_bindings
+        and not filtered["callsUpsert"]
+        and not filtered["bindingsUpsert"]
+    )
+    index = runtime_repair_fragments(repaired, {})["immutableIndex"]["calls"]
+    index_preserves_absence = all(
+        ("target" in projected) == ("target" in authored)
+        for projected, authored in zip(index, repaired["runtimeProgram"]["calls"])
+    )
+
+    no_arg_source = build_capability_witness("move_straight")
+    no_arg_call = next(row for row in no_arg_source["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
+    no_arg_replacement = copy.deepcopy(no_arg_call)
+    del no_arg_call["target"]
+    no_arg_report = validate_runtime_program(no_arg_source)
+    no_arg_scope = build_runtime_repair_scope(no_arg_source, no_arg_report["errors"])
+    no_arg_filtered, no_arg_audit = filter_repair_patch_scope(
+        no_arg_source,
+        {"note": "restore the explicit projectile target", "callsUpsert": [no_arg_replacement]},
+        no_arg_scope,
+    )
+    no_arg_repaired = apply_repair_patch(no_arg_source, no_arg_filtered)
+    no_arg_omission_preserved = bool(
+        no_arg_audit.get("ok")
+        and validate_runtime_program(no_arg_repaired).get("ok")
+        and no_arg_filtered["callsUpsert"] == [no_arg_replacement]
+        and "params" not in no_arg_replacement
+    )
+    results = {
+        "missingItemDeclarationCloses": missing_body_closed,
+        "acceptedCallsAndBindingsPreserved": source_omissions_preserved,
+        "immutableIndexPreservesTargetAbsence": index_preserves_absence,
+        "noArgumentRepairPreservesParamsAbsence": no_arg_omission_preserved,
+    }
+    return {**results, "ok": all(results.values())}
+
+
 def _emitted_validator_codes() -> set[str]:
     path = ROOT / "LocalGenerator/infini_local/core/runtime_authoring/validator.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -238,6 +296,9 @@ def render() -> dict[str, Any]:
     frozen_merge = _frozen_merge_probe()
     if not frozen_merge["ok"]:
         errors.append("frozen merge probe failed")
+    native_source = _native_source_probe()
+    if not native_source["ok"]:
+        errors.append("native Author source Repair boundary probe failed")
     frozen_callsites = _frozen_callsite_audit()
     if not frozen_callsites["ok"]:
         errors.append("one or more stage Repair callsites allow arbitrary additions")
@@ -249,6 +310,7 @@ def render() -> dict[str, Any]:
         "fullCapabilityCatalogCount": full_count,
         "policyCoverage": policy_coverage,
         "frozenMerge": frozen_merge,
+        "nativeSourceBoundary": native_source,
         "frozenCallsites": frozen_callsites,
         "cases": cases,
         "errors": errors,
@@ -285,6 +347,7 @@ def main() -> int:
         print(
             f"  policy={report['policyCoverage']['policyCodes']}/{report['policyCoverage']['declaredCodes']}; "
             f"frozenMerge={report['frozenMerge']['ok']}; "
+            f"nativeSource={report['nativeSourceBoundary']['ok']}; "
             f"frozenCallsites={report['frozenCallsites']['explicitFalse']}/{report['frozenCallsites']['calls']}"
         )
         for error in report["errors"]:

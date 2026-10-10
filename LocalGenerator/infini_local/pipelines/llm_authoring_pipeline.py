@@ -35,6 +35,7 @@ from infini_local.core.runtime_authoring.program_schema import (
     assert_bounded_author_input,
     strict_repair_structure_report,
 )
+from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
 )
@@ -44,6 +45,7 @@ from infini_local.pipelines.author_item_contract import (
     author_item_provider_response_schema,
     author_item_prompt_shape_card,
     author_item_repair_prompt_shape_card,
+    author_item_repair_response_schema,
     provider_nullable_transport_rule,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
@@ -186,6 +188,12 @@ def _repair_malformed_author_json(
 ) -> tuple[dict[str, Any], str]:
     """Spend the one Gameplay Repair call on syntax-only Author recovery."""
 
+    original_context = json.loads(original_recipe_context)
+    # Keep exact recipe facts, not a second copy of the full Author instructions.
+    # The syntax rules, allowed params and full output shape remain below; the
+    # equality check after decoding still forbids adding or changing gameplay.
+    original_context = {key: value for key, value in original_context.items()
+                        if key not in _AUTHOR_CACHE_PREFIX_KEYS}
     repair_context = {
         "schema": "infini.gameplay-author-format-repair.v1",
         "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
@@ -202,7 +210,7 @@ def _repair_malformed_author_json(
         "requiredJsonShape": author_item_prompt_shape_card(),
         "parseError": f"{type(parse_error).__name__}: {parse_error}",
         "malformedRawText": malformed_raw_text,
-        "originalRecipeContext": json.loads(original_recipe_context),
+        "originalRecipeContext": original_context,
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
@@ -429,7 +437,7 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from readOnlySourceFragments.brokenFragments, changing only permitted fields; never omit unchanged required fields.",
+            "Every upsert entry must be a complete schema-valid node in the canonical Author grammar. For callsUpsert copy id, fn and every variant-required target/params field from readOnlySourceFragments.brokenFragments, changing only permitted fields. Omit item-only target and zero-parameter params keys; never omit unchanged required fields.",
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "For existing nodes, omission means no change, not reset to a card default. Preserve accepted absences too; an optional default describes the full Author object after frozen-first merge, never permission to add or delete a field. New nodes must satisfy the full capability requirements.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
@@ -509,12 +517,14 @@ def repair_author_item_after_failure(
             "Gameplay validation exposed a registry/runtime defect that LLM Repair must not hide: "
             + bounded_json_dumps(scope["nonRepairableErrors"], max_chars=5000)
         )
+    local_repair_schema = author_item_repair_response_schema(
+        capability_names=runtime_repair_schema_capabilities(scope))
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "
         f"{PRIMARY_REPAIR_SYSTEM_RULE} For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
         "Every target or entity-reference id that points to an existing entity must be copied from immutableProgramIndex.entities[*].id; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call target may instead use an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and never invent any other target. "
-        "For every bindingId in repairScope.bindingAlternatives that you update, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. When a repairRequirement sets mustChooseExactlyOne without mustCreateExactlyOne, emit exactly one complete allowed binding transaction: an existing id must be listed by that exact row's allowedExistingBindingIds and bindingAlternatives; a new id must be permitted by create.bindings. Global mutability does not let one blocker satisfy another; never update all candidate bindings. "
+        "For every bindingId in repairScope.bindingAlternatives that you update, copy one complete native binding transaction verbatim into bindingsUpsert, preserving exactly the fields shown and the variant's omitted constants; never cross-product fields from different alternatives. When a repairRequirement sets mustChooseExactlyOne without mustCreateExactlyOne, emit exactly one complete allowed binding transaction: an existing id must be listed by that exact row's allowedExistingBindingIds and bindingAlternatives; a new id must be permitted by create.bindings. Global mutability does not let one blocker satisfy another; never update all candidate bindings. "
         "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
@@ -533,7 +543,7 @@ def repair_author_item_after_failure(
         "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_repair",
-            schema=author_item_provider_repair_response_schema,
+            schema=lambda: author_item_provider_repair_response_schema(local_schema=local_repair_schema),
             strict=True,
             auto_preference="json_schema",
         ),
@@ -567,7 +577,8 @@ def repair_author_item_after_failure(
         )
         parsed = parse_first_valid_llm_json(content)
         patch = project_provider_nullable_optionals_to_local(
-            parsed, response_format=_effective_response_format(request, raw),
+            parsed, local_schema=local_repair_schema,
+            response_format=_effective_response_format(request, raw),
         )
         if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
             raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")

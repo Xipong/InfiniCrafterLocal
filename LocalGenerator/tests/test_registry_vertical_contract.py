@@ -32,8 +32,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     runtime_authoring_prompt_field_guide,
     EventDependencyAlternative,
     event_dependency_alternatives,
-    event_alternative_is_present,
 )
+from infini_local.core.runtime_authoring.event_producer_validation import event_alternative_is_present
 from infini_local.core.runtime_authoring.program_schema import (
     runtime_program_author_schema,
     PRIMARY_ENTITY_FIELD,
@@ -302,11 +302,9 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
         bindings=[
             {
                 "input": "primary_use",
-                "usePolicy": {
-                    "action": {"kind": "use_item_body", "targetId": "item"},
-                    "stackCost": 0,
-                    "contactDamage": True,
-                },
+                "action": {"kind": "use_item_body"},
+                "stackCost": 0,
+                "contactDamage": True,
             }
         ],
     )
@@ -317,11 +315,7 @@ def test_event_dependency_is_a_typed_registry_projection() -> None:
         bindings=[
             {
                 "input": "primary_use",
-                "usePolicy": {
-                    "action": {"kind": "place_item", "targetId": "item", "placementCallId": "place"},
-                    "stackCost": 1,
-                    "contactDamage": False,
-                },
+                "action": {"kind": "place_item", "placementCallId": "place"},
             }
         ],
     )

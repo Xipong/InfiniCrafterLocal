@@ -1,0 +1,90 @@
+{
+  "schema": "infini.canonical-author-output-measurements.v1",
+  "unit": "Unicode characters in compact JSON; not tokens, latency or billed usage",
+  "sourceAuthorHead": "9013256117587d0d30ae271a1fbe6b6cb8242367",
+  "foundationHead": "f5012379f3c814d1b22e0a69f2a676adb5272fae",
+  "scope": "native canonical Author v5; flat calls, flat binding variants, exact item-only targets, zero-argument calls and explicit report indices",
+  "rows": [
+    {
+      "fixture": "workbench_blade",
+      "beforeChars": 5053,
+      "afterChars": 4942,
+      "savingChars": 111,
+      "strictProviderBeforeChars": 5072,
+      "strictProviderAfterChars": 4961,
+      "strictProviderSavingChars": 111,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "umbrella_grenade",
+      "beforeChars": 5789,
+      "afterChars": 5655,
+      "savingChars": 134,
+      "strictProviderBeforeChars": 5807,
+      "strictProviderAfterChars": 5673,
+      "strictProviderSavingChars": 134,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "door_on_chain",
+      "beforeChars": 3738,
+      "afterChars": 3655,
+      "savingChars": 83,
+      "strictProviderBeforeChars": 3756,
+      "strictProviderAfterChars": 3673,
+      "strictProviderSavingChars": 83,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "returning_potion",
+      "beforeChars": 3917,
+      "afterChars": 3834,
+      "savingChars": 83,
+      "strictProviderBeforeChars": 3953,
+      "strictProviderAfterChars": 3870,
+      "strictProviderSavingChars": 83,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "fishing_platform_tool",
+      "beforeChars": 3876,
+      "afterChars": 3623,
+      "savingChars": 253,
+      "strictProviderBeforeChars": 3876,
+      "strictProviderAfterChars": 3623,
+      "strictProviderSavingChars": 253,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "shield_and_disc",
+      "beforeChars": 5539,
+      "afterChars": 5405,
+      "savingChars": 134,
+      "strictProviderBeforeChars": 5539,
+      "strictProviderAfterChars": 5405,
+      "strictProviderSavingChars": 134,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "held_and_deployed",
+      "beforeChars": 6954,
+      "afterChars": 6820,
+      "savingChars": 134,
+      "strictProviderBeforeChars": 6954,
+      "strictProviderAfterChars": 6820,
+      "strictProviderSavingChars": 134,
+      "gameplayWireMatchesBaseline": true
+    },
+    {
+      "fixture": "equipment_tool_combat",
+      "beforeChars": 5090,
+      "afterChars": 4665,
+      "savingChars": 425,
+      "strictProviderBeforeChars": 5632,
+      "strictProviderAfterChars": 5207,
+      "strictProviderSavingChars": 425,
+      "gameplayWireMatchesBaseline": true
+    }
+  ],
+  "liveLlmQuality": "notRun"
+}

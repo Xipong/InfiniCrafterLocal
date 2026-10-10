@@ -29,7 +29,7 @@
 - capabilities: **54**; parameters: **241**; numeric: **189/189 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
 - typed entity references: **2**; requirements: **30**; binding dependency edges: **8**;
-- exact wire paths: **324**; global technical lowerer outputs: **149**;
+- exact wire paths: **324**; global technical lowerer outputs: **154**;
 - Python↔C# range parity rows: **86**; vertical witnesses: **54**;
 - errors: **0**; warnings: **0**.
 

@@ -23,14 +23,12 @@
             {
               "id": "primary_chain",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "chained_door"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "chained_door"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -51,8 +49,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -68,8 +65,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -159,7 +155,7 @@
             }
           ],
           "primaryEntityId": "chained_door",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Swings a literal reinforced door from a bounded tether.",
         "realization": {
@@ -171,14 +167,14 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_chain"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 }
               ]
             },
@@ -436,39 +432,23 @@
             {
               "id": "primary_tool",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "use_item_body",
-                  "targetId": "item"
-                },
-                "contactDamage": true,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "use_item_body"
+              },
+              "stackCost": 0,
+              "contactDamage": true
             },
             {
               "id": "alternate_torch",
               "input": "alternate_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "place_item",
-                  "placementCallId": "place_torch",
-                  "targetId": "item"
-                },
-                "contactDamage": false,
-                "stackCost": 1
+              "action": {
+                "kind": "place_item",
+                "placementCallId": "place_torch"
               }
             },
             {
               "id": "passive_harness",
-              "input": "equipped",
-              "usePolicy": {
-                "action": {
-                  "kind": "equip_passive",
-                  "targetId": "item"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "input": "equipped"
             }
           ],
           "calls": [
@@ -489,8 +469,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -506,8 +485,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_contact_hitbox",
@@ -515,8 +493,7 @@
               "params": {
                 "contactForgivenessPx": 4,
                 "hitboxScale": 1.0
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_accessory",
@@ -528,8 +505,7 @@
                 "lightColor": "yellow",
                 "lightStrength": 0.35,
                 "moveSpeedBonusPercent": 8
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "add_equipment_damage_bonus",
@@ -538,8 +514,7 @@
                 "bonusPercent": 5,
                 "damageClass": "generic",
                 "phase": "equipped"
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_tool",
@@ -549,8 +524,7 @@
                 "hammerPower": 0,
                 "miningSpeedScale": 0.85,
                 "pickPower": 55
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_placeable",
@@ -559,8 +533,7 @@
                 "placeStyle": 0,
                 "tileId": 4,
                 "wallId": -1
-              },
-              "target": "item"
+              }
             }
           ],
           "entities": [
@@ -570,7 +543,7 @@
             }
           ],
           "primaryEntityId": "item",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Acts as an accessory, body-owned mining tool, contact weapon and placeable light.",
         "realization": {
@@ -582,34 +555,34 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned use_item_body behavior.",
                   "implementedBehavior": "The executable program implements use_item_body.",
                   "runtimeRefs": [
                     "primary_tool"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 },
                 {
-                  "plannedIntent": "Execute the planned place_item behavior.",
                   "implementedBehavior": "The executable program implements place_item.",
                   "runtimeRefs": [
                     "alternate_torch"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 1
                 },
                 {
-                  "plannedIntent": "Execute the planned equip_passive behavior.",
                   "implementedBehavior": "The executable program implements equip_passive.",
                   "runtimeRefs": [
                     "passive_harness"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 2
                 }
               ]
             },
@@ -913,26 +886,18 @@
             {
               "id": "primary_tool",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "use_item_body",
-                  "targetId": "item"
-                },
-                "contactDamage": true,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "use_item_body"
+              },
+              "stackCost": 0,
+              "contactDamage": true
             },
             {
               "id": "alternate_place",
               "input": "alternate_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "place_item",
-                  "placementCallId": "platform_result",
-                  "targetId": "item"
-                },
-                "contactDamage": false,
-                "stackCost": 1
+              "action": {
+                "kind": "place_item",
+                "placementCallId": "platform_result"
               }
             }
           ],
@@ -954,8 +919,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -971,8 +935,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_contact_hitbox",
@@ -980,8 +943,7 @@
               "params": {
                 "contactForgivenessPx": 4,
                 "hitboxScale": 1.0
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_tool",
@@ -991,8 +953,7 @@
                 "hammerPower": 20,
                 "miningSpeedScale": 0.9,
                 "pickPower": 35
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_placeable",
@@ -1001,8 +962,7 @@
                 "placeStyle": 0,
                 "tileId": 19,
                 "wallId": -1
-              },
-              "target": "item"
+              }
             }
           ],
           "entities": [
@@ -1012,7 +972,7 @@
             }
           ],
           "primaryEntityId": "item",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Functions as a tool and places a concrete temporary-looking platform tile.",
         "realization": {
@@ -1024,24 +984,24 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned use_item_body behavior.",
                   "implementedBehavior": "The executable program implements use_item_body.",
                   "runtimeRefs": [
                     "primary_tool"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 },
                 {
-                  "plannedIntent": "Execute the planned place_item behavior.",
                   "implementedBehavior": "The executable program implements place_item.",
                   "runtimeRefs": [
                     "alternate_place"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 1
                 }
               ]
             },
@@ -1291,26 +1251,22 @@
             {
               "id": "primary_pike",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "held_lantern_pike"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "held_lantern_pike"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             },
             {
               "id": "alternate_deploy",
               "input": "alternate_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "deployed_lantern"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "deployed_lantern"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -1331,8 +1287,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -1348,8 +1303,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -1580,7 +1534,7 @@
             }
           ],
           "primaryEntityId": "held_lantern_pike",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Primary use drives a held lighted body; alternate use deploys an independent targeter.",
         "realization": {
@@ -1592,24 +1546,24 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_pike"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 },
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "alternate_deploy"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 1
                 }
               ]
             },
@@ -2001,14 +1955,12 @@
             {
               "id": "primary_tonic",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "tonic_flask"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "tonic_flask"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -2029,8 +1981,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -2046,8 +1997,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -2147,7 +2097,7 @@
             }
           ],
           "primaryEntityId": "tonic_flask",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Throws a potion flask that returns and heals its owner on a hit.",
         "realization": {
@@ -2159,14 +2109,14 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_tonic"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 }
               ]
             },
@@ -2429,26 +2379,22 @@
             {
               "id": "primary_shield",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "shield_body"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "shield_body"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             },
             {
               "id": "alternate_disc",
               "input": "alternate_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "shield_disc"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "shield_disc"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -2469,8 +2415,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -2486,8 +2431,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -2637,7 +2581,7 @@
             }
           ],
           "primaryEntityId": "shield_body",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Primary use holds a contact shield; alternate use launches a returning disc.",
         "realization": {
@@ -2649,24 +2593,24 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_shield"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 },
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "alternate_disc"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 1
                 }
               ]
             },
@@ -3005,26 +2949,22 @@
             {
               "id": "primary_guard",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "umbrella_guard"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "umbrella_guard"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             },
             {
               "id": "alternate_grenade",
               "input": "alternate_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "grenade_weight"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "grenade_weight"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -3045,8 +2985,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -3062,8 +3001,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -3222,7 +3160,7 @@
             }
           ],
           "primaryEntityId": "umbrella_guard",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.",
         "realization": {
@@ -3234,24 +3172,24 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_guard"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 },
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "alternate_grenade"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 1
                 }
               ]
             },
@@ -3595,14 +3533,12 @@
             {
               "id": "primary_workbench",
               "input": "primary_use",
-              "usePolicy": {
-                "action": {
-                  "kind": "spawn_entity",
-                  "targetId": "workbench_blade"
-                },
-                "contactDamage": false,
-                "stackCost": 0
-              }
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "workbench_blade"
+              },
+              "stackCost": 0,
+              "contactDamage": false
             }
           ],
           "calls": [
@@ -3623,8 +3559,7 @@
                 "useTimeTicks": 24,
                 "valueCopper": 7500,
                 "widthPx": 32
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_use",
@@ -3640,8 +3575,7 @@
                 "heldSpriteVisibilityHint": "immediate",
                 "useStyle": "shoot",
                 "useTurn": true
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_item_contact_hitbox",
@@ -3649,8 +3583,7 @@
               "params": {
                 "contactForgivenessPx": 4,
                 "hitboxScale": 1.0
-              },
-              "target": "item"
+              }
             },
             {
               "fn": "configure_spawn",
@@ -3778,7 +3711,6 @@
             {
               "fn": "move_straight",
               "id": "nail_motion",
-              "params": {},
               "target": "nail"
             },
             {
@@ -3810,7 +3742,7 @@
             }
           ],
           "primaryEntityId": "item",
-          "schema": "infini.runtime-program.authoring.v4"
+          "schema": "infini.runtime-program.authoring.v5"
         },
         "tooltip": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
         "realization": {
@@ -3822,14 +3754,14 @@
               "summary": "Historical fixture translated to the explicit draft-versus-program evaluation contract.",
               "actionChecks": [
                 {
-                  "plannedIntent": "Execute the planned spawn_entity behavior.",
                   "implementedBehavior": "The executable program implements spawn_entity.",
                   "runtimeRefs": [
                     "primary_workbench"
                   ],
                   "result": "aligned",
                   "intentionality": "intentional",
-                  "reason": "The planned action is represented by the cited runtime lane."
+                  "reason": "The planned action is represented by the cited runtime lane.",
+                  "plannedActionIndex": 0
                 }
               ]
             },

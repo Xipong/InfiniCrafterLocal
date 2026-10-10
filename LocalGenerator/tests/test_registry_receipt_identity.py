@@ -123,7 +123,6 @@ def test_receipt_identity_and_complete_projection(fn, params, mutation, paths, r
                 {
                     "id": dc + "_bonus",
                     "fn": "add_equipment_damage_bonus",
-                    "target": "item",
                     "params": {"phase": "equipped", "damageClass": dc, "bonusPercent": 15},
                 }
                 for dc in ("melee", "ranged")
@@ -275,7 +274,6 @@ def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, p
             {
                 "id": "class_bonus",
                 "fn": "add_equipment_damage_bonus",
-                "target": "item",
                 "params": {"phase": bonus[0], "damageClass": bonus[1], "bonusPercent": 15},
             }
         )
@@ -392,9 +390,9 @@ def test_equipment_alias_is_not_a_second_author_surface(fn, old):
 def test_item_effects_require_their_executable_binding(fn):
     source = build_capability_witness(fn)
     binding = source["runtimeProgram"]["bindings"][0]
-    assert binding["usePolicy"]["action"]["kind"] == "apply_item_effects"
+    assert binding["action"]["kind"] == "apply_item_effects"
     assert validate_runtime_program(source)["ok"]
-    binding["usePolicy"]["action"]["kind"] = "use_item_body"
+    binding["action"]["kind"] = "use_item_body"
     report = validate_runtime_program(source)
     assert not report["ok"] and any(e["code"] == "missing_binding_dependency" for e in report["errors"])
 
@@ -445,7 +443,7 @@ def test_equipment_dependencies_refuse_invalid_composition_before_projection(fn,
         doc["runtimeProgram"]["calls"].append(extra)
     elif mutation == "mixed-equipment":
         doc["runtimeProgram"]["calls"].append(
-            {"id": "also_armor", "fn": "configure_armor", "target": "item", "params": {"slot": "head", "setKey": "", "defensePoints": 2}}
+            {"id": "also_armor", "fn": "configure_armor", "params": {"slot": "head", "setKey": "", "defensePoints": 2}}
         )
     elif mutation in {"missing-set-key", "body-set-bonus"}:
         call["params"] = {
@@ -457,7 +455,6 @@ def test_equipment_dependencies_refuse_invalid_composition_before_projection(fn,
             {
                 "id": "set_damage",
                 "fn": "add_equipment_damage_bonus",
-                "target": "item",
                 "params": {
                     "phase": "matching_armor_set",
                     "damageClass": "generic" if mutation == "body-set-bonus" else "melee",
@@ -603,7 +600,7 @@ def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation
         program = source["runtimeProgram"]
         program["entities"].append({"id": "other_held", "kind": "owner_attached_projectile"})
         for call in list(program["calls"]):
-            if call["target"] == "held_lantern_pike":
+            if call.get("target") == "held_lantern_pike":
                 extra = deepcopy(call)
                 extra.update(id="other_" + call["id"], target="other_held")
                 program["calls"].append(extra)

@@ -53,7 +53,7 @@ Malformed provider/patch shape фатален: код не угадывает с
 
 Root patch разрежен: отсутствующие upsert/delete arrays и `metadataPatch` — no change. Каждый присутствующий upsert — полный типизированный node. `note` обязателен в local patch shape; model-facing Repair также требует полный non-null `realizationReplacement` как проверяемый report после merge. Nullable provider wrappers optional object properties кодируют omission только в фактически применённом `json_schema`; unknown keys, required non-null fields и null array elements не удаляются. В `json_object/off` явный null не такой эквивалент. [Transport/null rules](DECLARED_NEUTRAL_OMISSIONS_RU.md#contract).
 
-Порядок: provider envelope → local strict patch → exact deterministic scope → tolerant frozen merge/audit → full runtime validation → normal compile/receipts/final-wire gates. Сужение provider envelope не сужает local validation.
+Порядок: provider envelope → local strict patch → exact deterministic scope → tolerant frozen merge/audit → full runtime validation → normal compile/receipts/final-wire gates. Сужение provider envelope не сужает local validation. Request-local calls grammar берётся из exact blocker/create scope; fn/whole-call edits сохраняют полный public union, пустой scope не расширяется. Nullable inverse использует ту же request-local schema. Syntax-only Repair не копирует повторный статический Author catalog; malformed text и equality с восстановимым исходником сохраняются. [Контракт и измерения](REPAIR_REQUEST_COMPACTION_RU.md).
 
 <a id="visual"></a>
 ## Visual Repair

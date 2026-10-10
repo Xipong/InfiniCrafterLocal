@@ -17,7 +17,7 @@
 
 Repair должен написать `realizationReplacement`, но прежний dossier терял исходный concept и параметры независимых корректных механик. Два документа с `intervalTicks=45/60` давали идентичный целый Repair request. Индекс bindings читал устаревшие root action/target и выдавал null.
 
-Теперь существующий `acceptedItemContext` содержит точные read-only копии concept/runtimeProgram; индекс читает `usePolicy`. Это полный pre-repair источник, включая невалидные поля, а не уже принятый результат. Модель интерпретирует его вместе с только разрешёнными изменениями. Старый realization — не доказательство механики. **Permissions, create/delete policy и frozen merge не расширены.** Hostile counterexamples подтвердили сохранение независимого damage/interval/cost/accepted absence.
+Теперь существующий `acceptedItemContext` содержит точные read-only копии concept/runtimeProgram; индекс читает канонические плоские Author bindings. Это полный pre-repair источник, включая невалидные поля, а не уже принятый результат. Модель интерпретирует его вместе с только разрешёнными изменениями. Старый realization — не доказательство механики. **Permissions, create/delete policy и frozen merge не расширены.** Hostile counterexamples подтвердили сохранение независимого damage/interval/cost/accepted absence.
 
 ## Luna 6 — фактическое холодное чтение
 

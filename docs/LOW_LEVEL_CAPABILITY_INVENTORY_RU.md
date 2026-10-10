@@ -3,7 +3,7 @@
 > Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).
 > Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [capability_library_audit.py](../LocalGenerator/infini_local/qa/capability_library_audit.py). [Lowery](../lowery.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.
 
-Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v4` / `infini.runtime-program.wire.v3`.
+Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v5` / `infini.runtime-program.wire.v3`.
 
 Inventory: **54 capabilities**, **7 entity kinds**, **4 inputs**, **5 binding actions**, **10 events**. Machine audit: **100/100**, errors=0, warnings=0.
 
@@ -57,7 +57,7 @@ Inventory: **54 capabilities**, **7 entity kinds**, **4 inputs**, **5 binding ac
 
 | event | source kinds | producer calls | producer binding inputs | producer-free base kinds | exact producer params | смысл |
 |---|---|---|---|---|---|---|
-| `on_use` | item_body | — | primary_use, alternate_use | — | — | Emitted when an active item-body use binding succeeds. |
+| `on_use` | item_body | — | primary_use, alternate_use | — | — | Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target. |
 | `on_spawn` | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | Emitted once when a runtime projectile entity activates. |
 | `on_hit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_damage | primary_use, alternate_use | — | — | Emitted after explicit contact/projectile damage hits an NPC. |
 | `on_crit` | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | set_projectile_damage | primary_use, alternate_use | — | — | Emitted after an explicitly damaging hit is critical. |

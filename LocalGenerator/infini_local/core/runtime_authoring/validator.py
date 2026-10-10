@@ -20,11 +20,14 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     CapabilitySpec,
     RequirementSpec,
-    event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
+    authored_call_target_id,
+    unique_item_body_id,
 )
-from infini_local.core.runtime_authoring.event_producer_validation import item_body_event_produced
+from infini_local.core.runtime_authoring.event_producer_validation import (
+    event_alternative_is_present, item_body_event_produced,
+)
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     authored_primary_entity_id,
@@ -113,7 +116,7 @@ def _rows(value: Any) -> list[dict[str, Any]]:
 def _calls_by_target(program: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     out: dict[str, list[dict[str, Any]]] = {}
     for call in _rows(program.get("calls")):
-        out.setdefault(str(call.get("target") or ""), []).append(call)
+        out.setdefault(authored_call_target_id(call, _rows(program.get("entities"))), []).append(call)
     return out
 
 
@@ -137,7 +140,7 @@ def _hidden_item_spawn_primary_target(program: Mapping[str, Any], item_id: str) 
     """Return the only explicit lifecycle target when the item body cannot represent use."""
     item_use_calls = [
         row for row in _rows(program.get("calls"))
-        if row.get("fn") == "configure_item_use" and str(row.get("target") or "") == item_id
+        if row.get("fn") == "configure_item_use" and authored_call_target_id(row, _rows(program.get("entities"))) == item_id
     ]
     if len(item_use_calls) != 1:
         return ""
@@ -153,7 +156,7 @@ def _hidden_item_spawn_primary_target(program: Mapping[str, Any], item_id: str) 
         for row in active_bindings
     ):
         return ""
-    targets = {binding_target_id(row) for row in active_bindings if binding_target_id(row)}
+    targets = {binding_target_id(row, item_entity_id=item_id) for row in active_bindings if binding_target_id(row, item_entity_id=item_id)}
     return next(iter(targets)) if len(targets) == 1 else ""
 
 
@@ -302,7 +305,7 @@ def _validate_requirement(
     entities_by_id: Mapping[str, dict[str, Any]],
     bindings: list[dict[str, Any]],
 ) -> ValidationIssue | None:
-    target_id = str(call.get("target") or "")
+    target_id = authored_call_target_id(call, entities_by_id.values())
     raw_params = call.get("params")
     params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])
@@ -323,12 +326,12 @@ def _validate_requirement(
             return None
         def valid_placement(row: Mapping[str, Any]) -> bool:
             native = row.get("params")
-            return (row.get("fn") == requirement.capability and row.get("target") == target_id
+            return (row.get("fn") == requirement.capability and authored_call_target_id(row, entities_by_id.values()) == target_id
                     and isinstance(native, Mapping) and type(native.get("tileId")) is int
                     and 0 <= native["tileId"] <= 65535 and type(native.get("wallId")) is int
                     and native["wallId"] == -1
                     and any(action_kind(binding) in requirement.any_of
-                            and binding_target_id(binding) == target_id
+                            and binding_target_id(binding, item_entity_id=item_id) == target_id
                             and placement_call_id(binding) == row.get("id")
                             for binding in bindings))
         allowed = tuple(str(row["id"]) for row in target_calls if valid_placement(row))
@@ -383,7 +386,7 @@ def _validate_requirement(
         required_target = item_id if requirement.target == "item_body" else target_id
         if not any(
             str(binding.get("input") or "") in requirement.any_of
-            and binding_target_id(binding) == required_target
+            and binding_target_id(binding, item_entity_id=item_id) == required_target
             for binding in bindings
         ):
             allowed = tuple(f"binding(input={input_name})" for input_name in requirement.any_of)
@@ -399,7 +402,7 @@ def _validate_requirement(
         required_target = item_id if requirement.target == "item_body" else target_id
         if not any(
             action_kind(binding) in requirement.any_of
-            and binding_target_id(binding) == required_target
+            and binding_target_id(binding, item_entity_id=item_id) == required_target
             for binding in bindings
         ):
             return ValidationIssue(
@@ -434,7 +437,7 @@ def _validate_requirement(
                 and (required_contact is None or contact_damage(binding) is required_contact)
                 for input_name, required_action, required_contact in allowed_tuples
             )
-            and (not required_target or binding_target_id(binding) == required_target)
+            and (not required_target or binding_target_id(binding, item_entity_id=item_id) == required_target)
             for binding in bindings
         ):
             return ValidationIssue(
@@ -449,7 +452,7 @@ def _validate_requirement(
             binding
             for binding in bindings
             if action_kind(binding) in requirement.any_of
-            and binding_target_id(binding) == required_target
+            and binding_target_id(binding, item_entity_id=item_id) == required_target
             and placement_call_id(binding) == call_id
         ]
         if len(matching) != 1:
@@ -457,7 +460,7 @@ def _validate_requirement(
                 path,
                 "missing_binding_dependency",
                 requirement.message,
-                tuple(f"binding usePolicy action {name} references call {call_id}" for name in requirement.any_of),
+                tuple(f"binding action {name} references call {call_id}" for name in requirement.any_of),
                 (call_id, required_target),
             )
         return None
@@ -572,7 +575,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     item_entities = [row for row in entities if row.get("kind") == "item_body"]
     if len(item_entities) != 1:
         issues.append(ValidationIssue("$.runtimeProgram.entities", "item_body_count", f"Exactly one item_body is required; found {len(item_entities)}.", ("add one item_body", "remove extras")))
-    item_id = str(item_entities[0].get("id") or "") if len(item_entities) == 1 else ""
+    item_id = unique_item_body_id(entities)
 
     primary_issues, primary_entity_id = _primary_entity_issues(entities_by_id, program)
     issues.extend(primary_issues)
@@ -581,18 +584,20 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     binding_spawn_roots: set[str] = set()
     for index, binding in enumerate(bindings):
         binding_id = str(binding.get("id") or "")
-        target_id = binding_target_id(binding)
+        target_id = binding_target_id(binding, item_entity_id=item_id)
         input_name = str(binding.get("input") or "")
         action_name = action_kind(binding)
         entity = entities_by_id.get(target_id)
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
-        action_path = f"$.runtimeProgram.bindings[{index}].usePolicy.action"
+        action_path = f"$.runtimeProgram.bindings[{index}].action"
+        if input_spec is None or action_spec is None:
+            continue  # Shape owns the missing/invalid selector, not an invented target leaf.
+        if action_spec is not None and action_spec.target_kinds == ("item_body",) and not item_id:
+            continue  # The exact invalid entity declarations own this missing identity.
         if entity is None:
             issues.append(ValidationIssue(f"{action_path}.targetId", "missing_entity_reference", f"Binding '{binding_id}' references missing entity '{target_id}'.", tuple(entities_by_id), (binding_id, target_id)))
             continue
-        if input_spec is None or action_spec is None:
-            continue  # strict schema already reports this case
         if action_name not in input_spec.allowed_actions or input_name not in action_spec.allowed_inputs:
             issues.append(ValidationIssue(
                 action_path,
@@ -650,7 +655,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     for index, call in enumerate(calls):
         call_id = str(call.get("id") or "")
         fn = str(call.get("fn") or "")
-        target_id = str(call.get("target") or "")
+        target_id = authored_call_target_id(call, entities)
         raw_params = call.get("params")
         params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
         cap = CAPABILITY_REGISTRY.get(fn)
@@ -658,6 +663,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if cap is None:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown capability '{fn}'.", tuple(CAPABILITY_REGISTRY), (call_id,)))
             continue
+        if cap.target_kinds == ("item_body",) and not item_id:
+            continue  # Do not invent a reparable .target field in this variant.
         if entity is None:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "missing_entity_reference", f"Call '{call_id}' references missing entity '{target_id}'.", tuple(entities_by_id), (call_id, target_id)))
             continue
@@ -727,7 +734,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if cap.name == "add_equipment_damage_bonus":
             raw_bonus_params = call.get("params")
             bonus_params: Mapping[str, Any] = raw_bonus_params if isinstance(raw_bonus_params, Mapping) else {}
-            target_id = str(call.get("target") or "")
+            target_id = authored_call_target_id(call, entities)
             configurations = [row for row in calls_by_target.get(target_id, [])
                               if row.get("fn") in {"configure_accessory", "configure_armor"}]
             if len(configurations) != 1:
@@ -834,7 +841,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
         dependencies = (
             ("input", input_spec.required_item_capabilities_any_of if input_spec is not None else ()),
-            ("usePolicy.action.kind", action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
+            ("input" if input_spec is not None and len(input_spec.allowed_actions) == 1 else "action.kind",
+             action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
         )
         for source, required_any_of in dependencies:
             if required_any_of and not item_fns.intersection(required_any_of):
@@ -849,9 +857,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             continue
         if stack_cost(binding) != 1:
             issues.append(ValidationIssue(
-                f"$.runtimeProgram.bindings[{index}].usePolicy.stackCost",
+                f"$.runtimeProgram.bindings[{index}].stackCost",
                 "place_item_without_stack_cost",
-                f"place_item on {input_name} requires stackCost=1 in the same usePolicy.",
+                f"place_item on {input_name} requires stackCost=1 in its exact binding variant.",
                 ("1",),
                 (str(binding.get("id") or ""),),
             ))
@@ -884,10 +892,10 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if (
             referenced_call is None
             or str(referenced_call.get("fn") or "") != "configure_placeable"
-            or str(referenced_call.get("target") or "") != binding_target_id(binding)
+            or authored_call_target_id(referenced_call, entities) != binding_target_id(binding, item_entity_id=item_id)
         ):
             issues.append(ValidationIssue(
-                f"$.runtimeProgram.bindings[{index}].usePolicy.action.placementCallId",
+                f"$.runtimeProgram.bindings[{index}].action.placementCallId",
                 "missing_binding_dependency",
                 "place_item must reference one configure_placeable call on the same item target.",
                 tuple(

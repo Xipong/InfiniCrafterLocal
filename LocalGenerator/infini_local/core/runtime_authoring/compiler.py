@@ -10,27 +10,31 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     project_to_wire,
     target_id as binding_target_id,
 )
+import infini_local.core.runtime_authoring.capability_registry as capability_registry
 from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
     RUNTIME_WIRE_SCHEMA,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
+    authored_call_target_id,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_producer_bindings
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
 from infini_local.core.runtime_authoring.technical_lowering import (
     audit_compiler_receipts,
+    binding_field_receipts,
     declared_neutral_omissions,
     primary_binding_role,
     primary_binding_role_receipt,
     primary_owner_for_kind,
     primary_owner_receipt,
+    item_target_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH,
@@ -47,7 +51,7 @@ class _CompileContext:
     def project_parameter(self, *, call: Mapping[str, Any], param: str, value: Any,
                           target: MutableMapping[str, Any], prefix: str) -> None:
         """Execute the registry's exact leaf/variant projection with provenance."""
-        spec = CAPABILITY_REGISTRY[str(call["fn"])].params[param]
+        spec = capability_registry.CAPABILITY_REGISTRY[str(call["fn"])].params[param]
         for row in spec.projected_fields(value, param):
             destination = target
             parts = row.wire_path.split(".")
@@ -91,7 +95,7 @@ def _copy_params(call: Mapping[str, Any]) -> dict[str, Any]:
 
 def _authored_param_for_wire(fn: str, wire_key: str) -> str:
     """Resolve a fixed DTO slot through the registry, never through Author aliases."""
-    params = CAPABILITY_REGISTRY[fn].params
+    params = capability_registry.CAPABILITY_REGISTRY[fn].params
     if wire_key in params:
         return wire_key
     matches = [name for name, spec in params.items()
@@ -120,24 +124,24 @@ def _compile_item_call(
         for wire_key, destination in mapping.items():
             # Prefer the actual DTO field, since older Author spellings need
             # not equal that field (e.g. potionSickness -> potion).
-            wire_matches = [name for name, spec in CAPABILITY_REGISTRY[fn].params.items()
+            wire_matches = [name for name, spec in capability_registry.CAPABILITY_REGISTRY[fn].params.items()
                             if spec.wire_name == destination]
             if len(wire_matches) > 1:
                 raise RuntimeError(f"{fn}: wire slot {destination!r} is ambiguous")
             source = wire_matches[0] if wire_matches else _authored_param_for_wire(fn, wire_key)
             if source in p:
-                spec = CAPABILITY_REGISTRY[fn].params[source]
+                spec = capability_registry.CAPABILITY_REGISTRY[fn].params[source]
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
 
     def project_equipment(target: dict[str, Any], prefix: str) -> None:
-        for source, spec in CAPABILITY_REGISTRY[fn].params.items():
+        for source in capability_registry.CAPABILITY_REGISTRY[fn].params:
             if source in p:
                 ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
     if fn == "configure_item_stats":
         project(gameplay, "gameplay", {
             name: spec.wire_name or name
-            for name, spec in CAPABILITY_REGISTRY[fn].params.items()
+            for name, spec in capability_registry.CAPABILITY_REGISTRY[fn].params.items()
         })
         return
     if fn == "configure_item_use":
@@ -263,7 +267,7 @@ def _compile_item_call(
         _, key = path.split(".", 1)
         ctx.write(
             call=call, path=path,
-            value=CAPABILITY_REGISTRY[fn].params["bonusPercent"].to_wire(p["bonusPercent"]),
+            value=capability_registry.CAPABILITY_REGISTRY[fn].params["bonusPercent"].to_wire(p["bonusPercent"]),
             target=target, key=key, authored_param="bonusPercent",
         )
         source = f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params"
@@ -396,6 +400,10 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     for index, call in enumerate(calls):
         call["_sourceIndex"] = index
         authored_params = _dict(call.get("params"))
+        if not capability_registry.CAPABILITY_REGISTRY[call["fn"]].params:
+            # An argument-free canonical call has no authored params field.
+            # This empty compiler-local mapping carries no design decision.
+            call["params"] = {}
         omitted = declared_neutral_omissions(str(call.get("fn") or ""), authored_params)
         if omitted:
             # Only the private compiler copy is completed; the Author source and
@@ -403,7 +411,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             call["params"] = {**authored_params, **copy.deepcopy(omitted)}
             call["_neutralOmissions"] = frozenset(omitted)
 
-    item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")
+    item_source_index, item_entity = next((i, row) for i, row in enumerate(authored_entities) if row.get("kind") == "item_body")
     item_entity_id = str(item_entity["id"])
     primary_entity_id = authored_primary_entity_id(authored_program)
     primary_entity_source_index, primary_entity = next(
@@ -413,6 +421,12 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     )
     primary_owner = primary_owner_for_kind(str(primary_entity.get("kind") or ""))
     ctx = _CompileContext(receipts=[])
+    entity_source_index_by_id = {str(row["id"]): i for i, row in enumerate(authored_entities)}
+    for index, call in enumerate(calls):
+        call["target"] = authored_call_target_id(call, authored_entities)
+        if capability_registry.CAPABILITY_REGISTRY[call["fn"]].target_kinds == ("item_body",):
+            ctx.receipts.append(item_target_receipt(source_index=index, item_source_index=item_source_index,
+                                                    call_id=str(call["id"]), item_entity_id=item_entity_id))
     ctx.receipts.append(primary_owner_receipt(
         source_index=primary_entity_source_index,
         owner=primary_owner,
@@ -440,15 +454,21 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         binding = project_to_wire(
             authored_binding,
             placement_calls_by_id=placement_calls_by_id,
+            item_entity_id=item_entity_id,
         )
-        binding["role"] = primary_binding_role(primary_entity_id, binding_target_id(authored_binding))
+        binding_target = binding_target_id(authored_binding, item_entity_id=item_entity_id)
+        binding["role"] = primary_binding_role(primary_entity_id, binding_target)
         final_index = len(bindings)
         bindings.append(binding)
         ctx.receipts.append(primary_binding_role_receipt(
             source_index=source_index,
             final_index=final_index,
             role=binding["role"],
+            target_entity_source_index=entity_source_index_by_id[binding_target],
         ))
+        ctx.receipts.extend(binding_field_receipts(source_index=source_index,
+                            target_entity_source_index=entity_source_index_by_id[binding_target],
+                            final_index=final_index, wire_binding=binding))
         if action_kind(authored_binding) == "place_item":
             call = placement_calls_by_id[placement_call_id(authored_binding)]
             source_call_index = int(call["_sourceIndex"])
@@ -473,14 +493,14 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                         ctx.write(call=presentation, path=f"{base}.{key}", value=value,
                                   target=body, key=key)
                 call_base = f"runtimeProgram.calls[{presentation['_sourceIndex']}]"
-                binding_base = f"runtimeProgram.bindings[{source_index}].usePolicy.action"
+                binding_base = f"runtimeProgram.bindings[{source_index}].action"
+                item_base = f"runtimeProgram.entities[{item_source_index}]"
                 ctx.receipts.append({
                     "callId": presentation["id"], "fn": "present_placed_item_sprite",
                     "authoredPath": f"{call_base}.params.placementCallId",
-                    "authoredPaths": [f"{call_base}.fn", f"{call_base}.target",
-                                      f"{call_base}.params.placementCallId",
-                                      f"{binding_base}.kind", f"{binding_base}.targetId",
-                                      f"{binding_base}.placementCallId"],
+                    "authoredPaths": [f"{call_base}.fn", f"{call_base}.params.placementCallId",
+                                      f"{binding_base}.kind", f"{binding_base}.placementCallId",
+                                      f"{item_base}.id", f"{item_base}.kind"],
                     "finalPath": base, "value": copy.deepcopy(body),
                     "status": "technical_projection",
                 })
@@ -587,6 +607,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     # longer emits prose claims or parent synthesis into this namespace.
     contract: dict[str, Any] = {}
     contract["compiledSchema"] = RUNTIME_WIRE_SCHEMA
+    contract["authoringSchema"] = RUNTIME_PROGRAM_SCHEMA
     contract["runtimeApiVersion"] = RUNTIME_PROGRAM_API_VERSION
     contract["finalWireReceipts"] = ctx.receipts
     contract["validation"] = validation
@@ -623,6 +644,7 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         name: item_body_producer_bindings(
             name, target_id=item_entity_id, target_calls=(), bindings=bindings,
             contact_suppressed=contact_suppressed,
+            wire=True,
         )
         for name, spec in EVENT_KIND_REGISTRY.items()
         if "item_body" in spec.producer_binding_kinds
