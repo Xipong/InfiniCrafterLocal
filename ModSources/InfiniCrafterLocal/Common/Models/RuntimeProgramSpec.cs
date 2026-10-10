@@ -893,7 +893,12 @@ public sealed class RuntimeTargetingSpec
     private string? _knockbackBasis;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? KnockbackBasis { get => _knockbackBasis; set => _knockbackBasis = RuntimeChildCombatBasis.Require(value); }
+    public sealed class DamageMultiplierJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public DamageMultiplierJsonConverter() : base("0", "4") { }
+    }
     private float? _damageMultiplier;
+    [JsonConverter(typeof(DamageMultiplierJsonConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? DamageMultiplier
     {
