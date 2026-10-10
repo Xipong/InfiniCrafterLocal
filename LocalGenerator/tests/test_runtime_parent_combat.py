@@ -24,6 +24,137 @@ _BASES = ("authored_child", "live_parent")
 _RETAINED = Path(__file__).with_name("fixtures") / "parent_combat_retained_wire.json"
 
 
+def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basis="authored_child", multiplier=0.5):
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+    document = build_runtime_fixture("held_and_deployed")
+    calls = document["runtimeProgram"]["calls"]
+    held = next(row for row in calls if row["target"] == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
+    held.update(fn="channel_beam", params={
+        "rangeTiles": 20, "widthPx": 12, "warmupTicks": 12, "manaPayment": "each_use_time",
+        "initialDamageMultiplier": 0.35, "initialWidthMultiplier": 0.22,
+        "damageStartProgress": 0.08, "raycastTiles": True,
+    })
+    _call(document, "configure_item_use")["params"]["channel"] = True
+    _call(document, "target_and_fire")["params"].update(
+        damageBasis=damage_basis, knockbackBasis=knockback_basis, damageMultiplier=multiplier,
+        count=4, spreadRadians=0.6, targetPolicy="player_assigned_first", requireLineOfSight=True, hardRange=True,
+    )
+    calls.extend([
+        {"id": "ammo", "fn": "configure_weapon_ammo", "target": "item",
+         "params": {"ammoCategory": "arrow", "speedBasis": "native_shot"}},
+        {"id": "native", "fn": "set_projectile_sentry", "target": "deployed_lantern", "params": {"enabled": True}},
+        {"id": "pool", "fn": "set_descendant_concurrency", "target": "deployed_lantern", "params": {"maxActive": 12}},
+        {"id": "shot_event", "fn": "spawn_entity_on_event", "target": "deployed_lantern", "params": {
+            "event": "periodic", "periodTicks": 90, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
+            "damageBasis": damage_basis, "knockbackBasis": knockback_basis,
+            "damageMultiplier": multiplier, "delayTicks": 3,
+        }},
+    ])
+    return document
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("damage_basis,knockback_basis,multiplier", [
+    ("authored_child", "authored_child", 0), ("authored_child", "live_parent", 0.5),
+    ("live_parent", "authored_child", 1), ("live_parent", "live_parent", 4),
+])
+def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through_serialized_provider(
+    monkeypatch, mode, damage_basis, knockback_basis, multiplier,
+):
+    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    request, user, _ = build_initial_author_request({}, {}, {}, {}, "combined-combat", model_name="test-model")
+    packet = json.loads(user)
+    names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
+    source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
+    assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency", "channel_beam"} <= names
+    assert validate_runtime_program(source)["ok"]
+    before = deepcopy(source)
+    encoded = _encode_nullable_fixture(source, contract.author_item_response_schema()) if mode == "json_schema" else source
+    serialized = json.dumps(encoded, ensure_ascii=False)
+    restored = contract.project_provider_author_item_to_local(json.loads(serialized), response_format=request["response_format"])
+    assert restored == source
+    wire = compile_runtime_program(restored)
+    assert validate_runtime_wire(wire)["ok"]
+    assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "native_shot"}
+    turret = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["id"] == "deployed_lantern")
+    assert turret["nativeSentry"] is True and turret["spawn"]["descendantMaxActive"] == 12
+    assert turret["targeting"]["count"] == 4 and turret["targeting"]["spreadRadians"] == 0.6
+    for fn in _PRODUCERS:
+        call = _call(source, fn)
+        component = _wire_component(wire, call)
+        assert {name: component[name] for name in ("damageBasis", "knockbackBasis", "damageMultiplier")} == {
+            "damageBasis": damage_basis, "knockbackBasis": knockback_basis, "damageMultiplier": multiplier,
+        }
+    beam = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["id"] == "held_lantern_pike")
+    assert beam["controller"]["params"]["manaPayment"] == "each_use_time"
+    assert beam["controller"]["params"]["raycastTiles"] is True
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert source == before
+
+
+@pytest.mark.parametrize("mutation", ["source_pool_target", "source_event_target", "final_event_id", "drop_combat_receipt", "drop_all_targeting_receipts"])
+def test_combined_combat_keeps_source_identity_and_exact_present_wire_receipt_guards(mutation):
+    source = _accepted_main_combat_composition()
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    if mutation == "source_pool_target":
+        _call(source, "set_descendant_concurrency")["target"] = "lantern_bolt"
+        assert validate_runtime_program(source)["ok"]
+    elif mutation == "source_event_target":
+        _call(source, "spawn_entity_on_event")["target"] = "held_lantern_pike"
+        assert validate_runtime_program(source)["ok"]
+    elif mutation == "final_event_id":
+        _wire_component(wire, _call(source, "spawn_entity_on_event"))["id"] = "different_valid_event_id"
+    elif mutation == "drop_combat_receipt":
+        rows[:] = [row for row in rows if not (row.get("fn") == "target_and_fire"
+                   and row.get("authoredPath", "").endswith(".params.damageBasis"))]
+    else:
+        rows[:] = [row for row in rows if row.get("fn") != "target_and_fire"]
+    assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    if not mutation.startswith("source_"):
+        assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
+        assert not validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("fn,leaf,invalid", [
+    ("target_and_fire", "damageBasis", "parent"), ("target_and_fire", "count", 5),
+    ("spawn_entity_on_event", "damageMultiplier", True),
+    ("channel_beam", "initialWidthMultiplier", 0), ("set_descendant_concurrency", "maxActive", 0),
+])
+def test_combined_combat_leaf_repair_keeps_all_accepted_main_and_parent_choices_frozen(fn, leaf, invalid):
+    good = _accepted_main_combat_composition()
+    broken = deepcopy(good)
+    call = _call(broken, fn)
+    call["params"][leaf] = invalid
+    before = deepcopy(broken)
+    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
+    hostile = deepcopy(good["runtimeProgram"]["calls"])
+    for row in hostile:
+        for key, value in tuple(row["params"].items()):
+            if row["id"] == call["id"] and key == leaf:
+                continue
+            spec = CAPABILITY_REGISTRY[row["fn"]].params[key]
+            if type(value) is bool:
+                row["params"][key] = not value
+            elif spec.enum and len(spec.enum) > 1:
+                row["params"][key] = next(option for option in spec.enum if option != value)
+            elif type(value) in (int, float):
+                alternate = spec.maximum if value == spec.minimum else spec.minimum
+                if alternate is not None:
+                    row["params"][key] = type(value)(alternate)
+    filtered, audit = filter_repair_patch_scope(broken, {"note": "exact combined leaf", "callsUpsert": hostile}, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    repaired = apply_repair_patch(broken, filtered)
+    assert repaired == good and broken == before
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
 def _call(document, fn):
     return next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == fn)
 

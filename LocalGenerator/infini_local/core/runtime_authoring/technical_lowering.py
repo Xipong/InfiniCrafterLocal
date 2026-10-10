@@ -202,9 +202,6 @@ def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = No
     ))
 
 
-
-
-
 def _valid_source_projection(spec: Any, source: Any, projected: Any) -> bool:
     try:
         rows = spec.projected_fields(source, "parameter")

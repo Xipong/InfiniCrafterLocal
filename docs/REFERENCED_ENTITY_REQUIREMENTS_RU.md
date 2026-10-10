@@ -13,6 +13,11 @@ Registry остаётся owner значения и диапазонов. `equal
 `integer`, boolean, string и остальные типы сохраняют точную идентичность,
 поэтому `false` и `0.0` не заменяют integer `0`.
 
+Оба вида reference requirements исключены из dependency closure **текущей**
+source entity. Требуемый `configure_spawn` принадлежит referenced child, поэтому
+исправление одного range leaf у source не даёт права добавлять ей spawn/movement.
+Только reference blocker открывает отдельный complete-child create slice.
+
 Это **validation**, не изменение authored программы. Реальный emission adapter
 классифицирует собственную детерминированную проекцию отдельно как Alias Lowering.
 Никаких новых gameplay capabilities данный framework сам не регистрирует.

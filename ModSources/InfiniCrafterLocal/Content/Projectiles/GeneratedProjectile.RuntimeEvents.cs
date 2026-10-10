@@ -33,7 +33,7 @@ public sealed partial class GeneratedProjectile
                     damageDone,
                     _childDepth,
                     _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
-                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                     Projectile.netUpdate = true;
                 continue;
             }
@@ -83,7 +83,7 @@ public sealed partial class GeneratedProjectile
                     Projectile.damage,
                     _childDepth,
                     _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
-                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                     Projectile.netUpdate = true;
             }
             else

@@ -1059,8 +1059,11 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     if event_spawn_budget > MAX_EVENT_SPAWNS_PER_ACTIVATION:
         issues.append(ValidationIssue("$.runtimeProgram.calls", "event_spawn_budget", f"Event spawn count {event_spawn_budget} exceeds {MAX_EVENT_SPAWNS_PER_ACTIVATION}.", (f"sum <= {MAX_EVENT_SPAWNS_PER_ACTIVATION}",)))
 
+    # Archived complete compiled DTOs include these diagnostic counts. New
+    # opt-in reference adapters contribute when selected; old programs keep
+    # their exact diagnostic bytes as well as their gameplay wire.
     counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
-                            if cap.name != "present_placed_item_sprite"
+                            if cap.name not in {"present_placed_item_sprite", "select_targets_and_emit_on_event"}
                             or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),

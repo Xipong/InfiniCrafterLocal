@@ -1960,6 +1960,35 @@ _CAPS.extend([
         budget="max 12 per action, program child depth <= 3, shared event spawn budget <= 32; no reservation is recreated on hydration",
     ),
     _cap(
+        "select_targets_and_emit_on_event",
+        "Plan bounded NPC links at the hit callback and emit a separate authored projectile for each link. "
+        "Each search and initial emission starts at the selected anchor; all links are planned at dispatch, not after child hits. "
+        "The child owns its speed, movement, damage and native collision; a selected target is an initial direction, not a guaranteed hit. "
+        "No direct damage, status or VFX is implied.",
+        "event",
+        ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        {
+            "event": _p("string", "Source hit event", enum=("on_hit", "on_crit")),
+            "entity": _p("string", "Independent free/child projectile with explicit origin/velocity spawn, zero offset and no over-target adapter", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId",
+                         reference=ReferenceSpec("entity", ("free_projectile", "child_projectile"), False, True)),
+            "stepCount": _p("integer", "Maximum planned links, one child per link; bounded by the shared activation spawn budget", minimum=1, maximum=12, units="projectiles"),
+            "stepRangeTiles": _p("number", "Inclusive geometric search radius measured anew from the selected anchor on each step", minimum=1, maximum=60, units="tiles"),
+            "selectionAnchor": _p("string", "previous_target advances search/emission origin to each selected NPC; event_target keeps the dispatch-time source NPC center", enum=("previous_target", "event_target")),
+            "repeatPolicy": _p("string", "The current anchor is always excluded. allow_revisits permits earlier NPCs again; exclude_visited excludes source and every previously selected NPC", enum=("allow_revisits", "exclude_visited")),
+            "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck"),
+            "initialIgnoreCountdownUpdates": _p("integer", "Exclude the exact emission-anchor NPC while this native AI countdown is positive; decremented before collision, so 10 means pre-AI plus nine post-AI collision opportunities; 0 disables", minimum=0, maximum=600, units="native projectile AI updates"),
+            "delayTicks": _p("integer", "Dispatch delay in world ticks; delayed source NPC must retain its active exact incarnation", minimum=0, maximum=600, units="world ticks"),
+        },
+        multiplicity="many_per_target",
+        py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
+        wire=("runtimeProgram.entities[].events[].*",),
+        provenance="A10 explicit target-anchor/repeat selection and physical child emission, without a chain-lightning family router",
+        repair_group="event_target_emission",
+        events=("on_hit", "on_crit"),
+        budget="at most 12 planned physical children; one shared activation reservation each; acyclic entity graph, depth <= 3 and aggregate event spawn count <= 32",
+    ),
+    _cap(
         "apply_status_on_event",
         "Apply one concrete Terraria debuff/buff to the hit target on a supported event.",
         "event",
@@ -1999,13 +2028,14 @@ _CAPS.extend([
     ),
     _cap(
         "chain_damage_on_event",
-        "Chain bounded damage from the hit target to nearby NPCs.",
+        "Apply instantaneous radial multi-target damage to a bounded nearest-NPC list around the original hit position. "
+        "No moving projectiles or advancing search anchor; the direct hit target is excluded.",
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "event": _p("string", "Source event", enum=("on_hit", "on_crit")),
-            "count": _p("integer", "Maximum chained targets", minimum=1, maximum=12),
-            "rangeTiles": _p("number", "Search radius", minimum=1, maximum=60, units="tiles"),
+            "count": _p("integer", "Maximum instantly damaged radial targets", minimum=1, maximum=12),
+            "rangeTiles": _p("number", "Fixed search radius from the original event position", minimum=1, maximum=60, units="tiles"),
             "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=2),
         },
         multiplicity="many_per_target",
@@ -2501,6 +2531,8 @@ def _component_slot(cap: CapabilitySpec) -> str:
 
 
 def _csharp_owner_for(cap: CapabilitySpec) -> str:
+    if cap.name == "select_targets_and_emit_on_event":
+        return "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit"
     if cap.name in PROJECTILE_MODIFIER_COMPONENTS:
         method = {"attract_npcs_while_active": "ApplyNpcAttraction", "set_projectile_homing_modifier": "ApplyHomingModifier", "set_projectile_visual_scale_curve": "ApplyVisualScaleCurve"}.get(cap.name, "ApplyActiveModifiers")
         return "Content/Projectiles/GeneratedProjectile.Modifiers.cs::" + method
@@ -2576,7 +2608,7 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
             "on_hit:target_to_owner": "owner_request_server_execute",
             "on_hit:target_to_entity": "owner_request_server_execute",
         }
-    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "move_owner_on_event", "move_player_on_use", "recall_home_on_use"}:
+    if cap.name in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "select_targets_and_emit_on_event", "move_owner_on_event", "move_player_on_use", "recall_home_on_use"}:
         return "owner_execute_sync", {}
     if cap.name == "heal_owner_on_event":
         return "owner_execute_sync", {}
@@ -2611,6 +2643,15 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             capability="configure_weapon_ammo", other_param="speedBasis", equals="native_shot",
             message="An active native_shot ammo root requires the constant-speed variant; sampled authored min/max and native shot magnitude cannot both own initial speed."))
         return tuple(rows)
+    if cap.name == "select_targets_and_emit_on_event":
+        return (
+            RequirementSpec("event_available", param="event", message="The source entity must actually emit the selected hit event."),
+            RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
+                equals={"placement": "item_use_origin", "aim": "velocity", "offsetPx": 0},
+                message="The emission reference requires configure_spawn placement=item_use_origin, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
+            RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
+                message="The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter."),
+        )
 
     if cap.name == "configure_weapon_ammo":
         return (RequirementSpec(
@@ -2870,6 +2911,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "pull_on_event": 5,
     "heal_owner_on_event": 6,
     "move_owner_on_event": 7,
+    "select_targets_and_emit_on_event": 8,
 })
 
 
@@ -2940,7 +2982,8 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         conflicts=(f"exclusive_group:{exclusive_group}",) if exclusive_group else (),
         network_authority=authority,
         authority_by_effect=MappingProxyType(dict(by_effect)),
-        activation_spawn_count_param="count" if (cap.wire_action or cap.name) == "spawn_entity_on_event" else "",
+        activation_spawn_count_param=("count" if (cap.wire_action or cap.name) == "spawn_entity_on_event"
+                                      else "stepCount" if cap.name == "select_targets_and_emit_on_event" else ""),
         meaningful_for_stationary=(cap.category == "event" or cap.name in {"set_projectile_damage", "target_and_fire", "emit_light_while_active", "attract_npcs_while_active"}),
     )
 
@@ -2994,7 +3037,6 @@ CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "charge_then_release": 2,
     "target_and_fire": 3,
 })
-
 
 
 def visible_capabilities() -> tuple[CapabilitySpec, ...]:

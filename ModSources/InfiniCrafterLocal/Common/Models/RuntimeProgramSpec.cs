@@ -85,8 +85,8 @@ public sealed class RuntimeProgramSpec
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)
             throw new InvalidDataException($"runtimeProgram.bindings exceeds {InfiniRuntimeLimits.MaxRuntimeBindings}");
 
-        // New reference adapters inspect original typed fields before retained
-        // v5 normalization can lowercase, clamp or default an invalid source.
+        // Both reference adapters inspect original typed source fields before
+        // retained v5 normalization can lowercase, clamp or default them.
         foreach (RuntimeEntitySpec? source in Entities)
         foreach (RuntimeEventActionSpec? action in source?.Events ?? Array.Empty<RuntimeEventActionSpec>())
         {
@@ -95,8 +95,11 @@ public sealed class RuntimeProgramSpec
             if (action.ActionCode == RuntimeEventActionCode.SpawnEntity && child?.Spawn is { } spawn
                 && !spawn.AcceptsEmissionSpread(action.SpreadRadians))
                 throw new InvalidDataException("radial/disk event emission requires exact neutral spread before normalization");
-            if (action.HitTargetSpawn is null) continue;
-            if (source is null || !source.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child))
+            if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                && !RuntimeEventActionSpec.SupportsTargetEmission(child))
+                throw new InvalidDataException("target emission requires the exact referenced spawn before normalization");
+            if (action.HitTargetSpawn is not null
+                && (source is null || !source.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child)))
                 throw new InvalidDataException("target-relative emission requires exact source and referenced spawn before normalization");
         }
 
@@ -227,7 +230,7 @@ public sealed class RuntimeProgramSpec
             foreach (RuntimeEventActionSpec action in entity.Events)
             {
                 RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse);
-                if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                 {
                     if (!entity.IsProjectileEntity
                         && (action.DamageBasis == RuntimeChildCombatBasis.LiveParent
@@ -239,8 +242,12 @@ public sealed class RuntimeProgramSpec
                     if (action.HitTargetSpawn is not null
                         && (!entity.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child)))
                         throw new InvalidDataException($"event '{action.Id}' target-relative spawn requires a moving child with event-origin placement, velocity aim, zero offset and no over-target transform");
+                    if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                        && !RuntimeEventActionSpec.SupportsTargetEmission(child))
+                        throw new InvalidDataException($"event '{action.Id}' requires an independent projectile with explicit origin/velocity spawn, zero offset and no over-target adapter");
                     graph[entity.Id].Add(child.Id);
-                    eventSpawnBudget += action.Count;
+                    eventSpawnBudget += action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                        ? action.StepCount!.Value : action.Count;
                 }
             }
             if (!string.IsNullOrWhiteSpace(entity.Targeting.ShotEntityId))
@@ -1514,6 +1521,7 @@ public static class RuntimeEventActionCode
     public const int Pull = 5;
     public const int HealOwner = 6;
     public const int MoveOwner = 7;
+    public const int SelectTargetsAndEmit = 8;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -1659,6 +1667,78 @@ public sealed class RuntimeEventActionSpec
     public int CooldownTicks { get; set; }
     public bool SafeTileOnly { get; set; } = true;
 
+    private int? _stepCount;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StepCount
+    {
+        get => _stepCount;
+        set
+        {
+            if (value is null || value < 1 || value > 12)
+                throw new InvalidDataException("stepCount must be an integer in 1..12");
+            _stepCount = value;
+        }
+    }
+    private double? _stepRangeTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? StepRangeTiles
+    {
+        get => _stepRangeTiles;
+        set
+        {
+            if (value is null || !double.IsFinite(value.Value) || value < 1d || value > 60d)
+                throw new InvalidDataException("stepRangeTiles must be finite in 1..60");
+            _stepRangeTiles = value;
+        }
+    }
+    private string? _selectionAnchor;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SelectionAnchor
+    {
+        get => _selectionAnchor;
+        set
+        {
+            if (value is not ("previous_target" or "event_target"))
+                throw new InvalidDataException("selectionAnchor must explicitly select previous_target or event_target");
+            _selectionAnchor = value;
+        }
+    }
+    private string? _repeatPolicy;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RepeatPolicy
+    {
+        get => _repeatPolicy;
+        set
+        {
+            if (value is not ("allow_revisits" or "exclude_visited"))
+                throw new InvalidDataException("repeatPolicy must explicitly select allow_revisits or exclude_visited");
+            _repeatPolicy = value;
+        }
+    }
+    private bool? _requireLineOfSight;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RequireLineOfSight
+    {
+        get => _requireLineOfSight;
+        set
+        {
+            if (value is null) throw new InvalidDataException("requireLineOfSight cannot be null");
+            _requireLineOfSight = value;
+        }
+    }
+    private int? _initialIgnoreCountdownUpdates;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? InitialIgnoreCountdownUpdates
+    {
+        get => _initialIgnoreCountdownUpdates;
+        set
+        {
+            if (value is null || value < 0 || value > 600)
+                throw new InvalidDataException("initialIgnoreCountdownUpdates must be an integer in 0..600");
+            _initialIgnoreCountdownUpdates = value;
+        }
+    }
+
     internal static bool SupportsTargetEmission(RuntimeEntitySpec? child)
         => child is not null && child.Kind is (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile)
             && child.Spawn is not null && child.Spawn.HasExactTargetEmissionOrigin();
@@ -1675,16 +1755,37 @@ public sealed class RuntimeEventActionSpec
                 || DelayTicks < 0 || DelayTicks > 600)
                 throw new InvalidDataException("target-relative spawn requires exact direct-hit event, explicit combat bases, count, multiplier and inactive spread");
         }
+        if (ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+            && (Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || Action != RuntimeOpcodeNames.EventActionName(ActionCode)
+                || EntityId != RuntimeText.IdOptional(EntityId)))
+            throw new InvalidDataException("target emission requires exact event/action/reference strings without normalization");
         Id = RuntimeText.Id(Id);
         Event = RuntimeText.Safe(Event, 32).ToLowerInvariant();
         Action = RuntimeText.Safe(Action, 64);
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.MoveOwner)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.SelectTargetsAndEmit)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
+        if (ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit)
+        {
+            if (Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || string.IsNullOrWhiteSpace(EntityId) || !_delayPresent || DelayTicks < 0 || DelayTicks > 600
+                || StepCount is null || StepRangeTiles is null || SelectionAnchor is null || RepeatPolicy is null
+                || RequireLineOfSight is null || InitialIgnoreCountdownUpdates is null)
+                throw new InvalidDataException("target emission requires every explicit hit-event parameter without defaults");
+            if (Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f || PeriodTicks != 0
+                || BuffId != -1 || DurationTicks != 0 || RadiusPx != 0 || RangeTiles != 0f || Mode != ""
+                || Strength != 0f || RadiusTiles != 0f || DamageFraction != 0f || MaxHeal != 0
+                || CooldownTicks != 0 || !SafeTileOnly)
+                throw new InvalidDataException("target emission cannot consume non-neutral fields owned by another event opcode");
+        }
+        else if (StepCount is not null || StepRangeTiles is not null || SelectionAnchor is not null || RepeatPolicy is not null
+            || RequireLineOfSight is not null || InitialIgnoreCountdownUpdates is not null)
+            throw new InvalidDataException("target selection/emission params require the exact SelectTargetsAndEmit opcode");
         if (ActionCode != RuntimeEventActionCode.SpawnEntity
             && (DamageBasis is not null || KnockbackBasis is not null))
             throw new InvalidDataException($"event '{Id}' child combat fields require spawn_entity_on_event");
@@ -1706,7 +1807,7 @@ public sealed class RuntimeEventActionSpec
         CooldownTicks = Math.Clamp(CooldownTicks, 0, 36000);
         if (Event == RuntimeEventKind.Periodic && PeriodTicks < 6)
             throw new InvalidDataException($"periodic event action '{Id}' requires periodTicks >= 6");
-        if (ActionCode == RuntimeEventActionCode.SpawnEntity && string.IsNullOrWhiteSpace(EntityId))
+        if (ActionCode is (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit) && string.IsNullOrWhiteSpace(EntityId))
             throw new InvalidDataException($"spawn event action '{Id}' has no entityId");
         if (ActionCode == RuntimeEventActionCode.ApplyStatus && (BuffId <= 0 || DurationTicks <= 0))
             throw new InvalidDataException($"status event action '{Id}' requires buffId and durationTicks");
@@ -1765,6 +1866,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
+        "select_targets_and_emit_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

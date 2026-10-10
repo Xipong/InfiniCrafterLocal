@@ -286,12 +286,16 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "consumerPrecisionPreserved": preserves_precision,
                              "preserved": reject_bounds == authored_bounds and preserves_precision})
                 continue
-            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"}:
+            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"} or (
+                cap.name == "select_targets_and_emit_on_event" and param_name != "delayTicks"
+            ):
                 block = _class_block(text, class_name)
+                storage = "int" if spec.kind == "integer" else "double"
+                finite_guard = r"!double\.IsFinite\(value\.Value\) \|\| " if storage == "double" else ""
                 declaration = re.search(
                     rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"
-                    rf"public int\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
-                    r"if\s*\(value is null \|\| value < ([^|]+?) \|\| value > ([^)]+)\)\s*"
+                    rf"public {storage}\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
+                    r"if\s*\(value is null \|\| " + finite_guard + r"value < ([^|]+?) \|\| value > ([^)]+)\)\s*"
                     r"throw new InvalidDataException\(",
                     block, re.DOTALL,
                 )
