@@ -25,7 +25,8 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 
 def build_report() -> dict[str, Any]:
-    names = set(CAPABILITY_REGISTRY)
+    names = {name for name, cap in CAPABILITY_REGISTRY.items()
+             if cap.prompt_visible and cap.decision == "expose"}
     schema_names = {
         row["properties"]["fn"]["const"]
         for row in runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]

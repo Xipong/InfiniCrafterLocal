@@ -100,7 +100,7 @@ def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotation
         {"optional": None}, local, response_format=response_format) == {"optional": None}
 
 
-@pytest.mark.parametrize("fn", list(CAPABILITY_REGISTRY))
+@pytest.mark.parametrize("fn", [name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"])
 def test_compact_provider_roundtrips_every_complete_capability_witness(fn):
     item = build_capability_witness(fn)
     assert validate_runtime_program(item)["ok"]
@@ -131,4 +131,4 @@ def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capa
     }
     assert prompt.source_wire_units_for_llm([])["scopes"] == []
     assert packets == before
-    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == set(CAPABILITY_REGISTRY)
+    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}

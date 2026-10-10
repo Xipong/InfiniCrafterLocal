@@ -225,6 +225,20 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "customHeldSprite": {
+          "enum": [
+            "hidden",
+            "visible",
+            "inherit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "disableMeleeHitbox": {
           "enum": [],
           "kind": "boolean",
@@ -242,21 +256,6 @@
             "two_handed",
             "overhead",
             "forward"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "heldSpriteVisibilityHint": {
-          "enum": [
-            "",
-            "immediate",
-            "on_release",
-            "after_charge"
           ],
           "kind": "string",
           "maximum": null,
@@ -660,7 +659,8 @@
             "restore_resources_on_use",
             "apply_vanilla_buff_on_use",
             "apply_generated_buff_on_use",
-            "move_player_on_use"
+            "move_player_on_use",
+            "recall_home_on_use"
           ],
           "kind": "capability_group_present",
           "message": "An apply_item_effects lane needs at least one effective use effect: positive healing or another active registered item-use effect. Potion rules alone are not an effect.",
@@ -1066,7 +1066,7 @@
       "componentSlot": "placeable",
       "conflicts": [],
       "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
-      "decision": "expose",
+      "decision": "internal",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1113,7 +1113,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "placement payload referenced by one exact binding transaction",
-      "purpose": "Set a concrete tile/wall placement. The current runtime admits one layer per use: both IDs enabled is schema-valid but refused at runtime; this call cannot place both together.",
+      "purpose": "Retained saved-wire provenance for the previous combined placement vocabulary; fresh Author selects one exact tile or wall operation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1141,13 +1141,141 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "configure_tile_placement",
+      "componentSlot": "placeable",
+      "conflicts": [
+        "exclusive_group:placeable"
+      ],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "placeable",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "placeStyle": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 255,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_place_style",
+          "units": ""
+        },
+        "tileId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_tile_id_or_disabled",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "lossless one-layer placement alias; the other layer is explicitly disabled by the selected operation",
+      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "kind": "binding_action_reference",
+          "message": "The placement call must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "configure_wall_placement",
+      "componentSlot": "placeable",
+      "conflicts": [
+        "exclusive_group:placeable"
+      ],
+      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "placeable",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "placeStyle": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 255,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_place_style",
+          "units": ""
+        },
+        "wallId": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 65535,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "terraria_wall_id_or_disabled",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "lossless one-layer placement alias; the other layer is explicitly disabled by the selected operation",
+      "purpose": "Select one exact loaded wall and placement style for one referenced placement transaction.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "kind": "binding_action_reference",
+          "message": "The placement call must be referenced by exactly one binding usePolicy.action.placementCallId.",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "present_placed_item_sprite",
       "componentSlot": "placed_body",
       "conflicts": [],
       "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
       "decision": "expose",
       "dependencies": [
-        "configure_placeable"
+        "configure_tile_placement"
       ],
       "emittedEvents": [],
       "events": [],
@@ -1296,7 +1424,7 @@
           "anyOf": [
             "place_item"
           ],
-          "capability": "configure_placeable",
+          "capability": "configure_tile_placement",
           "equals": null,
           "kind": "executed_tile_placement_reference",
           "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference.",
@@ -1339,33 +1467,8 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "minLife": {
+        "condition": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 1000,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "life_points",
-          "units": ""
-        },
-        "minMana": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 1000,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "mana_points",
-          "units": ""
-        },
-        "mode": {
-          "enum": [
-            "grounded",
-            "not_wet",
-            "life_above",
-            "mana_above"
-          ],
           "kind": "string",
           "maximum": null,
           "minimum": null,
@@ -1380,19 +1483,7 @@
       "provenance": "existing use_condition",
       "purpose": "Gate use on one explicit runtime condition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "anyOf": [
-            "life_above:minLife",
-            "mana_above:minMana"
-          ],
-          "equals": null,
-          "kind": "conditional_param",
-          "message": "threshold modes require their threshold parameter",
-          "param": "mode",
-          "target": "same_target"
-        }
-      ],
+      "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1468,13 +1559,15 @@
       "authorityByEffect": {},
       "capability": "move_player_on_use",
       "componentSlot": "item_mobility",
-      "conflicts": [],
+      "conflicts": [
+        "exclusive_group:item_mobility"
+      ],
       "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
-      "exclusiveGroup": "",
+      "exclusiveGroup": "item_mobility",
       "finalWirePaths": [
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
@@ -1511,7 +1604,6 @@
         },
         "mode": {
           "enum": [
-            "recall_home",
             "blink_to_cursor"
           ],
           "kind": "string",
@@ -1546,7 +1638,77 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing mobility_effect",
-      "purpose": "Run one explicit bounded mobility action on successful use.",
+      "purpose": "Run a bounded blink-to-cursor action on successful use; home recall has its own operation with no inactive blink fields.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "apply_item_effects"
+          ],
+          "kind": "binding_action_present",
+          "message": "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "recall_home_on_use",
+      "componentSlot": "item_mobility",
+      "conflicts": [
+        "exclusive_group:item_mobility"
+      ],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "item_mobility",
+      "finalWirePaths": [
+        "gameplay.mobilityMode",
+        "gameplay.mobilityRangeTiles",
+        "gameplay.mobilityCooldownTicks",
+        "gameplay.mobilitySafeTileOnly",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].mobilityMode",
+        "runtimeProgram.effectGroups[].mobilityRangeTiles",
+        "runtimeProgram.effectGroups[].mobilityCooldownTicks",
+        "runtimeProgram.effectGroups[].mobilitySafeTileOnly"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "cooldownTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 3600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "exact recall branch; blink-only range and safety are registered inactive constants",
+      "purpose": "Recall the owner home after a successful apply_item_effects use. The player mobility cooldown is shared with blink actions.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2217,115 +2379,15 @@
           "semanticType": "slots",
           "units": "slots"
         },
-        "setBonusAggroPoints": {
+        "setBonuses": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 1000,
-          "minimum": -1000,
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
           "reference": null,
           "required": false,
-          "semanticType": "engine units: aggro points",
-          "units": "engine units: aggro points"
-        },
-        "setBonusAmmoSaveChancePercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 99,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "probability_percent",
-          "units": "probability_percent"
-        },
-        "setBonusDamageReductionPercentagePoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 75,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "percentage_points",
-          "units": "percentage_points"
-        },
-        "setBonusGenericArmorPenetrationPoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "armor_points",
-          "units": "armor_points"
-        },
-        "setBonusGenericCritChancePercentagePoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": -100,
-          "reference": null,
-          "required": false,
-          "semanticType": "percentage_points",
-          "units": "percentage_points"
-        },
-        "setBonusLifeRegenHpPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": -50,
-          "reference": null,
-          "required": false,
-          "semanticType": "HP/s",
-          "units": "HP/s"
-        },
-        "setBonusManaCostReductionPercentagePoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 90,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "percentage_points",
-          "units": "percentage_points"
-        },
-        "setBonusManaRegenBonusPoints": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 200,
-          "minimum": -100,
-          "reference": null,
-          "required": false,
-          "semanticType": "engine units: manaRegenBonus points",
-          "units": "engine units: manaRegenBonus points"
-        },
-        "setBonusMinionSlotsBonus": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 20,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "slots",
-          "units": "slots"
-        },
-        "setBonusMoveSpeedBonusPercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": -90,
-          "reference": null,
-          "required": false,
-          "semanticType": "additive_percent",
-          "units": "additive_percent"
-        },
-        "setBonusSentrySlotsBonus": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 20,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "slots",
-          "units": "slots"
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "setKey": {
           "enum": [],
@@ -2393,17 +2455,7 @@
           "kind": "nonneutral_params_require_param",
           "message": "A three-piece armor set bonus needs an explicit non-empty setKey shared by head, body and legs.",
           "nonzeroParams": [
-            "setBonusGenericCritChancePercentagePoints",
-            "setBonusMoveSpeedBonusPercent",
-            "setBonusLifeRegenHpPerSecond",
-            "setBonusManaRegenBonusPoints",
-            "setBonusMinionSlotsBonus",
-            "setBonusSentrySlotsBonus",
-            "setBonusManaCostReductionPercentagePoints",
-            "setBonusAmmoSaveChancePercent",
-            "setBonusAggroPoints",
-            "setBonusDamageReductionPercentagePoints",
-            "setBonusGenericArmorPenetrationPoints"
+            "setBonuses"
           ],
           "param": "setKey",
           "target": "same_target"
@@ -2413,17 +2465,7 @@
           "kind": "nonneutral_params_require_exact_param",
           "message": "Only the head piece executes an armor set bonus once a matching head, body and legs are equipped.",
           "nonzeroParams": [
-            "setBonusGenericCritChancePercentagePoints",
-            "setBonusMoveSpeedBonusPercent",
-            "setBonusLifeRegenHpPerSecond",
-            "setBonusManaRegenBonusPoints",
-            "setBonusMinionSlotsBonus",
-            "setBonusSentrySlotsBonus",
-            "setBonusManaCostReductionPercentagePoints",
-            "setBonusAmmoSaveChancePercent",
-            "setBonusAggroPoints",
-            "setBonusDamageReductionPercentagePoints",
-            "setBonusGenericArmorPenetrationPoints"
+            "setBonuses"
           ],
           "param": "slot",
           "target": "same_target"

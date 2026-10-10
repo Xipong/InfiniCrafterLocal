@@ -30,6 +30,8 @@ def _groups(fn="restore_resources_on_use"):
         other["params"].update(healLife=0, healMana=35)
     elif fn == "move_player_on_use":
         other["params"].update(mode="blink_to_cursor", rangeTiles=12, cooldownTicks=90)
+    elif fn == "recall_home_on_use":
+        other["params"]["cooldownTicks"] = 90
     elif fn == "apply_vanilla_buff_on_use":
         other["params"]["buffId"] = 2
     else:
@@ -39,7 +41,7 @@ def _groups(fn="restore_resources_on_use"):
     return doc
 
 
-@pytest.mark.parametrize("fn", ["restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use"])
+@pytest.mark.parametrize("fn", ["restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use", "recall_home_on_use"])
 def test_every_existing_item_effect_can_partition_explicit_main_and_alternate_groups(fn):
     doc = _groups(fn)
     before = deepcopy(doc)
@@ -56,6 +58,105 @@ def test_every_existing_item_effect_can_partition_explicit_main_and_alternate_gr
     receipts = final["runtimeContract"]["finalWireReceipts"]
     assert sum(row.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for row in receipts) == 2
     assert audit_compiler_receipts(receipts, authored_document=doc, final_document=final)["ok"]
+
+
+def _mobility_pair(first, second):
+    doc = _groups(first)
+    replacement = deepcopy(next(row for row in build_capability_witness(second)["runtimeProgram"]["calls"] if row["fn"] == second))
+    replacement.update(id="second_effect")
+    replacement["params"].update(effectGroupId="second", cooldownTicks=90)
+    doc["runtimeProgram"]["calls"][-1] = replacement
+    return doc
+
+
+@pytest.mark.parametrize("first,second", [
+    ("move_player_on_use", "move_player_on_use"),
+    ("recall_home_on_use", "recall_home_on_use"),
+    ("move_player_on_use", "recall_home_on_use"),
+    ("recall_home_on_use", "move_player_on_use"),
+])
+@pytest.mark.parametrize("owner", ["same", "default", "distinct", "named-default"])
+def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(first, second, owner):
+    doc = _mobility_pair(first, second)
+    effects = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] in {first, second}]
+    if owner == "same":
+        effects[1]["params"]["effectGroupId"] = "first"
+        doc["runtimeProgram"]["bindings"][1]["usePolicy"]["action"]["effectGroupId"] = "first"
+    elif owner in {"default", "named-default"}:
+        for index in ([0, 1] if owner == "default" else [1]):
+            effects[index]["params"].pop("effectGroupId")
+            doc["runtimeProgram"]["bindings"][index]["usePolicy"]["action"].pop("effectGroupId")
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    if owner in {"same", "default"}:
+        conflicts = [row for row in report["errors"] if row["code"] == "exclusive_component_conflict"]
+        assert len(conflicts) == 1
+        assert conflicts[0]["relatedIds"] == [effects[0]["id"], effects[1]["id"], "item"]
+    else:
+        assert report["ok"], report
+        final = compile_runtime_program(doc)
+        assert validate_runtime_wire(final)["ok"]
+        for call in effects:
+            group_id = call["params"].get("effectGroupId")
+            destination = next(row for row in final["runtimeProgram"]["effectGroups"] if row["id"] == group_id) if group_id else final["gameplay"]
+            assert destination["mobilityCooldownTicks"] == call["params"]["cooldownTicks"]
+            if call["fn"] == "recall_home_on_use":
+                assert {key: destination[key] for key in CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals} == dict(CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals)
+        receipts = final["runtimeContract"]["finalWireReceipts"]
+        assert audit_compiler_receipts(receipts, authored_document=doc, final_document=final)["ok"]
+        assert audit_compiler_receipts(receipts, final_document=final)["ok"]
+    assert doc == before
+
+
+@pytest.mark.parametrize("field", ["mobilityMode", "mobilityRangeTiles", "mobilitySafeTileOnly"])
+@pytest.mark.parametrize("mutation", ["drop", "duplicate", "wrong_type", "wrong_value", "cross_owner"])
+@pytest.mark.parametrize("source_available", [False, True])
+def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(field, mutation, source_available):
+    doc = _mobility_pair("move_player_on_use", "recall_home_on_use")
+    final = compile_runtime_program(doc)
+    rows = final["runtimeContract"]["finalWireReceipts"]
+    row = next(row for row in rows if row.get("fn") == "recall_home_on_use" and row["finalPath"].endswith("." + field))
+    assert row["finalPath"] == "runtimeProgram.effectGroups[1]." + field
+    expected = CAPABILITY_REGISTRY["recall_home_on_use"].fixed_wire_literals[field]
+    assert row["authoredPath"].endswith(".fn") and type(row["value"]) is type(expected) and row["value"] == expected
+    if mutation == "drop":
+        rows.remove(row)
+    elif mutation == "duplicate":
+        rows.append(deepcopy(row))
+    elif mutation in {"wrong_type", "wrong_value"}:
+        row["value"] = {"mobilityMode": True, "mobilityRangeTiles": False, "mobilitySafeTileOnly": 0}[field] if mutation == "wrong_type" else {
+            "mobilityMode": "blink_to_cursor", "mobilityRangeTiles": 1, "mobilitySafeTileOnly": True}[field]
+        final["runtimeProgram"]["effectGroups"][1][field] = row["value"]
+    else:
+        row["finalPath"] = "runtimeProgram.effectGroups[0]." + field
+        final["runtimeProgram"]["effectGroups"][0][field] = expected
+    assert not audit_compiler_receipts(rows, authored_document=doc if source_available else None, final_document=final)["ok"]
+    assert not validate_runtime_wire(final)["ok"]
+
+
+@pytest.mark.parametrize("fn", ["move_player_on_use", "recall_home_on_use"])
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monkeypatch, fn, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _mobility_pair("move_player_on_use", fn)
+    call = doc["runtimeProgram"]["calls"][-1]
+    call["params"]["cooldownTicks"] = True
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": "second_effect", "paths": ["params.cooldownTicks"]}]
+    fixed = deepcopy(call)
+    fixed["params"]["cooldownTicks"] = 90
+    expected = apply_repair_patch(doc, {"note": "one explicit leaf", "callsUpsert": [fixed]})
+    fixed["params"]["effectGroupId"] = "first"
+    hostile = deepcopy(doc["runtimeProgram"]["calls"][-2])
+    hostile["params"]["rangeTiles"] = 120
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc,
+        {"note": "one explicit leaf with frozen attacks", "realizationReplacement": doc["realization"], "callsUpsert": [fixed, hostile]},
+        format_mode, out_of_scope_response=fn == "recall_home_on_use")
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert repaired == expected
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
 def test_named_and_default_effects_remain_independent():

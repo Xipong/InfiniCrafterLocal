@@ -70,8 +70,10 @@ from infini_local.pipelines import llm_authoring_pipeline as pipeline
 )
 def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
     rows = runtime_authoring_registry_manifest()[key]
-    assert {r[identity] for r in rows} == set(registry)
-    assert len(rows) == len(registry)
+    expected = ({name for name, cap in registry.items() if cap.prompt_visible and cap.decision == "expose"}
+                if key == "capabilities" else set(registry))
+    assert {r[identity] for r in rows} == expected
+    assert len(rows) == len(expected)
     if key == "capabilities":
         assert all(r["slot"] and r["authority"] for r in rows)
         assert all(
@@ -80,13 +82,13 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
         )
 
 
-@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn in CAPABILITY_REGISTRY])
+@pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn, spec in CAPABILITY_REGISTRY.items() if spec.prompt_visible and spec.decision == "expose"])
 def test_registered_capability_survives_schema_card_projection_compiler_and_wire(fn):
     cap = CAPABILITY_REGISTRY[fn]
     variants = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {v["properties"]["fn"]["const"] for v in variants} == set(CAPABILITY_REGISTRY)
-    assert len(capability_provider_union()) == len(CAPABILITY_REGISTRY)
-    assert {c["fn"] for c in compact_capability_catalog()} == set(CAPABILITY_REGISTRY)
+    assert {v["properties"]["fn"]["const"] for v in variants} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert len(capability_provider_union()) == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
+    assert {c["fn"] for c in compact_capability_catalog()} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert all("*" not in p for p in cap.final_wire_paths)
     full, compact = cap.prompt_card(), cap.author_prompt_card()
     assert {k: v for k, v in compact.items() if k != "params"} == {k: v for k, v in full.items() if k != "params"}
@@ -96,9 +98,9 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     for name, spec in cap.params.items():
         row, original = compact["params"][name], full["params"][name]
         if fn != "add_equipment_damage_bonus":
-            assert any(p.rsplit(".", 1)[-1] in {name, spec.wire_name} for p in cap.final_wire_paths), (fn, name)
+            assert all(any(p.endswith("." + field) for p in cap.final_wire_paths) for field in spec.wire_field_names(name)), (fn, name)
         meaning = row.get("meaning", "")
-        if fn == "configure_armor" and name.startswith("setBonus"):
+        if fn == "configure_armor" and name.startswith("setBonus") and name != "setBonuses":
             meaning = guide["setBonusParamPrefix"] + meaning
         elif fn == "configure_armor" and not meaning:
             meaning = CAPABILITY_REGISTRY["configure_accessory"].params[name].description
@@ -132,7 +134,7 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
     if cap.params:
         rows = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
         direct = next(
-            (r for r in rows if r.get("fn") == fn and r.get("status") == "delivered" and ".params." in str(r.get("authoredPath") or "")),
+            (r for r in rows if r.get("fn") == fn and r.get("status") in {"delivered", "alias_lowering"} and ".params." in str(r.get("authoredPath") or "")),
             None,
         )
         if direct is None:
@@ -148,7 +150,8 @@ def test_library_audit_and_shared_notation_have_no_missing_boundary():
     report = capability_library_audit()
     assert report["ok"] and report["score"] == report["scoreMax"], report["issues"]
     metrics = report["metrics"]
-    assert metrics["capabilities"] == metrics["verticalSliceCount"] == len(CAPABILITY_REGISTRY)
+    assert metrics["capabilities"] == len(CAPABILITY_REGISTRY)
+    assert metrics["publicCapabilities"] == metrics["verticalSliceCount"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
     assert metrics["boundedNumericParameters"] == metrics["numericParameters"]
     assert metrics["typedEntityReferences"] == sum(
         1 for cap in CAPABILITY_REGISTRY.values() for spec in cap.params.values()

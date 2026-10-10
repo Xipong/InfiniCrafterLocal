@@ -67,7 +67,9 @@ def test_bad_placement_association_rejects_without_rewriting(fault):
     elif fault == "duplicate": document["runtimeProgram"]["calls"].append({**copy.deepcopy(body), "id":"duplicate_body"})
     before = json.dumps(document, sort_keys=True)
     report = validate_runtime_program(document)
-    code = "duplicate_placed_body_reference" if fault == "duplicate" else "placed_body_placement_reference"
+    code = ("duplicate_placed_body_reference" if fault == "duplicate"
+            else "shape_additional_property" if fault == "tile-and-wall"
+            else "placed_body_placement_reference")
     assert code in {r["code"] for r in report["errors"]}, report
     with pytest.raises(ValueError): compile_runtime_program(document)
     assert json.dumps(document, sort_keys=True) == before
@@ -327,22 +329,23 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 
 def test_absent_member_keeps_complete_legacy_compiled_bytes():
     from captured_parent_combat_author import historical_child_combat_wire
+    from captured_item_alias_wire import historical_item_alias_wire
     from beam_contract_checks import without_declared_beam_neutrals
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
     actual = {}
     for name in baseline:
-        final = historical_child_combat_wire(without_declared_targeting_neutrals(
-            without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name)))))
+        final = historical_item_alias_wire(historical_child_combat_wire(without_declared_targeting_neutrals(
+            without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))))
         # Compose historical child combat and declared neutral reversals. The
         # archive also predates ammo and the curve's exact inventory requirements.
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
                       "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
         added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
-        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29 + added_requirements
-        checks["exclusiveGroups"].remove("ammo_role")
-        checks["requirements"] -= 1 + added_requirements
+        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
+        assert checks["requirements"] == 31 + added_requirements
+        checks["exclusiveGroups"] = ["controller", "movement"]
+        checks["requirements"] -= 3 + added_requirements
         actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 
