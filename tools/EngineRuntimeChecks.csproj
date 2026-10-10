@@ -48,6 +48,7 @@
     <Compile Include="EngineRuntimeChecks.VfxShapes.cs" />
     <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />
     <Compile Include="EngineRuntimeChecks.BodyGeometry.cs" />
+    <Compile Include="EngineRuntimeChecks.ChannelBeam.cs" />
     <Compile Include="EngineRuntimeChecks.VfxPreview.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />

@@ -42,6 +42,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private bool _released;
     private int _chargeTicks;
     private int _controllerTimer;
+    private bool _beamManaClockStarted;
+    private uint _beamLastManaTick;
+    private readonly float[] _beamScanSamples = new float[3];
     private int _lastTarget = -1;
     private int _lastOwnerVectorSyncAge = -1000;
     private Vector2 _initialDirection = Vector2.UnitX;
@@ -139,6 +142,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
+            _beamManaClockStarted = false;
+            _beamLastManaTick = 0;
             _vfxSourceToken=0;
             _presentationGeneration=new object();
             _presentationRetired=false;

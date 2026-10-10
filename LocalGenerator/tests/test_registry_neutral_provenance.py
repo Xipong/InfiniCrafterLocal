@@ -21,6 +21,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
+                     "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
     "configure_item_stats": {"manaCost": 0},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
     "target_and_fire": {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
