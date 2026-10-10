@@ -228,7 +228,12 @@ public static partial class InfiniItemVfxRuntime
                     Lighting.AddLight(center, color.ToVector3() * strength);
                 continue;
             }
-            if (kind == InfiniVfxRendererKind.SoundCue) { SoundEngine.PlaySound(slot.ResolveSoundStyle() with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, center); continue; }
+            if (kind == InfiniVfxRendererKind.SoundCue)
+            {
+                SoundStyle sound = slot.ResolveSoundStyle();
+                if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
+                continue;
+            }
             // Item-location effects follow the weapon-facing axis; velocity is an
             // explicit alternate anchor, not an implicit replacement for that aim.
             Vector2 forward = player.itemRotation.ToRotationVector2() * player.direction;

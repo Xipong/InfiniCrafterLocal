@@ -143,6 +143,7 @@ Legacy C# DTO/Normalize-поля и выборочные исторически�
 - `move_owner_on_event` телепортирует только к **сохранённой позиции события** (ограничение `rangeTiles`, проверка safe tile, общий cooldown с `move_player_on_use`). Wire `Mode=blink_to_event_position` — фиксированный технический discriminator; старое `blink_to_entity` исполнялось той же веткой и больше не предлагается модели.
 - `oreSenseEnabled` — булево включение Terraria `Player.findTreasure`; legacy `GeneratedBuffSpec.OreSenseRadiusTiles` хранит только 0/1, **не радиус**. В prompt нет ложных тайлов.
 - `RuntimeParamsSpec.IntervalTicks` — только legacy fallback при нулевом typed `Targeting.IntervalTicks`; текущий Author требует положительный typed interval. `ShotEntity` и `SameTargetBias` в старом Params не потребляются: Author пишет typed `Targeting`.
+- `held generatedBuff`: snapshot ещё не имеет refresh generated utility buff при удержании; текущие held light/mining-speed поля не заменяют произвольный buff. Исторический consumer и его удаление описаны в A2 snapshot-аудита; возможное восстановление требует явного отдельного capability, не скрытого выбора по предмету.
 - Legacy `GameplaySpec.BuffCode`/`BuffTime` (`Item.buffType`/`buffTime`) сохраняются для старого wire. Новый Author использует явный многобафовый `ExtraBuffs` и не смешивает эти два пути; различие vanilla Item hook и пользовательского AddBuff не доказано эквивалентным.
 - `Archetype`, `Kind`, `Stage`, `PowerBudget` — исторические display/plan поля, не семантические маршрутизаторы. `Enabled`, opcodes, роли, `UseStyle` и DTO IDs выводятся из явно авторских calls.
 
@@ -150,7 +151,7 @@ Legacy C# DTO/Normalize-поля и выборочные исторически�
 
 ## Исторические возможности вне нынешнего executable surface
 
-До v5 Author мог выбирать held generatedBuff, отдельные эффекты alternate use, вероятностное расходование стека, Item.useAmmo/PickAmmo, точный sound catalog и target-biased child spawn. `extractinator_output` раньше исполнялся отдельным `GeneratedExtractinatorMaterial` proxy с type-wide `ItemID.Sets.ExtractinatorMode`, но этот C# тип удалён: нынешний `GeneratedItem` не может честно восстановить его одним instance-полем. Исторический `Attack.ShotCount` исполнялся в первичном Shoot; отдельный прежний sentry per-volley executor не доказан, а нынешний `target_and_fire` всегда выпускает одну сущность за interval. Эти решения **не восстановлены** equipment-проекцией и не входят в утверждение об AST parity. Новая поддержка требует отдельных низкоуровневых vertical slices с engine semantics, а не возврата whole-weapon macros или угадывания из parent prose.
+Историческая проверка должна учитывать удалённые consumers отдельно от нынешнего AST. В pre-v5 `f04ee02` реальный `GeneratedProjectile.Sentry.cs:42–53` исполняет shotCount/spread за залп: этот механизм доказан. Вероятность собственного расхода сохранялась при импорте v5 и исчезла 2 августа (`3831d93`/`7f4e86a`). Ammo-side PickAmmo существует и не заменяет weapon Item.useAmmo. Старый Extractinator proxy хранил output в instance Data, но ExtractinatorUse неинстансный; intended per-instance output не доказан рабочим, а удаление произошло 15 июля (`5adb9fa`). Полная классификация с ранними архивами, source paths и ограничениями — [исторический snapshot-аудит](HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md). Последующие restoration PR оцениваются отдельно: snapshot не является реестром текущих возможностей. Новая поддержка требует explicit bounded primitives и полного vertical slice, без whole-weapon macros.
 
 <a id="units"></a>
 
@@ -162,7 +163,7 @@ Legacy C# DTO/Normalize-поля и выборочные исторически�
 
 ## Границы проверки
 
-AST audit анализирует DTO и названные C# executor seams; он не заменяет полноценный compiler/semantic analysis всех tML API. Headless C# тесты покрывают projection/equip и cooldown, но не Terraria world loop, GPU или multiplayer. Live20 проверяет Author pipeline на внешней модели, а не выполнение в игре.
+AST audit анализирует нынешние DTO и названные C# executor seams. Удалённое вместе с consumer поле исчезает из этого множества: текущий PASS не доказывает исторический паритет. Audit не заменяет полноценный compiler/semantic analysis всех tML API. Headless C# тесты покрывают projection/equip и cooldown, но не Terraria world loop, GPU или multiplayer. Live20 проверяет Author pipeline на внешней модели, а не выполнение в игре.
 
 <a id="refresh"></a>
 
