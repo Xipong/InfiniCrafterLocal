@@ -296,8 +296,11 @@ def _compile_entity_call(
         spawn["enabled"] = True
         ctx.write_derived(call=call, path=f"{base}.spawn.enabled", value=True, target=spawn, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "set_projectile_concurrency":
+    if fn in {"set_projectile_concurrency", "set_descendant_concurrency"}:
         project(component("spawn"), f"{base}.spawn", p)
+        return
+    if fn == "set_projectile_sentry":
+        project(entity, base, p)
         return
     if fn == "set_projectile_damage":
         damage = component("damage")
