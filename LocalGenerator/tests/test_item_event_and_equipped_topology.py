@@ -47,7 +47,7 @@ def test_spawn_binding_emits_item_body_on_use_even_with_projectile_target() -> N
     authored["runtimeProgram"]["calls"].append({
         "id": "body_use_child", "fn": "spawn_entity_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     assert strict_author_shape_report(authored)["ok"]
     assert validate_runtime_program(authored)["ok"]
@@ -185,7 +185,7 @@ def test_incompatible_event_projection_respects_frozen_contact_and_action_target
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
@@ -229,7 +229,7 @@ def test_incompatible_event_repair_can_update_existing_contact_without_changing_
     authored["runtimeProgram"]["calls"].append({
         "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{

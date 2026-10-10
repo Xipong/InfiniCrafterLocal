@@ -100,10 +100,12 @@ def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     from sentry_contract_checks import without_declared_targeting_neutrals
     from beam_contract_checks import without_declared_beam_neutrals
+    from captured_parent_combat_author import historical_child_combat_wire
+    from captured_item_alias_wire import historical_item_alias_wire
 
     for name, expected_hash in baseline.items():
         final = without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name)))))
+            without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name))))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
         added_modifier_caps = (
