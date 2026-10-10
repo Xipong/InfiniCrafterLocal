@@ -1276,6 +1276,80 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "configure_weapon_ammo"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "ammoCategory": {
+                        "type": "string",
+                        "enum": [
+                          "arrow",
+                          "bullet",
+                          "candy_corn",
+                          "coin",
+                          "dart",
+                          "fallen_star",
+                          "flare",
+                          "gel",
+                          "jack_o_lantern",
+                          "nail_friendly",
+                          "rocket",
+                          "snowball",
+                          "solution",
+                          "stake",
+                          "stynger_bolt"
+                        ],
+                        "description": "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks",
+                        "x-infini-semanticType": "terraria_ammo_id_category"
+                      },
+                      "speedBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_spawn",
+                          "native_shot"
+                        ],
+                        "description": "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "ammoCategory",
+                      "speedBasis"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "configure_vanilla_ammo_item"
                   },
                   "target": {

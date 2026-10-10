@@ -89,9 +89,10 @@ public sealed partial class GeneratedItemData
             ? RuntimeProgram.TryGetEntity(primary.UsePolicy.Action.TargetId)
             : null;
         item.shootSpeed = primaryEntity?.Spawn.SpeedPxPerTick ?? 0f;
+        ApplyWeaponAmmoField(item, primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity);
 
         // Exact Terraria ammo-item projection. Item.ammo means “this item is ammo”;
-        // Item.useAmmo would mean “this weapon consumes ammo” and is intentionally not
+        // The separate explicit WeaponAmmo capability owns Item.useAmmo. Neither is
         // inferred here. The projectile ID is authored explicitly rather than selected
         // from a family/category table.
         item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory(Gameplay.AmmoCategory);
@@ -125,6 +126,10 @@ public sealed partial class GeneratedItemData
         item.UseSound = null;
         StampAppliedTrace(item);
     }
+
+    internal void ApplyWeaponAmmoField(Item item, bool activeSpawn)
+        => item.useAmmo = activeSpawn && RuntimeProgram.WeaponAmmo is { } ammo
+            ? TerrariaRuntimeVocabulary.ResolveAmmoCategory(ammo.AmmoCategory) : AmmoID.None;
 
     internal void ApplyUseEffectFields(Item item, bool enabled)
     {

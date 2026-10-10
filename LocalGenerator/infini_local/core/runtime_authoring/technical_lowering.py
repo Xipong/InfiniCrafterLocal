@@ -459,6 +459,14 @@ def audit_compiler_receipts(
                 "finalPath": path,
                 "reason": "final wire value differs from compiler receipt",
             })
+        if fn == "configure_weapon_ammo" and receipt.get("status") == "technical_projection":
+            match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.fn", authored_path)
+            source = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
+            valid = bool(match) and path == "runtimeProgram.weaponAmmo"
+            if authored_document is not None:
+                valid = valid and isinstance(source, Mapping) and source.get("fn") == fn and source.get("id") == receipt.get("callId")
+            if not valid:
+                violations.append({"fn": fn, "finalPath": path, "reason": "weapon ammo semantics lack their exact originating capability selection"})
         if authored_document is not None:
             reason = (_visual_receipt_source_error(receipt, authored_document, final_document)
                       if lowerer_id == "entity_kind_to_visual_role"
@@ -944,6 +952,23 @@ def audit_compiler_receipts(
                             "reason": "declared neutral omission has no unique omission receipt",
                         })
     if final_document is not None:
+        if _final_value(final_document, "runtimeProgram.weaponAmmo") is not _MISSING:
+            selections = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
+                          and row.get("finalPath") == "runtimeProgram.weaponAmmo"
+                          and row.get("status") == "technical_projection"
+                          and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.fn", str(row.get("authoredPath") or ""))]
+            if len(selections) != 1:
+                violations.append({"finalPath": "runtimeProgram.weaponAmmo", "reason": "weapon ammo has no unique fn-selected semantics receipt"})
+            else:
+                selection = selections[0]
+                prefix = selection["authoredPath"].rsplit(".", 1)[0] + ".params."
+                for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params:
+                    rows = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
+                            and row.get("callId") == selection.get("callId") and row.get("authoredPath") == prefix + name
+                            and row.get("finalPath") == "runtimeProgram.weaponAmmo." + name and row.get("status") == "delivered"]
+                    if len(rows) != 1:
+                        violations.append({"finalPath": "runtimeProgram.weaponAmmo." + name,
+                                           "reason": "weapon ammo choice has no unique originating parameter receipt"})
         # Presence is an explicit root-PNG source selection. With provenance
         # supplied, every body requires one exact association and each transform
         # requires its own unique receipt from that association's source call.
