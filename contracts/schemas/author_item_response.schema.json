@@ -3164,13 +3164,240 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "speedPxPerUpdate": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 80,
-                        "description": "Initial Projectile.velocity pixels per projectile update; without steering/collisions, speed 10 with updatesPerTick=2 moves ~20 px/world tick",
-                        "x-infini-units": "pixels/projectile update",
-                        "x-infini-semanticType": "unitless_scalar"
+                      "velocity": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "constantSpeedPxPerUpdate": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 80,
+                                "description": "Initial velocity magnitude; each extra update moves this many pixels before movement/collisions.",
+                                "x-infini-units": "pixels/projectile update",
+                                "x-infini-semanticType": "initial_velocity_speed",
+                                "x-infini-neutral": 0,
+                                "x-infini-consumerConstraint": {
+                                  "storage": "float32",
+                                  "neutral": 0,
+                                  "rule": "nonneutral_must_remain_nonneutral",
+                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                }
+                              }
+                            },
+                            "required": [
+                              "constantSpeedPxPerUpdate"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Exact constant-speed deterministic fan; preserves the established wire."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "fanSpeed": {
+                                "type": "object",
+                                "properties": {
+                                  "minSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  },
+                                  "maxSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "minSpeedPxPerUpdate",
+                                  "maxSpeedPxPerUpdate"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."
+                              }
+                            },
+                            "required": [
+                              "fanSpeed"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "radial": {
+                                "type": "object",
+                                "properties": {
+                                  "minSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  },
+                                  "maxSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "minSpeedPxPerUpdate",
+                                  "maxSpeedPxPerUpdate"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Sample each direction uniformly over the full circle and speed uniformly between min and max."
+                              }
+                            },
+                            "required": [
+                              "radial"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Sample each direction uniformly over the full circle and speed uniformly between min and max."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "disk": {
+                                "type": "object",
+                                "properties": {
+                                  "maxSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "maxSpeedPxPerUpdate"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."
+                              }
+                            },
+                            "required": [
+                              "disk"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "cone": {
+                                "type": "object",
+                                "properties": {
+                                  "minSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  },
+                                  "maxSpeedPxPerUpdate": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 80,
+                                    "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                    "x-infini-units": "pixels/projectile update",
+                                    "x-infini-semanticType": "initial_velocity_speed",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  },
+                                  "halfAngleRadians": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 3.141592653589793,
+                                    "description": "Uniform signed angular jitter around each existing fan direction.",
+                                    "x-infini-units": "radians",
+                                    "x-infini-semanticType": "radians",
+                                    "x-infini-neutral": 0,
+                                    "x-infini-consumerConstraint": {
+                                      "storage": "float32",
+                                      "neutral": 0,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "minSpeedPxPerUpdate",
+                                  "maxSpeedPxPerUpdate",
+                                  "halfAngleRadians"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."
+                              }
+                            },
+                            "required": [
+                              "cone"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."
+                          }
+                        ],
+                        "description": "Select exactly one initial velocity rule. Owner samples a seeded batch once; native projectile state synchronizes the result. No peer reroll or inferred distribution.",
+                        "x-infini-semanticType": "initial_velocity_distribution"
                       },
                       "count": {
                         "type": "integer",
@@ -3207,7 +3434,7 @@
                           "velocity",
                           "none"
                         ],
-                        "description": "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity",
+                        "description": "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "position": {
@@ -3276,7 +3503,7 @@
                       }
                     },
                     "required": [
-                      "speedPxPerUpdate",
+                      "velocity",
                       "offsetPx",
                       "aim",
                       "position"
@@ -6073,6 +6300,373 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "spawn_entity_from_hit_target"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "type": "string",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "entity": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform",
+                        "x-infini-semanticType": "runtime_entity_id",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "free_projectile",
+                            "child_projectile"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": true
+                        }
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 12,
+                        "description": "Number of independently placed children",
+                        "x-infini-semanticType": "spawn_or_target_count"
+                      },
+                      "geometry": {
+                        "type": "object",
+                        "properties": {
+                          "beforeProbability": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1,
+                            "description": "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance.",
+                            "x-infini-units": "probability",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float64",
+                              "rule": "finite_double_no_normalization",
+                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                            }
+                          },
+                          "hitboxMaxSideFactor": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2,
+                            "description": "Clearance radius uses max(target.width,target.height) times this factor, plus clearancePx.",
+                            "x-infini-units": "hitbox max-side factor",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "clearancePx": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 128,
+                            "description": "Additional target-centre clearance, explicitly added to the selected hitbox radius.",
+                            "x-infini-units": "pixels",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "beforePositionJitterRadiusPx": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 128,
+                            "description": "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter.",
+                            "x-infini-units": "pixels",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "beforeDirectionJitterRadians": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 3.141592653589793,
+                            "description": "Before-target direction gets uniform signed jitter within this half-angle around the event direction.",
+                            "x-infini-units": "radians",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "afterFanSpreadRadians": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 6.283185307179586,
+                            "description": "After-target directions use the deterministic inclusive fan over all child indices; each origin lies on its own ray.",
+                            "x-infini-units": "radians",
+                            "x-infini-semanticType": "spawn_geometry",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "initialIgnoreCountdownUpdates": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 600,
+                            "description": "Exact initial NPC exclusion counter, decremented before collision: 10 blocks before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
+                            "x-infini-units": "projectile AI countdown updates",
+                            "x-infini-semanticType": "initial_target_exclusion_countdown"
+                          }
+                        },
+                        "required": [
+                          "beforeProbability",
+                          "hitboxMaxSideFactor",
+                          "clearancePx",
+                          "beforePositionJitterRadiusPx",
+                          "beforeDirectionJitterRadians",
+                          "afterFanSpreadRadians",
+                          "initialIgnoreCountdownUpdates"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Explicit hit-target-relative origin and direction sampling. Capture target geometry/event direction and owner seed at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
+                        "x-infini-semanticType": "hit_target_spawn_geometry"
+                      },
+                      "damageBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child damage source, selected independently of its velocity and knockback",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "knockbackBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child knockback source, selected independently of damage",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "damageMultiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 4,
+                        "description": "Multiply the selected damage exactly once; zero preserves a zero-damage child",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "World-tick delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted",
+                        "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks"
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "entity",
+                      "count",
+                      "geometry",
+                      "damageBasis",
+                      "knockbackBasis",
+                      "damageMultiplier",
+                      "delayTicks"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "select_targets_and_emit_on_event"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "type": "string",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "description": "Execute on this exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "entity": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Independent free/child projectile with explicit origin/velocity spawn, zero offset and no over-target adapter",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "free_projectile",
+                            "child_projectile"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": true
+                        }
+                      },
+                      "stepCount": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 12,
+                        "description": "Maximum planned links, one child per link; bounded by the shared activation spawn budget",
+                        "x-infini-units": "projectiles",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "stepRangeTiles": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 60,
+                        "description": "Inclusive geometric search radius measured anew from the selected anchor on each step",
+                        "x-infini-units": "tiles",
+                        "x-infini-semanticType": "tiles"
+                      },
+                      "selectionAnchor": {
+                        "type": "string",
+                        "enum": [
+                          "previous_target",
+                          "event_target"
+                        ],
+                        "description": "previous_target advances search/emission origin to each selected NPC; event_target keeps the dispatch-time source NPC center",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "repeatPolicy": {
+                        "type": "string",
+                        "enum": [
+                          "allow_revisits",
+                          "exclude_visited"
+                        ],
+                        "description": "The current anchor is always excluded. allow_revisits permits earlier NPCs again; exclude_visited excludes source and every previously selected NPC",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "requireLineOfSight": {
+                        "type": "boolean",
+                        "description": "Require native Collision.CanHit from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "initialIgnoreCountdownUpdates": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Exclude the exact emission-anchor NPC while this native AI countdown is positive; decremented before collision, so 10 means pre-AI plus nine post-AI collision opportunities; 0 disables",
+                        "x-infini-units": "native projectile AI updates",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "delayTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600,
+                        "description": "Dispatch delay in world ticks; delayed source NPC must retain its active exact incarnation",
+                        "x-infini-units": "world ticks",
+                        "x-infini-semanticType": "ticks"
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "entity",
+                      "stepCount",
+                      "stepRangeTiles",
+                      "selectionAnchor",
+                      "repeatPolicy",
+                      "requireLineOfSight",
+                      "initialIgnoreCountdownUpdates",
+                      "delayTicks"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "apply_status_on_event"
                   },
                   "target": {
@@ -6281,14 +6875,14 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Maximum chained targets",
+                        "description": "Maximum instantly damaged radial targets",
                         "x-infini-semanticType": "spawn_or_target_count"
                       },
                       "rangeTiles": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 60,
-                        "description": "Search radius",
+                        "description": "Fixed search radius from the original event position",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },

@@ -327,20 +327,38 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+def test_absent_member_keeps_complete_historical_wire_bytes():
+    """Keep the original cec64b6 complete-wire oracle, including provenance."""
     from captured_parent_combat_author import historical_child_combat_wire
+    from captured_item_alias_wire import historical_item_alias_wire
     from beam_contract_checks import without_declared_beam_neutrals
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
 
-    baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name: hashlib.sha256(json.dumps(
-        without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))),
-        ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
+    fixture = Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json"
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == "41c670ba3fd12a44a2436bc6226bf815628e3d4c64d04f4efd3cc586b628a43a"
+    baseline = json.loads(fixture.read_text())
+    actual = {}
+    for name in baseline:
+        authored = build_runtime_fixture(name)
+        compiled = compile_runtime_program(authored)
+        assert validate_runtime_wire(compiled)["ok"]
+        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=authored, final_document=compiled)["ok"]
+        final = historical_item_alias_wire(without_declared_targeting_neutrals(
+            without_declared_beam_neutrals(without_captured_projectile_alias_delta(
+                historical_child_combat_wire(compiled)))))
+        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                      "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
+        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
+        checks["requirements"] = 28
+        checks["exclusiveGroups"] = ["controller", "movement"]
+        actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 
-
 def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from captured_spawn_velocity_author import captured_spawn_velocity_author
     from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical, _historical_spawn_defaults
     from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 
@@ -352,8 +370,72 @@ def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts(
     # explicit at-position zero DTO defaults with an exact assertion.
     corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
     for row in corpus["cases"]:
-        compiled = compile_runtime_program(captured_parent_combat_author(_current_author_seed(row["authored"])))
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"]))))
         delivered = _historical_spawn_defaults(_delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))), row["expectedDeliveryWire"])
         assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
         assert delivered == row["expectedDeliveryWire"]
         assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
+    """Current-main additions coexist with this feature through real offline callers."""
+    from copy import deepcopy
+    import json
+    from jsonschema import Draft202012Validator
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = placed()
+    calls = doc["runtimeProgram"]["calls"]
+    owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
+    for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
+        for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
+            if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
+                continue
+            row["id"] = "combined_" + str(len(calls))
+            if fn == "set_projectile_hitbox_curve":
+                row["target"] = owner
+            else:
+                row.pop("target", None)
+            calls.append(row)
+    before = json.dumps(doc, sort_keys=True)
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    responses, requests = wire_transport
+    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    responses.append(payload)
+    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "combined-offline")
+    assert accepted is not None and len(requests) == 1 and not responses
+    request = requests[0]
+    assert request["response_format"]["type"] == format_mode
+    if format_mode == "json_schema":
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+    assert json.dumps(accepted["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)
+    wire = compile_runtime_program(accepted)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=accepted, final_document=wire)["ok"]
+    assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "authored_spawn"}
+    assert wire["runtimeProgram"]["heldEffectGroupId"] == "witness"
+    assert [group["id"] for group in wire["runtimeProgram"]["effectGroups"]] == ["witness"]
+    assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
+
+    broken = deepcopy(accepted)
+    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    curve["params"]["endScale"] = 9
+    candidate = deepcopy(curve)
+    candidate["params"].update(endScale=0.25, startScale=7)
+    frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
+    frozen["params"]["ammoCategory"] = "bullet"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
+        {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
+         "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert json.dumps(repaired["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)
+    repaired_wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(repaired_wire)["ok"]
+    assert repaired_wire["runtimeProgram"] == wire["runtimeProgram"]
+    assert audit_compiler_receipts(repaired_wire["runtimeContract"]["finalWireReceipts"], authored_document=repaired, final_document=repaired_wire)["ok"]
+    assert json.dumps(doc, sort_keys=True) == before

@@ -538,7 +538,7 @@ CSHARP_SEAMS = [
     ("Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs", "", "", "RuntimeDelayedActionScheduler.TrySchedule", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "RuntimeProgramExecutor.ExecuteAction", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "PostUpdateEverything", True),
-    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "reservedSpawnBudget = budget.Reserve(action.Count)", True),
+    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "reservedSpawnBudget = budget.Reserve(action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "pending.Budget.Return(pending.ReservedSpawnBudget)", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxPendingRuntimeActions", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick", True),

@@ -6,6 +6,7 @@ using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using BigInteger = System.Numerics.BigInteger;
 using Terraria;
 using Terraria.DataStructures;
 
@@ -34,6 +35,7 @@ internal static class RuntimeProgramExecutor
         {
             RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
+            RuntimeEventActionCode.SelectTargetsAndEmit => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage
                 => ShouldRunNpcEvent(action, owner),
             RuntimeEventActionCode.Pull => action.Mode == "owner_to_target"
@@ -74,7 +76,8 @@ internal static class RuntimeProgramExecutor
         int childDepth,
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget = 0,
-        RuntimeParentCombat? parentCombat = null)
+        RuntimeParentCombat? parentCombat = null,
+        RuntimeHitTargetSpawnSnapshot? hitTargetSpawn = null)
     {
         if (!HasActionAuthority(action, owner))
         {
@@ -84,8 +87,17 @@ internal static class RuntimeProgramExecutor
         switch (action.ActionCode)
         {
             case RuntimeEventActionCode.SpawnEntity:
+                if (action.HitTargetSpawn is not null && (!sourceEntity.IsProjectileEntity
+                    || action.Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)))
+                {
+                    budget.Return(reservedSpawnBudget);
+                    return;
+                }
                 SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget,
-                    parentCombat ?? RuntimeParentCombat.Capture(source, owner));
+                    parentCombat ?? RuntimeParentCombat.Capture(source, owner), directTarget, hitTargetSpawn);
+                break;
+            case RuntimeEventActionCode.SelectTargetsAndEmit:
+                SelectTargetsAndEmit(data, action, owner, source, directTarget, childDepth, budget, reservedSpawnBudget);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (directTarget is { active: true })
@@ -118,6 +130,110 @@ internal static class RuntimeProgramExecutor
     internal static float EventSpawnDamageMultiplier(RuntimeEventActionSpec action)
         => Math.Clamp(action.DamageMultiplier, 0f, 10f);
 
+    internal readonly record struct TargetEmissionStep(
+        int TargetNpcSlot, RuntimeSpawnTransform Transform, RuntimeInitialNpcExclusion Exclusion);
+
+    internal static IReadOnlyList<TargetEmissionStep> PlanTargetEmissions(RuntimeEventActionSpec action, NPC initialTarget, int capacity)
+    {
+        var steps = new List<TargetEmissionStep>();
+        if (action.ActionCode != RuntimeEventActionCode.SelectTargetsAndEmit || action.StepCount is null
+            || action.StepRangeTiles is null || action.SelectionAnchor is null || action.RepeatPolicy is null
+            || action.RequireLineOfSight is null || action.InitialIgnoreCountdownUpdates is null
+            || capacity <= 0 || initialTarget.whoAmI < 0 || initialTarget.whoAmI >= Main.maxNPCs
+            || !ReferenceEquals(Main.npc[initialTarget.whoAmI], initialTarget))
+            return steps;
+        int count = Math.Min(action.StepCount.Value, capacity);
+        double radius = action.StepRangeTiles.Value * 16d;
+        if (!double.IsFinite(radius) || radius <= 0d) return steps;
+        // Every finite binary32 coordinate is an integer multiple of 2^-149.
+        // The admitted binary64 radius (16..960) lies on this same lattice.
+        // Scaling by a power of two is exact; compare integer squared lengths
+        // rather than lose a small orthogonal term in a rounded double sum.
+        BigInteger radiusUnits = new(Math.ScaleB(radius, 149));
+        BigInteger radiusSquared = radiusUnits * radiusUnits;
+        var visited = new HashSet<NPC> { initialTarget };
+        NPC previous = initialTarget;
+        for (int step = 0; step < count; step++)
+        {
+            NPC anchor = action.SelectionAnchor == "previous_target" ? previous : initialTarget;
+            Vector2 origin = anchor.Center;
+            if (!float.IsFinite(origin.X) || !float.IsFinite(origin.Y)
+                || !RuntimeInitialNpcExclusion.TryCapture(anchor, action.InitialIgnoreCountdownUpdates.Value, out var exclusion))
+                break;
+            BigInteger originX = new(Math.ScaleB(origin.X, 149));
+            BigInteger originY = new(Math.ScaleB(origin.Y, 149));
+            NPC? next = null;
+            BigInteger nearestSquared = default;
+            foreach (NPC npc in Main.ActiveNPCs)
+            {
+                if (!npc.CanBeChasedBy() || ReferenceEquals(npc, anchor)
+                    || action.RepeatPolicy == "exclude_visited" && visited.Contains(npc))
+                    continue;
+                Vector2 center = npc.Center;
+                if (!float.IsFinite(center.X) || !float.IsFinite(center.Y)) continue;
+                BigInteger dx = new BigInteger(Math.ScaleB(center.X, 149)) - originX;
+                BigInteger dy = new BigInteger(Math.ScaleB(center.Y, 149)) - originY;
+                BigInteger distanceSquared = dx * dx + dy * dy;
+                // Coincident centers have no authored direction; a strictly
+                // outside point cannot become an inclusive-boundary false tie.
+                if (distanceSquared.IsZero || distanceSquared > radiusSquared)
+                    continue;
+                if (action.RequireLineOfSight == true
+                    && !Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height))
+                    continue;
+                if (next is null || distanceSquared < nearestSquared
+                    || distanceSquared == nearestSquared && npc.whoAmI < next.whoAmI)
+                {
+                    next = npc;
+                    nearestSquared = distanceSquared;
+                }
+            }
+            if (next is null) break;
+            var transform = new RuntimeSpawnTransform(origin, next.Center - origin);
+            if (!transform.IsValid) break;
+            steps.Add(new(next.whoAmI, transform, exclusion));
+            previous = next;
+            visited.Add(next);
+        }
+        return steps;
+    }
+
+    private static void SelectTargetsAndEmit(
+        GeneratedItemData data, RuntimeEventActionSpec action, Player owner, IEntitySource source,
+        NPC? directTarget, int childDepth, RuntimeSpawnBudget budget, int reservedSpawnBudget)
+    {
+        RuntimeEntitySpec? child = data.RuntimeProgram.TryGetEntity(action.EntityId);
+        if (directTarget is null || childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
+            || !RuntimeEventActionSpec.SupportsTargetEmission(child) || action.StepCount is null)
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.StepCount.Value);
+        int unattempted = granted;
+        try
+        {
+            // Snapshot the complete bounded path in this callback. Later child
+            // hits neither move the anchor nor force any planned target to take damage.
+            foreach (TargetEmissionStep step in PlanTargetEmissions(action, directTarget, granted))
+            {
+                // Transfer one reservation to the real spawn boundary. Its
+                // exception path owns this one; finally owns only unattempted links.
+                unattempted--;
+                int spawned = GeneratedProjectile.SpawnRuntimeEntity(data, child!.Id, owner, source,
+                    step.Transform.Position, step.Transform.Direction, childDepth + 1, 1,
+                    requestedCount: 1, spreadOverride: 0f, activationBudget: budget,
+                    initialNpcExclusion: step.Exclusion, initialTransform: step.Transform);
+                if (spawned == 0)
+                {
+                    budget.Return(1);
+                    break;
+                }
+            }
+        }
+        finally { budget.Return(unattempted); }
+    }
+
     private static void SpawnEntity(
         GeneratedItemData data,
         RuntimeEventActionSpec action,
@@ -128,7 +244,9 @@ internal static class RuntimeProgramExecutor
         int childDepth,
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget,
-        RuntimeParentCombat parentCombat)
+        RuntimeParentCombat parentCombat,
+        NPC? directTarget,
+        RuntimeHitTargetSpawnSnapshot? hitTargetSpawn)
     {
         // Reserve observes concurrent child retirement; a stale Remaining=0
         // must not bypass it for an immediate event-only producer.
@@ -149,6 +267,12 @@ internal static class RuntimeProgramExecutor
             budget.Return(reservedSpawnBudget);
             return;
         }
+        if (action.HitTargetSpawn is not null)
+        {
+            SpawnHitTargetChildren(data, action, target, owner, source, direction, directTarget,
+                childDepth, budget, reservedSpawnBudget, damageOverride, knockbackOverride, hitTargetSpawn);
+            return;
+        }
         int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
         int requested = Math.Min(action.Count, granted);
         int spawned = requested > 0 ? GeneratedProjectile.SpawnRuntimeEntity(
@@ -167,6 +291,63 @@ internal static class RuntimeProgramExecutor
             rootDamageOverride: damageOverride,
             rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
+    }
+
+    private static void SpawnHitTargetChildren(
+        GeneratedItemData data, RuntimeEventActionSpec action, RuntimeEntitySpec child,
+        Player owner, IEntitySource source, Vector2 direction, NPC? directTarget,
+        int childDepth, RuntimeSpawnBudget budget, int reservedSpawnBudget,
+        int? damageOverride, float? knockbackOverride, RuntimeHitTargetSpawnSnapshot? admittedSnapshot)
+    {
+        RuntimeHitTargetSpawnSpec spec = action.HitTargetSpawn!;
+        if (!spec.IsValid || !RuntimeEventActionSpec.SupportsTargetEmission(child)
+            || action.DamageBasis is null || action.KnockbackBasis is null
+            || action.Count < 1 || action.Count > 12 || action.SpreadRadians != 0f
+            || !float.IsFinite(action.DamageMultiplier) || action.DamageMultiplier < 0f || action.DamageMultiplier > 4f)
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        RuntimeHitTargetSpawnSnapshot snapshot;
+        if (admittedSnapshot is { } captured)
+            snapshot = captured;
+        else if (!RuntimeHitTargetSpawnSnapshot.TryCapture(spec, directTarget, direction, out snapshot))
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
+        int unattempted = granted;
+        try
+        {
+            int count = Math.Min(Math.Min(action.Count, granted), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                - GeneratedProjectile.CountActiveGeneratedProjectiles(owner.whoAmI));
+            if (count <= 0 || !GeneratedProjectile.CanAdmitEntityBatch(data, child, owner.whoAmI, count))
+                return;
+            if (admittedSnapshot is null)
+                snapshot = snapshot with { Seed = Main.rand.Next() };
+            if (!RuntimeHitTargetSpawn.TryPlan(spec, snapshot, count, out var transforms, out var velocitySeeds))
+                return;
+            for (int i = 0; i < count; i++)
+            {
+                // Transfer exactly one reservation before dispatch. The callee
+                // refunds its attempted slot on exception; this finally owns
+                // only those slots which have not yet crossed the boundary.
+                unattempted--;
+                int spawned = GeneratedProjectile.SpawnRuntimeEntity(data, child.Id, owner, source,
+                    transforms[i].Position, transforms[i].Direction, childDepth + 1, 1,
+                    requestedCount: 1, spreadOverride: 0f,
+                    damageMultiplier: EventSpawnDamageMultiplier(action), activationBudget: budget,
+                    rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride,
+                    initialNpcExclusion: snapshot.Exclusion, initialTransform: transforms[i],
+                    initialVelocitySeed: velocitySeeds[i]);
+                budget.Return(1 - spawned);
+            }
+        }
+        finally
+        {
+            budget.Return(unattempted);
+        }
     }
 
     // Item stats are projected into Gameplay; projectile stats belong to the exact

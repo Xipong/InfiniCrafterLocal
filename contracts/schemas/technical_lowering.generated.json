@@ -406,6 +406,10 @@
       "outputs": [
         "runtimeProgram.entities[].spawn.enabled",
         "runtimeProgram.entities[].spawn.speedPxPerTick",
+        "runtimeProgram.entities[].spawn.velocityDistribution.kind",
+        "runtimeProgram.entities[].spawn.velocityDistribution.minSpeedPxPerUpdate",
+        "runtimeProgram.entities[].spawn.velocityDistribution.maxSpeedPxPerUpdate",
+        "runtimeProgram.entities[].spawn.velocityDistribution.halfAngleRadians",
         "runtimeProgram.entities[].spawn.count",
         "runtimeProgram.entities[].spawn.spreadRadians",
         "runtimeProgram.entities[].spawn.offsetPx",
@@ -938,6 +942,52 @@
         "runtimeProgram.entities[].events[].damageBasis",
         "runtimeProgram.entities[].events[].knockbackBasis",
         "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "spawn_entity_from_hit_target",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].count",
+        "runtimeProgram.entities[].events[].spreadRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforeProbability",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.hitboxMaxSideFactor",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.clearancePx",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforePositionJitterRadiusPx",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.beforeDirectionJitterRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.afterFanSpreadRadians",
+        "runtimeProgram.entities[].events[].hitTargetSpawn.initialIgnoreCountdownUpdates",
+        "runtimeProgram.entities[].events[].damageBasis",
+        "runtimeProgram.entities[].events[].knockbackBasis",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "select_targets_and_emit_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].stepCount",
+        "runtimeProgram.entities[].events[].stepRangeTiles",
+        "runtimeProgram.entities[].events[].selectionAnchor",
+        "runtimeProgram.entities[].events[].repeatPolicy",
+        "runtimeProgram.entities[].events[].requireLineOfSight",
+        "runtimeProgram.entities[].events[].initialIgnoreCountdownUpdates",
         "runtimeProgram.entities[].events[].delayTicks"
       ]
     },

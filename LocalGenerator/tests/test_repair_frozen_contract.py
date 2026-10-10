@@ -15,6 +15,7 @@ from infini_local.pipelines import visual_generation_pipeline as visual
 from tests.test_visual_presentation_metadata import kit
 from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_parent_combat_author import captured_parent_combat_author
+from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
 
 
 _TYPE_PAIRS = [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)]
@@ -122,7 +123,7 @@ def _historical_names(document):
             del params["tileId"]
         project_captured_projectile_call(row)
     from tests.captured_projectile_author import project_captured_author_notation
-    return project_captured_author_notation(captured_parent_combat_author(projected))
+    return project_captured_author_notation(captured_spawn_velocity_author(captured_parent_combat_author(projected)))
 
 
 def test_replay_frozen_provenance():

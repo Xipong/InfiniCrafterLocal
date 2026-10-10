@@ -202,6 +202,7 @@ Event actions:
 | pull_on_event | 5 |
 | heal_owner_on_event | 6 |
 | move_owner_on_event | 7 |
+| select_targets_and_emit_on_event | 8 |
 
 ### Entity kind → visual role
 

@@ -35,6 +35,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_CAPABILITIES,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
+    compatible_entity_reference_ids,
     event_dependency_alternatives,
     visible_capabilities,
 )
@@ -70,6 +71,9 @@ _NODE_PATH_RE = re.compile(
 # retry or an empty patch.
 REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "unsupported_param_target_kind": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
+    "unsupported_param_variant_target_kind": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
+    "unordered_param_range": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
+    "incompatible_param_variant": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
     "consumer_representability": {"strategy": "patch_exact_param", "llmRepairable": True, "allowNodeDelete": False},
     "ambiguous_global_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
@@ -118,6 +122,7 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "unsupported_input_action": {"strategy": "patch_exact_input_or_action", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_binding_target_kind": {"strategy": "retarget_exact_binding", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_reference_target_kind": {"strategy": "patch_exact_reference", "llmRepairable": True, "allowNodeDelete": False},
+    "reference_requirements_unsatisfied": {"strategy": "retarget_or_create_compatible_entity_keep_existing_frozen", "llmRepairable": True, "allowNodeDelete": False},
     "wrong_target_kind": {"strategy": "retarget_exact_call", "llmRepairable": True, "allowNodeDelete": False},
 }
 
@@ -325,7 +330,9 @@ def _capability_dependency_closure(names: Iterable[str]) -> set[str]:
         cap = CAPABILITY_REGISTRY[name]
         pending.extend(value for value in cap.dependencies if value in CAPABILITY_REGISTRY)
         for requirement in cap.requirements:
-            if requirement.capability in CAPABILITY_REGISTRY:
+            if requirement.capability in CAPABILITY_REGISTRY and requirement.kind not in {
+                "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value",
+            }:
                 pending.append(requirement.capability)
             if requirement.kind == "capability_group_present":
                 pending.extend(value for value in requirement.any_of if value in CAPABILITY_REGISTRY)
@@ -1553,6 +1560,40 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     binding_target_change_ids.add(node_id)
                     retarget_binding_ids.update(_matching_entity_ids(rows, _binding_target_kinds(node_row)))
                     grant("bindings", node_id, "action")
+        elif code == "reference_requirements_unsatisfied" and node_namespace == "calls":
+            param_match = re.search(r"\.params\.([A-Za-z0-9_]+)$", path)
+            cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+            if param_match and cap is not None:
+                param_name = param_match.group(1)
+                kinds = _call_target_kinds(node_row, param_name=param_name)
+                call_reference_param_changes.add(f"{node_id}:{param_name}")
+                indexed_calls: dict[str, list[dict[str, Any]]] = {}
+                for candidate in rows["calls"]:
+                    indexed_calls.setdefault(str(candidate.get("target") or ""), []).append(candidate)
+                candidates = compatible_entity_reference_ids(
+                    cap, param_name, str(node_row.get("target") or ""),
+                    {str(row.get("id") or ""): row for row in rows["entities"]}, indexed_calls,
+                )
+                retarget_call_ids.update(candidates)
+                requirement_row["allowedCompatibleEntityIds"] = list(candidates)
+                requirement_row["referenceRequirements"] = [item.card() for item in cap.requirements
+                    if item.param == param_name and item.kind in {
+                        "referenced_entity_capability_params", "referenced_entity_without_capability"}]
+                # A new child is a separate authored choice. No permission is
+                # granted to edit the referenced, otherwise-valid existing child.
+                create_entity_kinds.update(kinds)
+                create_call_target_kinds.update(kinds)
+                for kind in kinds:
+                    kind_spec = ENTITY_KIND_REGISTRY.get(kind)
+                    if kind_spec is not None:
+                        create_call_fns.update(kind_spec.required_components)
+                        if kind_spec.requires_position_driver:
+                            create_call_fns.update(candidate.name for candidate in CAPABILITY_REGISTRY.values()
+                                if kind in candidate.target_kinds and candidate.position_ownership != "none")
+                create_call_fns.update(item.capability for item in cap.requirements
+                    if item.param == param_name and item.kind == "referenced_entity_capability_params")
+                create_call_fns.update(candidate.name for candidate in CAPABILITY_REGISTRY.values()
+                    if candidate.category == "entity_combat" and set(kinds).intersection(candidate.target_kinds))
         elif code in {"wrong_target_kind", "wrong_reference_target_kind", "self_reference_forbidden"}:
             if node_namespace == "calls":
                 param_match = re.search(r"\.params\.([A-Za-z0-9_]+)$", path)
@@ -3146,6 +3187,7 @@ def filter_repair_patch_scope(
                     # independent lanes. No decision is copied out of a foreign wrapper.
                     if action_kind(candidate) != "place_item" and candidate.get("input") in ACTIVE_USE_INPUTS:
                         row_permissions.update(key for key in ("stackCost", "contactDamage") if key not in original)
+                row_deletions: list[str] = []
                 if namespace == "calls":
                     original_params_raw = original.get("params")
                     candidate_params_raw = candidate.get("params")
@@ -3153,6 +3195,24 @@ def filter_repair_patch_scope(
                     candidate_params: Mapping[str, Any] = candidate_params_raw if isinstance(candidate_params_raw, Mapping) else {}
                     cap = CAPABILITY_REGISTRY.get(str(original.get("fn") or ""))
                     if cap is not None:
+                        for param_name, param_spec in cap.params.items():
+                            # A whole invalid union permission permits an explicit
+                            # complete model-authored variant, not a union of old/new.
+                            # Leaf-only repairs and omitted params never retire branches.
+                            if (not param_spec.alternatives or f"params.{param_name}" not in row_permissions
+                                    or param_name not in candidate_params
+                                    or not isinstance(original_params.get(param_name), Mapping)):
+                                continue
+                            try:
+                                param_spec.selected_variant(candidate_params[param_name])
+                            except ValueError:
+                                continue
+                            if isinstance(candidate_params[param_name], Mapping):
+                                row_deletions.extend(
+                                    json_path_child(f"params.{param_name}", key)
+                                    for key in original_params[param_name]
+                                    if key not in candidate_params[param_name]
+                                )
                         dependencies = _conditional_param_dependencies(cap)
                         selected_missing = {
                             required for selector, expected, required in dependencies
@@ -3203,7 +3263,7 @@ def filter_repair_patch_scope(
                     # but only exact error/dependency leaves may change or be
                     # added. Every other old value remains frozen.
                     allow_additions=False,
-                    delete_paths=_metadata_deletion_paths(scope, f"runtimeProgram.{namespace}[{next(i for i, row in enumerate(indexed_rows) if isinstance(row, Mapping) and row.get(id_key) == row_id)}]"),
+                    delete_paths=tuple(row_deletions) + _metadata_deletion_paths(scope, f"runtimeProgram.{namespace}[{next(i for i, row in enumerate(indexed_rows) if isinstance(row, Mapping) and row.get(id_key) == row_id)}]"),
                 )
                 ignored.extend(row_ignored)
                 accepted.extend(row_accepted)

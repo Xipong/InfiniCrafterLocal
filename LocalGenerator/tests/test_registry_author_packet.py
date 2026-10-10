@@ -434,7 +434,7 @@ UNIT_MEANINGS = {
         "genericArmorPenetrationPoints": "armor",
         "lightStrength": "RGB",
     },
-    "configure_spawn": {"speedPxPerUpdate": "updatesPerTick", "count": "root binding"},
+    "configure_spawn": {"velocity": "initial velocity", "count": "root binding"},
     "set_projectile_hitbox": {"drawScale": "visual scale"},
     "set_projectile_damage": {"knockback": "Projectile.knockBack"},
     "set_projectile_collision": {"updatesPerTick": "per world tick", "immunity": "engine"},
@@ -490,7 +490,7 @@ EXPLICIT_MEANINGS = [
     ("configure_accessory", "lifeRegenHpPerSecond", "-2"),
     ("configure_accessory", "lifeRegenHpPerSecond", "-1 HP/s"),
     ("move_drift", "velocityRetention", "updatesPerTick"),
-    ("configure_spawn", "speedPxPerUpdate", "10"),
+    ("configure_spawn", "velocity", "No peer reroll"),
 ]
 
 
@@ -546,7 +546,6 @@ def test_raw_coefficients_have_identity_wire_conversion(fn, name):
     [
         pytest.param(fn, n, id=fn + "-" + n)
         for fn, n in (
-            ("configure_spawn", "speedPxPerUpdate"),
             ("move_boomerang", "returnSpeed"),
             ("move_returning_glaive", "returnSpeed"),
             ("move_accelerate", "maxSpeed"),

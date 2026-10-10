@@ -116,7 +116,7 @@ def deterministic_low_level_plan(
                 },
                 {
                     "id": "call_spawn_held", "fn": "configure_spawn", "target": "held_body",
-                    "params": {"speedPxPerUpdate": 1.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "position": {"at": "owner_center"}},
+                    "params": {"velocity": {"constantSpeedPxPerUpdate": 1.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "position": {"at": "owner_center"}},
                 },
                 {
                     "id": "call_damage_held", "fn": "set_projectile_damage", "target": "held_body",
@@ -132,7 +132,7 @@ def deterministic_low_level_plan(
                 },
                 {
                     "id": "call_spawn_child", "fn": "configure_spawn", "target": "child_shard",
-                    "params": {"speedPxPerUpdate": 9.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "position": {"at": "activation_origin"}},
+                    "params": {"velocity": {"constantSpeedPxPerUpdate": 9.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "position": {"at": "activation_origin"}},
                 },
                 {
                     "id": "call_damage_child", "fn": "set_projectile_damage", "target": "child_shard",

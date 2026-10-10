@@ -131,6 +131,53 @@ def method_body(text: str, name: str, overload: int = 0) -> str:
     return braced_body(text, match.end() - 1)
 
 
+def check_sampled_spawn_boundaries() -> None:
+    """Bind sampled/target-relative launch state to its real admission consumers.
+
+    These are source obligations; the actual seeded distribution, native spawn,
+    delay and ExtraAI scenarios belong to EngineRuntimeChecks.
+    """
+    projectile = read("Content/Projectiles/GeneratedProjectile.cs")
+    ai = read("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    net = read("Content/Projectiles/GeneratedProjectile.NetSync.cs")
+    runtime = read("Common/Runtime/RuntimeProgramExecutor.cs")
+    scheduler = read("Common/Runtime/RuntimeDelayedActionScheduler.cs")
+    dto = read("Common/Models/RuntimeProgramSpec.cs")
+    planner = read("Common/Runtime/RuntimeHitTargetSpawn.cs")
+    obligations = (
+        (projectile, "SpawnRuntimeEntity", (
+            "if (rootSpeedOverride.HasValue && entity.Spawn.VelocityDistribution is not null) return 0;",
+            "entity.Spawn.AcceptsEmissionSpread(spreadOverride ?? entity.Spawn.SpreadRadians)",
+            "new UnifiedRandom(initialVelocitySeed ?? Main.rand.Next())",
+            "RuntimeSpawnVelocity.TrySample(entity.Spawn, direction, velocityRandom, out velocity)",
+        )),
+        (projectile, "Configure", (
+            "_sampledInitialVelocity = entity.Spawn.VelocityDistribution is null ? null : Projectile.velocity",
+            "else if ((entity.Spawn.VelocityDistribution is null) != (_sampledInitialVelocity is null))",
+        )),
+        (ai, "AI", ("_age == 0", "Projectile.velocity = _sampledInitialVelocity ??",)),
+        (net, "ReceiveExtraAI", ("receivedVelocityPresence > 1", "!float.IsFinite(sampled.X)", "!float.IsFinite(sampled.Y)",)),
+        (net, "SendExtraAI", ("writer.Write(_sampledInitialVelocity.HasValue)", "writer.Write(sampled.X)", "writer.Write(sampled.Y)",)),
+        (scheduler, "TrySchedule", ("RuntimeHitTargetSpawnSnapshot.TryCapture(geometry, target, direction, out var captured)", "hitTargetSpawn = launch with { Seed = Main.rand.Next() }",)),
+        (runtime, "SpawnHitTargetChildren", (
+            "RuntimeEventActionSpec.SupportsTargetEmission(child)", "unattempted--",
+            "initialNpcExclusion: snapshot.Exclusion", "initialTransform: transforms[i]",
+            "initialVelocitySeed: velocitySeeds[i]", "budget.Return(1 - spawned)", "budget.Return(unattempted)",
+        )),
+        (planner, "TryPlan", ("!snapshot.Exclusion.CanApply", "new UnifiedRandom(snapshot.Seed)",)),
+        (dto, "HasExactTargetEmissionOrigin", ("_offsetPresent && _aimPresent && _placementPresent", "OverTarget is not null",)),
+    )
+    for source, name, tokens in obligations:
+        code = re.sub(r"\s+", "", stripped(method_body(source, name)))
+        for token in tokens:
+            require(code, re.sub(r"\s+", "", token), name)
+    normalize = stripped(method_body(dto, "NormalizeAndValidate"))
+    consumer = normalize.find("entity.NormalizeAndValidate(Limits)")
+    for guard in ("RuntimeEventActionSpec.SupportsTargetEmission(child)", "spawn.AcceptsEmissionSpread(action.SpreadRadians)"):
+        if normalize.find(guard) < 0 or consumer < normalize.find(guard):
+            fail(f"sampled_spawn_raw_reference: {guard} must precede entity normalization")
+
+
 def check_network_boundaries() -> None:
     # Method-scoped obligations: preserve authority, exact identities and fail
     # closed transport. Runtime behavior remains the EngineRuntimeChecks owner.
@@ -139,6 +186,12 @@ def check_network_boundaries() -> None:
     net = read("Content/Projectiles/GeneratedProjectile.NetSync.cs")
     projectile = read("Content/Projectiles/GeneratedProjectile.cs")
     runtime = read("Common/Runtime/RuntimeProgramExecutor.cs")
+    initial_exclusion = read("Common/Runtime/RuntimeInitialNpcExclusion.cs")
+    projectile_ai = read("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    projectile_events = read("Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs")
+    dto = read("Common/Models/RuntimeProgramSpec.cs")
+    event_dto = dto[dto.index("public sealed class RuntimeEventActionSpec"):dto.index("public sealed class RuntimeItemUseSpec")]
+    scheduler = read("Common/Runtime/RuntimeDelayedActionScheduler.cs")
     multiplayer = read("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
     obligations = [
         (asset, "HandleAssetRequestPacket", ("Main.netMode != NetmodeID.Server", "GeneratedItems.TryGet(itemId, out GeneratedItemData data)", "BuildServerAssetDescriptors(data)"), ("packet.Send",)),
@@ -146,8 +199,23 @@ def check_network_boundaries() -> None:
         (asset, "ComputeSha256Hex", ("SHA256.HashData",), ()),
         (asset, "DownloadAssetBytesWithBoundedStreamAsync", ("HttpCompletionOption.ResponseHeadersRead", "ContentLength", "total > MaxAssetBytes"), ("GetByteArrayAsync",)),
         (net, "SendExtraAI", ("writer.Write(_generatedItemId", "writer.Write(_entityId"), ()),
-        (net, "ReceiveExtraAI", ("reader.ReadByte() != RuntimeNetVersion", "_generatedItemId.Length > 96", "_entityId.Length > 48", "Projectile.friendly = false", "Projectile.velocity = Vector2.Zero", "TryHydrate()", "_preserveSyncedStateOnHydrate = true"), ()),
+        (net, "ReceiveExtraAI", ("runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion", "_generatedItemId.Length > 96", "_entityId.Length > 48", "Projectile.friendly = false", "Projectile.velocity = Vector2.Zero", "TryHydrate()", "_preserveSyncedStateOnHydrate = true"), ()),
         (projectile, "Configure", ("preserveSyncedState", "Projectile.timeLeft = Math.Max(1, syncedTimeLeft)", "_remainingBounces = Math.Clamp(syncedBounces", "_activationDelayTicks = Math.Max(0, syncedActivationDelay)"), ()),
+        (initial_exclusion, "TryCapture", ("RuntimeHitNpcGeneration.Get(npc)", "if (generation == 0) return false", "ReferenceEquals(Main.npc[npc.whoAmI], npc)"), ()),
+        (initial_exclusion, "AppliesTo", ("RuntimeHitNpcGeneration.Get(npc) == Generation", "ReferenceEquals(Main.npc[NpcSlot], npc)"), ()),
+        (projectile_ai, "AI", ("_initialNpcExclusion = _initialNpcExclusion.AfterUpdate()",), ()),
+        (projectile_events, "CanHitNPC", ("_initialNpcExclusion.AppliesTo(target)",), ()),
+        (net, "SendExtraAI", ("_initialNpcExclusion.Write(writer)",), ()),
+        (net, "ReceiveExtraAI", ("RuntimeInitialNpcExclusion.Read(reader)", "if (!retainOwnerExclusion)", "_runtimePayloadRejected = true"), ()),
+        (projectile, "TryHydrate", ("if (_runtimePayloadRejected) return false",), ()),
+        (projectile, "SpawnRuntimeEntity", ("if (!projectile.active || projectile.ModProjectile is not GeneratedProjectile generated)", "projectile.active = false", "if (childDepth > 0) activationBudget.Return(remainingSpawnBudget - spawned)", "throw;"), ()),
+        (runtime, "PlanTargetEmissions", ("Math.Min(action.StepCount.Value, capacity)", "action.SelectionAnchor == \"previous_target\" ? previous : initialTarget", "action.RepeatPolicy == \"exclude_visited\" && visited.Contains(npc)", "distanceSquared > radiusSquared", "BigInteger radiusUnits = new(Math.ScaleB(radius, 149))", "BigInteger distanceSquared = dx * dx + dy * dy", "Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height)", "RuntimeInitialNpcExclusion.TryCapture(anchor, action.InitialIgnoreCountdownUpdates.Value", "previous = next", "npc.whoAmI < next.whoAmI"), ("ApplyDamageToNPC", "SpawnRuntimeEntity")),
+        (runtime, "SelectTargetsAndEmit", ("childDepth >= data.RuntimeProgram.Limits.MaxChildDepth", "unattempted--", "GeneratedProjectile.SpawnRuntimeEntity", "requestedCount: 1", "spreadOverride: 0f", "initialNpcExclusion: step.Exclusion", "initialTransform: step.Transform", "finally { budget.Return(unattempted); }"), ("ApplyDamageToNPC", "ChainDamage(")),
+        (scheduler, "TrySchedule", ("action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit", "RuntimeHitNpcGeneration.Get(target) == 0", "action.StepCount!.Value : action.Count"), ()),
+        (scheduler, "Update", ("pending.Action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit", "RuntimeHitNpcGeneration.Get(Main.npc[pending.NpcId]) == pending.TargetGeneration"), ()),
+        (event_dto, "NormalizeAndValidate", ("!_delayPresent", "StepCount is null || StepRangeTiles is null", "RequireLineOfSight is null || InitialIgnoreCountdownUpdates is null", "DamageMultiplier != 1f"), ()),
+        (dto, "HasExactTargetEmissionOrigin", ("_offsetPresent && _aimPresent && _placementPresent", "Placement == \"item_use_origin\" && Aim == \"velocity\" && OffsetPx == 0", "OverTarget is not null && OverTarget.HeightTiles == 0f && OverTarget.DelayTicks == 0"), ()),
+        (dto, "NormalizeAndValidate", ("if (action is null) continue", "action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit", "!RuntimeEventActionSpec.SupportsTargetEmission(child)"), ()),
         (runtime, "HealOwner", ("owner.Heal(heal)",), ("ShouldRunPlayerGameplay(owner)",)),
         (runtime, "DamageArea", ("AuthoredEventDamage(data, sourceEntity)", "owner.ApplyDamageToNPC"), ()),
         (runtime, "ChainDamage", ("AuthoredEventDamage(data, sourceEntity)", "owner.ApplyDamageToNPC"), ()),
@@ -159,13 +227,21 @@ def check_network_boundaries() -> None:
         (multiplayer, "CompleteServerCraftTransaction", ("LogServerCraftTransaction", "if (success) ClearServerStationEscrowLane(laneIndex)"), ()),
     ]
     for source, name, required, forbidden in obligations:
-        code = re.sub(r"\s+", "", stripped(method_body(source, name)))
+        body = method_body(source, name)
+        code = re.sub(r"\s+", "", stripped(body))
+        # A predicate comparing an enum literal must keep that literal, while
+        # comments remain masked. Other code obligations still mask strings.
+        literal_code = re.sub(r"\s+", "", stripped(body, keep_strings=True))
         for token in required:
-            if re.sub(r"\s+", "", token) not in code:
+            if re.sub(r"\s+", "", token) not in (literal_code if '"' in token else code):
                 fail(f"{name}: missing code obligation `{token}`")
         for token in forbidden:
             if re.sub(r"\s+", "", token) in code:
                 fail(f"{name}: forbidden code obligation `{token}`")
+    normalizer = re.sub(r"\s+", "", stripped(method_body(dto, "NormalizeAndValidate")))
+    if not (0 <= normalizer.find("RuntimeEventActionSpec.SupportsTargetEmission(child)")
+            < normalizer.find("entity.NormalizeAndValidate(Limits)")):
+        fail("target emission reference admission must precede retained child normalization")
     # Native candidate coverage validates the shared decision; the source gate
     # must bind both real callers to it, not demand obsolete inline duplicates.
     scheduler = read("Common/Runtime/RuntimeDelayedActionScheduler.cs")
@@ -756,6 +832,7 @@ def main() -> int:
     check_item_dispatch()
     check_projectile_dispatch()
     check_network_boundaries()
+    check_sampled_spawn_boundaries()
     check_client_source_contracts()
     check_world_transactions()
     check_delivery_metadata()

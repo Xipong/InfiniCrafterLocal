@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import math
 import re
 from typing import Any
 
@@ -57,7 +58,7 @@ def _class_properties(data: bytes, class_name: str) -> set[str]:
     raise ValueError(f"Missing executable C# DTO class {class_name}")
 
 
-def nullable_float_rejection_bounds(data: bytes, class_name: str, property_name: str) -> list[float] | None:
+def nullable_number_rejection_bounds(data: bytes, class_name: str, property_name: str) -> list[float] | None:
     """Read the strict nullable scalar setter, including null/finite rejection and storage.
 
     A changed guard/assignment or comment-only decoy fails this source proof;
@@ -77,8 +78,9 @@ def nullable_float_rejection_bounds(data: bytes, class_name: str, property_name:
             if name is None or name.text != property_name.encode():
                 continue
             storage = prop.child_by_field_name("type")
-            if storage is None or storage.text != b"float?":
+            if storage is None or storage.text not in {b"float?", b"double?", b"int?"}:
                 return None
+            scalar = storage.text[:-1]
             accessors = list(_nodes(prop, "accessor_declaration"))
             getter = next((row for row in accessors if row.children[0].type == "get"), None)
             setter = next((row for row in accessors if row.children[0].type == "set"), None)
@@ -88,14 +90,24 @@ def nullable_float_rejection_bounds(data: bytes, class_name: str, property_name:
             if not getter_match or len(statements) != 2 or statements[0].type != "if_statement":
                 return None
             condition = statements[0].child_by_field_name("condition")
-            guard = re.fullmatch(rb"valueisnotfloat([A-Za-z_][A-Za-z_0-9]*)\|\|!float\.IsFinite\(\1\)\|\|\1<(-?[0-9.]+)f\|\|\1>(-?[0-9.]+)f", tokens(condition)) if condition else None
+            literal = (rb"-?[0-9]+" if scalar == b"int" else
+                       rb"(?:-?[0-9.]+(?:[eE][+-]?[0-9]+)?f|MathF\.(?:PI|Tau))" if scalar == b"float" else
+                       rb"(?:-?[0-9.]+(?:[eE][+-]?[0-9]+)?d|Math\.(?:PI|Tau))")
+            finite = b"" if scalar == b"int" else rb"\|\|!" + scalar + rb"\.IsFinite\(\1\)"
+            guard_pattern = (rb"valueisnot" + scalar + rb"([A-Za-z_][A-Za-z_0-9]*)" + finite
+                             + rb"\|\|\1<(" + literal + rb")\|\|\1>(" + literal + rb")")
+            guard = re.fullmatch(guard_pattern, tokens(condition)) if condition else None
             consequence = statements[0].child_by_field_name("consequence")
             if (not guard or consequence is None or consequence.type != "throw_statement"
                     or not tokens(consequence).startswith(b"thrownewInvalidDataException(")
                     or statements[0].child_by_field_name("alternative") is not None
                     or tokens(statements[1]) != getter_match[1] + b"=" + guard[1] + b";"):
                 return None
-            return [float(guard[2]), float(guard[3])]
+            def bound(raw: bytes) -> float:
+                if raw in {b"Math.PI", b"MathF.PI"}: return math.pi
+                if raw in {b"Math.Tau", b"MathF.Tau"}: return math.tau
+                return float(raw.rstrip(b"fd"))
+            return [bound(guard[2]), bound(guard[3])]
     return None
 
 
@@ -207,9 +219,10 @@ def event_surface_audit(
         raise ValueError(f"C# event executors read undeclared action fields: {consumed - properties}")
     prefix = "runtimeProgram.entities[].events[]."
     declared = {
-        path[len(prefix):][0].upper() + path[len(prefix):][1:]
+        suffix[0].upper() + suffix[1:]
         for cap in CAPABILITY_REGISTRY.values() if cap.category == "event"
         for path in cap.final_wire_paths if path.startswith(prefix)
+        if (suffix := path[len(prefix):].split(".", 1)[0])
     }
     # Identity is authored at calls[].id, not a mechanic parameter.
     hidden = {"Id": "Authored call identity, carried unchanged into the event action."}
@@ -227,6 +240,8 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     components: dict[str, tuple[str, ...]] = {
         "RuntimeSpawnSpec": ("runtimeProgram.entities[].spawn.",),
         "RuntimeOverTargetSpec": ("runtimeProgram.entities[].spawn.overTarget.",),
+        "RuntimeSpawnVelocitySpec": ("runtimeProgram.entities[].spawn.velocityDistribution.",),
+        "RuntimeHitTargetSpawnSpec": ("runtimeProgram.entities[].events[].hitTargetSpawn.",),
         "RuntimeDamageSpec": ("runtimeProgram.entities[].damage.",),
         "RuntimeHitboxSpec": ("runtimeProgram.entities[].hitbox.",),
         "RuntimeHitboxCurveSpec": ("runtimeProgram.entities[].hitboxCurve.",),
@@ -251,6 +266,7 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         },
         "RuntimeSpawnSpec": {
             "OverTarget": "Nested object with its own fully inventoried RuntimeOverTargetSpec fields.",
+            "VelocityDistribution": "Nested exact authored union with fully inventoried RuntimeSpawnVelocitySpec fields; absence preserves old constant wire.",
         },
     }
     unclassified: dict[str, list[str]] = {}

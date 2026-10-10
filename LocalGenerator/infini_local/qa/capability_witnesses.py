@@ -31,7 +31,7 @@ _ITEM_BASE_USE = {
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
     "handPose": "one_handed", "customHeldSprite": "hidden",
 }
-_SPAWN = {"speedPxPerUpdate": 8.0, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
+_SPAWN = {"velocity": {"constantSpeedPxPerUpdate": 8.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
 _COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}
@@ -41,7 +41,7 @@ def _value(spec: ParamSpec, name: str) -> Any:
     if spec.alternatives:
         return _value(spec.alternatives[0], name)
     if spec.kind == "object":
-        return {key: _value(leaf, key) for key, leaf in spec.properties.items() if leaf.required}
+        return {key: _value(child, key) for key, child in spec.properties.items() if child.required}
     if spec.enum:
         return deepcopy(spec.enum[0])
     if spec.kind == "boolean":
@@ -96,6 +96,10 @@ def _params(fn: str) -> dict[str, Any]:
         "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
         "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
         "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "spawn_entity_from_hit_target": {"when": "on_hit", "entity": "witness_child", "count": 3, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "geometry": {"beforeProbability": 0.85, "hitboxMaxSideFactor": 0.6, "clearancePx": 10, "beforePositionJitterRadiusPx": 8, "beforeDirectionJitterRadians": 0.2, "afterFanSpreadRadians": 1.2, "initialIgnoreCountdownUpdates": 10}},
+        "select_targets_and_emit_on_event": {"when": "on_hit", "entity": "witness_child", "stepCount": 2,
+            "stepRangeTiles": 22.5, "selectionAnchor": "previous_target", "repeatPolicy": "allow_revisits",
+            "requireLineOfSight": False, "initialIgnoreCountdownUpdates": 10, "delayTicks": 0},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
@@ -240,10 +244,13 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             for base_fn, params in base.items():
                 calls.append(_call(f"shot_{base_fn}", base_fn, "witness_shot", params))
             calls.append(_call("shot_motion", "move_straight", "witness_shot", {}))
-        if fn == "spawn_entity_on_event":
+        if fn in {"spawn_entity_on_event", "spawn_entity_from_hit_target", "select_targets_and_emit_on_event"}:
             entities.append({"id": "witness_child", "kind": "child_projectile"})
             for base_fn, params in base.items():
-                calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", params))
+                child_params = deepcopy(params)
+                if fn in {"spawn_entity_from_hit_target", "select_targets_and_emit_on_event"} and base_fn == "configure_spawn":
+                    child_params.update(position={"at": "activation_origin"}, aim="velocity", offsetPx=0)
+                calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", child_params))
             calls.append(_call("child_motion", "move_straight", "witness_child", {}))
 
         if fn in MOVEMENT_CAPABILITIES or fn in {"channel_beam", "charge_then_release", "target_and_fire"}:

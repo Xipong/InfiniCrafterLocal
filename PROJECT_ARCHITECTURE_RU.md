@@ -16,7 +16,7 @@ Gameplay Author создаёт bounded runtimeProgram из конечных capa
 | Storage/health/assets | [World recipe owner](docs/RECIPE_HEALTH_AND_CONTRACTS_RU.md), [image lifecycle](docs/IMAGE_ASSET_LIFECYCLE_RU.md) |
 | Execution/net/world transactions | [C# consumers](PROJECT_MAP_RU.md#csharp), trust boundaries ниже |
 
-[Registry](LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) объявляет runtime API `infini.runtime-program.v5`, Author `infini.runtime-program.authoring.v4`, wire `infini.runtime-program.wire.v3`. Schema/validator/registry владеют finite composition limits (entities/bindings/calls, child depth, events/rate/lifetime, movement/controller slots), не копируемые counts в обзоре. Это не ECS/VM общего назначения.
+[Registry](LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) объявляет runtime API `infini.runtime-program.v5`, Author `infini.runtime-program.authoring.v5`, wire `infini.runtime-program.wire.v3`. Schema/validator/registry владеют finite composition limits (entities/bindings/calls, child depth, events/rate/lifetime, movement/controller slots), не копируемые counts в обзоре. Это не ECS/VM общего назначения.
 
 <a id="pipeline"></a>
 ## Стадии и transport

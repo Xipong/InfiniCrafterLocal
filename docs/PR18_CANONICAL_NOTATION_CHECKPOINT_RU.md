@@ -1,8 +1,50 @@
-# PR18 current canonical notation — исполняемый неполный checkpoint
+# PR18 — единственная Author v5 и текущая композиция #27/#25/#22/#12
 
-## Статус
+## Текущий checkpoint
 
-Не release GREEN и не законченная замена всех regression observers. Реальный existing pipeline уже использует единственный `infini.runtime-program.authoring.v5`; новая параллельная API не создана. Wire v3 неизменён. Локальный baseline `0b94d2b524bcd6b0f08783c73f1f6ea4efadfd95` включает accepted main7a6b3b4 и released #12 e31c758, #14 1496a5d, #22 b15baf6. Parent-owned поздние runtime commits не интегрировались вслепую.
+Единственный fresh Gameplay Author — `infini.runtime-program.authoring.v5`:
+private exact view, flat bindings, независимые input/action/stackCost/contactDamage
+и optional own-stack chance. Saved wire `infini.runtime-program.wire.v3` и его
+исторические receipt domains сохранены; fresh v4 admission, публичного importer,
+semantic router и выбора gameplay defaults нет.
+
+Предыдущий принятый checkpoint `88610055a85832bd1719045fb610bd5dcaa147ee`
+(tree `b9228b7f42f96db31912ca325ed15c19e0c85990`) имеет отдельную проверку
+8693/103 files и 14 parent acceptance cases. Это **историческая** full-suite
+проверка, не full-suite verdict новой композиции. Текущий checkpoint объединяет
+его с `1eb5854622c7d331c4598557ba7a8c1008dac956`; bounded final-tree evidence,
+source freeze и release manifest находятся в
+`artifacts/pr-ideology-review-2026-10-10/pr18/current27-composition/` вне checkout.
+Текущая bounded проверка: 693 PASS через canonical sandbox (11 files),
+110 PASS registry consumers, 48 PASS combined modifier/historical curve,
+14 PASS unchanged parent acceptance; 16/16 gates PASS. Ранние неуспешные
+попытки сохранены отдельно. Это source-checkpoint GREEN, не native/game
+release verdict. Parent выполняет один общий all-PR full run после финальной alias integration.
+
+Исполняемый combined observer в `test_projectile_target_emission_contract.py`
+проводит real serialized Author → v5 prepare/compiler → strict wire + source
+receipt audit → hostile exact-leaf Repair в `json_object` и `json_schema`.
+Одновременно сохранены sampled child velocity, hit-target geometry, physical
+emission, live-parent combat, item aliases, named effects и stack chance.
+
+Сильный полный historical wire observer и отдельный delivery observer имеют
+разные имена: оба действительно собираются pytest. Original placed fixture SHA256
+`41c670ba3fd12a44a2436bc6226bf815628e3d4c64d04f4efd3cc586b628a43a`
+не переписан candidate output. Все восемь original hashes независимо подтверждены
+исполнением pinned `cec64b6` Python sources. `c3d0d3d` — уже следующий archive
+inventory (другой hash), а не источник исходного `41c670…` oracle. Test-local
+reverse projections проверяют только точные neutral/provenance/registry deltas;
+исходный свежий compile сначала проходит source-backed audit.
+
+Python/docs/generated reconciliation не редактирует native sources и не запускает
+C# compilation/game/live/provider/external AI. Native 184-input parity проверяется
+с parent-owned #27/#25 run; remote approval/publication принадлежит parent.
+
+## Исторический исходный неполный checkpoint (не текущий verdict)
+
+Следующие секции сохраняют первоначальные RED/blocker receipts и путь ремонта.
+Их 15 failures и формулировки «не release GREEN» относятся к исходному checkpoint,
+а не отменяют позднее принятое состояние или текущие bounded GREEN receipts.
 
 ## Реализовано
 
