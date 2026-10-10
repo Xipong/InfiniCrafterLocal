@@ -313,6 +313,16 @@ def _validate_requirement(
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
 
+    if requirement.kind == "capability_absent":
+        if requirement.param and params.get(requirement.param) != requirement.equals:
+            return None
+        conflicting = [row for row in target_calls if row.get("fn") in requirement.any_of]
+        if conflicting:
+            return ValidationIssue(path + (".params." + requirement.param if requirement.param else ""),
+                                   "exclusive_component_conflict", requirement.message,
+                                   requirement.any_of, tuple([str(call.get("id") or ""), *[str(row.get("id") or "") for row in conflicting]]))
+        return None
+
     if requirement.kind in {"executed_tile_placement_reference", "unique_call_reference"}:
         reference = params.get(requirement.param)
         if not isinstance(reference, str):

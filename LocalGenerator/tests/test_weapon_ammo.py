@@ -119,7 +119,7 @@ def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_count
                                                          if row["finalPath"] not in retired_paths]
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29
+        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()

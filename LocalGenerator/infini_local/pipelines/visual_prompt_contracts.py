@@ -155,6 +155,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
                 scale_row["hitbox.drawScale"] = hitbox["drawScale"]
             if "scale" in visual:
                 scale_row["visual.scale"] = visual["scale"]
+            if "hitboxCurve" in row:
+                scale_row["hitboxCurve"] = row["hitboxCurve"]
             shared.append(scale_row)
         if shared:
             facts["sharedEntityMultipliers"] = shared
@@ -165,6 +167,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             multipliers["hitbox.drawScale"] = hitbox["drawScale"]
         if "scale" in owner:
             multipliers["visual.scale"] = owner["scale"]
+        if "hitboxCurve" in entity:
+            facts["hitboxCurve"] = entity["hitboxCurve"]
     if multipliers:
         facts["multipliers"] = multipliers
     grip_instruction = (
@@ -179,7 +183,9 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         "Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. "
         "Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; "
         "held item uses R/C times adjusted item scale (gameplay.itemScale included once). "
-        "Entity body uses R/C times clamp(current Projectile.scale,0.1,8), initially hitbox.drawScale times visual.scale; later growth is independent. "
+        "Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true: "
+        "the complete product is hitbox.drawScale times visual.scale times curveScale(active age). Otherwise its existing clamp(Projectile.scale,0.1,8) remains. "
+        "Do not add a curve, change accepted endpoints or choose mirror in the image stage. VFX body copies retain their separate published scale rules. "
         "forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. "
         "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. "
         "Do not omit or merge authored parts to simplify the sprite."
