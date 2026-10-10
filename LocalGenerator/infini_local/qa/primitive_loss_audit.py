@@ -393,7 +393,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     program = author.runtime_program_author_schema()
     binding_variants = program["properties"]["bindings"]["items"]["oneOf"]
     bindings = set().union(*(row["properties"] for row in binding_variants))
-    policy = {"action", "stackCost", "contactDamage"}
+    policy = (bindings - {"id", "input"}) | {"action", "stackCost", "contactDamage"}  # exact fixed wire lanes + every current source policy member
     actions = set().union(*(row["properties"].get("action", {}).get("properties", {}) for row in binding_variants))
     actions.update({"kind", "targetId"})  # exact registry-selected fixed/body reference projections
     prefixes = ("runtimeProgram.entities[].", "runtimeProgram.bindings[].usePolicy.action.placement.")
