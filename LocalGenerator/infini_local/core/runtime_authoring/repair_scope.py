@@ -1362,7 +1362,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     f"$.runtimeProgram.bindings[{node_index}].action.kind"
                 ):
                     binding_action_change_ids.add(node_id)
-                    if "action" not in node_row:
+                    if not isinstance(node_row.get("action"), Mapping):
                         binding_target_change_ids.add(node_id)
                 if path.startswith((
                     f"$.runtimeProgram.bindings[{node_index}].action.targetId",

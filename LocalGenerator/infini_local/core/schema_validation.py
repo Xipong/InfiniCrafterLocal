@@ -139,7 +139,8 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 identity_selected = [index for index, paths in enumerate(const_paths)
                                      if all_identity_paths and all(key in paths and _authored_const_matches(value, key, paths[key])
                                                                    for key in all_identity_paths)]
-                for selector in set.intersection(*(set(paths) for paths in const_paths)) if const_paths else set():
+                for selector in (set.intersection(*(set(paths) for paths in const_paths))
+                                 if const_paths and any(set(paths) != set(const_paths[0]) for paths in const_paths) else set()):
                     present, actual = _authored_const_value(value, selector)
                     if (present and all(isinstance(paths[selector], str) for paths in const_paths)
                             and not any(_authored_const_matches(value, selector, paths[selector]) for paths in const_paths)):
