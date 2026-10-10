@@ -276,12 +276,16 @@ def author_item_response_schema() -> dict[str, Any]:
     }
 
 
-def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
+def author_item_repair_schema(
+    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+) -> dict[str, Any]:
     """Canonical patch shape, optionally restricted to request-visible calls.
 
     None requests the complete local contract. An explicit empty set permits
     only an empty callsUpsert array, never the full catalog. Scope permissions
-    and the frozen merge remain separate authorities after parsing.
+    and the frozen merge remain separate authorities after parsing. The LLM
+    request requires the existing realizationReplacement field; generic patch
+    utilities keep its omission-as-no-change semantics.
     """
     variants = capability_provider_union()
     if capability_names is not None:
@@ -365,7 +369,7 @@ def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) 
             "realizationReplacement": realization_schema(),
             "note": _strict_string(min_len=1, max_len=500),
         },
-        "required": ["note"],
+        "required": ["note", "realizationReplacement"] if require_realization else ["note"],
     }
 
 
@@ -510,15 +514,37 @@ def _repair_structure_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def is_plan_report_diagnostic_path(path: str, *, repair: bool = False) -> bool:
+    """Only the plan comparison is non-blocking; its ancestors/siblings stay strict."""
+    field = "realizationReplacement" if repair else "realization"
+    root = f"$.{field}.selfEvaluation.planVsProgram"
+    return path == root or path.startswith((root + ".", root + "["))
+
+
+def _repair_acceptance_shape_report(value: Any, schema: Mapping[str, Any], report_schema: str) -> dict[str, Any]:
+    # Collect all bounded diagnostics before classifying them: a long plan report
+    # must not hide a later programVsReport/note error behind a display limit.
+    candidate, limit = assert_bounded_author_input(value, schema=schema, authored_only=False)
+    shape_errors = strict_schema_errors(candidate, schema, limit=limit)
+    errors = [row for row in shape_errors if not is_plan_report_diagnostic_path(str(row.get("path") or ""), repair=True)]
+    return {
+        "schema": report_schema, "ok": not errors, "errors": errors,
+        "shape": {"ok": not shape_errors, "errors": shape_errors},
+    }
+
+
 def strict_repair_structure_report(value: Any) -> dict[str, Any]:
-    """Pre-filter check only; never substitute for strict merged validation."""
-    errors = strict_schema_errors(value, _repair_structure_schema(author_item_repair_schema()))
-    return {"schema": "infini.author-item-repair-structure-report.v1", "ok": not errors, "errors": errors}
+    """Pre-filter admission with raw diagnostics; merged validation remains required."""
+    return _repair_acceptance_shape_report(
+        value, _repair_structure_schema(author_item_repair_schema()),
+        "infini.author-item-repair-structure-report.v1",
+    )
 
 
 def strict_repair_shape_report(value: Any) -> dict[str, Any]:
-    errors = strict_schema_errors(value, author_item_repair_schema())
-    return {"schema": "infini.author-item-repair-shape-report.v1", "ok": not errors, "errors": errors}
+    return _repair_acceptance_shape_report(
+        value, author_item_repair_schema(), "infini.author-item-repair-shape-report.v1",
+    )
 
 
 def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:

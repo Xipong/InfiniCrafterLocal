@@ -1596,7 +1596,9 @@ def test_maximal_author_schema_shape_keeps_worst_branch_and_report_tail():
     assert report["errors"][-1]["path"] == tail_path
     canonical = validate_runtime_program(current)["errors"]
     shape_errors = [row for row in canonical if row["code"].startswith("shape_")]
-    assert [(row["path"], row["code"]) for row in shape_errors] == [(row["path"], "shape_" + row["kind"]) for row in expected]
+    blocking_expected = [row for row in expected
+                         if not row["path"].startswith("$.realization.selfEvaluation.planVsProgram.")]
+    assert [(row["path"], row["code"]) for row in shape_errors] == [(row["path"], "shape_" + row["kind"]) for row in blocking_expected]
     assert authored_item_validation_report(current)["errors"] == canonical
     assert strict_schema_errors(current, schema) == expected[:128]
     assert strict_schema_errors(current, schema, limit=7) == expected[:7]

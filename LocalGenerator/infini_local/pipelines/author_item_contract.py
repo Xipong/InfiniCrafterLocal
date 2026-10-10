@@ -165,7 +165,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "selfEvaluation": {
                 "planVsProgram": {
                     "verdict": "aligned|changed|uncertain",
-                    "summary": "diagnostic comparison of concept with the emitted program",
+                    "summary": "diagnostic comparison of concept with the emitted program; formatting errors are recorded but do not reject executable gameplay",
                     "actionChecks": [{
                         "plannedIntent": "one exact plannedPlayerActions intent, or 'no corresponding initial action' for an added lane",
                         "implementedBehavior": "what runtimeProgram actually implements for it",
@@ -480,8 +480,11 @@ def author_item_provider_response_schema() -> dict[str, Any]:
     return _provider_strict_projection(author_item_response_schema(), omit_annotations=True)
 
 
-def author_item_repair_response_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
-    return copy.deepcopy(_repair_schema(capability_names=capability_names))
+def author_item_repair_response_schema(
+    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+) -> dict[str, Any]:
+    return copy.deepcopy(_repair_schema(
+        capability_names=capability_names, require_realization=require_realization))
 
 
 def author_item_repair_prompt_shape_card(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:

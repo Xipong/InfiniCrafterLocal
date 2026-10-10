@@ -20,8 +20,9 @@ from test_codex_subscription_contract import _encode_nullable_fixture
 from test_gameplay_repair_readonly_context import _offline_builder
 
 
-def _local(scope):
-    return contract.author_item_repair_response_schema(capability_names=runtime_repair_schema_capabilities(scope))
+def _local(scope, *, require_realization=False):
+    return contract.author_item_repair_response_schema(
+        capability_names=runtime_repair_schema_capabilities(scope), require_realization=require_realization)
 
 
 def _call(item, fn):
@@ -49,7 +50,7 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
     failure = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, failure["errors"])
     assert runtime_repair_schema_capabilities(scope) == ["configure_item_stats"]
-    local = _local(scope)
+    local = _local(scope, require_realization=True)
     fixed = copy.deepcopy(_call(expected, "configure_item_stats"))
     patch = {"note": "Repair exact damage only", "callsUpsert": [fixed], "realizationReplacement": item["realization"]}
     provider, encoded = _wire_roundtrip(patch, local)
@@ -71,6 +72,40 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
     repaired.pop("debug")
     assert repaired == expected and item == before
     assert "manaCost" not in _call(repaired, "configure_item_stats")["params"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("report_value", ["absent", None])
+def test_real_repair_request_and_stage_reject_missing_report_without_mutating_source(monkeypatch, mode, report_value):
+    item = build_runtime_fixture("workbench_blade")
+    fixed = copy.deepcopy(_call(item, "configure_item_stats"))
+    _call(item, "configure_item_stats")["params"]["damage"] = -1
+    before = copy.deepcopy(item)
+    failure = validate_runtime_program(item)
+    patch = {"note": "Exact damage correction still needs its authored report", "callsUpsert": [fixed]}
+    if report_value != "absent":
+        patch["realizationReplacement"] = report_value
+    requests = []
+
+    def respond(request, **_kwargs):
+        requests.append(copy.deepcopy(request))
+        payload = copy.deepcopy(patch)
+        if mode == "json_schema":
+            # Other sparse patch fields still use the existing nullable envelope.
+            # Neither null nor a missing report may be admitted by the real request.
+            payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
+            if report_value == "absent":
+                payload.pop("realizationReplacement")
+            provider = request["response_format"]["json_schema"]["schema"]
+            assert not Draft202012Validator(provider).is_valid(payload)
+        return {"choices": [{"message": {"content": json.dumps(payload)}}],
+                "_debug": {"responseFormatType": mode}}
+
+    _offline_builder(monkeypatch, mode, respond)
+    with pytest.raises(PlannerUnavailable, match="non-null realizationReplacement"):
+        author.repair_author_item_after_failure(item, {}, {}, {}, {}, "required-report", failure_report=failure)
+    assert len(requests) == 1
+    assert item == before
 
 
 def test_single_function_schema_never_decodes_an_unknown_function_by_object_type():
