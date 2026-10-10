@@ -22,6 +22,7 @@ MIN_EXACT_REPETITION_COMPRESSION = 5
 PRIMARY_BINDING_ROLE_LOWERER_ID = "primary_entity_to_binding_role"
 PRIMARY_OWNER_LOWERER_ID = "primary_entity_kind_to_owner"
 PRIMARY_OWNER_FINAL_PATH = "runtimeProgram.primaryOwner"
+EFFECT_GROUP_BINDING_LOWERER_ID = "binding_effect_group_identity"
 EXACT_REPETITION_COMPRESSION_POLICY = {
     "kind": "exact_repetition",
     "minimumRepeatedPlacements": MIN_EXACT_REPETITION_COMPRESSION,
@@ -73,6 +74,16 @@ def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
         "status": "technical_projection",
     }
 
+
+def effect_group_binding_receipt(*, source_index: int, final_index: int, value: str) -> dict[str, Any]:
+    return {
+        "lowererId": EFFECT_GROUP_BINDING_LOWERER_ID,
+        "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
+                          f"runtimeProgram.bindings[{source_index}].usePolicy.action.effectGroupId"],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.effectGroupId",
+        "value": value, "status": "technical_projection",
+    }
+
 # These are the only non-capability design-neutral projections. They serialize one
 # authored value into the tModLoader-facing DTO shape or derive an opcode/role from
 # an already-authored exact capability/entity kind. They never choose movement,
@@ -86,6 +97,14 @@ _ITEM_TECHNICAL_OUTPUTS = tuple(dict.fromkeys(
 ))
 
 GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
+    {
+        "id": EFFECT_GROUP_BINDING_LOWERER_ID,
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].usePolicy.action.effectGroupId"],
+        "outputs": ["runtimeProgram.bindings[].usePolicy.action.effectGroupId"],
+        "equivalence": "literal named effect group on the same exact authored binding",
+        "preserves": ["binding identity", "group identity", "group contents", "shared mobility cooldown"],
+        "addsDesignChoice": False,
+    },
     {
         "id": "entity_kind_to_visual_role",
         "inputs": ["runtimeProgram.entities[].kind"],
@@ -151,30 +170,16 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
     }
 
 
-def _parameter_outputs(fn: str, name: str, *, retained: bool = False) -> tuple[str, ...]:
+def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None, *, retained: bool = False) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
     spec = (cap.retained_receipt_params if retained else cap.params)[name]
     names = {name, spec.wire_name} - {""}
     return tuple(dict.fromkeys(
         candidate for candidate in cap.final_wire_paths
         if any(candidate.endswith("." + name) for name in names)
+        and (params is None or not cap.effect_groupable
+             or candidate.startswith("runtimeProgram.effectGroups[]." if "effectGroupId" in params else "gameplay."))
     ))
-
-
-def _present_wire_paths(value: Any, pattern: str, prefix: str = "") -> Iterable[str]:
-    """Expand only declared exact paths and array slots; do not scan arbitrary keys."""
-    head, dot, tail = pattern.partition(".")
-    key = head[:-2] if head.endswith("[]") else head
-    if not isinstance(value, Mapping) or key not in value:
-        return
-    child = value[key]
-    base = f"{prefix}.{key}" if prefix else key
-    children = ((f"{base}[{index}]", row) for index, row in enumerate(child)) if head.endswith("[]") and isinstance(child, list) else ((base, child),) if not head.endswith("[]") else ()
-    for path, row in children:
-        if dot:
-            yield from _present_wire_paths(row, tail, path)
-        else:
-            yield path
 
 
 def _valid_source_projection(spec: Any, source: Any, projected: Any) -> bool:
@@ -244,6 +249,16 @@ def _final_value(document: Mapping[str, Any], path: str) -> Any:
                 return _MISSING
             value = value[segment]
     return value
+
+
+def _present_wire_paths(document: Mapping[str, Any], pattern: str) -> tuple[str, ...]:
+    """Resolve registry array paths against present wire rows without inventing slots."""
+    if "[]" not in pattern:
+        return () if _final_value(document, pattern) is _MISSING else (pattern,)
+    prefix, suffix = pattern.split("[]", 1)
+    rows = _final_value(document, prefix)
+    return tuple(path for index in range(len(rows))
+                 for path in _present_wire_paths(document, f"{prefix}[{index}]{suffix}")) if isinstance(rows, list) else ()
 
 
 def _primary_receipt_source_error(
@@ -344,6 +359,24 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
     else:
         return ""
     return "global receipt is not the declared projection of final wire facts" if receipt.get("value") != expected else ""
+
+
+def _effect_group_binding_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].usePolicy.action.effectGroupId":
+        return "effect-group receipt lacks exact same-binding inputs"
+    binding_id = _final_value(authored, paths[0])
+    value = _final_value(authored, paths[1])
+    if not isinstance(value, str) or not _same_receipt_value(value, receipt.get("value")):
+        return "effect-group receipt differs from the explicit authored identity"
+    if final is not None:
+        bindings = _final_value(final, "runtimeProgram.bindings")
+        matches = [i for i, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                   if isinstance(binding, Mapping) and binding.get("id") == binding_id]
+        if len(matches) != 1 or receipt.get("finalPath") != f"runtimeProgram.bindings[{matches[0]}].usePolicy.action.effectGroupId":
+            return "effect-group receipt differs from its exact binding identity"
+    return ""
 
 
 def _capability_receipt_owner_error(
@@ -481,7 +514,9 @@ def audit_compiler_receipts(
             if not valid:
                 violations.append({"fn": fn, "finalPath": path, "reason": "weapon ammo semantics lack their exact originating capability selection"})
         if authored_document is not None:
-            reason = (_visual_receipt_source_error(receipt, authored_document, final_document)
+            reason = (_effect_group_binding_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == EFFECT_GROUP_BINDING_LOWERER_ID
+                      else _visual_receipt_source_error(receipt, authored_document, final_document)
                       if lowerer_id == "entity_kind_to_visual_role"
                       else _primary_receipt_source_error(receipt, authored_document, final_document))
             if reason:
@@ -692,6 +727,18 @@ def audit_compiler_receipts(
                         "finalPath": path,
                         "reason": "compiler receipt value is not the declared projection of its authored parameter",
                     })
+                if cap.effect_groupable and isinstance(source_params, Mapping):
+                    group_id = source_params.get("effectGroupId")
+                    group_match = re.match(r"runtimeProgram\.effectGroups\[(\d+)\]\.", path)
+                    if group_id is None:
+                        valid_scope = path.startswith("gameplay.")
+                    else:
+                        valid_scope = bool(group_match)
+                        if group_match and final_document is not None:
+                            valid_scope = _final_value(final_document, f"runtimeProgram.effectGroups[{group_match.group(1)}].id") == group_id
+                    if not valid_scope:
+                        violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                           "reason": "effect parameter is not projected into its exact authored group"})
                 if fn == "configure_item_stats":
                     param = match.group(2)
                     expected = f"gameplay.{cap.params[param].wire_name or param}"
@@ -775,7 +822,19 @@ def audit_compiler_receipts(
             final_claims[row["finalPath"]] = final_claims.get(row["finalPath"], 0) + 1
     for output, count in final_claims.items():
         if count != 1:
-            violations.append({"finalPath": output, "reason": "final capability output is claimed by multiple receipts"})
+            claims = [row for row in receipt_rows if row.get("fn") and not row.get("lowererId")
+                      and row["finalPath"] == output]
+            # Separate explicitly named effect components may share the same
+            # immutable group identity. Each exact source claim still passes
+            # scalar/domain/owner proof and per-call unique coverage below.
+            shared_identity = bool(re.fullmatch(r"runtimeProgram\.effectGroups\[\d+\]\.id", output)) and all(
+                CAPABILITY_REGISTRY[row["fn"]].effect_groupable
+                and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\.effectGroupId", row["authoredPath"])
+                and _same_receipt_value(row["value"], claims[0]["value"])
+                for row in claims
+            )
+            if not shared_identity:
+                violations.append({"finalPath": output, "reason": "final capability output is claimed by multiple receipts"})
     call_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for row in receipt_rows:
         if row.get("fn") and not row.get("lowererId"):
@@ -793,6 +852,17 @@ def audit_compiler_receipts(
             violations.append({"fn": fn, "callId": call_id, "reason": "call outputs lack unique receipt coverage"})
         if final_document is None:
             continue
+        projection_params = None
+        if cap.effect_groupable:
+            identity_rows = [row for row in rows if row["authoredPath"].endswith(".params.effectGroupId")]
+            projection_params = {"effectGroupId": identity_rows[0]["value"]} if identity_rows else {}
+            scope_prefix = "gameplay."
+            if identity_rows:
+                identity_match = re.fullmatch(r"(runtimeProgram\.effectGroups\[\d+\])\.id", identity_rows[0]["finalPath"])
+                scope_prefix = identity_match.group(1) + "." if identity_match else ""
+            if not scope_prefix or any(not row["finalPath"].startswith(scope_prefix) for row in rows):
+                violations.append({"fn": fn, "callId": call_id,
+                                   "reason": "effect call lacks one exact default or named group output owner"})
         for name, spec in cap.params.items():
             if spec.structured:
                 destinations = spec.wire_field_names(name)
@@ -800,7 +870,7 @@ def audit_compiler_receipts(
                 # Current and explicitly retained source paths share the same
                 # finite output slots; every present slot still needs one row.
             else:
-                patterns = list(_parameter_outputs(fn, name))
+                patterns = list(_parameter_outputs(fn, name, projection_params))
             for pattern in patterns:
                 concrete = {r["finalPath"] for r in rows if path_matches(pattern, r["finalPath"])}
                 if "[]" not in pattern:
@@ -855,6 +925,13 @@ def audit_compiler_receipts(
             if len(matching) != 1:
                 violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
                                    "reason": "global projection has no unique compiler receipt"})
+            group_path = f"runtimeProgram.bindings[{bi}].usePolicy.action.effectGroupId"
+            if _final_value(authored_document, group_path) is not _MISSING:
+                matching = [r for r in receipt_rows if r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID
+                            and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", group_path]]
+                if len(matching) != 1:
+                    violations.append({"lowererId": EFFECT_GROUP_BINDING_LOWERER_ID, "authoredPath": group_path,
+                                       "reason": "global projection has no unique compiler receipt"})
         entities = _final_value(authored_document, "runtimeProgram.entities")
         for ei, _ in enumerate(entities if isinstance(entities, list) else []):
             source_path = f"runtimeProgram.entities[{ei}].kind"
@@ -871,6 +948,11 @@ def audit_compiler_receipts(
         bindings = _final_value(final_document, "runtimeProgram.bindings")
         expected_globals.extend((PRIMARY_BINDING_ROLE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].role")
                                 for bi, _ in enumerate(bindings if isinstance(bindings, list) else []))
+        expected_globals.extend((EFFECT_GROUP_BINDING_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.action.effectGroupId")
+                                for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                                if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                                and isinstance(binding["usePolicy"].get("action"), Mapping)
+                                and "effectGroupId" in binding["usePolicy"]["action"])
         entities = _final_value(final_document, "runtimeProgram.entities")
         # Isolated capability projectors can supply partial entity DTOs without
         # global fields; require coverage for each actual global output slot.
@@ -952,7 +1034,7 @@ def audit_compiler_receipts(
                 continue
             for name in declared_neutral_omissions(fn, params):
                 source_path = f"runtimeProgram.calls[{index}].params.{name}"
-                for expected in _parameter_outputs(fn, name):
+                for expected in _parameter_outputs(fn, name, params):
                     matching = [row for row in receipt_rows
                                 if row.get("fn") == fn and row.get("callId") == source_call.get("id")
                                 and row.get("authoredPath") == source_path
@@ -1056,9 +1138,8 @@ def audit_compiler_receipts(
         # present declared default slot, but do not claim whether it was omitted.
         for fn, cap in CAPABILITY_REGISTRY.items():
             for name in declared_neutral_omissions(fn, {}):
-                for expected in _parameter_outputs(fn, name):
-                    if "[]" in expected or _final_value(final_document, expected) is _MISSING:
-                        continue
+                for expected in (path for pattern in _parameter_outputs(fn, name)
+                                 for path in _present_wire_paths(final_document, pattern)):
                     matching = [row for row in receipt_rows
                                 if row.get("fn") == fn and row.get("finalPath") == expected
                                 and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name),
@@ -1072,7 +1153,9 @@ def audit_compiler_receipts(
         "schema": "infini.technical-lowering-audit.v1",
         "ok": not violations,
         "violations": violations,
-        "lowerers": list(GLOBAL_TECHNICAL_LOWERINGS),
+        "lowerers": [row for row in GLOBAL_TECHNICAL_LOWERINGS
+                     if row["id"] != EFFECT_GROUP_BINDING_LOWERER_ID
+                     or any(receipt.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for receipt in receipt_rows)],
         # Keep source-backed compiler serialization unchanged. Only standalone
         # audits need an explicit limit on what their successful check proves.
         **({"authoredSourceChecked": False} if authored_document is None else {}),

@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 from infini_local.core.runtime_authoring.binding_use_policy import (
     ACTIVE_USE_INPUTS,
     action_kind,
+    action as binding_action,
     contact_damage,
     placeable_input_contract,
     placement_call_id,
@@ -44,6 +45,8 @@ MAX_EVENT_SPAWNS_PER_ACTIVATION = 32
 VALIDATION_ERROR_CODES = frozenset({
     "ambiguous_global_id",
     "binding_dependency",
+    "missing_effect_group",
+    "invalid_held_effect_group",
     "capability_event_incompatible",
     "child_depth_budget",
     "consumer_representability",
@@ -359,6 +362,7 @@ def _validate_requirement(
             row.get("fn") in requirement.any_of
             and (effect_cap := CAPABILITY_REGISTRY.get(str(row.get("fn") or ""))) is not None
             and isinstance((effect_params := row.get("params")), Mapping)
+            and (not cap.effect_groupable or effect_params.get("effectGroupId") == params.get("effectGroupId"))
             and effect_cap.has_non_neutral_effect(effect_params)
             for row in target_calls
         ):
@@ -408,11 +412,17 @@ def _validate_requirement(
         return None
     if requirement.kind == "binding_action_present":
         required_target = item_id if requirement.target == "item_body" else target_id
+        group_id = params.get("effectGroupId") if cap.effect_groupable else None
+        held = (cap.name == "apply_generated_buff_on_use" and isinstance(group_id, str)
+                and any(row.get("fn") == "refresh_generated_effect_group_while_held"
+                        and isinstance(row.get("params"), Mapping)
+                        and row["params"].get("effectGroupId") == group_id for row in target_calls))
         if not any(
             action_kind(binding) in requirement.any_of
             and binding_target_id(binding) == required_target
+            and (not cap.effect_groupable or binding_action(binding).get("effectGroupId") == group_id)
             for binding in bindings
-        ):
+        ) and not held:
             return ValidationIssue(
                 path, "missing_binding_dependency", requirement.message,
                 requirement.any_of, (str(call.get("id") or ""), required_target),
@@ -652,7 +662,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         ))
 
     calls_by_target = _calls_by_target(program)
-    seen_single: set[tuple[str, str]] = set()
+    seen_single: set[tuple[str, str, str | None]] = set()
     exclusive_components: dict[tuple[str, str], tuple[int, str]] = {}
     event_edges: dict[str, set[str]] = {entity_id: set() for entity_id in entities_by_id}
     event_referenced_entities: set[str] = set()
@@ -675,7 +685,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         kind = str(entity.get("kind") or "")
         if kind not in cap.target_kinds:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "wrong_target_kind", f"{fn} cannot target {kind}.", cap.target_kinds, (call_id, target_id)))
-        key = (target_id, fn)
+        key = (target_id, fn, params.get("effectGroupId") if cap.effect_groupable and isinstance(params.get("effectGroupId"), str) else None)
         if cap.multiplicity == "single_per_target" and key in seen_single:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}]", "duplicate_single_component", f"{fn} may appear only once on '{target_id}'.", ("merge into one call", "delete duplicate"), (target_id, call_id)))
         seen_single.add(key)
@@ -838,17 +848,44 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
 
     item_calls = calls_by_target.get(item_id, []) if item_id else []
     item_fns = {str(row.get("fn") or "") for row in item_calls}
+    effect_groups: dict[str, list[dict[str, Any]]] = {}
+    for row in item_calls:
+        declared = CAPABILITY_REGISTRY.get(str(row.get("fn") or ""))
+        group_id = row.get("params", {}).get("effectGroupId") if isinstance(row.get("params"), Mapping) else None
+        if declared is not None and declared.effect_groupable and isinstance(group_id, str):
+            effect_groups.setdefault(group_id, []).append(row)
+    valid_held_groups = tuple(group_id for group_id, rows in effect_groups.items()
+                             if len(rows) == 1 and rows[0].get("fn") == "apply_generated_buff_on_use")
+    for row in item_calls:
+        if row.get("fn") == "refresh_generated_effect_group_while_held":
+            group_id = row.get("params", {}).get("effectGroupId") if isinstance(row.get("params"), Mapping) else None
+            if isinstance(group_id, str) and group_id not in valid_held_groups:
+                issues.append(ValidationIssue(
+                    f"$.runtimeProgram.calls[{calls.index(row)}].params.effectGroupId", "invalid_held_effect_group",
+                    "Held refresh requires exactly one named generated utility buff and no heal/native buff/mobility components.",
+                    valid_held_groups, (str(row.get("id") or ""),),
+                ))
     for index, binding in enumerate(bindings):
         input_name = str(binding.get("input") or "")
         action_name = action_kind(binding)
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
+        group_id = binding_action(binding).get("effectGroupId")
+        if action_name == "apply_item_effects":
+            selected_calls = effect_groups.get(group_id, []) if isinstance(group_id, str) else [
+                row for row in item_calls if isinstance(row.get("params"), Mapping) and "effectGroupId" not in row["params"]]
+            selected_fns = {str(row.get("fn") or "") for row in selected_calls}
+            if isinstance(group_id, str) and group_id not in effect_groups:
+                issues.append(ValidationIssue(f"$.runtimeProgram.bindings[{index}].usePolicy.action.effectGroupId",
+                    "missing_effect_group", "Binding must select an exact declared effect group.", tuple(effect_groups), (str(binding.get("id") or ""),)))
+        else:
+            selected_fns = item_fns
         dependencies = (
             ("input", input_spec.required_item_capabilities_any_of if input_spec is not None else ()),
             ("usePolicy.action.kind", action_spec.required_item_capabilities_any_of if action_spec is not None else ()),
         )
         for source, required_any_of in dependencies:
-            if required_any_of and not item_fns.intersection(required_any_of):
+            if required_any_of and not selected_fns.intersection(required_any_of) and not (action_name == "apply_item_effects" and isinstance(group_id, str)):
                 issues.append(ValidationIssue(
                     f"$.runtimeProgram.bindings[{index}].{source}",
                     "binding_dependency",

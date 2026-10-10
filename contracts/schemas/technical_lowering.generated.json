@@ -95,7 +95,11 @@
       "outputs": [
         "gameplay.healLife",
         "gameplay.healMana",
-        "gameplay.potion"
+        "gameplay.potion",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].healLife",
+        "runtimeProgram.effectGroups[].healMana",
+        "runtimeProgram.effectGroups[].potion"
       ]
     },
     {
@@ -106,7 +110,10 @@
       "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
       "outputs": [
         "gameplay.extraBuffs[].buffCode",
-        "gameplay.extraBuffs[].buffTime"
+        "gameplay.extraBuffs[].buffTime",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffCode",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffTime"
       ]
     },
     {
@@ -124,7 +131,27 @@
         "gameplay.generatedBuff.movementSpeed",
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
-        "gameplay.generatedBuff.lifeRegen"
+        "gameplay.generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
+        "runtimeProgram.effectGroups[].generatedBuff.emitLightStrength",
+        "runtimeProgram.effectGroups[].generatedBuff.lightColorName",
+        "runtimeProgram.effectGroups[].generatedBuff.oreSenseRadiusTiles",
+        "runtimeProgram.effectGroups[].generatedBuff.movementSpeed",
+        "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
+        "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegen"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "refresh_generated_effect_group_while_held",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "outputs": [
+        "runtimeProgram.heldEffectGroupId"
       ]
     },
     {
@@ -213,7 +240,12 @@
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
         "gameplay.mobilityCooldownTicks",
-        "gameplay.mobilitySafeTileOnly"
+        "gameplay.mobilitySafeTileOnly",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].mobilityMode",
+        "runtimeProgram.effectGroups[].mobilityRangeTiles",
+        "runtimeProgram.effectGroups[].mobilityCooldownTicks",
+        "runtimeProgram.effectGroups[].mobilitySafeTileOnly"
       ]
     },
     {
@@ -876,6 +908,24 @@
     "requiresLiteralEquality": true
   },
   "globalLowerers": [
+    {
+      "addsDesignChoice": false,
+      "equivalence": "literal named effect group on the same exact authored binding",
+      "id": "binding_effect_group_identity",
+      "inputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].usePolicy.action.effectGroupId"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.effectGroupId"
+      ],
+      "preserves": [
+        "binding identity",
+        "group identity",
+        "group contents",
+        "shared mobility cooldown"
+      ]
+    },
     {
       "addsDesignChoice": false,
       "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
