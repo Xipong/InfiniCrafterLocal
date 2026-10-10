@@ -48,6 +48,8 @@ Child может встретить стену, промахнуться или 
 | `initialIgnoreCountdownUpdates` | integer 0…600 | Начальный native AI countdown исключения точного emission-anchor NPC; 0 отключает |
 | `delayTicks` | integer 0…600 | Задержка dispatch в world ticks |
 
+Радиус и порядок nearest сравниваются по точным квадратам расстояний фактических binary32 NPC Center. Координаты и разрешённый binary64 radius переводятся на общую dyadic решётку `2^-149`, после чего integer comparison сохраняет inclusive equality и различает любой положительный ортогональный компонент. Это не epsilon/расширение радиуса; слот разрешает только математически точную ничью.
+
 Фрагмент calls для уже объявленных `bolt` и `arc_child`:
 
 ```json

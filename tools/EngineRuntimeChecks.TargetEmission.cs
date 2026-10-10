@@ -180,7 +180,31 @@ internal static partial class EngineRuntimeChecks
             "original float coordinates outside radius cannot round inside or win a false tie");
         c.active = false;
         Equal(0, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1).Count, "nearby raw outside radius refused");
-        c.active = true; action.StepRangeTiles = 22.5;
+        c.active = true; action.StepRangeTiles = 60;
+        foreach (NPC other in Terraria.Main.npc.Where(npc => npc.whoAmI > 2)) other.active = false;
+        a.width = a.height = b.width = b.height = c.width = c.height = 10;
+        a.Center = new Vector2(1000, 32);
+        b.Center = new Vector2(1960, MathF.BitIncrement(32f));
+        c.Center = new Vector2(1960, 32);
+        Equal(MathF.BitIncrement(32f), b.Center.Y, "native Center roundtrip preserves orthogonal displacement");
+        Equal(2, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1)[0].TargetNpcSlot,
+            "double rounded squared radius cannot admit outside target or invent tie");
+        c.active = false;
+        Equal(0, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1).Count, "tiny exact outside displacement still outside inclusive radius");
+        c.active = true; action.StepRangeTiles = 60;
+        b.Center = new Vector2(1950, MathF.BitIncrement(32f));
+        c.Center = new Vector2(1950, 32);
+        Equal(2, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1)[0].TargetNpcSlot,
+            "exact nearest order retained when both candidates are in radius");
+        b.active = false; c.Center = new Vector2(1960, 32);
+        action.StepRangeTiles = Math.BitDecrement(60d);
+        Equal(0, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1).Count,
+            "binary64 fractional radius below native coordinate boundary stays outside");
+        action.StepRangeTiles = 60;
+        Equal(2, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1)[0].TargetNpcSlot,
+            "exact authored radius equality remains inclusive");
+        b.active = true;
+        action.StepRangeTiles = 22.5; a.Center = Vector2.Zero;
         b.Center = new Vector2(360, 0); c.Center = new Vector2(-360, 0);
         int calls = 0;
         using var lineOfSight = new Hook(typeof(Collision).GetMethod(nameof(Collision.CanHit),

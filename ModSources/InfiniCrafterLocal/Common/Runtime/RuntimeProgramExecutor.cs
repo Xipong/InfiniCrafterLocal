@@ -6,6 +6,7 @@ using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using BigInteger = System.Numerics.BigInteger;
 using Terraria;
 using Terraria.DataStructures;
 
@@ -134,6 +135,13 @@ internal static class RuntimeProgramExecutor
             return steps;
         int count = Math.Min(action.StepCount.Value, capacity);
         double radius = action.StepRangeTiles.Value * 16d;
+        if (!double.IsFinite(radius) || radius <= 0d) return steps;
+        // Every finite binary32 coordinate is an integer multiple of 2^-149.
+        // The admitted binary64 radius (16..960) lies on this same lattice.
+        // Scaling by a power of two is exact; compare integer squared lengths
+        // rather than lose a small orthogonal term in a rounded double sum.
+        BigInteger radiusUnits = new(Math.ScaleB(radius, 149));
+        BigInteger radiusSquared = radiusUnits * radiusUnits;
         var visited = new HashSet<NPC> { initialTarget };
         NPC previous = initialTarget;
         for (int step = 0; step < count; step++)
@@ -143,25 +151,29 @@ internal static class RuntimeProgramExecutor
             if (!float.IsFinite(origin.X) || !float.IsFinite(origin.Y)
                 || !RuntimeInitialNpcExclusion.TryCapture(anchor, action.InitialIgnoreCountdownUpdates.Value, out var exclusion))
                 break;
+            BigInteger originX = new(Math.ScaleB(origin.X, 149));
+            BigInteger originY = new(Math.ScaleB(origin.Y, 149));
             NPC? next = null;
-            double nearestSquared = double.PositiveInfinity;
+            BigInteger nearestSquared = default;
             foreach (NPC npc in Main.ActiveNPCs)
             {
                 if (!npc.CanBeChasedBy() || ReferenceEquals(npc, anchor)
                     || action.RepeatPolicy == "exclude_visited" && visited.Contains(npc))
                     continue;
                 Vector2 center = npc.Center;
-                double dx = (double)center.X - origin.X, dy = (double)center.Y - origin.Y;
-                double distanceSquared = dx * dx + dy * dy;
-                // A coincident center has no authored direction. Do not invent
-                // an axis for it or let NaN win a nearest-target comparison.
-                if (!double.IsFinite(distanceSquared) || distanceSquared <= 0d || distanceSquared > radius * radius)
+                if (!float.IsFinite(center.X) || !float.IsFinite(center.Y)) continue;
+                BigInteger dx = new BigInteger(Math.ScaleB(center.X, 149)) - originX;
+                BigInteger dy = new BigInteger(Math.ScaleB(center.Y, 149)) - originY;
+                BigInteger distanceSquared = dx * dx + dy * dy;
+                // Coincident centers have no authored direction; a strictly
+                // outside point cannot become an inclusive-boundary false tie.
+                if (distanceSquared.IsZero || distanceSquared > radiusSquared)
                     continue;
                 if (action.RequireLineOfSight == true
                     && !Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height))
                     continue;
-                if (distanceSquared < nearestSquared
-                    || distanceSquared == nearestSquared && (next is null || npc.whoAmI < next.whoAmI))
+                if (next is null || distanceSquared < nearestSquared
+                    || distanceSquared == nearestSquared && npc.whoAmI < next.whoAmI)
                 {
                     next = npc;
                     nearestSquared = distanceSquared;
