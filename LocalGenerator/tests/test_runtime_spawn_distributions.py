@@ -235,3 +235,79 @@ def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero
     report = validate_runtime_wire(wire)
     assert not report["ok"]
     assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".spreadRadians") for row in report["errors"])
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("capability", ["target_and_fire", "charge_then_release"])
+@pytest.mark.parametrize("velocity", VELOCITIES[1:])
+def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkeypatch, format_mode, capability, velocity):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness(capability)
+    controller = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == capability)
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn" and row["target"] == controller["target"])
+    call["params"].update(velocity=deepcopy(velocity), spreadRadians=0)
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    permission = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
+    assert permission["paths"] == ["params.velocity"]
+    candidate = deepcopy(call)
+    candidate["params"]["velocity"] = {"constantSpeedPxPerUpdate": 6}
+    expected = apply_repair_patch(doc, {"note": "model selects full replacement", "callsUpsert": [candidate]})
+    assert validate_runtime_program(expected)["ok"]
+    candidate["target"] = "item"
+    candidate["params"]["count"] = 12
+    hostile = deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+    hostile["params"]["damage"] = 999
+    patch = {"note": "explicit constant replacement", "realizationReplacement": doc["realization"],
+             "callsUpsert": [candidate, hostile]}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["noop", "omitted", "unchanged"])
+def test_velocity_replacement_requires_an_explicit_new_variant(monkeypatch, format_mode, case):
+    from infini_local.core.errors import PlannerUnavailable
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("target_and_fire")
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn")
+    call["params"].update(velocity=deepcopy(VELOCITIES[2]), spreadRadians=0)
+    before = deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    candidate = deepcopy(call)
+    if case == "omitted":
+        candidate["params"].pop("velocity")
+    incoming = {"note": "no new variant selected", "realizationReplacement": doc["realization"]}
+    if case != "noop":
+        incoming["callsUpsert"] = [candidate]
+        filtered, _ = filter_repair_patch_scope(doc, incoming, scope)
+        assert apply_repair_patch(doc, filtered)["runtimeProgram"] == doc["runtimeProgram"]
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert doc == before
+    assert not validate_runtime_program(doc)["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_velocity_leaf_permission_does_not_thaw_other_variant_leaves(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, call = fixture({"cone": {"minSpeedPxPerUpdate": 9, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}})
+    candidate = deepcopy(call)
+    candidate["params"]["velocity"]["cone"]["minSpeedPxPerUpdate"] = 4
+    expected = apply_repair_patch(doc, {"note": "exact minimum only", "callsUpsert": [candidate]})
+    candidate["params"]["velocity"]["cone"].update(maxSpeedPxPerUpdate=10, halfAngleRadians=0.4)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc,
+        {"note": "exact min with hostile siblings", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.velocity.cone.minSpeedPxPerUpdate"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]

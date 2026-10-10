@@ -122,12 +122,38 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void SampledVelocityRawNumericDomainAndRoundTrips()
+    {
+        using var scope = new Rt01NpcScope(NetmodeID.SinglePlayer);
+        foreach ((string field, string outside, string valid) in new[] {
+            ("minSpeedPxPerUpdate", "-1e-50", "0"),
+            ("minSpeedPxPerUpdate", "1e-46", "1e-40"),
+            ("maxSpeedPxPerUpdate", "80.000000000000000000000000001", "79.999999999999999999999999999"),
+            ("maxSpeedPxPerUpdate", "80.00000000000001", "80"),
+            ("halfAngleRadians", "3.1415926535897930000000000001", "3.141592653589793"),
+            ("halfAngleRadians", "1e-46", "0"),
+        })
+        {
+            var raw = JsonNode.Parse(SampledLaunchFixture("cone").ToNetworkJson())!;
+            var spec = LaunchRoot(raw)["spawn"]!["velocityDistribution"]!.AsObject();
+            spec[field] = "RAW_VELOCITY_NUMBER";
+            string document = raw.ToJsonString();
+            Equal(true, GeneratedItemData.FromJson(document.Replace("\"RAW_VELOCITY_NUMBER\"", outside, StringComparison.Ordinal)) is null,
+                "raw distribution domain refuses before narrowing " + field + "=" + outside);
+            var accepted = GeneratedItemData.FromJson(document.Replace("\"RAW_VELOCITY_NUMBER\"", valid, StringComparison.Ordinal))
+                ?? throw new InvalidOperationException("valid raw distribution refused " + field);
+            foreach (string payload in new[] { accepted.ToJson(), accepted.ToNetworkJson() })
+                Equal(true, GeneratedItemData.FromJson(payload) is not null, "distribution rounded endpoint retains roundtrip " + field);
+        }
+    }
+
     private static void SampledVelocitySeededGeometryAndAreaMoments()
     {
         foreach (string kind in new[] { "fan_speed", "radial", "disk", "cone" })
         {
             var spawn = new RuntimeSpawnSpec { SpeedPxPerTick = 0, Aim = "velocity", VelocityDistribution = LaunchDistribution(kind) };
-            var first = new UnifiedRandom(817), replay = new UnifiedRandom(817);
+            var first = new UnifiedRandom(817);
+            var replay = new UnifiedRandom(817);
             double squaredSum = 0; int left = 0, right = 0, above = 0, below = 0;
             for (int i = 0; i < 4096; i++)
             {

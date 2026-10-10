@@ -45,6 +45,7 @@ internal static partial class EngineRuntimeChecks
     {
         (string Name, Action Check)[] checks = {
             ("sampled launch strict DTO and old saved absence", SampledLaunchDtoRejectsInvalidAndPreservesOldAbsence),
+            ("sampled launch raw numeric domain and round trips", SampledVelocityRawNumericDomainAndRoundTrips),
             ("sampled velocity seeded geometry and area moments", SampledVelocitySeededGeometryAndAreaMoments),
             ("sampled velocity native spawn owner authority", SampledVelocityReachesNativeSpawnOnlyOnOwner),
             ("sampled velocity delay ExtraAI and hydration", SampledVelocityDelayExtraAiAndHydrationPreserveChosenVector),
@@ -366,9 +367,9 @@ internal static partial class EngineRuntimeChecks
         return entity;
     }
 
-    private static void Equal<T>(T expected, T actual, string label) where T : IEquatable<T>
+    private static void Equal<T>(T expected, T actual, string label)
     {
-        if (!expected.Equals(actual))
+        if (!System.Collections.Generic.EqualityComparer<T>.Default.Equals(expected, actual))
             throw new InvalidOperationException($"{label}: expected {expected}, actual {actual}");
     }
 

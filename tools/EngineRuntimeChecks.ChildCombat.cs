@@ -21,7 +21,7 @@ internal static partial class EngineRuntimeChecks
         var child = JsonSerializer.Deserialize<RuntimeEntitySpec>(JsonSerializer.Serialize(parent))!;
         child.Id = "child";
         child.Kind = RuntimeEntityKind.ChildProjectile;
-        child.Visual.Role = child.VisualRole = "child";
+        child.Visual.Role = child.VisualRole = "child_projectile";
         child.Damage.Damage = 23;
         child.Damage.Knockback = 2.5f;
         child.Damage.DamageClass = "magic";

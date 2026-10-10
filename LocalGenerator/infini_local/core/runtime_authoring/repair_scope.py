@@ -2931,6 +2931,7 @@ def filter_repair_patch_scope(
                             accepted.append(path)
                         continue
                 row_permissions = set(permissions.get(row_id, ()))
+                row_deletions: list[str] = []
                 if namespace == "calls":
                     original_params_raw = original.get("params")
                     candidate_params_raw = candidate.get("params")
@@ -2938,6 +2939,24 @@ def filter_repair_patch_scope(
                     candidate_params: Mapping[str, Any] = candidate_params_raw if isinstance(candidate_params_raw, Mapping) else {}
                     cap = CAPABILITY_REGISTRY.get(str(original.get("fn") or ""))
                     if cap is not None:
+                        for param_name, param_spec in cap.params.items():
+                            # A whole invalid union permission permits an explicit
+                            # complete model-authored variant, not a union of old/new.
+                            # Leaf-only repairs and omitted params never retire branches.
+                            if (not param_spec.alternatives or f"params.{param_name}" not in row_permissions
+                                    or param_name not in candidate_params
+                                    or not isinstance(original_params.get(param_name), Mapping)):
+                                continue
+                            try:
+                                param_spec.selected_variant(candidate_params[param_name])
+                            except ValueError:
+                                continue
+                            if isinstance(candidate_params[param_name], Mapping):
+                                row_deletions.extend(
+                                    json_path_child(f"params.{param_name}", key)
+                                    for key in original_params[param_name]
+                                    if key not in candidate_params[param_name]
+                                )
                         dependencies = _conditional_param_dependencies(cap)
                         selected_missing = {
                             required for selector, expected, required in dependencies
@@ -2988,6 +3007,7 @@ def filter_repair_patch_scope(
                     # but only exact error/dependency leaves may change or be
                     # added. Every other old value remains frozen.
                     allow_additions=False,
+                    delete_paths=row_deletions,
                 )
                 ignored.extend(row_ignored)
                 accepted.extend(row_accepted)

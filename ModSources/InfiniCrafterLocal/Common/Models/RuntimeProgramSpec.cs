@@ -749,6 +749,11 @@ public sealed class RuntimeSpawnVelocitySpec
 {
     [JsonRequired] public string Kind { get; set; } = "";
     private float? _minSpeedPxPerUpdate;
+    public sealed class MinSpeedPxPerUpdateJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public MinSpeedPxPerUpdateJsonConverter() : base("0", "80", "0") { }
+    }
+    [JsonConverter(typeof(MinSpeedPxPerUpdateJsonConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? MinSpeedPxPerUpdate
     {
@@ -761,6 +766,11 @@ public sealed class RuntimeSpawnVelocitySpec
         }
     }
     private float? _maxSpeedPxPerUpdate;
+    public sealed class MaxSpeedPxPerUpdateJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public MaxSpeedPxPerUpdateJsonConverter() : base("0", "80", "0") { }
+    }
+    [JsonConverter(typeof(MaxSpeedPxPerUpdateJsonConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? MaxSpeedPxPerUpdate
     {
@@ -773,6 +783,11 @@ public sealed class RuntimeSpawnVelocitySpec
         }
     }
     private float? _halfAngleRadians;
+    public sealed class HalfAngleRadiansJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public HalfAngleRadiansJsonConverter() : base("0", "3.141592653589793", "0") { }
+    }
+    [JsonConverter(typeof(HalfAngleRadiansJsonConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? HalfAngleRadians
     {
