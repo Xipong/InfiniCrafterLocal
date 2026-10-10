@@ -508,6 +508,28 @@ public sealed class RuntimeEntitySpec
         get => _hitboxCurve;
         set => _hitboxCurve = value ?? throw new InvalidDataException("present hitboxCurve cannot be null");
     }
+    private RuntimeTurnModifierSpec? _turnModifier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeTurnModifierSpec? TurnModifier { get => _turnModifier; set => _turnModifier = value ?? throw new InvalidDataException("present turnModifier cannot be null"); }
+    private RuntimeSpeedModifierSpec? _speedModifier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeSpeedModifierSpec? SpeedModifier { get => _speedModifier; set => _speedModifier = value ?? throw new InvalidDataException("present speedModifier cannot be null"); }
+    private RuntimeHomingModifierSpec? _homingModifier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHomingModifierSpec? HomingModifier { get => _homingModifier; set => _homingModifier = value ?? throw new InvalidDataException("present homingModifier cannot be null"); }
+    private RuntimeNpcAttractionSpec? _npcAttraction;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeNpcAttractionSpec? NpcAttraction { get => _npcAttraction; set => _npcAttraction = value ?? throw new InvalidDataException("present npcAttraction cannot be null"); }
+    private RuntimeVisualScaleCurveSpec? _visualScaleCurve;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeVisualScaleCurveSpec? VisualScaleCurve { get => _visualScaleCurve; set => _visualScaleCurve = value ?? throw new InvalidDataException("present visualScaleCurve cannot be null"); }
+    private bool? _whipUsesOwnerGravity;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WhipUsesOwnerGravity
+    {
+        get => _whipUsesOwnerGravity;
+        set => _whipUsesOwnerGravity = value is true ? true : throw new InvalidDataException("present whipUsesOwnerGravity must be true");
+    }
     public RuntimeCollisionSpec Collision { get; set; } = new();
     public RuntimeMovementSpec Movement { get; set; } = new();
     public RuntimeControllerSpec Controller { get; set; } = new();
@@ -551,7 +573,8 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
-            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null)
+            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
+                || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -563,11 +586,20 @@ public sealed class RuntimeEntitySpec
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
+            TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
+            NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
+            if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
+                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code != RuntimeControllerCode.None))
+                throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
+            if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
+                throw new InvalidDataException("dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry");
+            if (WhipUsesOwnerGravity.HasValue && (Kind != RuntimeEntityKind.OwnerAttachedProjectile || Movement.Code != 18 || Controller.Code == RuntimeControllerCode.ChannelBeam))
+                throw new InvalidDataException("owner gravity orientation requires active whip geometry");
             if (HitboxCurve is { } curve)
             {
                 curve.Validate();
                 if (Controller.Code == RuntimeControllerCode.ChannelBeam || Movement.Code == 18
-                    || curve.MirrorToSprite && Movement.Code == 15)
+                    || curve.MirrorToSprite && (Movement.Code == 15 || VisualScaleCurve is not null))
                     throw new InvalidDataException("hitboxCurve cannot coexist with beam/whip collision or a second mirrored sprite-scale owner");
             }
             bool requiresPositionDriver = Kind is RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile;
@@ -762,6 +794,110 @@ public sealed class RuntimeHitboxCurveSpec
         return Curve == "exponential"
             ? (float)(StartScale * Math.Pow(EndScale / (double)StartScale, progress))
             : (float)(StartScale + (EndScale - StartScale) * progress);
+    }
+}
+
+public static class RuntimeModifierClock
+{
+    public static bool Active(int activeUpdates, int updatesPerWorldTick, int delayTicks, int durationTicks)
+    {
+        // AI increments activeUpdates before consumers. Select the interval at
+        // the beginning of this step, including all subupdates in the phase.
+        double tick = Math.Max(0, activeUpdates - 1) / (double)Math.Max(1, updatesPerWorldTick);
+        return tick >= delayTicks && tick < (long)delayTicks + durationTicks;
+    }
+
+    public static void RequireRange(float value, float low, float high)
+    {
+        if (!float.IsFinite(value) || value < low || value > high)
+            throw new InvalidDataException("modifier fields require exact finite registry bounds");
+    }
+}
+
+public sealed class RuntimeTurnModifierSpec
+{
+    [JsonRequired] public float TurnRadiansPerUpdate { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(TurnRadiansPerUpdate, -0.5f, 0.5f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+    }
+}
+
+public sealed class RuntimeSpeedModifierSpec
+{
+    [JsonRequired] public float SpeedMultiplierPerUpdate { get; set; }
+    [JsonRequired] public float MaxSpeed { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(SpeedMultiplierPerUpdate, 0.8f, 1.2f);
+        RuntimeModifierClock.RequireRange(MaxSpeed, 0.1f, 80f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+    }
+}
+
+public sealed class RuntimeHomingModifierSpec
+{
+    [JsonRequired] public float RangeTiles { get; set; }
+    [JsonRequired] public float MaxTurnRadiansPerUpdate { get; set; }
+    [JsonRequired] public bool RequireLineOfSight { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(RangeTiles, 1f, 120f);
+        RuntimeModifierClock.RequireRange(MaxTurnRadiansPerUpdate, 0.0001f, 3.2f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+    }
+}
+
+public sealed class RuntimeNpcAttractionSpec
+{
+    [JsonRequired] public float RangeTiles { get; set; }
+    [JsonRequired] public float StrengthPerUpdate { get; set; }
+    [JsonRequired] public string Falloff { get; set; } = "";
+    [JsonRequired] public int MaxTargets { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(RangeTiles, 1f, 80f);
+        RuntimeModifierClock.RequireRange(StrengthPerUpdate, 0.001f, 4f);
+        RuntimeModifierClock.RequireRange(MaxTargets, 1, 16);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+        if (Falloff is not ("constant" or "linear")) throw new InvalidDataException("unknown NPC attraction falloff");
+    }
+}
+
+public sealed class RuntimeVisualScaleCurveSpec
+{
+    [JsonRequired] public float StartScale { get; set; }
+    [JsonRequired] public float EndScale { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    [JsonRequired] public string Curve { get; set; } = "";
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(StartScale, 0.25f, 8f);
+        RuntimeModifierClock.RequireRange(EndScale, 0.25f, 8f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+        if (Curve is not ("linear" or "exponential")) throw new InvalidDataException("unknown visual scale curve");
+    }
+    public float ScaleAt(int activeUpdates, int updatesPerWorldTick)
+    {
+        double tick = Math.Max(0, activeUpdates) / (double)Math.Max(1, updatesPerWorldTick);
+        double progress = Math.Clamp((tick - StartDelayTicks) / DurationTicks, 0d, 1d);
+        return Curve == "exponential" ? (float)(StartScale * Math.Pow(EndScale / (double)StartScale, progress))
+                                    : (float)(StartScale + (EndScale - StartScale) * progress);
     }
 }
 

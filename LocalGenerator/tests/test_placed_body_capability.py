@@ -332,7 +332,9 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
         checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         # The new capability adds registry checks even when it is absent. Preserve
         # the frozen full-document baseline, adjusting only that proven counter.
-        assert checks["requirements"] == 28 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        new_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                    "set_projectile_homing_modifier", "attract_npcs_while_active", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+        assert checks["requirements"] == 28 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in new_caps)
         checks["requirements"] = 28
         actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline

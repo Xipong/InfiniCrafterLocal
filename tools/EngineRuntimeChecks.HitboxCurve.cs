@@ -88,7 +88,7 @@ internal static partial class EngineRuntimeChecks
                 cacheProperty.SetValue(null, cache);
                 foreach (string mode in new[] { "baked_sprite", "reuse_item_icon" })
                 foreach (bool declaredFrame in new[] { false, true })
-                foreach (string policy in new[] { "absent", "independent", "mirror" })
+                foreach (string policy in new[] { "absent", "independent", "mirror", "visual" })
                 foreach ((float drawScale, float visualScale, float curveScale, float product) in new[] {
                     (.25f, .25f, .25f, .015625f), (2f, 3f, 2f, 12f), (4f, 4f, 8f, 128f),
                 })
@@ -98,13 +98,18 @@ internal static partial class EngineRuntimeChecks
                     entity.Visual.AssetMode = mode; entity.Visual.SpritePath = path;
                     entity.Hitbox.DrawScale = drawScale; entity.Visual.Scale = visualScale;
                     if (declaredFrame) { data.Visual.RenderSizePx = 32; entity.Visual.RenderSizePx = 32; }
-                    if (policy != "absent") entity.HitboxCurve = new() {
+                    if (policy is not ("absent" or "visual")) entity.HitboxCurve = new() {
                         StartScale = curveScale, EndScale = curveScale, StartDelayTicks = 0,
                         DurationTicks = 60, Curve = "linear", MirrorToSprite = policy == "mirror",
                     };
+                    if (policy == "visual") entity.VisualScaleCurve = new() {
+                        StartScale = curveScale, EndScale = curveScale, StartDelayTicks = 0,
+                        DurationTicks = 60, Curve = "linear",
+                    };
+                    bool exactScale = policy is "mirror" or "visual";
                     var projectile = new Projectile { active = true, damage = 100, Center = new Vector2(100, 120), rotation = .35f };
                     var generated = Attach(projectile); generated.Configure(data, entity, 0, 8, Vector2.UnitX);
-                    if (policy == "mirror") Equal(product, projectile.scale, "real mirror computes the authored product before drawing");
+                    if (exactScale) Equal(product, projectile.scale, "real explicit visual owner computes the authored product before drawing");
                     else projectile.scale = product; // Independent legacy live visual state retains its own clamp.
                     string frozen = System.Text.Json.JsonSerializer.Serialize(entity);
                     Rectangle collision = projectile.Hitbox;
@@ -112,7 +117,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(index + 1, count(), "actual PNG consumer queues one body");
                     Vector3[] points = positions(index);
                     Vector2 edge = new(points[1].X - points[0].X, points[1].Y - points[0].Y);
-                    float expectedScale = policy == "mirror" ? product : Math.Clamp(product, .1f, 8f);
+                    float expectedScale = exactScale ? product : Math.Clamp(product, .1f, 8f);
                     float expectedWidth = (declaredFrame ? 32f : 64f) * expectedScale;
                     Equal(true, float.IsFinite(edge.Length()) && Math.Abs(edge.Length() - expectedWidth) < .001f + expectedWidth * .000001f,
                         "PNG vertices preserve exact mirror product and frame units: " + mode + "/" + policy);
@@ -131,7 +136,7 @@ internal static partial class EngineRuntimeChecks
         WithBodyGeometryQueue((count, positions) =>
         {
             foreach (Vector2 aim in new[] { Vector2.UnitX, Vector2.UnitY, new Vector2(-.6f, .8f) })
-            foreach (string policy in new[] { "absent", "independent", "mirror" })
+            foreach (string policy in new[] { "absent", "independent", "mirror", "visual" })
             foreach ((float drawScale, float visualScale, float curveScale, float product) in new[] {
                 (.25f, .25f, .25f, .015625f), (2f, 3f, 2f, 12f), (4f, 4f, 8f, 128f),
             })
@@ -139,15 +144,20 @@ internal static partial class EngineRuntimeChecks
                 var entity = Entity(); entity.Kind = RuntimeEntityKind.FreeProjectile;
                 entity.Visual.AssetMode = "runtime_geometry"; entity.Hitbox.WidthPx = 4; entity.Hitbox.HeightPx = 4;
                 entity.Hitbox.DrawScale = drawScale; entity.Visual.Scale = visualScale;
-                if (policy != "absent") entity.HitboxCurve = new() {
+                if (policy is not ("absent" or "visual")) entity.HitboxCurve = new() {
                     StartScale = curveScale, EndScale = curveScale, StartDelayTicks = 0,
                     DurationTicks = 60, Curve = "linear", MirrorToSprite = policy == "mirror",
                 };
+                if (policy == "visual") entity.VisualScaleCurve = new() {
+                    StartScale = curveScale, EndScale = curveScale, StartDelayTicks = 0,
+                    DurationTicks = 60, Curve = "linear",
+                };
+                bool exactScale = policy is "mirror" or "visual";
                 var projectile = new Projectile { active = true, damage = 100, Center = new Vector2(100, 120), velocity = aim };
                 var generated = Attach(projectile); generated.Configure(new GeneratedItemData(), entity, 0, 8, aim);
-                if (policy != "mirror") projectile.scale = product;
-                float length = policy == "mirror" ? 4f * product : Math.Max(8f, 4f * product);
-                float width = policy == "mirror" ? 1.4f * product : Math.Max(2f, 1.4f * product);
+                if (!exactScale) projectile.scale = product;
+                float length = exactScale ? 4f * product : Math.Max(8f, 4f * product);
+                float width = exactScale ? 1.4f * product : Math.Max(2f, 1.4f * product);
                 int index = count(); DrawBodyGeometry(generated);
                 Equal(index + 1, count(), "even the .0625px authored segment reaches native vertices");
                 AssertBodySegment(positions(index), projectile.Center - aim * length * .5f, projectile.Center + aim * length * .5f, width);

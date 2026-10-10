@@ -623,6 +623,7 @@ def check_explicit_body_scale() -> None:
     runtime = read("Common/VFX/InfiniVfxRuntime.cs")
     predicate = stripped(method_body(visual, "PreservesExplicitBodyScale"))
     require(predicate, "_entity?.HitboxCurve?.MirrorToSprite == true", "explicit body scale opt-in")
+    require(predicate, "_entity?.VisualScaleCurve is not null", "explicit visual curve opt-in")
     sprite = stripped(method_body(visual, "DrawAuthoredEntityVisual"))
     require(sprite, "PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f)", "explicit body scale PNG consumer")
     require(sprite, "* selected.FrameScale(source.Width, source.Height)", "explicit body scale frame units")
