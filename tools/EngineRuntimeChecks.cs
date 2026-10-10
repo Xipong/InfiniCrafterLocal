@@ -48,6 +48,15 @@ internal static partial class EngineRuntimeChecks
             ("target bias saved DTO range and native distance-score discount", TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount),
             ("signed vertical acceleration native DTO active updates and hydration", SignedVerticalAccelerationUsesNativeDtoAndEveryActiveUpdate),
             ("signed vertical acceleration activation delay and update rate", SignedVerticalAccelerationWaitsForActivationThenPreservesAuthoredRate),
+            ("initial NPC exclusion exact incarnation and counter", InitialNpcExclusionUsesExactIncarnationAndCounter),
+            ("initial NPC exclusion ExtraAI remaining and v2 absence", InitialNpcExclusionExtraAiPreservesRemainingAndOldAbsence),
+            ("explicit spawn transform native boundary", ExplicitSpawnTransformRejectsInvalidBeforeNativeBoundary),
+            ("target emission strict wire and old action absence", TargetEmissionWireIsStrictAndOldOpcodesStayAbsent),
+            ("target emission anchor and repeat policies", TargetEmissionPlannerUsesExplicitAnchorsAndRepeatPolicy),
+            ("target emission inclusive range ties and LOS", TargetEmissionPlannerUsesInclusiveRangeExactTiesAndLos),
+            ("target emission real hit authority stats and reservations", TargetEmissionRealHitHookKeepsAuthorityStatsAndReservation),
+            ("target emission ordinary refusal and child collision", TargetEmissionNormalRefusalsReturnUnspentPlanBudget),
+            ("target emission delayed NPC incarnation and refunds", TargetEmissionDelayedDispatchRequiresSameActiveNpcAndRefundsCancellation),
             ("raw numeric helper signed nullable neutral domains", RawNumericHelperSignedNullableAndNeutralDomains),
             ("hitbox raw numeric outside domain", HitboxRawNumericDomainRefusesOutsideBeforeNarrowing),
             ("hitbox raw numeric serialization cache network", HitboxRawNumericEndpointsSurviveSerializationCacheNetwork),
@@ -62,6 +71,7 @@ internal static partial class EngineRuntimeChecks
             ("motion modifier strict DTO presence", ModifierStrictDtoPresenceAndOldAbsence),
             ("hitbox mirror exact PNG vertices", HitboxCurveExplicitMirrorReachesSpriteVertices),
             ("hitbox mirror exact primitive vertices", HitboxCurveExplicitMirrorReachesPrimitiveVertices),
+
             ("bugfix251 grounded native support", GroundedConditionRequiresNativeSupport),
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),
@@ -110,6 +120,10 @@ internal static partial class EngineRuntimeChecks
             ("generated native prefix compact hydration", GeneratedItemNativePrefixCompactHydration),
             ("generated root combat native lane contexts and query counts", GeneratedRootCombatNativeLanesAndQueryCounts),
             ("generated root combat terminal hold and source fence", GeneratedRootCombatTerminalHoldAndSourceFence),
+            ("child combat strict saved wire preserves absent selectors", ChildCombatSavedWireIsStrictAndPreservesAbsence),
+            ("child combat immediate events inherit exact current values once", ChildCombatImmediateEventsSelectLiveOrAuthoredStatsExactlyOnce),
+            ("child combat delayed and charge events capture at admission", ChildCombatDelayedAndChargeEventsCaptureAtAdmission),
+            ("child combat sentry firing and refused spawn reservations", ChildCombatSentryUsesCurrentParentAndRefusalsRefundBudget),
             ("dynamic collision preserves authored choice and return phase", RuntimeCollisionKeepsAuthoredChoiceAndReturnPhase),
             ("swarm charge keeps actual combat basis exactly once", SwarmChargeKeepsCombatBasisOnce),
             ("swarm charge received released ExtraAI never rescales", SwarmChargeReleasedExtraAiDoesNotRescale),
@@ -397,9 +411,9 @@ internal static partial class EngineRuntimeChecks
         return entity;
     }
 
-    private static void Equal<T>(T expected, T actual, string label) where T : IEquatable<T>
+    private static void Equal<T>(T expected, T actual, string label)
     {
-        if (!expected.Equals(actual))
+        if (!System.Collections.Generic.EqualityComparer<T>.Default.Equals(expected, actual))
             throw new InvalidOperationException($"{label}: expected {expected}, actual {actual}");
     }
 
@@ -413,6 +427,23 @@ internal static partial class EngineRuntimeChecks
             Attach(projectile).Configure(new GeneratedItemData(), Entity(), 0, 8, Vector2.UnitX);
             Equal(damage, projectile.damage, "spawn damage");
             Equal(damage, projectile.originalDamage, "spawn originalDamage");
+            foreach (bool enabled in new[] { false, true })
+            foreach (bool hydrated in new[] { false, true })
+            foreach (int delay in new[] { 0, 2 })
+            {
+                var child = Entity(); child.Kind = RuntimeEntityKind.ChildProjectile;
+                child.Damage.Enabled = enabled; child.Damage.Damage = 0;
+                child.Spawn.OverTarget.DelayTicks = delay;
+                var live = new Projectile { active = true, damage = damage, originalDamage = damage,
+                    knockBack = 3f, timeLeft = 60, velocity = Vector2.UnitX };
+                var host = Attach(live);
+                if (hydrated) typeof(GeneratedProjectile).GetField("_activationDelayTicks",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(host, delay);
+                host.Configure(new GeneratedItemData(), child, 0, 8, Vector2.UnitX, preserveSyncedState: hydrated);
+                Equal(enabled && damage > 0 && delay == 0, live.friendly, "live child collision eligibility at configuration");
+                for (int tick = 0; tick < delay; tick++) host.AI();
+                Equal(enabled && damage > 0, live.friendly, "live child collision eligibility after activation delay");
+            }
         }
     }
 

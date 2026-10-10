@@ -9,6 +9,7 @@ from typing import Any
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.captured_projectile_author import project_captured_projectile_call
+from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 from sentry_contract_checks import without_declared_targeting_neutrals
 from beam_contract_checks import without_declared_beam_neutrals
 
@@ -32,7 +33,7 @@ def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
     current = deepcopy(authored)
     for call in current["runtimeProgram"]["calls"]:
         project_captured_projectile_call(call)
-    return current
+    return captured_parent_combat_author(current)
 
 
 def _historical_spawn_defaults(wire: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
@@ -104,7 +105,7 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         compiled = compile_runtime_program(_current_author_seed(authored))
         assert validate_runtime_wire(compiled)["ok"] is True
         actual_wire = _historical_spawn_defaults(
-            _delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled))),
+            _delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))),
             row["expectedDeliveryWire"]
         )
         assert actual_wire == row["expectedDeliveryWire"]

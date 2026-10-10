@@ -161,20 +161,35 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
             for item_call in current_source["runtimeProgram"]["calls"]:
                 if item_call["fn"] == "configure_item_use":
                     project_captured_projectile_call(item_call)
+            from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
+            current_source = captured_parent_combat_author(current_source)
             assert validate_runtime_program(current_source)["ok"]
+            fresh, _ = compile_and_check(current_source)
+            # The frozen wire intentionally predates explicit child combat too.
+            # Add only independently authenticated new combat leaves/receipts to
+            # the audit control so its five targeting-omission violations remain
+            # isolated; do not change the archived wire or its hash.
+            current_wire = deepcopy(wire)
             current_rows = deepcopy(receipts)
+            for old_entity, fresh_entity in zip(current_wire["runtimeProgram"]["entities"], fresh["runtimeProgram"]["entities"]):
+                if "targeting" in old_entity:
+                    for name in ("damageBasis", "knockbackBasis", "damageMultiplier"):
+                        old_entity["targeting"][name] = fresh_entity["targeting"][name]
+            current_rows.extend(deepcopy(receipt) for receipt in fresh["runtimeContract"]["finalWireReceipts"]
+                                if receipt.get("fn") == "target_and_fire"
+                                and receipt["authoredPath"].rsplit(".params.", 1)[-1]
+                                in {"damageBasis", "knockbackBasis", "damageMultiplier"})
             for receipt in current_rows:
                 if receipt.get("fn") == "configure_item_use" and receipt["authoredPath"].endswith(".heldSpriteVisibilityHint"):
                     assert receipt["value"] in {"", "immediate", "on_release"}
                     receipt["authoredPath"] = receipt["authoredPath"].removesuffix("heldSpriteVisibilityHint") + "customHeldSprite"
-            violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=wire)["violations"]
+            violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=current_wire)["violations"]
             assert len(violations) == 5
             assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
             assert {v["authoredPath"].rsplit(".", 1)[1] for v in violations} == {
                 "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"}
             from sentry_contract_checks import without_declared_targeting_neutrals
-            fresh, _ = compile_and_check(current_source)
-            projected = without_declared_targeting_neutrals(fresh)
+            projected = historical_child_combat_wire(without_declared_targeting_neutrals(fresh))
             assert projected["runtimeProgram"] == wire["runtimeProgram"]
             assert projected["gameplay"] == wire["gameplay"]
         if row["case"].startswith("on_"):

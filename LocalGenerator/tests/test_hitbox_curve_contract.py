@@ -152,8 +152,9 @@ def test_no_curve_preserves_frozen_gameplay_payload(name):
     from beam_contract_checks import without_declared_beam_neutrals
     from sentry_contract_checks import without_declared_targeting_neutrals
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
+    from captured_parent_combat_author import historical_child_combat_wire
     wire = without_declared_targeting_neutrals(without_declared_beam_neutrals(
-        without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name)))))
+        without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name))))))
     assert all("hitboxCurve" not in entity for entity in wire["runtimeProgram"]["entities"])
     text = json.dumps(_payload(wire), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     assert hashlib.sha256(text.encode()).hexdigest() == capture["sha256"][name]

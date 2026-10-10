@@ -23,6 +23,8 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     CapabilitySpec,
     RequirementSpec,
+    compatible_entity_reference_ids,
+    referenced_entity_requirement_satisfied,
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
@@ -90,8 +92,10 @@ VALIDATION_ERROR_CODES = frozenset({
     "unknown_registry_requirement",
     "unreachable_entity",
     "unsupported_input_action",
+    "unsupported_param_target_kind",
     "wrong_binding_target_kind",
     "wrong_reference_target_kind",
+    "reference_requirements_unsatisfied",
     "wrong_target_kind",
 })
 
@@ -314,6 +318,26 @@ def _validate_requirement(
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
+
+    if requirement.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}:
+        referenced_id = params.get(requirement.param)
+        if not isinstance(referenced_id, str) or referenced_id not in entities_by_id:
+            return None  # Shape/reference ownership emits its exact missing leaf.
+        if not referenced_entity_requirement_satisfied(requirement, referenced_id, calls_by_target):
+            allowed = compatible_entity_reference_ids(cap, requirement.param, target_id, entities_by_id, calls_by_target)
+            return ValidationIssue(f"{path}.params.{requirement.param}", "reference_requirements_unsatisfied",
+                                   requirement.message, allowed, (str(call.get("id") or ""), referenced_id))
+        return None
+
+    if requirement.kind == "param_requires_target_kind":
+        if (params.get(requirement.param) == requirement.equals
+                and entities_by_id.get(target_id, {}).get("kind") not in requirement.any_of):
+            allowed = tuple(str(value) for value in cap.params[requirement.param].enum
+                            if value != requirement.equals)
+            return ValidationIssue(f"{path}.params.{requirement.param}",
+                                   "unsupported_param_target_kind", requirement.message,
+                                   allowed, (str(call.get("id") or ""), target_id))
+        return None
 
     if requirement.kind == "capability_absent":
         if requirement.param and params.get(requirement.param) != requirement.equals:
@@ -990,8 +1014,11 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     if event_spawn_budget > MAX_EVENT_SPAWNS_PER_ACTIVATION:
         issues.append(ValidationIssue("$.runtimeProgram.calls", "event_spawn_budget", f"Event spawn count {event_spawn_budget} exceeds {MAX_EVENT_SPAWNS_PER_ACTIVATION}.", (f"sum <= {MAX_EVENT_SPAWNS_PER_ACTIVATION}",)))
 
+    # Archived complete compiled DTOs include these diagnostic counts. New
+    # opt-in reference adapters contribute when selected; old programs keep
+    # their exact diagnostic bytes as well as their gameplay wire.
     counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
-                            if cap.name != "present_placed_item_sprite"
+                            if cap.name not in {"present_placed_item_sprite", "select_targets_and_emit_on_event"}
                             or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),
