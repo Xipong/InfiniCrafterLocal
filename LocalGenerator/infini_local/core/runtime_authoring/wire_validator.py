@@ -17,6 +17,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     ENTITY_KINDS,
+    EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
@@ -24,11 +25,28 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.validator import _has_non_neutral_generated_buff
+from infini_local.core.runtime_authoring.validator import (
+    MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
+    _graph_cycle, _has_non_neutral_generated_buff, _max_depth,
+)
 
 _MAX_MOVEMENT_CODE = 19
 _MAX_CONTROLLER_CODE = 3
-_MAX_EVENT_ACTION_CODE = 7
+_MAX_EVENT_ACTION_CODE = max(EVENT_ACTION_OPCODE.values())
+_TARGET_EMISSION = "select_targets_and_emit_on_event"
+_TARGET_EMISSION_FIELDS = frozenset(
+    spec.wire_name or name for name, spec in CAPABILITY_REGISTRY[_TARGET_EMISSION].params.items()
+)
+_TARGET_EMISSION_ONLY_FIELDS = _TARGET_EMISSION_FIELDS - {"event", "entityId", "delayTicks"}
+# Existing C# event DTOs serialize these unrelated fields with these exact
+# neutral values. They remain readable, but cannot smuggle another operation
+# into opcode 8. Fresh Author emits only the registry-owned fields above.
+_EMISSION_UNUSED_EVENT_DEFAULTS = {
+    "count": 1, "spreadRadians": 0, "damageMultiplier": 1, "periodTicks": 0,
+    "buffId": -1, "durationTicks": 0, "radiusPx": 0, "rangeTiles": 0,
+    "mode": "", "strength": 0, "radiusTiles": 0, "damageFraction": 0,
+    "maxHeal": 0, "cooldownTicks": 0, "safeTileOnly": True,
+}
 _FORBIDDEN_ROUTER_KEYS = {
     "attack",
     "runtimePlan",
@@ -68,7 +86,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
-})
+}) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement"})
@@ -208,6 +226,117 @@ def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: 
             errors.append({"path": leaf_path, "code": "nonowning_sprite_presentation", "message": "Only a distinct baked entity owns main-sprite presentation; item_body/reuse select the root and non-PNG branches have none."})
         for error in strict_schema_errors(visual[field], properties[field], path=leaf_path):
             errors.append({"path": error["path"], "code": "invalid_sprite_presentation", "message": "Present presentation metadata must have the declared non-null type and finite bounded domain without coercion."})
+
+
+def _validate_target_emission(event: Mapping[str, Any], entities: list[Mapping[str, Any]],
+                              path: str, errors: list[dict[str, Any]]) -> None:
+    cap = CAPABILITY_REGISTRY[_TARGET_EMISSION]
+    if event.get("actionCode") != EVENT_ACTION_OPCODE[_TARGET_EMISSION]:
+        for key in _TARGET_EMISSION_ONLY_FIELDS & event.keys():
+            errors.append({"path": f"{path}.{key}", "code": "wrong_event_parameter_owner",
+                           "message": "Target-selection emission fields require the exact registered opcode."})
+        if event.get("action") == _TARGET_EMISSION:
+            errors.append({"path": f"{path}.actionCode", "code": "event_name_opcode_mismatch",
+                           "message": "Target-selection emission requires its exact registered opcode."})
+        return
+    if event.get("action") != cap.name:
+        errors.append({"path": f"{path}.action", "code": "event_name_opcode_mismatch",
+                       "message": "The target emission name and opcode must agree exactly."})
+    schema = {"type": "object", "additionalProperties": False,
+              "properties": {spec.wire_name or name: spec.schema() for name, spec in cap.params.items()},
+              "required": [spec.wire_name or name for name, spec in cap.params.items() if spec.required]}
+    params = {key: event[key] for key in _TARGET_EMISSION_FIELDS if key in event}
+    for error in strict_schema_errors(params, schema, path=path):
+        errors.append({**error, "code": "invalid_target_emission_parameter"})
+    for key, neutral in _EMISSION_UNUSED_EVENT_DEFAULTS.items():
+        if key not in event:
+            continue
+        value = event[key]
+        # JSON numbers share one numeric domain; booleans never equal 0/1.
+        same_type = type(value) is type(neutral) or type(value) in (int, float) and type(neutral) in (int, float)
+        if not same_type or value != neutral:
+            errors.append({"path": f"{path}.{key}", "code": "wrong_event_parameter_owner",
+                           "message": "This field is not consumed by target emission; only its retained DTO neutral is readable."})
+    child = next((row for row in entities if row.get("id") == event.get("entityId")), None)
+    if child is None:
+        return  # Existing reference validation reports the missing target.
+    reference = cap.params["entity"].reference
+    spawn = child.get("spawn")
+    valid = reference is not None and child.get("kind") in reference.target_kinds and isinstance(spawn, Mapping)
+    if valid:
+        assert isinstance(spawn, Mapping)
+        valid = spawn.get("enabled") is True
+        for requirement in cap.requirements:
+            if requirement.kind == "referenced_entity_capability_params":
+                source = CAPABILITY_REGISTRY[requirement.capability]
+                for key, required_value in requirement.equals.items():
+                    spec = source.params[key]
+                    value = spawn.get(spec.wire_name or key)
+                    valid = valid and not strict_schema_errors(value, spec.schema()) and value == required_value
+            elif requirement.kind == "referenced_entity_without_capability" and requirement.capability == "spawn_over_target":
+                over = spawn.get("overTarget", {})
+                valid = valid and isinstance(over, Mapping) and all(
+                    key not in over or type(over[key]) in (int, float) and over[key] == 0
+                    for key in ("heightTiles", "delayTicks"))
+    if not valid:
+        errors.append({"path": f"{path}.entityId", "code": "reference_requirements_unsatisfied",
+                       "message": "Target emission needs the exact independent projectile spawn contract declared by its registry reference requirements."})
+
+
+def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[Mapping[str, Any]],
+                                     errors: list[dict[str, Any]]) -> None:
+    """Validate new emission graphs without reinterpreting retained old-only wire."""
+    actions = [(entity, event) for entity in entities
+               for event in (entity.get("events") if isinstance(entity.get("events"), list) else [])
+               if isinstance(event, Mapping)]
+    if not any(event.get("actionCode") == EVENT_ACTION_OPCODE[_TARGET_EMISSION] for _, event in actions):
+        return
+    limit_defaults = {"maxEntityCount": MAX_RUNTIME_ENTITIES, "maxChildDepth": MAX_CHILD_DEPTH,
+                      "maxEventSpawnsPerActivation": MAX_EVENT_SPAWNS_PER_ACTIVATION}
+    raw_limits = runtime.get("limits")
+    limits = dict(raw_limits) if isinstance(raw_limits, Mapping) else {}
+    for key, ceiling in limit_defaults.items():
+        value = limits.get(key, ceiling)
+        minimum = 1 if key == "maxEntityCount" else 0
+        if type(value) is not int or not minimum <= value <= ceiling:
+            errors.append({"path": f"$.runtimeProgram.limits.{key}", "code": "invalid_runtime_limit",
+                           "message": "Target emission requires a bounded integer runtime limit without coercion."})
+            return
+        limits[key] = value
+    if len(entities) > limits["maxEntityCount"]:
+        errors.append({"path": "$.runtimeProgram.entities", "code": "entity_limit_exceeded",
+                       "message": "Target emission graph exceeds the explicit entity limit."})
+        return
+    graph = {str(entity.get("id") or ""): set() for entity in entities}
+    total = 0
+    for entity, event in actions:
+        opcode = event.get("actionCode")
+        if opcode not in (EVENT_ACTION_OPCODE["spawn_entity_on_event"], EVENT_ACTION_OPCODE[_TARGET_EMISSION]):
+            continue
+        child = event.get("entityId")
+        if isinstance(child, str) and child in graph:
+            graph[str(entity.get("id") or "")].add(child)
+        count = event.get("stepCount") if opcode == EVENT_ACTION_OPCODE[_TARGET_EMISSION] else event.get("count", 1)
+        if type(count) is not int or count < 1 or count > CAPABILITY_REGISTRY["spawn_entity_on_event"].params["count"].maximum:
+            errors.append({"path": "$.runtimeProgram.entities", "code": "invalid_graph_spawn_count",
+                           "message": "Every counted spawn edge needs its declared integer count."})
+            return
+        total += count
+    for entity in entities:
+        targeting = entity.get("targeting")
+        shot = targeting.get("shotEntityId") if isinstance(targeting, Mapping) else None
+        if isinstance(shot, str) and shot in graph:
+            graph[str(entity.get("id") or "")].add(shot)
+    if total > limits["maxEventSpawnsPerActivation"]:
+        errors.append({"path": "$.runtimeProgram.entities", "code": "event_spawn_budget_exceeded",
+                       "message": "Aggregate physical event emissions exceed the shared activation limit."})
+    cycle = _graph_cycle(graph)
+    if cycle:
+        errors.append({"path": "$.runtimeProgram.entities", "code": "entity_graph_cycle",
+                       "message": "Entity spawn/targeting graph contains a cycle: " + " -> ".join(cycle)})
+    elif _max_depth(graph, graph) > limits["maxChildDepth"]:
+        errors.append({"path": "$.runtimeProgram.entities", "code": "entity_graph_depth_exceeded",
+                       "message": "Entity spawn/targeting graph exceeds the explicit child depth."})
 
 
 def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -376,6 +505,17 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}]", "code": "required_object", "message": "Event entry must be an object."})
                 continue
             _reject_unknown(event, _EVENT_KEYS, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
+            _validate_target_emission(event, entities, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
+            if event.get("actionCode") == EVENT_ACTION_OPCODE[_TARGET_EMISSION]:
+                damage = entity.get("damage")
+                bindings = runtime.get("bindings")
+                contact = isinstance(bindings, list) and any(
+                    contact_damage(binding) for binding in bindings if isinstance(binding, Mapping))
+                if (kind == "item_body" and not contact) or (kind != "item_body" and (
+                    not isinstance(damage, Mapping) or damage.get("enabled") is not True
+                )):
+                    errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].event",
+                                   "code": "event_not_produced", "message": "Target emission requires the actual item-contact or projectile-damage hit producer."})
             action_code = event.get("actionCode")
             if not isinstance(action_code, int) or isinstance(action_code, bool) or not 1 <= action_code <= _MAX_EVENT_ACTION_CODE:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].actionCode", "code": "unsupported_opcode", "message": f"Event action opcode must be 1..{_MAX_EVENT_ACTION_CODE}."})
@@ -383,6 +523,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if child and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].entityId", "code": "missing_entity_reference", "message": f"Unknown event target entity {child!r}."})
 
+    _validate_target_emission_graph(runtime, entities, errors)
     item_bodies = [row for row in entities if row.get("kind") == "item_body"]
     if len(item_bodies) != 1:
         errors.append({"path": "$.runtimeProgram.entities", "code": "item_body_count", "message": f"Exactly one item_body is required; found {len(item_bodies)}."})

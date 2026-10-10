@@ -33,7 +33,7 @@ public sealed partial class GeneratedProjectile
                     damageDone,
                     _childDepth,
                     _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
-                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                     Projectile.netUpdate = true;
                 continue;
             }
@@ -83,7 +83,7 @@ public sealed partial class GeneratedProjectile
                     Projectile.damage,
                     _childDepth,
                     _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
-                    && action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                     Projectile.netUpdate = true;
             }
             else
@@ -138,7 +138,8 @@ public sealed partial class GeneratedProjectile
     }
 
     public override bool? CanHitNPC(NPC target)
-        => !_configured || _activationDelayTicks > 0 || _entity?.Damage.Enabled != true ? false : null;
+        => !_configured || _activationDelayTicks > 0 || _entity?.Damage.Enabled != true
+            || _initialNpcExclusion.AppliesTo(target) ? false : null;
 
     public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
     {

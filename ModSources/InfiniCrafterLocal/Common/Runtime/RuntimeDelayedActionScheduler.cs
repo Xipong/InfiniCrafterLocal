@@ -64,6 +64,10 @@ internal static class RuntimeDelayedActionScheduler
             return false;
         if (!RuntimeProgramExecutor.HasActionAuthority(action, owner))
             return false;
+        if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+            && (action.StepCount is null || target is not { active: true }
+                || RuntimeHitNpcGeneration.Get(target) == 0))
+            return false;
         if (Pending.Count >= InfiniRuntimeLimits.MaxPendingRuntimeActions)
             return false;
         if (ownerHitReceipt)
@@ -124,9 +128,10 @@ internal static class RuntimeDelayedActionScheduler
         else return false; // Never replace an unknown source with a contextless Misc source.
 
         int reservedSpawnBudget = 0;
-        if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
+        if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
         {
-            reservedSpawnBudget = budget.Reserve(action.Count);
+            reservedSpawnBudget = budget.Reserve(action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                ? action.StepCount!.Value : action.Count);
             if (reservedSpawnBudget <= 0)
                 return false;
         }
@@ -212,9 +217,13 @@ internal static class RuntimeDelayedActionScheduler
             // A direct-hit pull cannot silently become an area pull if its NPC
             // died or the slot was recycled during the authored delay.
             if (pending.Target is not null && target is null
-                && pending.Action.ActionCode == RuntimeEventActionCode.Pull
-                && pending.Action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                && (pending.Action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                    || pending.Action.ActionCode == RuntimeEventActionCode.Pull
+                    && pending.Action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit))
+            {
+                pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;
+            }
             RuntimeProgramExecutor.ExecuteAction(
                 pending.Data,
                 pending.SourceEntity,

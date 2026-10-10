@@ -22,6 +22,8 @@ public sealed partial class GeneratedProjectile
         if (!TryHydrate() || _data is null || _entity is null)
             return;
 
+        _initialNpcExclusion = _initialNpcExclusion.AfterUpdate();
+
         if (_activationDelayTicks > 0)
         {
             _activationDelayTicks--;

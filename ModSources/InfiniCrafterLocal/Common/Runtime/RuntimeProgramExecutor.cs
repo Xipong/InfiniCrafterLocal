@@ -49,6 +49,7 @@ internal static class RuntimeProgramExecutor
         {
             RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
+            RuntimeEventActionCode.SelectTargetsAndEmit => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage
                 => ShouldRunNpcEvent(action, owner),
             RuntimeEventActionCode.Pull => action.Mode == "owner_to_target"
@@ -100,6 +101,9 @@ internal static class RuntimeProgramExecutor
             case RuntimeEventActionCode.SpawnEntity:
                 SpawnEntity(data, action, owner, source, eventPosition, direction, childDepth, budget, reservedSpawnBudget);
                 break;
+            case RuntimeEventActionCode.SelectTargetsAndEmit:
+                SelectTargetsAndEmit(data, action, owner, source, directTarget, childDepth, budget, reservedSpawnBudget);
+                break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (directTarget is { active: true })
                     directTarget.AddBuff(action.BuffId, action.DurationTicks);
@@ -130,6 +134,98 @@ internal static class RuntimeProgramExecutor
 
     internal static float EventSpawnDamageMultiplier(RuntimeEventActionSpec action)
         => Math.Clamp(action.DamageMultiplier, 0f, 10f);
+
+    internal readonly record struct TargetEmissionStep(
+        int TargetNpcSlot, RuntimeSpawnTransform Transform, RuntimeInitialNpcExclusion Exclusion);
+
+    internal static IReadOnlyList<TargetEmissionStep> PlanTargetEmissions(RuntimeEventActionSpec action, NPC initialTarget, int capacity)
+    {
+        var steps = new List<TargetEmissionStep>();
+        if (action.ActionCode != RuntimeEventActionCode.SelectTargetsAndEmit || action.StepCount is null
+            || action.StepRangeTiles is null || action.SelectionAnchor is null || action.RepeatPolicy is null
+            || action.RequireLineOfSight is null || action.InitialIgnoreCountdownUpdates is null
+            || capacity <= 0 || initialTarget.whoAmI < 0 || initialTarget.whoAmI >= Main.maxNPCs
+            || !ReferenceEquals(Main.npc[initialTarget.whoAmI], initialTarget))
+            return steps;
+        int count = Math.Min(action.StepCount.Value, capacity);
+        double radius = action.StepRangeTiles.Value * 16d;
+        var visited = new HashSet<NPC> { initialTarget };
+        NPC previous = initialTarget;
+        for (int step = 0; step < count; step++)
+        {
+            NPC anchor = action.SelectionAnchor == "previous_target" ? previous : initialTarget;
+            Vector2 origin = anchor.Center;
+            if (!float.IsFinite(origin.X) || !float.IsFinite(origin.Y)
+                || !RuntimeInitialNpcExclusion.TryCapture(anchor, action.InitialIgnoreCountdownUpdates.Value, out var exclusion))
+                break;
+            NPC? next = null;
+            double nearestSquared = double.PositiveInfinity;
+            foreach (NPC npc in Main.ActiveNPCs)
+            {
+                if (!npc.CanBeChasedBy() || ReferenceEquals(npc, anchor)
+                    || action.RepeatPolicy == "exclude_visited" && visited.Contains(npc))
+                    continue;
+                Vector2 delta = npc.Center - origin;
+                float distanceSquared = delta.LengthSquared();
+                // A coincident center has no authored direction. Do not invent
+                // an axis for it or let NaN win a nearest-target comparison.
+                if (!float.IsFinite(distanceSquared) || distanceSquared <= 0f || distanceSquared > radius * radius)
+                    continue;
+                if (action.RequireLineOfSight == true
+                    && !Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height))
+                    continue;
+                if (distanceSquared < nearestSquared
+                    || distanceSquared == nearestSquared && (next is null || npc.whoAmI < next.whoAmI))
+                {
+                    next = npc;
+                    nearestSquared = distanceSquared;
+                }
+            }
+            if (next is null) break;
+            var transform = new RuntimeSpawnTransform(origin, next.Center - origin);
+            if (!transform.IsValid) break;
+            steps.Add(new(next.whoAmI, transform, exclusion));
+            previous = next;
+            visited.Add(next);
+        }
+        return steps;
+    }
+
+    private static void SelectTargetsAndEmit(
+        GeneratedItemData data, RuntimeEventActionSpec action, Player owner, IEntitySource source,
+        NPC? directTarget, int childDepth, RuntimeSpawnBudget budget, int reservedSpawnBudget)
+    {
+        RuntimeEntitySpec? child = data.RuntimeProgram.TryGetEntity(action.EntityId);
+        if (directTarget is null || childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
+            || !RuntimeEventActionSpec.SupportsTargetEmission(child) || action.StepCount is null)
+        {
+            budget.Return(reservedSpawnBudget);
+            return;
+        }
+        int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.StepCount.Value);
+        int unattempted = granted;
+        try
+        {
+            // Snapshot the complete bounded path in this callback. Later child
+            // hits neither move the anchor nor force any planned target to take damage.
+            foreach (TargetEmissionStep step in PlanTargetEmissions(action, directTarget, granted))
+            {
+                // Transfer one reservation to the real spawn boundary. Its
+                // exception path owns this one; finally owns only unattempted links.
+                unattempted--;
+                int spawned = GeneratedProjectile.SpawnRuntimeEntity(data, child!.Id, owner, source,
+                    step.Transform.Position, step.Transform.Direction, childDepth + 1, 1,
+                    requestedCount: 1, spreadOverride: 0f, activationBudget: budget,
+                    initialNpcExclusion: step.Exclusion, initialTransform: step.Transform);
+                if (spawned == 0)
+                {
+                    budget.Return(1);
+                    break;
+                }
+            }
+        }
+        finally { budget.Return(unattempted); }
+    }
 
     private static void SpawnEntity(
         GeneratedItemData data,

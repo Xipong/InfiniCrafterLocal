@@ -5039,6 +5039,141 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "select_targets_and_emit_on_event"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delayTicks": {
+                    "description": "Dispatch delay in world ticks; delayed source NPC must retain its active exact incarnation",
+                    "maximum": 600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "ticks",
+                    "x-infini-units": "world ticks"
+                  },
+                  "entity": {
+                    "description": "Independent free/child projectile with explicit origin/velocity spawn, zero offset and no over-target adapter",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "graphEdge": true,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "free_projectile",
+                        "child_projectile"
+                      ]
+                    },
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "event": {
+                    "description": "Source hit event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_kind"
+                  },
+                  "initialIgnoreCountdownUpdates": {
+                    "description": "Exclude the exact emission-anchor NPC while this native AI countdown is positive; decremented before collision, so 10 means pre-AI plus nine post-AI collision opportunities; 0 disables",
+                    "maximum": 600,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "native projectile AI updates"
+                  },
+                  "repeatPolicy": {
+                    "description": "The current anchor is always excluded. allow_revisits permits earlier NPCs again; exclude_visited excludes source and every previously selected NPC",
+                    "enum": [
+                      "allow_revisits",
+                      "exclude_visited"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "requireLineOfSight": {
+                    "description": "Require native Collision.CanHit from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "selectionAnchor": {
+                    "description": "previous_target advances search/emission origin to each selected NPC; event_target keeps the dispatch-time source NPC center",
+                    "enum": [
+                      "previous_target",
+                      "event_target"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "stepCount": {
+                    "description": "Maximum planned links, one child per link; bounded by the shared activation spawn budget",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "projectiles"
+                  },
+                  "stepRangeTiles": {
+                    "description": "Inclusive geometric search radius measured anew from the selected anchor on each step",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "type": "number",
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tiles"
+                  }
+                },
+                "required": [
+                  "event",
+                  "entity",
+                  "stepCount",
+                  "stepRangeTiles",
+                  "selectionAnchor",
+                  "repeatPolicy",
+                  "requireLineOfSight",
+                  "initialIgnoreCountdownUpdates",
+                  "delayTicks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body",
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "apply_status_on_event"
               },
               "id": {
@@ -5219,7 +5354,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "count": {
-                    "description": "Maximum chained targets",
+                    "description": "Maximum instantly damaged radial targets",
                     "maximum": 12,
                     "minimum": 1,
                     "type": "integer",
@@ -5251,7 +5386,7 @@
                     "x-infini-semanticType": "runtime_event_kind"
                   },
                   "rangeTiles": {
-                    "description": "Search radius",
+                    "description": "Fixed search radius from the original event position",
                     "maximum": 60,
                     "minimum": 1,
                     "type": "number",

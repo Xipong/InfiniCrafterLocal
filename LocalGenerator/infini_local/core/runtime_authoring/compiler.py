@@ -351,7 +351,7 @@ def _compile_entity_call(
             "action": fn,
             "actionCode": EVENT_ACTION_OPCODE[fn],
         }
-        if fn == "spawn_entity_on_event":
+        if fn in {"spawn_entity_on_event", "select_targets_and_emit_on_event"}:
             event_row["entityId"] = p.pop("entity")
         if fn == "move_owner_on_event":
             event_row["mode"] = "blink_to_event_position"  # C# DTO discriminator; not an authored branch

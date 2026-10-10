@@ -44,6 +44,15 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("initial NPC exclusion exact incarnation and counter", InitialNpcExclusionUsesExactIncarnationAndCounter),
+            ("initial NPC exclusion ExtraAI remaining and v2 absence", InitialNpcExclusionExtraAiPreservesRemainingAndOldAbsence),
+            ("explicit spawn transform native boundary", ExplicitSpawnTransformRejectsInvalidBeforeNativeBoundary),
+            ("target emission strict wire and old action absence", TargetEmissionWireIsStrictAndOldOpcodesStayAbsent),
+            ("target emission anchor and repeat policies", TargetEmissionPlannerUsesExplicitAnchorsAndRepeatPolicy),
+            ("target emission inclusive range ties and LOS", TargetEmissionPlannerUsesInclusiveRangeExactTiesAndLos),
+            ("target emission real hit authority stats and reservations", TargetEmissionRealHitHookKeepsAuthorityStatsAndReservation),
+            ("target emission ordinary refusal and child collision", TargetEmissionNormalRefusalsReturnUnspentPlanBudget),
+            ("target emission delayed NPC incarnation and refunds", TargetEmissionDelayedDispatchRequiresSameActiveNpcAndRefundsCancellation),
             ("bugfix251 grounded native support", GroundedConditionRequiresNativeSupport),
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),

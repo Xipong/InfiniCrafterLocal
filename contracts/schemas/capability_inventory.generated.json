@@ -4531,6 +4531,191 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "select_targets_and_emit_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].stepCount",
+        "runtimeProgram.entities[].events[].stepRangeTiles",
+        "runtimeProgram.entities[].events[].selectionAnchor",
+        "runtimeProgram.entities[].events[].repeatPolicy",
+        "runtimeProgram.entities[].events[].requireLineOfSight",
+        "runtimeProgram.entities[].events[].initialIgnoreCountdownUpdates",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "world ticks"
+        },
+        "entity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": true,
+            "namespace": "entity",
+            "targetKinds": [
+              "free_projectile",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "event": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_kind",
+          "units": ""
+        },
+        "initialIgnoreCountdownUpdates": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "native projectile AI updates"
+        },
+        "repeatPolicy": {
+          "enum": [
+            "allow_revisits",
+            "exclude_visited"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "requireLineOfSight": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "selectionAnchor": {
+          "enum": [
+            "previous_target",
+            "event_target"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "stepCount": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 12,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "projectiles"
+        },
+        "stepRangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "A10 explicit target-anchor/repeat selection and physical child emission, without a chain-lightning family router",
+      "purpose": "Plan bounded NPC links at the hit callback and emit a separate authored projectile for each link. Each search and initial emission starts at the selected anchor; all links are planned at dispatch, not after child hits. The child owns its speed, movement, damage and native collision; a selected target is an initial direction, not a guaranteed hit. No direct damage, status or VFX is implied.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "The source entity must actually emit the selected hit event.",
+          "param": "event",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": {
+            "aim": "velocity",
+            "offsetPx": 0,
+            "placement": "item_use_origin"
+          },
+          "kind": "referenced_entity_capability_params",
+          "message": "The emission reference requires configure_spawn placement=item_use_origin, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity.",
+          "param": "entity",
+          "target": "same_target"
+        },
+        {
+          "capability": "spawn_over_target",
+          "equals": null,
+          "kind": "referenced_entity_without_capability",
+          "message": "The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter.",
+          "param": "entity",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "at most 12 planned physical children; one shared activation reservation each; acyclic entity graph, depth <= 3 and aggregate event spawn count <= 32",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "apply_status_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
@@ -4813,7 +4998,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "chain/lightning arc extracted from on-hit opcode",
-      "purpose": "Chain bounded damage from the hit target to nearby NPCs.",
+      "purpose": "Apply instantaneous radial multi-target damage to a bounded nearest-NPC list around the original hit position. No moving projectiles or advancing search anchor; the direct hit target is excluded.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

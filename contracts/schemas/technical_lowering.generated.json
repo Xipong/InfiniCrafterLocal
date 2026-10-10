@@ -715,6 +715,26 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "select_targets_and_emit_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].stepCount",
+        "runtimeProgram.entities[].events[].stepRangeTiles",
+        "runtimeProgram.entities[].events[].selectionAnchor",
+        "runtimeProgram.entities[].events[].repeatPolicy",
+        "runtimeProgram.entities[].events[].requireLineOfSight",
+        "runtimeProgram.entities[].events[].initialIgnoreCountdownUpdates",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "apply_status_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
