@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     expected_placeable_input,
     placement_call_id,
     stack_cost,
+    stack_chance_error,
     target_id as binding_target_id,
     complete_transaction as transaction,
 )
@@ -35,6 +36,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_dependency_alternatives,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
@@ -1412,6 +1414,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 if row_id != node_id:
                     context_id(row_id)
         elif code in {"duplicate_single_component", "exclusive_component_conflict"}:
+            # A registry conditional conflict may also be resolved by changing
+            # the exact selected leaf (for example disabling an explicit visual
+            # mirror). Valid curve numbers and the other movement stay frozen.
+            if node_namespace == "calls" and node_id and ".params." in path:
+                fn = str(node_row.get("fn") or "")
+                param = path.rsplit(".params.", 1)[1]
+                cap = CAPABILITY_REGISTRY.get(fn)
+                if cap is not None and any(req.kind == "capability_absent" and req.param == param for req in cap.requirements):
+                    grant("calls", node_id, "params." + param)
             for row_id in related:
                 if namespace_by_id.get(row_id) == "calls":
                     mark("calls", row_id, can_delete=True)
@@ -2618,17 +2629,41 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         binding = binding_rows_by_id.get(row_id)
         if binding is None:
             continue
-        allowed = binding_alternative_overrides.get(row_id)
-        if allowed is None:
-            allowed = _binding_repair_alternatives(
+        binding_choices = binding_alternative_overrides.get(row_id)
+        if binding_choices is None:
+            binding_choices = _binding_repair_alternatives(
                 rows,
                 binding,
                 input_mutable=row_id in binding_input_change_ids,
                 action_mutable=row_id in binding_action_change_ids,
                 target_mutable=row_id in binding_target_change_ids,
             )
-        binding_alternatives.append({"bindingId": row_id, "allowed": allowed})
-        retarget_binding_ids.update(binding_target_id(row) for row in allowed)
+        chance = _mapping(binding.get("usePolicy")).get("stackConsumeChancePercent")
+        if (type(chance) is int and 0 <= chance <= 100
+                and "usePolicy.stackConsumeChancePercent" not in field_permissions["bindings"].get(row_id, set())):
+            # The optional authored policy remains frozen during an input repair.
+            # Complete alternatives must include it rather than force its omission.
+            for alternative in binding_choices:
+                alternative_policy = dict(_mapping(alternative["usePolicy"]))
+                alternative_policy["stackConsumeChancePercent"] = chance
+                alternative["usePolicy"] = alternative_policy
+            binding_choices = [alternative for alternative in binding_choices if not stack_chance_error(alternative)]
+        group_id = _mapping(_mapping(binding.get("usePolicy")).get("action")).get("effectGroupId")
+        if (isinstance(group_id, str)
+                and "usePolicy.action.effectGroupId" not in field_permissions["bindings"].get(row_id, set())):
+            # Exact input/target repairs cannot drop the frozen named selector.
+            # Let the canonical binding schema reject incompatible alternatives;
+            # this scope owner does not declare a second action/selector grammar.
+            for alternative in binding_choices:
+                alternative_policy = dict(_mapping(alternative["usePolicy"]))
+                alternative_action = dict(_mapping(alternative_policy["action"]))
+                alternative_action["effectGroupId"] = group_id
+                alternative_policy["action"] = alternative_action
+                alternative["usePolicy"] = alternative_policy
+            binding_choices = [alternative for alternative in binding_choices
+                               if not strict_schema_errors({"id": row_id, **alternative}, binding_schema())]
+        binding_alternatives.append({"bindingId": row_id, "allowed": binding_choices})
+        retarget_binding_ids.update(binding_target_id(row) for row in binding_choices)
     scope["bindingAlternatives"] = binding_alternatives
     scope["eventAlternatives"] = event_alternative_rows
     scope["retarget"]["bindingTargetIds"] = sorted(retarget_binding_ids)

@@ -459,3 +459,160 @@ def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode,
             {"note": "no correction or removal chosen", "realizationReplacement": doc["realization"]}, format_mode)
     assert doc == before
     assert not validate_runtime_program(doc)["ok"]
+
+
+# Combined binding lanes retain the same canonical compiler/receipt/Repair owners.
+def _chance_groups(chance=35):
+    doc = _groups()
+    for binding in doc["runtimeProgram"]["bindings"]:
+        binding["usePolicy"].update(stackCost=1, stackConsumeChancePercent=chance)
+    # Deliberately reverse the source order: receipts must resolve exact IDs,
+    # not assume source and sorted final binding coordinates agree.
+    doc["runtimeProgram"]["bindings"].reverse()
+    return doc
+
+
+@pytest.mark.parametrize("chance", [0, 35, 100])
+def test_named_effect_selection_and_stack_probability_compile_independently(chance):
+    from infini_local.core.runtime_authoring.technical_lowering import STACK_CHANCE_LOWERER_ID
+
+    doc = _chance_groups(chance)
+    before = deepcopy(doc)
+    final = compile_runtime_program(doc)
+    assert validate_runtime_wire(final)["ok"] and doc == before
+    bindings = final["runtimeProgram"]["bindings"]
+    assert {b["input"]: (b["usePolicy"]["action"]["effectGroupId"], b["usePolicy"]["stackConsumeChancePercent"])
+            for b in bindings} == {"primary_use": ("first", chance), "alternate_use": ("second", chance)}
+    assert [(g["id"], g["healLife"], g["healMana"]) for g in final["runtimeProgram"]["effectGroups"]] == [
+        ("first", 20, 0), ("second", 0, 35)]
+    rows = final["runtimeContract"]["finalWireReceipts"]
+    assert sum(r.get("lowererId") == STACK_CHANCE_LOWERER_ID for r in rows) == 2
+    assert sum(r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for r in rows) == 2
+    assert audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
+    assert audit_compiler_receipts(rows, final_document=final)["ok"]
+    # Adding probability must not rewrite any pre-existing grouped projection.
+    omitted = deepcopy(doc)
+    for binding in omitted["runtimeProgram"]["bindings"]:
+        del binding["usePolicy"]["stackConsumeChancePercent"]
+    expected = compile_runtime_program(omitted)
+    for binding in bindings:
+        del binding["usePolicy"]["stackConsumeChancePercent"]
+    final["runtimeContract"]["finalWireReceipts"] = [r for r in rows if r.get("lowererId") != STACK_CHANCE_LOWERER_ID]
+    final["runtimeContract"]["technicalLoweringAudit"]["lowerers"] = [
+        r for r in final["runtimeContract"]["technicalLoweringAudit"]["lowerers"] if r["id"] != STACK_CHANCE_LOWERER_ID]
+    assert final == expected
+
+
+@pytest.mark.parametrize("lane", ["chance", "group"])
+@pytest.mark.parametrize("attack", ["missing", "duplicate", "coherent-value", "source-identity"])
+def test_combined_binding_receipts_authenticate_each_independent_lane(lane, attack):
+    from infini_local.core.runtime_authoring.technical_lowering import STACK_CHANCE_LOWERER_ID
+
+    doc = _chance_groups()
+    final = compile_runtime_program(doc)
+    rows = deepcopy(final["runtimeContract"]["finalWireReceipts"])
+    lowerer = STACK_CHANCE_LOWERER_ID if lane == "chance" else EFFECT_GROUP_BINDING_LOWERER_ID
+    claim = next(r for r in rows if r.get("lowererId") == lowerer)
+    if attack == "missing":
+        rows.remove(claim)
+    elif attack == "duplicate":
+        rows.append(deepcopy(claim))
+    elif attack == "coherent-value":
+        value = 99 if lane == "chance" else "second" if claim["value"] == "first" else "first"
+        claim["value"] = value
+        binding = final["runtimeProgram"]["bindings"][int(claim["finalPath"].split("[")[1].split("]")[0])]
+        if lane == "chance":
+            binding["usePolicy"]["stackConsumeChancePercent"] = value
+        else:
+            binding["usePolicy"]["action"]["effectGroupId"] = value
+    else:
+        source_index = int(claim["authoredPaths"][0].split("[")[1].split("]")[0])
+        doc["runtimeProgram"]["bindings"][source_index]["id"] = "changed_source_binding"
+        assert validate_runtime_program(doc)["ok"]
+    assert not audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
+    if attack in {"missing", "duplicate"}:
+        assert not audit_compiler_receipts(rows, final_document=final)["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("chance", [None, 0, 35, 100])
+def test_combined_provider_preparation_preserves_presence_and_exact_compilation(monkeypatch, format_mode, chance):
+    import json
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    doc = _chance_groups(chance)
+    if chance is None:
+        for binding in doc["runtimeProgram"]["bindings"]:
+            del binding["usePolicy"]["stackConsumeChancePercent"]
+    before = json.dumps(doc, sort_keys=True)
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    request, user, system = author.build_initial_author_request({}, {}, {}, {}, "combined-offline", model_name="offline-no-model")
+    assert [(row["role"], row["content"]) for row in request["messages"]] == [("system", system), ("user", user)]
+    local = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(doc, local) if format_mode == "json_schema" else deepcopy(doc)
+    if format_mode == "json_schema":
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+    parsed = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
+    assert json.dumps(parsed, sort_keys=True) == before
+    final = compile_runtime_program(parsed)
+    assert final == compile_runtime_program(doc) and validate_runtime_wire(final)["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("invalid_leaf", ["chance", "group", "input"])
+def test_combined_real_frozen_repair_preserves_the_other_binding_lanes(monkeypatch, format_mode, invalid_leaf):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _chance_groups()
+    binding = doc["runtimeProgram"]["bindings"][0]
+    binding_id = binding["id"]
+    expected = deepcopy(doc)
+    if invalid_leaf == "chance":
+        binding["usePolicy"]["stackConsumeChancePercent"] = 101
+        path = "usePolicy.stackConsumeChancePercent"
+    elif invalid_leaf == "group":
+        binding["usePolicy"]["action"]["effectGroupId"] = "missing"
+        path = "usePolicy.action.effectGroupId"
+    else:
+        binding["input"] = []
+        path = "input"
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["bindings"] == [{"id": binding_id, "paths": [path]}]
+    corrected = deepcopy(expected["runtimeProgram"]["bindings"][0])
+    corrected["usePolicy"]["contactDamage"] = True
+    if invalid_leaf != "chance":
+        corrected["usePolicy"]["stackConsumeChancePercent"] = 99
+    if invalid_leaf != "group":
+        corrected["usePolicy"]["action"]["effectGroupId"] = "first"
+    if invalid_leaf != "input":
+        corrected["input"] = "primary_use"
+    incoming = {"note": "explicit exact leaf only", "realizationReplacement": doc["realization"], "bindingsUpsert": [corrected]}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == scope["fieldPermissions"]["bindings"]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("input_value", [[], {}, None, True, 1, "PRIMARY_USE"])
+def test_combined_raw_wire_malformed_input_is_structured_nonmutating_refusal(input_value):
+    import json
+
+    final = compile_runtime_program(_chance_groups())
+    final.pop("runtimeContract")
+    final["runtimeProgram"]["bindings"][0]["input"] = deepcopy(input_value)
+    raw = json.dumps(final, sort_keys=True)
+    parsed = json.loads(raw)
+    report = validate_runtime_wire(parsed)
+    assert not report["ok"]
+    assert any(e["code"] == "unknown_runtime_input" for e in report["errors"])
+    assert json.dumps(parsed, sort_keys=True) == raw

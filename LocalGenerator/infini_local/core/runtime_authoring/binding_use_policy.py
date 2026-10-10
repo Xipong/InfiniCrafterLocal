@@ -15,6 +15,9 @@ STACK_COST_RULE = (
     "Before answering, compare each active binding with the intended item lifetime: if the generated item "
     "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
     "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
+    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
+    "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
+    "the existing 100 percent debit. This never controls ammo saving or placement escrow."
 )
 
 
@@ -48,6 +51,27 @@ def placement_call_id(binding: Mapping[str, Any]) -> str:
 def stack_cost(binding: Mapping[str, Any]) -> int:
     value = use_policy(binding).get("stackCost")
     return value if isinstance(value, int) and not isinstance(value, bool) else -1
+
+
+def stack_chance_error(binding: Mapping[str, Any]) -> str:
+    """The same explicit optional policy contract is used at Author and wire boundaries."""
+    policy = use_policy(binding)
+    if "stackConsumeChancePercent" not in policy:
+        return ""
+    value = policy["stackConsumeChancePercent"]
+    if type(value) is not int or not 0 <= value <= 100:
+        return "stackConsumeChancePercent must be an integer 0..100."
+    input_name = binding.get("input")
+    if (not isinstance(input_name, str) or input_name not in ACTIVE_USE_INPUTS or stack_cost(binding) != 1
+            or action_kind(binding) == PLACE_ITEM_ACTION):
+        return "stackConsumeChancePercent requires an active non-placement binding with stackCost=1."
+    return ""
+
+
+def may_retain_stack(binding: Mapping[str, Any]) -> bool:
+    policy = use_policy(binding)
+    chance = policy.get("stackConsumeChancePercent", 100)
+    return stack_cost(binding) == 0 or (type(chance) is int and chance < 100)
 
 
 def contact_damage(binding: Mapping[str, Any]) -> bool:
@@ -140,14 +164,17 @@ def project_to_wire(
         call = placement_calls_by_id[call_id]
         wire_action["placement"] = {**copy.deepcopy(dict(call["params"])),
                                     **placement_literals_by_fn[str(call["fn"])]}
+    wire_policy = {
+        "action": wire_action,
+        "stackCost": int(policy["stackCost"]),
+        "contactDamage": bool(policy["contactDamage"]),
+    }
+    if "stackConsumeChancePercent" in policy:
+        wire_policy["stackConsumeChancePercent"] = policy["stackConsumeChancePercent"]
     return {
         "id": str(binding["id"]),
         "input": str(binding["input"]),
-        "usePolicy": {
-            "action": wire_action,
-            "stackCost": int(policy["stackCost"]),
-            "contactDamage": bool(policy["contactDamage"]),
-        },
+        "usePolicy": wire_policy,
     }
 
 
@@ -178,6 +205,8 @@ __all__ = [
     "placed_body_binding_ids",
     "project_to_wire",
     "stack_cost",
+    "stack_chance_error",
+    "may_retain_stack",
     "target_id",
     "use_policy",
 ]

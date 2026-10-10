@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring.technical_lowering import (
     primary_binding_role_receipt,
     primary_owner_for_kind,
     primary_owner_receipt,
+    stack_chance_receipt,
     effect_group_binding_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
@@ -345,6 +346,9 @@ def _compile_entity_call(
     if fn == "set_projectile_hitbox":
         project(component("hitbox"), f"{base}.hitbox", p)
         return
+    if fn == "set_projectile_hitbox_curve":
+        project(component("hitboxCurve"), f"{base}.hitboxCurve", p)
+        return
     if fn == "set_projectile_collision":
         project(component("collision"), f"{base}.collision", p)
         return
@@ -476,6 +480,11 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             final_index=final_index,
             role=binding["role"],
         ))
+        if "stackConsumeChancePercent" in binding["usePolicy"]:
+            ctx.receipts.append(stack_chance_receipt(
+                source_index=source_index, final_index=final_index,
+                value=binding["usePolicy"]["stackConsumeChancePercent"],
+            ))
         if "effectGroupId" in binding["usePolicy"]["action"]:
             ctx.receipts.append(effect_group_binding_receipt(source_index=source_index, final_index=final_index,
                 value=binding["usePolicy"]["action"]["effectGroupId"]))

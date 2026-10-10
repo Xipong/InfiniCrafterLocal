@@ -11,6 +11,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     placeable_input_contract,
     placement_call_id,
     stack_cost,
+    may_retain_stack,
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -311,6 +312,16 @@ def _validate_requirement(
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])
     fns = {str(row.get("fn") or "") for row in target_calls}
     path = f"$.runtimeProgram.calls[{call_index}]"
+
+    if requirement.kind == "capability_absent":
+        if requirement.param and params.get(requirement.param) != requirement.equals:
+            return None
+        conflicting = [row for row in target_calls if row.get("fn") in requirement.any_of]
+        if conflicting:
+            return ValidationIssue(path + (".params." + requirement.param if requirement.param else ""),
+                                   "exclusive_component_conflict", requirement.message,
+                                   requirement.any_of, tuple([str(call.get("id") or ""), *[str(row.get("id") or "") for row in conflicting]]))
+        return None
 
     if requirement.kind in {"executed_tile_placement_reference", "unique_call_reference"}:
         reference = params.get(requirement.param)
@@ -899,7 +910,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             row for row in bindings
             if str(row.get("input") or "") in {"primary_use", "alternate_use"}
             and action_kind(row) in {"spawn_entity", "use_item_body"}
-            and stack_cost(row) == 0
+            and may_retain_stack(row)
         ]
         if reusable_active_uses:
             # Durable hybrid: the item is both a reusable tool/weapon and a placeable.

@@ -186,6 +186,7 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeOverTargetSpec": ("runtimeProgram.entities[].spawn.overTarget.",),
         "RuntimeDamageSpec": ("runtimeProgram.entities[].damage.",),
         "RuntimeHitboxSpec": ("runtimeProgram.entities[].hitbox.",),
+        "RuntimeHitboxCurveSpec": ("runtimeProgram.entities[].hitboxCurve.",),
         "RuntimeCollisionSpec": ("runtimeProgram.entities[].collision.",),
         "RuntimeParamsSpec": ("runtimeProgram.entities[].movement.params.",
                               "runtimeProgram.entities[].controller.params."),

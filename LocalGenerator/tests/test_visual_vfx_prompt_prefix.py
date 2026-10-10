@@ -10,6 +10,38 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import wire_transport
 
 
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("repair", [False, True])
+@pytest.mark.parametrize("policy", ["absent", "independent", "mirror"])
+def test_actual_visual_packets_keep_accepted_hitbox_curve_and_exact_body_scale(wire_transport, monkeypatch, format_mode, repair, policy):
+    from infini_local.pipelines import llm_transport
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    source = build_capability_witness("set_projectile_hitbox_curve")
+    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    if policy == "absent":
+        source["runtimeProgram"]["calls"].remove(call)
+    else:
+        call["params"].update(startScale=.25, endScale=8, mirrorToSprite=policy == "mirror")
+    data = compile_runtime_program(source)
+    frozen = copy.deepcopy(data)
+    responses, sent = wire_transport
+    responses.append({})
+    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
+    visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
+    packet = json.loads(sent[-1]["messages"][1]["content"])
+    rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
+    for row, accepted in zip(rows, data["runtimeProgram"]["entities"]):
+        assert ("hitboxCurve" in row) == ("hitboxCurve" in accepted)
+        if "hitboxCurve" in accepted:
+            assert row["hitboxCurve"] == accepted["hitboxCurve"]
+    formula = packet["spritePresentationReadOnly"]["formulas"]["body"]
+    assert "q_selected * P when accepted hitboxCurve.mirrorToSprite=true" in formula
+    assert "P=D*E*curveScale(active age)" in formula
+    assert "otherwise q_selected * clamp(P, .1, 8)" in formula
+    assert data == frozen
+
+
 def test_default_author_system_explicitly_targets_terraria(monkeypatch):
     from infini_local.core import llm_config
     from infini_local.pipelines import llm_authoring_pipeline as author
@@ -430,7 +462,7 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
     presentation = packet["spritePresentationReadOnly"]
     assert presentation["formulas"]["q"] == "R / max(actual final PNG frame width, height)"
     assert presentation["formulas"]["held"] == "q_item * player.GetAdjustedItemScale(held) (G already included once)"
-    assert presentation["formulas"]["body"] == "q_selected * clamp(P, .1, 8); initial P=D*E, growth remains independent"
+    assert presentation["formulas"]["body"] == "q_selected * P when accepted hitboxCurve.mirrorToSprite=true, with P=D*E*curveScale(active age); otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred."
     assert "alpha-bbox" in presentation["units"] and "positive clockwise" in presentation["axis"]
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     use = CAPABILITY_REGISTRY["configure_item_use"].params

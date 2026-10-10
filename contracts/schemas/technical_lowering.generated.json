@@ -483,6 +483,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_hitbox_curve",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "outputs": [
+        "runtimeProgram.entities[].hitboxCurve.startScale",
+        "runtimeProgram.entities[].hitboxCurve.endScale",
+        "runtimeProgram.entities[].hitboxCurve.startDelayTicks",
+        "runtimeProgram.entities[].hitboxCurve.durationTicks",
+        "runtimeProgram.entities[].hitboxCurve.curve",
+        "runtimeProgram.entities[].hitboxCurve.mirrorToSprite"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_collision",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
@@ -945,6 +960,25 @@
     "requiresLiteralEquality": true
   },
   "globalLowerers": [
+    {
+      "addsDesignChoice": false,
+      "equivalence": "literal optional authored probability on the same exact binding identity",
+      "id": "binding_stack_chance_identity",
+      "inputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "preserves": [
+        "binding identity",
+        "explicit zero",
+        "probability",
+        "absence",
+        "placement escrow"
+      ]
+    },
     {
       "addsDesignChoice": false,
       "equivalence": "literal named effect group on the same exact authored binding",

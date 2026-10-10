@@ -11,6 +11,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     contact_damage,
     placeable_input_contract,
     stack_cost,
+    stack_chance_error,
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -42,7 +43,7 @@ _FORBIDDEN_ROUTER_KEYS = {
 
 _RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "effectGroups", "heldEffectGroupId", "weaponAmmo"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
-_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry"})
+_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "hitboxCurve", "nativeSentry", "collision", "movement", "controller", "targeting", "light", "events"})
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
@@ -72,7 +73,7 @@ _EVENT_KEYS = frozenset({
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
 })
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
-_USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
+_USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
@@ -340,6 +341,28 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         entity_id = str(entity.get("id") or "")
         kind = str(entity.get("kind") or "")
         _reject_unknown(entity, _ENTITY_KEYS, entity_path, errors)
+        if "hitboxCurve" in entity:
+            curve_cap = CAPABILITY_REGISTRY["set_projectile_hitbox_curve"]
+            curve_schema = curve_cap.provider_variant_schema()["properties"]["params"]
+            curve = entity["hitboxCurve"]
+            curve_path = entity_path + ".hitboxCurve"
+            shape = strict_schema_errors(curve, curve_schema, path=curve_path)
+            if kind not in curve_cap.target_kinds or shape:
+                errors.append({"path": curve_path, "code": "invalid_hitbox_curve", "message": "Present hitboxCurve requires every explicit registry field, exact types, finite bounds and a projectile target."})
+                errors.extend(shape)
+            else:
+                movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
+                controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+                if controller.get("code") == 1 or movement.get("code") == 18 or (curve["mirrorToSprite"] and movement.get("code") == 15):
+                    errors.append({"path": curve_path, "code": "hitbox_curve_driver_conflict", "message": "Rectangle curves exclude beam/whip collisions; a sprite mirror excludes independent expanding-wave scale."})
+                contract = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
+                if "finalWireReceipts" in contract:
+                    receipts = contract["finalWireReceipts"]
+                    for name in curve_cap.params:
+                        final_path = curve_path.removeprefix("$.") + "." + name
+                        matches = [row for row in receipts if isinstance(row, Mapping) and row.get("fn") == curve_cap.name and row.get("finalPath") == final_path] if isinstance(receipts, list) else []
+                        if len(matches) != 1:
+                            errors.append({"path": curve_path + "." + name, "code": "missing_unique_hitbox_curve_receipt", "message": "A provenance-bearing wire must prove every present curve leaf exactly once on its actual entity."})
         component_specs = (
             ("visual", _VISUAL_KEYS), ("spawn", _SPAWN_KEYS), ("damage", _DAMAGE_KEYS),
             ("hitbox", _HITBOX_KEYS), ("collision", _COLLISION_KEYS), ("movement", _DRIVER_KEYS),
@@ -589,6 +612,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         cost = stack_cost(binding)
         if cost not in {0, 1}:
             errors.append({"path": f"{binding_path}.usePolicy.stackCost", "code": "invalid_stack_cost", "message": "stackCost must be exactly 0 or 1."})
+        if reason := stack_chance_error(binding):
+            errors.append({"path": f"{binding_path}.usePolicy.stackConsumeChancePercent", "code": "invalid_stack_chance", "message": reason})
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
             errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "required_boolean", "message": "contactDamage must be a boolean."})
@@ -674,6 +699,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         or bool(str(gameplay.get("mobilityMode") or ""))
     )
     has_equipment = accessory.get("enabled") is True or armor.get("enabled") is True
+    has_placement = any(isinstance(b, Mapping) and action_kind(b) == "place_item" for b in bindings)
     if "heldEffectGroupId" in runtime:
         held_id = runtime["heldEffectGroupId"]
         held_group = effect_groups.get(held_id) if isinstance(held_id, str) else None
@@ -691,6 +717,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(binding, Mapping):
             continue
         action_name = action_kind(binding)
+        chance_policy = binding.get("usePolicy")
+        chance = chance_policy.get("stackConsumeChancePercent") if isinstance(chance_policy, Mapping) else None
+        if (has_placement and action_name in {"spawn_entity", "use_item_body"}
+                and type(chance) is int and chance < 100 and gameplay.get("maxStack") != 1):
+            errors.append({"path": "$.gameplay.maxStack", "code": "hybrid_placeable_max_stack", "message": "A reusable placement hybrid with own-stack saving requires maxStack=1."})
         group_id = action(binding).get("effectGroupId")
         selected_effects = effect_groups.get(group_id) if isinstance(group_id, str) else None
         selected_has_effect = _item_effects_present(selected_effects) if selected_effects is not None else has_use_effect if group_id is None else False
