@@ -7,6 +7,8 @@ from typing import Any
 ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT/"LocalGenerator"))
 from infini_local.core.runtime_authoring import author_item_repair_schema, author_item_response_schema, capability_inventory_rows, runtime_program_author_schema, runtime_repair_scope_schema, technical_lowering_manifest
 from infini_local.core.vfx_manifest import vfx_director_schema, vfx_repair_schema
+from infini_local.core.runtime_authoring.compact_notation import compact_author_item_schema
+from infini_local.core.runtime_authoring.compact_api import compact_repair_schema
 from infini_local.pipelines.visual_generation_pipeline import visual_repair_schema, visual_response_schema
 from infini_local.core.runtime_authoring import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -21,6 +23,8 @@ def render()->dict[Path,str]:
       "runtime_program_author.schema.json":_doc("runtime_program_author.schema.json",runtime_program_author_schema()),
       "author_item_response.schema.json":_doc("author_item_response.schema.json",author_item_response_schema()),
       "author_item_repair.schema.json":_doc("author_item_repair.schema.json",author_item_repair_schema()),
+      "author_item_compact.schema.json":_doc("author_item_compact.schema.json",compact_author_item_schema()),
+      "author_item_compact_repair.schema.json":_doc("author_item_compact_repair.schema.json",compact_repair_schema()),
       "runtime_repair_scope.schema.json":_doc("runtime_repair_scope.schema.json",runtime_repair_scope_schema()),
       "visual_runtime_entities.schema.json":_doc("visual_runtime_entities.schema.json",visual_response_schema(ids, item_body_id=sample["runtimeProgram"]["itemEntityId"])),
       "visual_repair_patch.schema.json":_doc("visual_repair_patch.schema.json",visual_repair_schema(ids, item_body_id=sample["runtimeProgram"]["itemEntityId"])),
@@ -34,7 +38,7 @@ def render()->dict[Path,str]:
         # Author root/property order is a model-facing autoregressive contract.
         # Keep the legacy stable sorted serialization for every other artifact
         # so this change does not create unrelated formatting churn.
-        preserve_model_order = filename == "author_item_response.schema.json"
+        preserve_model_order = filename in {"author_item_response.schema.json", "author_item_compact.schema.json"}
         rows[OUT / filename] = json.dumps(
             payload,
             ensure_ascii=False,

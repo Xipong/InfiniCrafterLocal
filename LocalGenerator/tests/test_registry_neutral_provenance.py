@@ -21,6 +21,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "configure_tool": {"axePowerTooltipPercent": 0, "hammerPower": 0},
+    "restore_resources_on_use": {"healMana": 0},
     "configure_item_stats": {"manaCost": 0},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
     "apply_generated_buff_on_use": {
@@ -222,8 +224,9 @@ def test_coupled_parameters_do_not_gain_omission_permission(fn, names, present):
     doc = build_capability_witness(fn)
     for name, keep in zip(names, present):
         if not keep:
-            _call(doc, fn)["params"].pop(name)
-    assert validate_runtime_program(doc)["ok"] is all(present)
+            _call(doc, fn)["params"].pop(name, None)
+    expected = all(keep or name in DECLARED.get(fn, {}) for name, keep in zip(names, present))
+    assert validate_runtime_program(doc)["ok"] is expected
 
 
 @pytest.mark.parametrize("original_mana,patch_mana", [(9, None), (None, 12)])
@@ -249,6 +252,36 @@ def test_repair_omission_is_no_change_and_valid_absence_stays_frozen(original_ma
     repaired = apply_repair_patch(doc, filtered)
     assert _call(repaired, "configure_item_stats")["params"].get("manaCost") == original_mana
     assert _wire_payload(repaired)["gameplay"]["manaCost"] == (0 if original_mana is None else original_mana)
+
+
+@pytest.mark.parametrize("fn,param,invalid_param,valid", [
+    ("configure_tool", "axePowerTooltipPercent", "pickPower", 100),
+    ("configure_tool", "hammerPower", "pickPower", 100),
+    ("restore_resources_on_use", "healMana", "healLife", 100),
+])
+@pytest.mark.parametrize("present", [False, True])
+def test_new_zero_omissions_are_frozen_at_the_repair_boundary(fn, param, invalid_param, valid, present):
+    doc = build_capability_witness(fn)
+    call = _call(doc, fn)
+    call["params"][invalid_param] = -1
+    if present:
+        call["params"][param] = 25
+    else:
+        call["params"].pop(param, None)
+    before = deepcopy(call["params"])
+    patch_call = deepcopy(call)
+    patch_call["params"][invalid_param] = valid
+    if present:
+        patch_call["params"].pop(param)
+    else:
+        patch_call["params"][param] = 25
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [patch_call], "note": "repair only invalid power/resource"}, scope)
+    assert audit["ok"], audit
+    fixed = apply_repair_patch(doc, patch)
+    expected = {**before, invalid_param: valid}
+    assert _call(fixed, fn)["params"] == expected
+    assert validate_runtime_wire(compile_runtime_program(fixed))["ok"]
 
 
 @pytest.mark.parametrize(

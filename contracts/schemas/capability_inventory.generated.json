@@ -524,7 +524,7 @@
           "maximum": 500,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "mana_points",
           "units": ""
         },
@@ -820,7 +820,7 @@
           "maximum": 500,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": "tooltip percent"
         },
@@ -830,7 +830,7 @@
           "maximum": 1000,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "terraria_hammer_power",
           "units": ""
         },

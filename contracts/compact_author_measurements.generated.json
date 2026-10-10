@@ -1,0 +1,84 @@
+{
+  "schema": "infini.compact-author-output-measurements.v1",
+  "unit": "Unicode characters in compact JSON; not tokens or billed usage",
+  "scope": "D1-D6 combined, exact fixture values retained; no additive savings claims or live model quality estimate",
+  "rows": [
+    {
+      "fixture": "workbench_blade",
+      "canonicalBeforeChars": 5053,
+      "compactChars": 4788,
+      "savingChars": 265,
+      "strictProviderBeforeChars": 5072,
+      "strictProviderCompactChars": 4807,
+      "strictProviderSavingChars": 265
+    },
+    {
+      "fixture": "umbrella_grenade",
+      "canonicalBeforeChars": 5789,
+      "compactChars": 5418,
+      "savingChars": 371,
+      "strictProviderBeforeChars": 5807,
+      "strictProviderCompactChars": 5436,
+      "strictProviderSavingChars": 371
+    },
+    {
+      "fixture": "door_on_chain",
+      "canonicalBeforeChars": 3738,
+      "compactChars": 3548,
+      "savingChars": 190,
+      "strictProviderBeforeChars": 3756,
+      "strictProviderCompactChars": 3566,
+      "strictProviderSavingChars": 190
+    },
+    {
+      "fixture": "returning_potion",
+      "canonicalBeforeChars": 3917,
+      "compactChars": 3710,
+      "savingChars": 207,
+      "strictProviderBeforeChars": 3953,
+      "strictProviderCompactChars": 3746,
+      "strictProviderSavingChars": 207
+    },
+    {
+      "fixture": "fishing_platform_tool",
+      "canonicalBeforeChars": 3876,
+      "compactChars": 3648,
+      "savingChars": 228,
+      "strictProviderBeforeChars": 3876,
+      "strictProviderCompactChars": 3648,
+      "strictProviderSavingChars": 228
+    },
+    {
+      "fixture": "shield_and_disc",
+      "canonicalBeforeChars": 5539,
+      "compactChars": 5224,
+      "savingChars": 315,
+      "strictProviderBeforeChars": 5539,
+      "strictProviderCompactChars": 5224,
+      "strictProviderSavingChars": 315
+    },
+    {
+      "fixture": "held_and_deployed",
+      "canonicalBeforeChars": 6954,
+      "compactChars": 6487,
+      "savingChars": 467,
+      "strictProviderBeforeChars": 6954,
+      "strictProviderCompactChars": 6487,
+      "strictProviderSavingChars": 467
+    },
+    {
+      "fixture": "equipment_tool_combat",
+      "canonicalBeforeChars": 5090,
+      "compactChars": 4690,
+      "savingChars": 400,
+      "strictProviderBeforeChars": 5632,
+      "strictProviderCompactChars": 5232,
+      "strictProviderSavingChars": 400
+    }
+  ],
+  "newNeutralOmissionsCanonicalOnly": {
+    "configure_tool_zero_axe_and_hammer": 43,
+    "restore_resources_zero_mana": 13
+  },
+  "liveLlmQuality": "notRun"
+}
