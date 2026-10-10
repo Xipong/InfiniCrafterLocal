@@ -56,6 +56,7 @@ public sealed partial class GeneratedProjectile
         bool controllerOwnsMotion = RunController();
         if (!controllerOwnsMotion)
             RunMovement();
+        ApplyHitboxCurveVisual();
 
         if (_entity.Light.Strength > 0f && Main.netMode != NetmodeID.Server)
         {
@@ -76,6 +77,15 @@ public sealed partial class GeneratedProjectile
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
+    }
+
+    private float HitboxCurveScale()
+        => _entity?.HitboxCurve?.ScaleAt(_age, Projectile.extraUpdates + 1) ?? 1f;
+
+    private void ApplyHitboxCurveVisual()
+    {
+        if (_entity?.HitboxCurve?.MirrorToSprite == true)
+            Projectile.scale = _entity.Hitbox.DrawScale * _entity.Visual.Scale * HitboxCurveScale();
     }
 
     private bool RunController()

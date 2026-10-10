@@ -339,6 +339,9 @@ def _compile_entity_call(
     if fn == "set_projectile_hitbox":
         project(component("hitbox"), f"{base}.hitbox", p)
         return
+    if fn == "set_projectile_hitbox_curve":
+        project(component("hitboxCurve"), f"{base}.hitboxCurve", p)
+        return
     if fn == "set_projectile_collision":
         project(component("collision"), f"{base}.collision", p)
         return

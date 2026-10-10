@@ -1413,6 +1413,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 if row_id != node_id:
                     context_id(row_id)
         elif code in {"duplicate_single_component", "exclusive_component_conflict"}:
+            # A registry conditional conflict may also be resolved by changing
+            # the exact selected leaf (for example disabling an explicit visual
+            # mirror). Valid curve numbers and the other movement stay frozen.
+            if node_namespace == "calls" and node_id and ".params." in path:
+                fn = str(node_row.get("fn") or "")
+                param = path.rsplit(".params.", 1)[1]
+                cap = CAPABILITY_REGISTRY.get(fn)
+                if cap is not None and any(req.kind == "capability_absent" and req.param == param for req in cap.requirements):
+                    grant("calls", node_id, "params." + param)
             for row_id in related:
                 if namespace_by_id.get(row_id) == "calls":
                     mark("calls", row_id, can_delete=True)

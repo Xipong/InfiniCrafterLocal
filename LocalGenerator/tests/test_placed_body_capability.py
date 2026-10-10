@@ -333,12 +333,75 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
     for name in baseline:
         final = historical_child_combat_wire(without_declared_targeting_neutrals(
             without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name)))))
-        # The archive predates weapon-ammo's two registry inventory diagnostics.
-        # Assert and reverse only those diagnostics; compare every retained byte.
+        # Compose historical child combat and declared neutral reversals. The
+        # archive also predates ammo and the curve's exact inventory requirements.
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        curve_requirements = len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29
+        assert checks["requirements"] == 29 + curve_requirements
         checks["exclusiveGroups"].remove("ammo_role")
-        checks["requirements"] -= 1
+        checks["requirements"] -= 1 + curve_requirements
         actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
+    """Current-main additions coexist with this feature through real offline callers."""
+    from copy import deepcopy
+    import json
+    from jsonschema import Draft202012Validator
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = placed()
+    calls = doc["runtimeProgram"]["calls"]
+    owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
+    for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
+        for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
+            if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
+                continue
+            row["id"] = "combined_" + str(len(calls))
+            row["target"] = owner if fn == "set_projectile_hitbox_curve" else "item"
+            calls.append(row)
+    before = json.dumps(doc, sort_keys=True)
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    responses, requests = wire_transport
+    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    responses.append(payload)
+    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "combined-offline")
+    assert accepted is not None and len(requests) == 1 and not responses
+    request = requests[0]
+    assert request["response_format"]["type"] == format_mode
+    if format_mode == "json_schema":
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+    assert json.dumps(accepted["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)
+    wire = compile_runtime_program(accepted)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=accepted, final_document=wire)["ok"]
+    assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "authored_spawn"}
+    assert wire["runtimeProgram"]["heldEffectGroupId"] == "witness"
+    assert [group["id"] for group in wire["runtimeProgram"]["effectGroups"]] == ["witness"]
+    assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
+
+    broken = deepcopy(accepted)
+    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    curve["params"]["endScale"] = 9
+    candidate = deepcopy(curve)
+    candidate["params"].update(endScale=0.25, startScale=7)
+    frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
+    frozen["params"]["ammoCategory"] = "bullet"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
+        {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
+         "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert json.dumps(repaired["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)
+    repaired_wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(repaired_wire)["ok"]
+    assert repaired_wire["runtimeProgram"] == wire["runtimeProgram"]
+    assert audit_compiler_receipts(repaired_wire["runtimeContract"]["finalWireReceipts"], authored_document=repaired, final_document=repaired_wire)["ok"]
+    assert json.dumps(doc, sort_keys=True) == before

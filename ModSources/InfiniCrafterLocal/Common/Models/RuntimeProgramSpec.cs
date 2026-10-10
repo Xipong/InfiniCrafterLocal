@@ -577,6 +577,13 @@ public sealed class RuntimeEntitySpec
     public RuntimeDamageSpec Damage { get; set; } = new();
     public int LifetimeTicks { get; set; } = 1;
     public RuntimeHitboxSpec Hitbox { get; set; } = new();
+    private RuntimeHitboxCurveSpec? _hitboxCurve;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHitboxCurveSpec? HitboxCurve
+    {
+        get => _hitboxCurve;
+        set => _hitboxCurve = value ?? throw new InvalidDataException("present hitboxCurve cannot be null");
+    }
     public RuntimeCollisionSpec Collision { get; set; } = new();
     public RuntimeMovementSpec Movement { get; set; } = new();
     public RuntimeControllerSpec Controller { get; set; } = new();
@@ -624,7 +631,7 @@ public sealed class RuntimeEntitySpec
         if (Kind == RuntimeEntityKind.ItemBody)
         {
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
-                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured
+                || HitboxCurve is not null || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
@@ -637,6 +644,13 @@ public sealed class RuntimeEntitySpec
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
+            if (HitboxCurve is { } curve)
+            {
+                curve.Validate();
+                if (Controller.Code == RuntimeControllerCode.ChannelBeam || Movement.Code == 18
+                    || curve.MirrorToSprite && Movement.Code == 15)
+                    throw new InvalidDataException("hitboxCurve cannot coexist with beam/whip collision or a second mirrored sprite-scale owner");
+            }
             bool requiresPositionDriver = Kind is RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile;
             bool controllerOwnsPosition = Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease or RuntimeControllerCode.TargetAndFire;
             if (requiresPositionDriver && !Movement.IsConfigured && !controllerOwnsPosition)
@@ -806,6 +820,52 @@ public sealed class RuntimeDamageSpec
         _ = TerrariaRuntimeVocabulary.ResolveDamageClass(DamageClass);
         Damage = Math.Clamp(Damage, 0, 2000);
         Knockback = Math.Clamp(Knockback, 0f, 20f);
+    }
+}
+
+public sealed class RuntimeHitboxCurveSpec
+{
+    public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StartScaleJsonConverter() : base("0.25", "8") { }
+    }
+    public sealed class EndScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public EndScaleJsonConverter() : base("0.25", "8") { }
+    }
+
+    [JsonConverter(typeof(StartScaleJsonConverter))]
+    [JsonRequired] public float StartScale { get; set; }
+    [JsonConverter(typeof(EndScaleJsonConverter))]
+    [JsonRequired] public float EndScale { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    [JsonRequired] public string Curve { get; set; } = "";
+    [JsonRequired] public bool MirrorToSprite { get; set; }
+
+    public void Validate()
+    {
+        RequireRange(StartScale, 0.25f, 8f);
+        RequireRange(EndScale, 0.25f, 8f);
+        RequireRange(StartDelayTicks, 0, 21600);
+        RequireRange(DurationTicks, 1, 21600);
+        if (Curve is not ("linear" or "exponential"))
+            throw new InvalidDataException("hitboxCurve.curve must be linear or exponential");
+    }
+
+    private static void RequireRange(float value, float low, float high)
+    {
+        if (!float.IsFinite(value) || value < low || value > high)
+            throw new InvalidDataException("hitboxCurve fields require exact finite registry bounds");
+    }
+
+    public float ScaleAt(int activeUpdates, int updatesPerWorldTick)
+    {
+        double activeTicks = Math.Max(0, activeUpdates) / (double)Math.Max(1, updatesPerWorldTick);
+        double progress = Math.Clamp((activeTicks - StartDelayTicks) / DurationTicks, 0d, 1d);
+        return Curve == "exponential"
+            ? (float)(StartScale * Math.Pow(EndScale / (double)StartScale, progress))
+            : (float)(StartScale + (EndScale - StartScale) * progress);
     }
 }
 

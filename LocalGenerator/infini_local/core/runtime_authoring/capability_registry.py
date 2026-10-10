@@ -1503,6 +1503,23 @@ _CAPS: list[CapabilitySpec] = [
         repair_group="hitbox",
     ),
     _cap(
+        "set_projectile_hitbox_curve",
+        "Scale the native rectangular damage hitbox along an explicit active-age curve, independently of sprite/VFX size. Start/end are multipliers on set_projectile_hitbox.hitboxScale. Active world ticks begin after spawn activation delay; extraUpdates changes sample frequency, not duration. Optional visual coupling is an explicit mirrorToSprite choice. Beam and whip line geometry are excluded.",
+        "entity_collision", PROJECTILE_ENTITY_KINDS,
+        {
+            "startScale": _p("number", "Damage-rectangle multiplier before/start of the curve", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
+            "endScale": _p("number", "Damage-rectangle multiplier at/after curve completion", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
+            "startDelayTicks": _p("integer", "Active world ticks to hold startScale before interpolation", minimum=0, maximum=21600, units="ticks"),
+            "durationTicks": _p("integer", "Active world ticks from startScale to endScale", minimum=1, maximum=21600, units="ticks"),
+            "curve": _p("string", "linear: start+(end-start)*t; exponential: start*(end/start)^t; t clamps to 0..1", enum=("linear", "exponential")),
+            "mirrorToSprite": _p("boolean", "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with move_expanding_wave, which independently owns dynamic sprite scale."),
+        },
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox",
+        wire=("runtimeProgram.entities[].hitboxCurve.*",),
+        provenance="restored explicit active-age damage rectangle growth; legacy movement15 visual scale no longer implies collision",
+        repair_group="hitbox_curve",
+    ),
+    _cap(
         "set_projectile_collision",
         "Set exact Terraria tile/liquid collision, penetration, update rate and NPC immunity mode.",
         "entity_collision",
@@ -2202,6 +2219,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         return ("runtimeProgram.entities[].lifetimeTicks",)
     if cap.name == "set_projectile_hitbox":
         return tuple(f"runtimeProgram.entities[].hitbox.{name}" for name in cap.params)
+    if cap.name == "set_projectile_hitbox_curve":
+        return tuple(f"runtimeProgram.entities[].hitboxCurve.{name}" for name in cap.params)
     if cap.name == "set_projectile_collision":
         return tuple(f"runtimeProgram.entities[].collision.{name}" for name in param_fields)
     if cap.category == "movement":
@@ -2238,6 +2257,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
+        "set_projectile_hitbox_curve": "hitbox_curve",
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
         "set_projectile_sentry": "native_sentry", "set_descendant_concurrency": "spawn",
     }
@@ -2279,6 +2299,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "set_projectile_damage": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_lifetime": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_hitbox": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+        "set_projectile_hitbox_curve": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
         "set_projectile_collision": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "spawn_over_target": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "emit_light_while_active": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
@@ -2323,6 +2344,12 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "set_projectile_hitbox_curve":
+        return (
+            RequirementSpec("capability_present", capability="set_projectile_hitbox", message="A hitbox curve multiplies the same entity's explicit static hitbox."),
+            RequirementSpec("capability_absent", any_of=("channel_beam", "move_whip_lash"), message="Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly."),
+            RequirementSpec("capability_absent", param="mirrorToSprite", equals=True, any_of=("move_expanding_wave",), message="mirrorToSprite=true owns dynamic sprite scale; move_expanding_wave is a second owner. Disable the mirror or choose one scale owner."),
+        )
     if cap.name == "configure_weapon_ammo":
         return (RequirementSpec(
             "binding_tuple_present", target="any_entity",

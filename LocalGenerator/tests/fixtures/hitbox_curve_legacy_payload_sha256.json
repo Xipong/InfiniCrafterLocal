@@ -1,0 +1,13 @@
+{
+  "source": "base62762da code-equivalent fixture compiler before A12; captured gameplay payload, excludes dynamic audit inventory counts",
+  "sha256": {
+    "workbench_blade": "7fc70298cf16f4ab2784924a0d8c11abb67179a6ed4cd1116435fb882fb03dbc",
+    "umbrella_grenade": "06281e34ad2bfb24cd392d4a6b8329cbae51aa15c88d1252855810e52e11e98d",
+    "door_on_chain": "785a3047ee9dfdd29b85a6f33274c41664820e7a86f2e8e6ae344041bb980437",
+    "returning_potion": "6e2397d46e3dea1178941d38fa8ebd79b931334c85a2736b4dd3040491ca34b4",
+    "fishing_platform_tool": "04bb5ba59e0fa8982f52b8d09efb6f1c24b8f09a9c40ec6c5762f449f59ab919",
+    "shield_and_disc": "1dcfa31191b96adb2df12f42e1d7aa1748c416c6b0dc912266a3a22304bf4863",
+    "held_and_deployed": "aea7c7fbb0e1de5344c2678e21ad8964e672a91eb0a830bc25fe7b91197a8b78",
+    "equipment_tool_combat": "2b3086b119ba30722caa948b83a209fd87ddecec57a9c7aebdf54663a4710c76"
+  }
+}
