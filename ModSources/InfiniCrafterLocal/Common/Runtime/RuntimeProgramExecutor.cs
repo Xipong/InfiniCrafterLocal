@@ -165,11 +165,12 @@ internal static class RuntimeProgramExecutor
                 if (!npc.CanBeChasedBy() || ReferenceEquals(npc, anchor)
                     || action.RepeatPolicy == "exclude_visited" && visited.Contains(npc))
                     continue;
-                Vector2 delta = npc.Center - origin;
-                float distanceSquared = delta.LengthSquared();
+                Vector2 center = npc.Center;
+                double dx = (double)center.X - origin.X, dy = (double)center.Y - origin.Y;
+                double distanceSquared = dx * dx + dy * dy;
                 // A coincident center has no authored direction. Do not invent
                 // an axis for it or let NaN win a nearest-target comparison.
-                if (!float.IsFinite(distanceSquared) || distanceSquared <= 0f || distanceSquared > radius * radius)
+                if (!double.IsFinite(distanceSquared) || distanceSquared <= 0d || distanceSquared > radius * radius)
                     continue;
                 if (action.RequireLineOfSight == true
                     && !Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height))

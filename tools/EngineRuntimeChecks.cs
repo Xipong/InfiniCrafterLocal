@@ -362,9 +362,9 @@ internal static partial class EngineRuntimeChecks
         return entity;
     }
 
-    private static void Equal<T>(T expected, T actual, string label) where T : IEquatable<T>
+    private static void Equal<T>(T expected, T actual, string label)
     {
-        if (!expected.Equals(actual))
+        if (!System.Collections.Generic.EqualityComparer<T>.Default.Equals(expected, actual))
             throw new InvalidOperationException($"{label}: expected {expected}, actual {actual}");
     }
 

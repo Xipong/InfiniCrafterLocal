@@ -32,6 +32,7 @@ internal static partial class EngineRuntimeChecks
         var root = data.RuntimeProgram.TryGetEntity("root")!;
         var child = JsonSerializer.Deserialize<RuntimeEntitySpec>(JsonSerializer.Serialize(root))!;
         child.Id = "hop"; child.Kind = RuntimeEntityKind.ChildProjectile;
+        child.Visual.Role = child.VisualRole = "child_projectile";
         child.Spawn.Placement = "item_use_origin"; child.Spawn.Aim = "velocity"; child.Spawn.OffsetPx = 0;
         child.Spawn.Count = 4; child.Spawn.SpreadRadians = 0.7f; child.Spawn.SpeedPxPerTick = 7;
         child.Damage.Damage = 17; child.Damage.Knockback = 2.5f;
@@ -173,7 +174,14 @@ internal static partial class EngineRuntimeChecks
         Equal(1, steps[0].TargetNpcSlot, "inclusive radius and lower-slot exact-distance tie");
         b.Center = new Vector2(360.01f, 0);
         Equal(2, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1)[0].TargetNpcSlot, "outside radius excluded");
-        b.Center = new Vector2(360, 0);
+        action.StepRangeTiles = 1;
+        b.Center = new Vector2(16, 0.001f); c.Center = new Vector2(16, 0);
+        Equal(2, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1)[0].TargetNpcSlot,
+            "original float coordinates outside radius cannot round inside or win a false tie");
+        c.active = false;
+        Equal(0, RuntimeProgramExecutor.PlanTargetEmissions(action, a, 1).Count, "nearby raw outside radius refused");
+        c.active = true; action.StepRangeTiles = 22.5;
+        b.Center = new Vector2(360, 0); c.Center = new Vector2(-360, 0);
         int calls = 0;
         using var lineOfSight = new Hook(typeof(Collision).GetMethod(nameof(Collision.CanHit),
             new[] { typeof(Vector2), typeof(int), typeof(int), typeof(Vector2), typeof(int), typeof(int) })!,
