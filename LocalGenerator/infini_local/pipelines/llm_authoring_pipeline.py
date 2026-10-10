@@ -606,6 +606,7 @@ def repair_author_item_after_failure(
             )
         repaired.setdefault("debug", {})["gameplayRepairRawPatch"] = copy.deepcopy(parsed)
         repaired["debug"]["gameplayRepairPatch"] = copy.deepcopy(filtered_patch)
+        repaired["debug"]["gameplayRepairStructureValidation"] = copy.deepcopy(report)
         repaired["debug"]["gameplayRepairFilterAudit"] = copy.deepcopy(filter_report)
         repaired["debug"]["gameplayRepairScope"] = copy.deepcopy(scope)
         accounting = _stage_accounting(repaired)

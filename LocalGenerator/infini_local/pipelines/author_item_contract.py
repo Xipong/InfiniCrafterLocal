@@ -165,7 +165,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "selfEvaluation": {
                 "planVsProgram": {
                     "verdict": "aligned|changed|uncertain",
-                    "summary": "diagnostic comparison of concept with the emitted program",
+                    "summary": "diagnostic comparison of concept with the emitted program; formatting errors are recorded but do not reject executable gameplay",
                     "actionChecks": [{
                         "plannedIntent": "one exact plannedPlayerActions intent, or 'no corresponding initial action' for an added lane",
                         "implementedBehavior": "what runtimeProgram actually implements for it",
