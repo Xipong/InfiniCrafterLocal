@@ -200,6 +200,7 @@ def test_frozen_material_boundary(case):
     for slot in raw["slots"]:
         if isinstance(slot, dict) and slot.get("rendererKind") == "soundCue":
             slot["soundId"] = "Item1"
+            slot["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
     before, gameplay = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]

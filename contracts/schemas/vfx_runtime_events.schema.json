@@ -996,7 +996,8 @@
             },
             "then": {
               "required": [
-                "soundId"
+                "soundId",
+                "sound"
               ]
             }
           },
@@ -1032,10 +1033,31 @@
             },
             "then": {
               "properties": {
+                "sound": {
+                  "enum": []
+                },
                 "soundId": {
                   "enum": []
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "soundCue"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "sound"
+              ]
+            },
+            "then": {
+              "required": [
+                "soundId"
+              ]
             }
           },
           {
@@ -1276,7 +1298,7 @@
         ],
         "properties": {
           "alpha": {
-            "description": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+            "description": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; legacy sound without sound payload uses volume clamp(alpha,0.05,1); explicit sound.volume alone owns new audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
@@ -2481,6 +2503,35 @@
             "minimum": 0.0,
             "type": "number"
           },
+          "sound": {
+            "additionalProperties": false,
+            "properties": {
+              "pitch": {
+                "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage.",
+                "maximum": 0.9,
+                "minimum": -0.9,
+                "type": "number"
+              },
+              "pitchVariance": {
+                "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter; a nonzero interval must remain nonzero in native float32 storage. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation.",
+                "maximum": 0.6,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "volume": {
+                "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. A nonzero choice must remain nonzero in native float32 playback; sub-storage values are rejected, not silenced. Native distance and user volume settings still apply.",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "volume",
+              "pitch",
+              "pitchVariance"
+            ],
+            "type": "object"
+          },
           "soundId": {
             "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement.",
             "enum": [
@@ -2488,22 +2539,86 @@
               "Item2",
               "Item3",
               "Item4",
+              "Item5",
+              "Item7",
               "Item8",
               "Item9",
+              "Item10",
+              "Item11",
+              "Item12",
+              "Item13",
               "Item14",
+              "Item15",
+              "Item17",
               "Item20",
               "Item21",
+              "Item26",
+              "Item28",
               "Item29",
+              "Item31",
+              "Item33",
+              "Item34",
+              "Item36",
+              "Item37",
+              "Item38",
+              "Item40",
+              "Item41",
+              "Item42",
               "Item43",
+              "Item44",
+              "Item46",
+              "Item51",
+              "Item54",
+              "Item57",
+              "Item58",
+              "Item60",
+              "Item62",
+              "Item69",
+              "Item70",
+              "Item71",
+              "Item72",
+              "Item73",
+              "Item74",
+              "Item76",
+              "Item77",
+              "Item78",
+              "Item82",
+              "Item83",
+              "Item84",
+              "Item85",
+              "Item88",
+              "Item89",
+              "Item91",
+              "Item93",
+              "Item94",
+              "Item97",
+              "Item98",
+              "Item99",
+              "Item102",
+              "Item103",
+              "Item105",
+              "Item106",
+              "Item107",
+              "Item108",
+              "Item109",
+              "Item110",
+              "Item113",
+              "Item117",
+              "Item123",
+              "Item124",
+              "Item152",
+              "Item157",
+              "Item158",
+              "Item169",
+              "Coins",
               "Dig",
-              "Tink",
               "Grab",
+              "MaxMana",
+              "ResearchComplete",
               "Shatter",
               "Splash",
-              "Coins",
-              "Unlock",
-              "MaxMana",
-              "ResearchComplete"
+              "Tink",
+              "Unlock"
             ],
             "type": "string"
           },
