@@ -129,7 +129,8 @@ def test_projection_constraint_reaches_actual_author_and_serialized_repair(monke
 
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     _, author_text, _ = build_initial_author_request({}, {}, {}, {}, "offline-percent", model_name="test-model")
-    author_cards = json.loads(author_text)["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    catalog = json.loads(author_text)["runtimeCapabilityContract"]["catalog"]
+    author_cards = catalog["capabilities"]
     doc, _, _ = percent_document(fn, name, 5e-324)
     _, dossier = _capture_request(monkeypatch, doc, format_mode)
     for cards in (author_cards, dossier["existingBrokenCapabilityCards"]):
@@ -140,6 +141,8 @@ def test_projection_constraint_reaches_actual_author_and_serialized_repair(monke
             for part in parts[1:]:
                 row = row["properties"][part]
         constraint = row["x-infini-consumerConstraint"] if len(parts) > 1 else row["consumerConstraint"]
+        if isinstance(constraint, str):
+            constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
         assert constraint == spec.schema()["x-infini-consumerConstraint"]
         assert constraint["storage"] == "float32"
         assert constraint["neutral"] == 0

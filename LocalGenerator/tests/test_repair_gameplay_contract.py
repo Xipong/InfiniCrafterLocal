@@ -14,7 +14,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
+def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_scope_response=False):
     """Exercise the real request/parser/scope/merge caller; only provider I/O is synthetic."""
     import socket
     from jsonschema import Draft202012Validator
@@ -34,7 +34,14 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode):
         payload = copy.deepcopy(incoming)
         if format_mode == "json_schema":
             payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
-            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
+            if out_of_scope_response:
+                # The scoped grammar rejects these independent capability rows.
+                # Still simulate a provider violating its declared schema so the
+                # frozen merge remains tested as a second, local boundary.
+                assert not validator.is_valid(payload)
+            else:
+                validator.validate(payload)
         return {"choices": [{"message": {"content": json.dumps(payload)}}],
                 "_debug": {"responseFormatType": format_mode}}
 
@@ -82,7 +89,8 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
     frozen["params"]["knockback" if leaf == "autoReuse" else "useStyle"] = 3 if leaf == "autoReuse" else "swing"
     incoming = {"note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
                 "callsUpsert": [candidate, frozen]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + leaf in audit["acceptedPaths"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
@@ -117,7 +125,8 @@ def test_gameplay_periodic_choice_accepts_only_exact_missing_dependency(monkeypa
     stats["params"]["damage"] = 1999
     incoming = {"note": "model explicitly chose a full conditional alternative",
                 "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+                                                out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params.periodTicks" in audit["acceptedPaths"]

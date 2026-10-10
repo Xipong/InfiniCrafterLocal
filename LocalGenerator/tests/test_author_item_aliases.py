@@ -222,3 +222,34 @@ def test_unrelated_repair_cannot_change_a_valid_condition_or_threshold():
     repaired = apply_repair_patch(source, patch)
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == call["params"]
     assert audit["ignoredChanges"] and validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+@pytest.mark.parametrize("bad", [True, 1.0, None])
+@pytest.mark.parametrize("source_available", [False, True])
+def test_grouped_armor_receipts_refuse_coherent_wrong_json_types(bad, source_available):
+    source, call = _source("configure_armor")
+    call["params"]["setBonuses"] = {"aggroPoints": 1}
+    wire = compile_runtime_program(source)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    row = next(r for r in receipts if r.get("authoredPath", "").endswith(".setBonuses.aggroPoints"))
+    call["params"]["setBonuses"]["aggroPoints"] = bad
+    wire["armor"]["setBonusAggro"] = row["value"] = bad
+    assert not audit_compiler_receipts(receipts, authored_document=source if source_available else None,
+                                       final_document=wire)["ok"]
+
+
+def test_prior_recall_mode_domain_is_explicit_and_wire_only():
+    cap = CAPABILITY_REGISTRY["move_player_on_use"]
+    assert cap.params["mode"].enum == ("blink_to_cursor",)
+    assert cap.retained_receipt_params["mode"].enum == ("blink_to_cursor", "recall_home")
+    source, call = _source("move_player_on_use")
+    call["params"]["mode"] = "blink_to_cursor"
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    wire["gameplay"]["mobilityMode"] = "recall_home"
+    next(r for r in rows if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params.mode"))["value"] = "recall_home"
+    call["params"]["mode"] = "recall_home"
+    before = deepcopy(wire)
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    assert not validate_runtime_program(source)["ok"]
+    assert wire == before

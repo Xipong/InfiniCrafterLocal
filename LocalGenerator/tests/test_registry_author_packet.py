@@ -34,6 +34,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from test_author_request_compaction import _expand_constraint_references
 
 
 @pytest.fixture
@@ -71,7 +72,9 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
         assert phrase.lower() not in user.lower()
     assert "concept" in user and "realization" in user
     expected = {r["fn"]: r for r in compact_capability_catalog()}
-    assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
+    assert _expand_constraint_references(
+        {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
+         for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
     assert set(expected) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert sum(len(r["params"]) for r in catalog["capabilities"]) == sum(len(c.params) for c in CAPABILITY_REGISTRY.values() if c.prompt_visible and c.decision == "expose")
     assert {r["input"] for r in catalog["inputs"] if r["exclusive"]} == {n for n, s in INPUT_KIND_REGISTRY.items() if s.exclusive}
@@ -131,7 +134,9 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
         assert phrase in intent
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expected = {r["fn"]: r for r in compact_capability_catalog()}
-    assert {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"} for r in catalog["capabilities"]} == expected
+    assert _expand_constraint_references(
+        {r["fn"]: {k: v for k, v in r.items() if k != "constructionMeaning"}
+         for r in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
     assert set(expected) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert (len(expected), sum(len(r["params"]) for r in expected.values())) == (
         len(expected), sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values() if cap.prompt_visible and cap.decision == "expose"),
