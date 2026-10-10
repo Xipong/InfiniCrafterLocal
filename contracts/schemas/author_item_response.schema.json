@@ -4769,11 +4769,18 @@
                     "properties": {
                       "gravityVelocityPerUpdate": {
                         "type": "number",
-                        "minimum": 0.001,
+                        "minimum": -2,
                         "maximum": 2,
-                        "description": "Add to vertical velocity (pixels/update) per projectile update",
+                        "description": "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
                         "x-infini-units": "engine units: vertical velocity increment per update",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       }
                     },
                     "required": [
@@ -6030,8 +6037,8 @@
                       "sameTargetBias": {
                         "type": "number",
                         "minimum": 0,
-                        "maximum": 1,
-                        "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
+                        "maximum": 0.9,
+                        "description": "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability",
                         "x-infini-units": "engine units: distance-score discount",
                         "x-infini-semanticType": "unitless_scalar"
                       },
@@ -6837,7 +6844,7 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
-                    "const": "chain_damage_on_event"
+                    "const": "damage_nearest_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -6871,18 +6878,18 @@
                         "description": "Execute on this exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "count": {
+                      "maxTargets": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Maximum instantly damaged radial targets",
+                        "description": "Maximum additional NPCs selected from the same event center, nearest first; the directly hit NPC is excluded",
                         "x-infini-semanticType": "spawn_or_target_count"
                       },
                       "rangeTiles": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 60,
-                        "description": "Fixed search radius from the original event position",
+                        "description": "Inclusive physical search radius around the recorded event center, in tiles; it does not move between targets",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },
@@ -6905,7 +6912,7 @@
                     },
                     "required": [
                       "when",
-                      "count",
+                      "maxTargets",
                       "rangeTiles",
                       "damageMultiplier"
                     ]

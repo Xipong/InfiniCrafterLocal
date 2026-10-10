@@ -10,6 +10,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KIND_REGISTRY,
     EVENT_ACTION_OPCODE,
     ParamSpec,
+    RUNTIME_PROGRAM_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
 )
@@ -796,6 +797,16 @@ def audit_compiler_receipts(
 ) -> dict[str, Any]:
     """Audit supplied evidence; without Author, success is wire consistency only."""
     literal_source = authored_document
+    if literal_source is not None:
+        source_program = literal_source.get("runtimeProgram")
+        source_bindings = source_program.get("bindings", []) if isinstance(source_program, Mapping) else []
+        if (not isinstance(source_program, Mapping) or source_program.get("schema") != RUNTIME_PROGRAM_SCHEMA
+            or (isinstance(source_bindings, list) and any(
+                isinstance(binding, Mapping) and "usePolicy" in binding for binding in source_bindings))):
+            return {"schema": "infini.technical-lowering-audit.v1", "ok": False,
+                    "violations": [{"path": "$.runtimeProgram",
+                                    "reason": "source provenance requires the sole current Author grammar"}],
+                    "lowerers": list(GLOBAL_TECHNICAL_LOWERINGS)}
     authored_document = _exact_mechanical_view(authored_document) if authored_document is not None else None
     program = authored_document.get("runtimeProgram") if authored_document is not None else None
     source_calls = program.get("calls") if isinstance(program, Mapping) else None

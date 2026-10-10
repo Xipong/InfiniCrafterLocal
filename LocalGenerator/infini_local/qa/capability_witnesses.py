@@ -91,7 +91,7 @@ def _params(fn: str) -> dict[str, Any]:
         "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
         "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
         "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
-        "chain_damage_on_event": {"when": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
+        "damage_nearest_on_event": {"when": "on_hit", "maxTargets": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
         "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8},
         "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
         "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},

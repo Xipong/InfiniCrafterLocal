@@ -1935,7 +1935,7 @@
                           "select_targets_and_emit_on_event",
                           "apply_status_on_event",
                           "damage_area_on_event",
-                          "chain_damage_on_event",
+                          "damage_nearest_on_event",
                           "pull_on_event",
                           "pull_owner_to_event_target",
                           "heal_owner_on_event",

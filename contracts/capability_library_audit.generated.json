@@ -14,9 +14,9 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 71,
+    "capabilities": 72,
     "publicCapabilities": 68,
-    "retainedCapabilities": 3,
+    "retainedCapabilities": 4,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
@@ -1079,11 +1079,11 @@
       "wireParam": "gravityPerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
-        0.001,
+        -2,
         2
       ],
       "wireBounds": [
-        0.001,
+        -2,
         2
       ],
       "csharpBounds": [
@@ -1850,11 +1850,11 @@
       "csharpClass": "RuntimeTargetingSpec",
       "authorBounds": [
         0,
-        1
+        0.9
       ],
       "wireBounds": [
         0,
-        1
+        0.9
       ],
       "csharpBounds": [
         0.0,
@@ -2324,8 +2324,8 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
-      "param": "count",
+      "capability": "damage_nearest_on_event",
+      "param": "maxTargets",
       "wireParam": "count",
       "csharpClass": "RuntimeEventActionSpec",
       "authorBounds": [
@@ -2343,7 +2343,7 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "param": "rangeTiles",
       "wireParam": "rangeTiles",
       "csharpClass": "RuntimeEventActionSpec",
@@ -2362,7 +2362,7 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "param": "damageMultiplier",
       "wireParam": "damageMultiplier",
       "csharpClass": "RuntimeEventActionSpec",
@@ -2381,7 +2381,7 @@
       "preserved": true
     },
     {
-      "capability": "chain_damage_on_event",
+      "capability": "damage_nearest_on_event",
       "param": "delayTicks",
       "wireParam": "delayTicks",
       "csharpClass": "RuntimeEventActionSpec",

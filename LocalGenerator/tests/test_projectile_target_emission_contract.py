@@ -297,11 +297,14 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     fingerprint = hashlib.sha256(json.dumps(wire["runtimeProgram"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
     assert not any(key in json.dumps(wire["runtimeProgram"]) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
-    old = compile_runtime_program(build_capability_witness("chain_damage_on_event"))
+    # The current exact fresh alias keeps the old radial runtime discriminator.
+    old = compile_runtime_program(build_capability_witness("damage_nearest_on_event"))
     events = [e for row in old["runtimeProgram"]["entities"] for e in row["events"]]
     assert events[0]["actionCode"] == EVENT_ACTION_OPCODE["chain_damage_on_event"] == 4
     assert "stepCount" not in events[0]
-    assert "instant" in CAPABILITY_REGISTRY["chain_damage_on_event"].summary.lower()
+    assert events[0]["action"] == "chain_damage_on_event"
+    assert "no sequential hopping" in CAPABILITY_REGISTRY["damage_nearest_on_event"].summary.lower()
+    assert CAPABILITY_REGISTRY["chain_damage_on_event"].decision == "internal"
 
 
 def test_numeric_consumer_audit_includes_every_new_numeric_leaf():
