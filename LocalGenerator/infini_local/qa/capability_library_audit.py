@@ -35,6 +35,12 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "ordered_params",
+    "present_param_requires_target_kind",
+    "present_param_requires_param_value",
+    "present_param_forbids_capability",
+    "present_params_forbid_item_capability_when_active_spawn",
+    "referenced_param_presence_requires_value",
     "param_requires_target_kind",
     "capability_absent",
     "capability_present",
@@ -196,7 +202,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
             "RuntimeTurnModifierSpec", "RuntimeSpeedModifierSpec", "RuntimeHomingModifierSpec", "RuntimeNpcAttractionSpec", "RuntimeVisualScaleCurveSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
-            "RuntimeEventActionSpec", "RuntimeItemContactSpec",
+            "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
         )
     }
     property_map: dict[str, tuple[str, str]] = {
@@ -228,27 +234,31 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             class_name = property_map[cap.name][0]
         else:
             continue
+        default_class = class_name
         for param_name, spec in (leaf for name, param in cap.params.items()
                                  for leaf in _numeric_parameter_leaves(param, name)):
-            wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
-            field_class = "RuntimeOverTargetSpec" if wire_name.startswith("overTarget.") else class_name
-            field = wire_name.rsplit(".", 1)[-1]
+            field = spec.wire_name or param_name.rsplit(".", 1)[-1]
+            class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
+                           "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
+            field = field.rsplit(".", 1)[-1]
             csharp_name = field[:1].upper() + field[1:]
             if cap.name == "set_descendant_concurrency":
                 csharp_name = "DescendantMaxActive"
-            csharp = class_bounds[field_class].get(csharp_name)
-            if cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"}:
-                if param_name == "damageMultiplier":
-                    from infini_local.qa.primitive_loss_audit import nullable_float_rejection_bounds
-                    reject_bounds = nullable_float_rejection_bounds(text.encode(), class_name, csharp_name)
-                else:
-                    # Explicit new options reject outside their interval; a missing
-                    # or weakened guard must be visible, not skipped as "no clamp".
-                    declaration = re.search(
-                        rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
-                        r"throw new InvalidDataException\(", _class_block(text, class_name),
-                    )
-                    reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+            bounds = class_bounds[class_name]
+            csharp = bounds.get(csharp_name)
+            if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
+                from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
+                reject_bounds = nullable_number_rejection_bounds(text.encode(), class_name, csharp_name)
+            elif cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
+                # Explicit new options reject outside their interval; a missing
+                # or weakened guard must be visible, not skipped as "no clamp".
+                declaration = re.search(
+                    rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
+                    r"throw new InvalidDataException\(", _class_block(text, class_name),
+                )
+                reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+            if ((cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"})
+                    or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}):
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
@@ -307,8 +317,8 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             rows.append({
                 "capability": cap.name,
                 "param": param_name,
-                "wireParam": wire_name,
-                "csharpClass": field_class,
+                "wireParam": spec.wire_name or param_name.rsplit(".", 1)[-1],
+                "csharpClass": class_name,
                 "authorBounds": list(authored) if authored else None,
                 "wireBounds": list(projected) if projected else None,
                 "csharpBounds": list(csharp),

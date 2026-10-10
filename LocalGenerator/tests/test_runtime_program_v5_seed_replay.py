@@ -10,6 +10,7 @@ from infini_local.core.runtime_authoring import compile_runtime_program, validat
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
+from tests.captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
 from sentry_contract_checks import without_declared_targeting_neutrals
 from beam_contract_checks import without_declared_beam_neutrals
 
@@ -33,7 +34,7 @@ def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
     current = deepcopy(authored)
     for call in current["runtimeProgram"]["calls"]:
         project_captured_projectile_call(call)
-    return captured_parent_combat_author(current)
+    return captured_spawn_velocity_author(captured_parent_combat_author(current))
 
 
 def _historical_spawn_defaults(wire: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
@@ -102,7 +103,7 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
 
         archived_digest = hashlib.sha256(_canonical(row["expectedDeliveryWire"]).encode("utf-8")).hexdigest()
         assert archived_digest == row["expectedDeliveryWireSha256"]
-        compiled = compile_runtime_program(_current_author_seed(authored))
+        compiled = compile_runtime_program(captured_spawn_velocity_author(_current_author_seed(authored)))
         assert validate_runtime_wire(compiled)["ok"] is True
         actual_wire = _historical_spawn_defaults(
             _delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))),

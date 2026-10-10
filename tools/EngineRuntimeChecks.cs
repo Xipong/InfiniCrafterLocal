@@ -46,6 +46,13 @@ internal static partial class EngineRuntimeChecks
         (string Name, Action Check)[] checks = {
             ("signed vertical acceleration native DTO active updates and hydration", SignedVerticalAccelerationUsesNativeDtoAndEveryActiveUpdate),
             ("signed vertical acceleration activation delay and update rate", SignedVerticalAccelerationWaitsForActivationThenPreservesAuthoredRate),
+            ("sampled launch strict DTO and old saved absence", SampledLaunchDtoRejectsInvalidAndPreservesOldAbsence),
+            ("sampled launch raw numeric domain and round trips", SampledVelocityRawNumericDomainAndRoundTrips),
+            ("sampled velocity seeded geometry and area moments", SampledVelocitySeededGeometryAndAreaMoments),
+            ("sampled velocity native spawn owner authority", SampledVelocityReachesNativeSpawnOnlyOnOwner),
+            ("sampled velocity delay ExtraAI and hydration", SampledVelocityDelayExtraAiAndHydrationPreserveChosenVector),
+            ("hit target captured hitbox branch endpoints and seed", HitTargetGeometryUsesCapturedHitboxAndExactBranchEndpoints),
+            ("hit target delayed native boundary and reservation ownership", HitTargetDelayedNativeBoundaryAndReservationOwnership),
             ("initial NPC exclusion exact incarnation and counter", InitialNpcExclusionUsesExactIncarnationAndCounter),
             ("initial NPC exclusion ExtraAI remaining and v2 absence", InitialNpcExclusionExtraAiPreservesRemainingAndOldAbsence),
             ("explicit spawn transform native boundary", ExplicitSpawnTransformRejectsInvalidBeforeNativeBoundary),

@@ -92,6 +92,7 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
 
 def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
+    from captured_spawn_velocity_author import historical_spawn_velocity_wire
     from sentry_contract_checks import without_declared_targeting_neutrals
 
     # Keep frozen base627 hashes; reverse only the proven test-local alias
@@ -105,7 +106,7 @@ def test_legacy_complete_wire_changes_only_declared_audit_and_alias_deltas():
 
     for name, expected_hash in baseline.items():
         final = without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name))))))
+            without_captured_projectile_alias_delta(historical_spawn_velocity_wire(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
         added_modifier_caps = (
@@ -195,3 +196,103 @@ def test_new_ammo_dto_cannot_silently_gain_a_weapon_family_field():
     assert anchor in source
     mutated = source.replace(anchor, b'public string WeaponFamily { get; set; } = "";\n' + anchor)
     assert primitive_loss_audit.weapon_ammo_surface_audit(mutated)["unclassifiedDtoFields"] == ["WeaponFamily"]
+
+
+@pytest.mark.parametrize("response_mode", ["json_object", "json_schema"])
+def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, monkeypatch):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _weapon(speed="native_shot")
+    binding = next(row for row in doc["runtimeProgram"]["bindings"]
+                   if row["input"] in ("primary_use", "alternate_use")
+                   and row["usePolicy"]["action"]["kind"] == "spawn_entity")
+    spawn = next(row for row in doc["runtimeProgram"]["calls"]
+                 if row["fn"] == "configure_spawn" and row["target"] == binding["usePolicy"]["action"]["targetId"])
+    spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    index = doc["runtimeProgram"]["calls"].index(spawn)
+    expected_path = f"$.runtimeProgram.calls[{index}].params.velocity"
+    assert [(row["path"], row["code"]) for row in report["errors"]] == [(expected_path, "incompatible_param_variant")]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
+    correction = deepcopy(spawn)
+    correction["params"]["velocity"] = {"constantSpeedPxPerUpdate": 8.0}
+    correction["params"]["count"] = 4  # hostile valid frozen sibling
+    patch = {"note": "exact root velocity replacement", "realizationReplacement": doc["realization"],
+             "callsUpsert": [correction]}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, response_mode)
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    repaired.pop("debug")
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    expected = deepcopy(before)
+    expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {"constantSpeedPxPerUpdate": 8.0}
+    assert repaired == expected and doc == before
+    assert audit["ignoredChanges"]
+    assert validate_runtime_program(repaired)["ok"]
+    final = compile_runtime_program(repaired)
+    assert validate_runtime_wire(final)["ok"]
+    assert _ammo_call(repaired)["params"]["speedBasis"] == "native_shot"
+
+
+@pytest.mark.parametrize("speed,sampled,accepted", [
+    ("authored_spawn", True, True),
+    ("native_shot", False, True),
+    ("native_shot", True, False),
+])
+def test_native_ammo_and_velocity_keep_one_selected_root_speed_owner(speed, sampled, accepted):
+    doc = _weapon(speed=speed)
+    binding = next(row for row in doc["runtimeProgram"]["bindings"]
+                   if row["input"] in ("primary_use", "alternate_use")
+                   and row["usePolicy"]["action"]["kind"] == "spawn_entity")
+    spawn = next(row for row in doc["runtimeProgram"]["calls"]
+                 if row["fn"] == "configure_spawn" and row["target"] == binding["usePolicy"]["action"]["targetId"])
+    if sampled:
+        spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+    assert validate_runtime_program(doc)["ok"] is accepted
+    if accepted:
+        final = compile_runtime_program(doc)
+        assert validate_runtime_wire(final)["ok"]
+        if speed == "authored_spawn":
+            final.pop("runtimeContract")
+            final["runtimeProgram"]["weaponAmmo"]["speedBasis"] = "native_shot"
+            report = validate_runtime_wire(final)
+            assert not report["ok"]
+            assert any(row["code"] == "incompatible_param_variant" for row in report["errors"])
+
+
+@pytest.mark.parametrize("input_name,accepted", [("hold", True), ("alternate_use", False)])
+def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_name, accepted):
+    doc = _weapon(speed="native_shot")
+    active = next(row for row in doc["runtimeProgram"]["bindings"]
+                  if row["input"] == "primary_use" and row["usePolicy"]["action"]["kind"] == "spawn_entity")
+    root_id = active["usePolicy"]["action"]["targetId"]
+    entity = deepcopy(next(row for row in doc["runtimeProgram"]["entities"] if row["id"] == root_id))
+    entity["id"] = "sampled_side"
+    doc["runtimeProgram"]["entities"].append(entity)
+    copied = []
+    for row in list(doc["runtimeProgram"]["calls"]):
+        if row["target"] == root_id:
+            copy = deepcopy(row)
+            copy["id"] = "side_" + copy["id"]
+            copy["target"] = "sampled_side"
+            if copy["fn"] == "configure_spawn":
+                copy["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+            copied.append(copy)
+    doc["runtimeProgram"]["calls"].extend(copied)
+    binding = deepcopy(active)
+    binding.update(id="side_binding", input=input_name)
+    binding["usePolicy"]["action"]["targetId"] = "sampled_side"
+    binding["usePolicy"].update(stackCost=0, contactDamage=False)
+    doc["runtimeProgram"]["bindings"].append(binding)
+    report = validate_runtime_program(doc)
+    assert report["ok"] is accepted, report
+    if accepted:
+        assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
+    else:
+        side_spawn = next(row for row in copied if row["fn"] == "configure_spawn")
+        index = doc["runtimeProgram"]["calls"].index(side_spawn)
+        assert [row["path"] for row in report["errors"]] == [f"$.runtimeProgram.calls[{index}].params.velocity"]
+        scope = build_runtime_repair_scope(doc, report["errors"])
+        assert scope["fieldPermissions"]["calls"] == [{"id": side_spawn["id"], "paths": ["params.velocity"]}]

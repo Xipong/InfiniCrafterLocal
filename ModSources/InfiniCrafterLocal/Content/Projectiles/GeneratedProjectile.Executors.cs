@@ -45,8 +45,9 @@ public sealed partial class GeneratedProjectile
             // exact speed and synced initial direction only at first activation;
             // later hydration must not reset an already moving projectile.
             if (_age == 0 && _entity.Spawn.OverTarget.DelayTicks > 0
-                && !_entity.IsStationary && _entity.Spawn.Aim != "none")
-                Projectile.velocity = _initialDirection * _entity.Spawn.SpeedPxPerTick;
+                && !_entity.IsStationary)
+                Projectile.velocity = _sampledInitialVelocity
+                    ?? (_entity.Spawn.Aim != "none" ? _initialDirection * _entity.Spawn.SpeedPxPerTick : Vector2.Zero);
             _spawnEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnSpawn, Projectile.Center);
