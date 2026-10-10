@@ -1463,21 +1463,25 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "engine units: pickSpeed divisor"
                   },
-                  "moveSpeedBonusFactor": {
+                  "moveSpeedBonusPercent": {
                     "default": 0,
-                    "description": "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers",
-                    "maximum": 2,
-                    "minimum": -0.5,
+                    "description": "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers",
+                    "maximum": 200,
+                    "minimum": -50,
                     "type": "number",
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
                       "neutral": 0,
                       "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
+                      "storage": "float32",
+                      "wireProjection": {
+                        "divisor": 100,
+                        "multiplier": 1
+                      }
                     },
                     "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: additive moveSpeed factor"
+                    "x-infini-semanticType": "additive_percent",
+                    "x-infini-units": "additive_percent"
                   },
                   "oreSenseEnabled": {
                     "default": false,
@@ -1566,8 +1570,8 @@
                     "type": "integer",
                     "x-infini-semanticType": "terraria_hammer_power"
                   },
-                  "miningSpeedScale": {
-                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
+                  "miningSpeedMultiplier": {
+                    "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
                     "maximum": 4,
                     "minimum": 0.1,
                     "type": "number",
@@ -1586,7 +1590,7 @@
                   "pickPower",
                   "axePowerTooltipPercent",
                   "hammerPower",
-                  "miningSpeedScale"
+                  "miningSpeedMultiplier"
                 ],
                 "type": "object"
               }
@@ -4597,8 +4601,8 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "gravityVelocityPerUpdate": {
-                    "description": "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
+                  "accelY": {
+                    "description": "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
                     "maximum": 2,
                     "minimum": -2,
                     "type": "number",
@@ -4614,7 +4618,7 @@
                   }
                 },
                 "required": [
-                  "gravityVelocityPerUpdate"
+                  "accelY"
                 ],
                 "type": "object"
               },
@@ -4714,8 +4718,8 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "rangeTiles": {
-                    "description": "Orbit leash",
+                  "radiusTiles": {
+                    "description": "Fixed orbit radius around the owner",
                     "maximum": 80,
                     "minimum": 1,
                     "type": "number",
@@ -4724,7 +4728,7 @@
                   }
                 },
                 "required": [
-                  "rangeTiles"
+                  "radiusTiles"
                 ],
                 "type": "object"
               },
@@ -5476,8 +5480,8 @@
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
                   },
-                  "returnSpeed": {
-                    "description": "Return speed",
+                  "speed": {
+                    "description": "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
                     "maximum": 80,
                     "minimum": 1,
                     "type": "number",
@@ -5487,7 +5491,7 @@
                 },
                 "required": [
                   "rangeTiles",
-                  "returnSpeed"
+                  "speed"
                 ],
                 "type": "object"
               },

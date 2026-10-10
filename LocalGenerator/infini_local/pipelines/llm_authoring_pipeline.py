@@ -35,12 +35,14 @@ from infini_local.core.runtime_authoring.program_schema import (
     assert_bounded_author_input,
     strict_repair_structure_report,
 )
+from infini_local.core.runtime_authoring.capability_registry import STACK_COST_RULE
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
 )
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_REPAIR_SYSTEM_RULE,
+    RUNTIME_ROW_SHAPE_RULE,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_prompt_shape_card,
@@ -437,7 +439,9 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. For callsUpsert copy id, fn, target, and the complete params object from readOnlySourceFragments.brokenFragments, changing only permitted fields; never omit unchanged required fields.",
+            "Every upsert entry must be a complete schema-valid node. Copy the existing node from readOnlySourceFragments.brokenFragments, changing only permitted fields; preserve unchanged required fields and accepted optional values or absences. Item-body-only calls have no target; zero-argument calls have no params object.",
+            RUNTIME_ROW_SHAPE_RULE,
+            STACK_COST_RULE,
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
             "For existing nodes, omission means no change, not reset to a card default. Preserve accepted absences too; an optional default describes the full Author object after frozen-first merge, never permission to add or delete a field. New nodes must satisfy the full capability requirements.",
             "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
@@ -483,7 +487,7 @@ def build_gameplay_repair_dossier(
         "blockerCapabilities": cards(blocker_plan.get("directCapabilityNames")),
         "supportingCapabilities": cards(blocker_plan.get("supportingCapabilityNames")),
         "existingBrokenCapabilityCards": cards(blocker_plan.get("existingBrokenCapabilityNames")),
-        "requiredJsonShape": author_item_repair_prompt_shape_card(),
+        "requiredJsonShape": author_item_repair_prompt_shape_card(capability_names=runtime_repair_schema_capabilities(scope)),
     }
 
 

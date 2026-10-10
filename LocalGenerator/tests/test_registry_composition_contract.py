@@ -476,7 +476,7 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
         {
             "id": "tool_heads",
             "fn": "configure_tool",
-            "params": {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedScale": 0.9},
+            "params": {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedMultiplier": 0.9},
         }
     )
     assert validate_runtime_program(tool)["ok"]

@@ -7,6 +7,19 @@ Gameplay параметры, descriptions, domains, units и exact wire mapping 
 
 Путь изменения: registry → actual provider schema/prompt → validator/Repair → compiler receipt → strict wire → C# DTO/executor → regression. Исторический rename не становится Author alias; C# wire сохраняет объявленные старые leaves. Category/name/prose не выбирают единицу, sentinel, механическую композицию или default.
 
+Четыре обязательных scalar поля имеют уточнённые канонические имена. Преобразование каждого значения остаётся identity через существующий `wire_name`; единицы, диапазоны, opcodes и requiredness не меняются.
+
+| Capability | Author | Сохранённый wire | Смысл |
+|---|---|---|---|
+| `move_gravity_arc` | `accelY` | `movement.params.gravityPerTick` | Знаковое ускорение по Y на projectile update; это не world-tick duration или скорость. |
+| `move_orbit` | `radiusTiles` | `movement.params.rangeTiles` | Фиксированный радиус орбиты вокруг владельца. |
+| `move_yoyo_hover` | `speed` | `movement.params.returnSpeed` | Желаемая скорость и при слежении за курсором, и при возврате; velocity приближается к ней через lerp. |
+| `configure_tool` | `miningSpeedMultiplier` | `gameplay.miningSpeedScale` | Делитель Player.pickSpeed; >1 ускоряет добычу, с прежней проверкой tool power и порогом 0.001. |
+
+Прежние Author имена этих полей сохранены только как `retained_receipt_params`: старые receipts проверяются без миграции saved wire. Свежие Author и Repair принимают только новые имена; source-aware аудит требует фактического нового authored leaf. Замороженные test corpora сохраняют исходные JSON и hashes, а их входы переводятся в текущую нотацию только test-only helper.
+
+`test_registry_author_units.py` сравнивает полные compiled hashes с захватом до переименования, проверяет сохранённые receipts, запрет старых Author/Repair имён и точные новые field permissions. Эти проверки доказывают совместимость и строгость контракта; улучшение качества LLM-генераций ими не измеряется.
+
 <a id="clocks"></a>
 ## World ticks, updates, pixels
 
@@ -26,7 +39,7 @@ Projectile `extraUpdates=N` даёт N+1 AI/movement updates/world tick. `speedP
 
 При отсутствии steering/collision грубая дальность projectile в tiles: `speedPxPerUpdate × (1+extraUpdates) × lifetimeTicks / 16`; controller может полностью изменить оценку. Минимальный event period берётся из registry, не из этой формулы.
 
-Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `speedPxPerUpdate=9`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `placement=owner_center`; `move_gravity_arc` — `gravityVelocityPerUpdate=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
+Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `velocity={"constantSpeedPxPerUpdate":9}`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `position={"at":"owner_center"}`; `move_gravity_arc` — `accelY=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
 
 <a id="gameplay"></a>
 ## Важные отличия единиц от обещаний
@@ -40,7 +53,7 @@ Projectile `extraUpdates=N` даёт N+1 AI/movement updates/world tick. `speedP
 | Ammo | `shootSpeedContributionPxPerUpdate` — signed Item.shootSpeed вклад в vanilla PickAmmo, не финальная скорость projectile. `usesPotionRules` — Item.potion/use eligibility/sickness gating flag, не duration. |
 | Equipment percentages | Уже объявленный /100 adapter; additive modifier, chance, percentage points и source-damage percent различны. Armor set требует полного matching set и head phase; equipment phase/damageClass — explicit selector, не router. Итог зависит от других Terraria modifiers/clamps. |
 | Mining / ore sense | Mining speed multiplier делит Player.pickSpeed: больший divisor даёт меньший pickSpeed и более быстрое копание. `oreSenseEnabled` включает Player.findTreasure; это bool→0/1, не произвольный исторический oreSenseRadiusTiles. |
-| Buff movement | `moveSpeedBonusFactor` — additive Player.moveSpeed factor [−.5,2], identity старого movementSpeed, **не** equipment percent adapter. `jumpSpeedBonusPxPerTick` — Player.jumpSpeedBoost pixels/world tick. |
+| Buff movement | `moveSpeedBonusPercent` — additive percent [−50,200]; `movementSpeed = percent/100`, как у equipment. `20` добавляет `0.2` к Player.moveSpeed до остальных modifiers. `jumpSpeedBonusPxPerTick` — Player.jumpSpeedBoost pixels/world tick. |
 | Projectile sentinels | `pierce=-1` — unlimited; `localNpcHitCooldownEngineUnits=-1` — one-hit-per-NPC только local immunity; 0..600 raw cooldown counts, не world-tick duration. Owner immunity использует отдельный shared путь. |
 | Movement/controller coefficients | Boomerang returnSpeed — target after lerp; phaseStrength одновременно rotation/alpha, не collision phasing; waveVelocityCoefficient нормализуется при расчёте direction, не displacement. sameTargetBias насыщается на .9; target_and_fire range — soft score, не strict геометрическая граница. Charge powerMultiplier меняет и release velocity, не только damage/knockback. |
 | Event effects | Spawn count — children; chain count — max дополнительных NPC. damageMultiplier берёт authored **base damage источника**, rounded/minimum 1 до defense, не damageDone и не additive percent. heal damageFraction — доля фактического damageDone; maxHeal — HP/event. |
@@ -54,7 +67,9 @@ Terminal owners: [GeneratedItemData.Apply](../ModSources/InfiniCrafterLocal/Comm
 
 Regen `lifeRegenHpPerSecond` у accessory/armor и `setBonusLifeRegenHpPerSecond`: authored [−50,100] с шагом .5, integer engine wire [−100,200], `wire=2×HP/s`, inverse `HP/s=wire/2`; сохраняются знак, 0 и endpoints. Generated buff regen имеет собственный registry domain [0,60] с тем же half-HP lattice; не расширять его до signed equipment domain.
 
-Existing /100 или bool→0/1 projection доказана только на своём declared image. Процентный /100 — объявленный scale adapter с обычной IEEE-754 точностью, **не биекция всех JSON/binary64 представлений**: соседние обычные doubles могут дать один результат деления; условие `x/100*100==x` не вводится как новый фильтр обычных значений. Такая точность не разрешает молча превращать ненулевой эффект в нейтраль. Она также не гарантирует exact binary32 round-trip произвольного JSON decimal или восстановление каждого старого DTO. Например bool ore sense не восстанавливает старые radius 2..60. Buff movement не переводится в percent: точный inverse полного float domain не доказан. Тики/радианы/вещественные тайловые радиусы не переводятся в секунды/градусы/пиксели по удобству prose без сквозной биекции, включая sign/zero/sentinels.
+Existing /100 или bool→0/1 projection доказана только на своём declared image. Процентный /100 — объявленный scale adapter с обычной IEEE-754 точностью, **не биекция всех JSON/binary64 представлений**: соседние обычные doubles могут дать один результат деления; условие `x/100*100==x` не вводится как новый фильтр обычных значений. Такая точность не разрешает молча превращать ненулевой эффект в нейтраль. Она также не гарантирует exact binary32 round-trip произвольного JSON decimal или восстановление каждого старого DTO. Например bool ore sense не восстанавливает старые radius 2..60. Тики/радианы/вещественные тайловые радиусы не переводятся в секунды/градусы/пиксели по удобству prose без сквозной биекции, включая sign/zero/sentinels.
+
+Buff movement использует тот же объявленный percent adapter и guard `nonneutral_must_remain_nonneutral`, что equipment. Каждый допустимый прежний float32 factor остаётся выразимым: его significand содержит не более 24 bits, умножение на `100 = 25×4` требует не более 29 significant bits и точно помещается в binary64; деление такого percent на 100 возвращает этот factor. Это доказательство о значениях C# consumer, не о произвольном старом JSON double. Сохранённые `movementSpeed` и прежние receipts не пересчитываются: prior identity `moveSpeedBonusFactor` объявлен только в `retained_receipt_params` для source-free проверки. Старое имя не принимается в новом Author или source-aware receipt proof.
 
 `false`, `0`, `0.0`, absent и `null` не взаимозаменяемы; frozen equality type-aware (true ≠ 1 ≠ 1.0). Только optional params с одинаковыми declared default/neutral допускают Author omission с отдельным receipt после всей composition validation. Missing dependency/invalid present value/empty required effect остаются RED. Repair omission — no-change; accepted absence не заполняется вне exact permissions. Правила — [declared neutrals](DECLARED_NEUTRAL_OMISSIONS_RU.md) и [targeted Repair](TARGETED_REPAIR_PROTOCOL_RU.md).
 
@@ -93,7 +108,7 @@ Ordinary slots обязаны передать все common fields; element/pat
 
 ### Локальное уточнение 0.4.252.3
 
-- Исходные `raw.item` и `raw.generatedParent` сохраняют engine/wire units. `sourceWireUnits` guide строится из `ParamSpec`/declared wire paths и показывает scoped соответствия: axePower9→axePowerTooltipPercent45; equipment movementSpeed.15→moveSpeedBonusPercent15, но generatedBuff movementSpeed.15→moveSpeedBonusFactor.15; lifeRegen2→1HP/s. Initial Author получает только присутствующие exact parent paths в динамической части packet, после cache boundary; полный registry guide остаётся доступен standalone и Gameplay Repair. Это пояснение, не преобразование raw facts/tooltip и не обязанность копировать механику родителя. Все capabilities сохраняются в статическом каталоге. [Сокращение request и nullable boundary](AUTHOR_REQUEST_COMPACTION_RU.md).
+- Исходные `raw.item` и `raw.generatedParent` сохраняют engine/wire units. `sourceWireUnits` guide строится из `ParamSpec`/declared wire paths и показывает scoped соответствия: axePower9→axePowerTooltipPercent45; equipment и generatedBuff movementSpeed.15→moveSpeedBonusPercent15; lifeRegen2→1HP/s. Initial Author получает только присутствующие exact parent paths в динамической части packet, после cache boundary; полный registry guide остаётся доступен standalone и Gameplay Repair. Это пояснение, не преобразование raw facts/tooltip и не обязанность копировать механику родителя. Все capabilities сохраняются в статическом каталоге. [Сокращение request и nullable boundary](AUTHOR_REQUEST_COMPACTION_RU.md).
 - Ненулевой percent, исчезающий в binary64 `/100` либо float32 storage, отвергается на точном authored leaf через `consumer_representability`. Число не округляется/заменяется; exact zero и обычные decimals остаются допустимы. 303 контрольных полных compiled outputs/receipts сохранили прежние bytes. Guard не гарантирует заметность после последующего сложения с большими player stats.
 - `sameAs` больше не сравнивает только неполный набор projectile полей: все retained факты, типы и presence должны совпасть; top-level provenance `source` хранится отдельно. Speed/cooldown/penetration различия не скрываются.
 - Charge release больше не поднимает явную spawn speed0/0.25 до1. `channel_complete` требует точного целочисленного числа projectile updates, а не `ratio>=.999`. Это два исправления executor; wire и authored решения не переписываются.

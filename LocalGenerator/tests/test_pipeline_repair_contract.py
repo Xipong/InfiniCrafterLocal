@@ -413,7 +413,7 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
     if scenario == "projected-tool":
         assert program["bindings"][0]["action"]["kind"] == "spawn_entity"
         program["bindings"][0]["contactDamage"] = False
-        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.75}})
+        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 0.75}})
         assert validate_runtime_program(current)["ok"]
         return
     if scenario == "missing-contact":
@@ -545,7 +545,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
         {"id": "place", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}},
-        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
+        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 1.0}},
     ]
     program["bindings"] = [{
         "id": "primary_place",
@@ -1652,7 +1652,9 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     )
     repair_rules = " ".join(dossier["rules"])
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
-    assert "id, fn, target, and the complete params object" in repair_rules
+    assert "Copy the existing node from readOnlySourceFragments.brokenFragments" in repair_rules
+    assert "preserve unchanged required fields and accepted optional values or absences" in repair_rules
+    assert "zero-argument calls have no params object" in repair_rules
     required_shape = dossier["requiredJsonShape"]
     assert not any(key in dossier for key in ("brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments"))
     assert set(dossier["readOnlySourceFragments"]) == {
@@ -1660,7 +1662,10 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     }
     assert "claimsUpsert" not in required_shape
     assert "claimIdsDelete" not in required_shape
-    assert set(required_shape["callsUpsert"][0]) == {"id", "fn", "target", "params"}
+    assert {frozenset(row) for row in required_shape["callsUpsert"]} == {
+        frozenset({"id", "fn", "target"}),
+        frozenset({"id", "fn", "target", "params"}),
+    }
     card_fns = {
         card["fn"]
         for key in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards")

@@ -17,12 +17,20 @@ from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
+    _binding_variant_schema,
     strict_schema_errors,
 )
 
 
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
+)
+RUNTIME_ROW_SHAPE_RULE = (
+    "Binding/call rows in requiredJsonShape illustrate separate forms, not a complete program. "
+    "Example ids and values are placeholders, not defaults or edit permissions. "
+    "Use actual ids and the selected capability card's exact required/conditional and permitted optional keys. "
+    "Item-body-only calls omit target; zero-argument calls omit params. "
+    "In a complete Author binding, action.effectGroupId is optional only for apply_item_effects; absence selects ungrouped item effects."
 )
 
 
@@ -46,26 +54,56 @@ def author_item_response_schema() -> dict[str, Any]:
     return copy.deepcopy(_author_schema())
 
 
-def _binding_prompt_shape_card() -> dict[str, Any]:
-    """The existing Author/Repair card describes the sole current source grammar."""
-    return {
-        "id": "stable_binding_id",
-        "input": "primary_use|alternate_use|hold|equipped",
-        "action": {
-            "kind": "required for primary_use/alternate_use; omit for hold/equipped because input declares one action",
-            "targetId": "required for projectile actions; forbidden for item_body-only actions (unique declared item_body)",
-            "placementCallId": "required only for place_item",
-            "effectGroupId": "optional only for apply_item_effects; omission selects existing ungrouped effects",
-        },
-        "stackCost": "required integer 0|1 only for active non-placement; omit fixed place_item=1 and passive=0",
-        "stackConsumeChancePercent": "optional integer 0..100 only active non-placement stackCost=1; omission means 100 percent. Own-stack debit, never ammo or placement saving",
-        "contactDamage": "required independent boolean only for active non-placement; omit fixed place_item/hold/equipped=false",
-        "omissionRule": "equipped has no action object; hold action has only targetId. No other decision may be omitted.",
+def _binding_prompt_shape_cards() -> list[dict[str, Any]]:
+    """Project a few instructional rows from the sole binding-shape owner.
+
+    These leaf values are examples only, never Author defaults or Repair edits.
+    Required/forbidden keys and discriminators come from the canonical schema.
+    """
+    example_leaves = {
+        "id": "binding_id", "targetId": "projectile_id", "placementCallId": "placement_call_id",
+        "effectGroupId": "effect_group_id", "stackConsumeChancePercent": 50, "contactDamage": False,
     }
+
+    def project(schema: Mapping[str, Any], name: str = "") -> Any:
+        if "const" in schema:
+            return schema["const"]
+        if schema.get("type") == "object":
+            return {key: project(child, key) for key, child in schema["properties"].items()}
+        return example_leaves[name]
+
+    return [project(_binding_variant_schema(input_name, action, cost)) for input_name, action, cost in (
+        ("primary_use", "spawn_entity", 0),
+        ("alternate_use", "use_item_body", 0),
+        ("primary_use", "apply_item_effects", 1),
+        ("alternate_use", "place_item", None),
+        ("hold", "spawn_entity", None),
+        ("equipped", "equip_passive", None),
+    )]
+
+
+def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Share only top-level forms present in this Author or scoped Repair union.
+
+    Parameter grammar stays in capability cards, without invented example
+    mechanics or a second capability catalogue in the shape card.
+    """
+    hints = {
+        "id": "stable_call_id", "fn": "selected catalog capability",
+        "target": "exact existing compatible entity id",
+        "params": {"exact selected card keys": "all required/conditional and permitted optional typed values"},
+    }
+    forms: dict[tuple[str, ...], dict[str, Any]] = {}
+    for variant in variants:
+        keys = tuple(variant["properties"])
+        forms.setdefault(keys, {key: copy.deepcopy(hints[key]) for key in keys})
+    return list(forms.values())
 
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
-    report_properties = _author_schema()["properties"]["realization"]["properties"]
+    schema = _author_schema()
+    report_properties = schema["properties"]["realization"]["properties"]
+    call_variants = schema["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["oneOf"]
     return {
         # This order is model-facing: non-binding intent, executable mechanics,
         # then the same Author's account and self-evaluation of the result.
@@ -110,8 +148,8 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "schema": RUNTIME_PROGRAM_SCHEMA,
             PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
-            "bindings": [_binding_prompt_shape_card()],
-            "calls": [{"id": "stable_id", "fn": "catalog capability", "target": "omit and forbid for item_body-only fn.targets with one declared item_body; otherwise exact existing compatible entity id", "params": {"all non-optional and conditional params": "exact card keys and typed values; optional fields only when selected; omit params property entirely for zero-argument capability"}}],
+            "bindings": _binding_prompt_shape_cards(),
+            "calls": _call_prompt_shape_cards(call_variants),
         },
         "realization": {
             "description": (
@@ -446,9 +484,9 @@ def author_item_repair_response_schema(*, capability_names: Iterable[str] | None
     return copy.deepcopy(_repair_schema(capability_names=capability_names))
 
 
-def author_item_repair_prompt_shape_card() -> dict[str, Any]:
+def author_item_repair_prompt_shape_card(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
     """Expose the repair root cardinality when provider JSON Schema is unavailable."""
-    schema = author_item_repair_response_schema()
+    schema = author_item_repair_response_schema(capability_names=capability_names)
     properties = schema.get("properties") or {}
     placeholders: dict[str, Any] = {}
     for key, child in properties.items():
@@ -456,15 +494,10 @@ def author_item_repair_prompt_shape_card() -> dict[str, Any]:
             placeholders[key] = [{"id": "stable_entity_id", "kind": "catalog entity kind"}]
             continue
         if key == "bindingsUpsert":
-            placeholders[key] = [_binding_prompt_shape_card()]
+            placeholders[key] = _binding_prompt_shape_cards()
             continue
         if key == "callsUpsert":
-            placeholders[key] = [{
-                "id": "stable_call_id",
-                "fn": "catalog capability",
-                "target": "existing entity id",
-                "params": {"everyRequiredCapabilityParam": "typed value"},
-            }]
+            placeholders[key] = _call_prompt_shape_cards((child.get("items") or {}).get("oneOf") or [])
             continue
         if key == "callParamKeysDelete":
             placeholders[key] = [{

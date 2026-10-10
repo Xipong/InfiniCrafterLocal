@@ -896,15 +896,15 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: pickSpeed divisor"
         },
-        "moveSpeedBonusFactor": {
+        "moveSpeedBonusPercent": {
           "enum": [],
           "kind": "number",
-          "maximum": 2,
-          "minimum": -0.5,
+          "maximum": 200,
+          "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: additive moveSpeed factor"
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         },
         "oreSenseEnabled": {
           "enum": [],
@@ -937,6 +937,28 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "moveSpeedBonusFactor": {
+          "priorAuthorSchema": {
+            "default": 0,
+            "description": "Retained prior additive Player.moveSpeed factor provenance",
+            "maximum": 2,
+            "minimum": -0.5,
+            "type": "number",
+            "x-infini-consumerConstraint": {
+              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+              "neutral": 0,
+              "rule": "nonneutral_must_remain_nonneutral",
+              "storage": "float32"
+            },
+            "x-infini-neutral": 0,
+            "x-infini-units": "engine units: additive moveSpeed factor"
+          },
+          "wireFields": [
+            "movementSpeed"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1027,7 +1049,7 @@
           "semanticType": "terraria_hammer_power",
           "units": ""
         },
-        "miningSpeedScale": {
+        "miningSpeedMultiplier": {
           "enum": [],
           "kind": "number",
           "maximum": 4,
@@ -1070,6 +1092,20 @@
           "target": "any_entity"
         }
       ],
+      "retainedWireProvenance": {
+        "miningSpeedScale": {
+          "priorAuthorSchema": {
+            "description": "Retained mining-speed divisor provenance",
+            "maximum": 4,
+            "minimum": 0.1,
+            "type": "number",
+            "x-infini-units": "engine units: pickSpeed divisor"
+          },
+          "wireFields": [
+            "miningSpeedScale"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1486,7 +1522,7 @@
       "parameters": {
         "condition": {
           "enum": [],
-          "kind": "string",
+          "kind": "union",
           "maximum": null,
           "minimum": null,
           "reference": null,
@@ -4476,7 +4512,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "gravityVelocityPerUpdate": {
+        "accelY": {
           "enum": [],
           "kind": "number",
           "maximum": 2,
@@ -4493,6 +4529,27 @@
       "purpose": "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "gravityVelocityPerUpdate": {
+          "priorAuthorSchema": {
+            "description": "Retained signed vertical acceleration provenance",
+            "maximum": 2,
+            "minimum": -2,
+            "type": "number",
+            "x-infini-consumerConstraint": {
+              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+              "neutral": 0,
+              "rule": "nonneutral_must_remain_nonneutral",
+              "storage": "float32"
+            },
+            "x-infini-neutral": 0,
+            "x-infini-units": "engine units: vertical velocity increment per update"
+          },
+          "wireFields": [
+            "gravityPerTick"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4582,7 +4639,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "rangeTiles": {
+        "radiusTiles": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -4596,9 +4653,23 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 4",
-      "purpose": "Curve around the owner while remaining a projectile.",
+      "purpose": "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "rangeTiles": {
+          "priorAuthorSchema": {
+            "description": "Retained orbit radius provenance",
+            "maximum": 80,
+            "minimum": 1,
+            "type": "number",
+            "x-infini-units": "tiles"
+          },
+          "wireFields": [
+            "rangeTiles"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4841,7 +4912,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 8",
-      "purpose": "Phase-drift with explicit tile collision still controlled separately.",
+      "purpose": "Couple a sinusoidal velocity-direction wobble with reduced opacity. This does not itself disable tile collision; tile collision is controlled separately.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5022,7 +5093,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 11",
-      "purpose": "Run the existing vortex-orb controller.",
+      "purpose": "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.99 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5086,7 +5157,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 12",
-      "purpose": "Run the existing black-hole pull controller.",
+      "purpose": "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.985 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5302,7 +5373,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "existing movement code 15",
-      "purpose": "Expand the entity while preserving authored collision/damage.",
+      "purpose": "Add to the projectile's visual scale, then clamp it to the authored cap. Collision size and damage do not grow with this scale; use an independent hitbox curve for growing contact geometry.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5411,7 +5482,7 @@
           "semanticType": "tiles",
           "units": "tiles"
         },
-        "returnSpeed": {
+        "speed": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -5425,9 +5496,23 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "yoyo movement extracted from the retired melee macro",
-      "purpose": "Follow owner cursor inside a leash and return on release.",
+      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "returnSpeed": {
+          "priorAuthorSchema": {
+            "description": "Retained cursor-tracking and return speed provenance",
+            "maximum": 80,
+            "minimum": 1,
+            "type": "number",
+            "x-infini-units": "pixels/projectile update"
+          },
+          "wireFields": [
+            "returnSpeed"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [

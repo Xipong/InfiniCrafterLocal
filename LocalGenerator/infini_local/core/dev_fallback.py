@@ -141,7 +141,7 @@ def deterministic_low_level_plan(
                 {"id": "call_life_child", "fn": "set_projectile_lifetime", "target": "child_shard", "params": {"lifetimeTicks": 120}},
                 {"id": "call_hitbox_child", "fn": "set_projectile_hitbox", "target": "child_shard", "params": {"widthPx": 10, "heightPx": 10, "drawScale": 0.7, "hitboxScale": 1.0}},
                 {"id": "call_collision_child", "fn": "set_projectile_collision", "target": "child_shard", "params": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": "once_per_npc"}},
-                {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"gravityVelocityPerUpdate": 0.12}},
+                {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"accelY": 0.12}},
             ],
         },
         "id": "dev_" + str(abs(hash(key)))[:16],

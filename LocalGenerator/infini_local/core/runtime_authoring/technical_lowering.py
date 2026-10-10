@@ -324,6 +324,11 @@ def path_matches(pattern: str, path: str) -> bool:
     return re.fullmatch(expression, normalized) is not None
 
 
+def _declares_neutral_omission(spec: ParamSpec) -> bool:
+    return (not spec.required and spec.default is not None
+            and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
+
+
 def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
     """Only explicit optional registry defaults equal to their neutral may fill an absent leaf."""
     cap = CAPABILITY_REGISTRY.get(fn)
@@ -331,8 +336,7 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
         return {}
     return {
         name: spec.default for name, spec in cap.params.items()
-        if name not in params and not spec.required and spec.default is not None
-        and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral
+        if name not in params and _declares_neutral_omission(spec)
     }
 
 
@@ -340,7 +344,12 @@ def _omission_context_allows(
     cap: Any, name: str, receipt: Mapping[str, Any], *,
     authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
 ) -> bool:
-    condition = cap.params[name].omission_condition
+    spec = cap.params.get(name)
+    if spec is None and authored_document is None:
+        spec = cap.retained_receipt_params.get(name)
+    if spec is None:
+        return False
+    condition = spec.omission_condition
     if condition is None:
         return True
     if authored_document is not None:
@@ -369,7 +378,7 @@ def _omission_context_allows(
     entity_path = entity_match.group(0)
     if _final_value(final_document, entity_path + ".kind") in condition.target_kinds:
         return True
-    field = cap.params[name].wire_name or name
+    field = spec.wire_name or name
     component_path = path.removesuffix("." + field)
     for selector, expected in condition.param_equals:
         selector_spec = cap.params[selector]
@@ -1046,7 +1055,13 @@ def audit_compiler_receipts(
             name = parameter_match.group(2)
             retained_spec = cap.retained_receipt_params[name]
             expected_paths = _parameter_outputs(fn, name, retained=True)
-            if (receipt.get("status") != "delivered" or authored_paths
+            retained_status = receipt.get("status") == "delivered" or (
+                receipt.get("status") == "declared_neutral_omission"
+                and _declares_neutral_omission(retained_spec)
+                and _same_receipt_value(receipt.get("value"), retained_spec.to_wire(retained_spec.default))
+                and _omission_context_allows(cap, name, receipt,
+                    authored_document=None, final_document=final_document))
+            if (not retained_status or authored_paths
                 or not any(path_matches(candidate, path) for candidate in expected_paths)
                 or not retained_spec.matches_scalar_projection(receipt.get("value"))):
                 violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
@@ -1570,10 +1585,17 @@ def audit_compiler_receipts(
             for name in declared_neutral_omissions(fn, {}):
                 for expected in (path for pattern in _parameter_outputs(fn, name)
                                  for path in _present_wire_paths(final_document, pattern)):
+                    # Saved evidence may name the prior optional neutral leaf
+                    # for this same wire slot. It never admits an old Author.
+                    source_names = [name, *(prior_name for prior_name, prior_spec in cap.retained_receipt_params.items()
+                        if authored_document is None and prior_name not in cap.params
+                        and _declares_neutral_omission(prior_spec)
+                        and any(path_matches(pattern, expected)
+                                for pattern in _parameter_outputs(fn, prior_name, retained=True)))]
+                    source_pattern = r"runtimeProgram\.calls\[\d+\]\.params\.(?:" + "|".join(map(re.escape, source_names)) + ")"
                     matching = [row for row in receipt_rows
                                 if row.get("fn") == fn and row.get("finalPath") == expected
-                                and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name),
-                                                 str(row.get("authoredPath") or ""))]
+                                and re.fullmatch(source_pattern, str(row.get("authoredPath") or ""))]
                     if len(matching) != 1:
                         violations.append({
                             "fn": fn, "finalPath": expected,

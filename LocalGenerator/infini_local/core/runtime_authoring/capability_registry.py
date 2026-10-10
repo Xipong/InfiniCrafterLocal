@@ -10,14 +10,14 @@ from typing import Any, Final, Iterable, Mapping
 from infini_local.core.repair_merge import json_values_equal
 
 STACK_COST_RULE = (
-    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "For place_item, Author omits stackCost and contactDamage; Lowery writes fixed stackCost=1 and contactDamage=false. "
+    "For hold/equipped, Author omits both fields; Lowery writes fixed stackCost=0 and contactDamage=false. "
+    "The placement stack is spent only after accepted placement "
     "and the placed generated item is returned by the placement ledger when broken. "
-    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
-    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
-    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
-    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
-    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
-    " Optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
+    "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
+    "stackCost=0 retains it, including reusable throws. Projectile return does not refund a consumed item. "
+    "Choose cost to match the final object's intended lifetime and purposeful action, not automatically from a parent or from a temporary projectile's lifetime."
+    " In a complete Author binding, optional stackConsumeChancePercent is an explicit integer 0..100 chance of spending that unit after "
     "the completed active use. It is valid only with stackCost=1 outside placement; omission retains "
     "the existing 100 percent debit. This never controls ammo saving or placement escrow."
 )
@@ -1387,7 +1387,7 @@ _CAPS: list[CapabilitySpec] = [
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable Terraria spelunker-style ore highlighting; not a radius", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
-            "moveSpeedBonusFactor": _p("number", "Additive Player.moveSpeed factor; 0.2 adds 20% before other modifiers", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0, consumer_storage="float32"),
+            "moveSpeedBonusPercent": _p("number", "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers", minimum=-50, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
             "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"),
             "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
             "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
@@ -1398,6 +1398,9 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing generated-buff executor",
         repair_group="generated_buff",
         lowering=("gameplay.generatedBuff.*",),
+        retained_receipt_params={
+            "moveSpeedBonusFactor": _p("number", "Retained prior additive Player.moveSpeed factor provenance", minimum=-0.5, maximum=2, wire_name="movementSpeed", units="engine units: additive moveSpeed factor", required=False, default=0, neutral=0, consumer_storage="float32"),
+        },
         effect_groupable=True,
     ),
     _cap(
@@ -1419,7 +1422,7 @@ _CAPS: list[CapabilitySpec] = [
             "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
             "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
             "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
-            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor", wire_name="miningSpeedScale"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -1427,6 +1430,9 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing tool_capability",
         repair_group="tool",
         lowering=("gameplay.pickPower", "gameplay.axePower", "gameplay.hammerPower", "gameplay.miningSpeedScale"),
+        retained_receipt_params={
+            "miningSpeedScale": _p("number", "Retained mining-speed divisor provenance", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
+        },
     ),
     _cap(
         "configure_placeable",
@@ -1496,7 +1502,7 @@ _CAPS: list[CapabilitySpec] = [
         "item",
         ("item_body",),
         {
-            "condition": _p("string", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
+            "condition": _p("union", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
                 _p("string", "Player is grounded", enum=("grounded",), wire_literals={"useConditionMode": "grounded"}),
                 _p("string", "Player is not wet", enum=("not_wet",), wire_literals={"useConditionMode": "not_wet"}),
                 _p("object", "Player.statLife >= the authored life threshold", properties={"lifeAtLeast": _p("integer", "Inclusive life threshold", minimum=0, maximum=1000, wire_name="useConditionMinLife")}, wire_literals={"useConditionMode": "life_above"}),
@@ -1872,14 +1878,18 @@ _CAPS.extend([
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
     }, provenance="existing movement code 1"),
     _movement("move_gravity_arc", "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.", 2, {
-        "gravityVelocityPerUpdate": _p("number", "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
-    }, provenance="existing movement code 2"),
+        "accelY": _p("number", "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
+    }, provenance="existing movement code 2", retained_receipt_params={
+        "gravityVelocityPerUpdate": _p("number", "Retained signed vertical acceleration provenance", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
+    }),
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
         "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }, provenance="existing movement code 3"),
-    _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
-        "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
-    }, provenance="existing movement code 4"),
+    _movement("move_orbit", "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.", 4, {
+        "radiusTiles": _p("number", "Fixed orbit radius around the owner", minimum=1, maximum=80, units="tiles", wire_name="rangeTiles"),
+    }, provenance="existing movement code 4", retained_receipt_params={
+        "rangeTiles": _p("number", "Retained orbit radius provenance", minimum=1, maximum=80, units="tiles"),
+    }),
     _movement("move_boomerang", "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.", 5, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
@@ -1892,7 +1902,7 @@ _CAPS.extend([
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
         "waveVelocityCoefficient": _p("number", "Raw lateral velocity coefficient: sin(age×0.18) × waveVelocityCoefficient × 0.03 before velocity direction normalization; not displacement pixels", minimum=0, maximum=64, units="engine units: lateral velocity coefficient", wire_name="waveAmplitude"),
     }, provenance="existing movement code 7"),
-    _movement("move_phase", "Phase-drift with explicit tile collision still controlled separately.", 8, {
+    _movement("move_phase", "Couple a sinusoidal velocity-direction wobble with reduced opacity. This does not itself disable tile collision; tile collision is controlled separately.", 8, {
         "phaseStrength": _p("number", "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians AND alpha = int(80×strength); not collision phasing", minimum=0, maximum=1, units="engine units: coupled rotation/alpha coefficient"),
     }, provenance="existing movement code 8"),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
@@ -1902,11 +1912,11 @@ _CAPS.extend([
     _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
         "turnRadiansPerUpdate": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update", wire_name="turnRadiansPerTick"),
     }, provenance="existing movement code 10"),
-    _movement("move_vortex_orb", "Run the existing vortex-orb controller.", 11, {
+    _movement("move_vortex_orb", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.99 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 11, {
         "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 11"),
-    _movement("move_blackhole_pull", "Run the existing black-hole pull controller.", 12, {
+    _movement("move_blackhole_pull", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.985 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 12, {
         "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }, provenance="existing movement code 12"),
@@ -1921,7 +1931,7 @@ _CAPS.extend([
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, provenance="existing movement code 14"),
-    _movement("move_expanding_wave", "Expand the entity while preserving authored collision/damage.", 15, {
+    _movement("move_expanding_wave", "Add to the projectile's visual scale, then clamp it to the authored cap. Collision size and damage do not grow with this scale; use an independent hitbox curve for growing contact geometry.", 15, {
         "scaleGrowthPerUpdate": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5, wire_name="scalePerTick", units="engine units: scale increment per update"),
         "maxScale": _p("number", "Projectile.scale cap (not a pixel radius)", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
@@ -1929,10 +1939,12 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
     }, targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
-    _movement("move_yoyo_hover", "Follow owner cursor inside a leash and return on release.", 17, {
+    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
-    }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro"),
+        "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
+    }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro", retained_receipt_params={
+        "returnSpeed": _p("number", "Retained cursor-tracking and return speed provenance", minimum=1, maximum=80, units="pixels/projectile update"),
+    }),
     _movement("move_whip_lash", "Execute the bounded owner-attached curved polyline from hand to tip; collision checks every segment, while Projectile.Center is the terminal point. A baked/reused PNG draws once at that tip, not along the curve. runtime_geometry draws the exact collision curve; a separately authored VFX texturedPath source=whip can accompany a baked tip. A channel_beam controller takes collision/geometry precedence. No automatic sprite stretching or representation selection.", 18, {
         "rangeTiles": _p("number", "Lash reach", minimum=2, maximum=60, units="tiles"),
         "segments": _p("integer", "Collision curve segments", minimum=3, maximum=48),
@@ -3222,6 +3234,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "Every listed param is required unless marked optional; optional params may be omitted. "
             "In a full Author object, an optional param with an explicit card default may be omitted "
             "to select exactly that neutral value only when its omissionAllowedOnlyWhen condition holds; this is not universal and never replaces an invalid present value. "
+            "For full one-shot Author generation, prefer explicit values for params with omissionAllowedOnlyWhen; permitted omissions remain valid. "
             "A neutral annotation alone does not make a required param optional. "
             "All requires/conditional dependencies still apply to the combined params; optional fields "
             "cannot leave a selected effect incomplete or inert. "
@@ -3241,7 +3254,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "(AoE/nearest-event damage floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
             "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
             "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
-            "has no fan; pierce=-1 is infinite and tileId/wallId=-1 disables placement. "
+            "has no fan; pierce=-1 is infinite. configure_tile_placement selects tileId>=0; configure_wall_placement selects wallId>=0. The inactive -1 placement field exists only in wire. "
             "Use each card's own bounds/units; no universal zero neutral."
         ),
         "stackCost": STACK_COST_RULE,

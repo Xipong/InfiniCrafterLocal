@@ -122,3 +122,138 @@ def test_immunity_is_one_required_typed_choice(monkeypatch):
     assert cooldown['minimum'] == 0 and cooldown['maximum'] == 600
     assert 'unscaled' in cooldown['description']
     assert 'localNpcHitCooldownEngineUnits' not in params and 'npcImmunityMode' not in params
+
+
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+@pytest.mark.parametrize('fn,leaf,bad_value,expected_keys', [
+    ('configure_item_stats', 'damage', True, {'id', 'fn', 'params'}),
+    ('set_projectile_lifetime', 'lifetimeTicks', 0, {'id', 'fn', 'target', 'params'}),
+    ('move_straight', None, 'missing_entity', {'id', 'fn', 'target'}),
+])
+def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value, expected_keys):
+    from copy import deepcopy
+    from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
+    from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    source = build_capability_witness(fn)
+    broken = deepcopy(source)
+    call = next(row for row in broken['runtimeProgram']['calls'] if row['fn'] == fn)
+    correction = deepcopy(call)
+    if leaf is None:
+        call['target'] = bad_value
+    else:
+        call['params'][leaf] = bad_value
+    patch = {'note': 'Correct only the invalid leaf', 'callsUpsert': [correction],
+             'realizationReplacement': source['realization']}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, broken, patch, mode)
+    assert repaired['runtimeProgram'] == source['runtimeProgram']
+    examples = dossier['requiredJsonShape']['callsUpsert']
+    offered_forms = {frozenset(row) for row in examples}
+    assert frozenset(expected_keys) in offered_forms
+    local = author_item_repair_response_schema(capability_names=runtime_repair_schema_capabilities(dossier['repairScope']))
+    assert offered_forms == {frozenset(row['properties']) for row in local['properties']['callsUpsert']['items']['oneOf']}
+    rules = ' '.join(dossier['rules'])
+    assert 'copy id, fn, target' not in rules
+    assert 'Item-body-only calls have no target' in rules
+    assert 'zero-argument calls have no params object' in rules
+    assert 'preserve unchanged required fields and accepted optional values or absences' in rules
+    assert 'not defaults or edit permissions' in rules
+    assert 'In a complete Author binding, action.effectGroupId is optional only for apply_item_effects' in rules
+    assert 'In a complete Author binding, optional stackConsumeChancePercent is an explicit integer 0..100' in rules
+    assert 'omission means no change' in rules
+
+
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actual_packet(monkeypatch, mode):
+    from infini_local.core.runtime_authoring.capability_registry import STACK_COST_RULE
+    from infini_local.core.runtime_authoring.program_schema import binding_schema
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'binding-guidance', model_name='test-model')
+    catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
+    rule = catalog['fieldGuide']['stackCost']
+    assert rule == STACK_COST_RULE  # The presentation must not replace this and lose optional chance semantics.
+    assert 'For place_item, Author omits stackCost and contactDamage' in rule
+    assert 'For hold/equipped, Author omits both fields' in rule
+    assert 'only with stackCost=1 outside placement' in rule
+    assert 'omission retains the existing 100 percent debit' in rule
+    assert 'action.effectGroupId is optional only for apply_item_effects' in catalog['fieldGuide']['rowShapes']
+    for variant in binding_schema()['oneOf']:
+        props = variant['properties']
+        if 'stackConsumeChancePercent' in props:
+            chance = props['stackConsumeChancePercent']
+            assert 'stackConsumeChancePercent' not in variant['required']
+            assert f"{chance['type']} {chance['minimum']}..{chance['maximum']}" in rule
+    placement = next(row for row in catalog['bindingActions'] if row['action'] == 'place_item')
+    assert 'Author omits stackCost and contactDamage' in placement['constructionMeaning']
+
+
+def test_condition_card_describes_its_existing_union_and_placement_guide_matches_public_ids(monkeypatch):
+    from dataclasses import replace
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'typed-guidance', model_name='test-model')
+    catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
+    cards = {row['fn']: row for row in catalog['capabilities']}
+    condition = cards['require_use_condition']['params']['condition']
+    spec = CAPABILITY_REGISTRY['require_use_condition'].params['condition']
+    assert condition['type'] == 'union'
+    assert condition['shape'] == spec.schema() == replace(spec, kind='string').schema()
+    assert {branch['type'] for branch in condition['shape']['oneOf']} == {'string', 'object'}
+    doc = build_capability_witness('require_use_condition')
+    next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == 'require_use_condition')['params']['condition'] = 3
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=validate_runtime_program(doc))
+    repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == 'require_use_condition')
+    assert repair_card['params']['condition']['type'] == 'union'
+    assert repair_card['params']['condition']['shape'] == condition['shape']
+    notation = catalog['fieldGuide']['paramNotation']
+    assert 'tileId/wallId=-1 disables placement' not in notation
+    for fn, key in [('configure_tile_placement', 'tileId'), ('configure_wall_placement', 'wallId')]:
+        assert cards[fn]['params'][key]['min'] == 0
+        assert f'{fn} selects {key}>=0' in notation
+
+
+@pytest.mark.parametrize('fn,phrases', [
+    ('move_phase', ('velocity-direction wobble', 'reduced opacity', 'does not itself disable tile collision')),
+    ('move_vortex_orb', ('nearby chaseable NPCs', '0.99 per projectile update', '16 NPCs')),
+    ('move_blackhole_pull', ('nearby chaseable NPCs', '0.985 per projectile update', '16 NPCs')),
+    ('move_expanding_wave', ('visual scale', 'Collision size and damage do not grow', 'independent hitbox curve')),
+    ('move_orbit', ('0.055 radians per projectile update', 'launch speed does not set', 'forces tileCollide=false')),
+    ('move_yoyo_hover', ('same authored speed', 'both cursor tracking and return', 'velocity smoothing')),
+])
+def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch, fn, phrases):
+    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'movement-guidance', model_name='test-model')
+    cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
+    assert all(phrase in cards[fn]['does'] for phrase in phrases)
+    doc = build_capability_witness(fn)
+    call = next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == fn)
+    del call['params'][next(name for name, spec in CAPABILITY_REGISTRY[fn].params.items() if spec.required)]
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=validate_runtime_program(doc))
+    repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == fn)
+    assert repair_card['does'] == cards[fn]['does']
+
+
+def test_conditional_neutral_guidance_preserves_optional_contract(monkeypatch):
+    from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'neutral-guidance', model_name='test-model')
+    catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
+    notation = catalog['fieldGuide']['paramNotation']
+    assert 'For full one-shot Author generation, prefer explicit values for params with omissionAllowedOnlyWhen' in notation
+    assert 'permitted omissions remain valid' in notation
+    cards = {row['fn']: row for row in catalog['capabilities']}
+    conditional = [(cap, name, spec) for cap in visible_capabilities() for name, spec in cap.params.items()
+                   if spec.omission_condition is not None]
+    assert len(conditional) == 3
+    for cap, name, spec in conditional:
+        assert not spec.required and cards[cap.name]['params'][name]['optional'] is True
+        assert cards[cap.name]['params'][name]['omissionAllowedOnlyWhen'] == spec.omission_condition.card()
