@@ -353,8 +353,22 @@ def _validate_requirement(
                 related_ids=(str(call.get("id") or ""), target_id))
         return None
     if requirement.kind == "present_param_requires_param_value":
+        if nested_param(requirement.param) is None:
+            return None
         expected = requirement.any_of or (requirement.equals,)
-        if nested_param(requirement.param) is not None and nested_param(requirement.other_param) not in expected:
+        actual = nested_param(requirement.other_param)
+        if requirement.other_param not in params:
+            from infini_local.core.runtime_authoring.technical_lowering import declared_neutral_omissions
+            omitted = declared_neutral_omissions(cap.name, params)
+            if requirement.other_param in omitted:
+                # Compare only an already-declared, context-valid omission;
+                # keep the source absent for compiler receipts and frozen Repair.
+                condition = cap.params[requirement.other_param].omission_condition
+                kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
+                target_capabilities = (str(row.get("fn") or "") for row in calls_by_target.get(target_id, ()))
+                if condition is None or condition.allows(params, kind, target_capabilities):
+                    actual = omitted[requirement.other_param]
+        if actual not in expected:
             return ValidationIssue(f"{path}.params.{requirement.other_param}", "incompatible_param_variant",
                 requirement.message, tuple(str(value) for value in expected), (str(call.get("id") or ""),))
         return None

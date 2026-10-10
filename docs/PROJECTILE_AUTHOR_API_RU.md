@@ -113,7 +113,9 @@ Call IDs, порядок actions, producer dependencies, фаза item/projectil
 | `configure_spawn.spreadRadians` | target kind строго `child_projectile` | `0` |
 | `set_projectile_collision.bounceCount` | `tileCollide` строго `false` либо тот же target имеет `move_boomerang`, `move_returning_glaive`, `move_flail_tether` | `0` |
 
-Свободная entity, на которую указывает child event, остаётся `free_projectile` и обязана явно задать root count/spread. Это правило не зависит от текущей достижимости entity через binding. У `child_projectile` current event producer задаёт count/spread сам, а `target_and_fire` запрашивает один выстрел.
+Свободная entity, на которую указывает child event, остаётся `free_projectile` и обязана явно задать root count/spread. Это правило не зависит от текущей достижимости entity через binding. У `child_projectile` порождающий event или `target_and_fire` задаёт count/spread своими параметрами.
+
+Для `child_projectile` с `velocity.radial` или `velocity.disk` разрешённое отсутствие `configure_spawn.spreadRadians` удовлетворяет требованию нулевого fan spread через уже объявленный `default=neutral=0`. Validator учитывает эту нейтраль только для отсутствующего leaf и допустимого контекста omission: явные `null`, неверный тип или ненулевой spread остаются ошибкой. Отдельный `spreadRadians` порождающего event по-прежнему обязан быть явно задан числом `0`; Author source сохраняет отсутствие, нейтраль появляется только в wire.
 
 У обычного движущегося projectile с `tileCollide: true` число bounce обязательно. `N` отражает N tile contacts; следующий контакт убивает. В трёх перечисленных return movements обработчик возвращается до чтения bounce counter. Явно заданные `count`, `spreadRadians` или `bounceCount`, включая игнорируемый `bounceCount: 17`, сохраняются без переписывания.
 
