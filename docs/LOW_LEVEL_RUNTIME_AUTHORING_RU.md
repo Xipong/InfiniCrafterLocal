@@ -33,6 +33,8 @@ binding с `stackCost=1`: вероятность применяется посл
 сохраняет deterministic расход; placement/аммо не затрагиваются. Hybrid с шансом
 сохранения собственного стека также требует `maxStack=1`. [Точные receipt/lifecycle правила](OWN_STACK_CHANCE_RU.md).
 
+`configure_weapon_ammo` отдельно выбирает exact ammo category и initial speed basis для active `spawn_entity` shots. Terraria владеет выбором/расходом/экономией ammo и его вкладом в damage/knockback; authored entity сохраняет поведение projectile. `stackCost` остаётся стоимостью самого generated item. Полная граница и ограничения — [weapon ammo consumption](WEAPON_AMMO_CONSUMPTION_RU.md).
+
 <a id="construction"></a>
 ## Прямое построение, не procedural self-check
 

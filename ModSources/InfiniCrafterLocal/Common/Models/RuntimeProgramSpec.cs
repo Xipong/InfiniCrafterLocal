@@ -33,6 +33,13 @@ public sealed class RuntimeProgramSpec
     public RuntimeBindingSpec[] Bindings { get; set; } = Array.Empty<RuntimeBindingSpec>();
     public RuntimeItemUseSpec ItemUse { get; set; } = new();
     public RuntimeItemContactSpec ItemContact { get; set; } = new();
+    private RuntimeWeaponAmmoSpec? _weaponAmmo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeWeaponAmmoSpec? WeaponAmmo
+    {
+        get => _weaponAmmo;
+        set => _weaponAmmo = value ?? throw new InvalidDataException("present weaponAmmo cannot be null");
+    }
 
     public bool HasExecutableBinding => Bindings.Any(x => x is not null && RuntimeBindingSpec.IsActiveInput(x.Input));
 
@@ -53,6 +60,11 @@ public sealed class RuntimeProgramSpec
         Bindings ??= Array.Empty<RuntimeBindingSpec>();
         ItemUse ??= new RuntimeItemUseSpec();
         ItemContact ??= new RuntimeItemContactSpec();
+        WeaponAmmo?.NormalizeAndValidate();
+        if (WeaponAmmo is not null && !Bindings.Any(binding => binding is not null
+                && RuntimeBindingSpec.IsActiveInput(binding.Input)
+                && binding.UsePolicy?.Action?.Kind == RuntimeBindingAction.SpawnEntity))
+            throw new InvalidDataException("weaponAmmo requires an active spawn_entity binding; passive hold is not a native ammo shot");
         if (Entities.Length < 1 || Entities.Length > Limits.MaxEntityCount)
             throw new InvalidDataException($"runtimeProgram.entities must contain 1..{Limits.MaxEntityCount} rows");
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)
@@ -510,6 +522,13 @@ public static class RuntimeEntityRole
 
 public sealed class RuntimeEntitySpec
 {
+    private bool? _nativeSentry;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NativeSentry
+    {
+        get => _nativeSentry;
+        set => _nativeSentry = value ?? throw new InvalidDataException("nativeSentry must be an explicit boolean when present");
+    }
     public string Id { get; set; } = "";
     public string Kind { get; set; } = "";
     public string VisualRole { get; set; } = "";
@@ -561,7 +580,9 @@ public sealed class RuntimeEntitySpec
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
-            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
+            if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
+                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured
+                || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -682,6 +703,18 @@ public sealed class RuntimeSpawnSpec
             _maxActive = value;
         }
     }
+    private int? _descendantMaxActive;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DescendantMaxActive
+    {
+        get => _descendantMaxActive;
+        set
+        {
+            if (value is null || value < 1 || value > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner)
+                throw new InvalidDataException("spawn.descendantMaxActive must be an explicit integer from 1 to the owner projectile ceiling");
+            _descendantMaxActive = value;
+        }
+    }
     public float SpreadRadians { get; set; }
     public int OffsetPx { get; set; }
     public string Aim { get; set; } = "cursor";
@@ -698,7 +731,7 @@ public sealed class RuntimeSpawnSpec
         Placement = RuntimeText.Safe(Placement, 48).ToLowerInvariant();
         if (Aim is not ("cursor" or "facing" or "velocity" or "none"))
             throw new InvalidDataException($"unknown spawn aim '{Aim}'");
-        if (Placement is not ("item_use_origin" or "owner_center" or "cursor" or "ground_at_cursor" or "above_cursor"))
+        if (Placement is not ("item_use_origin" or "owner_center" or "cursor" or "ground_at_cursor" or "above_cursor" or "native_resting_spot"))
             throw new InvalidDataException($"unknown spawn placement '{Placement}'");
         OverTarget ??= new RuntimeOverTargetSpec();
         OverTarget.Normalize();
@@ -781,6 +814,8 @@ public sealed class RuntimeMovementSpec
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
         Params.Normalize();
+        if (Params.HasBeamExtensions)
+            throw new InvalidDataException("beam extension params require the channel_beam controller");
         // Omitted movement is meaningful for stationary/field/helper entities. Code 0
         // is also the explicit move_straight opcode, so Name is the presence bit.
         if (!IsConfigured)
@@ -809,6 +844,8 @@ public sealed class RuntimeControllerSpec
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
         Params.Normalize();
+        if (Code != RuntimeControllerCode.ChannelBeam && Params.HasBeamExtensions)
+            throw new InvalidDataException("beam extension params require the channel_beam controller");
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedControllerCode)
             throw new InvalidDataException($"unsupported controller opcode {Code}");
         if (Code == RuntimeControllerCode.ChannelBeam && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
@@ -843,6 +880,63 @@ public sealed class RuntimeParamsSpec
     public int DurationTicks { get; set; }
     public float WidthPx { get; set; }
     public int WarmupTicks { get; set; }
+    // Missing retained-v5 leaves stay absent. Present values are strict and
+    // never normalized into an accepted beam design or into the neutral value.
+    private string? _manaPayment;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ManaPayment
+    {
+        get => _manaPayment;
+        set {
+            if (value is not ("initial_use_only" or "each_use_time"))
+                throw new InvalidDataException("beam manaPayment is not a declared exact choice");
+            _manaPayment = value;
+        }
+    }
+    private double? _initialDamageMultiplier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? InitialDamageMultiplier
+    {
+        get => _initialDamageMultiplier;
+        set {
+            if (value is null || !double.IsFinite(value.Value) || value < 0.01 || value > 1
+                || value != 1 && (float)value.Value == 1f)
+                throw new InvalidDataException("beam initialDamageMultiplier violates bounds or float32 neutral preservation");
+            _initialDamageMultiplier = value;
+        }
+    }
+    private double? _initialWidthMultiplier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? InitialWidthMultiplier
+    {
+        get => _initialWidthMultiplier;
+        set {
+            if (value is null || !double.IsFinite(value.Value) || value < 0.01 || value > 1
+                || value != 1 && (float)value.Value == 1f)
+                throw new InvalidDataException("beam initialWidthMultiplier violates bounds or float32 neutral preservation");
+            _initialWidthMultiplier = value;
+        }
+    }
+    private double? _damageStartProgress;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DamageStartProgress
+    {
+        get => _damageStartProgress;
+        set {
+            if (value is null || !double.IsFinite(value.Value) || value < 0 || value > 1)
+                throw new InvalidDataException("beam damageStartProgress violates explicit bounds");
+            _damageStartProgress = value;
+        }
+    }
+    private bool? _raycastTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RaycastTiles
+    {
+        get => _raycastTiles;
+        set => _raycastTiles = value ?? throw new InvalidDataException("present beam raycastTiles must be boolean");
+    }
+    [JsonIgnore] public bool HasBeamExtensions => ManaPayment is not null || InitialDamageMultiplier is not null
+        || InitialWidthMultiplier is not null || DamageStartProgress is not null || RaycastTiles is not null;
     public int ChargeTicks { get; set; }
     public float PowerMultiplier { get; set; }
     public string ShotEntity { get; set; } = "";

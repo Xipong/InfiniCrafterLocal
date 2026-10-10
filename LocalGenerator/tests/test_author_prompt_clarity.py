@@ -34,7 +34,7 @@ def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypa
     assert parts is not None
     index, static, dynamic = parts
     assert index == 1
-    assert set(json.loads(dynamic)) == {'recipeKey', 'parents', 'balanceCorridor'}
+    assert set(json.loads(dynamic)) == {'recipeKey', 'parents', 'balanceCorridor', 'sourceWireUnits'}
     assert 'user-owned-parent' not in static
     assert {**json.loads(static), **json.loads(dynamic)} == json.loads(user)
 
