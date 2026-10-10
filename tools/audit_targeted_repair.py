@@ -204,7 +204,7 @@ def render() -> dict[str, Any]:
         _case("missing_position_driver", _missing_movement),
         _case("existing_dependency_parameter_mismatch", _channel_dependency),
     ]
-    full_count = sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())
+    full_count = len(visible_capabilities())
     errors: list[str] = []
     for row in cases:
         if row["capabilitySubsetCount"] >= full_count:

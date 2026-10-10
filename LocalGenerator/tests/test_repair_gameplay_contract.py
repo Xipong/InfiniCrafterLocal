@@ -137,7 +137,7 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     if choice == "periodic":
         candidate["params"].update(strength=4, radiusTiles=60)
     else:
-        candidate["params"]["foreign"] = 200
+        candidate["target"] = "foreign_body"
     stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
     stats["params"]["damage"] = 1999
     incoming = {"note": "model explicitly chose a full conditional alternative",

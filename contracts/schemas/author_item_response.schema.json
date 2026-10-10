@@ -5448,6 +5448,31 @@
                         "x-infini-units": "engine units: distance-score discount",
                         "x-infini-semanticType": "unitless_scalar"
                       },
+                      "damageBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "knockbackBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "damageMultiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 4,
+                        "description": "Multiply the selected damage basis exactly once; zero preserves a zero-damage child",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
                       "count": {
                         "type": "integer",
                         "minimum": 1,
@@ -5504,7 +5529,10 @@
                       "shotEntity",
                       "intervalTicks",
                       "rangeTiles",
-                      "sameTargetBias"
+                      "sameTargetBias",
+                      "damageBasis",
+                      "knockbackBasis",
+                      "damageMultiplier"
                     ]
                   }
                 },
@@ -5622,11 +5650,29 @@
                         "x-infini-units": "radians",
                         "x-infini-semanticType": "radians"
                       },
+                      "damageBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "knockbackBasis": {
+                        "type": "string",
+                        "enum": [
+                          "authored_child",
+                          "live_parent"
+                        ],
+                        "description": "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source",
+                        "x-infini-semanticType": "bounded_text"
+                      },
                       "damageMultiplier": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 4,
-                        "description": "Multiplier applied to the referenced child entity's authored base damage",
+                        "description": "Multiply the selected damage basis exactly once; zero preserves a zero-damage child",
                         "x-infini-semanticType": "unitless_scalar"
                       },
                       "delayTicks": {
@@ -5643,6 +5689,8 @@
                       "entity",
                       "count",
                       "spreadRadians",
+                      "damageBasis",
+                      "knockbackBasis",
                       "damageMultiplier",
                       "delayTicks"
                     ]

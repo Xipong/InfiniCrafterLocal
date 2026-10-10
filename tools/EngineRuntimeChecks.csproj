@@ -70,6 +70,7 @@
     <Compile Include="EngineRuntimeChecks.ForgeHeart.cs" />
     <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
     <Compile Include="EngineRuntimeChecks.RootCombat.cs" />
+    <Compile Include="EngineRuntimeChecks.ChildCombat.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
     <Compile Include="EngineRuntimeChecks.Mobility.cs" />
     <Compile Include="EngineRuntimeChecks.MobilityConsumption.cs" />

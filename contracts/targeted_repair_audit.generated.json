@@ -9,11 +9,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-<<<<<<< HEAD
-      "dossierChars": 35749,
-=======
-      "dossierChars": 35830,
->>>>>>> 1496a5d81128553a5077ced0ba9c8f0cf8de64fb
+      "dossierChars": 35886,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -45,11 +41,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-<<<<<<< HEAD
-      "dossierChars": 35303,
-=======
-      "dossierChars": 35362,
->>>>>>> 1496a5d81128553a5077ced0ba9c8f0cf8de64fb
+      "dossierChars": 35440,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -95,11 +87,7 @@
         "move_whip_lash",
         "move_yoyo_hover"
       ],
-<<<<<<< HEAD
-      "dossierChars": 47666,
-=======
-      "dossierChars": 47020,
->>>>>>> 1496a5d81128553a5077ced0ba9c8f0cf8de64fb
+      "dossierChars": 47132,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -127,11 +115,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-<<<<<<< HEAD
-      "dossierChars": 41794,
-=======
-      "dossierChars": 41920,
->>>>>>> 1496a5d81128553a5077ced0ba9c8f0cf8de64fb
+      "dossierChars": 41931,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -171,21 +155,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-<<<<<<< HEAD
-  "fullAuthorPayloadChars": 117050,
-  "fullCapabilityCatalogCount": 60,
-=======
-  "fullAuthorPayloadChars": 114462,
-  "fullCapabilityCatalogCount": 56,
->>>>>>> 1496a5d81128553a5077ced0ba9c8f0cf8de64fb
+  "fullAuthorPayloadChars": 124088,
+  "fullCapabilityCatalogCount": 59,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 48,
+    "declaredCodes": 49,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 47,
+    "emittedCodes": 48,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 48,
-    "runtimeDeclaredCodes": 47,
+    "policyCodes": 49,
+    "runtimeDeclaredCodes": 48,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

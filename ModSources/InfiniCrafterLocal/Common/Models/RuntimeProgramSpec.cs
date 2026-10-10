@@ -214,6 +214,10 @@ public sealed class RuntimeProgramSpec
                 RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse);
                 if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
+                    if (!entity.IsProjectileEntity
+                        && (action.DamageBasis == RuntimeChildCombatBasis.LiveParent
+                            || action.KnockbackBasis == RuntimeChildCombatBasis.LiveParent))
+                        throw new InvalidDataException($"event '{action.Id}' live_parent combat requires a projectile source");
                     RuntimeEntitySpec? child = TryGetEntity(action.EntityId);
                     if (child is null || child.Kind == RuntimeEntityKind.ItemBody)
                         throw new InvalidDataException($"event '{action.Id}' references invalid entity '{action.EntityId}'");
@@ -231,6 +235,10 @@ public sealed class RuntimeProgramSpec
             if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire
                 && string.IsNullOrWhiteSpace(entity.Targeting.ShotEntityId))
                 throw new InvalidDataException($"entity '{entity.Id}' target_and_fire has no explicit shotEntityId");
+            if (entity.Controller.Code != RuntimeControllerCode.TargetAndFire
+                && (entity.Targeting.DamageBasis is not null || entity.Targeting.KnockbackBasis is not null
+                    || entity.Targeting.DamageMultiplier is not null))
+                throw new InvalidDataException($"entity '{entity.Id}' child combat targeting fields require target_and_fire");
         }
         if (eventSpawnBudget > Limits.MaxEventSpawnsPerActivation)
             throw new InvalidDataException("runtime event spawn budget exceeded");
@@ -1007,12 +1015,47 @@ public sealed class RuntimeParamsSpec
     }
 }
 
+public static class RuntimeChildCombatBasis
+{
+    public const string AuthoredChild = "authored_child";
+    public const string LiveParent = "live_parent";
+
+    internal static string Require(string? value)
+        => value is AuthoredChild or LiveParent ? value
+            : throw new InvalidDataException("child combat basis must be exactly authored_child or live_parent");
+}
+
 public sealed class RuntimeTargetingSpec
 {
     public string ShotEntityId { get; set; } = "";
     public int IntervalTicks { get; set; }
     public float RangeTiles { get; set; }
     public float SameTargetBias { get; set; }
+    // Missing fields in saved wire keep the historical authored-child lane.
+    // Present null/unknown values are invalid; fresh Author requires every choice.
+    private string? _damageBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DamageBasis { get => _damageBasis; set => _damageBasis = RuntimeChildCombatBasis.Require(value); }
+    private string? _knockbackBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? KnockbackBasis { get => _knockbackBasis; set => _knockbackBasis = RuntimeChildCombatBasis.Require(value); }
+    public sealed class DamageMultiplierJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public DamageMultiplierJsonConverter() : base("0", "4") { }
+    }
+    private float? _damageMultiplier;
+    [JsonConverter(typeof(DamageMultiplierJsonConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? DamageMultiplier
+    {
+        get => _damageMultiplier;
+        set
+        {
+            if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 0f || multiplier > 4f)
+                throw new InvalidDataException("targeting damageMultiplier must be finite and within 0..4");
+            _damageMultiplier = multiplier;
+        }
+    }
     // Missing retained-v5 leaves remain absent from the serialized definition.
     // Effective legacy behavior is selected only by the native consumer, not
     // materialized into the persisted identity. Explicit null is never omission.
@@ -1105,6 +1148,12 @@ public sealed class RuntimeEventActionSpec
     public int Count { get; set; } = 1;
     public float SpreadRadians { get; set; }
     public float DamageMultiplier { get; set; } = 1f;
+    private string? _damageBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DamageBasis { get => _damageBasis; set => _damageBasis = RuntimeChildCombatBasis.Require(value); }
+    private string? _knockbackBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? KnockbackBasis { get => _knockbackBasis; set => _knockbackBasis = RuntimeChildCombatBasis.Require(value); }
     public int DelayTicks { get; set; }
     public int PeriodTicks { get; set; }
     public int BuffId { get; set; } = -1;
@@ -1131,6 +1180,9 @@ public sealed class RuntimeEventActionSpec
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
+        if (ActionCode != RuntimeEventActionCode.SpawnEntity
+            && (DamageBasis is not null || KnockbackBasis is not null))
+            throw new InvalidDataException($"event '{Id}' child combat fields require spawn_entity_on_event");
         Count = Math.Clamp(Count, 1, InfiniRuntimeLimits.MaxRuntimeSpawnCount);
         SpreadRadians = Math.Clamp(SpreadRadians, 0f, MathF.Tau);
         DamageMultiplier = Math.Clamp(DamageMultiplier, 0f, 10f);

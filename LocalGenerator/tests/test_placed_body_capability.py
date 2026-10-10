@@ -328,13 +328,14 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 
 
 def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from captured_parent_combat_author import historical_child_combat_wire
     from beam_contract_checks import without_declared_beam_neutrals
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
 
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
     actual = {name: hashlib.sha256(json.dumps(
         without_declared_targeting_neutrals(without_declared_beam_neutrals(
-            without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))),
+            without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))),
         ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
     assert actual == baseline
 

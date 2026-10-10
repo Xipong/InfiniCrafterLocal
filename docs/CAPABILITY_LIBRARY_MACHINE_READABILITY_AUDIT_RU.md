@@ -26,11 +26,11 @@
 
 ## Измеренные свойства
 
-- capabilities: **62**; parameters: **247**; numeric: **180/180 bounded**;
+- capabilities: **62**; parameters: **252**; numeric: **181/181 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
-- typed entity references: **2**; requirements: **34**; binding dependency edges: **9**;
-- exact wire paths: **374**; global technical lowerer outputs: **150**;
-- Python↔C# range parity rows: **102**; vertical witnesses: **59**;
+- typed entity references: **2**; requirements: **36**; binding dependency edges: **9**;
+- exact wire paths: **379**; global technical lowerer outputs: **150**;
+- Python↔C# range parity rows: **103**; vertical witnesses: **59**;
 - errors: **0**; warnings: **0**.
 
 <a id="proof"></a>

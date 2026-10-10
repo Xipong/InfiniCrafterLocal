@@ -92,6 +92,7 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
 
 def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neutrals():
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
+    from captured_parent_combat_author import historical_child_combat_wire
     # Keep the pre-ammo hashes unchanged. Item aliases intentionally replace
     # source names/placement receipts, while #13 adds exact neutral targeting.
     # Reverse only those asserted successors; every other compiled byte is pinned.
@@ -99,7 +100,7 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
     from sentry_contract_checks import without_declared_targeting_neutrals
 
     for name, expected_hash in baseline.items():
-        final = without_declared_targeting_neutrals(without_captured_projectile_alias_delta(compile_runtime_program(build_runtime_fixture(name))))
+        final = without_declared_targeting_neutrals(without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))
         rows = final["runtimeContract"]["finalWireReceipts"]
         for row in rows:
             if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):

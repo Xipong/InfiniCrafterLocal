@@ -35,6 +35,7 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "param_requires_target_kind",
     "capability_present",
     "capability_group_present",
     "item_capability_param",
@@ -220,14 +221,18 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             if cap.name == "set_descendant_concurrency":
                 csharp_name = "DescendantMaxActive"
             csharp = class_bounds[field_class].get(csharp_name)
-            if cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
-                # Explicit new options reject outside their interval; a missing
-                # or weakened guard must be visible, not skipped as "no clamp".
-                declaration = re.search(
-                    rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
-                    r"throw new InvalidDataException\(", _class_block(text, class_name),
-                )
-                reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+            if cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"}:
+                if param_name == "damageMultiplier":
+                    from infini_local.qa.primitive_loss_audit import nullable_float_rejection_bounds
+                    reject_bounds = nullable_float_rejection_bounds(text.encode(), class_name, csharp_name)
+                else:
+                    # Explicit new options reject outside their interval; a missing
+                    # or weakened guard must be visible, not skipped as "no clamp".
+                    declaration = re.search(
+                        rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
+                        r"throw new InvalidDataException\(", _class_block(text, class_name),
+                    )
+                    reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
