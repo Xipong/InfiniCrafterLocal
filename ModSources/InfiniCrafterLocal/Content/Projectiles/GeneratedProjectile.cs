@@ -252,9 +252,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
         float damageMultiplier = 1f,
         RuntimeSpawnBudget? activationBudget = null,
         int? rootDamageOverride = null,
-        float? rootKnockbackOverride = null)
+        float? rootKnockbackOverride = null,
+        float? rootSpeedOverride = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+            return 0;
+        if (rootSpeedOverride is float speed && (!float.IsFinite(speed) || speed < 0f))
             return 0;
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(entityId);
         // Root binding shots are exempt from the EVENT budget but all roots from
@@ -313,7 +316,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
             {
                 float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
                 Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
-                Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * entity.Spawn.SpeedPxPerTick;
+                Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * (rootSpeedOverride ?? entity.Spawn.SpeedPxPerTick);
                 // A supplied root value is the final native shooting result, including
                 // player/prefix/late hooks. Null retains the authored event-spawn lane.
                 int damage = entity.Damage.Enabled
