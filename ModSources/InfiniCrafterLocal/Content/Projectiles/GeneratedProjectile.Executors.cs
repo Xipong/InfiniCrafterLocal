@@ -22,6 +22,8 @@ public sealed partial class GeneratedProjectile
         if (!TryHydrate() || _data is null || _entity is null)
             return;
 
+        _initialNpcExclusion = _initialNpcExclusion.AfterUpdate();
+
         if (_activationDelayTicks > 0)
         {
             _activationDelayTicks--;
@@ -31,7 +33,7 @@ public sealed partial class GeneratedProjectile
             if (_activationDelayTicks == 0)
             {
                 Projectile.alpha = 0;
-                Projectile.friendly = _entity.Damage.Enabled && _entity.Damage.Damage > 0;
+                Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
                 Projectile.netUpdate = true;
             }
             return;
@@ -226,11 +228,17 @@ public sealed partial class GeneratedProjectile
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
-        int granted = budget.Reserve((_entity.Targeting.Count ?? 1));
+        float damageMultiplier = _entity.Targeting.DamageMultiplier ?? 1f;
+        if (!RuntimeChildCombat.TryResolve(_entity.Targeting.DamageBasis, _entity.Targeting.KnockbackBasis,
+            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
+            out int? damageOverride, out float? knockbackOverride))
+            return true;
+        int granted = budget.Reserve(_entity.Targeting.Count ?? 1);
         int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
             Projectile.Center, direction, _childDepth + 1, granted, requestedCount: (_entity.Targeting.Count ?? 1),
             spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
-            activationBudget: budget) : 0;
+            damageMultiplier: damageMultiplier, activationBudget: budget,
+            rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
         Projectile.netUpdate = true;
         return true;

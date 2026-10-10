@@ -252,3 +252,106 @@ def test_actual_author_request_exposes_every_explicit_choice():
     payload = json.loads(user)
     cards = {row["fn"]: row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     for fn, params in PARAMS.items(): assert set(cards[fn]["params"]) == set(params)
+
+# Combined-owner acceptance: one composition, not a second provenance helper.
+# Every explicit combat basis and every sampled-velocity variant is exercised
+# beside the complete orthogonal modifier component inventory.
+_COMBAT_CHOICES = [("authored_child", "authored_child"), ("authored_child", "live_parent"),
+                   ("live_parent", "authored_child"), ("live_parent", "live_parent")]
+_HAS_COMBAT = "damageBasis" in CAPABILITY_REGISTRY["spawn_entity_on_event"].params
+_HAS_VELOCITY = "velocity" in CAPABILITY_REGISTRY["configure_spawn"].params
+_VELOCITY_CHOICES = [None] if not _HAS_VELOCITY else [
+    {"constantSpeedPxPerUpdate": 8.5},
+    {"fanSpeed": {"minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}},
+    {"radial": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}},
+    {"disk": {"maxSpeedPxPerUpdate": 6}},
+    {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": .2}},
+]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("bases", _COMBAT_CHOICES if _HAS_COMBAT else [None])
+@pytest.mark.parametrize("velocity", _VELOCITY_CHOICES)
+def test_combined_feature_modifier_complete_projection_and_actual_serialized_repair(
+    monkeypatch, format_mode, bases, velocity,
+):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines import author_item_contract as contract, llm_transport
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    feature = "spawn_entity_on_event" if bases else "select_targets_and_emit_on_event"
+    doc = build_capability_witness(feature)
+    producer = call(doc, feature)
+    child = producer["params"]["entity"]
+    spawn = next(row for row in doc["runtimeProgram"]["calls"]
+                 if row["fn"] == "configure_spawn" and row["target"] == child)
+    if bases:
+        producer["params"].update(damageBasis=bases[0], knockbackBasis=bases[1])
+    if velocity:
+        spawn["params"]["velocity"] = deepcopy(velocity)
+    for index, fn in enumerate(PROJECTILE_MODIFIER_COMPONENTS):
+        doc["runtimeProgram"]["calls"].append(dict(
+            id=f"combined_modifier_{index}", fn=fn, target=child, params=deepcopy(PARAMS[fn])))
+    doc["runtimeProgram"]["calls"].append(dict(id="combined_hitbox_curve", fn="set_projectile_hitbox_curve", target=child,
+        params=dict(startScale=1, endScale=2, startDelayTicks=0, durationTicks=80, curve="linear", mirrorToSprite=False)))
+    original = json.dumps(doc, sort_keys=True)
+    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    request, user, _ = build_initial_author_request({}, {}, {}, {}, "combined-merge-offline", model_name="test-model")
+    catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
+    cards = {row["fn"]: row for row in catalog["capabilities"]}
+    def expanded(value):
+        if isinstance(value, dict):
+            return {key: (catalog["fieldGuide"]["consumerConstraints"][child]
+                          if key == "consumerConstraint" and isinstance(child, str) else expanded(child))
+                    for key, child in value.items()}
+        return [expanded(child) for child in value] if isinstance(value, list) else value
+    for fn in (feature, "configure_spawn", *PROJECTILE_MODIFIER_COMPONENTS):
+        assert expanded(cards[fn]) == CAPABILITY_REGISTRY[fn].author_prompt_card()
+    encoded = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    if format_mode == "json_schema":
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
+    restored = contract.project_provider_author_item_to_local(json.loads(json.dumps(encoded)), response_format=request["response_format"])
+    assert json.dumps(restored, sort_keys=True) == original
+    wire = compile_runtime_program(restored)
+    assert validate_runtime_wire(wire)["ok"]
+    accepted_child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == child)
+    for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+        assert accepted_child[member] == PARAMS[fn]
+    assert accepted_child["hitboxCurve"]["mirrorToSprite"] is False
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    for source_document in (None, doc):
+        assert audit_compiler_receipts(rows, authored_document=source_document, final_document=wire)["ok"]
+        # Independent receipt lanes remain mandatory inside the combined wire.
+        mandatory = ["set_projectile_turn_modifier"]
+        # Old scalar spawn/event wire is legitimately source-free; newly
+        # explicit combat and typed velocity require retained presence receipts.
+        if bases or source_document is not None:
+            mandatory.append(feature)
+        if velocity or source_document is not None:
+            mandatory.append("configure_spawn")
+        for fn in mandatory:
+            removed = [row for row in rows if row.get("fn") != fn]
+            assert not audit_compiler_receipts(removed, authored_document=source_document, final_document=wire)["ok"]
+    without_provenance = deepcopy(wire); without_provenance.pop("runtimeContract")
+    assert validate_runtime_wire(without_provenance)["ok"]
+
+    broken = deepcopy(doc)
+    modifier = call(broken, "set_projectile_turn_modifier")
+    modifier["params"]["durationTicks"] = 0
+    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": modifier["id"], "paths": ["params.durationTicks"]}]
+    fix = deepcopy(modifier); fix["params"].update(durationTicks=90, turnRadiansPerUpdate=.2)
+    hostile_feature = deepcopy(producer); hostile_feature["params"]["entity"] = "item"
+    hostile_spawn = deepcopy(spawn); hostile_spawn["params"]["offsetPx"] = 10
+    repaired, packet = _offline_gameplay_repair(monkeypatch, broken,
+        {"note": "only exact phase duration", "realizationReplacement": doc["realization"],
+         "callsUpsert": [fix, hostile_feature, hostile_spawn]}, format_mode, out_of_scope_response=True)
+    assert packet["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == original
+    repaired_wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(repaired_wire)["ok"]
+    assert repaired_wire == wire
+    assert json.dumps(doc, sort_keys=True) == original

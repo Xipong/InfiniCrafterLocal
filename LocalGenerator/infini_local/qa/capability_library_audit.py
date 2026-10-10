@@ -35,6 +35,7 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "param_requires_target_kind",
     "capability_absent",
     "capability_present",
     "capability_group_present",
@@ -54,6 +55,8 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "conditional_omission",
     "non_neutral_param",
     "event_available",
+    "referenced_entity_capability_params",
+    "referenced_entity_without_capability",
 })
 
 
@@ -234,14 +237,18 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             if cap.name == "set_descendant_concurrency":
                 csharp_name = "DescendantMaxActive"
             csharp = class_bounds[field_class].get(csharp_name)
-            if cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
-                # Explicit new options reject outside their interval; a missing
-                # or weakened guard must be visible, not skipped as "no clamp".
-                declaration = re.search(
-                    rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
-                    r"throw new InvalidDataException\(", _class_block(text, class_name),
-                )
-                reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+            if cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"}:
+                if param_name == "damageMultiplier":
+                    from infini_local.qa.primitive_loss_audit import nullable_float_rejection_bounds
+                    reject_bounds = nullable_float_rejection_bounds(text.encode(), class_name, csharp_name)
+                else:
+                    # Explicit new options reject outside their interval; a missing
+                    # or weakened guard must be visible, not skipped as "no clamp".
+                    declaration = re.search(
+                        rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
+                        r"throw new InvalidDataException\(", _class_block(text, class_name),
+                    )
+                    reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
@@ -269,12 +276,16 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "consumerPrecisionPreserved": preserves_precision,
                              "preserved": reject_bounds == authored_bounds and preserves_precision})
                 continue
-            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"}:
+            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"} or (
+                cap.name == "select_targets_and_emit_on_event" and param_name != "delayTicks"
+            ):
                 block = _class_block(text, class_name)
+                storage = "int" if spec.kind == "integer" else "double"
+                finite_guard = r"!double\.IsFinite\(value\.Value\) \|\| " if storage == "double" else ""
                 declaration = re.search(
                     rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"
-                    rf"public int\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
-                    r"if\s*\(value is null \|\| value < ([^|]+?) \|\| value > ([^)]+)\)\s*"
+                    rf"public {storage}\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
+                    r"if\s*\(value is null \|\| " + finite_guard + r"value < ([^|]+?) \|\| value > ([^)]+)\)\s*"
                     r"throw new InvalidDataException\(",
                     block, re.DOTALL,
                 )
@@ -379,6 +390,18 @@ def capability_library_audit() -> dict[str, Any]:
                 error("unknown_requirement_kind", f"{base}.requirements", requirement.kind)
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
+            if requirement.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}:
+                reference_param = cap.params.get(requirement.param)
+                if reference_param is None or reference_param.reference is None or reference_param.reference.namespace != "entity":
+                    error("invalid_reference_requirement_param", f"{base}.requirements", requirement.param)
+                required_cap = CAPABILITY_REGISTRY.get(requirement.capability)
+                if requirement.kind == "referenced_entity_capability_params":
+                    if not isinstance(requirement.equals, Mapping) or not requirement.equals:
+                        error("empty_reference_requirement_params", f"{base}.requirements", requirement.param)
+                    elif required_cap is not None:
+                        for name in requirement.equals:
+                            if name not in required_cap.params:
+                                error("unknown_reference_requirement_exact_param", f"{base}.requirements", name)
             for name in requirement.any_of:
                 if requirement.kind in {"capability_group_present", "capability_absent"} and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)

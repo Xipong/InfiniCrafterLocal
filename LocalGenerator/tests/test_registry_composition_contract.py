@@ -392,7 +392,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
                     "spreadRadians": 0.0,
                     "damageMultiplier": 1.0 if mutation == "cycle" else 0.2,
                     "delayTicks": i,
-                },
+                 "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
             }
             for i in range(1 if mutation == "cycle" else 3)
         )
@@ -539,7 +539,7 @@ CSHARP_SEAMS = [
     ("Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs", "", "", "RuntimeDelayedActionScheduler.TrySchedule", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "RuntimeProgramExecutor.ExecuteAction", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "PostUpdateEverything", True),
-    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "reservedSpawnBudget = budget.Reserve(action.Count)", True),
+    ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "reservedSpawnBudget = budget.Reserve(action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "pending.Budget.Return(pending.ReservedSpawnBudget)", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxPendingRuntimeActions", True),
     ("Common/Runtime/RuntimeDelayedActionScheduler.cs", "", "", "InfiniRuntimeLimits.MaxRuntimeDelayedActionsPerTick", True),

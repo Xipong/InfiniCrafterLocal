@@ -87,8 +87,8 @@ def _params(fn: str) -> dict[str, Any]:
         "set_projectile_hitbox": deepcopy(_HITBOX),
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
-        "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2},
-        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0},
+        "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
+        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
         "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
         "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
         "chain_damage_on_event": {"when": "on_hit", "count": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
@@ -96,6 +96,9 @@ def _params(fn: str) -> dict[str, Any]:
         "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
         "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
         "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
+        "select_targets_and_emit_on_event": {"when": "on_hit", "entity": "witness_child", "stepCount": 2,
+            "stepRangeTiles": 22.5, "selectionAnchor": "previous_target", "repeatPolicy": "allow_revisits",
+            "requireLineOfSight": False, "initialIgnoreCountdownUpdates": 10, "delayTicks": 0},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
@@ -223,10 +226,13 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             for base_fn, params in base.items():
                 calls.append(_call(f"shot_{base_fn}", base_fn, "witness_shot", params))
             calls.append(_call("shot_motion", "move_straight", "witness_shot", {}))
-        if fn == "spawn_entity_on_event":
+        if fn in {"spawn_entity_on_event", "select_targets_and_emit_on_event"}:
             entities.append({"id": "witness_child", "kind": "child_projectile"})
             for base_fn, params in base.items():
-                calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", params))
+                child_params = deepcopy(params)
+                if fn == "select_targets_and_emit_on_event" and base_fn == "configure_spawn":
+                    child_params.update(position={"at": "activation_origin"}, aim="velocity", offsetPx=0)
+                calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", child_params))
             calls.append(_call("child_motion", "move_straight", "witness_child", {}))
 
         if fn in MOVEMENT_CAPABILITIES or fn in {"channel_beam", "charge_then_release", "target_and_fire"}:
