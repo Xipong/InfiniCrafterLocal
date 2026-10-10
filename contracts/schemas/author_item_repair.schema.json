@@ -3063,13 +3063,14 @@
                     "x-infini-units": "pixels"
                   },
                   "placement": {
-                    "description": "Spawn position",
+                    "description": "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle",
                     "enum": [
                       "item_use_origin",
                       "owner_center",
                       "cursor",
                       "ground_at_cursor",
-                      "above_cursor"
+                      "above_cursor",
+                      "native_resting_spot"
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
@@ -3149,6 +3150,113 @@
                     "type": "integer",
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "live projectiles"
+                  }
+                },
+                "required": [
+                  "maxActive"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_sentry"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Native Projectile.sentry flag; false explicitly disables registration",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_descendant_concurrency"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "maxActive": {
+                    "description": "Maximum simultaneous pending reservations plus live descendants for this physical source and its nested descendants",
+                    "maximum": 96,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "pending or live descendants"
                   }
                 },
                 "required": [
