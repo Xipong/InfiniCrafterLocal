@@ -181,6 +181,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
         "set_projectile_concurrency": ("RuntimeSpawnSpec", ""),
+        "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
@@ -208,6 +209,8 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "shotEntity": "ShotEntityId",
                 "entity": "EntityId",
             }.get(param_name, param_name[:1].upper() + param_name[1:])
+            if cap.name == "set_descendant_concurrency":
+                csharp_name = "DescendantMaxActive"
             csharp = bounds.get(csharp_name)
             if cap.name == "channel_beam" and spec.default is not None:
                 block = _class_block(text, class_name)
@@ -230,7 +233,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "consumerPrecisionPreserved": preserves_precision,
                              "preserved": reject_bounds == authored_bounds and preserves_precision})
                 continue
-            if cap.name == "set_projectile_concurrency" or (
+            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"} or (
                 cap.name == "select_targets_and_emit_on_event" and param_name != "delayTicks"
             ):
                 block = _class_block(text, class_name)

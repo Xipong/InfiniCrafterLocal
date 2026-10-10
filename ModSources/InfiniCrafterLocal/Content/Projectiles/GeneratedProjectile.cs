@@ -32,6 +32,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _childDepth;
     private int _remainingSpawnBudget; // peer-visible snapshot only; not owner authority
     private RuntimeSpawnBudget? _activationSpawnBudget;
+    private RuntimeSpawnLease? _spawnBudgetLease;
     private int _age;
     private int _remainingBounces;
     private int _activationDelayTicks;
@@ -109,6 +110,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.tileCollide = false;
         Projectile.ignoreWater = false;
         Projectile.netImportant = false;
+        Projectile.sentry = false;
     }
 
     internal void Configure(
@@ -118,7 +120,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int remainingSpawnBudget,
         Vector2 initialDirection,
         bool preserveSyncedState = false,
-        RuntimeSpawnBudget? activationBudget = null)
+        RuntimeSpawnBudget? activationBudget = null,
+        bool ownsSpawnReservation = false)
     {
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedBounces = _remainingBounces;
@@ -129,7 +132,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _generatedItemId = data.Id;
         _entityId = entity.Id;
         _childDepth = Math.Clamp(childDepth, 0, data.RuntimeProgram.Limits.MaxChildDepth);
-        _remainingSpawnBudget = Math.Clamp(remainingSpawnBudget, 0, data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
+        _remainingSpawnBudget = Math.Clamp(remainingSpawnBudget, 0, InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner);
         // Only the firing peer owns the mutable ledger. ExtraAI is an observation,
         // never a grant of fresh event-spawn capacity on another network peer.
         if (activationBudget is not null)
@@ -140,6 +143,21 @@ public sealed partial class GeneratedProjectile : ModProjectile
             _activationSpawnBudget = new RuntimeSpawnBudget(_remainingSpawnBudget);
         else if (!preserveSyncedState)
             _activationSpawnBudget = null;
+        bool localAuthority = Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+            && Main.player[Projectile.owner] is { active: true } budgetOwner
+            && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(budgetOwner);
+        if (!preserveSyncedState)
+        {
+            _spawnBudgetLease?.Release();
+            _spawnBudgetLease = null;
+            if (localAuthority && entity.Spawn.DescendantMaxActive is int cap)
+            {
+                // A free root has no ancestor occupancy. A nested declaration
+                // adds a cap and cannot replace the incoming ancestor ledger.
+                _activationSpawnBudget = new RuntimeSpawnBudget(cap, concurrent: true,
+                    parent: childDepth > 0 ? activationBudget ?? _activationSpawnBudget : null);
+            }
+        }
         _initialDirection = initialDirection.SafeNormalize(Vector2.UnitX);
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
@@ -172,6 +190,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.alpha = _activationDelayTicks > 0 ? 220 : 0;
         }
         _preserveSyncedStateOnHydrate = false;
+        // Only fully configured native results convert a reservation to live
+        // occupancy. A configuration exception leaves it available for refund.
+        if (!preserveSyncedState && localAuthority && ownsSpawnReservation && activationBudget is not null)
+        {
+            RuntimeSpawnLease? lease = null;
+            lease = activationBudget.TrackLive(Projectile,
+                () => ReferenceEquals(_spawnBudgetLease, lease) && ReferenceEquals(Projectile.ModProjectile, this)
+                    && Projectile.whoAmI >= 0 && Projectile.whoAmI < Main.projectile.Length
+                    && ReferenceEquals(Main.projectile[Projectile.whoAmI], Projectile));
+            _spawnBudgetLease = lease;
+        }
     }
 
     private void ApplyEntityStats()
@@ -203,7 +232,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             : -2;
         Projectile.netImportant = entity.IsOwnerAttached
             || entity.IsStationary
+            || entity.NativeSentry == true
             || entity.Controller.Code != RuntimeControllerCode.None;
+        Projectile.sentry = entity.NativeSentry == true;
         Projectile.timeLeft = Math.Max(1, AuthoredTicksToProjectileUpdates(entity.LifetimeTicks) + _activationDelayTicks);
         // Charging is a lifecycle phase, not an entity-kind collision policy.
         // Released peers retain their explicitly authored collision on hydration.
@@ -257,6 +288,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 "cursor" => cursor,
                 "ground_at_cursor" => FindGroundAtCursor(cursor),
                 "above_cursor" => cursor - Vector2.UnitY * Math.Max(16f, entity.Spawn.OverTarget.HeightTiles * 16f),
+                "native_resting_spot" => NativeRestingSpot(owner, entity),
                 _ => origin,
             });
             if (initialTransform is null && entity.Spawn.OverTarget.HeightTiles > 0f && entity.Spawn.Placement != "above_cursor")
@@ -311,7 +343,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 try
                 {
                     generated.Configure(data, entity, childDepth, activationBudget.Remaining, direction == Vector2.Zero ? new Vector2(owner.direction, 0f) : direction,
-                        activationBudget: activationBudget);
+                        activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0);
                     generated.SetInitialNpcExclusion(initialNpcExclusion ?? RuntimeInitialNpcExclusion.None);
                 }
                 catch
@@ -323,6 +355,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 }
                 projectile.netUpdate = true;
                 spawned++;
+                if (entity.NativeSentry == true) owner.UpdateMaxTurrets();
             }
         }
         catch
@@ -363,6 +396,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 count++;
         }
         return count;
+    }
+
+    private static Vector2 NativeRestingSpot(Player owner, RuntimeEntitySpec entity)
+    {
+        owner.FindSentryRestingSpot(ModContent.ProjectileType<GeneratedProjectile>(), out int x, out int y, out _);
+        return new Vector2(x, y - entity.Hitbox.HeightPx * 0.5f);
     }
 
     private static Vector2 FindGroundAtCursor(Vector2 cursor)

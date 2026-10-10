@@ -1155,7 +1155,7 @@ _CAPS: list[CapabilitySpec] = [
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
             "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
-            "placement": _p("string", "Spawn position", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor")),
+            "placement": _p("string", "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot")),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::SpawnRuntimeEntity",
@@ -1183,6 +1183,26 @@ _CAPS: list[CapabilitySpec] = [
         wire=("runtimeProgram.entities[].spawn.maxActive",),
         provenance="explicit optional per-entity live admission cap; no omission materialization",
         repair_group="projectile_concurrency",
+    ),
+    _cap(
+        "set_projectile_sentry",
+        "Explicitly choose Projectile.sentry registration for this entity. enabled=true participates in the owner's native maxTurrets cap; Player.UpdateMaxTurrets runs immediately after each successful native sentry spawn and may retire the oldest sentry. Active item bindings project Item.sentry from their exact target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement or choose a weapon family. Omission preserves prior non-sentry behaviour.",
+        "entity_lifecycle", PROJECTILE_ENTITY_KINDS,
+        {"enabled": _p("boolean", "Native Projectile.sentry flag; false explicitly disables registration", wire_name="nativeSentry")},
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.cs::Configure",
+        wire=("runtimeProgram.entities[].nativeSentry",),
+        provenance="native sentry registration restored as an independent declared engine primitive",
+        repair_group="native_sentry",
+    ),
+    _cap(
+        "set_descendant_concurrency",
+        "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget, with no fresh capacity created by network hydration.",
+        "entity_spawn", PROJECTILE_ENTITY_KINDS,
+        {"maxActive": _p("integer", "Maximum simultaneous pending reservations plus live descendants for this physical source and its nested descendants", minimum=1, maximum=96, units="pending or live descendants", wire_name="descendantMaxActive")},
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.cs::Configure",
+        wire=("runtimeProgram.entities[].spawn.descendantMaxActive",),
+        provenance="sustained bounded descendant capacity without a monotonic 32-shot lifetime stop",
+        repair_group="descendant_concurrency",
     ),
     _cap(
         "set_projectile_damage",
@@ -1931,8 +1951,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         )
     if cap.name == "configure_spawn":
         return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items()]])
-    if cap.name == "set_projectile_concurrency":
+    if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"}:
         return tuple(f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items())
+    if cap.name == "set_projectile_sentry":
+        return ("runtimeProgram.entities[].nativeSentry",)
     if cap.name == "set_projectile_damage":
         return tuple(["runtimeProgram.entities[].damage.enabled", *[f"runtimeProgram.entities[].damage.{name}" for name in cap.params]])
     if cap.name == "set_projectile_lifetime":
@@ -1976,6 +1998,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
+        "set_projectile_sentry": "native_sentry", "set_descendant_concurrency": "spawn",
     }
     if cap.name in direct:
         return direct[cap.name]
@@ -2010,6 +2033,8 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "add_equipment_damage_bonus": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
         "configure_spawn": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "set_projectile_concurrency": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
+        "set_projectile_sentry": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+        "set_descendant_concurrency": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
         "set_projectile_damage": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_lifetime": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_hitbox": "Content/Projectiles/GeneratedProjectile.cs::Configure",

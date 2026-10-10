@@ -243,6 +243,7 @@ public partial class GeneratedItem : ModItem
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
         Data.ApplyUseEffectFields(Item, applyingItemEffects);
         bool spawning = action.Kind == RuntimeBindingAction.SpawnEntity;
+        Item.sentry = spawning && Data.RuntimeProgram.TryGetEntity(action.TargetId)?.NativeSentry == true;
         Item.shoot = spawning ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
         Item.shootSpeed = spawning
             ? Data.RuntimeProgram.TryGetEntity(action.TargetId)?.Spawn.SpeedPxPerTick ?? 0f
