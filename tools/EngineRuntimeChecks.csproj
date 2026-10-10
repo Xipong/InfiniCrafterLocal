@@ -12,6 +12,9 @@
     <!-- Compile the canonical implementation, never a copied/extracted method. -->
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
     <Compile Include="EngineRuntimeChecks.cs" />
+    <Compile Include="EngineRuntimeChecks.HitboxCurve.cs" />
+    <Compile Include="EngineRuntimeChecks.Modifiers.cs" />
+    <Compile Include="EngineRuntimeChecks.RawJsonNumeric.cs" />
     <Compile Include="EngineRuntimeChecks.World.cs" />
     <Compile Include="EngineRuntimeChecks.Player.cs" />
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
@@ -19,6 +22,7 @@
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.LiteralStackCost.cs" />
+    <Compile Include="EngineRuntimeChecks.StackChance.cs" />
     <Compile Include="EngineRuntimeChecks.Float32BuffIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffUI.cs" />
     <Compile Include="EngineRuntimeChecks.UtilityBuffDraw.cs" />

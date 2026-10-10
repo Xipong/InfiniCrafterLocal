@@ -22,6 +22,7 @@ MIN_EXACT_REPETITION_COMPRESSION = 5
 PRIMARY_BINDING_ROLE_LOWERER_ID = "primary_entity_to_binding_role"
 PRIMARY_OWNER_LOWERER_ID = "primary_entity_kind_to_owner"
 PRIMARY_OWNER_FINAL_PATH = "runtimeProgram.primaryOwner"
+STACK_CHANCE_LOWERER_ID = "binding_stack_chance_identity"
 EFFECT_GROUP_BINDING_LOWERER_ID = "binding_effect_group_identity"
 EXACT_REPETITION_COMPRESSION_POLICY = {
     "kind": "exact_repetition",
@@ -99,6 +100,16 @@ def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
     }
 
 
+def stack_chance_receipt(*, source_index: int, final_index: int, value: int) -> dict[str, Any]:
+    return {
+        "lowererId": STACK_CHANCE_LOWERER_ID,
+        "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
+                          f"runtimeProgram.bindings[{source_index}].stackConsumeChancePercent"],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.stackConsumeChancePercent",
+        "value": value, "status": "technical_projection",
+    }
+
+
 def effect_group_binding_receipt(*, source_index: int, final_index: int, value: str) -> dict[str, Any]:
     return {
         "lowererId": EFFECT_GROUP_BINDING_LOWERER_ID,
@@ -132,6 +143,14 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
                     "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId", "runtimeProgram.itemEntityId"],
         "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
         "preserves": ["input", "action", "target", "stack", "contact", "primary", "identity", "JSON type"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": STACK_CHANCE_LOWERER_ID,
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].stackConsumeChancePercent"],
+        "outputs": ["runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"],
+        "equivalence": "literal optional authored probability on the same exact binding identity",
+        "preserves": ["binding identity", "explicit zero", "probability", "absence", "placement escrow"],
         "addsDesignChoice": False,
     },
     {
@@ -559,6 +578,24 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
     return "global receipt is not the declared projection of final wire facts" if receipt.get("value") != expected else ""
 
 
+def _stack_chance_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].stackConsumeChancePercent":
+        return "stack chance receipt lacks exact same-binding inputs"
+    binding_id = _final_value(authored, paths[0])
+    value = _final_value(authored, paths[1])
+    if type(value) is not int or not _same_receipt_value(value, receipt.get("value")):
+        return "stack chance receipt differs from the explicit authored probability"
+    if final is not None:
+        bindings = _final_value(final, "runtimeProgram.bindings")
+        matches = [i for i, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                   if isinstance(binding, Mapping) and binding.get("id") == binding_id]
+        if len(matches) != 1 or receipt.get("finalPath") != f"runtimeProgram.bindings[{matches[0]}].usePolicy.stackConsumeChancePercent":
+            return "stack chance receipt differs from its exact binding identity"
+    return ""
+
+
 def _effect_group_binding_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
     paths = receipt.get("authoredPaths", [])
     match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
@@ -740,7 +777,9 @@ def audit_compiler_receipts(
             if not valid:
                 violations.append({"fn": fn, "finalPath": path, "reason": "weapon ammo semantics lack their exact originating capability selection"})
         if authored_document is not None:
-            reason = (_effect_group_binding_source_error(receipt, authored_document, final_document)
+            reason = (_stack_chance_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == STACK_CHANCE_LOWERER_ID
+                      else _effect_group_binding_source_error(receipt, authored_document, final_document)
                       if lowerer_id == EFFECT_GROUP_BINDING_LOWERER_ID
                       else _visual_receipt_source_error(receipt, authored_document, final_document)
                       if lowerer_id == "entity_kind_to_visual_role"
@@ -995,7 +1034,7 @@ def audit_compiler_receipts(
                             "reason": "wrong item stat output for authored parameter",
                         })
                 if fn in {"configure_accessory", "configure_armor"}:
-                    prefix = "accessory" if fn == "configure_accessory" else "armor"
+                    prefix = fn.removeprefix("configure_")
                     expected = f"{prefix}.{cap.params[match.group(2)].wire_name or match.group(2)}"
                     if path != expected:
                         violations.append({
@@ -1177,6 +1216,13 @@ def audit_compiler_receipts(
             if len(matching) != 1:
                 violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
                                    "reason": "global projection has no unique compiler receipt"})
+            chance_path = f"runtimeProgram.bindings[{bi}].stackConsumeChancePercent"
+            if _final_value(authored_document, chance_path) is not _MISSING:
+                matching = [r for r in receipt_rows if r.get("lowererId") == STACK_CHANCE_LOWERER_ID
+                            and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", chance_path]]
+                if len(matching) != 1:
+                    violations.append({"lowererId": STACK_CHANCE_LOWERER_ID, "authoredPath": chance_path,
+                                       "reason": "global projection has no unique compiler receipt"})
             group_path = f"runtimeProgram.bindings[{bi}].action.effectGroupId"
             if _final_value(authored_document, group_path) is not _MISSING:
                 matching = [r for r in receipt_rows if r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID
@@ -1200,6 +1246,10 @@ def audit_compiler_receipts(
         bindings = _final_value(final_document, "runtimeProgram.bindings")
         expected_globals.extend((PRIMARY_BINDING_ROLE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].role")
                                 for bi, _ in enumerate(bindings if isinstance(bindings, list) else []))
+        expected_globals.extend((STACK_CHANCE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.stackConsumeChancePercent")
+                                for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                                if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                                and "stackConsumeChancePercent" in binding["usePolicy"])
         expected_globals.extend((EFFECT_GROUP_BINDING_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.action.effectGroupId")
                                 for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
                                 if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
@@ -1340,6 +1390,29 @@ def audit_compiler_receipts(
                         if not associated:
                             violations.append({"fn": fn, "finalPath": path, "callId": receipt.get("callId"),
                                                "reason": "explicit wire parameter receipt has the wrong entity or event owner"})
+        # Optional registry-selected components have no legacy implicit owner.
+        # Audit their full presence here, even when every receipt was removed.
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        for presence_fn, presence_cap in CAPABILITY_REGISTRY.items():
+            if not presence_cap.wire_presence_path:
+                continue
+            for index, _ in enumerate(entities if isinstance(entities, list) else []):
+                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1)
+                if _final_value(final_document, base) is _MISSING:
+                    continue
+                matching = [row for row in receipt_rows if row.get("fn") == presence_fn
+                            and (row["finalPath"] == base or row["finalPath"].startswith(base + "."))]
+                owners = {(row["callId"], source_match.group(0)) for row in matching
+                          if (source_match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+                if len(owners) != 1:
+                    violations.append({"fn": presence_fn, "finalPath": base,
+                                       "reason": "present optional component lacks one originating receipt owner"})
+                for pattern in presence_cap.final_wire_paths:
+                    output = pattern.replace("[]", f"[{index}]", 1)
+                    rows = [row for row in matching if row["finalPath"] == output]
+                    if len(rows) != 1:
+                        violations.append({"fn": presence_fn, "finalPath": output,
+                                           "reason": "present optional component lacks unique full output coverage"})
         if _final_value(final_document, "runtimeProgram.weaponAmmo") is not _MISSING:
             selections = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
                           and row.get("finalPath") == "runtimeProgram.weaponAmmo"
@@ -1406,8 +1479,8 @@ def audit_compiler_receipts(
         "ok": not violations,
         "violations": violations,
         "lowerers": [row for row in GLOBAL_TECHNICAL_LOWERINGS
-                     if row["id"] != EFFECT_GROUP_BINDING_LOWERER_ID
-                     or any(receipt.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for receipt in receipt_rows)],
+                     if row["id"] not in {STACK_CHANCE_LOWERER_ID, EFFECT_GROUP_BINDING_LOWERER_ID}
+                     or any(receipt.get("lowererId") == row["id"] for receipt in receipt_rows)],
         # Keep source-backed compiler serialization unchanged. Only standalone
         # audits need an explicit limit on what their successful check proves.
         **({"authoredSourceChecked": False} if authored_document is None else {}),
@@ -1425,6 +1498,7 @@ def technical_lowering_manifest() -> dict[str, Any]:
             "compilerOwner": cap.compiler_owner,
             "csharpOwner": cap.csharp_owner,
             **({"technicalProjectionInputs": list(cap.technical_lowering_inputs)} if cap.technical_lowering_inputs else {}),
+            **({"wirePresencePath": cap.wire_presence_path} if cap.wire_presence_path else {}),
         })
     return {
         "schema": TECHNICAL_LOWERING_SCHEMA,

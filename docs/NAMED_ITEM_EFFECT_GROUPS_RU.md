@@ -4,16 +4,17 @@
 
 ## Контракт и совместимость
 
-Четыре существующие capability принимают optional `params.effectGroupId`:
+Пять существующих capability принимают optional `params.effectGroupId`:
 
 | Capability | Эффекты внутри выбранной группы |
 |---|---|
 | `restore_resources_on_use` | `healLife`, `healMana`, `potion` |
 | `apply_vanilla_buff_on_use` | append в `extraBuffs[]` с точными ID и длительностью |
 | `apply_generated_buff_on_use` | `generatedBuff`, включая объявленные unit conversions и optional neutral omissions |
-| `move_player_on_use` | выбранный mobility mode, range, cooldown и safe-tile policy |
+| `move_player_on_use` | blink-to-cursor, range, cooldown и safe-tile policy |
+| `recall_home_on_use` | recall с authored cooldown и точными registry literals `mobilityMode="recall_home"`, `mobilityRangeTiles=0`, `mobilitySafeTileOnly=false` в выбранной группе |
 
-ID соответствует `[a-z][a-z0-9_]{0,47}`. Одинаковый литерал складывает компоненты одной группы; разные литералы разделяют их. Single-компоненты проверяются отдельно в каждой группе, append-компонент сохраняет все authored native buffs. ID ничего не сообщает об оружейной family, категории, визуальном carrier или выборе способности.
+ID соответствует `[a-z][a-z0-9_]{0,47}`. Одинаковый литерал складывает компоненты одной группы; разные литералы разделяют их. Single-компоненты и exclusive ownership проверяются отдельно в каждой группе, append-компонент сохраняет все authored native buffs. Blink и recall занимают один exclusive `item_mobility` slot внутри одинаковой или default-группы; разные явно названные группы и named/default пара независимы. Разный input сам по себе не разделяет slot. ID ничего не сообщает об оружейной family, категории, визуальном carrier или выборе способности.
 
 У `apply_item_effects` action появляется optional `effectGroupId`. Пример двух binding-фрагментов:
 
@@ -35,6 +36,8 @@ Calls с `effectGroupId:"healing"` и `effectGroupId:"escape"` должны яв
 `GeneratedItem` выбирает группу по точному активному binding. До использования native `Item.healLife`, `healMana`, `potion`, `buffType`, `buffTime` проецируются из этого выбранного источника; затем тот же источник обслуживает extra buffs, generated utility и mobility. Native healing/consumption продолжает выполнять Terraria.
 
 Quick heal и quick mana выбирают только primary binding. Подготовка кандидатов обновляет native effect fields перед native selector, поэтому предыдущее альтернативное использование не прячет primary healing. Multiplayer quick-utility ticket по-прежнему фиксирует player/item/definition/primary binding; server admission и commit выбирают эту же primary group. Транспорт не повторяет native лечение или `UseItem`.
+
+[Optional вероятность расхода собственного стека](OWN_STACK_CHANCE_RU.md) — независимая binding policy. Она не маршрутизирует group selection и не подавляет успешно выполненные эффекты; exact input Repair сохраняет одновременно frozen group selector и probability. Held-refresh dedup не заменяет completed-use receipt расхода.
 
 Все группы и все предметы одного игрока используют прежний **единый player mobility cooldown**. Две разные группы recall/blink не создают независимые таймеры. Pure mobility attempt, отказанный после admission, не получает успешный stack-consumption receipt; удача primary не может оплатить отказавший alternate. Если группа содержит другие успешно выполненные эффекты, сохраняется прежняя mixed-use семантика без выдуманного общего rollback.
 

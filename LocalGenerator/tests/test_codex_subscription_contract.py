@@ -272,8 +272,10 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             action_kind = branch["properties"].get("action", {}).get("properties", {}).get("kind", {}).get("const")
             action_kind = action_kind or INPUT_KIND_REGISTRY[input_kind].allowed_actions[0]
             row = {"id": "binding_probe", **complete_transaction(input_name=input_kind, action_name=action_kind,
-                target="item", stack_cost_value=1 if action_kind == "place_item" else 0,
+                target="item", stack_cost_value=branch["properties"].get("stackCost", {}).get("const", 1 if action_kind == "place_item" else 0),
                 contact_damage_value=False, placement_call="place_call" if action_kind == "place_item" else "")}
+            if "stackConsumeChancePercent" in branch["properties"]:
+                row["stackConsumeChancePercent"] = 35
             selector = "input"
         assert Draft202012Validator(local).is_valid(row)
         encoded = _encode_nullable_fixture(row, branch)

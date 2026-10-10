@@ -98,9 +98,10 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
     # Reverse only those asserted successors; every other compiled byte is pinned.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
     from sentry_contract_checks import without_declared_targeting_neutrals
+    from beam_contract_checks import without_declared_beam_neutrals
 
     for name, expected_hash in baseline.items():
-        final = without_declared_targeting_neutrals(without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name)))))
+        final = without_declared_targeting_neutrals(without_declared_beam_neutrals(without_captured_projectile_alias_delta(historical_child_combat_wire(compile_runtime_program(build_runtime_fixture(name))))))
         rows = final["runtimeContract"]["finalWireReceipts"]
         for row in rows:
             if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
@@ -129,7 +130,11 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
                                            for fn in stats["capabilitiesUsed"])
         checks = stats["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
-        assert checks["requirements"] == 31
+        added_modifier_caps = (
+            "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
+        )
+        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
@@ -152,7 +157,8 @@ def test_ammo_stack_and_weapon_consumer_are_an_explicit_unsupported_composition(
 
 def test_hold_only_spawner_is_not_a_native_ammo_consumer_and_repair_uses_existing_entity():
     doc = _weapon()
-    doc["runtimeProgram"]["bindings"][0]["input"] = "hold"
+    binding = doc["runtimeProgram"]["bindings"][0]
+    doc["runtimeProgram"]["bindings"][0] = {"id": binding["id"], "input": "hold", "action": {"targetId": binding["action"]["targetId"]}}
     report = validate_runtime_program(doc)
     assert any(row["code"] == "missing_binding_dependency" for row in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])

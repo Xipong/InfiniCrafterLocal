@@ -11,6 +11,9 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
+    private bool PreservesExplicitBodyScale()
+        => _entity?.HitboxCurve?.MirrorToSprite == true || _entity?.VisualScaleCurve is not null;
+
     public override bool PreDraw(ref Color lightColor)
     {
         if (!TryHydrate() || _data is null || _entity is null) return false;
@@ -41,7 +44,10 @@ public sealed partial class GeneratedProjectile
         if (texture is null) return;
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() * 0.5f;
-        float scale = Math.Clamp(Projectile.scale, 0.1f, 8f) * selected.FrameScale(source.Width, source.Height);
+        // An explicit mirror or visual curve owns the complete bounded product.
+        // Legacy live sprite scale retains its old clamp without either owner.
+        float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
+            * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), selected.ProjectileRotation(_entity, Projectile.rotation, effects), origin, scale, effects, 0f);
     }
@@ -70,9 +76,10 @@ public sealed partial class GeneratedProjectile
         Vector2 direction = _entity.Movement.Code is 14 or 16 or 17
             ? Projectile.rotation.ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);
-        float length = Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
-        float width = Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f);
+        bool exactScale = PreservesExplicitBodyScale();
+        float length = exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
+        float width = exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f : Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f);
         Vector2 delta = direction.SafeNormalize(Vector2.UnitX) * length;
-        InfiniVfxRuntime.DrawLine(pixel, center - delta * 0.5f, center + delta * 0.5f, color, width);
+        InfiniVfxRuntime.DrawLine(pixel, center - delta * 0.5f, center + delta * 0.5f, color, width, preserveWidth: exactScale);
     }
 }

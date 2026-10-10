@@ -30,3 +30,30 @@
 ## Scope
 
 C# feature diff отсутствует; native source baseline совпадает с approved b15baf6. Нет native conflicts, но native compile не выполнялся. Не менялись чужие worktrees, remote, saved fixtures, Visual/VFX exports. Это checkpoint implementation для review/продолжения, не утверждение полного acceptance.
+
+
+## Интеграция accepted main `88dbddb17f60f9ddc044c8cefb4f5c3d4efd0472`
+
+Новый source checkpoint сохраняет единственную Author v5, private exact view и wire v3.
+Python/docs/generated merge согласован с independent own-stack chance, named groups,
+optional component presence proof и типизированными параметрами. C# автоматически
+слит parent-ом; этот source repair не редактировал C# и не запускал native/compiler/game.
+
+Все девять прежних pipeline Repair failures воспроизведены (`integration-red.log`) и
+закрыты canonical permission/deletion/created-declaration owners либо source-native
+adversarial constructors. Исторические diagnostic oracles явно проецируют placement
+`shape_const` в exact forbidden-property diagnostic; captured JSON/hashes не менялись.
+Full-byte ammo oracle сохраняет прежние SHA после проверяемой test-local проекции
+child/beam/targeting, source provenance и конечных registry deltas.
+
+Два дополнительно найденных parent-ом механизма имеют RED/GREEN observers в
+`test_canonical_author_notation.py`: omission-only passive input получает только input
+scope без synthetic action/target; no-op Repair сохраняет malformed whole array.
+Оба actual serialized provider formats проходят parse→scope→filter→merge→compile;
+hostile frozen named-group sibling игнорируется с audit.
+
+До final source freeze: `focused-final.log` 394 PASS; `parent-blockers-green.log` 26 PASS;
+`accepted-features-green.log` 723 PASS (пересекающиеся subsets, не суммировать).
+`gates-integration.json`: 11 gates PASS + pyright 0 errors. Полный canonical four-shard
+acceptance привязывается к следующему frozen merge head отдельным artifact report;
+эта запись сама по себе не заменяет полный acceptance verdict.

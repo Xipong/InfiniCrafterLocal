@@ -18,15 +18,19 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_wire
 
     assert validate_runtime_wire(compiled)["ok"]
-    result = deepcopy(compiled)
+    result = historical_author_binding_wire(compiled)
     checks = result["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
     conditional = [(cap.name, name) for cap in CAPABILITY_REGISTRY.values()
                    for name, spec in cap.params.items() if spec.omission_condition is not None]
     assert set(conditional) == {("configure_spawn", "count"), ("configure_spawn", "spreadRadians"),
                                 ("set_projectile_collision", "bounceCount")}
     assert len(CAPABILITY_REGISTRY["pull_owner_to_event_target"].requirements) == 1
-    assert checks["requirements"] == 33
-    checks["requirements"] = 29  # Three branch proofs and the explicit owner-pull event.
+    added_modifier_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                           "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+    added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
+    assert added_requirements == 9
+    assert checks["requirements"] == 35 + added_requirements
+    checks["requirements"] -= 4  # Three branch proofs and the explicit owner-pull event.
     removed = set()
     for i, entity in enumerate(result["runtimeProgram"]["entities"]):
         spawn = entity.get("spawn", {})
@@ -156,3 +160,35 @@ def project_captured_author_notation(document: dict[str, Any]) -> dict[str, Any]
                     if type(row[key]) is type(value) and row[key] == value:
                         del row[key]
     return projected
+
+
+def historical_author_binding_wire(compiled: dict[str, Any]) -> dict[str, Any]:
+    """Reverse only authenticated v5 notation provenance for frozen v4 oracles."""
+    import re
+    result = deepcopy(compiled)
+    contract = result["runtimeContract"]
+    rows = contract["finalWireReceipts"]
+    new = [r for r in rows if r.get("lowererId") == "author_binding_lanes"]
+    assert new
+    for row in new:
+        assert row["status"] == "technical_projection" and row["authoredPaths"]
+        path = row["finalPath"]
+        value = result
+        for key, index in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]", path):
+            value = value[int(index)] if index else value[key]
+        assert type(value) is type(row["value"]) and value == row["value"]
+    contract["finalWireReceipts"] = [r for r in rows if r not in new]
+    for row in contract["finalWireReceipts"]:
+        if row.get("lowererId") == "primary_entity_to_binding_role":
+            match = re.fullmatch(r"runtimeProgram.bindings\[(\d+)\].role", row["finalPath"])
+            assert match and row["authoredPaths"][0] == "runtimeProgram.primaryEntityId"
+            source = next(path for path in row["authoredPaths"] if path.startswith("runtimeProgram.bindings["))
+            prefix = source.split("]", 1)[0] + "]"
+            row["authoredPaths"] = ["runtimeProgram.primaryEntityId", prefix + ".usePolicy.action.targetId"]
+    manifest = contract["technicalLoweringAudit"]["lowerers"]
+    assert sum(row["id"] == "author_binding_lanes" for row in manifest) == 1
+    manifest[:] = [row for row in manifest if row["id"] != "author_binding_lanes"]
+    role = next(row for row in manifest if row["id"] == "primary_entity_to_binding_role")
+    assert role["inputs"] == ["runtimeProgram.primaryEntityId", "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"]
+    role["inputs"] = ["runtimeProgram.primaryEntityId", "runtimeProgram.bindings[].usePolicy.action.targetId"]
+    return result

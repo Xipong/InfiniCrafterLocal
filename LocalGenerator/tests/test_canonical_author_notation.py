@@ -1,6 +1,8 @@
 """Current Author notation: one source admission/compiler/Repair boundary."""
 from copy import deepcopy
 
+import pytest
+
 from infini_local.core.runtime_authoring import (
     compile_runtime_program, validate_runtime_program, validate_runtime_wire,
 )
@@ -306,3 +308,52 @@ def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes(
         assert repaired == expected
         assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
         assert source == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("value", ["unknown", {}, None])
+def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypatch, format_mode, value):
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+    source = build_capability_witness("configure_accessory")
+    from test_item_effect_groups import _groups
+    groups = _groups()
+    groups["runtimeProgram"]["bindings"][0]["id"] = "group_primary"
+    groups["runtimeProgram"]["calls"][2]["id"] = "group_effect"
+    source["runtimeProgram"]["calls"].extend(deepcopy(row) for row in groups["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use")
+    source["runtimeProgram"]["bindings"].extend(deepcopy(groups["runtimeProgram"]["bindings"]))
+    binding = source["runtimeProgram"]["bindings"][0]
+    assert set(binding) == {"id", "input"}
+    binding["input"] = value
+    before = deepcopy(source)
+    report = validate_runtime_program(source)
+    scope = build_runtime_repair_scope(source, report["errors"])
+    assert scope["fieldPermissions"]["bindings"] == [{"id": binding["id"], "paths": ["input"]}]
+    fixed = {"id": binding["id"], "input": "equipped"}
+    hostile = deepcopy(source["runtimeProgram"]["bindings"][1])
+    hostile["action"]["effectGroupId"] = "second"
+    repaired, _ = _offline_gameplay_repair(monkeypatch, source,
+        {"note": "explicit passive selector", "realizationReplacement": source["realization"], "bindingsUpsert": [fixed, hostile]}, format_mode)
+    assert repaired["runtimeProgram"]["bindings"] == [fixed, *source["runtimeProgram"]["bindings"][1:]]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert repaired["runtimeProgram"]["calls"] == source["runtimeProgram"]["calls"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert source == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("value", [{}, None, ""])
+def test_noop_repair_preserves_malformed_whole_binding_container(monkeypatch, format_mode, value):
+    from infini_local.core.runtime_authoring import apply_repair_patch
+    from infini_local.core.errors import PlannerUnavailable
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+    source = build_capability_witness("configure_accessory")
+    source["runtimeProgram"]["bindings"] = value
+    before = deepcopy(source)
+    assert apply_repair_patch(source, {"note": "no-op"}) == source
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, source,
+            {"note": "no-op", "realizationReplacement": source["realization"]}, format_mode)
+    assert source == before

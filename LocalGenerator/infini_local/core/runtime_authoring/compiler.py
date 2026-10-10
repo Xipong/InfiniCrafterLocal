@@ -14,6 +14,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     MOVEMENT_OPCODE,
+    PROJECTILE_MODIFIER_COMPONENTS,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
     ENTITY_KIND_REGISTRY,
@@ -30,6 +31,7 @@ from infini_local.core.runtime_authoring.technical_lowering import (
     primary_binding_role_receipt,
     primary_owner_for_kind,
     primary_owner_receipt,
+    stack_chance_receipt,
     effect_group_binding_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
@@ -254,9 +256,9 @@ def _compile_item_call(
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
         return
     if fn == "recall_home_on_use":
-        ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix="gameplay")
+        ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix=effect_prefix)
         for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
-            ctx.write_derived(call=call, path=f"gameplay.{key}", value=value, target=gameplay, key=key,
+            ctx.write_derived(call=call, path=f"{effect_prefix}.{key}", value=value, target=gameplay, key=key,
                               source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "move_player_on_use":
@@ -343,6 +345,17 @@ def _compile_entity_call(
         return
     if fn == "set_projectile_hitbox":
         project(component("hitbox"), f"{base}.hitbox", p)
+        return
+    if fn == "set_projectile_hitbox_curve":
+        project(component("hitboxCurve"), f"{base}.hitboxCurve", p)
+        return
+    if fn in PROJECTILE_MODIFIER_COMPONENTS:
+        name = PROJECTILE_MODIFIER_COMPONENTS[fn]
+        project(component(name), f"{base}.{name}", p)
+        return
+    if fn == "orient_whip_to_owner_gravity":
+        ctx.write_derived(call=call, path=f"{base}.whipUsesOwnerGravity", value=True, target=entity,
+                          key="whipUsesOwnerGravity", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "set_projectile_collision":
         project(component("collision"), f"{base}.collision", p)
@@ -458,6 +471,11 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         role_receipt = primary_binding_role_receipt(source_index=source_index, final_index=final_index, role=binding["role"])
         role_receipt["authoredPaths"] = _binding_role_paths(document, source_index)
         ctx.receipts.append(role_receipt)
+        if "stackConsumeChancePercent" in binding["usePolicy"]:
+            ctx.receipts.append(stack_chance_receipt(
+                source_index=source_index, final_index=final_index,
+                value=binding["usePolicy"]["stackConsumeChancePercent"],
+            ))
         if "effectGroupId" in binding["usePolicy"]["action"]:
             ctx.receipts.append(effect_group_binding_receipt(source_index=source_index, final_index=final_index,
                 value=binding["usePolicy"]["action"]["effectGroupId"]))

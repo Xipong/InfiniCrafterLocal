@@ -58,6 +58,7 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
             "effectGroupId": "optional only for apply_item_effects; omission selects existing ungrouped effects",
         },
         "stackCost": "required integer 0|1 only for active non-placement; omit fixed place_item=1 and passive=0",
+        "stackConsumeChancePercent": "optional integer 0..100 only active non-placement stackCost=1; omission means 100 percent. Own-stack debit, never ammo or placement saving",
         "contactDamage": "required independent boolean only for active non-placement; omit fixed place_item/hold/equipped=false",
         "omissionRule": "equipped has no action object; hold action has only targetId. No other decision may be omitted.",
     }

@@ -1674,7 +1674,12 @@
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
         "gameplay.mobilityCooldownTicks",
-        "gameplay.mobilitySafeTileOnly"
+        "gameplay.mobilitySafeTileOnly",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].mobilityMode",
+        "runtimeProgram.effectGroups[].mobilityRangeTiles",
+        "runtimeProgram.effectGroups[].mobilityCooldownTicks",
+        "runtimeProgram.effectGroups[].mobilitySafeTileOnly"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -1688,6 +1693,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -3042,6 +3057,654 @@
         "child_projectile"
       ],
       "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_hitbox_curve",
+      "componentSlot": "hitbox_curve",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "decision": "expose",
+      "dependencies": [
+        "set_projectile_hitbox"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].hitboxCurve.startScale",
+        "runtimeProgram.entities[].hitboxCurve.endScale",
+        "runtimeProgram.entities[].hitboxCurve.startDelayTicks",
+        "runtimeProgram.entities[].hitboxCurve.durationTicks",
+        "runtimeProgram.entities[].hitboxCurve.curve",
+        "runtimeProgram.entities[].hitboxCurve.mirrorToSprite"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "curve": {
+          "enum": [
+            "linear",
+            "exponential"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "endScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        },
+        "mirrorToSprite": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "startScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restored explicit active-age damage rectangle growth; legacy movement15 visual scale no longer implies collision",
+      "purpose": "Scale the native rectangular damage hitbox along an explicit active-age curve, independently of sprite/VFX size. Start/end are multipliers on set_projectile_hitbox.hitboxScale. Active world ticks begin after spawn activation delay; extraUpdates changes sample frequency, not duration. Optional visual coupling is an explicit mirrorToSprite choice. Beam and whip line geometry are excluded.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "set_projectile_hitbox",
+          "kind": "capability_present",
+          "message": "A hitbox curve multiplies the same entity's explicit static hitbox.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "channel_beam",
+            "move_whip_lash"
+          ],
+          "kind": "capability_absent",
+          "message": "Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "move_expanding_wave",
+            "set_projectile_visual_scale_curve"
+          ],
+          "equals": true,
+          "kind": "capability_absent",
+          "message": "mirrorToSprite=true owns dynamic sprite scale; expanding-wave movement or a visual scale curve is a second owner. Disable the mirror or choose one scale owner.",
+          "param": "mirrorToSprite",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_turn_modifier",
+      "componentSlot": "turnModifier",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].turnModifier.turnRadiansPerUpdate",
+        "runtimeProgram.entities[].turnModifier.startDelayTicks",
+        "runtimeProgram.entities[].turnModifier.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "turnRadiansPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 0.5,
+          "minimum": -0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "radians/projectile update"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "explicit orthogonal turn with active-age phase",
+      "purpose": "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release",
+            "target_and_fire"
+          ],
+          "kind": "capability_absent",
+          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_speed_modifier",
+      "componentSlot": "speedModifier",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].speedModifier.speedMultiplierPerUpdate",
+        "runtimeProgram.entities[].speedModifier.maxSpeed",
+        "runtimeProgram.entities[].speedModifier.startDelayTicks",
+        "runtimeProgram.entities[].speedModifier.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "maxSpeed": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0.1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "pixels/projectile update"
+        },
+        "speedMultiplierPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.2,
+          "minimum": 0.8,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier/update"
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "explicit acceleration/retention independent of turn and homing",
+      "purpose": "After movement and turn, multiply velocity on each active projectile update and clamp its magnitude to the authored cap. Values below one slow; above one accelerate. Phase timing is in world ticks, while the multiplier is explicitly per projectile update.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release",
+            "target_and_fire"
+          ],
+          "kind": "capability_absent",
+          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_homing_modifier",
+      "componentSlot": "homingModifier",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].homingModifier.rangeTiles",
+        "runtimeProgram.entities[].homingModifier.maxTurnRadiansPerUpdate",
+        "runtimeProgram.entities[].homingModifier.requireLineOfSight",
+        "runtimeProgram.entities[].homingModifier.startDelayTicks",
+        "runtimeProgram.entities[].homingModifier.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "maxTurnRadiansPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.2,
+          "minimum": 0.0001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "radians/projectile update"
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "requireLineOfSight": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "explicit delayed homing independent of movement slot",
+      "purpose": "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release",
+            "target_and_fire"
+          ],
+          "kind": "capability_absent",
+          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "one bounded native NPC-array scan per active projectile update",
+      "status": "refactored",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "attract_npcs_while_active",
+      "componentSlot": "npcAttraction",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].npcAttraction.rangeTiles",
+        "runtimeProgram.entities[].npcAttraction.strengthPerUpdate",
+        "runtimeProgram.entities[].npcAttraction.falloff",
+        "runtimeProgram.entities[].npcAttraction.maxTargets",
+        "runtimeProgram.entities[].npcAttraction.startDelayTicks",
+        "runtimeProgram.entities[].npcAttraction.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "falloff": {
+          "enum": [
+            "constant",
+            "linear"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "maxTargets": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 16,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "rangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "tiles"
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "strengthPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.001,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "NPC velocity units/projectile update"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "independent NPC attraction and explicit radial falloff; no coupled hidden projectile drag",
+      "purpose": "Independent server NPC attraction every active projectile update, after movement/modifiers, without changing projectile velocity or selecting a movement family. Scan NPC slots in index order, require chaseable positive-resistance targets within hard range, then apply at most maxTargets. Uses native resistance clamped 0.1..1. No periodic event clock or owner hit callback is substituted.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "one bounded native NPC-array scan, at most authored 1..16 targets/update",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_visual_scale_curve",
+      "componentSlot": "visualScaleCurve",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].visualScaleCurve.startScale",
+        "runtimeProgram.entities[].visualScaleCurve.endScale",
+        "runtimeProgram.entities[].visualScaleCurve.startDelayTicks",
+        "runtimeProgram.entities[].visualScaleCurve.durationTicks",
+        "runtimeProgram.entities[].visualScaleCurve.curve"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "client_visual_only",
+      "parameters": {
+        "curve": {
+          "enum": [
+            "linear",
+            "exponential"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "endScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "startScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "independent multiplicative visual growth with explicit phase",
+      "purpose": "Set sprite/generic body scale to authored drawScale times visual.scale times an independent time curve. Linear or exponential interpolation uses active world ticks. This does not change damage or tile collision. Beam/whip line drivers are excluded because their exact body geometry uses collision dimensions. A separate gameplay hitbox curve can coexist only with its mirrorToSprite=false; no_asset still deliberately hides the body.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "move_expanding_wave",
+            "channel_beam",
+            "move_whip_lash"
+          ],
+          "kind": "capability_absent",
+          "message": "A visual scale curve excludes another scale owner and special beam/whip line geometry that does not consume sprite scale.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "orient_whip_to_owner_gravity",
+      "componentSlot": "whip_gravity",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::BuildWhipPoints",
+      "decision": "expose",
+      "dependencies": [
+        "move_whip_lash"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].whipUsesOwnerGravity"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {},
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "explicit owner-gravity orientation for existing whip geometry",
+      "purpose": "Mirror the existing whip sweep and bend around its explicitly aimed axis when owner.gravDir is inverted. Does not change authored aim, range or damage; collision and body use the same whip points. Choosing this fn supplies the sole true wire marker.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "move_whip_lash",
+          "kind": "capability_present",
+          "message": "Owner-gravity orientation requires the same entity's explicit whip geometry.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "channel_beam"
+          ],
+          "kind": "capability_absent",
+          "message": "Beam geometry takes precedence and would leave whip gravity orientation unconsumed.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].whipUsesOwnerGravity"
+      ]
     },
     {
       "authorityByEffect": {},

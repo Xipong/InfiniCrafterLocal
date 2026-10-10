@@ -287,7 +287,7 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v5"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
     author_binding = card["runtimeProgram"]["bindings"][0]
-    assert set(author_binding) == {"id", "input", "action", "stackCost", "contactDamage", "omissionRule"}
+    assert set(author_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
     assert set(author_binding["action"]) == {"kind", "targetId", "placementCallId", "effectGroupId"}
     assert "role" not in author_binding
     assert "role" not in card["runtimeProgram"]["calls"][0]
@@ -300,7 +300,7 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     repair_card = author_item_repair_prompt_shape_card()
     repair_schema = author_item_repair_response_schema()
     repair_binding = repair_card["bindingsUpsert"][0]
-    assert set(repair_binding) == {"id", "input", "action", "stackCost", "contactDamage", "omissionRule"}
+    assert set(repair_binding) == {"id", "input", "action", "stackCost", "contactDamage", "stackConsumeChancePercent", "omissionRule"}
     assert repair_binding == author_binding
     assert set(repair_card) == set(repair_schema["properties"])
     assert all(

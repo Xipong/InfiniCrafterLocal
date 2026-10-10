@@ -471,6 +471,7 @@ def test_planned_capability_support_cannot_cross_requirement_owner(scenario):
         item = next(e for e in program["entities"] if e["kind"] == "item_body")
         program["entities"].append({**item, "id": "other_item"})
         tool = next(c for c in program["calls"] if c["fn"] == "configure_tool")
+        tool["target"] = "item"  # Deliberately malformed explicit owners: no ambiguous body inference.
         program["calls"].append({**copy.deepcopy(tool), "id": "other_tool", "target": "other_item"})
         errors = validate_runtime_program(current)["errors"]
         item_error = next(e for e in errors if e["code"] == "missing_capability_dependency" and e.get("relatedIds") == ["item"])
@@ -549,11 +550,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     program["bindings"] = [{
         "id": "primary_place",
         "input": "primary_use",
-        "usePolicy": {
-            "action": {"kind": "place_item", "targetId": "item", "placementCallId": "place"},
-            "stackCost": 1,
-            "contactDamage": False,
-        },
+        "action": {"kind": "place_item", "placementCallId": "place"},
     }]
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["missing_binding_dependency"]
@@ -563,11 +560,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     alternatives = {row["bindingId"]: row["allowed"] for row in scope["bindingAlternatives"]}
     assert alternatives["primary_place"] == [{
         "input": "alternate_use",
-        "usePolicy": {
-            "action": {"kind": "place_item", "targetId": "item", "placementCallId": "place"},
-            "stackCost": 1,
-            "contactDamage": False,
-        },
+        "action": {"kind": "place_item", "placementCallId": "place"},
     }]
     primary_create = next(
         row for row in scope["create"]["bindings"]["allowedTransactions"]
@@ -611,7 +604,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
     )
     original_item_calls = [
         copy.deepcopy(row) for row in current["runtimeProgram"]["calls"]
-        if row["target"] == original_item["id"]
+        if CAPABILITY_REGISTRY[row["fn"]].target_kinds == ("item_body",)
     ]
     removed_call_ids = {row["id"] for row in original_item_calls}
     current["runtimeProgram"]["entities"] = [
@@ -645,7 +638,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
             continue
         repaired = copy.deepcopy(row)
         repaired["id"] = "repaired_" + row["id"]
-        repaired["target"] = new_item_id
+        assert "target" not in repaired  # The exact created sole declaration owns body calls.
         repaired_calls.append(repaired)
     patch = _empty_gameplay_patch()
     patch["entitiesUpsert"] = [repaired_item]
@@ -699,7 +692,7 @@ def test_repair_scope_does_not_mask_same_path_error_for_different_related_ids(
     )
     scope = build_runtime_repair_scope(current, [source_error])
     fixed = copy.deepcopy(stats)
-    fixed["target"] = "item"
+    del fixed["target"]  # Remove the exact forbidden selector; declaration identity is frozen.
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [fixed]
 
@@ -869,13 +862,10 @@ def test_vfx_repair_freezes_valid_fields_and_accepts_missing_broken_slot_params(
 def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() -> None:
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
-    item = next(row for row in program["entities"] if row["kind"] == "item_body")
-    other_item = copy.deepcopy(item)
-    other_item["id"] = "other_item"
-    program["entities"].append(other_item)
-    binding = program["bindings"][0]
-    binding["action"] = {"kind": "use_item_body", "targetId": "other_item"}
-    binding["contactDamage"] = False
+    foreign = copy.deepcopy(next(row for row in program["calls"] if row["fn"] == "set_projectile_damage" and row["target"] == "nail"))
+    foreign["id"] = "foreign_producer"
+    program["calls"].append(foreign)
+    program["bindings"][0] = _binding_row(program["bindings"][0]["id"], "hold", "spawn_entity", "workbench_blade")
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
     event_call["params"]["when"] = "on_use"
@@ -888,17 +878,17 @@ def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() 
             "binding input one of: primary_use,alternate_use; "
             "action one of: spawn_entity,use_item_body,apply_item_effects",
         ],
-        "relatedIds": ["item", "other_item"],
+        "relatedIds": ["item", "foreign_producer"],
     }])
     requirement = scope["repairRequirements"][0]
     assert requirement["allowedBindingTransactions"]
     assert {
-        row["action"]["targetId"]
+        row["action"].get("targetId", "item")
         for row in requirement["allowedBindingTransactions"]
     } == {"item", "workbench_blade"}
     assert all(
         row["action"]["kind"] == "spawn_entity"
-        or row["action"]["targetId"] == "item"
+        or "targetId" not in row["action"]
         for row in requirement["allowedBindingTransactions"]
     )
 
@@ -965,7 +955,7 @@ def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
     duplicate["id"] = "duplicate_tool_primary"
     unrelated = copy.deepcopy(original)
     unrelated["id"] = "unrelated_mutable_binding"
-    unrelated["input"] = "equipped"
+    unrelated["input"] = "unknown_input"
     program["bindings"].extend([duplicate, unrelated])
 
     report = validate_runtime_program(current)
@@ -1005,7 +995,7 @@ def test_create_only_binding_choice_rejects_additional_existing_transaction(
     program = current["runtimeProgram"]
     unrelated = copy.deepcopy(program["bindings"][0])
     unrelated["id"] = "unrelated_mutable_binding"
-    unrelated["input"] = "equipped"
+    unrelated["input"] = "unknown_input"
     unrelated["contactDamage"] = False
     program["bindings"] = [unrelated]
 
@@ -1313,7 +1303,7 @@ def test_event_repair_must_also_close_independent_required_component() -> None:
 def test_selected_event_any_of_binding_adds_exactly_one_input_root() -> None:
     current = build_capability_witness("spawn_entity_on_event")
     program = current["runtimeProgram"]
-    program["bindings"][0]["input"] = "hold"
+    program["bindings"][0] = _binding_row(program["bindings"][0]["id"], "hold", "spawn_entity", program["bindings"][0]["action"]["targetId"])
     event_call = next(row for row in program["calls"] if row["id"] == "witness_call")
     event_call["target"] = "item"
     event_call["params"]["when"] = "equipped"

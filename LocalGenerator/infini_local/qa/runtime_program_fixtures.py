@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind as binding_action_kind
+
 """Non-archetypal v5 runtime-program acceptance fixtures.
 
 Each fixture is a complete Author response.  The helper intentionally writes every
@@ -191,7 +193,7 @@ class _Builder:
                 "plannedPlayerActions": [
                     {
                         "input": str(row["input"]),
-                        "intent": f"Execute the authored {row.get('action', {}).get('kind', row['input'])} action.",
+                        "intent": f"Execute the authored {binding_action_kind(row)} action.",
                     }
                     for row in self.bindings
                 ] or [{"input": "passive_or_event", "intent": "Execute the authored passive or event-driven behavior."}],
@@ -205,8 +207,8 @@ class _Builder:
                         "summary": "Every fixture draft action is represented by the explicit runtime program.",
                         "actionChecks": [
                             {
-                                "plannedIntent": f"Execute the authored {row.get('action', {}).get('kind', row['input'])} action.",
-                                "implementedBehavior": f"The binding executes {row.get('action', {}).get('kind', row['input'])}.",
+                                "plannedIntent": f"Execute the authored {binding_action_kind(row)} action.",
+                                "implementedBehavior": f"The binding executes {binding_action_kind(row)}.",
                                 "runtimeRefs": [str(row["id"])],
                                 "result": "aligned",
                                 "intentionality": "intentional",
@@ -228,7 +230,7 @@ class _Builder:
                         "behaviorChecks": [
                             {
                                 "runtimeRefs": [str(row["id"])],
-                                "programBehavior": f"The binding executes {row.get('action', {}).get('kind', row['input'])}.",
+                                "programBehavior": f"The binding executes {binding_action_kind(row)}.",
                                 "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
                                 "result": "aligned",
                                 "reason": "The fixture report is the accepted description of this explicit binding lane.",

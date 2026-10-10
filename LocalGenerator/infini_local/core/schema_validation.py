@@ -133,6 +133,25 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 selected = [index for index, paths in enumerate(const_paths)
                             if discriminators and all(_authored_const_matches(value, key, paths[key])
                                                       for key in discriminators)]
+                all_identity_paths = {key for key in set().union(*(set(paths) for paths in const_paths))
+                                      if all(isinstance(paths[key], str) for paths in const_paths if key in paths)
+                                      and _authored_const_value(value, key)[0]}
+                identity_selected = [index for index, paths in enumerate(const_paths)
+                                     if all_identity_paths and all(key in paths and _authored_const_matches(value, key, paths[key])
+                                                                   for key in all_identity_paths)]
+                for selector in set.intersection(*(set(paths) for paths in const_paths)) if const_paths else set():
+                    present, actual = _authored_const_value(value, selector)
+                    if (present and all(isinstance(paths[selector], str) for paths in const_paths)
+                            and not any(_authored_const_matches(value, selector, paths[selector]) for paths in const_paths)):
+                        selector_path = path
+                        for part in selector:
+                            selector_path = json_path_child(selector_path, part)
+                        if not any(row["path"] == selector_path for row in errors):
+                            add("one_of" if exclusive else "any_of", selector_path)
+                if len(identity_selected) == 1:
+                    # Exact string identity outranks foreign numeric constraints.
+                    # A forbidden fixed cost is not evidence for another action.
+                    selected = identity_selected
                 if len(selected) != 1:
                     # A closed branch may omit an inner discriminator entirely.
                     # Use present exact consts hierarchically: input first, then
@@ -202,6 +221,16 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                     errors.extend(row for row in branch_results[selected[0]]
                                   if all(row in branch_results[index] for index in selected[1:]))
                 elif not selected:
+                    # A numeric constraint in a closed action variant must not
+                    # hide its exact leaf when string discriminators uniquely
+                    # identify the branch. This selects diagnostics, not values.
+                    identity = {key for key in discriminators
+                                if all(isinstance(paths[key], str) for paths in const_paths)}
+                    identity_selected = [index for index, paths in enumerate(const_paths)
+                                         if identity and all(_authored_const_matches(value, key, paths[key]) for key in identity)]
+                    if len(identity_selected) == 1:
+                        errors.extend(branch_results[identity_selected[0]][: max(0, limit - len(errors))])
+                        return errors[:limit]
                     present = {key for key in discriminators if _authored_const_value(value, key)[0]}
                     partial = [index for index, paths in enumerate(const_paths)
                                if present and all(_authored_const_matches(value, key, paths[key]) for key in present)]

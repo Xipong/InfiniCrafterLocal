@@ -81,7 +81,7 @@ def _binding_action_schema(action_name: str, *, include_kind: bool = True) -> di
     return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
 
 
-def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]:
+def _binding_variant_schema(input_name: str, action_name: str, cost: int | None = None) -> dict[str, Any]:
     active_use = input_name in {"primary_use", "alternate_use"}
     include_kind = len(INPUT_KIND_REGISTRY[input_name].allowed_actions) != 1
     action_shape = _binding_action_schema(action_name, include_kind=include_kind)
@@ -94,7 +94,10 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
         properties["action"] = action_shape
         required.append("action")
     if active_use and action_name != "place_item":
-        properties["stackCost"] = {"type": "integer", "enum": [0, 1]}
+        properties["stackCost"] = {"type": "integer", "const": cost}
+        if cost == 1:
+            properties["stackConsumeChancePercent"] = {"type": "integer", "minimum": 0, "maximum": 100,
+                "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving."}
         properties["contactDamage"] = {"type": "boolean"}
         required.extend(("stackCost", "contactDamage"))
     return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
@@ -103,9 +106,10 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
 def binding_schema() -> dict[str, Any]:
     return {
         "oneOf": [
-            _binding_variant_schema(input_name, action_name)
+            _binding_variant_schema(input_name, action_name, cost)
             for input_name, input_spec in INPUT_KIND_REGISTRY.items()
             for action_name in input_spec.allowed_actions
+            for cost in ((0, 1) if input_name in {"primary_use", "alternate_use"} and action_name != "place_item" else (None,))
         ],
     }
 
@@ -365,6 +369,7 @@ def author_item_repair_schema(*, capability_names: Iterable[str] | None = None) 
     }
 
 
+
 def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int, int]:
     """Derive input nodes/depth/text width and assertion weight from Author schema.
 
@@ -552,7 +557,15 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         ("bindings", "bindingsUpsert", "bindingIdsDelete", "bindingIndicesDelete"),
         ("calls", "callsUpsert", "callIdsDelete", "callIndicesDelete"),
     ):
-        current_rows = list(program.get(list_key) or []) if isinstance(program, dict) else []
+        if not isinstance(program, dict):
+            return out  # Sparse Repair cannot sanitize an invalid root container.
+        original_rows = program.get(list_key)
+        operations = any(patch.get(key) for key in (upsert_key, delete_key, index_delete_key))
+        if not operations:
+            continue
+        if not isinstance(original_rows, list):
+            raise ValueError(f"gameplay Repair cannot apply row operations to malformed {list_key}")
+        current_rows = original_rows
         current_rows = delete_indices(current_rows, list(patch.get(index_delete_key) or []))
         current_rows = delete(current_rows, list(patch.get(delete_key) or []))
         program[list_key] = upsert(current_rows, list(patch.get(upsert_key) or []))

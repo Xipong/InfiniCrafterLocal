@@ -12,6 +12,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     placeable_input_contract,
     placement_call_id,
     stack_cost,
+    may_retain_stack,
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -325,6 +326,16 @@ def _validate_requirement(
                                    allowed, (str(call.get("id") or ""), target_id))
         return None
 
+    if requirement.kind == "capability_absent":
+        if requirement.param and params.get(requirement.param) != requirement.equals:
+            return None
+        conflicting = [row for row in target_calls if row.get("fn") in requirement.any_of]
+        if conflicting:
+            return ValidationIssue(path + (".params." + requirement.param if requirement.param else ""),
+                                   "exclusive_component_conflict", requirement.message,
+                                   requirement.any_of, tuple([str(call.get("id") or ""), *[str(row.get("id") or "") for row in conflicting]]))
+        return None
+
     if requirement.kind in {"executed_tile_placement_reference", "unique_call_reference"}:
         reference = params.get(requirement.param)
         if not isinstance(reference, str):
@@ -619,6 +630,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         input_name = str(binding.get("input") or "")
         action_name = action_kind(binding)
         entity = entities_by_id.get(target_id)
+        if not action_name:
+            continue  # Shape owns an undecided selector; never invent a target dependency.
         input_spec = INPUT_KIND_REGISTRY.get(input_name)
         action_spec = BINDING_ACTION_REGISTRY.get(action_name)
         action_path = f"$.runtimeProgram.bindings[{index}].action"
@@ -678,7 +691,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
 
     calls_by_target = _calls_by_target(program)
     seen_single: set[tuple[str, str, str | None]] = set()
-    exclusive_components: dict[tuple[str, str], tuple[int, str]] = {}
+    exclusive_components: dict[tuple[str, str, str | None], tuple[int, str]] = {}
     event_edges: dict[str, set[str]] = {entity_id: set() for entity_id in entities_by_id}
     event_referenced_entities: set[str] = set()
     event_spawn_budget = 0
@@ -708,7 +721,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}]", "duplicate_single_component", f"{fn} may appear only once on '{target_id}'.", ("merge into one call", "delete duplicate"), (target_id, call_id)))
         seen_single.add(key)
         if cap.exclusive_group:
-            group_key = (target_id, cap.exclusive_group)
+            # Multiplicity and exclusivity share the same registry-declared
+            # owner: target plus explicit effect identity, never a semantic lane.
+            group_key = (target_id, cap.exclusive_group, key[2])
             if group_key in exclusive_components:
                 previous_index, previous_id = exclusive_components[group_key]
                 issues.append(ValidationIssue(
@@ -929,7 +944,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             row for row in bindings
             if str(row.get("input") or "") in {"primary_use", "alternate_use"}
             and action_kind(row) in {"spawn_entity", "use_item_body"}
-            and stack_cost(row) == 0
+            and may_retain_stack(row)
         ]
         if reusable_active_uses:
             # Durable hybrid: the item is both a reusable tool/weapon and a placeable.
