@@ -18,10 +18,10 @@ Schema `default` — аннотация, не обещание provider constrai
 |---|---|
 | `configure_item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
 | `configure_item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
-| `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusFactor/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
+| `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusPercent/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
 | `channel_beam` | `manaPayment → initial_use_only`; `initialDamageMultiplier/initialWidthMultiplier/damageStartProgress → 1.0`; `raycastTiles → false`; совместные сочетания и native semantics — [A7](CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md) |
 
-Это конечный перечень объявленных параметров, не blanket optionality. Units и старые wire conversions не меняются; актуальный executable перечень — registry. Для beam сохранённый wire без расширений остаётся без новых полей, а fresh Author получает явные нейтрали с omission receipts.
+Это конечный перечень объявленных параметров, не blanket optionality. Актуальные units, wire projections и executable перечень задаёт registry; сохранённые wire не переписываются. Для beam сохранённый wire без расширений остаётся без новых полей, а fresh Author получает явные нейтрали с omission receipts.
 
 <a id="dependencies"></a>
 ## Совместные зависимости важнее optionality
@@ -42,6 +42,8 @@ Repair omission — **не менять**; accepted absence frozen. Repair со�
 ## Receipt provenance и coverage
 
 `declared_neutral_omission` отличается от `delivered`: аудит проверяет declared default, точный output и происхождение. С исходным Author он доказывает факт отсутствия; standalone wire без Author лишь проверяет declaration/mapping/value и coverage присутствующих default fields, но не восстанавливает исходный omission. Если `runtimeContract` присутствует, пустой/повреждённый contract не освобождает от аудита. Delivery намеренно удаляет internal runtimeContract, поэтому final DTO не обязан содержать receipts.
+
+Source-free audit также сохраняет ранее выпущенный omission receipt, если `retained_receipt_params` явно хранит прежний optional `default=neutral` с совпадающим типом, точный prior domain/projection и допустимый omission context. Один wire slot требует ровно один receipt от текущего либо такого прежнего параметра; смешанные дубли не допускаются. В частности, старый buff `moveSpeedBonusFactor` сохраняет integer `movementSpeed=0`, а новый `moveSpeedBonusPercent/100` материализует `0.0`. Значения и сохранённые receipts не переписываются, старый Author не импортируется; source-aware proof принимает только текущие параметры.
 
 Regressions из [registry/test owners](TEST_CONTRACT_OWNERS_RU.md): все absent/zero/negative/positive XY combinations; 64 modifier-presence masks со working light и 64 полностью neutral masks (reject); каждый sole active effect; invalid-present/type/range boundaries; sparse/explicit-neutral wire equality; unapproved optional groups/dependencies; altered status/value/path, lost output/receipt и numeric type подмены (`0` ≠ `false` ≠ `0.0`).
 

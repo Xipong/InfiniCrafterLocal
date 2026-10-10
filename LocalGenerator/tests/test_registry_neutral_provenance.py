@@ -32,7 +32,7 @@ DECLARED = {
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,
         "oreSenseEnabled": False,
-        "moveSpeedBonusFactor": 0,
+        "moveSpeedBonusPercent": 0,
         "jumpSpeedBonusPxPerTick": 0,
         "manaRegenBonusPoints": 0,
         "lifeRegenHpPerSecond": 0,

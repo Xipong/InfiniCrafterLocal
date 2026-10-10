@@ -53,6 +53,8 @@ def percent_document(fn, name, value, *, companion=True):
     )
     if not companion:
         call["params"].pop("defensePoints", None)
+        if fn == "apply_generated_buff_on_use":
+            call["params"]["lightStrength"] = 0
     _set_stat(call["params"], name, value)
     return doc, index, call
 
@@ -104,8 +106,11 @@ def test_nonneutral_percent_refused_at_exact_leaf_then_explicitly_repaired(fn, n
     candidate = deepcopy(call)
     _set_stat(candidate["params"], name, 15.125)
     # A valid sibling/absence must remain frozen despite a useful correction.
-    sibling = "damageClass" if fn == "add_equipment_damage_bonus" else "defensePoints"
-    candidate["params"][sibling] = "magic" if sibling == "damageClass" else 77
+    sibling, replacement = (
+        ("damageClass", "magic") if fn == "add_equipment_damage_bonus" else
+        ("durationTicks", 3600) if fn == "apply_generated_buff_on_use" else
+        ("defensePoints", 77))
+    candidate["params"][sibling] = replacement
     unrelated = deepcopy(doc["runtimeProgram"]["calls"][0])
     unrelated["params"]["damage"] = 1999
     patch = {"note": "offline explicit percent correction", "realizationReplacement": deepcopy(doc["realization"]),
@@ -154,9 +159,10 @@ def test_projection_constraint_reaches_actual_author_and_serialized_repair(monke
 
 
 def test_percent_roster_is_complete():
-    assert len(PERCENT_PARAMS) == 21
+    assert len(PERCENT_PARAMS) == 22
     assert {fn: sum(row[0] == fn for row in PERCENT_PARAMS) for fn in {row[0] for row in PERCENT_PARAMS}} == {
         "configure_accessory": 8, "configure_armor": 12, "add_equipment_damage_bonus": 1,
+        "apply_generated_buff_on_use": 1,
     }
     assert all(spec.neutral == 0 and spec.consumer_storage == "float32" for _, _, spec in PERCENT_PARAMS)
 
@@ -200,7 +206,7 @@ def test_float32_half_subnormal_boundary_is_checked_after_division(fn, name, spe
         assert _bytes(doc) == before
 
 
-@pytest.mark.parametrize("fn", ["configure_accessory", "configure_armor"])
+@pytest.mark.parametrize("fn", ["configure_accessory", "configure_armor", "apply_generated_buff_on_use"])
 @pytest.mark.parametrize("value", [5e-324, -5e-324, 1e-50, -1e-50])
 def test_sole_percent_effect_is_rejected_without_thawing_valid_call_siblings(fn, value):
     name = "moveSpeedBonusPercent"
@@ -217,12 +223,12 @@ def test_sole_percent_effect_is_rejected_without_thawing_valid_call_siblings(fn,
     assert not audit["ok"]
     assert any(e["code"] == "repair_scope_violation" for e in audit["errors"])
     assert not validate_runtime_program(apply_repair_patch(doc, noop))["ok"]
-    # Keep existing composition policy: zero alone is inert for an accessory;
-    # an armor still has its explicit slot/set identity. Neither is precision loss.
+    # Zero alone is inert for an accessory or generated buff; an armor still
+    # has its explicit slot/set identity. Neither is precision loss.
     call["params"][name] = -0.0
     neutral_report = validate_runtime_program(doc)
     assert all(e["code"] != "consumer_representability" for e in neutral_report["errors"])
-    if fn == "configure_accessory":
+    if fn in {"configure_accessory", "apply_generated_buff_on_use"}:
         assert not neutral_report["ok"]
         assert any(e["code"] == "inert_component" for e in neutral_report["errors"])
     else:

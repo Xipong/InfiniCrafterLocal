@@ -896,15 +896,15 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: pickSpeed divisor"
         },
-        "moveSpeedBonusFactor": {
+        "moveSpeedBonusPercent": {
           "enum": [],
           "kind": "number",
-          "maximum": 2,
-          "minimum": -0.5,
+          "maximum": 200,
+          "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: additive moveSpeed factor"
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         },
         "oreSenseEnabled": {
           "enum": [],
@@ -937,6 +937,28 @@
           "target": "same_target"
         }
       ],
+      "retainedWireProvenance": {
+        "moveSpeedBonusFactor": {
+          "priorAuthorSchema": {
+            "default": 0,
+            "description": "Retained prior additive Player.moveSpeed factor provenance",
+            "maximum": 2,
+            "minimum": -0.5,
+            "type": "number",
+            "x-infini-consumerConstraint": {
+              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+              "neutral": 0,
+              "rule": "nonneutral_must_remain_nonneutral",
+              "storage": "float32"
+            },
+            "x-infini-neutral": 0,
+            "x-infini-units": "engine units: additive moveSpeed factor"
+          },
+          "wireFields": [
+            "movementSpeed"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
