@@ -177,6 +177,12 @@ def _compile_item_call(
             "contactForgivenessPx": "contactForgivenessPx",
         })
         return
+    if fn == "configure_weapon_ammo":
+        ammo: dict[str, Any] = {}
+        project(ammo, "runtimeProgram.weaponAmmo", {name: name for name in CAPABILITY_REGISTRY[fn].params})
+        ctx.write_derived(call=call, path="runtimeProgram.weaponAmmo", value=ammo, target=runtime, key="weaponAmmo",
+                          source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
+        return
     if fn == "configure_vanilla_ammo_item":
         project(gameplay, "gameplay", {
             "ammoCategory": "ammoCategory",
@@ -304,8 +310,11 @@ def _compile_entity_call(
         spawn["enabled"] = True
         ctx.write_derived(call=call, path=f"{base}.spawn.enabled", value=True, target=spawn, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "set_projectile_concurrency":
+    if fn in {"set_projectile_concurrency", "set_descendant_concurrency"}:
         project(component("spawn"), f"{base}.spawn", p)
+        return
+    if fn == "set_projectile_sentry":
+        project(entity, base, p)
         return
     if fn == "set_projectile_damage":
         damage = component("damage")

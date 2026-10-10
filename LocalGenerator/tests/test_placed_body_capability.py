@@ -327,14 +327,16 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 
 
 def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
+    from beam_contract_checks import without_declared_beam_neutrals
     from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical
 
     # The old full-document hashes remain archival. New Author names deliberately
     # change compiler provenance and registry diagnostic counts, not delivery DTOs.
+    # Newly declared beam neutrals are an explicit successor, not a legacy rewrite.
     corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
     for row in corpus["cases"]:
         compiled = compile_runtime_program(_current_author_seed(row["authored"]))
-        delivered = _delivery_wire(compiled)
+        delivered = without_declared_beam_neutrals(_delivery_wire(compiled))
         assert "placedBody" not in delivered["runtimeProgram"]
         assert delivered == row["expectedDeliveryWire"]
         assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
