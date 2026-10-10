@@ -61,10 +61,84 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "primary_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "spawn_entity"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
@@ -135,10 +209,84 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "primary_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "use_item_body"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
@@ -216,10 +364,91 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "primary_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "effectGroupId": {
+                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "apply_item_effects"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
@@ -375,10 +604,84 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "alternate_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "spawn_entity"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
@@ -449,10 +752,84 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "alternate_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "use_item_body"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
@@ -530,10 +907,91 @@
                     "type": "boolean"
                   },
                   "stackCost": {
-                    "enum": [
-                      0,
-                      1
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action",
+                  "stackCost",
+                  "contactDamage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "input",
+              "usePolicy"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 48,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "input": {
+                "const": "alternate_use"
+              },
+              "usePolicy": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "effectGroupId": {
+                        "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects.",
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "apply_item_effects"
+                      },
+                      "targetId": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "type": "string",
+                        "x-infini-reference": {
+                          "allowSelf": true,
+                          "graphEdge": false,
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body",
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "targetId"
                     ],
+                    "type": "object"
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
+                  },
+                  "stackConsumeChancePercent": {
+                    "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "stackCost": {
+                    "const": 1,
                     "type": "integer"
                   }
                 },
