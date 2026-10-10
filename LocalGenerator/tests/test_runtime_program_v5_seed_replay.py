@@ -8,7 +8,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
-from tests.captured_projectile_author import project_captured_projectile_call
+from tests.captured_projectile_author import project_captured_projectile_call, project_captured_author_notation
 from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
 from sentry_contract_checks import without_declared_targeting_neutrals
@@ -30,11 +30,23 @@ def _delivery_wire(compiled: dict[str, Any]) -> dict[str, Any]:
 
 
 def _current_author_seed(authored: dict[str, Any]) -> dict[str, Any]:
-    """Express only the captured choices in the current Author grammar."""
+    """Express this frozen test corpus in the new Author shape; never import saves."""
     current = deepcopy(authored)
     for call in current["runtimeProgram"]["calls"]:
         project_captured_projectile_call(call)
-    return captured_spawn_velocity_author(captured_parent_combat_author(current))
+        params = call["params"]
+        if call["fn"] == "configure_item_use" and "heldSpriteVisibilityHint" in params:
+            old = params.pop("heldSpriteVisibilityHint")
+            params["customHeldSprite"] = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}[old]
+        if call["fn"] == "configure_placeable":
+            if params["wallId"] == -1:
+                call["fn"] = "configure_tile_placement"
+                del params["wallId"]
+            else:
+                assert params["tileId"] == -1
+                call["fn"] = "configure_wall_placement"
+                del params["tileId"]
+    return project_captured_author_notation(current)
 
 
 def _historical_spawn_defaults(wire: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
@@ -103,7 +115,7 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
 
         archived_digest = hashlib.sha256(_canonical(row["expectedDeliveryWire"]).encode("utf-8")).hexdigest()
         assert archived_digest == row["expectedDeliveryWireSha256"]
-        compiled = compile_runtime_program(captured_spawn_velocity_author(_current_author_seed(authored)))
+        compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(authored))))
         assert validate_runtime_wire(compiled)["ok"] is True
         actual_wire = _historical_spawn_defaults(
             _delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))),

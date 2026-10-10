@@ -226,9 +226,9 @@
         "runtimeProgram.calls[].fn",
         "runtimeProgram.calls[].target",
         "runtimeProgram.calls[].params.placementCallId",
-        "runtimeProgram.bindings[].usePolicy.action.kind",
-        "runtimeProgram.bindings[].usePolicy.action.targetId",
-        "runtimeProgram.bindings[].usePolicy.action.placementCallId"
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].action.placementCallId"
       ]
     },
     {
@@ -1124,11 +1124,51 @@
   "globalLowerers": [
     {
       "addsDesignChoice": false,
+      "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
+      "id": "author_binding_lanes",
+      "inputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].input",
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].stackCost",
+        "runtimeProgram.bindings[].contactDamage",
+        "runtimeProgram.bindings[].action.effectGroupId",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind",
+        "runtimeProgram.primaryEntityId"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].input",
+        "runtimeProgram.bindings[].usePolicy.action.kind",
+        "runtimeProgram.bindings[].usePolicy.action.targetId",
+        "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+        "runtimeProgram.bindings[].usePolicy.stackCost",
+        "runtimeProgram.bindings[].usePolicy.contactDamage",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind",
+        "runtimeProgram.primaryEntityId",
+        "runtimeProgram.itemEntityId"
+      ],
+      "preserves": [
+        "input",
+        "action",
+        "target",
+        "stack",
+        "contact",
+        "primary",
+        "identity",
+        "JSON type"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
       "equivalence": "literal optional authored probability on the same exact binding identity",
       "id": "binding_stack_chance_identity",
       "inputs": [
         "runtimeProgram.bindings[].id",
-        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+        "runtimeProgram.bindings[].stackConsumeChancePercent"
       ],
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
@@ -1147,7 +1187,7 @@
       "id": "binding_effect_group_identity",
       "inputs": [
         "runtimeProgram.bindings[].id",
-        "runtimeProgram.bindings[].usePolicy.action.effectGroupId"
+        "runtimeProgram.bindings[].action.effectGroupId"
       ],
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.effectGroupId"
@@ -1182,7 +1222,12 @@
       "id": "primary_entity_to_binding_role",
       "inputs": [
         "runtimeProgram.primaryEntityId",
-        "runtimeProgram.bindings[].usePolicy.action.targetId"
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].input",
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.entities[].id",
+        "runtimeProgram.entities[].kind"
       ],
       "outputs": [
         "runtimeProgram.bindings[].role"

@@ -93,7 +93,7 @@ Projectile ExtraAI **v4** добавляет к v3 presence-byte и выбран
 
 `_wire_projection_witness` — внутренняя конечная проверка соответствия wire одному зарегистрированному варианту. Она возвращает только доказанные projection rows для audit; не выдаёт Author-документ, не кормит compiler/Repair и не становится production importer. `retained_receipt_params` сохраняет прежнюю scalar projection только для wire-only audit. С actual Author единственным источником истины остаётся текущая форма.
 
-У сохранённого wire без новых полей исполняемые значения, opcodes, IDs и старые receipts остаются читаемыми. Frozen JSON и хеши не перезаписываются. Fresh constant Author имеет новый source path `.params.velocity.constantSpeedPxPerUpdate`, а его диагностический `runtimeContract.validation.stats.registryDrivenChecks` отражает текущий registry. Полная byte identity свежего отчёта с историческим не заявляется. Archive replay сравнивается через явно ограниченный **test-only** adapter: exact scalar source rename и delta `24` requirements/`1` typed reference; production путь этот adapter не использует.
+У сохранённого wire без новых полей исполняемые значения, opcodes, IDs и старые receipts остаются читаемыми. Frozen JSON и хеши не перезаписываются. Fresh constant Author имеет новый source path `.params.velocity.constantSpeedPxPerUpdate`, а его диагностический `runtimeContract.validation.stats.registryDrivenChecks` отражает текущий registry. Полная byte identity свежего отчёта с историческим не заявляется. Archive replay сравнивается через явно ограниченный **test-only** adapter: exact scalar source rename и delta `23` requirements/`1` typed reference; production путь этот adapter не использует.
 
 ## Проверки и предел доказательства
 
