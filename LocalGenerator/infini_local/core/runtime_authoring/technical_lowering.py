@@ -232,22 +232,6 @@ def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = No
     ))
 
 
-def _present_wire_paths(value: Any, pattern: str, prefix: str = "") -> Iterable[str]:
-    """Expand only declared exact paths and array slots; do not scan arbitrary keys."""
-    head, dot, tail = pattern.partition(".")
-    key = head[:-2] if head.endswith("[]") else head
-    if not isinstance(value, Mapping) or key not in value:
-        return
-    child = value[key]
-    base = f"{prefix}.{key}" if prefix else key
-    children = ((f"{base}[{index}]", row) for index, row in enumerate(child)) if head.endswith("[]") and isinstance(child, list) else ((base, child),) if not head.endswith("[]") else ()
-    for path, row in children:
-        if dot:
-            yield from _present_wire_paths(row, tail, path)
-        else:
-            yield path
-
-
 def _valid_source_projection(spec: Any, source: Any, projected: Any) -> bool:
     try:
         rows = spec.projected_fields(source, "parameter")
