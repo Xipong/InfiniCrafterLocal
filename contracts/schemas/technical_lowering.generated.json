@@ -409,6 +409,109 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_hitbox_curve",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "outputs": [
+        "runtimeProgram.entities[].hitboxCurve.startScale",
+        "runtimeProgram.entities[].hitboxCurve.endScale",
+        "runtimeProgram.entities[].hitboxCurve.startDelayTicks",
+        "runtimeProgram.entities[].hitboxCurve.durationTicks",
+        "runtimeProgram.entities[].hitboxCurve.curve",
+        "runtimeProgram.entities[].hitboxCurve.mirrorToSprite"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].hitboxCurve"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_turn_modifier",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "outputs": [
+        "runtimeProgram.entities[].turnModifier.turnRadiansPerUpdate",
+        "runtimeProgram.entities[].turnModifier.startDelayTicks",
+        "runtimeProgram.entities[].turnModifier.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].turnModifier"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_speed_modifier",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "outputs": [
+        "runtimeProgram.entities[].speedModifier.speedMultiplierPerUpdate",
+        "runtimeProgram.entities[].speedModifier.maxSpeed",
+        "runtimeProgram.entities[].speedModifier.startDelayTicks",
+        "runtimeProgram.entities[].speedModifier.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].speedModifier"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_homing_modifier",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
+      "outputs": [
+        "runtimeProgram.entities[].homingModifier.rangeTiles",
+        "runtimeProgram.entities[].homingModifier.maxTurnRadiansPerUpdate",
+        "runtimeProgram.entities[].homingModifier.requireLineOfSight",
+        "runtimeProgram.entities[].homingModifier.startDelayTicks",
+        "runtimeProgram.entities[].homingModifier.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].homingModifier"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "attract_npcs_while_active",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
+      "outputs": [
+        "runtimeProgram.entities[].npcAttraction.rangeTiles",
+        "runtimeProgram.entities[].npcAttraction.strengthPerUpdate",
+        "runtimeProgram.entities[].npcAttraction.falloff",
+        "runtimeProgram.entities[].npcAttraction.maxTargets",
+        "runtimeProgram.entities[].npcAttraction.startDelayTicks",
+        "runtimeProgram.entities[].npcAttraction.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].npcAttraction"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_visual_scale_curve",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
+      "outputs": [
+        "runtimeProgram.entities[].visualScaleCurve.startScale",
+        "runtimeProgram.entities[].visualScaleCurve.endScale",
+        "runtimeProgram.entities[].visualScaleCurve.startDelayTicks",
+        "runtimeProgram.entities[].visualScaleCurve.durationTicks",
+        "runtimeProgram.entities[].visualScaleCurve.curve"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].visualScaleCurve"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "orient_whip_to_owner_gravity",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::BuildWhipPoints",
+      "outputs": [
+        "runtimeProgram.entities[].whipUsesOwnerGravity"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].whipUsesOwnerGravity"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_collision",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",

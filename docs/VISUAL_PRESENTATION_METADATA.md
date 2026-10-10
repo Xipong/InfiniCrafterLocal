@@ -45,13 +45,13 @@ Authoring schemas: `infini.visual-kit.runtime-entities.v2` и `infini.visual-kit
 | Dropped item | `q_item * s_world * W`; same finalScale bottom alignment | `s_world * W` |
 | Held generated root | `q_item * player.GetAdjustedItemScale(held)`; G already included once | existing adjusted scale |
 | Registry-only held root | `q_item * baseScale * clamp(G,.25,4)` | existing registry branch |
-| Baked/reused body | `q_selected * clamp(P,.1,8)` | existing clamp(P) |
+| Baked/reused body | `q_selected * P` при accepted `hitboxCurve.mirrorToSprite=true`; иначе `q_selected * clamp(P,.1,8)` | та же body policy без q |
 | Live body copies | `q_selected * clamp(P,.1,8) * slot.Scale` | exact old `max(.05,P*slot.Scale)` |
 | Detached body copies | selected q after actual texture load, existing dimensionless pose/slot multiplier | exact existing branch |
 
 Snapshot/network `Pose.Scale`, Item.scale, Projectile.scale, collision, hitbox/tip anchors и growth остаются механическими/dimensionless. Size/path выбираются у одного texture owner; dedicated impact/overlay/material world widths/textured paths не получают body q. Existing tip anchors не являются измеренным PNG наконечником. Один scalar max-side не гарантирует равную физическую длину разных поз или точный grip/tip.
 
-Reuse гарантирует одинаковые pixels и **base** frame extent, не принудительное равенство final held/world/body: с нейтральными caller hooks equality held/body требует `G == clamp(D*E,.1,8)`. W не переносится на held, G не дописывается в projectile. Accepted G/D/gameplay не менять ради арта.
+Reuse гарантирует одинаковые pixels и **base** frame extent, не принудительное равенство final held/world/body: с нейтральными caller hooks equality held/body требует `G == clamp(D*E,.1,8)` либо `G == D*E*curveScale(active age)` при явном mirror. W не переносится на held, G не дописывается в projectile. Accepted G/D/gameplay не менять ради арта. Mirror относится к базовому body; VFX body copies сохраняют собственные опубликованные scale rules.
 
 ### Read-only Director/Repair context и visibility
 

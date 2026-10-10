@@ -233,6 +233,10 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             if not any(row["id"] == "witness_call" for row in calls):
                 calls.append(_call("witness_call", fn, witness_target))
 
+    if fn == "orient_whip_to_owner_gravity":
+        base_motion = next(row for row in calls if row["id"] == "base_motion")
+        base_motion.update(fn="move_whip_lash", params={"rangeTiles": 8, "segments": 12})
+
     primary_target = "item" if item_target and not projectile_target else witness_target
 
     return {

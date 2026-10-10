@@ -33,6 +33,7 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "capability_absent",
     "capability_present",
     "capability_group_present",
     "item_capability_param",
@@ -160,6 +161,12 @@ def _clamp_bounds(text: str, class_name: str, constants: Mapping[str, float]) ->
         hi = _number(raw_max, constants)
         if lo is not None and hi is not None:
             out[name] = (lo, hi)
+    # New optional DTO components reject invalid fields instead of clamping.
+    # Read their executable RequireRange calls with the same parity contract.
+    for name, raw_min, raw_max in re.findall(r"RequireRange\((\w+),\s*([^,]+),\s*([^\)]+)\)", block):
+        lo, hi = _number(raw_min, constants), _number(raw_max, constants)
+        if lo is not None and hi is not None:
+            out[name] = (lo, hi)
     return out
 
 
@@ -171,7 +178,8 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     class_bounds = {
         name: _clamp_bounds(text, name, constants)
         for name in (
-            "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec",
+            "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
+            "RuntimeTurnModifierSpec", "RuntimeSpeedModifierSpec", "RuntimeHomingModifierSpec", "RuntimeNpcAttractionSpec", "RuntimeVisualScaleCurveSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
             "RuntimeEventActionSpec", "RuntimeItemContactSpec",
         )
@@ -182,6 +190,12 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
+        "set_projectile_hitbox_curve": ("RuntimeHitboxCurveSpec", ""),
+        "set_projectile_turn_modifier": ("RuntimeTurnModifierSpec", ""),
+        "set_projectile_speed_modifier": ("RuntimeSpeedModifierSpec", ""),
+        "set_projectile_homing_modifier": ("RuntimeHomingModifierSpec", ""),
+        "attract_npcs_while_active": ("RuntimeNpcAttractionSpec", ""),
+        "set_projectile_visual_scale_curve": ("RuntimeVisualScaleCurveSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
         "spawn_over_target": ("RuntimeOverTargetSpec", ""),
         "emit_light_while_active": ("RuntimeLightSpec", ""),
@@ -351,7 +365,7 @@ def capability_library_audit() -> dict[str, Any]:
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
             for name in requirement.any_of:
-                if requirement.kind == "capability_group_present" and name not in capability_names:
+                if requirement.kind in {"capability_group_present", "capability_absent"} and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)
             if requirement.kind in {"at_least_one_param_nonzero", "nonneutral_params_require_param", "nonneutral_params_require_exact_param", "positive_param_requires_param"}:
                 if not requirement.nonzero_params:

@@ -44,6 +44,16 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("hitbox curve actual rectangle and world-tick clock", HitboxCurveActualDamageRectAndWorldTickClock),
+            ("hitbox curve explicit visual mirror and hydration", HitboxCurveExplicitVisualMirrorAndLateHydration),
+            ("hitbox curve strict DTO presence", HitboxCurveDtoPresenceAndDriverBoundaries),
+            ("motion modifiers actual phase and visual hydration", ModifierActualTurnSpeedPhaseAndVisualHydration),
+            ("NPC attraction authority falloff and bounds", ModifierNpcAttractionAuthorityFalloffAndBounds),
+            ("homing modifier owner selection and speed", ModifierHomingOwnerSelectionAndSpeedPreservation),
+            ("whip gravity actual collision polyline", ModifierWhipGravityUsesTheSameCollisionPolyline),
+            ("motion modifier strict DTO presence", ModifierStrictDtoPresenceAndOldAbsence),
+            ("hitbox mirror exact PNG vertices", HitboxCurveExplicitMirrorReachesSpriteVertices),
+            ("hitbox mirror exact primitive vertices", HitboxCurveExplicitMirrorReachesPrimitiveVertices),
             ("bugfix251 grounded native support", GroundedConditionRequiresNativeSupport),
             ("VFX sound selector strict DTO round trips", VfxSoundSelectorStrictDtoRoundTrips),
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),

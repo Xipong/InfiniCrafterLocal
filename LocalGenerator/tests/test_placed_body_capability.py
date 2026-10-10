@@ -328,5 +328,15 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 def test_absent_member_keeps_complete_legacy_compiled_bytes():
     from beam_contract_checks import without_declared_beam_neutrals
     baseline = json.loads((Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json").read_text())
-    actual = {name:hashlib.sha256(json.dumps(without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name)))), ensure_ascii=False, sort_keys=True).encode()).hexdigest() for name in baseline}
+    actual = {}
+    for name in baseline:
+        compiled = without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))
+        checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
+        # The new capability adds registry checks even when it is absent. Preserve
+        # the frozen full-document baseline, adjusting only that proven counter.
+        new_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                    "set_projectile_homing_modifier", "attract_npcs_while_active", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in new_caps)
+        checks["requirements"] = 29
+        actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
