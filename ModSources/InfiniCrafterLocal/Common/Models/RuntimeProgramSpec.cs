@@ -459,6 +459,18 @@ public sealed class RuntimeBindingUsePolicySpec
     public RuntimeBindingActionSpec Action { get; set; } = new();
     public int StackCost { get; set; }
     public bool ContactDamage { get; set; }
+    private int? _stackConsumeChancePercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StackConsumeChancePercent
+    {
+        get => _stackConsumeChancePercent;
+        set
+        {
+            if (value is null || value < 0 || value > 100)
+                throw new InvalidDataException("stackConsumeChancePercent must be an explicit integer 0..100");
+            _stackConsumeChancePercent = value;
+        }
+    }
 
     public void NormalizeAndValidate(string input)
     {
@@ -466,6 +478,11 @@ public sealed class RuntimeBindingUsePolicySpec
         Action.NormalizeAndValidate();
         if (StackCost is not (0 or 1))
             throw new InvalidDataException("binding usePolicy.stackCost must be exactly 0 or 1");
+        if (StackConsumeChancePercent is int chance
+            && (chance < 0 || chance > 100 || StackCost != 1
+                || input is not (RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse)
+                || Action.Kind == RuntimeBindingAction.PlaceItem))
+            throw new InvalidDataException("stackConsumeChancePercent requires 0..100 and an active non-placement stackCost=1 binding");
         if (Action.Kind == RuntimeBindingAction.PlaceItem)
         {
             if (StackCost != 1)
