@@ -78,6 +78,22 @@ def test_same_named_group_composes_explicit_components():
     final = compile_runtime_program(doc)
     assert "generatedBuff" in final["runtimeProgram"]["effectGroups"][0]
     assert "generatedBuff" not in final["runtimeProgram"]["effectGroups"][1]
+    receipts = final["runtimeContract"]["finalWireReceipts"]
+    group_claims = [row for row in receipts if row["finalPath"] == "runtimeProgram.effectGroups[0].id"]
+    assert len(group_claims) == 2
+    assert audit_compiler_receipts(receipts, authored_document=doc, final_document=final)["ok"]
+    assert audit_compiler_receipts(receipts, final_document=final)["ok"]
+    for mode in ("missing", "duplicate", "forged"):
+        attacked = deepcopy(receipts)
+        claim = next(row for row in attacked if row["finalPath"] == "runtimeProgram.effectGroups[0].id")
+        if mode == "missing":
+            attacked.remove(claim)
+        elif mode == "duplicate":
+            attacked.append(deepcopy(claim))
+        else:
+            claim["value"] = "second"
+        assert not audit_compiler_receipts(attacked, authored_document=doc, final_document=final)["ok"], mode
+        assert not audit_compiler_receipts(attacked, final_document=final)["ok"], mode
 
 
 def test_held_refresh_is_explicit_generated_utility_with_no_active_effect_binding():

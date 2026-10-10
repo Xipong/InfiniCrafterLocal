@@ -168,16 +168,29 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
     }
 
 
-def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None) -> tuple[str, ...]:
+def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None, *, retained: bool = False) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
-    spec = cap.params[name]
+    spec = (cap.retained_receipt_params if retained else cap.params)[name]
     names = {name, spec.wire_name} - {""}
     return tuple(dict.fromkeys(
         candidate for candidate in cap.final_wire_paths
-        if candidate.rsplit(".", 1)[-1] in names
+        if any(candidate.endswith("." + name) for name in names)
         and (params is None or not cap.effect_groupable
              or candidate.startswith("runtimeProgram.effectGroups[]." if "effectGroupId" in params else "gameplay."))
     ))
+
+
+def _valid_source_projection(spec: Any, source: Any, projected: Any) -> bool:
+    try:
+        rows = spec.projected_fields(source, "parameter")
+        return len(rows) == 1 and _same_receipt_value(rows[0].value, projected)
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
+def _retained_projection_value_matches(spec: Any, value: Any) -> bool:
+    """Persisted domain consistency only, owned by the exact ParamSpec."""
+    return spec.matches_scalar_projection(value)
 
 
 def declared_outputs_for(fn: str) -> tuple[str, ...]:
@@ -369,6 +382,48 @@ def _effect_group_binding_source_error(receipt: Mapping[str, Any], authored: Map
     return ""
 
 
+def _capability_receipt_owner_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any] | None,
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    """Authenticate source target and final event identity, never array order."""
+    source_match = re.match(r"runtimeProgram\.calls\[(\d+)\]\.", receipt.get("authoredPath", ""))
+    source_call = None
+    if authored_document is not None:
+        source_call = _final_value(authored_document, f"runtimeProgram.calls[{source_match.group(1)}]") if source_match else None
+        calls = _final_value(authored_document, "runtimeProgram.calls")
+        if (not isinstance(source_call, Mapping) or source_call.get("fn") != receipt.get("fn")
+            or source_call.get("id") != receipt.get("callId")
+            or not isinstance(calls, list)
+            or sum(isinstance(c, Mapping) and c.get("id") == receipt.get("callId") for c in calls) != 1):
+            return "capability receipt lacks a unique originating source call"
+    if final_document is None:
+        return ""
+    match = re.match(r"(runtimeProgram\.entities\[\d+\])(?:\.events\[\d+\])?\.", receipt["finalPath"])
+    if match is None:
+        return ""  # global item fields and binding projections have their own owners
+    entity = _final_value(final_document, match.group(1))
+    entities = _final_value(final_document, "runtimeProgram.entities")
+    identity = entity.get("id") if isinstance(entity, Mapping) else None
+    if (not isinstance(identity, str) or not identity or not isinstance(entities, list)
+        or sum(isinstance(e, Mapping) and e.get("id") == identity for e in entities) != 1):
+        return "capability receipt lacks a unique final entity identity"
+    if source_call is not None and source_call.get("target") != identity:
+        return "capability receipt final entity differs from its exact authored target"
+    event_match = re.match(r"(runtimeProgram\.entities\[\d+\]\.events\[\d+\])\.", receipt["finalPath"])
+    if event_match is not None:
+        event = _final_value(final_document, event_match.group(1))
+        events = []
+        for e in entities:
+            event_rows = e.get("events") if isinstance(e, Mapping) else None
+            if isinstance(event_rows, list):
+                events.extend(event_rows)
+        if (not isinstance(event, Mapping) or event.get("id") != receipt.get("callId")
+            or sum(isinstance(e, Mapping) and e.get("id") == receipt.get("callId") for e in events) != 1):
+            return "capability receipt lacks its unique exact final event/call identity"
+    return ""
+
+
 def audit_compiler_receipts(
     receipts: Iterable[Any], *, authored_document: Mapping[str, Any] | None = None,
     final_document: Mapping[str, Any] | None = None,
@@ -413,6 +468,7 @@ def audit_compiler_receipts(
         # Only structurally valid rows can participate in source coverage.
         receipt_rows.append(receipt)
     delivered_equipment: dict[str, int] = {}
+    structured_groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     for receipt in receipt_rows:
         fn = str(receipt.get("fn") or "")
         lowerer_id = str(receipt.get("lowererId") or "")
@@ -438,6 +494,10 @@ def audit_compiler_receipts(
                 "declaredOutputs": list(declared),
                 "reason": "compiler receipt used an undeclared input or output field",
             })
+        if fn and not lowerer_id:
+            reason = _capability_receipt_owner_error(receipt, authored_document, final_document)
+            if reason:
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path, "reason": reason})
         if lowerer_id and receipt.get("status") != "technical_projection":
             violations.append({"lowererId": lowerer_id, "finalPath": path,
                                "reason": "global receipt has an unexpected status"})
@@ -468,6 +528,23 @@ def audit_compiler_receipts(
             reason = _global_receipt_wire_error(receipt, final_document)
             if reason:
                 violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
+        literal_cap = CAPABILITY_REGISTRY.get(fn)
+        if literal_cap is not None and literal_cap.fixed_wire_literals:
+            literal_matches = [(key, value) for key, value in literal_cap.fixed_wire_literals.items()
+                               if path.endswith("." + key)]
+            if literal_matches:
+                source_match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.fn", authored_path)
+                valid_literal = (len(literal_matches) == 1 and source_match is not None
+                                 and receipt.get("status") == "technical_projection" and not authored_paths
+                                 and _same_receipt_value(receipt.get("value"), literal_matches[0][1]))
+                if authored_document is not None and source_match is not None:
+                    index = int(source_match.group(1))
+                    source_call = source_calls[index] if index < len(source_calls) else None
+                    valid_literal = valid_literal and isinstance(source_call, Mapping) and (
+                        source_call.get("fn") == fn and source_call.get("id") == receipt.get("callId"))
+                if not valid_literal:
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                       "reason": "fixed wire literal is not the exact projection of the originating capability"})
         if fn == "present_placed_item_sprite" and receipt.get("status") == "technical_projection":
             match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.params\.placementCallId", authored_path)
             source_call = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
@@ -507,9 +584,56 @@ def audit_compiler_receipts(
                 if not match or not binding_match or list(authored_paths) != expected_inputs:
                     violations.append({"fn": fn, "finalPath": path, "reason": "placed-body association receipt missing exact declared source paths"})
             continue
+        nested_match = re.fullmatch(
+            r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)*", authored_path
+        ) if fn and not lowerer_id else None
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if nested_match is not None and cap is not None and nested_match.group(2) in cap.params and cap.params[nested_match.group(2)].structured:
+            index, root_name = int(nested_match.group(1)), nested_match.group(2)
+            spec = cap.params[root_name]
+            structured_groups.setdefault((fn, receipt["callId"], f"runtimeProgram.calls[{index}].params.{root_name}"), []).append(receipt)
+            source_prefix = f"runtimeProgram.calls[{index}].params."
+            source_name = authored_path.removeprefix(source_prefix)
+            pairs = [(source, destination, literal) for source, destination, literal in spec.projection_paths(root_name)
+                     if source == source_name and path.endswith("." + destination)]
+            expected_statuses = {"alias_lowering" if literal else "delivered" for _, _, literal in pairs}
+            if not pairs or receipt.get("status") not in expected_statuses or authored_paths:
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
+                                   "finalPath": path, "reason": "structured parameter receipt is not a declared source/output pair"})
+            if authored_document is not None:
+                source_call = source_calls[index] if index < len(source_calls) else None
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                expected_rows = ()
+                if (isinstance(source_call, Mapping) and source_call.get("fn") == fn
+                    and source_call.get("id") == receipt.get("callId")
+                    and isinstance(source_params, Mapping) and root_name in source_params):
+                    try:
+                        expected_rows = spec.projected_fields(source_params[root_name], root_name)
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                matching = [row for row in expected_rows if row.authored_path == source_name
+                            and path.endswith("." + row.wire_path)
+                            and receipt.get("status") == ("alias_lowering" if row.literal else "delivered")
+                            and _same_receipt_value(row.value, receipt.get("value"))]
+                if len(matching) != 1:
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
+                                       "finalPath": path, "reason": "structured receipt is not the exact authored variant projection"})
+            continue
         parameter_match = re.fullmatch(
             r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
         ) if fn and not lowerer_id else None
+        if (authored_document is None and parameter_match is not None and cap is not None
+            and parameter_match.group(2) not in cap.params
+            and parameter_match.group(2) in cap.retained_receipt_params):
+            name = parameter_match.group(2)
+            retained_spec = cap.retained_receipt_params[name]
+            expected_paths = _parameter_outputs(fn, name, retained=True)
+            if (receipt.get("status") != "delivered" or authored_paths
+                or not any(path_matches(candidate, path) for candidate in expected_paths)
+                or not _retained_projection_value_matches(retained_spec, receipt.get("value"))):
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
+                                   "finalPath": path, "reason": "retained wire provenance has no exact declared prior projection"})
+            continue
         if fn and authored_paths and (fn != "add_equipment_damage_bonus" or receipt.get("status") != "delivered"):
             violations.append({
                 "callId": str(receipt.get("callId") or ""), "fn": fn,
@@ -541,6 +665,14 @@ def audit_compiler_receipts(
                         "expectedPaths": list(expected_paths),
                         "reason": "wrong capability output for authored parameter",
                     })
+            if (match is not None and cap is not None and match.group(2) in cap.params
+                and authored_document is None and receipt.get("status") == "delivered"):
+                spec = cap.params[match.group(2)]
+                retained = cap.retained_receipt_params.get(match.group(2))
+                if not (spec.matches_scalar_projection(receipt.get("value"))
+                        or retained is not None and retained.matches_scalar_projection(receipt.get("value"))):
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                       "reason": "scalar receipt is outside its exact declared wire domain"})
             if match is not None and cap is not None and match.group(2) in cap.params and is_omission:
                 name = match.group(2)
                 spec = cap.params[name]
@@ -590,7 +722,7 @@ def audit_compiler_receipts(
                         "authoredPath": authored_path, "finalPath": path,
                         "reason": "authored parameter absent from originating call",
                     })
-                elif not _same_receipt_value(receipt.get("value"), cap.params[match.group(2)].to_wire(source_params[match.group(2)])):
+                elif not _valid_source_projection(cap.params[match.group(2)], source_params[match.group(2)], receipt.get("value")):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""),
                         "fn": fn,
@@ -665,6 +797,121 @@ def audit_compiler_receipts(
                             "callId": str(receipt.get("callId") or ""), "fn": fn,
                             "finalPath": path, "reason": "equipment class modifier has no unique declared configuration",
                         })
+    for (fn, call_id, source_root), rows in structured_groups.items():
+        root_name = source_root.rsplit(".", 1)[-1]
+        spec = CAPABILITY_REGISTRY[fn].params[root_name]
+        records = []
+        owners = set()
+        for row in rows:
+            source_name = root_name + row["authoredPath"][len(source_root):]
+            pairs = [(destination, literal) for source, destination, literal in spec.projection_paths(root_name)
+                     if source == source_name and row["finalPath"].endswith("." + destination)
+                     and row["status"] == ("alias_lowering" if literal else "delivered")]
+            if len(pairs) != 1:
+                break
+            destination, literal = pairs[0]
+            owners.add(row["finalPath"][:-(len(destination) + 1)])
+            records.append((source_name, destination, literal, row["value"]))
+        if (len(records) != len(rows) or len(owners) != 1
+            or not spec.matches_projection_records(tuple(records), root_name)):
+            violations.append({"fn": fn, "callId": call_id, "authoredPath": source_root,
+                               "reason": "structured receipts lack one complete admitted variant output set"})
+    # A persisted group asserts one originating coordinate and output owner.
+    # These are claim-consistency checks; only the source path above authenticates
+    # the original target. Require coverage even when every typed row was removed.
+    final_claims: dict[str, int] = {}
+    for row in receipt_rows:
+        if row.get("fn") and not row.get("lowererId"):
+            final_claims[row["finalPath"]] = final_claims.get(row["finalPath"], 0) + 1
+    for output, count in final_claims.items():
+        if count != 1:
+            claims = [row for row in receipt_rows if row.get("fn") and not row.get("lowererId")
+                      and row["finalPath"] == output]
+            # Separate explicitly named effect components may share the same
+            # immutable group identity. Each exact source claim still passes
+            # scalar/domain/owner proof and per-call unique coverage below.
+            shared_identity = bool(re.fullmatch(r"runtimeProgram\.effectGroups\[\d+\]\.id", output)) and all(
+                CAPABILITY_REGISTRY[row["fn"]].effect_groupable
+                and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\.effectGroupId", row["authoredPath"])
+                and _same_receipt_value(row["value"], claims[0]["value"])
+                for row in claims
+            )
+            if not shared_identity:
+                violations.append({"finalPath": output, "reason": "final capability output is claimed by multiple receipts"})
+    call_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    for row in receipt_rows:
+        if row.get("fn") and not row.get("lowererId"):
+            call_groups.setdefault((row["fn"], row["callId"]), []).append(row)
+    for (fn, call_id), rows in call_groups.items():
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if cap is None:
+            continue
+        source_bases = {match.group(0) for row in rows
+                        if (match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+        if len(source_bases) != 1:
+            violations.append({"fn": fn, "callId": call_id, "reason": "call receipts lack one exact source coordinate"})
+        paths = [row["finalPath"] for row in rows]
+        if len(paths) != len(set(paths)):
+            violations.append({"fn": fn, "callId": call_id, "reason": "call outputs lack unique receipt coverage"})
+        if final_document is None:
+            continue
+        projection_params = None
+        if cap.effect_groupable:
+            identity_rows = [row for row in rows if row["authoredPath"].endswith(".params.effectGroupId")]
+            projection_params = {"effectGroupId": identity_rows[0]["value"]} if identity_rows else {}
+            scope_prefix = "gameplay."
+            if identity_rows:
+                identity_match = re.fullmatch(r"(runtimeProgram\.effectGroups\[\d+\])\.id", identity_rows[0]["finalPath"])
+                scope_prefix = identity_match.group(1) + "." if identity_match else ""
+            if not scope_prefix or any(not row["finalPath"].startswith(scope_prefix) for row in rows):
+                violations.append({"fn": fn, "callId": call_id,
+                                   "reason": "effect call lacks one exact default or named group output owner"})
+        for name, spec in cap.params.items():
+            if spec.structured:
+                destinations = spec.wire_field_names(name)
+                patterns = [p for p in cap.final_wire_paths if any(p.endswith("." + d) for d in destinations)]
+                # Current and explicitly retained source paths share the same
+                # finite output slots; every present slot still needs one row.
+            else:
+                patterns = list(_parameter_outputs(fn, name, projection_params))
+            for pattern in patterns:
+                concrete = {r["finalPath"] for r in rows if path_matches(pattern, r["finalPath"])}
+                if "[]" not in pattern:
+                    concrete.add(pattern)
+                else:
+                    # Instantiate indices from any receipt of this exact call,
+                    # rather than choosing an entity/event by position.
+                    for row in rows:
+                        indices = re.findall(r"\[\d+\]", row["finalPath"])
+                        if pattern.count("[]") == len(indices):
+                            candidate = pattern
+                            for index in indices:
+                                candidate = candidate.replace("[]", index, 1)
+                            concrete.add(candidate)
+                for output in concrete:
+                    if _final_value(final_document, output) is _MISSING:
+                        continue
+                    matching = [r for r in rows if r["finalPath"] == output]
+                    if len(matching) != 1:
+                        violations.append({"fn": fn, "callId": call_id, "finalPath": output,
+                                           "reason": "present parameter output lacks unique compiler receipt coverage"})
+    # A declared fn-selected literal is part of the full capability projection.
+    # Require coverage from actual Author calls, or from the persisted receipt
+    # group when no Author exists. Never fabricate a missing source document.
+    literal_calls = ({(str(row.get("fn") or ""), str(row.get("id") or ""))
+                      for row in source_calls if isinstance(row, Mapping)} if authored_document is not None
+                     else {(str(row.get("fn") or ""), str(row.get("callId") or "")) for row in receipt_rows})
+    for fn, call_id in literal_calls:
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if cap is None:
+            continue
+        for key in cap.fixed_wire_literals:
+            expected_paths = [candidate for candidate in cap.final_wire_paths if candidate.endswith("." + key)]
+            matching = [row for row in receipt_rows if row.get("fn") == fn and row.get("callId") == call_id
+                        and any(path_matches(candidate, str(row.get("finalPath") or "")) for candidate in expected_paths)]
+            if not expected_paths or len(matching) != 1:
+                violations.append({"fn": fn, "callId": call_id, "field": key,
+                                   "reason": "fixed wire literal has no unique declared compiler receipt"})
     # Require the existing primary receipts, never synthesize new provenance.
     # Source and wire indices are separate: bindings may be sorted during compile.
     if authored_document is not None:
@@ -730,6 +977,9 @@ def audit_compiler_receipts(
                 continue
             param_names = params if call.get("fn") != "add_equipment_damage_bonus" else ("bonusPercent",)
             for param in param_names:
+                cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+                if cap is not None and param in cap.params and cap.params[param].structured:
+                    continue  # exact expanded leaf coverage below
                 authored_path = f"runtimeProgram.calls[{index}].params.{param}"
                 if delivered_equipment.get(authored_path, 0) != 1:
                     violations.append({
@@ -752,6 +1002,25 @@ def audit_compiler_receipts(
             if not isinstance(source_params, Mapping):
                 continue
             for name in source_params:
+                cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
+                if cap is not None and name in cap.params and cap.params[name].structured:
+                    try:
+                        projections = cap.params[name].projected_fields(source_params[name], name)
+                    except (ValueError, TypeError, KeyError):
+                        projections = ()
+                    if not projections:
+                        violations.append({"fn": cap.name, "callId": source_call.get("id"),
+                                           "reason": "structured authored parameter has no projection"})
+                    for projection in projections:
+                        source_path = f"runtimeProgram.calls[{index}].params.{projection.authored_path}"
+                        matching = [row for row in receipt_rows
+                                    if row.get("fn") == cap.name and row.get("callId") == source_call.get("id")
+                                    and row.get("authoredPath") == source_path
+                                    and str(row.get("finalPath") or "").endswith("." + projection.wire_path)]
+                        if len(matching) != 1:
+                            violations.append({"fn": cap.name, "callId": source_call.get("id"), "authoredPath": source_path,
+                                               "reason": "structured parameter output has no unique compiler receipt"})
+                    continue
                 key = (str(source_call.get("fn") or ""), str(source_call.get("id") or ""),
                        f"runtimeProgram.calls[{index}].params.{name}")
                 if key not in delivered_sources:

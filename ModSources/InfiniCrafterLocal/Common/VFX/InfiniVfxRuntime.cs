@@ -363,7 +363,8 @@ public static class InfiniVfxRuntime
         }
         if (kind == InfiniVfxRendererKind.SoundCue)
         {
-            SoundEngine.PlaySound(slot.ResolveSoundStyle() with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, center);
+            SoundStyle sound = slot.ResolveSoundStyle();
+            if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
             return;
         }
         if (kind == InfiniVfxRendererKind.ImpactSprite)

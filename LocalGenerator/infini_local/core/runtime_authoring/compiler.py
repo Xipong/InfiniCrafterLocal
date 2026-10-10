@@ -45,6 +45,20 @@ from infini_local.core.runtime_authoring.validator import (
 class _CompileContext:
     receipts: list[dict[str, Any]]
 
+    def project_parameter(self, *, call: Mapping[str, Any], param: str, value: Any,
+                          target: MutableMapping[str, Any], prefix: str) -> None:
+        """Execute the registry's exact leaf/variant projection with provenance."""
+        spec = CAPABILITY_REGISTRY[str(call["fn"])].params[param]
+        for row in spec.projected_fields(value, param):
+            destination = target
+            parts = row.wire_path.split(".")
+            for part in parts[:-1]:
+                destination = destination.setdefault(part, {})
+            self.write(call=call, path=f"{prefix}.{row.wire_path}", value=row.value,
+                       target=destination, key=parts[-1], authored_param=row.authored_path)
+            if row.literal:
+                self.receipts[-1]["status"] = "alias_lowering"
+
     def write(self, *, call: Mapping[str, Any], path: str, value: Any, target: MutableMapping[str, Any], key: str, authored_param: str | None = None) -> None:
         target[key] = copy.deepcopy(value)
         self.receipts.append({
@@ -129,12 +143,9 @@ def _compile_item_call(
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
 
     def project_equipment(target: dict[str, Any], prefix: str) -> None:
-        for source, spec in CAPABILITY_REGISTRY[fn].params.items():
+        for source in CAPABILITY_REGISTRY[fn].params:
             if source in p:
-                destination = spec.wire_name or source
-                ctx.write(call=call, path=f"{prefix}.{destination}",
-                          value=spec.to_wire(p[source]), target=target,
-                          key=destination, authored_param=source)
+                ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
     if fn == "configure_item_stats":
         project(gameplay, "gameplay", {
@@ -302,10 +313,7 @@ def _compile_entity_call(
 
     def project(target: dict[str, Any], prefix: str, values: Mapping[str, Any]) -> None:
         for source, value in values.items():
-            spec = CAPABILITY_REGISTRY[fn].params[source]
-            destination = spec.wire_name or source
-            ctx.write(call=call, path=f"{prefix}.{destination}", value=spec.to_wire(value),
-                      target=target, key=destination, authored_param=source)
+            ctx.project_parameter(call=call, param=source, value=value, target=target, prefix=prefix)
 
     if fn == "configure_spawn":
         spawn = component("spawn")
@@ -348,14 +356,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.controller.name", value=fn, target=controller, key="name", source=source_fn)
         ctx.write_derived(call=call, path=f"{base}.controller.code", value=CONTROLLER_OPCODE[fn], target=controller, key="code", source=source_fn)
         if fn == "target_and_fire":
-            targeting = component("targeting")
-            for source_key, destination in {
-                "shotEntity": "shotEntityId",
-                "intervalTicks": "intervalTicks",
-                "rangeTiles": "rangeTiles",
-                "sameTargetBias": "sameTargetBias",
-            }.items():
-                ctx.write(call=call, path=f"{base}.targeting.{destination}", value=p[source_key], target=targeting, key=destination, authored_param=source_key)
+            project(component("targeting"), f"{base}.targeting", p)
         else:
             controller_params = controller.setdefault("params", {})
             for key, value in p.items():

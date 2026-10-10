@@ -636,6 +636,45 @@ def check_visual_vfx_contract() -> None:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 
 
+def check_vfx_sound_contract() -> None:
+    # Read the actual VFX owner, never a second list of samples/Author controls.
+    source = ast.parse((ROOT / "LocalGenerator/infini_local/core/vfx_manifest.py").read_text(encoding="utf-8"))
+    catalog = next(ast.literal_eval(node.value) for node in source.body
+                   if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "_SOUND_IDS" for target in node.targets))
+    schema_function = next(node for node in source.body if isinstance(node, ast.FunctionDef) and node.name == "_sound_schema")
+    fields = set(ast.literal_eval(next(node.value for node in schema_function.body if isinstance(node, ast.Return)))["properties"])
+    manifest = read("Common/Models/VfxManifestSpec.cs")
+    controls = read("Common/Models/VfxSoundSpec.cs")
+    exact = re.findall(r'"(\w+)"\s*=>\s*SoundID\.(\w+)', stripped(manifest, keep_strings=True))
+    if len(exact) != len(catalog) or dict(exact) != {name: name for name in catalog}:
+        fail("VFX sound exact palette must match every canonical SoundID member")
+    properties = set(re.findall(r'\bpublic\s+[\w?<>\[\]]+\s+(\w+)\s*\{\s*get\s*;\s*set\s*;', stripped(controls)))
+    if properties != {field[0].upper() + field[1:] for field in fields}:
+        fail("VFX sound DTO must expose exactly the canonical control fields")
+    # VfxManifestSpec and VfxSlotSpec share the method name: narrow ownership to
+    # the slot declaration, otherwise a valid root normalizer can hide a loss.
+    slot_declaration = manifest[manifest.index("public sealed class VfxSlotSpec"):]
+    normalized = stripped(method_body(slot_declaration, "NormalizeAndValidate"), keep_strings=True)
+    require(normalized, 'rendererKind != InfiniVfxRendererKind.SoundCue', "VFX sound renderer ownership")
+    require(normalized, 'if (SoundId is null)', "VFX sound explicit selector dependency")
+    require(normalized, 'Sound.NormalizeAndValidate();', "VFX sound strict controls")
+    playback = stripped(method_body(manifest, "ResolveSoundStyle"))
+    require(playback, 'Sound is { } sound ? sound.ApplyTo(sample) : sample with', "VFX sound explicit/legacy split")
+    require(playback, 'Volume = Math.Clamp(Alpha, 0.05f, 1f)', "VFX sound legacy volume")
+    require(playback, 'Pitch = Math.Clamp(PhaseOffset * 0.25f, -0.5f, 0.5f)', "VFX sound legacy phase")
+    apply = stripped(method_body(controls, "ApplyTo"))
+    require(apply, 'new SoundStyle(sample.SoundPath, sample.Variants, sample.Type)', "VFX sound independent pitch")
+    for field in fields:
+        member = field[0].upper() + field[1:]
+        require(apply, f'{member} = {member}', "VFX sound exact controls")
+    for member in ("Identifier", "MaxInstances", "SoundLimitBehavior", "RerollAttempts", "LimitsArePerVariant", "PlayOnlyIfFocused", "PauseBehavior", "IsLooped", "VariantsWeights"):
+        require(apply, f'{member} = sample.{member}', "VFX sound native playback policy")
+    for path, method in (("Common/VFX/InfiniItemVfxRuntime.cs", "EmitLocal"), ("Common/VFX/InfiniVfxRuntime.cs", "EmitSlot")):
+        consumer = stripped(method_body(read(path), method))
+        require(consumer, 'SoundStyle sound = slot.ResolveSoundStyle();', "VFX sound shared playback projection")
+        require(consumer, 'if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);', "VFX sound explicit silence")
+
+
 def check_deleted_architecture() -> None:
     forbidden_files = [
         "Content/Projectiles/GeneratedProjectile.Runtime.cs",
@@ -694,6 +733,7 @@ def main() -> int:
     check_world_transactions()
     check_delivery_metadata()
     check_visual_vfx_contract()
+    check_vfx_sound_contract()
     check_deleted_architecture()
     check_packet_ids()
     if ERRORS:
