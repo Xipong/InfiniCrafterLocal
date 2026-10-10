@@ -1375,16 +1375,21 @@ _CAPS.extend([
 _CAPS.extend([
     _cap(
         "channel_beam",
-        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
+        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
         "controller",
         ("owner_attached_projectile",),
         {
             "rangeTiles": _p("number", "Beam length", minimum=1, maximum=120, units="tiles"),
             "widthPx": _p("number", "Beam collision width", minimum=2, maximum=128, units="pixels"),
-            "warmupTicks": _p("integer", "Warmup before full damage", minimum=0, maximum=600, units="ticks"),
+            "warmupTicks": _p("integer", "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.", minimum=0, maximum=600, units="ticks"),
+            "manaPayment": _p("string", "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.", required=False, enum=("initial_use_only", "each_use_time"), default="initial_use_only", neutral="initial_use_only", units="native mana payment cadence", execution_phase="owner channel sustain"),
+            "initialDamageMultiplier": _p("number", "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="source damage multiplier", consumer_storage="float32", execution_phase="NPC hit"),
+            "initialWidthMultiplier": _p("number", "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="beam width multiplier", consumer_storage="float32", execution_phase="beam geometry"),
+            "damageStartProgress": _p("number", "Minimum warmup progress that enables the native friendly hit lane, inclusive. 1 retains the full-warmup gate; 0 enables hits from the start. Progress and threshold use binary64 before native hit dispatch.", required=False, minimum=0, maximum=1, default=1.0, neutral=1.0, units="fraction of warmup", execution_phase="channel update"),
+            "raycastTiles": _p("boolean", "When true, Collision.LaserScan samples three rays across current beam width and clips the shared segment to the shortest bounded sample without temporal smoothing. False retains full range. Does not set collision.tileCollide or damage.ownerHitCheck.", required=False, default=False, neutral=False, units="tile clipping enabled", execution_phase="beam geometry"),
         },
         py=_COMPILER_OWNER,
-        cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController/Colliding",
+        cs="Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
         wire=("runtimeProgram.entities[].controller.*",),
         provenance="beam scan/channel extracted from the retired magic macro",
         repair_group="controller",
@@ -2002,6 +2007,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "set_projectile_collision": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "spawn_over_target": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "emit_light_while_active": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
+        "channel_beam": cap.csharp_owner,
     }
     if cap.name in item:
         return item[cap.name]
@@ -2013,6 +2019,8 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
 
 
 def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
+    if cap.name == "channel_beam":
+        return "owner_execute_sync", {"sustain_mana": "owner_execute_sync", "beam_geometry": "native_local_collision_and_visual", "NPC_source_damage": "native_projectile_hit_authority"}
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
     if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:

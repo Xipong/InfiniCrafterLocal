@@ -62,7 +62,7 @@ _PARAMS_KEYS = frozenset({
     "waveAmplitude", "phaseStrength", "acceleration", "maxSpeed", "turnRadiansPerTick", "pullStrength",
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
     "chargeTicks", "powerMultiplier", "shotEntity", "intervalTicks", "sameTargetBias",
-})
+}) | frozenset(CAPABILITY_REGISTRY["channel_beam"].params)
 _TARGETING_KEYS = frozenset({"shotEntityId", "intervalTicks", "rangeTiles", "sameTargetBias"})
 _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
@@ -300,7 +300,18 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:
-                _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+                params = _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+                beam = CAPABILITY_REGISTRY["channel_beam"]
+                for name, spec in beam.params.items():
+                    if spec.default is None or params is None or name not in params:
+                        continue  # Retained v5 omission keeps the old neutral behavior.
+                    path = f"{entity_path}.{component_name}.params.{name}"
+                    selected = (component_name == "controller" and component.get("name") == beam.name
+                                and type(component.get("code")) is int and component["code"] == 1
+                                and kind in beam.target_kinds)
+                    if not selected or strict_schema_errors(params[name], spec.schema(), path=path) or spec.consumer_value_error(params[name]):
+                        errors.append({"path": path, "code": "invalid_channel_beam_param",
+                                       "message": "Present beam extension must match its exact controller, target, type, bounds and consumer precision without coercion."})
         if "nativeSentry" in entity:
             spec = CAPABILITY_REGISTRY["set_projectile_sentry"]
             path = f"{entity_path}.nativeSentry"
