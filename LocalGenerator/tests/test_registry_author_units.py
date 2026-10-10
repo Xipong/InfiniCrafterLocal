@@ -453,5 +453,8 @@ def test_generated_lowery_names_current_binding_target_path():
     root = Path(__file__).resolve().parents[2]
     projection = runpy.run_path(str(root / "tools/generate_lowery.py"))
     text = projection["render"]()
-    assert "exact `binding.usePolicy.action.targetId`" in text
+    assert "exact `binding.action.targetId`" in text
+    assert "exact unique item-body identity" in text
+    assert "Wire сохраняет `binding.usePolicy`" in text
+    assert "exact `binding.usePolicy.action.targetId`" not in text
     assert "exact `binding.target`" not in text
