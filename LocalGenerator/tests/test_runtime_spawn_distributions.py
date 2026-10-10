@@ -261,7 +261,7 @@ def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkey
     hostile["params"]["damage"] = 999
     patch = {"note": "explicit constant replacement", "realizationReplacement": doc["realization"],
              "callsUpsert": [candidate, hostile]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")

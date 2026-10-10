@@ -31,6 +31,13 @@ def historical_spawn_velocity_wire(document):
         # constraints plus 3 target-spawn constraints, the existing spawn
         # event's radial/disk spread guard, and one typed reference.
         checks = contract["validation"]["stats"]["registryDrivenChecks"]
-        checks["requirements"] -= 23
+        # Native-shot/sampling exclusivity is a new diagnostic only. It does
+        # not alter any of these constant-speed, no-weapon-ammo captures.
+        from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+        constraint = [row for row in CAPABILITY_REGISTRY["configure_spawn"].requirements
+                      if row.kind == "present_params_forbid_item_capability_when_active_spawn"]
+        assert len(constraint) == 1 and constraint[0].equals == "native_shot"
+        assert constraint[0].param == "velocity" and constraint[0].capability == "configure_weapon_ammo"
+        checks["requirements"] -= 24
         checks["typedReferences"] -= 1
     return projected

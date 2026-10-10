@@ -41,9 +41,9 @@ _FORBIDDEN_ROUTER_KEYS = {
     "family",
 }
 
-_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact"})
+_RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "weaponAmmo"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
-_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events"})
+_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry"})
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
@@ -51,7 +51,8 @@ _VISUAL_KEYS = frozenset({
     "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
-    spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["set_projectile_concurrency"].params.items()
+    spec.wire_name or name for fn in ("set_projectile_concurrency", "set_descendant_concurrency")
+    for name, spec in CAPABILITY_REGISTRY[fn].params.items()
 )
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
@@ -63,7 +64,7 @@ _PARAMS_KEYS = frozenset({
     "waveAmplitude", "phaseStrength", "acceleration", "maxSpeed", "turnRadiansPerTick", "pullStrength",
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
     "chargeTicks", "powerMultiplier", "shotEntity", "intervalTicks", "sameTargetBias",
-})
+}) | frozenset(CAPABILITY_REGISTRY["channel_beam"].params)
 _TARGETING_KEYS = frozenset(spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["target_and_fire"].params.items())
 _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
@@ -322,6 +323,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         _reject_unknown(runtime_raw, _RUNTIME_KEYS, "$.runtimeProgram", errors)
     if not isinstance(runtime_raw, Mapping):
         errors.append({"path": "$.runtimeProgram", "code": "required_object", "message": "Compiled runtimeProgram object is required."})
+    if "weaponAmmo" in runtime:
+        ammo_cap = CAPABILITY_REGISTRY["configure_weapon_ammo"]
+        ammo_schema = {"type": "object", "additionalProperties": False,
+                       "properties": {name: spec.schema() for name, spec in ammo_cap.params.items()},
+                       "required": list(ammo_cap.params)}
+        for issue in strict_schema_errors(runtime["weaponAmmo"], ammo_schema, path="$.runtimeProgram.weaponAmmo"):
+            errors.append({**issue, "code": "invalid_weapon_ammo", "message": "weaponAmmo must contain exactly the registered category and explicit speed basis."})
     if runtime.get("apiVersion") != RUNTIME_PROGRAM_API_VERSION:
         errors.append({
             "path": "$.runtimeProgram.apiVersion",
@@ -383,20 +391,40 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if component_name == "visual" and component is not None:
                 _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
             if component_name == "spawn" and component is not None:
-                concurrency = CAPABILITY_REGISTRY["set_projectile_concurrency"]
-                for name, spec in concurrency.params.items():
-                    key = spec.wire_name or name
-                    if key not in component:
-                        continue  # Legacy omission adds no admission cap.
-                    path = f"{entity_path}.spawn.{key}"
-                    if kind not in concurrency.target_kinds or strict_schema_errors(component[key], spec.schema(), path=path):
-                        errors.append({"path": path, "code": "invalid_projectile_concurrency",
-                                       "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
+                for fn in ("set_projectile_concurrency", "set_descendant_concurrency"):
+                    concurrency = CAPABILITY_REGISTRY[fn]
+                    for name, spec in concurrency.params.items():
+                        key = spec.wire_name or name
+                        if key not in component:
+                            continue  # Legacy omission adds no admission cap.
+                        path = f"{entity_path}.spawn.{key}"
+                        if kind not in concurrency.target_kinds or strict_schema_errors(component[key], spec.schema(), path=path):
+                            errors.append({"path": path, "code": "invalid_projectile_concurrency",
+                                           "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
+                if "placement" in component:
+                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
+                        errors.append(issue)
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
                 _validate_spawn_velocity(component, entity, f"{entity_path}.spawn", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:
-                _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+                params = _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+                beam = CAPABILITY_REGISTRY["channel_beam"]
+                for name, spec in beam.params.items():
+                    if spec.default is None or params is None or name not in params:
+                        continue  # Retained v5 omission keeps the old neutral behavior.
+                    path = f"{entity_path}.{component_name}.params.{name}"
+                    selected = (component_name == "controller" and component.get("name") == beam.name
+                                and type(component.get("code")) is int and component["code"] == 1
+                                and kind in beam.target_kinds)
+                    if not selected or strict_schema_errors(params[name], spec.schema(), path=path) or spec.consumer_value_error(params[name]):
+                        errors.append({"path": path, "code": "invalid_channel_beam_param",
+                                       "message": "Present beam extension must match its exact controller, target, type, bounds and consumer precision without coercion."})
+        if "nativeSentry" in entity:
+            spec = CAPABILITY_REGISTRY["set_projectile_sentry"]
+            path = f"{entity_path}.nativeSentry"
+            if kind not in spec.target_kinds or strict_schema_errors(entity["nativeSentry"], spec.params["enabled"].schema(), path=path):
+                errors.append({"path": path, "code": "invalid_native_sentry", "message": "Present nativeSentry must be an explicit projectile boolean."})
         if not entity_id:
             errors.append({"path": f"$.runtimeProgram.entities[{index}].id", "code": "required_id", "message": "Entity id is required."})
         elif entity_id in entity_by_id:
@@ -470,6 +498,39 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                    and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
                                    and controller.get("name") == "target_and_fire",
                                    f"$.runtimeProgram.entities[{index}].targeting", errors)
+            # New options are absent in retained v5 wire. Any present option is
+            # checked by its canonical ParamSpec without supplying a value.
+            option_names = ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange")
+            present_options = set(option_names).intersection(targeting)
+            if present_options and (
+                kind not in CAPABILITY_REGISTRY["target_and_fire"].target_kinds
+                or not isinstance(controller, Mapping)
+                or controller.get("name") != "target_and_fire" or type(controller.get("code")) is not int
+                or controller.get("code") != CONTROLLER_OPCODE["target_and_fire"]
+            ):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting",
+                               "code": "targeting_extension_owner",
+                               "message": "Explicit targeting options require their registered controller and target kind."})
+            contract = data.get("runtimeContract")
+            if present_options and isinstance(contract, Mapping):
+                receipts = contract.get("finalWireReceipts")
+                receipts = receipts if isinstance(receipts, list) else []
+                for name in sorted(present_options):
+                    final_path = f"runtimeProgram.entities[{index}].targeting.{name}"
+                    matching = [row for row in receipts if isinstance(row, Mapping)
+                                and row.get("fn") == "target_and_fire" and row.get("finalPath") == final_path]
+                    if len(matching) != 1:
+                        errors.append({"path": "$." + final_path, "code": "targeting_extension_provenance",
+                                       "message": "A present targeting option requires one exact capability receipt."})
+            for name in option_names:
+                if name in targeting:
+                    spec = CAPABILITY_REGISTRY["target_and_fire"].params[name]
+                    for error in strict_schema_errors(targeting[name], spec.schema()):
+                        errors.append({**error, "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
+                    consumer_error = spec.consumer_value_error(targeting[name])
+                    if consumer_error:
+                        errors.append({"code": "consumer_precision_loss", "message": consumer_error,
+                                       "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
             child = str(targeting.get("shotEntityId") or "")
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})
@@ -619,6 +680,30 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     gameplay_raw = data.get("gameplay")
     gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
+    for requirement in CAPABILITY_REGISTRY["configure_spawn"].requirements:
+        if requirement.kind != "present_params_forbid_item_capability_when_active_spawn":
+            continue
+        ammo = runtime.get("weaponAmmo")
+        if not isinstance(ammo, Mapping) or ammo.get(requirement.other_param) != requirement.equals:
+            continue
+        selected = {binding_target_id(binding) for binding in bindings if isinstance(binding, Mapping)
+                    and str(binding.get("input") or "") in ACTIVE_USE_INPUTS and action_kind(binding) == "spawn_entity"}
+        for index, entity in enumerate(entities):
+            spawn = entity.get("spawn") if isinstance(entity, Mapping) else None
+            if not isinstance(spawn, Mapping) or entity.get("id") not in selected:
+                continue
+            rows = _wire_projection_witness(CAPABILITY_REGISTRY["configure_spawn"].params[requirement.param],
+                                            requirement.param, "spawn", {"spawn": spawn})
+            if any(row.authored_path == name or row.authored_path.startswith(name + ".")
+                   for row in rows for name in requirement.any_of):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].spawn.velocityDistribution",
+                               "code": "incompatible_param_variant", "message": requirement.message})
+    if "weaponAmmo" in runtime:
+        if not any(isinstance(binding, Mapping) and str(binding.get("input") or "") in ACTIVE_USE_INPUTS
+                   and action_kind(binding) == "spawn_entity" for binding in bindings):
+            errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "missing_weapon_ammo_consumer", "message": "weaponAmmo requires an active spawn_entity binding."})
+        if gameplay.get("ammoCategory"):
+            errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "ammo_role_conflict", "message": "One generated item cannot be both an ammo consumer and a native ammo stack."})
     retired_use_policy_fields = {
         "consumable",
         "consumeChancePercent",

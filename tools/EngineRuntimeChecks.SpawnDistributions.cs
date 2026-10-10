@@ -187,6 +187,19 @@ internal static partial class EngineRuntimeChecks
 
     private static void SampledVelocityReachesNativeSpawnOnlyOnOwner()
     {
+        using (var scope = new Rt01NpcScope(NetmodeID.SinglePlayer))
+        {
+            var data = SampledLaunchFixture("radial");
+            bool observed = false;
+            using var hook = LaunchSpawnObserver((source, position, velocity, damage, knockback) => observed = true);
+            int count = -1;
+            try { count = GeneratedProjectile.SpawnRuntimeEntity(data, "root", Terraria.Main.player[0],
+                Terraria.Main.player[0].GetSource_Misc("competing-explicit-speeds"), Vector2.Zero, Vector2.UnitX,
+                0, 8, requestedCount: 1, initialVelocitySeed: 182, rootSpeedOverride: 9f); }
+            catch (Exception error) when (RootCombatBoundary(error)) { }
+            Equal(false, observed, "sampled distribution cannot silently discard explicit native-shot speed");
+            Equal(0, count, "competing explicit speed owners refuse before native spawn");
+        }
         foreach (var role in SwarmRoles)
         {
             using var scope = new Rt01NpcScope(role.Mode); Terraria.Main.myPlayer = role.Local;

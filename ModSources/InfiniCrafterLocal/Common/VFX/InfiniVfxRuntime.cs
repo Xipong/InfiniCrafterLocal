@@ -363,7 +363,8 @@ public static class InfiniVfxRuntime
         }
         if (kind == InfiniVfxRendererKind.SoundCue)
         {
-            SoundEngine.PlaySound(slot.ResolveSoundStyle() with { Volume = Math.Clamp(slot.Alpha, 0.05f, 1f), Pitch = Math.Clamp(slot.PhaseOffset * 0.25f, -0.5f, 0.5f) }, center);
+            SoundStyle sound = slot.ResolveSoundStyle();
+            if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
             return;
         }
         if (kind == InfiniVfxRendererKind.ImpactSprite)
@@ -660,7 +661,7 @@ public static class InfiniVfxRuntime
         return true;
     }
 
-    internal static void DrawLine(Texture2D pixel, Vector2 start, Vector2 end, Color color, float width)
+    internal static void DrawLine(Texture2D pixel, Vector2 start, Vector2 end, Color color, float width, bool preserveWidth = false)
     {
         Vector2 delta = end - start;
         if (delta.LengthSquared() <= 0.01f) return;
@@ -668,6 +669,6 @@ public static class InfiniVfxRuntime
         // Center the width on the segment so reversing it preserves its footprint.
         Main.spriteBatch.Draw(pixel, start, null, color, delta.ToRotation(),
             new Vector2(0f, pixel.Height * 0.5f),
-            new Vector2(delta.Length() / pixel.Width, Math.Max(1f, width) / pixel.Height), SpriteEffects.None, 0f);
+            new Vector2(delta.Length() / pixel.Width, (preserveWidth ? width : Math.Max(1f, width)) / pixel.Height), SpriteEffects.None, 0f);
     }
 }

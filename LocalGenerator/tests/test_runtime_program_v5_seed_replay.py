@@ -10,6 +10,8 @@ from infini_local.core.runtime_authoring import compile_runtime_program, validat
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author, historical_spawn_velocity_wire
+from sentry_contract_checks import without_declared_targeting_neutrals
+from beam_contract_checks import without_declared_beam_neutrals
 
 
 _CORPUS = Path(__file__).with_name("fixtures") / "runtime_program_v5_seed_corpus.json"
@@ -79,7 +81,7 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
 
         compiled = compile_runtime_program(captured_spawn_velocity_author(captured_parent_combat_author(authored)))
         assert validate_runtime_wire(compiled)["ok"] is True
-        actual_wire = historical_spawn_velocity_wire(historical_child_combat_wire(_delivery_wire(compiled)))
+        actual_wire = historical_spawn_velocity_wire(historical_child_combat_wire(_delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))))
         assert actual_wire == row["expectedDeliveryWire"]
         digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]

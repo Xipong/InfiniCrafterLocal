@@ -83,6 +83,20 @@ internal static partial class EngineRuntimeChecks
             targeting["damageMultiplier"] = JsonNode.Parse(invalid);
             Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "present targeting multiplier rejected: " + invalid);
         }
+        foreach (string literal in new[] { "-1e-50", "4.000000000000001", "4.000000000000000000000000000000000001" })
+        {
+            targeting["damageMultiplier"] = "RAW_CHILD_NUMBER";
+            string invalid = raw.ToJsonString().Replace("\"RAW_CHILD_NUMBER\"", literal, StringComparison.Ordinal);
+            Equal(true, GeneratedItemData.FromJson(invalid) is null, "original targeting multiplier domain refused " + literal);
+        }
+        foreach (string literal in new[] { "0", "4", "3.999999999999999999999999999999999999", "1e-40" })
+        {
+            targeting["damageMultiplier"] = "RAW_CHILD_NUMBER";
+            string valid = raw.ToJsonString().Replace("\"RAW_CHILD_NUMBER\"", literal, StringComparison.Ordinal);
+            var accepted = GeneratedItemData.FromJson(valid) ?? throw new InvalidOperationException("valid targeting raw multiplier rejected");
+            foreach (string payload in new[] { accepted.ToJson(), accepted.ToNetworkJson() })
+                Equal(true, GeneratedItemData.FromJson(payload) is not null, "targeting multiplier rounded endpoint survives re-admission");
+        }
         var inactive = ChildCombatFixture();
         var inactiveParent = inactive.RuntimeProgram.TryGetEntity("root")!;
         inactiveParent.Targeting.DamageBasis = RuntimeChildCombatBasis.LiveParent;

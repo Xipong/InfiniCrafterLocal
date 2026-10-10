@@ -351,6 +351,17 @@ def _validate_requirement(
             return ValidationIssue(f"{path}.params.{requirement.other_param}", "incompatible_param_variant",
                 requirement.message, tuple(str(value) for value in expected), (str(call.get("id") or ""),))
         return None
+    if requirement.kind == "present_params_forbid_item_capability_when_active_spawn":
+        selected = any(binding.get("input") in ACTIVE_USE_INPUTS
+                       and action_kind(binding) == "spawn_entity" and binding_target_id(binding) == target_id
+                       for binding in bindings)
+        conflicts = any(row.get("fn") == requirement.capability
+                        and nested_param(requirement.other_param, row.get("params", {})) == requirement.equals
+                        for row in calls_by_target.get(item_id, []))
+        if selected and conflicts and any(nested_param(name) is not None for name in requirement.any_of):
+            return ValidationIssue(f"{path}.params.{requirement.param}", "incompatible_param_variant",
+                requirement.message, related_ids=(str(call.get("id") or ""), target_id))
+        return None
     if requirement.kind == "present_param_forbids_capability":
         if nested_param(requirement.param) is not None and requirement.capability in fns:
             return ValidationIssue(f"{path}.params.{requirement.param.rsplit('.', 1)[0]}", "incompatible_param_variant",

@@ -97,6 +97,7 @@ public sealed partial class GeneratedProjectile
         if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
         {
             GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width);
+            if ((end - start).LengthSquared() <= 0.01f) return false;
             float collisionPoint = 0f;
             return Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), start, end, width, ref collisionPoint);
         }
@@ -118,10 +119,32 @@ public sealed partial class GeneratedProjectile
     private void GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width)
     {
         Player owner = Owner();
+        RuntimeParamsSpec p = _entity!.Controller.Params;
         Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
         start = owner.MountedCenter + direction * 18f;
-        end = start + direction * Math.Max(16f, _entity!.Controller.Params.RangeTiles * 16f);
-        width = Math.Max(2f, _entity.Controller.Params.WidthPx);
+        double initialWidth = p.InitialWidthMultiplier ?? 1d;
+        width = (float)(Math.Max(2f, p.WidthPx) * (initialWidth + (1d - initialWidth) * ChannelBeamWarmupProgress()));
+        float length = Math.Max(16f, p.RangeTiles * 16f);
+        if (p.RaycastTiles == true)
+        {
+            Collision.LaserScan(start, direction, width, length, _beamScanSamples);
+            foreach (float sample in _beamScanSamples)
+            {
+                if (!float.IsFinite(sample))
+                    throw new InvalidOperationException("native beam LaserScan returned a non-finite distance");
+                // The explicit tile-raycast contract uses the shortest of three
+                // width samples. No interpolation may extend past a current wall.
+                length = Math.Min(length, Math.Max(0f, sample));
+            }
+        }
+        end = start + direction * length;
+    }
+
+    public override void ModifyHitNPC(NPC target, ref NPC.HitModifiers modifiers)
+    {
+        if (!_configured || _entity?.Controller.Code != RuntimeControllerCode.ChannelBeam) return;
+        double initial = _entity.Controller.Params.InitialDamageMultiplier ?? 1d;
+        modifiers.SourceDamage *= (float)(initial + (1d - initial) * ChannelBeamWarmupProgress());
     }
 
     private float WhipCollisionWidth()
@@ -181,6 +204,10 @@ public sealed partial class GeneratedProjectile
 
     public override void OnKill(int timeLeft)
     {
+        // Release occupancy before terminal authored events, permitting a
+        // bounded replacement. Lifetime ledgers never refill from this path.
+        _spawnBudgetLease?.Release();
+        _spawnBudgetLease = null;
         if (_data is null || _entity is null) return;
         RuntimeHitPullBridge.RememberRetired(Projectile);
         if (!_expireEventRan && timeLeft <= 1)

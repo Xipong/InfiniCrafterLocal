@@ -81,7 +81,7 @@ def _project(fn, new, value):
         )
         final = {"gameplay": gameplay, "runtimeProgram": runtime}
     else:
-        entity = {}
+        entity = {"id": call["target"]}
         compiler._compile_entity_call(ctx, call, entity=entity, entity_index=0)
         final = {"runtimeProgram": {"entities": [entity]}}
     return call, ctx.receipts, final
