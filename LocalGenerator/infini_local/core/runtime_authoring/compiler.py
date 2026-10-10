@@ -130,7 +130,7 @@ def _compile_item_call(
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
 
     def project_equipment(target: dict[str, Any], prefix: str) -> None:
-        for source, spec in CAPABILITY_REGISTRY[fn].params.items():
+        for source in CAPABILITY_REGISTRY[fn].params:
             if source in p:
                 ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
