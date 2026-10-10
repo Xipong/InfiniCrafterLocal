@@ -857,7 +857,7 @@ def audit_compiler_receipts(
                             "reason": "wrong item stat output for authored parameter",
                         })
                 if fn in {"configure_accessory", "configure_armor"}:
-                    prefix = "accessory" if fn == "configure_accessory" else "armor"
+                    prefix = fn.removeprefix("configure_")
                     expected = f"{prefix}.{cap.params[match.group(2)].wire_name or match.group(2)}"
                     if path != expected:
                         violations.append({
@@ -1172,6 +1172,29 @@ def audit_compiler_receipts(
                             "reason": "declared neutral omission has no unique omission receipt",
                         })
     if final_document is not None:
+        # Optional registry-selected components have no legacy implicit owner.
+        # Audit their full presence here, even when every receipt was removed.
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        for presence_fn, presence_cap in CAPABILITY_REGISTRY.items():
+            if not presence_cap.wire_presence_path:
+                continue
+            for index, _ in enumerate(entities if isinstance(entities, list) else []):
+                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1)
+                if _final_value(final_document, base) is _MISSING:
+                    continue
+                matching = [row for row in receipt_rows if row.get("fn") == presence_fn
+                            and (row["finalPath"] == base or row["finalPath"].startswith(base + "."))]
+                owners = {(row["callId"], source_match.group(0)) for row in matching
+                          if (source_match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+                if len(owners) != 1:
+                    violations.append({"fn": presence_fn, "finalPath": base,
+                                       "reason": "present optional component lacks one originating receipt owner"})
+                for pattern in presence_cap.final_wire_paths:
+                    output = pattern.replace("[]", f"[{index}]", 1)
+                    rows = [row for row in matching if row["finalPath"] == output]
+                    if len(rows) != 1:
+                        violations.append({"fn": presence_fn, "finalPath": output,
+                                           "reason": "present optional component lacks unique full output coverage"})
         if _final_value(final_document, "runtimeProgram.weaponAmmo") is not _MISSING:
             selections = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
                           and row.get("finalPath") == "runtimeProgram.weaponAmmo"
@@ -1257,6 +1280,7 @@ def technical_lowering_manifest() -> dict[str, Any]:
             "compilerOwner": cap.compiler_owner,
             "csharpOwner": cap.csharp_owner,
             **({"technicalProjectionInputs": list(cap.technical_lowering_inputs)} if cap.technical_lowering_inputs else {}),
+            **({"wirePresencePath": cap.wire_presence_path} if cap.wire_presence_path else {}),
         })
     return {
         "schema": TECHNICAL_LOWERING_SCHEMA,
