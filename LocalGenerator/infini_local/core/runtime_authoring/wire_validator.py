@@ -23,7 +23,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, matches_declared_scalar_projection
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import _has_non_neutral_generated_buff
 
 _MAX_MOVEMENT_CODE = 19
@@ -369,7 +369,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             # a delivery without provenance still obeys the retained wire type.
             bias_spec = CAPABILITY_REGISTRY["target_and_fire"].retained_receipt_params["sameTargetBias"]
             bias_key = bias_spec.wire_name or "sameTargetBias"
-            if bias_key in targeting and not matches_declared_scalar_projection(bias_spec, targeting[bias_key]):
+            if bias_key in targeting and not bias_spec.matches_scalar_projection(targeting[bias_key]):
                 errors.append({"path": f"{entity_path}.targeting.{bias_key}",
                                "code": "invalid_retained_target_bias",
                                "message": "Present target bias must match its declared persisted 0..1 domain without coercion or rewriting."})

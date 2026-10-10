@@ -234,3 +234,25 @@ def test_retained_bias_domain_is_audit_only_and_cannot_widen_fresh_provider():
     generated = next(row for row in json.loads(generated_path.read_text())["capabilities"] if row["capability"] == cap.name)
     assert generated["retainedWireProvenance"] == inventory["retainedWireProvenance"]
     assert CAPABILITY_REGISTRY[NEW].params["maxTargets"].semantic_type == "spawn_or_target_count"
+
+@pytest.mark.parametrize("equal", [False, True])
+def test_nearest_alias_receipts_bind_final_event_identity_even_for_equal_values(equal):
+    source = build_capability_witness(NEW)
+    first = witness(source)
+    first["params"]["maxTargets"] = 1
+    second = deepcopy(first)
+    second["id"] = "another_nearest"
+    second["params"]["maxTargets"] = 1 if equal else 7
+    source["runtimeProgram"]["calls"].append(second)
+    wire = compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == first["target"])
+    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    for row in rows:
+        if row.get("callId") in {first["id"], second["id"]}:
+            row["finalPath"] = row["finalPath"].replace("events[0]", "EVENT_SWAP").replace("events[1]", "events[0]").replace("EVENT_SWAP", "events[1]")
+    a, b = entity["events"]
+    a_id, b_id = a["id"], b["id"]
+    entity["events"] = [{**b, "id": a_id}, {**a, "id": b_id}]
+    for doc in (None, source):
+        assert not audit_compiler_receipts(rows, authored_document=doc, final_document=wire)["ok"]

@@ -535,7 +535,7 @@ def test_source_receipt_projection_rejects_bool_for_identity_integer():
     assert not validate_runtime_program(source)["ok"]  # Separate audit-only bug, not compiler admission.
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)
     assert not report["ok"], report
-    assert any("originating Author parameter is outside its current declared domain" == v["reason"]
+    assert any("compiler receipt value is not the declared projection of its authored parameter" == v["reason"]
                for v in report["violations"]), report
 
 
