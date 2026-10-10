@@ -124,6 +124,14 @@ def _binding(
 def build_capability_witness(fn: str) -> dict[str, Any]:
     if fn not in CAPABILITY_REGISTRY:
         raise KeyError(fn)
+    if fn == "configure_weapon_ammo":
+        doc = build_capability_witness("move_straight")
+        next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_motion"
+        doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item"))
+        doc["name"] = f"Capability Witness {fn}"
+        doc["concept"]["coreMechanic"] = f"Execute {fn} through its public typed contract."
+        doc["realization"]["description"] = f"A minimal runtime witness executing {fn}."
+        return doc
     cap = CAPABILITY_REGISTRY[fn]
     entities: list[dict[str, Any]] = [{"id": "item", "kind": "item_body"}]
     bindings: list[dict[str, Any]] = []

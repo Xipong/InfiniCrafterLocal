@@ -97,6 +97,8 @@ public sealed partial class GeneratedItemData
 
     private void ValidateBindingCapabilityProjection()
     {
+        if (RuntimeProgram.WeaponAmmo is not null && Gameplay.AmmoCategory.Length > 0)
+            throw new InvalidDataException("one generated item cannot be both an ammo consumer and a native ammo stack");
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
 
         foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)

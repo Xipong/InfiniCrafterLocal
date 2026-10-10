@@ -245,6 +245,8 @@ public partial class GeneratedItem : ModItem
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
         Data.ApplyUseEffectFields(Item, applyingItemEffects, binding);
         bool spawning = action.Kind == RuntimeBindingAction.SpawnEntity;
+        Data.ApplyWeaponAmmoField(Item, spawning);
+        Item.sentry = spawning && Data.RuntimeProgram.TryGetEntity(action.TargetId)?.NativeSentry == true;
         Item.shoot = spawning ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
         Item.shootSpeed = spawning
             ? Data.RuntimeProgram.TryGetEntity(action.TargetId)?.Spawn.SpeedPxPerTick ?? 0f
@@ -618,7 +620,8 @@ public partial class GeneratedItem : ModItem
         RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
         if (entity is null) return false;
         GeneratedProjectile.SpawnRuntimeEntity(Data, entity.Id, player, source, position, velocity.SafeNormalize(new Vector2(player.direction, 0f)), 0, RootBindingSpawnCapacity(entity), activationBudget: _itemEventBudget,
-            rootDamageOverride: damage, rootKnockbackOverride: knockback);
+            rootDamageOverride: damage, rootKnockbackOverride: knockback,
+            rootSpeedOverride: Data.RuntimeProgram.WeaponAmmo?.SpeedBasis == "native_shot" ? velocity.Length() : null);
         return false;
     }
 

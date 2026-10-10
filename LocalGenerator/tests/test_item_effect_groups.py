@@ -238,7 +238,7 @@ def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatc
     hostile["params"]["damage"] = 999
     incoming = {"note": "explicit selector and independent alternate", "realizationReplacement": doc["realization"],
                 "bindingsUpsert": [corrected, alternate], "callsUpsert": [hostile]}
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, out_of_scope_response=True)
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
@@ -263,7 +263,7 @@ def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatc
     hostile["params"]["damage"] = 999
     incoming = {"note": "remove diagnosed held call only", "realizationReplacement": doc["realization"],
                 "callIdsDelete": [held["id"], frozen["id"]], "callsUpsert": [hostile]}
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, out_of_scope_response=True)
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)

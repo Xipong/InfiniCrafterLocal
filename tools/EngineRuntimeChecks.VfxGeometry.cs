@@ -81,7 +81,7 @@ internal static partial class EngineRuntimeChecks
             {
                 Vector2 start = new(10, 20), end = start + delta;
                 int index = count();
-                draw.Invoke(null, new object[] { texture, start, end, Color.White, 4f });
+                draw.Invoke(null, new object[] { texture, start, end, Color.White, 4f, false });
                 Equal(index + 1, count(), "line queues exactly one quad");
                 Vector3[] points = positions(index);
                 AssertVfxNear((start + end) * 0.5f, VfxVertexCenter(points), "line centered on authored segment");
@@ -98,7 +98,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, Math.Abs(minAcross + 2f) < 0.001f && Math.Abs(maxAcross - 2f) < 0.001f, "width centered and measured in pixels");
             }
             int before = count();
-            draw.Invoke(null, new object[] { texture, Vector2.One, Vector2.One, Color.White, 4f });
+            draw.Invoke(null, new object[] { texture, Vector2.One, Vector2.One, Color.White, 4f, false });
             Equal(before, count(), "zero segment queues nothing");
         });
     }

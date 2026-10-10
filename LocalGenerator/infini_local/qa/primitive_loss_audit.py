@@ -323,6 +323,15 @@ def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "wireDtoDrift": sorted(actual ^ pascal(wire_fields))}
 
 
+def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    """Exact typed native-ammo choices, without an unregistered weapon profile."""
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeWeaponAmmoSpec.cs").read_bytes()
+    expected = {name[0].upper() + name[1:] for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params}
+    actual = _class_properties(dto, "RuntimeWeaponAmmoSpec")
+    return {"ok": actual == expected, "unclassifiedDtoFields": sorted(actual - expected),
+            "missingDtoFields": sorted(expected - actual)}
+
+
 def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Cross-check structural C# DTOs with Author, Visual and technical owners."""
     from infini_local.core.runtime_authoring import program_schema as author
@@ -388,9 +397,11 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
     placed_storage = placed_body_surface_audit(dto)
     effect_groups = item_effect_group_surface_audit()
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and effect_groups["ok"],
+    weapon_ammo = weapon_ammo_surface_audit()
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
             "placedBodyStorage": placed_storage,
             "itemEffectGroups": effect_groups,
+            "weaponAmmo": weapon_ammo,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,
             "visualStageFields": sorted(visual_contract),
             "vfxDirectorFields": sorted(vfx_director_fields),

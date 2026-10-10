@@ -30,6 +30,8 @@ Item graphic/body-contact representation принадлежит `item_body`. Pro
 
 Для разных item effects основного и альтернативного use Author явно связывает `params.effectGroupId` calls с `apply_item_effects.effectGroupId`; отсутствие selector сохраняет ungrouped effects. `refresh_generated_effect_group_while_held` выбирает отдельную generated-utility группу удерживания. Точные ограничения, общий player mobility cooldown, quick use и Repair — [именованные группы эффектов](NAMED_ITEM_EFFECT_GROUPS_RU.md).
 
+`configure_weapon_ammo` отдельно выбирает exact ammo category и initial speed basis для active `spawn_entity` shots. Terraria владеет выбором/расходом/экономией ammo и его вкладом в damage/knockback; authored entity сохраняет поведение projectile. `stackCost` остаётся стоимостью самого generated item. Полная граница и ограничения — [weapon ammo consumption](WEAPON_AMMO_CONSUMPTION_RU.md).
+
 <a id="construction"></a>
 ## Прямое построение, не procedural self-check
 
