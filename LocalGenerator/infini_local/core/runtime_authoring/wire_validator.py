@@ -16,6 +16,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
+    CONTROLLER_OPCODE,
     ENTITY_KINDS,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
@@ -366,7 +367,29 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(targeting, Mapping):
             # New options are absent in retained v5 wire. Any present option is
             # checked by its canonical ParamSpec without supplying a value.
-            for name in ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"):
+            option_names = ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange")
+            present_options = set(option_names).intersection(targeting)
+            if present_options and (
+                kind not in CAPABILITY_REGISTRY["target_and_fire"].target_kinds
+                or not isinstance(controller, Mapping)
+                or controller.get("name") != "target_and_fire" or type(controller.get("code")) is not int
+                or controller.get("code") != CONTROLLER_OPCODE["target_and_fire"]
+            ):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting",
+                               "code": "targeting_extension_owner",
+                               "message": "Explicit targeting options require their registered controller and target kind."})
+            contract = data.get("runtimeContract")
+            if present_options and isinstance(contract, Mapping):
+                receipts = contract.get("finalWireReceipts")
+                receipts = receipts if isinstance(receipts, list) else []
+                for name in sorted(present_options):
+                    final_path = f"runtimeProgram.entities[{index}].targeting.{name}"
+                    matching = [row for row in receipts if isinstance(row, Mapping)
+                                and row.get("fn") == "target_and_fire" and row.get("finalPath") == final_path]
+                    if len(matching) != 1:
+                        errors.append({"path": "$." + final_path, "code": "targeting_extension_provenance",
+                                       "message": "A present targeting option requires one exact capability receipt."})
+            for name in option_names:
                 if name in targeting:
                     spec = CAPABILITY_REGISTRY["target_and_fire"].params[name]
                     for error in strict_schema_errors(targeting[name], spec.schema()):

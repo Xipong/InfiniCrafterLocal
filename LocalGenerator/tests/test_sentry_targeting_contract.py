@@ -119,6 +119,35 @@ def test_frozen_repair_repairs_one_invalid_choice_and_preserves_absent_and_valid
     assert apply_repair_patch(broken, filtered) == good
 
 
+@pytest.mark.parametrize("with_provenance", [False, True])
+@pytest.mark.parametrize("kind", ["item_body", "noncontroller_projectile"])
+def test_targeting_extensions_require_the_executable_owner(kind, with_provenance):
+    doc, _ = _fixture(**OPTIONS)
+    wire = compile_runtime_program(doc)
+    target = next(row for row in wire["runtimeProgram"]["entities"]
+                  if row["kind"] == "item_body" if kind == "item_body") if kind == "item_body" else next(
+                      row for row in wire["runtimeProgram"]["entities"]
+                      if row["kind"] != "item_body" and not row.get("controller", {}).get("code"))
+    target["targeting"] = dict(OPTIONS)
+    if not with_provenance:
+        wire.pop("runtimeContract")
+    before = deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(row.get("code") == "targeting_extension_owner" for row in report["errors"])
+    assert wire == before
+
+
+def test_targeting_extension_requires_a_receipt_when_contract_is_present():
+    doc, _ = _fixture(**OPTIONS)
+    wire = compile_runtime_program(doc)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    wire["runtimeContract"]["finalWireReceipts"] = [row for row in rows if not row["finalPath"].endswith(".targeting.count")]
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(row.get("code") == "targeting_extension_provenance" for row in report["errors"])
+
+
 def test_targeting_numeric_reject_guards_are_audited():
     rows = {r["param"]: r for r in _runtime_param_bound_rows() if r["capability"] == "target_and_fire"}
     for key in ("count", "spreadRadians"):

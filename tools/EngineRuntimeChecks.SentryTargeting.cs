@@ -154,16 +154,30 @@ internal static partial class EngineRuntimeChecks
         foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() }) {
             var copy = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("targeting fixture rejected");
             var target = copy.RuntimeProgram.TryGetEntity("root")!.Targeting;
-            Equal(4, target.Count, "count survives serialized DTO"); Equal(0.6, target.SpreadRadians, "spread survives serialized DTO");
-            Equal("player_assigned_first", target.TargetPolicy, "assigned policy survives serialized DTO");
-            Equal(true, target.RequireLineOfSight && target.HardRange, "filters survive serialized DTO");
+            Equal(4, target.Count ?? 1, "count survives serialized DTO"); Equal(0.6, target.SpreadRadians ?? 0d, "spread survives serialized DTO");
+            Equal("player_assigned_first", target.TargetPolicy ?? "distance_score", "assigned policy survives serialized DTO");
+            Equal(true, target.RequireLineOfSight == true && target.HardRange == true, "filters survive serialized DTO");
         }
         var raw = JsonNode.Parse(data.ToJson())!.AsObject(); var fields = raw["runtimeProgram"]!["entities"]![1]!["targeting"]!.AsObject();
         foreach (string name in new[] { "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange" }) fields.Remove(name);
         var legacy = GeneratedItemData.FromJson(raw.ToJsonString()) ?? throw new InvalidOperationException("retained wire absence rejected");
         var kept = legacy.RuntimeProgram.TryGetEntity("root")!.Targeting;
-        Equal(1, kept.Count, "retained count defaults to former one shot"); Equal(0d, kept.SpreadRadians, "retained spread neutral");
-        Equal("distance_score", kept.TargetPolicy, "retained target policy"); Equal(false, kept.RequireLineOfSight || kept.HardRange, "retained soft score and no LOS");
+        Equal(1, kept.Count ?? 1, "retained count defaults to former one shot"); Equal(0d, kept.SpreadRadians ?? 0d, "retained spread neutral");
+        Equal("distance_score", kept.TargetPolicy ?? "distance_score", "retained target policy"); Equal(false, kept.RequireLineOfSight == true || kept.HardRange == true, "retained soft score and no LOS");
+        foreach (string name in new[] { "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange" }) {
+            foreach (string serialized in new[] { legacy.ToJson(), legacy.ToNetworkJson() }) {
+                var retained = JsonNode.Parse(serialized)!["runtimeProgram"]!["entities"]!.AsArray()
+                    .First(row => (string?)row!["id"] == "root")!["targeting"]!.AsObject();
+                Equal(false, retained.ContainsKey(name), "retained option omission stays absent " + name);
+            }
+        }
+        foreach (string ownerKind in new[] { RuntimeEntityKind.ItemBody, RuntimeEntityKind.ChildProjectile }) {
+            var badOwner = JsonNode.Parse(data.ToJson())!.AsObject();
+            var ownerEntity = badOwner["runtimeProgram"]!["entities"]!.AsArray()
+                .First(row => (string?)row!["kind"] == ownerKind)!;
+            ownerEntity["targeting"]!["count"] = 1;
+            Equal(true, GeneratedItemData.FromJson(badOwner.ToJsonString()) is null, "misplaced targeting options refused " + ownerKind);
+        }
         foreach (var (key, value) in new[] { ("count", "0"), ("count", "5"), ("count", "null"), ("count", "true"),
             ("spreadRadians", "-0.1"), ("spreadRadians", "0.8"), ("spreadRadians", "1e-50"), ("spreadRadians", "null"),
             ("targetPolicy", "\"nearest\""), ("targetPolicy", "null"), ("requireLineOfSight", "null"), ("hardRange", "1") }) {

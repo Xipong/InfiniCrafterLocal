@@ -542,6 +542,9 @@ public sealed class RuntimeEntitySpec
         if (!string.Equals(VisualRole, expectedVisualRole, StringComparison.Ordinal)
             || !string.Equals(Visual.Role, expectedVisualRole, StringComparison.Ordinal))
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
+        if (Targeting.HasVolleyOptions && (Controller.Code != RuntimeControllerCode.TargetAndFire
+            || Kind is not (RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.TemporaryHelper)))
+            throw new InvalidDataException("targeting options require the explicit target_and_fire owner");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured)
@@ -867,15 +870,41 @@ public sealed class RuntimeTargetingSpec
     public int IntervalTicks { get; set; }
     public float RangeTiles { get; set; }
     public float SameTargetBias { get; set; }
-    // Retained v5 documents omit these fields. Their defaults preserve the exact
-    // former single-shot/soft-score behaviour; new Author choices are receipted.
-    public int Count { get; set; } = 1;
-    // Keep the admitted JSON number until the native float32 spawn boundary,
-    // so a tiny nonzero angle cannot disappear before validation observes it.
-    public double SpreadRadians { get; set; }
-    public string TargetPolicy { get; set; } = "distance_score";
-    public bool RequireLineOfSight { get; set; }
-    public bool HardRange { get; set; }
+    // Missing retained-v5 leaves remain absent from the serialized definition.
+    // Effective legacy behavior is selected only by the native consumer, not
+    // materialized into the persisted identity. Explicit null is never omission.
+    private int? _count;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Count {
+        get => _count;
+        set => _count = value ?? throw new InvalidDataException("present targeting count must be an integer");
+    }
+    private double? _spreadRadians;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? SpreadRadians {
+        get => _spreadRadians;
+        set => _spreadRadians = value ?? throw new InvalidDataException("present targeting spread must be a number");
+    }
+    private string? _targetPolicy;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TargetPolicy {
+        get => _targetPolicy;
+        set => _targetPolicy = value ?? throw new InvalidDataException("present targeting policy must be an exact token");
+    }
+    private bool? _requireLineOfSight;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RequireLineOfSight {
+        get => _requireLineOfSight;
+        set => _requireLineOfSight = value ?? throw new InvalidDataException("present targeting LOS must be boolean");
+    }
+    private bool? _hardRange;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HardRange {
+        get => _hardRange;
+        set => _hardRange = value ?? throw new InvalidDataException("present targeting hard range must be boolean");
+    }
+    [JsonIgnore] public bool HasVolleyOptions => Count.HasValue || SpreadRadians.HasValue
+        || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
@@ -886,8 +915,9 @@ public sealed class RuntimeTargetingSpec
             throw new InvalidDataException("targeting count is outside explicit accepted bounds");
         if (SpreadRadians is < 0d or > 0.75d)
             throw new InvalidDataException("targeting spread is outside explicit accepted bounds");
-        if (!double.IsFinite(SpreadRadians) || SpreadRadians != 0d && (float)SpreadRadians == 0f
-            || TargetPolicy is not ("distance_score" or "player_assigned_first"))
+        if (SpreadRadians.HasValue && (!double.IsFinite(SpreadRadians.Value)
+            || SpreadRadians != 0d && (float)SpreadRadians.Value == 0f)
+            || TargetPolicy is not null and not ("distance_score" or "player_assigned_first"))
             throw new InvalidDataException("targeting volley/policy is outside explicit accepted bounds");
     }
 }

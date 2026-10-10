@@ -182,10 +182,10 @@ public sealed partial class GeneratedProjectile
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
-        int granted = budget.Reserve(_entity.Targeting.Count);
+        int granted = budget.Reserve((_entity.Targeting.Count ?? 1));
         int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: _entity.Targeting.Count,
-            spreadOverride: (float)_entity.Targeting.SpreadRadians,
+            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: (_entity.Targeting.Count ?? 1),
+            spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
             activationBudget: budget) : 0;
         budget.Return(granted - spawned);
         Projectile.netUpdate = true;
@@ -201,12 +201,12 @@ public sealed partial class GeneratedProjectile
             float distance = Vector2.Distance(Projectile.Center, npc.Center);
             // Geometric admission precedes the preference discount. A previous
             // or assigned target cannot turn a hard radius into a score radius.
-            if (targeting.HardRange && distance > range) return false;
+            if (targeting.HardRange == true && distance > range) return false;
             score = npc.whoAmI == _lastTarget
                 ? distance * (1f - Math.Clamp(targeting.SameTargetBias, 0f, 0.9f))
                 : distance;
-            if (!targeting.HardRange && score >= range) return false;
-            return !targeting.RequireLineOfSight || Collision.CanHit(
+            if (targeting.HardRange != true && score >= range) return false;
+            return targeting.RequireLineOfSight != true || Collision.CanHit(
                 Projectile.position, Projectile.width, Projectile.height, npc.position, npc.width, npc.height);
         }
 
