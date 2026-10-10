@@ -650,6 +650,76 @@ def _buff_speed_source(scope, value=None):
     return document, call
 
 
+@pytest.mark.parametrize("scope", ["global", "effect_group"])
+def test_current_percent_omission_requires_exact_signed_zero_projection(scope):
+    document, _ = _buff_speed_source(scope)
+    source_before = _buff_speed_bytes(document)
+    wire = compile_runtime_program(document)
+    receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert receipt["status"] == "declared_neutral_omission"
+    assert _buff_speed_bytes(receipt["value"]) == b"0.0"
+    assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
+
+    # A coherent receipt/output forgery survives JSON reload; equality with
+    # zero is insufficient to authenticate the declared +0.0 omission.
+    owner, _, key = receipt["finalPath"].rpartition(".")
+    _get(wire, owner)[key] = receipt["value"] = -0.0
+    wire = json.loads(_buff_speed_bytes(wire))
+    before = _buff_speed_bytes(wire)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    for source in (document, None):
+        report = audit_compiler_receipts(rows, authored_document=source, final_document=wire)
+        assert not report["ok"], report
+        assert any(row["reason"] == "omission receipt lacks an exact declared neutral default/projection"
+                   and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
+    assert not validate_runtime_wire(wire)["ok"]
+    assert _buff_speed_bytes(wire) == before
+    assert _buff_speed_bytes(document) == source_before
+
+
+@pytest.mark.parametrize("scope", ["global", "effect_group"])
+@pytest.mark.parametrize("value,accepted", [
+    pytest.param(0, False, id="integer-zero"),
+    pytest.param(1, False, id="integer-one"),
+    pytest.param(1e-50, False, id="positive-float32-collapse"),
+    pytest.param(-1e-50, False, id="negative-float32-collapse"),
+    pytest.param(5e-324, False, id="binary64-subnormal-collapse"),
+    pytest.param(0.0, True, id="positive-zero"),
+    pytest.param(-0.0, True, id="negative-zero"),
+    pytest.param(-0.5, True, id="minimum"),
+    pytest.param(2.0, True, id="maximum"),
+    pytest.param(0.007 / 100, True, id="ordinary-decimal-collision"),
+    pytest.param(2.0 ** -149, True, id="nonzero-float32-subnormal"),
+    pytest.param(math.nextafter(2.0 ** -150, math.inf), True, id="above-float32-half-tie"),
+])
+def test_current_percent_delivered_wire_domain_keeps_type_and_consumer_constraint(scope, value, accepted):
+    document, _ = _buff_speed_source(scope, 20)
+    source_before = _buff_speed_bytes(document)
+    wire = compile_runtime_program(document)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
+    receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
+    assert receipt["status"] == "delivered"
+    owner, _, key = receipt["finalPath"].rpartition(".")
+    _get(wire, owner)[key] = receipt["value"] = value
+    wire = json.loads(_buff_speed_bytes(wire))
+    before = _buff_speed_bytes(wire)
+    report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
+    assert report["ok"] is accepted, report
+    assert CAPABILITY_REGISTRY[FN].params[BUFF_SPEED_PERCENT].matches_scalar_projection(value) is accepted
+    assert validate_runtime_wire(wire)["ok"] is accepted
+    if not accepted:
+        assert any(row["reason"] == "scalar receipt is outside its exact declared wire domain"
+                   and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
+    assert _buff_speed_bytes(wire) == before
+    assert _buff_speed_bytes(document) == source_before
+
+
 @pytest.mark.parametrize("case", BUFF_FACTOR_CASES, ids=lambda case: case["id"])
 def test_real_pre_percent_saved_wires_and_receipts_are_unchanged(case):
     assert BUFF_FACTOR_ARCHIVE["sourceHead"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
@@ -756,7 +826,7 @@ def test_retained_omission_needs_one_exact_prior_source_claim_for_the_wire_slot(
 
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
 @pytest.mark.parametrize("status", ["delivered", "declared_neutral_omission"])
-@pytest.mark.parametrize("value", [None, False, "0", -0.6, 2.1, 1e-50, 0.0, -0.0, 0.2])
+@pytest.mark.parametrize("value", [None, False, "0", -0.6, 2.1, 1e-50, 0, 0.0, -0.0, 0.2])
 def test_retained_value_uses_prior_domain_and_omission_requires_prior_typed_zero(scope, status, value):
     wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_omitted"))
     old = _buff_speed_receipt(wire)
@@ -764,7 +834,8 @@ def test_retained_value_uses_prior_domain_and_omission_requires_prior_typed_zero
     owner, _, key = old["finalPath"].rpartition(".")
     _get(wire, owner)[key] = value
     before = _buff_speed_bytes(wire)
-    accepted = status == "delivered" and type(value) is float and value in (0.0, 0.2)
+    accepted = (type(value) is int and value == 0
+                or status == "delivered" and type(value) is float and value in (0.0, 0.2))
     # Without source, explicit prior zero is a valid consistency claim; it is
     # not proof of an omission. Prior omission itself must retain int zero.
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)

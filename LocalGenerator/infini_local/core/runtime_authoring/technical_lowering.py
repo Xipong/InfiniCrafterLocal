@@ -1112,8 +1112,7 @@ def audit_compiler_receipts(
                 if (spec.required or spec.default is None
                     or type(spec.default) is not type(spec.neutral)
                     or spec.default != spec.neutral
-                    or type(receipt.get("value")) is not type(spec.to_wire(spec.default))
-                    or receipt.get("value") != spec.to_wire(spec.default)):
+                    or not _same_receipt_value(receipt.get("value"), spec.to_wire(spec.default))):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""), "fn": fn,
                         "authoredPath": authored_path, "finalPath": path,
