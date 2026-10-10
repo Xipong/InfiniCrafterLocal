@@ -7,7 +7,7 @@
 
 <a id="verdict"></a>
 
-## Вердикт: 100/100
+## Вердикт: 85/100
 
 Это **структурная оценка контракта**, а не заявление, что реализован весь Terraria runtime.
 
@@ -17,7 +17,7 @@
 | `typedParameters` | 15 | PASS |
 | `compositionMetadata` | 15 | PASS |
 | `exactDelivery` | 15 | PASS |
-| `runtimeOwnership` | 15 | PASS |
+| `runtimeOwnership` | 15 | FAIL |
 | `rangeParity` | 10 | PASS |
 | `projectionParity` | 10 | PASS |
 | `verticalSlices` | 10 | PASS |
@@ -26,12 +26,12 @@
 
 ## Измеренные свойства
 
-- capabilities: **56**; parameters: **252**; numeric: **191/191 bounded**;
+- capabilities: **58**; parameters: **263**; numeric: **195/195 bounded**;
 - entity kinds: **7**; inputs: **4**; actions: **5**; events: **10**;
-- typed entity references: **2**; requirements: **34**; binding dependency edges: **8**;
-- exact wire paths: **344**; global technical lowerer outputs: **149**;
-- Python↔C# range parity rows: **102**; vertical witnesses: **56**;
-- errors: **0**; warnings: **0**.
+- typed entity references: **2**; requirements: **37**; binding dependency edges: **8**;
+- exact wire paths: **373**; global technical lowerer outputs: **150**;
+- Python↔C# range parity rows: **102**; vertical witnesses: **58**;
+- errors: **1**; warnings: **0**.
 
 <a id="proof"></a>
 
@@ -54,7 +54,7 @@
 - Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.
 - Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.
 - Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет [`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.
-- Публичный каталог покрывает реализованные 56 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
+- Публичный каталог покрывает реализованные 58 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
 
 <a id="assessment"></a>
 
@@ -64,3 +64,16 @@
 - **Однозначность для LLM: 9/10** — API не содержит weapon families и semantic defaults; некоторые item-body calls длинные из-за широких typed DTO.
 - **Выразительность текущего runtime: 8/10** — странные multi-entity композиции поддерживаются, но controller layering и произвольная world interaction намеренно ограничены.
 - **Доказанность в игре: неполная** до C# build/tModLoader singleplayer/host-client smoke.
+
+## Issues
+
+```json
+[
+  {
+    "severity": "error",
+    "code": "missing_csharp_owner",
+    "path": "capabilities.set_projectile_hitbox_curve.csharpOwner",
+    "message": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual: Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual: missing method symbol(s): ['ApplyHitboxCurveVisual']"
+  }
+]
+```

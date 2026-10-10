@@ -57,6 +57,7 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
                 "kind": "catalog action",
                 "targetId": "exact existing entity id compatible with the selected action.targets",
                 "placementCallId": "include only for place_item; otherwise omit",
+                "effectGroupId": "optional only for apply_item_effects: exact effectGroupId authored on item-effect calls; omission selects existing ungrouped effects",
             },
             "stackCost": "exact integer 0 or 1 allowed by the selected input/action",
             "contactDamage": (

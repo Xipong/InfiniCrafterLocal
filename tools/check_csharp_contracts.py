@@ -265,7 +265,7 @@ def check_world_transactions() -> None:
     obligations = [
         (item, "ConsumeItem", ("RuntimeBindingAction.PlaceItem", "StackCost == 1 && ConsumeAcceptedPlacementReceipt(player)"), ()),
         (item, "UseItem", ("Action.Kind != RuntimeBindingAction.PlaceItem", "RuntimeEventKind.OnUse"), ()),
-        (item, "ApplyActiveUseProjection", ("Item.mana = Math.Max(0, Data.Gameplay.ManaCost)", "bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects", "Data.ApplyUseEffectFields(Item, applyingItemEffects)"), ()),
+        (item, "ApplyActiveUseProjection", ("Item.mana = Math.Max(0, Data.Gameplay.ManaCost)", "bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects", "Data.ApplyUseEffectFields(Item, applyingItemEffects, binding)"), ()),
         (item, "BindingUsesItemBodyContact", ("UsePolicy.ContactDamage",), ("RuntimeBindingAction", "TargetId")),
         (ledger, "AuthorizePlacement", ("PendingAuthorizations.Count", "MaxCellsPerGroup", "MaxGroups", "data.ToNetworkJson()"), ()),
         (ledger, "TryCommitAuthorizedPlacement", ("MaxCells - committedCells.Count", "Groups.Count >= MaxGroups"), ()),
@@ -317,7 +317,19 @@ def check_world_transactions() -> None:
     require(ammo_shoot, "rootDamageOverride: damage, rootKnockbackOverride: knockback", "native ammo combat arguments without second scaling")
     for field in ("healLife", "healMana", "buffType", "buffTime"):
         authored = {"buffType": "BuffCode"}.get(field, field[0].upper() + field[1:])
-        require(apply_fields, f"item.{field} = enabled ? Math.Max(0, Gameplay.{authored}) : 0;", "binding-scoped use effects")
+        require(apply_fields, f"item.{field} = enabled ? Math.Max(0, effects.{authored}) : 0;", "binding-scoped use effects")
+    require(apply_fields, "IItemEffectsSpec effects = binding is null ? PrimaryUseEffects : EffectsForBinding(binding);", "exact selected use effect group")
+    require(stripped(method_body(item, "ApplyItemEffects")), "Data.EffectsForBinding(binding)", "selected utility/mobility group")
+    held_effects = stripped(method_body(item, "RefreshHeldEffectGroup"))
+    for token in ("ReferenceEquals(player.HeldItem, Item)", "InfiniRuntimeAuthority.ShouldRunPlayerGameplay(player)",
+                  "TryGetEffectGroup(Data.RuntimeProgram.HeldEffectGroupId)", "previous.Tick == tick",
+                  "tick - previous.SnapshotTick >= 30", "ApplyGeneratedUtilityBuff(buff"):
+        require(held_effects, token, "explicit held utility refresh")
+    quick_use = read("Common/Systems/GeneratedQuickUseSystem.cs")
+    require(stripped(method_body(quick_use, "Within<T>")), "ProjectPrimaryEffectCandidates(player.inventory)", "native quick-use candidate primary projection")
+    primary_candidates = stripped(method_body(quick_use, "ProjectPrimaryEffectCandidates"))
+    require(primary_candidates, "BindingForInput(RuntimeInputKind.PrimaryUse)", "native quick-use exact primary group")
+    require(primary_candidates, "generated.Data.ApplyUseEffectFields(item", "native quick-use refreshes selected fields before native scan")
     for body in (apply_fields, stripped(method_body(item, "ApplyActiveUseProjection"))):
         if not re.search(r"\b(?:item|Item)\.consumable\s*=\s*[^;]*\|\|\s*(?:Data\.)?Gameplay\.AmmoCategory\.Length\s*>\s*0\s*;", body):
             fail("ammo remains vanilla consumable: ammo cost is independent of direct use")
@@ -503,7 +515,7 @@ def check_runtime_contract() -> None:
     forbid(dto, 'public const string Passive = "passive"', "RuntimeProgramSpec.cs")
     require(normalize, "Gameplay.AmmoProjectileId >= ProjectileID.Count", "GeneratedItemData.Normalize.cs")
     apply = read("Common/Models/GeneratedItemData.Apply.cs")
-    for needle in ["item.potion = enabled && Gameplay.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
+    for needle in ["item.potion = enabled && effects.Potion;", "item.notAmmo = Gameplay.NotAmmo;", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory", "item.shoot = Gameplay.AmmoProjectileId;", "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick;"]:
         require(apply, needle, "GeneratedItemData.Apply.cs")
     forbid(apply, "item.potion = Gameplay.HealLife > 0", "GeneratedItemData.Apply.cs")
     require(apply, "RuntimeProgram.PrimaryOwner != RuntimeProgramSpec.ItemBodyOwner", "GeneratedItemData.Apply.cs")
@@ -624,6 +636,30 @@ def check_visual_vfx_contract() -> None:
         forbid(visual + manifest + runtime, legacy, "entity/event VFX")
 
 
+def check_explicit_body_scale() -> None:
+    """Keep explicit curve scale through the actual PNG/primitive consumers."""
+    visual = read("Content/Projectiles/GeneratedProjectile.Visuals.cs")
+    runtime = read("Common/VFX/InfiniVfxRuntime.cs")
+    predicate = stripped(method_body(visual, "PreservesExplicitBodyScale"))
+    require(predicate, "_entity?.HitboxCurve?.MirrorToSprite == true", "explicit body scale opt-in")
+    sprite = stripped(method_body(visual, "DrawAuthoredEntityVisual"))
+    require(sprite, "PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f)", "explicit body scale PNG consumer")
+    require(sprite, "* selected.FrameScale(source.Width, source.Height)", "explicit body scale frame units")
+    body = stripped(method_body(visual, "DrawRuntimeGeometry"))
+    for token in (
+        "bool exactScale = PreservesExplicitBodyScale()",
+        "exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale)",
+        "exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f : Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f)",
+        "color, width, preserveWidth: exactScale",
+    ):
+        require(body, token, "explicit body scale primitive consumer")
+    line = stripped(method_body(runtime, "DrawLine"))
+    for token in (
+        "lengthSquared <= (preserveWidth ? 0f : 0.01f)",
+        "preserveWidth && (!float.IsFinite(lengthSquared) || !float.IsFinite(width) || width <= 0f)",
+        "preserveWidth ? width : Math.Max(1f, width)",
+    ):
+        require(line, token, "explicit body scale final line consumer")
 def check_vfx_sound_contract() -> None:
     # Read the actual VFX owner, never a second list of samples/Author controls.
     source = ast.parse((ROOT / "LocalGenerator/infini_local/core/vfx_manifest.py").read_text(encoding="utf-8"))
@@ -761,6 +797,7 @@ def main() -> int:
     check_world_transactions()
     check_delivery_metadata()
     check_visual_vfx_contract()
+    check_explicit_body_scale()
     check_vfx_sound_contract()
     check_deleted_architecture()
     check_packet_ids()

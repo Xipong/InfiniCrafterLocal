@@ -1,10 +1,10 @@
 {
   "schema": "infini.terraria-standardization-audit.v1",
-  "ok": true,
-  "score": 88,
+  "ok": false,
+  "score": 87,
   "scoreMax": 88,
   "metrics": {
-    "capabilities": 56,
+    "capabilities": 58,
     "canonicalDamageClasses": 10,
     "canonicalUseStyles": 13,
     "canonicalAmmoCategories": 15,
@@ -288,7 +288,7 @@
     },
     {
       "name": "potion_flag_is_authored",
-      "ok": true,
+      "ok": false,
       "detail": "Item.potion must be authored, binding-scoped, and not inferred from healing"
     },
     {
@@ -452,5 +452,10 @@
       "detail": "documented VFX aliases must remain confined to presentation color"
     }
   ],
-  "issues": []
+  "issues": [
+    {
+      "code": "potion_flag_is_authored",
+      "message": "Item.potion must be authored, binding-scoped, and not inferred from healing"
+    }
+  ]
 }

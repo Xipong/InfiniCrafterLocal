@@ -31,10 +31,12 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     retained = CAPABILITY_REGISTRY["chain_damage_on_event"]
     assert current.wire_action == retained.name and retained.decision == "internal"
     assert current.requirements == retained.requirements and len(retained.requirements) == 1
-    assert checks["requirements"] == 34
+    curve_requirements = len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+    assert curve_requirements == 3
+    assert checks["requirements"] == 34 + curve_requirements
     checks["requirements"] -= len(retained.requirements)
-    assert checks["requirements"] == 33
-    checks["requirements"] = 29  # Three branch proofs and the explicit owner-pull event.
+    assert checks["requirements"] == 33 + curve_requirements
+    checks["requirements"] = 29 + curve_requirements  # Reverse aliases only; retain accepted hitbox requirements.
     removed = set()
     for i, entity in enumerate(result["runtimeProgram"]["entities"]):
         spawn = entity.get("spawn", {})

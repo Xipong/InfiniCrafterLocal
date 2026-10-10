@@ -194,7 +194,7 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     assert json.dumps(forbidden) not in json.dumps(surfaces)
 
 @pytest.mark.parametrize("gate,path,old,new,diagnostic", [
-    pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Apply.cs', 'item.potion = enabled && Gameplay.Potion;', 'item.potion = Gameplay.HealLife > 0;', 'item.potion', id='inferred-potion'),
+    pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Apply.cs', 'item.potion = enabled && effects.Potion;', 'item.potion = Gameplay.HealLife > 0;', 'item.potion', id='inferred-potion'),
     pytest.param('check_runtime_contract', 'Common/Models/TerrariaRuntimeVocabulary.cs', 'ModContent.TryFind<DamageClass>(exact', 'ModContent.TryFind<DamageClass>(guessed', 'ModContent.TryFind', id='loose-class-lookup'),
     pytest.param('check_runtime_contract', 'Common/Services/GeneratorClient.cs', '=> TerrariaRuntimeVocabulary.CanonicalDamageClassToken', '=> LegacyDamageClassToken', 'CanonicalDamageClassToken', id='shadow-class-owner'),
     pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Normalize.cs', 'Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);', 'Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();', 'DamageClass', id='lowercased-class'),
@@ -231,6 +231,14 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_visual_vfx_contract', 'Common/Models/VfxManifestSpec.cs', '!impactEntityIds.Add(slot.EntityId)', 'true', 'authored texture role admission', id='duplicate-impact-accepted'),
     pytest.param('check_visual_vfx_contract', 'Common/Models/GeneratedItemData.cs', 'entity.Visual.ImpactSpritePath = FileNameOnly', 'entity.Visual.ImpactSpritePath = identity', 'impact wire path', id='unprojected-impact-path'),
     pytest.param('check_visual_vfx_contract', 'Common/Services/GeneratedAssetSyncService.cs', 'yield return entity.Visual.ImpactSpritePath', 'yield return entity.Visual.SpritePath', 'impact asset roster', id='missing-impact-roster'),
+    pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '_entity?.HitboxCurve?.MirrorToSprite == true', 'false', 'explicit body scale opt-in', id='mirror-opt-in-lost'),
+    pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '? Projectile.scale : Math.Clamp', '? Math.Clamp(Projectile.scale, 0.1f, 8f) : Math.Clamp', 'explicit body scale PNG consumer', id='explicit-mirror-png-clamped'),
+    pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', 'exactScale ? _entity.Hitbox.WidthPx * Projectile.scale', 'false ? _entity.Hitbox.WidthPx * Projectile.scale', 'explicit body scale primitive consumer', id='explicit-mirror-length-floored'),
+    pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', 'exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f', 'false ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f', 'explicit body scale primitive consumer', id='explicit-mirror-width-floored'),
+    pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', 'preserveWidth: exactScale', 'preserveWidth: false', 'explicit body scale primitive consumer', id='explicit-mirror-line-policy-lost'),
+    pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', 'preserveWidth ? width : Math.Max(1f, width)', 'Math.Max(1f, width)', 'explicit body scale final line consumer', id='explicit-mirror-final-width-floored'),
+    pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', 'preserveWidth ? 0f : 0.01f', '0.01f', 'explicit body scale final line consumer', id='explicit-mirror-small-segment-suppressed'),
+    pytest.param('check_explicit_body_scale', 'Common/VFX/InfiniVfxRuntime.cs', '!float.IsFinite(width) || width <= 0f', 'width < 0f', 'explicit body scale final line consumer', id='explicit-line-invalid-width-not-refused'),
     pytest.param('check_vfx_sound_contract', 'Common/Models/VfxManifestSpec.cs', '"Item169" => SoundID.Item169', '"Item169" => SoundID.Item1', 'exact palette', id='restored-sound-sample-substitution'),
     pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'PitchVariance = PitchVariance', 'PitchVariance = sample.PitchVariance', 'exact controls', id='native-jitter-overrides-authored-zero'),
     pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'new SoundStyle(sample.SoundPath, sample.Variants, sample.Type)', 'sample with', 'independent pitch', id='hidden-native-music-pitch'),
@@ -240,7 +248,7 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_client_source_contracts', 'Common/Config/InfiniGameplayQolConfig.cs', 'RuntimeSpriteCacheMaxTextures = 512', 'RuntimeSpriteCacheMaxTextures = 600', 'runtime cache config parity', id='cache-config-drift'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', '!config.EnableInventoryAssetPrefetch', 'config.EnableInventoryAssetPrefetch', 'inventory prefetch', id='prefetch-optout-inverted'),
     pytest.param('check_client_source_contracts', 'Common/Players/InfiniCraftPlayer.cs', 'if (ensured >= maxItems)', 'if (ensured < maxItems)', 'inventory prefetch', id='unbounded-prefetch'),
-    pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 0;", "item.healLife = enabled ? Math.Max(0, Gameplay.HealLife) : 1;", "binding-scoped use effects", id="disabled-heal-leak"),
+    pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "item.healLife = enabled ? Math.Max(0, effects.HealLife) : 0;", "item.healLife = enabled ? Math.Max(0, effects.HealLife) : 1;", "binding-scoped use effects", id="disabled-heal-leak"),
     pytest.param("check_world_transactions", "Content/Items/GeneratedItem.cs", "|| Data.Gameplay.AmmoCategory.Length > 0", "|| false", "ammo remains vanilla consumable", id="ammo-not-consumable"),
     pytest.param("check_world_transactions", "Common/Models/GeneratedItemData.Apply.cs", "activeSpawn && RuntimeProgram.WeaponAmmo", "RuntimeProgram.WeaponAmmo", "explicit weapon ammo use lane", id="ammo-leaks-to-non-shot-use"),
     pytest.param("check_world_transactions", "Content/Items/GeneratedItem.cs", 'rootSpeedOverride: Data.RuntimeProgram.WeaponAmmo?.SpeedBasis == "native_shot" ? velocity.Length() : null', "rootSpeedOverride: velocity.Length()", "ammo shot speed policy", id="ammo-speed-overwrites-authored-choice"),
@@ -283,7 +291,7 @@ def test_source_gate_accepts_consistent_refactors(gates, monkeypatch, check, cha
 @pytest.mark.parametrize("path,old,new,diagnostic", [
     ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs", "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);", "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 50);", "axe_tooltip_percent_parity"),
     ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs", "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129);", "Gameplay.DamageClass = SafeText(Gameplay.DamageClass, 129).ToLowerInvariant();", "modded_damage_class_case_preserved"),
-    ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs", "item.potion = enabled && Gameplay.Potion;", "item.potion = Gameplay.HealLife > 0;", "potion_flag_is_authored"),
+    ("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs", "item.potion = enabled && effects.Potion;", "item.potion = Gameplay.HealLife > 0;", "potion_flag_is_authored"),
     ("lowery.md", "Gameplay Author-visible semantic aliases: **нет**", "Gameplay Author-visible semantic aliases: **allowed**", "lowery:Gameplay Author-visible "),
 ], ids=["axe-domain-drift", "case-normalized-modded-owner", "inferred-potion-authority", "restored-gameplay-aliases"])
 def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_path, path, old, new, diagnostic):
