@@ -247,7 +247,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "sound": _sound_schema(),
         "heldRootVisibility": {
             field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
-            for field in ("hideUseGraphic", "heldSpriteVisibilityHint")
+            for field in ("hideUseGraphic", "customHeldSprite")
         },
         "colorPolicy": "Explicit Visual effectColor is shared by item, projectile and detached VFX. Its absence preserves legacy color paths. Rich palette prose is not parsed into a color and motif does not override explicit effectColor.",
         "backend": list(_BACKENDS),
