@@ -1,5 +1,6 @@
 """Actual typed Author/provider/compiler/provenance/Repair tests for initial velocity."""
 from copy import deepcopy
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -36,6 +37,120 @@ def fixture(velocity):
 
 def component(wire, call):
     return next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])["spawn"]
+
+
+def child_fixture(velocity):
+    document = build_capability_witness("spawn_entity_on_event")
+    call = next(row for row in document["runtimeProgram"]["calls"]
+                if row["fn"] == "configure_spawn" and row["target"] == "witness_child")
+    call["params"].update(velocity=deepcopy(velocity), count=1, spreadRadians=0)
+    return document, call
+
+
+@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
+@pytest.mark.parametrize("omitted", [("count",), ("spreadRadians",), ("count", "spreadRadians")])
+def test_child_neutral_omissions_preserve_explicit_wire_and_source_receipts(velocity, omitted):
+    document, call = child_fixture(velocity)
+    explicit = compile_runtime_program(document)
+    for name in omitted:
+        call["params"].pop(name)
+    before = deepcopy(document)
+    wire = compile_runtime_program(document)
+    assert document == before
+    assert {k: wire[k] for k in ("gameplay", "runtimeProgram", "accessory", "armor")} == {
+        k: explicit[k] for k in ("gameplay", "runtimeProgram", "accessory", "armor")
+    }
+    assert component(wire, call)["count"] == 1 and component(wire, call)["spreadRadians"] == 0
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    omitted_rows = [row for row in receipts if row.get("callId") == call["id"]
+                    and row["status"] == "declared_neutral_omission"]
+    assert {row["authoredPath"].rsplit(".", 1)[-1] for row in omitted_rows} == set(omitted)
+    for row in omitted_rows:
+        delivered = next(r for r in explicit["runtimeContract"]["finalWireReceipts"] if r["finalPath"] == row["finalPath"])
+        assert delivered["status"] == "delivered"
+        assert row == {**delivered, "status": "declared_neutral_omission"}
+    for source in (None, document):
+        assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
+@pytest.mark.parametrize("omitted", [("count",), ("spreadRadians",), ("count", "spreadRadians")])
+def test_root_distribution_still_requires_explicit_count_and_spread(velocity, omitted):
+    document, call = fixture(velocity)
+    for name in omitted:
+        call["params"].pop(name)
+    errors = validate_runtime_program(document)["errors"]
+    assert {row["path"].rsplit(".", 1)[-1] for row in errors
+            if row["code"] == "missing_dependency_param"} == set(omitted)
+    if "spreadRadians" in omitted and "constantSpeedPxPerUpdate" not in velocity:
+        assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".params.spreadRadians")
+                   for row in errors)
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+
+
+@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
+@pytest.mark.parametrize("spread", [None, False, "0", 0.5])
+def test_child_neutral_omission_does_not_replace_present_spread(velocity, spread):
+    document, call = child_fixture(velocity)
+    call["params"].pop("count")
+    call["params"]["spreadRadians"] = spread
+    before = deepcopy(document)
+    accepted = "constantSpeedPxPerUpdate" in velocity and spread == 0.5
+    report = validate_runtime_program(document)
+    assert report["ok"] is accepted
+    if "constantSpeedPxPerUpdate" not in velocity and spread is not False:
+        assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".params.spreadRadians")
+                   for row in report["errors"])
+    if accepted:
+        assert component(compile_runtime_program(document), call)["spreadRadians"] == spread
+    else:
+        with pytest.raises(ValueError):
+            compile_runtime_program(document)
+    assert document == before
+
+
+@pytest.mark.parametrize("changes", [
+    {"default": None}, {"default": 1}, {"neutral": False}, {"neutral": 0.0}, {"required": True},
+])
+def test_child_equality_omission_requires_declared_typed_optional_neutral(monkeypatch, changes):
+    from infini_local.core.runtime_authoring import technical_lowering, validator
+
+    document, call = child_fixture(VELOCITIES[2])
+    call["params"].pop("spreadRadians")
+    cap = CAPABILITY_REGISTRY["configure_spawn"]
+    changed = replace(cap, params={**cap.params, "spreadRadians": replace(cap.params["spreadRadians"], **changes)})
+    registry = {**CAPABILITY_REGISTRY, cap.name: changed}
+    monkeypatch.setattr(validator, "CAPABILITY_REGISTRY", registry)
+    monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", registry)
+    errors = validate_runtime_program(document)["errors"]
+    assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".params.spreadRadians") for row in errors)
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+
+
+@pytest.mark.parametrize("velocity", [VELOCITIES[2], VELOCITIES[3]], ids=["radial", "disk"])
+def test_unrelated_child_repair_keeps_accepted_neutral_omissions_frozen(velocity):
+    document, call = child_fixture(velocity)
+    call["params"].pop("count")
+    call["params"].pop("spreadRadians")
+    call["params"]["offsetPx"] = 257
+    before = deepcopy(document)
+    scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.offsetPx"]}]
+    candidate = deepcopy(call)
+    candidate["params"].update(offsetPx=19, count=12, spreadRadians=0, velocity=deepcopy(VELOCITIES[0]))
+    patch, audit = filter_repair_patch_scope(document, {"note": "repair offset", "callsUpsert": [candidate]}, scope)
+    assert audit["ok"] and audit["ignoredChanges"]
+    repaired = apply_repair_patch(document, patch)
+    actual = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])
+    assert actual["params"] == {**call["params"], "offsetPx": 19}
+    assert document == before
+    wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=repaired, final_document=wire)["ok"]
 
 
 @pytest.mark.parametrize("velocity", VELOCITIES)
@@ -194,11 +309,15 @@ def test_distribution_dependencies_diagnose_the_exact_other_leaf(velocity, leaf,
 
 
 @pytest.mark.parametrize("velocity", [VELOCITIES[2], VELOCITIES[3]])
-def test_event_spread_for_radial_child_is_repaired_without_changing_valid_child(velocity):
+@pytest.mark.parametrize("omit_child_neutrals", [False, True])
+def test_event_spread_for_radial_child_is_repaired_without_changing_valid_child(velocity, omit_child_neutrals):
     document = build_capability_witness("spawn_entity_on_event")
     event = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "spawn_entity_on_event")
     child = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn" and row["target"] == event["params"]["entity"])
     child["params"].update(velocity=deepcopy(velocity), spreadRadians=0)
+    if omit_child_neutrals:
+        child["params"].pop("count")
+        child["params"].pop("spreadRadians")
     event["params"]["spreadRadians"] = 0
     wire = compile_runtime_program(document); wire.pop("runtimeContract")
     owner = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == event["target"])
