@@ -17,6 +17,28 @@
 
 Final combined canonical Python suite — **9173 PASS / 0 FAIL, 109 test files, все четыре shards**; **16 portable gates PASS**, source-bound native harness **333 PASS / 0 FAIL** и реальный private SDK compile **0 warnings / 0 errors** проверены отдельно; точные результаты, scopes и merge commits доступны в PR reviews/CI. SDK pin включает 141 source/resource/project input, из них 107 файлов C#; headless harness pin — 186 inputs, 333 исполненных checks. Это разные единицы измерения, их нельзя складывать. World/GPU/MP/live и качество новой LLM-генерации не проверялись. Installed Windows mods/config/saves не менялись, опубликованный v0.4.254 не переиздавался.
 
+## Дополнение: пакет #29/#30/#32–#36
+
+Все семь предложений прошли техническое и архитектурное ревью и приняты; #36 доработан перед принятием. #31 уже был в исходном main и не входит в этот roster. Проверка выполнена поверх `274d4c38849bff5b8f7ecde1c61d6276a4803712`, а не поверх прежнего итогового пакета #7–#27.
+
+| PR | Итог и canonical граница |
+|---|---|
+| [#29](https://github.com/Xipong/InfiniCrafterLocal/pull/29) | Приоритеты LLM-first и single-shot Author закреплены в AGENTS; creative/gameplay choices не переходят к host |
+| [#30](https://github.com/Xipong/InfiniCrafterLocal/pull/30) | Diagnosed `realization.selfEvaluation.planVsProgram` — advisory, без автозаполнения/лишнего Repair; runtime, containers, description, `programVsReport`, чужие siblings и resource guards остаются strict |
+| [#32](https://github.com/Xipong/InfiniCrafterLocal/pull/32) | Реальный Repair требует non-null `realizationReplacement` через единственный request-local schema owner; generic sparse patch сохраняет omission-as-no-change |
+| [#33](https://github.com/Xipong/InfiniCrafterLocal/pull/33) | Radial/disk child учитывает только declared/context-valid neutral omission spread; source и frozen absences не дописываются, present-invalid/root omissions остаются RED |
+| [#34](https://github.com/Xipong/InfiniCrafterLocal/pull/34) | Fresh scalar names `accelY`, `radiusTiles`, `speed`, `miningSpeedMultiplier` имеют exact прежнюю wire projection; старые имена только retained receipt provenance, не Author aliases |
+| [#35](https://github.com/Xipong/InfiniCrafterLocal/pull/35) | Actual Author/Repair cards построены из canonical shapes; Repair показывает только scope-visible `callsUpsert`, empty union даёт empty examples; формы не объявлены defaults или weapon presets |
+| [#36](https://github.com/Xipong/InfiniCrafterLocal/pull/36) | `moveSpeedBonusPercent / 100` с прежним wire factor lifecycle; исправлены exact signed-zero omission provenance и standalone float-type/consumer-domain audit, без inverse equality/quantization/fallback |
+
+Проверенный общий executable snapshot — tree `ae09cbd346747314d35f03e43fc32e33684978df`, executed head `e427b451eb568a1fb990f78c4766180d979c354d`: **9506 Python PASS / 0 FAIL**, **111 test files**, четыре canonical shards и **33 actual commands**, **16 portable gates PASS**; 672 input hashes не менялись во время исполнения, same-scope duplicate observers отсутствуют. Финальные ancestry-only successors имеют тот же tree; navigation commit меняет только три Markdown-файла. Counts отдельных ревью не складываются с full-suite total. Ранний full на доработанном precursor имел три timing FAIL в healthy image sibling controls; same-byte shard retry прошёл, исходный RED сохранён. Финальный 9506-case run прошёл целиком без retry.
+
+На совместной композиции повторены actual Author/Repair readers в обоих formats: 14 report/gameplay/frozen/resource controls, 68 public witnesses и 12 frozen Repair controls. Final independent fix36 review: 26 regressions + 4 historical controls PASS. Архивные 4 scalar и 8 buff wires аутентифицированы исполнением первоначального producer `274d4c3`; fixture hashes не обновлялись под candidate.
+
+Native **333 checks PASS** и private SDK **0 warnings / 0 errors** здесь — source-bound reuse прежнего реального исполнения по точным 186/141 compile-input hashes и фактическим DLL, **не новый native run**. SDK pin содержит 107 C# файлов внутри 141 inputs. Hosted Windows source scan не выдаётся за compilation. World/GPU/MP/live и качество новых генераций не проверялись; установленный Windows runtime, configs/saves и опубликованный v0.4.254 не менялись.
+
+Ubuntu MOTD `GEN_EMAIL` traceback диагностирован отдельно как system OpenSSL/Hermes cryptography search-path contamination; clean-env control прошёл. Он не подменяет реальные project exit codes, глобальные packages/config не менялись.
+
 ## Исходный proposal snapshot — исторический, не current status
 
 Следующие таблицы фиксируют первоначальные ветки, их counts и ограничения на момент подготовки. Их «Открыт»/«Draft», отсутствие .NET и opt-in compact mode **устарели** и не описывают принятый main. Первоначальная база — `62762da1831771b376eb83efbab80530411ff3f1`. Исходные pytest totals нельзя складывать или приписывать финальной композиции.

@@ -12,10 +12,10 @@ Python base: [`LocalGenerator/infini_local/`](LocalGenerator/infini_local/FOLDER
 | Изменение | Canonical owner относительно Python base |
 |---|---|
 | Grammar, units, events, authority | `core/runtime_authoring/capability_registry.py` |
-| Author/Repair shape | `program_schema.py` в том же runtime_authoring |
-| Dependencies/slots/producers/budgets | `validator.py`, `event_producer_validation.py`, `binding_use_policy.py` |
+| Author/Repair shape и scope-derived examples | `program_schema.py` в том же runtime_authoring; `pipelines/author_item_contract.py` строит cards из canonical shapes, real Repair требует non-null realizationReplacement |
+| Dependencies/slots/producers/budgets и advisory report leaves | `validator.py`, `event_producer_validation.py`, `binding_use_policy.py`; diagnosed planVsProgram не блокирует craft, но чужие siblings/gameplay/resource guards остаются strict |
 | Frozen scope/filter | `repair_scope.py`; shared leaf merge — `core/repair_merge.py` |
-| Projection/receipts/final wire | `compiler.py`, `technical_lowering.py`, `wire_validator.py` |
+| Projection/receipts/final wire | `compiler.py`, `technical_lowering.py`, `wire_validator.py`; scalar fresh names и buff percent units задаёт ParamSpec, retained source names не fresh grammar; exact typed/signed-zero omission и consumer float32 domain проверяются у тех же owners |
 | Terraria mappings | `terraria_vocabulary.py` |
 | Model prose/packet | `pipelines/author_item_contract.py`, `llm_authoring_prompt.py` |
 | Author/Repair/stage orchestration | `pipelines/llm_authoring_pipeline.py`, `combine_pipeline.py` |
