@@ -2565,19 +2565,19 @@
             "additionalProperties": false,
             "properties": {
               "pitch": {
-                "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added.",
+                "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage.",
                 "maximum": 0.9,
                 "minimum": -0.9,
                 "type": "number"
               },
               "pitchVariance": {
-                "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation.",
+                "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter; a nonzero interval must remain nonzero in native float32 storage. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation.",
                 "maximum": 0.6,
                 "minimum": 0.0,
                 "type": "number"
               },
               "volume": {
-                "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. Native distance and user volume settings still apply.",
+                "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. A nonzero choice must remain nonzero in native float32 playback; sub-storage values are rejected, not silenced. Native distance and user volume settings still apply.",
                 "maximum": 1.0,
                 "minimum": 0.0,
                 "type": "number"

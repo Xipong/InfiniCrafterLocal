@@ -1204,6 +1204,80 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "configure_weapon_ammo"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "ammoCategory": {
+                    "description": "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks",
+                    "enum": [
+                      "arrow",
+                      "bullet",
+                      "candy_corn",
+                      "coin",
+                      "dart",
+                      "fallen_star",
+                      "flare",
+                      "gel",
+                      "jack_o_lantern",
+                      "nail_friendly",
+                      "rocket",
+                      "snowball",
+                      "solution",
+                      "stake",
+                      "stynger_bolt"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "terraria_ammo_id_category"
+                  },
+                  "speedBasis": {
+                    "description": "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative",
+                    "enum": [
+                      "authored_spawn",
+                      "native_shot"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [
+                  "ammoCategory",
+                  "speedBasis"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "configure_vanilla_ammo_item"
               },
               "id": {
@@ -3063,13 +3137,14 @@
                     "x-infini-units": "pixels"
                   },
                   "placement": {
-                    "description": "Spawn position",
+                    "description": "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle",
                     "enum": [
                       "item_use_origin",
                       "owner_center",
                       "cursor",
                       "ground_at_cursor",
-                      "above_cursor"
+                      "above_cursor",
+                      "native_resting_spot"
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
@@ -3149,6 +3224,113 @@
                     "type": "integer",
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "live projectiles"
+                  }
+                },
+                "required": [
+                  "maxActive"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_sentry"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Native Projectile.sentry flag; false explicitly disables registration",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_descendant_concurrency"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "maxActive": {
+                    "description": "Maximum simultaneous pending reservations plus live descendants for this physical source and its nested descendants",
+                    "maximum": 96,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "pending or live descendants"
                   }
                 },
                 "required": [
@@ -4711,6 +4893,60 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "damageStartProgress": {
+                    "default": 1.0,
+                    "description": "Minimum warmup progress that enables the native friendly hit lane, inclusive. 1 retains the full-warmup gate; 0 enables hits from the start. Progress and threshold use binary64 before native hit dispatch.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "fraction of warmup"
+                  },
+                  "initialDamageMultiplier": {
+                    "default": 1.0,
+                    "description": "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "source damage multiplier"
+                  },
+                  "initialWidthMultiplier": {
+                    "default": 1.0,
+                    "description": "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1.0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "beam width multiplier"
+                  },
+                  "manaPayment": {
+                    "default": "initial_use_only",
+                    "description": "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.",
+                    "enum": [
+                      "initial_use_only",
+                      "each_use_time"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "initial_use_only",
+                    "x-infini-semanticType": "bounded_text",
+                    "x-infini-units": "native mana payment cadence"
+                  },
                   "rangeTiles": {
                     "description": "Beam length",
                     "maximum": 120,
@@ -4719,8 +4955,16 @@
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
                   },
+                  "raycastTiles": {
+                    "default": false,
+                    "description": "When true, Collision.LaserScan samples three rays across current beam width and clips the shared segment to the shortest bounded sample without temporal smoothing. False retains full range. Does not set collision.tileCollide or damage.ownerHitCheck.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "tile clipping enabled"
+                  },
                   "warmupTicks": {
-                    "description": "Warmup before full damage",
+                    "description": "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.",
                     "maximum": 600,
                     "minimum": 0,
                     "type": "integer",
@@ -4838,6 +5082,23 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "count": {
+                    "default": 1,
+                    "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
+                    "maximum": 4,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "spawn_or_target_count",
+                    "x-infini-units": "projectiles/volley"
+                  },
+                  "hardRange": {
+                    "default": false,
+                    "description": "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "intervalTicks": {
                     "description": "Firing interval",
                     "maximum": 3600,
@@ -4847,12 +5108,19 @@
                     "x-infini-units": "ticks"
                   },
                   "rangeTiles": {
-                    "description": "Soft target range: previous target may be chosen outside it after distance discount",
+                    "description": "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount",
                     "maximum": 120,
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tiles"
+                  },
+                  "requireLineOfSight": {
+                    "default": false,
+                    "description": "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "sameTargetBias": {
                     "description": "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9",
@@ -4880,6 +5148,33 @@
                       ]
                     },
                     "x-infini-semanticType": "runtime_entity_id"
+                  },
+                  "spreadRadians": {
+                    "default": 0.0,
+                    "description": "Full symmetric fan angle for this firing volley; count=1 has zero angular offset",
+                    "maximum": 0.75,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "targetPolicy": {
+                    "default": "distance_score",
+                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score",
+                    "enum": [
+                      "distance_score",
+                      "player_assigned_first"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "distance_score",
+                    "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [

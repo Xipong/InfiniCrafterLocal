@@ -904,6 +904,23 @@ _CAPS: list[CapabilitySpec] = [
         repair_group="item_contact",
     ),
     _cap(
+        "configure_weapon_ammo",
+        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+        "item",
+        ("item_body",),
+        {
+            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks", enum=VANILLA_AMMO_CATEGORY_TOKENS),
+            "speedBasis": _p("string", "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative", enum=("authored_spawn", "native_shot")),
+        },
+        py=_COMPILER_OWNER,
+        cs="GeneratedItemData.Apply.cs::ApplyToItem/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+        wire=("runtimeProgram.weaponAmmo", "runtimeProgram.weaponAmmo.ammoCategory", "runtimeProgram.weaponAmmo.speedBasis"),
+        provenance="restores native weapon-side ammo requirement/conservation and combat contribution without retired bow/gun classifiers; native ammo projectile AI remains outside this capability",
+        repair_group="weapon_ammo",
+        lowering=("runtimeProgram.weaponAmmo",),
+        lowering_inputs=("runtimeProgram.calls[].fn",),
+    ),
+    _cap(
         "configure_vanilla_ammo_item",
         "Mark this generated item as one exact vanilla ammo category and projectile. Sets Item.ammo and Item.shoot; it does not configure a weapon to consume ammo.",
         "item",
@@ -1153,7 +1170,7 @@ _CAPS: list[CapabilitySpec] = [
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
             "aim": _p("string", "Initial aim source: cursor=spawn-to-cursor, facing=owner direction, velocity=incoming activation direction, none=zero velocity", enum=("cursor", "facing", "velocity", "none")),
-            "placement": _p("string", "Spawn position", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor")),
+            "placement": _p("string", "Spawn position; native_resting_spot explicitly calls Player.FindSentryRestingSpot, including native reachable-area clamp, and centers above the returned ground by half this entity's hitbox height. It does not enable native sentry lifecycle", enum=("item_use_origin", "owner_center", "cursor", "ground_at_cursor", "above_cursor", "native_resting_spot")),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItem.cs::SpawnRuntimeEntity",
@@ -1181,6 +1198,26 @@ _CAPS: list[CapabilitySpec] = [
         wire=("runtimeProgram.entities[].spawn.maxActive",),
         provenance="explicit optional per-entity live admission cap; no omission materialization",
         repair_group="projectile_concurrency",
+    ),
+    _cap(
+        "set_projectile_sentry",
+        "Explicitly choose Projectile.sentry registration for this entity. enabled=true participates in the owner's native maxTurrets cap; Player.UpdateMaxTurrets runs immediately after each successful native sentry spawn and may retire the oldest sentry. Active item bindings project Item.sentry from their exact target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement or choose a weapon family. Omission preserves prior non-sentry behaviour.",
+        "entity_lifecycle", PROJECTILE_ENTITY_KINDS,
+        {"enabled": _p("boolean", "Native Projectile.sentry flag; false explicitly disables registration", wire_name="nativeSentry")},
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.cs::Configure",
+        wire=("runtimeProgram.entities[].nativeSentry",),
+        provenance="native sentry registration restored as an independent declared engine primitive",
+        repair_group="native_sentry",
+    ),
+    _cap(
+        "set_descendant_concurrency",
+        "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget, with no fresh capacity created by network hydration.",
+        "entity_spawn", PROJECTILE_ENTITY_KINDS,
+        {"maxActive": _p("integer", "Maximum simultaneous pending reservations plus live descendants for this physical source and its nested descendants", minimum=1, maximum=96, units="pending or live descendants", wire_name="descendantMaxActive")},
+        py=_COMPILER_OWNER, cs="GeneratedProjectile.cs::Configure",
+        wire=("runtimeProgram.entities[].spawn.descendantMaxActive",),
+        provenance="sustained bounded descendant capacity without a monotonic 32-shot lifetime stop",
+        repair_group="descendant_concurrency",
     ),
     _cap(
         "set_projectile_damage",
@@ -1355,16 +1392,21 @@ _CAPS.extend([
 _CAPS.extend([
     _cap(
         "channel_beam",
-        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment using rangeTiles/widthPx, taking precedence over movement collision. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry draws the exact collision line; a separately authored VFX texturedPath source=beam may supply a textured body. No automatic PNG stretching or representation selection.",
+        "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
         "controller",
         ("owner_attached_projectile",),
         {
             "rangeTiles": _p("number", "Beam length", minimum=1, maximum=120, units="tiles"),
             "widthPx": _p("number", "Beam collision width", minimum=2, maximum=128, units="pixels"),
-            "warmupTicks": _p("integer", "Warmup before full damage", minimum=0, maximum=600, units="ticks"),
+            "warmupTicks": _p("integer", "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.", minimum=0, maximum=600, units="ticks"),
+            "manaPayment": _p("string", "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.", required=False, enum=("initial_use_only", "each_use_time"), default="initial_use_only", neutral="initial_use_only", units="native mana payment cadence", execution_phase="owner channel sustain"),
+            "initialDamageMultiplier": _p("number", "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="source damage multiplier", consumer_storage="float32", execution_phase="NPC hit"),
+            "initialWidthMultiplier": _p("number", "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="beam width multiplier", consumer_storage="float32", execution_phase="beam geometry"),
+            "damageStartProgress": _p("number", "Minimum warmup progress that enables the native friendly hit lane, inclusive. 1 retains the full-warmup gate; 0 enables hits from the start. Progress and threshold use binary64 before native hit dispatch.", required=False, minimum=0, maximum=1, default=1.0, neutral=1.0, units="fraction of warmup", execution_phase="channel update"),
+            "raycastTiles": _p("boolean", "When true, Collision.LaserScan samples three rays across current beam width and clips the shared segment to the shortest bounded sample without temporal smoothing. False retains full range. Does not set collision.tileCollide or damage.ownerHitCheck.", required=False, default=False, neutral=False, units="tile clipping enabled", execution_phase="beam geometry"),
         },
         py=_COMPILER_OWNER,
-        cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController/Colliding",
+        cs="Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
         wire=("runtimeProgram.entities[].controller.*",),
         provenance="beam scan/channel extracted from the retired magic macro",
         repair_group="controller",
@@ -1386,14 +1428,19 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity.",
+        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and placement=item_use_origin consumes the firing entity origin; other explicit child aim/placement choices remain literal.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
-            "rangeTiles": _p("number", "Soft target range: previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
+            "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Previous target distance multiplied by (1 − min(bias, 0.9)); 0.9..1 saturates at 0.9", minimum=0, maximum=1, units="engine units: distance-score discount"),
+            "count": _p("integer", "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot", minimum=1, maximum=4, units="projectiles/volley", required=False, default=1, neutral=1),
+            "spreadRadians": _p("number", "Full symmetric fan angle for this firing volley; count=1 has zero angular offset", minimum=0, maximum=0.75, units="radians", required=False, default=0.0, neutral=0.0, consumer_storage="float32"),
+            "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score", enum=("distance_score", "player_assigned_first"), required=False, default="distance_score", neutral="distance_score"),
+            "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets", required=False, default=False, neutral=False),
+            "hardRange": _p("boolean", "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit", required=False, default=False, neutral=False),
         },
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunController",
@@ -1684,7 +1731,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         "on_use",
         ("item_body",),
         (),
-        "Emitted when an active item-body use binding succeeds.",
+        "Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target.",
         producer_binding_inputs=("primary_use", "alternate_use"),
         producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
         producer_binding_kinds=("item_body",),
@@ -1851,6 +1898,8 @@ if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
+    if cap.name == "configure_weapon_ammo":
+        return ("runtimeProgram.weaponAmmo", *(f"runtimeProgram.weaponAmmo.{name}" for name in cap.params))
     if cap.name == "present_placed_item_sprite":
         base = "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
         return (base, *(f"{base}.{name}" for name in cap.params if name != "placementCallId"))
@@ -1894,8 +1943,10 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
         )
     if cap.name == "configure_spawn":
         return tuple(["runtimeProgram.entities[].spawn.enabled", *[f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items()]])
-    if cap.name == "set_projectile_concurrency":
+    if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"}:
         return tuple(f"runtimeProgram.entities[].spawn.{spec.wire_name or name}" for name, spec in cap.params.items())
+    if cap.name == "set_projectile_sentry":
+        return ("runtimeProgram.entities[].nativeSentry",)
     if cap.name == "set_projectile_damage":
         return tuple(["runtimeProgram.entities[].damage.enabled", *[f"runtimeProgram.entities[].damage.{name}" for name in cap.params]])
     if cap.name == "set_projectile_lifetime":
@@ -1909,11 +1960,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name in {"channel_beam", "charge_then_release"}:
         return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
     if cap.name == "target_and_fire":
-        return (
-            "runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
-            "runtimeProgram.entities[].targeting.shotEntityId", "runtimeProgram.entities[].targeting.intervalTicks",
-            "runtimeProgram.entities[].targeting.rangeTiles", "runtimeProgram.entities[].targeting.sameTargetBias",
-        )
+        return ("runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
+                *(f"runtimeProgram.entities[].targeting.{spec.wire_name or name}" for name, spec in cap.params.items()))
     if cap.name == "spawn_over_target":
         return tuple(f"runtimeProgram.entities[].spawn.overTarget.{name}" for name in cap.params)
     if cap.category == "event":
@@ -1933,12 +1981,13 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 def _component_slot(cap: CapabilitySpec) -> str:
     direct = {
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
-        "configure_vanilla_ammo_item": "ammo_item", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
+        "configure_vanilla_ammo_item": "ammo_item", "configure_weapon_ammo": "weapon_ammo", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
         "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
         "set_projectile_damage": "damage", "set_projectile_lifetime": "lifetime", "set_projectile_hitbox": "hitbox",
         "set_projectile_collision": "collision", "spawn_over_target": "spawn_over_target", "emit_light_while_active": "light",
+        "set_projectile_sentry": "native_sentry", "set_descendant_concurrency": "spawn",
     }
     if cap.name in direct:
         return direct[cap.name]
@@ -1957,6 +2006,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "configure_item_use": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
         "configure_item_contact_hitbox": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
         "configure_vanilla_ammo_item": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+        "configure_weapon_ammo": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
         "restore_resources_on_use": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "apply_vanilla_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
         "apply_generated_buff_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
@@ -1971,12 +2021,15 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "add_equipment_damage_bonus": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
         "configure_spawn": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "set_projectile_concurrency": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
+        "set_projectile_sentry": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+        "set_descendant_concurrency": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
         "set_projectile_damage": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_lifetime": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_hitbox": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "set_projectile_collision": "Content/Projectiles/GeneratedProjectile.cs::Configure",
         "spawn_over_target": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
         "emit_light_while_active": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
+        "channel_beam": cap.csharp_owner,
     }
     if cap.name in item:
         return item[cap.name]
@@ -1988,6 +2041,10 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
 
 
 def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
+    if cap.name == "configure_weapon_ammo":
+        return "owner_execute_sync", {}
+    if cap.name == "channel_beam":
+        return "owner_execute_sync", {"sustain_mana": "owner_execute_sync", "beam_geometry": "native_local_collision_and_visual", "NPC_source_damage": "native_projectile_hit_authority"}
     if cap.category == "movement" or cap.category in {"entity_spawn", "entity_lifecycle", "entity_collision", "entity_combat", "controller"}:
         return "owner_execute_sync", {}
     if cap.name in {"apply_status_on_event", "chain_damage_on_event"}:
@@ -2013,6 +2070,12 @@ def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
 
 
 def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
+    if cap.name == "configure_weapon_ammo":
+        return (RequirementSpec(
+            "binding_tuple_present", target="any_entity",
+            any_of=("primary_use|spawn_entity", "alternate_use|spawn_entity"),
+            message="Weapon ammo requires an explicit active spawn_entity shot; hold/equipped events or item effects are not native ammo consumers.",
+        ),)
     if cap.name == "add_equipment_damage_bonus":
         return (RequirementSpec(
             "capability_group_present", target="item_body", any_of=("configure_accessory", "configure_armor"),
@@ -2182,6 +2245,8 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     if cap.category == "movement":
         exclusive_group = "movement"
         position_ownership = "velocity_or_position_controller"
+    elif cap.name in {"configure_weapon_ammo", "configure_vanilla_ammo_item"}:
+        exclusive_group = "ammo_role"
     elif cap.category == "controller":
         exclusive_group = "controller"
         position_ownership = {

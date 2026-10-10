@@ -179,6 +179,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
         "set_projectile_concurrency": ("RuntimeSpawnSpec", ""),
+        "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
@@ -206,8 +207,45 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "shotEntity": "ShotEntityId",
                 "entity": "EntityId",
             }.get(param_name, param_name[:1].upper() + param_name[1:])
+            if cap.name == "set_descendant_concurrency":
+                csharp_name = "DescendantMaxActive"
             csharp = bounds.get(csharp_name)
-            if cap.name == "set_projectile_concurrency":
+            if cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
+                # Explicit new options reject outside their interval; a missing
+                # or weakened guard must be visible, not skipped as "no clamp".
+                declaration = re.search(
+                    rf"if\s*\({re.escape(csharp_name)} is < ([^ ]+) or > ([^)]+)\)\s*"
+                    r"throw new InvalidDataException\(", _class_block(text, class_name),
+                )
+                reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
+                authored_bounds = [spec.minimum, spec.maximum]
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": authored_bounds,
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "preserved": reject_bounds == authored_bounds})
+                continue
+            if cap.name == "channel_beam" and spec.default is not None:
+                block = _class_block(text, class_name)
+                declaration = re.search(
+                    rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"
+                    rf"public double\? {re.escape(csharp_name)}\s*\{{\s*get\s*=>\s*[^;]+;\s*set\s*\{{\s*"
+                    r"if\s*\(value is null \|\| !double\.IsFinite\(value\.Value\) \|\| value < ([^|]+?) \|\| value > ([^|)]+)"
+                    r"(?P<precision>\s*\|\| value != ([^&]+) && \(float\)value\.Value == ([^)]+))?\)\s*"
+                    r"throw new InvalidDataException\(", block, re.DOTALL,
+                )
+                reject_bounds = [_number(declaration.group(i).strip(), constants) for i in (1, 2)] if declaration else None
+                preserves_precision = bool(declaration) and (
+                    spec.consumer_storage != "float32" or
+                    declaration.group("precision") is not None and
+                    all(_number(declaration.group(i).strip(), constants) == spec.neutral for i in (4, 5)))
+                authored_bounds = [spec.minimum, spec.maximum]
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": authored_bounds,
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "consumerPrecisionPreserved": preserves_precision,
+                             "preserved": reject_bounds == authored_bounds and preserves_precision})
+                continue
+            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"}:
                 block = _class_block(text, class_name)
                 declaration = re.search(
                     rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"

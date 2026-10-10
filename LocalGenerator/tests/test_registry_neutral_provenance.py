@@ -21,8 +21,12 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
+                     "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
     "configure_item_stats": {"manaCost": 0},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
+    "target_and_fire": {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
+                        "requireLineOfSight": False, "hardRange": False},
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,
         "oreSenseEnabled": False,
@@ -148,8 +152,8 @@ def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omi
             ("null", None, False),
             ("text", "missing", False),
             ("wrong-json-type", False if spec.kind != "boolean" else 0, False),
-            ("minimum", False if spec.kind == "boolean" else spec.minimum, True),
-            ("maximum", True if spec.kind == "boolean" else spec.maximum, True),
+            ("minimum", False if spec.kind == "boolean" else spec.enum[0] if spec.enum else spec.minimum, True),
+            ("maximum", True if spec.kind == "boolean" else spec.enum[-1] if spec.enum else spec.maximum, True),
         )
     ]
     + [
