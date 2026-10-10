@@ -85,15 +85,22 @@ public sealed class RuntimeProgramSpec
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)
             throw new InvalidDataException($"runtimeProgram.bindings exceeds {InfiniRuntimeLimits.MaxRuntimeBindings}");
 
-        // The new reference adapter must see the original typed child fields,
-        // before retained v5 Normalize paths can lowercase/clamp/default them.
+        // Both reference adapters inspect original typed source fields before
+        // retained v5 normalization can lowercase, clamp or default them.
         foreach (RuntimeEntitySpec? source in Entities)
         foreach (RuntimeEventActionSpec? action in source?.Events ?? Array.Empty<RuntimeEventActionSpec>())
         {
-            if (action?.ActionCode != RuntimeEventActionCode.SelectTargetsAndEmit) continue;
+            if (action is null) continue;
             RuntimeEntitySpec? child = Entities.FirstOrDefault(row => row?.Id == action.EntityId);
-            if (!RuntimeEventActionSpec.SupportsTargetEmission(child))
+            if (action.ActionCode == RuntimeEventActionCode.SpawnEntity && child?.Spawn is { } spawn
+                && !spawn.AcceptsEmissionSpread(action.SpreadRadians))
+                throw new InvalidDataException("radial/disk event emission requires exact neutral spread before normalization");
+            if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                && !RuntimeEventActionSpec.SupportsTargetEmission(child))
                 throw new InvalidDataException("target emission requires the exact referenced spawn before normalization");
+            if (action.HitTargetSpawn is not null
+                && (source is null || !source.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child)))
+                throw new InvalidDataException("target-relative emission requires exact source and referenced spawn before normalization");
         }
 
         var entityIds = new HashSet<string>(StringComparer.Ordinal);
@@ -232,6 +239,9 @@ public sealed class RuntimeProgramSpec
                     RuntimeEntitySpec? child = TryGetEntity(action.EntityId);
                     if (child is null || child.Kind == RuntimeEntityKind.ItemBody)
                         throw new InvalidDataException($"event '{action.Id}' references invalid entity '{action.EntityId}'");
+                    if (action.HitTargetSpawn is not null
+                        && (!entity.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child)))
+                        throw new InvalidDataException($"event '{action.Id}' target-relative spawn requires a moving child with event-origin placement, velocity aim, zero offset and no over-target transform");
                     if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
                         && !RuntimeEventActionSpec.SupportsTargetEmission(child))
                         throw new InvalidDataException($"event '{action.Id}' requires an independent projectile with explicit origin/velocity spawn, zero offset and no over-target adapter");
@@ -699,6 +709,9 @@ public sealed class RuntimeEntitySpec
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
+            if (Spawn.VelocityDistribution is not null
+                && (IsStationary || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
+                throw new InvalidDataException($"entity '{Id}' does not execute sampled initial velocity");
             TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
             if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
@@ -844,14 +857,34 @@ public sealed class RuntimeSpawnSpec
     public string Aim { get => _aim; set { _aim = value; _aimPresent = true; } }
     public string Placement { get => _placement; set { _placement = value; _placementPresent = true; } }
     public RuntimeOverTargetSpec OverTarget { get; set; } = new();
+    private RuntimeSpawnVelocitySpec? _velocityDistribution;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeSpawnVelocitySpec? VelocityDistribution
+    {
+        get => _velocityDistribution;
+        set => _velocityDistribution = value ?? throw new InvalidDataException("present spawn.velocityDistribution cannot be null");
+    }
 
     internal bool HasExactTargetEmissionOrigin()
         => _offsetPresent && _aimPresent && _placementPresent && Enabled
             && Placement == "item_use_origin" && Aim == "velocity" && OffsetPx == 0
             && OverTarget is not null && OverTarget.HeightTiles == 0f && OverTarget.DelayTicks == 0;
 
+    internal bool AcceptsEmissionSpread(float spread)
+        => VelocityDistribution?.Kind is not ("radial" or "disk") || spread == 0f;
+
     public void Normalize()
     {
+        if (VelocityDistribution is { } distribution)
+        {
+            distribution.Validate();
+            if (SpeedPxPerTick != 0f)
+                throw new InvalidDataException("sampled velocity requires the exact inactive constant-speed wire slot 0");
+            if (distribution.Kind is "fan_speed" or "cone" && Aim is not ("cursor" or "facing" or "velocity"))
+                throw new InvalidDataException("directional sampled velocity requires an explicit aim axis");
+            if (distribution.Kind is "radial" or "disk" && SpreadRadians != 0f)
+                throw new InvalidDataException("radial/disk velocity requires exact neutral deterministic spread 0");
+        }
         SpeedPxPerTick = Math.Clamp(SpeedPxPerTick, 0f, 80f);
         Count = Math.Clamp(Count, 1, InfiniRuntimeLimits.MaxRuntimeSpawnCount);
         SpreadRadians = Math.Clamp(SpreadRadians, 0f, MathF.Tau);
@@ -864,6 +897,78 @@ public sealed class RuntimeSpawnSpec
             throw new InvalidDataException($"unknown spawn placement '{Placement}'");
         OverTarget ??= new RuntimeOverTargetSpec();
         OverTarget.Normalize();
+    }
+}
+
+public sealed class RuntimeSpawnVelocitySpec
+{
+    [JsonRequired] public string Kind { get; set; } = "";
+    private float? _minSpeedPxPerUpdate;
+    public sealed class MinSpeedPxPerUpdateJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public MinSpeedPxPerUpdateJsonConverter() : base("0", "80", "0") { }
+    }
+    [JsonConverter(typeof(MinSpeedPxPerUpdateJsonConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? MinSpeedPxPerUpdate
+    {
+        get => _minSpeedPxPerUpdate;
+        set
+        {
+            if (value is not float speed || !float.IsFinite(speed) || speed < 0f || speed > 80f)
+                throw new InvalidDataException("minimum sampled speed must be finite 0..80");
+            _minSpeedPxPerUpdate = speed;
+        }
+    }
+    private float? _maxSpeedPxPerUpdate;
+    public sealed class MaxSpeedPxPerUpdateJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public MaxSpeedPxPerUpdateJsonConverter() : base("0", "80", "0") { }
+    }
+    [JsonConverter(typeof(MaxSpeedPxPerUpdateJsonConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? MaxSpeedPxPerUpdate
+    {
+        get => _maxSpeedPxPerUpdate;
+        set
+        {
+            if (value is not float speed || !float.IsFinite(speed) || speed < 0f || speed > 80f)
+                throw new InvalidDataException("maximum sampled speed must be finite 0..80");
+            _maxSpeedPxPerUpdate = speed;
+        }
+    }
+    private float? _halfAngleRadians;
+    public sealed class HalfAngleRadiansJsonConverter : RawJsonNullableFloatDomainConverter
+    {
+        public HalfAngleRadiansJsonConverter() : base("0", "3.141592653589793", "0") { }
+    }
+    [JsonConverter(typeof(HalfAngleRadiansJsonConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? HalfAngleRadians
+    {
+        get => _halfAngleRadians;
+        set
+        {
+            if (value is not float angle || !float.IsFinite(angle) || angle < 0f || angle > MathF.PI)
+                throw new InvalidDataException("cone half-angle must be finite 0..pi");
+            _halfAngleRadians = angle;
+        }
+    }
+
+    internal bool IsValid => MaxSpeedPxPerUpdate is not null && (Kind switch
+    {
+        "disk" => MinSpeedPxPerUpdate is null && HalfAngleRadians is null,
+        "fan_speed" or "radial" => MinSpeedPxPerUpdate is not null
+            && MinSpeedPxPerUpdate <= MaxSpeedPxPerUpdate && HalfAngleRadians is null,
+        "cone" => MinSpeedPxPerUpdate is not null
+            && MinSpeedPxPerUpdate <= MaxSpeedPxPerUpdate && HalfAngleRadians is not null,
+        _ => false,
+    });
+
+    public void Validate()
+    {
+        if (!IsValid)
+            throw new InvalidDataException("sampled velocity requires one exact variant, all its fields and min <= max");
     }
 }
 
@@ -1419,6 +1524,107 @@ public static class RuntimeEventActionCode
     public const int SelectTargetsAndEmit = 8;
 }
 
+public sealed class RuntimeHitTargetSpawnSpec
+{
+    private double? _beforeProbability;
+    [JsonRequired]
+    public double? BeforeProbability
+    {
+        get => _beforeProbability;
+        set
+        {
+            if (value is not double number || !double.IsFinite(number) || number < 0d || number > 1d)
+                throw new InvalidDataException("invalid target-relative spawn BeforeProbability");
+            _beforeProbability = number;
+        }
+    }
+    private float? _hitboxMaxSideFactor;
+    [JsonRequired]
+    public float? HitboxMaxSideFactor
+    {
+        get => _hitboxMaxSideFactor;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0f || number > 2f)
+                throw new InvalidDataException("invalid target-relative spawn HitboxMaxSideFactor");
+            _hitboxMaxSideFactor = number;
+        }
+    }
+    private float? _clearancePx;
+    [JsonRequired]
+    public float? ClearancePx
+    {
+        get => _clearancePx;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0f || number > 128f)
+                throw new InvalidDataException("invalid target-relative spawn ClearancePx");
+            _clearancePx = number;
+        }
+    }
+    private float? _beforePositionJitterRadiusPx;
+    [JsonRequired]
+    public float? BeforePositionJitterRadiusPx
+    {
+        get => _beforePositionJitterRadiusPx;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0f || number > 128f)
+                throw new InvalidDataException("invalid target-relative spawn BeforePositionJitterRadiusPx");
+            _beforePositionJitterRadiusPx = number;
+        }
+    }
+    private float? _beforeDirectionJitterRadians;
+    [JsonRequired]
+    public float? BeforeDirectionJitterRadians
+    {
+        get => _beforeDirectionJitterRadians;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0f || number > MathF.PI)
+                throw new InvalidDataException("invalid target-relative spawn BeforeDirectionJitterRadians");
+            _beforeDirectionJitterRadians = number;
+        }
+    }
+    private float? _afterFanSpreadRadians;
+    [JsonRequired]
+    public float? AfterFanSpreadRadians
+    {
+        get => _afterFanSpreadRadians;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0f || number > MathF.Tau)
+                throw new InvalidDataException("invalid target-relative spawn AfterFanSpreadRadians");
+            _afterFanSpreadRadians = number;
+        }
+    }
+    private int? _initialIgnoreCountdownUpdates;
+    [JsonRequired]
+    public int? InitialIgnoreCountdownUpdates
+    {
+        get => _initialIgnoreCountdownUpdates;
+        set
+        {
+            if (value is not int number || number < 0 || number > 600)
+                throw new InvalidDataException("invalid target-relative spawn InitialIgnoreCountdownUpdates");
+            _initialIgnoreCountdownUpdates = number;
+        }
+    }
+    internal bool IsValid => BeforeProbability is not null
+        && HitboxMaxSideFactor is not null
+        && ClearancePx is not null
+        && BeforePositionJitterRadiusPx is not null
+        && BeforeDirectionJitterRadians is not null
+        && AfterFanSpreadRadians is not null
+        && InitialIgnoreCountdownUpdates is not null;
+    public void Validate()
+    {
+        if (!IsValid)
+            throw new InvalidDataException("target-relative spawn requires all geometry and exclusion choices");
+    }
+
+}
+
 public sealed class RuntimeEventActionSpec
 {
     public string Id { get; set; } = "";
@@ -1426,18 +1632,28 @@ public sealed class RuntimeEventActionSpec
     public string Action { get; set; } = "";
     public int ActionCode { get; set; }
     public string EntityId { get; set; } = "";
-    public int Count { get; set; } = 1;
-    public float SpreadRadians { get; set; }
-    public float DamageMultiplier { get; set; } = 1f;
+    private int _count = 1;
+    private float _spreadRadians;
+    private float _damageMultiplier = 1f;
+    private int _delayTicks;
+    private bool _countPresent, _spreadPresent, _damageMultiplierPresent, _delayPresent;
+    public int Count { get => _count; set { _countPresent = true; _count = value; } }
+    public float SpreadRadians { get => _spreadRadians; set { _spreadPresent = true; _spreadRadians = value; } }
+    public float DamageMultiplier { get => _damageMultiplier; set { _damageMultiplierPresent = true; _damageMultiplier = value; } }
     private string? _damageBasis;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DamageBasis { get => _damageBasis; set => _damageBasis = RuntimeChildCombatBasis.Require(value); }
     private string? _knockbackBasis;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? KnockbackBasis { get => _knockbackBasis; set => _knockbackBasis = RuntimeChildCombatBasis.Require(value); }
-    private int _delayTicks;
-    private bool _delayTicksPresent;
-    public int DelayTicks { get => _delayTicks; set { _delayTicks = value; _delayTicksPresent = true; } }
+    private RuntimeHitTargetSpawnSpec? _hitTargetSpawn;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHitTargetSpawnSpec? HitTargetSpawn
+    {
+        get => _hitTargetSpawn;
+        set => _hitTargetSpawn = value ?? throw new InvalidDataException("present hitTargetSpawn cannot be null");
+    }
+    public int DelayTicks { get => _delayTicks; set { _delayPresent = true; _delayTicks = value; } }
     public int PeriodTicks { get; set; }
     public int BuffId { get; set; } = -1;
     public int DurationTicks { get; set; }
@@ -1529,6 +1745,16 @@ public sealed class RuntimeEventActionSpec
 
     public void NormalizeAndValidate()
     {
+        if (HitTargetSpawn is not null)
+        {
+            HitTargetSpawn.Validate();
+            if (!_countPresent || !_spreadPresent || !_damageMultiplierPresent || !_delayPresent
+                || ActionCode != RuntimeEventActionCode.SpawnEntity || Action != "spawn_entity_on_event" || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || DamageBasis is null || KnockbackBasis is null || Count < 1 || Count > 12
+                || SpreadRadians != 0f || !float.IsFinite(DamageMultiplier) || DamageMultiplier < 0f || DamageMultiplier > 4f
+                || DelayTicks < 0 || DelayTicks > 600)
+                throw new InvalidDataException("target-relative spawn requires exact direct-hit event, explicit combat bases, count, multiplier and inactive spread");
+        }
         if (ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
             && (Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
                 || Action != RuntimeOpcodeNames.EventActionName(ActionCode)
@@ -1547,7 +1773,7 @@ public sealed class RuntimeEventActionSpec
         if (ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit)
         {
             if (Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
-                || string.IsNullOrWhiteSpace(EntityId) || !_delayTicksPresent || DelayTicks < 0 || DelayTicks > 600
+                || string.IsNullOrWhiteSpace(EntityId) || !_delayPresent || DelayTicks < 0 || DelayTicks > 600
                 || StepCount is null || StepRangeTiles is null || SelectionAnchor is null || RepeatPolicy is null
                 || RequireLineOfSight is null || InitialIgnoreCountdownUpdates is null)
                 throw new InvalidDataException("target emission requires every explicit hit-event parameter without defaults");

@@ -78,7 +78,7 @@ internal static partial class EngineRuntimeChecks
             var owner = SwarmHost(data, entity); owner.SetInitialNpcExclusion(exclusion);
             owner.AI(); owner.AI();
             byte[] payload = ReviewExtra(owner);
-            Equal((byte)3, payload[0], "extended ExtraAI version");
+            Equal((byte)4, payload[0], "extended ExtraAI version");
             foreach (var role in SwarmRoles)
             {
                 Terraria.Main.netMode = role.Mode; Terraria.Main.myPlayer = role.Local;
@@ -94,7 +94,12 @@ internal static partial class EngineRuntimeChecks
                 Equal(8, InitialNpcState(peer).RemainingUpdates, "metadata hydration does not reset duration " + role.Name);
                 // v2 carries no exclusion. Same known old prefix is accepted,
                 // while a new physical host receives no invented exclusion.
-                byte[] oldPayload = payload[..^8]; oldPayload[0] = 2;
+                byte[] v3 = payload[..^1]; v3[0] = 3;
+                var v3Peer = Attach(new Projectile { owner = 0, active = true, timeLeft = 80 });
+                v3Peer.ReceiveExtraAI(new BinaryReader(new MemoryStream(v3)));
+                Equal(true, v3Peer.Matches(data.Id, entity.Id), "v3 remains readable " + role.Name);
+                Equal(8, InitialNpcState(v3Peer).RemainingUpdates, "v3 retains exact counter " + role.Name);
+                byte[] oldPayload = payload[..^9]; oldPayload[0] = 2;
                 var oldPeer = Attach(new Projectile { owner = 0, active = true, timeLeft = 80 });
                 oldPeer.ReceiveExtraAI(new BinaryReader(new MemoryStream(oldPayload)));
                 Equal(true, oldPeer.Matches(data.Id, entity.Id), "v2 remains readable " + role.Name);
@@ -104,7 +109,7 @@ internal static partial class EngineRuntimeChecks
             owner.AI(); Equal(7, InitialNpcState(owner).RemainingUpdates, "local owner advanced after capture");
             owner.ReceiveExtraAI(new BinaryReader(new MemoryStream(payload)));
             Equal(7, InitialNpcState(owner).RemainingUpdates, "same-source observation cannot extend local counter");
-            byte[] invalid = (byte[])payload.Clone(); Array.Clear(invalid, invalid.Length - 6, 4);
+            byte[] invalid = (byte[])payload.Clone(); Array.Clear(invalid, invalid.Length - 7, 4);
             var rejected = Attach(new Projectile { owner = 0, active = true, friendly = true, timeLeft = 90, velocity = Vector2.UnitX });
             rejected.ReceiveExtraAI(new BinaryReader(new MemoryStream(invalid)));
             Equal(false, rejected.Projectile.friendly, "zero generation with positive counter fails closed");

@@ -27,7 +27,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, _wire_projection_witness
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
     _graph_cycle, _has_non_neutral_generated_buff, _max_depth,
@@ -69,7 +69,7 @@ _VISUAL_KEYS = frozenset({
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
     "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
 })
-_SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget"}) | frozenset(
+_SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
     spec.wire_name or name for fn in ("set_projectile_concurrency", "set_descendant_concurrency")
     for name, spec in CAPABILITY_REGISTRY[fn].params.items()
 )
@@ -90,7 +90,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
-    "damageBasis", "knockbackBasis",
+    "damageBasis", "knockbackBasis", "hitTargetSpawn",
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
@@ -148,6 +148,80 @@ def _validate_child_combat(
                 and source_kind not in requirement.any_of):
             errors.append({"path": f"{path}.{requirement.param}",
                            "code": "unsupported_param_target_kind", "message": requirement.message})
+
+
+def _validate_spawn_velocity(spawn: Mapping[str, Any], entity: Mapping[str, Any], path: str, errors: list[dict[str, Any]]) -> None:
+    if "velocityDistribution" not in spawn:
+        return  # Historical constant-speed wire is unchanged.
+    cap = CAPABILITY_REGISTRY["configure_spawn"]
+    spec = cap.params["velocity"]
+    distribution = spawn["velocityDistribution"]
+    fields = frozenset(name.split(".", 1)[1] for name in spec.wire_field_names("velocity")
+                       if name.startswith("velocityDistribution."))
+    if _validate_component_shape(distribution, fields, path + ".velocityDistribution", errors) is None:
+        return
+    projections = _wire_projection_witness(spec, "velocity", "spawn", {"spawn": spawn})
+    if not projections:
+        errors.append({"path": path + ".velocityDistribution", "code": "invalid_spawn_velocity_distribution",
+                       "message": "Sampled velocity must be the exact projection of one declared typed variant with no missing or foreign fields."})
+        return
+    minimum, maximum = distribution.get("minSpeedPxPerUpdate"), distribution.get("maxSpeedPxPerUpdate")
+    if type(minimum) in (int, float) and type(maximum) in (int, float) and minimum > maximum:
+        errors.append({"path": path + ".velocityDistribution.minSpeedPxPerUpdate", "code": "unordered_param_range",
+                       "message": "Minimum sampled speed must not exceed its maximum."})
+    controller = entity.get("controller", {})
+    controller = controller if isinstance(controller, Mapping) else {}
+    for requirement in cap.requirements:
+        if not any(row.authored_path == requirement.param or row.authored_path.startswith(requirement.param + ".") for row in projections):
+            continue
+        invalid = False
+        if requirement.kind == "present_param_requires_target_kind":
+            invalid = entity.get("kind") not in requirement.any_of
+        elif requirement.kind == "present_param_requires_param_value":
+            invalid = spawn.get(requirement.other_param) not in (requirement.any_of or (requirement.equals,))
+        elif requirement.kind == "present_param_forbids_capability":
+            invalid = controller.get("name") == requirement.capability or controller.get("code") == CONTROLLER_OPCODE.get(requirement.capability)
+        if invalid:
+            errors.append({"path": path + ".velocityDistribution", "code": "incompatible_param_variant", "message": requirement.message})
+
+
+def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entities: list[Mapping[str, Any]], path: str, errors: list[dict[str, Any]]) -> None:
+    if "hitTargetSpawn" not in event:
+        return
+    cap = CAPABILITY_REGISTRY["spawn_entity_from_hit_target"]
+    spec = cap.params["geometry"]
+    allowed = frozenset(name.split(".", 1)[1] for name in spec.wire_field_names("geometry")
+                        if name.startswith("hitTargetSpawn."))
+    if _validate_component_shape(event["hitTargetSpawn"], allowed, path + ".hitTargetSpawn", errors) is None:
+        return
+    if not _wire_projection_witness(spec, "geometry", "event", {"event": event}):
+        errors.append({"path": path + ".hitTargetSpawn", "code": "invalid_hit_target_spawn_geometry",
+                       "message": "Hit-target geometry requires every declared leaf and its exact inactive-spread literal."})
+    if (event.get("action") != cap.wire_action or type(event.get("actionCode")) is not int
+            or event["actionCode"] != EVENT_ACTION_OPCODE[cap.wire_action] or source_kind not in cap.target_kinds):
+        errors.append({"path": path + ".hitTargetSpawn", "code": "inactive_hit_target_spawn_geometry",
+                       "message": "Target-relative geometry belongs only to a projectile's exact spawn action."})
+    for name, parameter in cap.params.items():
+        if name == "geometry":
+            continue
+        field = parameter.wire_name or name
+        if field not in event:
+            errors.append({"path": f"{path}.{field}", "code": "required_hit_target_spawn_field",
+                           "message": "The new target-relative action requires an explicit complete choice."})
+        else:
+            errors.extend(strict_schema_errors(event[field], parameter.schema(), path=f"{path}.{field}"))
+    child = next((row for row in entities if row.get("id") == event.get("entityId")), None)
+    child_spawn = child.get("spawn", {}) if child is not None else {}
+    child_spawn = child_spawn if isinstance(child_spawn, Mapping) else {}
+    over = child_spawn.get("overTarget", {})
+    over = over if isinstance(over, Mapping) else {}
+    reference = cap.params["entity"].reference
+    if (child is None or reference is None or child.get("kind") not in reference.target_kinds
+            or child_spawn.get("enabled") is not True or child_spawn.get("placement") != "item_use_origin"
+            or child_spawn.get("aim") != "velocity" or type(child_spawn.get("offsetPx")) is not int
+            or child_spawn["offsetPx"] != 0 or over.get("heightTiles", 0) != 0 or over.get("delayTicks", 0) != 0):
+        errors.append({"path": path + ".entityId", "code": "reference_requirements_unsatisfied",
+                       "message": "Target-relative child must be moving with exact event-origin/velocity/zero-offset spawn and no over-target transform."})
 
 
 def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]], path: str = "$.gameplay.generatedBuff") -> None:
@@ -562,6 +636,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         errors.append(issue)
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
+                _validate_spawn_velocity(component, entity, f"{entity_path}.spawn", errors)
             if component_name in {"movement", "controller"} and component is not None and "params" in component:
                 params = _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
                 beam = CAPABILITY_REGISTRY["channel_beam"]
@@ -710,6 +785,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].event",
                                    "code": "event_not_produced", "message": "Target emission requires the actual item-contact or projectile-damage hit producer."})
             action_code = event.get("actionCode")
+            _validate_hit_target_spawn(event, kind, entities, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             _validate_child_combat(event, "spawn_entity_on_event", kind,
                                    type(action_code) is int and action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"]
                                    and event.get("action") == "spawn_entity_on_event",
@@ -717,6 +793,14 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(action_code, int) or isinstance(action_code, bool) or not 1 <= action_code <= _MAX_EVENT_ACTION_CODE:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].actionCode", "code": "unsupported_opcode", "message": f"Event action opcode must be 1..{_MAX_EVENT_ACTION_CODE}."})
             child = str(event.get("entityId") or "")
+            child_row = next((row for row in entities if row.get("id") == child), {})
+            child_spawn = child_row.get("spawn", {})
+            distribution = child_spawn.get("velocityDistribution", {}) if isinstance(child_spawn, Mapping) else {}
+            if (action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"] and isinstance(distribution, Mapping)
+                    and distribution.get("kind") in {"radial", "disk"}
+                    and (type(event.get("spreadRadians")) not in (int, float) or event["spreadRadians"] != 0)):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].spreadRadians",
+                               "code": "incompatible_param_variant", "message": "A radial/disk child requires exact neutral event spread 0."})
             if child and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].entityId", "code": "missing_entity_reference", "message": f"Unknown event target entity {child!r}."})
 
@@ -848,6 +932,24 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     gameplay_raw = data.get("gameplay")
     gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
+    for requirement in CAPABILITY_REGISTRY["configure_spawn"].requirements:
+        if requirement.kind != "present_params_forbid_item_capability_when_active_spawn":
+            continue
+        ammo = runtime.get("weaponAmmo")
+        if not isinstance(ammo, Mapping) or ammo.get(requirement.other_param) != requirement.equals:
+            continue
+        selected = {binding_target_id(binding) for binding in bindings if isinstance(binding, Mapping)
+                    and str(binding.get("input") or "") in ACTIVE_USE_INPUTS and action_kind(binding) == "spawn_entity"}
+        for index, entity in enumerate(entities):
+            spawn = entity.get("spawn") if isinstance(entity, Mapping) else None
+            if not isinstance(spawn, Mapping) or entity.get("id") not in selected:
+                continue
+            rows = _wire_projection_witness(CAPABILITY_REGISTRY["configure_spawn"].params[requirement.param],
+                                            requirement.param, "spawn", {"spawn": spawn})
+            if any(row.authored_path == name or row.authored_path.startswith(name + ".")
+                   for row in rows for name in requirement.any_of):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].spawn.velocityDistribution",
+                               "code": "incompatible_param_variant", "message": requirement.message})
     if "weaponAmmo" in runtime:
         if not any(isinstance(binding, Mapping) and str(binding.get("input") or "") in ACTIVE_USE_INPUTS
                    and action_kind(binding) == "spawn_entity" for binding in bindings):
