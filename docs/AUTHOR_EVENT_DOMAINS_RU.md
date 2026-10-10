@@ -40,7 +40,7 @@
 
 `score = distance × (1 − bias)`
 
-Для остальных NPC score равен distance. Native selector выбирает минимальный score строго меньше `rangeTiles × 16`. Поэтому range для предыдущей цели является score threshold: предыдущая NPC на расстоянии 100 px с bias 0.9 может выиграть у NPC на 15 px при range 20 px. Это не вероятность повторного попадания и не абсолютный физический радиус поиска.
+Для остальных NPC score равен distance. При `hardRange=false` native selector выбирает минимальный score строго меньше `rangeTiles × 16`. Поэтому soft range для предыдущей цели является score threshold: предыдущая NPC на расстоянии 100 px с bias 0.9 может выиграть у NPC на 15 px при range 20 px. При явно выбранном `hardRange=true` геометрическая граница проверяется до discount; `requireLineOfSight` и `targetPolicy` остаются независимыми решениями Author. Это не вероятность повторного попадания. Текущий firing caller использует `FindFiringTarget`; retained `FindNearestNpc` сохраняет прежний soft-score consumer для других movement paths.
 
 В сохранённом wire допустим прежний **0…1**. Native selector использует `min(bias, 0.9)`, так что старые 0.9, 0.95 и 1 дают одинаковый discount. DTO сохраняет исходное число 0.95/1, а C# execution применяет прежнюю saturation; loader и compiler не переписывают сохранённый документ. Новое значение 0.95 от Author отвергается, а не clamp-ится в 0.9 и не выдаётся за старую запись.
 
@@ -64,9 +64,9 @@ Repair открывает только ошибочный leaf: invalid `maxTarg
 
 `test_author_event_domains.py` проходит registry→provider/cards→validator→compiler receipts→strict wire. Матрицы включают оба event и item/projectile producers, 1/3/12 targets, явные delay/radius/damage значения, forged/missing/duplicate literals, неверный count source/path/domain, malformed fresh inputs, wire с/без receipts и frozen leaf Repair.
 
-`fixtures/event_domain_retained_wire.json` содержит пять неизменённых записей original compiler на `c0a8450`: два radial event и bias 0.9/0.95/1. Каждый wire имеет SHA-256; alias сравнивается с прежними gameplay/runtime payload дословно. Общие historical seed/retained-wire fixtures продолжают проверяться и не переписаны.
+`fixtures/event_domain_retained_wire.json` содержит пять неизменённых записей original compiler на `c0a8450`: два radial event и bias 0.9/0.95/1. Каждый wire имеет SHA-256; alias сравнивается с прежними gameplay/runtime payload дословно. Старый bias=0.9 Author остаётся валидным, но его архивные receipts не содержат пяти новых targeting-neutral omission rows: source-aware audit точно отклоняет эти пять отсутствий. Fresh compile проходит полный audit; test-only projection удаляет лишь объявленные neutral leaves и их receipts, сохраняя архивный wire без изменений. Общие historical seed/retained-wire fixtures продолжают проверяться и не переписаны.
 
-`EngineRuntimeChecks.EventDomains.cs` подготовлен для native проверки двух фактов. Radial check вызывает настоящий `ExecuteAction`/`ApplyDamageToNPC`, сравнивает с native damage control, проверяет исключённый directTarget, сортировку, count, inclusive boundary и NPC вне исходного радиуса, находящуюся рядом с выбранной целью. Bias check читает реальный строгий JSON DTO, вызывает actual `FindNearestNpc` при четырёх ролях, проверяет сохранение 0.95/1, одинаковую saturation и previous target вне физического range. Source gate связывает эти methods с реальными callers; шесть isolated native-source mutations обязаны его нарушить.
+`EngineRuntimeChecks.EventDomains.cs` подготовлен для native проверки двух фактов. Radial check вызывает настоящий `ExecuteAction`/`ApplyDamageToNPC`, сравнивает с native damage control, проверяет исключённый directTarget, сортировку, count, inclusive boundary и NPC вне исходного радиуса, находящуюся рядом с выбранной целью. Bias check читает реальный строгий JSON DTO, вызывает actual `FindNearestNpc` при четырёх ролях, проверяет сохранение 0.95/1, одинаковую saturation и previous target вне физического range. Source gate связывает эти methods с реальными callers, включая текущий `ApplyTargetAndFire → FindFiringTarget`; восемь isolated native-source mutations обязаны его нарушить.
 
 Это method-level checks, не эмуляция полного world/network loop. В среде подготовки **C# build, запуск EngineRuntimeChecks и игровые SP/MP smoke = notRun** из-за отсутствия .NET 8, tModLoader, ParticleLibrary/Luminance. Portable/source проверки не заявляются native execution.
 
@@ -76,5 +76,5 @@ Repair открывает только ошибочный leaf: invalid `maxTarg
 - [`technical_lowering.py`](../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py): scalar projection и source/wire receipt checks.
 - [`wire_validator.py`](../LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py): present saved targeting domain без provenance.
 - [`RuntimeProgramExecutor.cs`](../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs): прежний `ChainDamage` и authority.
-- [`GeneratedProjectile.Executors.cs`](../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs): прежние `ApplyTargetAndFire` и `FindNearestNpc`.
+- [`GeneratedProjectile.Executors.cs`](../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs): current `ApplyTargetAndFire`/`FindFiringTarget` и retained `FindNearestNpc`.
 - [`RuntimeProgramSpec.cs`](../ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs): прежние action 4 и обе DTO границы bias 0…1.

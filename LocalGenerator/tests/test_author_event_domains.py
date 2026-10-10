@@ -151,7 +151,22 @@ def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_deliver
         assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
         assert json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")) == encoded
         source_audit = audit_compiler_receipts(receipts, authored_document=row["source"], final_document=wire)
-        assert source_audit["ok"] == (row["case"] == "bias-0.9")
+        assert not source_audit["ok"]
+        if row["case"] == "bias-0.9":
+            # A6 makes five formerly absent targeting neutrals explicit. The
+            # frozen wire remains admitted wire-only, but cannot authenticate a
+            # complete current compilation until those exact receipts exist.
+            assert validate_runtime_program(row["source"])["ok"]
+            violations = source_audit["violations"]
+            assert len(violations) == 5
+            assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
+            assert {v["authoredPath"].rsplit(".", 1)[1] for v in violations} == {
+                "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"}
+            from sentry_contract_checks import without_declared_targeting_neutrals
+            fresh, _ = compile_and_check(deepcopy(row["source"]))
+            projected = without_declared_targeting_neutrals(fresh)
+            assert projected["runtimeProgram"] == wire["runtimeProgram"]
+            assert projected["gameplay"] == wire["gameplay"]
         if row["case"].startswith("on_"):
             source = deepcopy(row["source"])
             call = witness(source)

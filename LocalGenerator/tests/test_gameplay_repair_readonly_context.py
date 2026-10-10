@@ -205,7 +205,16 @@ def _repair_with_response(monkeypatch, item, patch, format_mode, *, out_of_scope
             payload = _encode_nullable_fixture(payload, author_item_repair_response_schema())
             validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
             if out_of_scope_response:
-                # Deliberately simulate a provider violating the request grammar.
+                # These deliberately foreign rows are literal hostile edits, not
+                # nullable scaffolding from the scoped provider grammar. Restore
+                # their original sparse shape instead of inventing null choices
+                # the actual request did not offer and cannot decode.
+                scope = json.loads(request["messages"][1]["content"])["repairScope"]
+                mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
+                payload["callsUpsert"] = [
+                    encoded if original["id"] in mutable_ids else copy.deepcopy(original)
+                    for original, encoded in zip(patch["callsUpsert"], payload["callsUpsert"])
+                ]
                 # Even then, a useful allowed leaf survives frozen extra rewrites.
                 assert not validator.is_valid(payload)
             else:
