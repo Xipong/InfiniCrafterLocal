@@ -158,6 +158,16 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                     errors.extend(row for row in branch_results[selected[0]]
                                   if all(row in branch_results[index] for index in selected[1:]))
                 elif not selected:
+                    # A numeric constraint in a closed action variant must not
+                    # hide its exact leaf when string discriminators uniquely
+                    # identify the branch. This selects diagnostics, not values.
+                    identity = {key for key in discriminators
+                                if all(isinstance(paths[key], str) for paths in const_paths)}
+                    identity_selected = [index for index, paths in enumerate(const_paths)
+                                         if identity and all(_authored_const_matches(value, key, paths[key]) for key in identity)]
+                    if len(identity_selected) == 1:
+                        errors.extend(branch_results[identity_selected[0]][: max(0, limit - len(errors))])
+                        return errors[:limit]
                     present = {key for key in discriminators if _authored_const_value(value, key)[0]}
                     partial = [index for index, paths in enumerate(const_paths)
                                if present and all(_authored_const_matches(value, key, paths[key]) for key in present)]

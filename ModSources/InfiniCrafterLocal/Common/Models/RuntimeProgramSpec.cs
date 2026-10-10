@@ -33,6 +33,21 @@ public sealed class RuntimeProgramSpec
     public RuntimeBindingSpec[] Bindings { get; set; } = Array.Empty<RuntimeBindingSpec>();
     public RuntimeItemUseSpec ItemUse { get; set; } = new();
     public RuntimeItemContactSpec ItemContact { get; set; } = new();
+    private RuntimeItemEffectGroupSpec[]? _effectGroups;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeItemEffectGroupSpec[]? EffectGroups
+    {
+        get => _effectGroups;
+        set => _effectGroups = value is { Length: > 0 and <= 48 } ? value
+            : throw new InvalidDataException("present effectGroups requires 1..48 named groups");
+    }
+    private string? _heldEffectGroupId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? HeldEffectGroupId
+    {
+        get => _heldEffectGroupId;
+        set => _heldEffectGroupId = RuntimeItemEffectGroupSpec.RequireId(value);
+    }
     private RuntimeWeaponAmmoSpec? _weaponAmmo;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeWeaponAmmoSpec? WeaponAmmo
@@ -94,6 +109,14 @@ public sealed class RuntimeProgramSpec
         if (PrimaryOwner != expectedOwner)
             throw new InvalidDataException($"runtimeProgram.primaryOwner must be '{expectedOwner}' for primary entity '{PrimaryEntityId}'");
 
+        var groupIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RuntimeItemEffectGroupSpec? group in EffectGroups ?? Array.Empty<RuntimeItemEffectGroupSpec>())
+        {
+            if (group is null) throw new InvalidDataException("effectGroups contains null");
+            group.NormalizeAndValidate();
+            if (!groupIds.Add(group.Id)) throw new InvalidDataException($"duplicate effect group '{group.Id}'");
+        }
+        var usedGroups = new HashSet<string>(StringComparer.Ordinal);
         var bindingIds = new HashSet<string>(StringComparer.Ordinal);
         var exclusiveInputs = new HashSet<string>(StringComparer.Ordinal);
         foreach (RuntimeBindingSpec? binding in Bindings)
@@ -105,6 +128,11 @@ public sealed class RuntimeProgramSpec
                 throw new InvalidDataException($"duplicate runtime binding id '{binding.Id}'");
             string bindingTarget = binding.UsePolicy.Action.TargetId;
             string bindingAction = binding.UsePolicy.Action.Kind;
+            if (binding.UsePolicy.Action.EffectGroupId is string groupId)
+            {
+                if (!groupIds.Contains(groupId)) throw new InvalidDataException($"binding '{binding.Id}' selects missing effect group '{groupId}'");
+                usedGroups.Add(groupId);
+            }
             if (!entityIds.Contains(bindingTarget))
                 throw new InvalidDataException($"binding '{binding.Id}' targets unknown entity '{bindingTarget}'");
             if (RuntimeBindingSpec.IsExclusiveInput(binding.Input) && !exclusiveInputs.Add(binding.Input))
@@ -127,6 +155,15 @@ public sealed class RuntimeProgramSpec
             if (binding.Role != expectedRole)
                 throw new InvalidDataException($"binding '{binding.Id}' role must be '{expectedRole}' for target '{bindingTarget}'");
         }
+
+        if (HeldEffectGroupId is string heldId)
+        {
+            if (TryGetEffectGroup(heldId)?.IsGeneratedBuffOnly != true)
+                throw new InvalidDataException("heldEffectGroupId must select a generated-buff-only group");
+            usedGroups.Add(heldId);
+        }
+        if (!groupIds.SetEquals(usedGroups))
+            throw new InvalidDataException("every named effect group requires an exact active binding or held consumer");
 
         bool hasPlaceUse = Bindings.Any(x =>
             x is not null
@@ -235,6 +272,9 @@ public sealed class RuntimeProgramSpec
 
     public RuntimeBindingSpec? BindingForInput(string input)
         => Bindings.FirstOrDefault(x => x is not null && string.Equals(x.Input, input, StringComparison.Ordinal));
+
+    public RuntimeItemEffectGroupSpec? TryGetEffectGroup(string? id)
+        => id is null ? null : EffectGroups?.FirstOrDefault(x => x is not null && x.Id == id);
 }
 
 public sealed class RuntimeLimitsSpec
@@ -393,6 +433,18 @@ public sealed class RuntimeBindingUsePolicySpec
     public RuntimeBindingActionSpec Action { get; set; } = new();
     public int StackCost { get; set; }
     public bool ContactDamage { get; set; }
+    private int? _stackConsumeChancePercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StackConsumeChancePercent
+    {
+        get => _stackConsumeChancePercent;
+        set
+        {
+            if (value is null || value < 0 || value > 100)
+                throw new InvalidDataException("stackConsumeChancePercent must be an explicit integer 0..100");
+            _stackConsumeChancePercent = value;
+        }
+    }
 
     public void NormalizeAndValidate(string input)
     {
@@ -400,6 +452,11 @@ public sealed class RuntimeBindingUsePolicySpec
         Action.NormalizeAndValidate();
         if (StackCost is not (0 or 1))
             throw new InvalidDataException("binding usePolicy.stackCost must be exactly 0 or 1");
+        if (StackConsumeChancePercent is int chance
+            && (chance < 0 || chance > 100 || StackCost != 1
+                || input is not (RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse)
+                || Action.Kind == RuntimeBindingAction.PlaceItem))
+            throw new InvalidDataException("stackConsumeChancePercent requires 0..100 and an active non-placement stackCost=1 binding");
         if (Action.Kind == RuntimeBindingAction.PlaceItem)
         {
             if (StackCost != 1)
@@ -418,6 +475,13 @@ public sealed class RuntimeBindingActionSpec
     public string Kind { get; set; } = "";
     public string TargetId { get; set; } = "";
     public RuntimePlacementSpec? Placement { get; set; }
+    private string? _effectGroupId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectGroupId
+    {
+        get => _effectGroupId;
+        set => _effectGroupId = RuntimeItemEffectGroupSpec.RequireId(value);
+    }
 
     public void NormalizeAndValidate()
     {
@@ -425,6 +489,8 @@ public sealed class RuntimeBindingActionSpec
         TargetId = RuntimeText.Id(TargetId);
         if (!RuntimeBindingAction.IsKnown(Kind))
             throw new InvalidDataException($"unknown runtime binding action '{Kind}'");
+        if (EffectGroupId is not null && Kind != RuntimeBindingAction.ApplyItemEffects)
+            throw new InvalidDataException("only apply_item_effects may select an effectGroupId");
         if (Kind == RuntimeBindingAction.PlaceItem)
         {
             if (Placement is null)
@@ -520,6 +586,13 @@ public sealed class RuntimeEntitySpec
     public RuntimeDamageSpec Damage { get; set; } = new();
     public int LifetimeTicks { get; set; } = 1;
     public RuntimeHitboxSpec Hitbox { get; set; } = new();
+    private RuntimeHitboxCurveSpec? _hitboxCurve;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHitboxCurveSpec? HitboxCurve
+    {
+        get => _hitboxCurve;
+        set => _hitboxCurve = value ?? throw new InvalidDataException("present hitboxCurve cannot be null");
+    }
     public RuntimeCollisionSpec Collision { get; set; } = new();
     public RuntimeMovementSpec Movement { get; set; } = new();
     public RuntimeControllerSpec Controller { get; set; } = new();
@@ -567,7 +640,7 @@ public sealed class RuntimeEntitySpec
         if (Kind == RuntimeEntityKind.ItemBody)
         {
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
-                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured
+                || HitboxCurve is not null || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
@@ -580,6 +653,13 @@ public sealed class RuntimeEntitySpec
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
+            if (HitboxCurve is { } curve)
+            {
+                curve.Validate();
+                if (Controller.Code == RuntimeControllerCode.ChannelBeam || Movement.Code == 18
+                    || curve.MirrorToSprite && Movement.Code == 15)
+                    throw new InvalidDataException("hitboxCurve cannot coexist with beam/whip collision or a second mirrored sprite-scale owner");
+            }
             bool requiresPositionDriver = Kind is RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile;
             bool controllerOwnsPosition = Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease or RuntimeControllerCode.TargetAndFire;
             if (requiresPositionDriver && !Movement.IsConfigured && !controllerOwnsPosition)
@@ -749,6 +829,52 @@ public sealed class RuntimeDamageSpec
         _ = TerrariaRuntimeVocabulary.ResolveDamageClass(DamageClass);
         Damage = Math.Clamp(Damage, 0, 2000);
         Knockback = Math.Clamp(Knockback, 0f, 20f);
+    }
+}
+
+public sealed class RuntimeHitboxCurveSpec
+{
+    public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public StartScaleJsonConverter() : base("0.25", "8") { }
+    }
+    public sealed class EndScaleJsonConverter : RawJsonFloatDomainConverter
+    {
+        public EndScaleJsonConverter() : base("0.25", "8") { }
+    }
+
+    [JsonConverter(typeof(StartScaleJsonConverter))]
+    [JsonRequired] public float StartScale { get; set; }
+    [JsonConverter(typeof(EndScaleJsonConverter))]
+    [JsonRequired] public float EndScale { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    [JsonRequired] public string Curve { get; set; } = "";
+    [JsonRequired] public bool MirrorToSprite { get; set; }
+
+    public void Validate()
+    {
+        RequireRange(StartScale, 0.25f, 8f);
+        RequireRange(EndScale, 0.25f, 8f);
+        RequireRange(StartDelayTicks, 0, 21600);
+        RequireRange(DurationTicks, 1, 21600);
+        if (Curve is not ("linear" or "exponential"))
+            throw new InvalidDataException("hitboxCurve.curve must be linear or exponential");
+    }
+
+    private static void RequireRange(float value, float low, float high)
+    {
+        if (!float.IsFinite(value) || value < low || value > high)
+            throw new InvalidDataException("hitboxCurve fields require exact finite registry bounds");
+    }
+
+    public float ScaleAt(int activeUpdates, int updatesPerWorldTick)
+    {
+        double activeTicks = Math.Max(0, activeUpdates) / (double)Math.Max(1, updatesPerWorldTick);
+        double progress = Math.Clamp((activeTicks - StartDelayTicks) / DurationTicks, 0d, 1d);
+        return Curve == "exponential"
+            ? (float)(StartScale * Math.Pow(EndScale / (double)StartScale, progress))
+            : (float)(StartScale + (EndScale - StartScale) * progress);
     }
 }
 

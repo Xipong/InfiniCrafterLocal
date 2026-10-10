@@ -5,7 +5,7 @@
 
 Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v4` / `infini.runtime-program.wire.v3`.
 
-Inventory: **58 public capabilities**, **2 internal retained entries**, **7 entity kinds**, **4 inputs**, **5 binding actions**, **10 events**. Machine audit: **85/100**, errors=1, warnings=0.
+Inventory: **58 public capabilities**, **2 internal retained entries**, **7 entity kinds**, **4 inputs**, **5 binding actions**, **10 events**. Machine audit: **100/100**, errors=0, warnings=0.
 
 **Навигация:** [классификация](#classification) · [entities](#entities) · [inputs/actions](#bindings) · [events](#events) · [capabilities](#capabilities) · [полнота](#coverage) · [обновление](#refresh).
 
