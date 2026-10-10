@@ -179,6 +179,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         name: _clamp_bounds(text, name, constants)
         for name in (
             "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
+            "RuntimeTurnModifierSpec", "RuntimeSpeedModifierSpec", "RuntimeHomingModifierSpec", "RuntimeNpcAttractionSpec", "RuntimeVisualScaleCurveSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
             "RuntimeEventActionSpec", "RuntimeItemContactSpec",
         )
@@ -190,6 +191,11 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
         "set_projectile_hitbox_curve": ("RuntimeHitboxCurveSpec", ""),
+        "set_projectile_turn_modifier": ("RuntimeTurnModifierSpec", ""),
+        "set_projectile_speed_modifier": ("RuntimeSpeedModifierSpec", ""),
+        "set_projectile_homing_modifier": ("RuntimeHomingModifierSpec", ""),
+        "attract_npcs_while_active": ("RuntimeNpcAttractionSpec", ""),
+        "set_projectile_visual_scale_curve": ("RuntimeVisualScaleCurveSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
         "spawn_over_target": ("RuntimeOverTargetSpec", ""),
         "emit_light_while_active": ("RuntimeLightSpec", ""),

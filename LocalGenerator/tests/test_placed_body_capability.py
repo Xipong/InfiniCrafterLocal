@@ -332,9 +332,11 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
     for name in baseline:
         compiled = without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name))))
         checks = compiled["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        # Accepted ammo baseline already owns its registry counters. Reverse
-        # only the new curve's declared requirements, preserving frozen hashes.
-        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        # The new capability adds registry checks even when it is absent. Preserve
+        # the frozen full-document baseline, adjusting only that proven counter.
+        new_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                    "set_projectile_homing_modifier", "attract_npcs_while_active", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+        assert checks["requirements"] == 29 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in new_caps)
         checks["requirements"] = 29
         actual[name] = hashlib.sha256(json.dumps(compiled, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline

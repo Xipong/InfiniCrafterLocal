@@ -6,11 +6,13 @@ This module knows visual roles and sprite constraints only. It never reads or
 infers a weapon family, attack shape, or gameplay topology from prose.
 """
 
+import copy
 import json
 import re
 from typing import Any, Mapping
 
 from infini_local.core.llm_stage_messages import generation_art_direction
+from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
 
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
@@ -155,8 +157,9 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
                 scale_row["hitbox.drawScale"] = hitbox["drawScale"]
             if "scale" in visual:
                 scale_row["visual.scale"] = visual["scale"]
-            if "hitboxCurve" in row:
-                scale_row["hitboxCurve"] = row["hitboxCurve"]
+            for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
+                if field in row:
+                    scale_row[field] = copy.deepcopy(row[field])
             shared.append(scale_row)
         if shared:
             facts["sharedEntityMultipliers"] = shared
@@ -167,8 +170,9 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             multipliers["hitbox.drawScale"] = hitbox["drawScale"]
         if "scale" in owner:
             multipliers["visual.scale"] = owner["scale"]
-        if "hitboxCurve" in entity:
-            facts["hitboxCurve"] = entity["hitboxCurve"]
+        for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
+            if field in entity:
+                facts[field] = copy.deepcopy(entity[field])
     if multipliers:
         facts["multipliers"] = multipliers
     grip_instruction = (
@@ -183,9 +187,9 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         "Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. "
         "Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; "
         "held item uses R/C times adjusted item scale (gameplay.itemScale included once). "
-        "Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true: "
-        "the complete product is hitbox.drawScale times visual.scale times curveScale(active age). Otherwise its existing clamp(Projectile.scale,0.1,8) remains. "
-        "Do not add a curve, change accepted endpoints or choose mirror in the image stage. VFX body copies retain their separate published scale rules. "
+        "Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: "
+        "the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. "
+        "Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. "
         "forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. "
         "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. "
         "Do not omit or merge authored parts to simplify the sprite."
