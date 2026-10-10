@@ -20,7 +20,7 @@ Python base: [`LocalGenerator/infini_local/`](LocalGenerator/infini_local/FOLDER
 | Numeric parent corridor | `pipelines/combine_balance.py` |
 | Profile lease/provider/Responses | `pipelines/llm_transport.py`, `core/llm_config.py` |
 | Visual + PNG delivery | `pipelines/visual_generation_pipeline.py`, `visual_delivery_gate.py`; [image owner](docs/IMAGE_ASSET_LIFECYCLE_RU.md) |
-| VFX slots/PNG dependencies | `core/vfx_manifest.py`, `vfx_material_contract.py` |
+| VFX slots/PNG dependencies | `core/vfx_manifest.py`, `vfx_material_contract.py`; [точные sound samples/controls](docs/VFX_SOUND_PALETTE_RU.md) |
 | World recipes/health/traces | `storage/world_recipe_runtime.py`, `world_storage.py`, `trace_runtime.py` |
 | C# executable completeness | `qa/primitive_loss_audit.py`; [QA owners](LocalGenerator/infini_local/qa/FOLDER_DOCS_RU.md), [test owners](docs/TEST_CONTRACT_OWNERS_RU.md) |
 

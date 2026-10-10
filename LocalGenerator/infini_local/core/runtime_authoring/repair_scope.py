@@ -1227,7 +1227,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     if code.startswith("shape_") and not (code == "shape_one_of" and has_precise_descendant):
                         grant(node_namespace, node_id, "")
                 elif (relative := json_path_relative(path, root_prefix)) is not None:
-                    if not (relative == "params" and code in {"empty_component", "inert_component"}):
+                    has_precise_descendant = any(json_path_relative(other, path) for other in error_paths_all)
+                    if not (relative == "params" and code in {"empty_component", "inert_component"}) and not (
+                        code == "shape_one_of" and has_precise_descendant
+                    ):
                         grant(node_namespace, node_id, relative)
             dependency_only_codes = {
                 "binding_dependency", "missing_capability_dependency", "missing_capability_group",
