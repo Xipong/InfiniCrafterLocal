@@ -153,7 +153,7 @@ public sealed partial class GeneratedProjectile
     public override void ModifyDamageHitbox(ref Rectangle hitbox)
     {
         if (_entity is null) return;
-        float scale = _entity.Hitbox.HitboxScale;
+        float scale = _entity.Hitbox.HitboxScale * HitboxCurveScale();
         if (Math.Abs(scale - 1f) < 0.001f) return;
         int width = Math.Max(2, (int)MathF.Round(hitbox.Width * scale));
         int height = Math.Max(2, (int)MathF.Round(hitbox.Height * scale));

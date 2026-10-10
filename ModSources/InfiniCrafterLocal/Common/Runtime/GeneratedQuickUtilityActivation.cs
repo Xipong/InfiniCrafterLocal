@@ -41,8 +41,8 @@ internal static class GeneratedQuickUtilityActivation
     private static readonly Dictionary<ulong, Local> local = new();
 
     internal static bool IsEligible(GeneratedItemData data)
-        => data.Gameplay.GeneratedBuff?.HasAnyEffect == true
-            && (data.Gameplay.HealLife > 0 || data.Gameplay.HealMana > 0)
+        => data.PrimaryUseEffects.GeneratedBuff?.HasAnyEffect == true
+            && (data.PrimaryUseEffects.HealLife > 0 || data.PrimaryUseEffects.HealMana > 0)
             && data.RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse)?.UsePolicy.Action.Kind
                 == RuntimeBindingAction.ApplyItemEffects;
 
@@ -100,7 +100,7 @@ internal static class GeneratedQuickUtilityActivation
         => slot < 58 ? slot < player.inventory.Length ? player.inventory[slot] : null
             : slot < 98 && player.useVoidBag() ? player.bank4.item[slot - 58] : null;
     private static bool HasResource(GeneratedItemData data, byte kind)
-        => kind == 1 ? data.Gameplay.HealLife > 0 && data.Gameplay.Potion : data.Gameplay.HealMana > 0;
+        => kind == 1 ? data.PrimaryUseEffects.HealLife > 0 && data.PrimaryUseEffects.Potion : data.PrimaryUseEffects.HealMana > 0;
     private static bool Fresh(ulong tick)
         => unchecked((uint)(Main.GameUpdateCount - (uint)tick)) <= LifetimeTicks;
     private static bool Valid(Identity id)
@@ -209,7 +209,7 @@ internal static class GeneratedQuickUtilityActivation
             // now would cancel legitimate native final-stack consumption. A ticket
             // is a short-lived authorization for that occurrence, not a new Item.
             var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-            GeneratedBuffSpec authored = data.Gameplay.GeneratedBuff;
+            GeneratedBuffSpec authored = data.PrimaryUseEffects.GeneratedBuff!;
             int elapsed = (int)unchecked((uint)(Main.GameUpdateCount - (uint)pending.Tick));
             int remaining = authored.DurationTicks - elapsed;
             if (remaining <= 0) return;

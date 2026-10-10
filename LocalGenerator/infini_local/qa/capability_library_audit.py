@@ -40,6 +40,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "present_params_forbid_item_capability_when_active_spawn",
     "referenced_param_presence_requires_value",
     "param_requires_target_kind",
+    "capability_absent",
     "capability_present",
     "capability_group_present",
     "item_capability_param",
@@ -169,6 +170,12 @@ def _clamp_bounds(text: str, class_name: str, constants: Mapping[str, float]) ->
         hi = _number(raw_max, constants)
         if lo is not None and hi is not None:
             out[name] = (lo, hi)
+    # New optional DTO components reject invalid fields instead of clamping.
+    # Read their executable RequireRange calls with the same parity contract.
+    for name, raw_min, raw_max in re.findall(r"RequireRange\((\w+),\s*([^,]+),\s*([^\)]+)\)", block):
+        lo, hi = _number(raw_min, constants), _number(raw_max, constants)
+        if lo is not None and hi is not None:
+            out[name] = (lo, hi)
     return out
 
 
@@ -195,7 +202,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     class_bounds = {
         name: _clamp_bounds(text, name, constants)
         for name in (
-            "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec",
+            "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
             "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
         )
@@ -206,6 +213,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
         "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
+        "set_projectile_hitbox_curve": ("RuntimeHitboxCurveSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
         "spawn_over_target": ("RuntimeOverTargetSpec", ""),
         "emit_light_while_active": ("RuntimeLightSpec", ""),
@@ -390,7 +398,7 @@ def capability_library_audit() -> dict[str, Any]:
                             if name not in required_cap.params:
                                 error("unknown_reference_requirement_exact_param", f"{base}.requirements", name)
             for name in requirement.any_of:
-                if requirement.kind == "capability_group_present" and name not in capability_names:
+                if requirement.kind in {"capability_group_present", "capability_absent"} and name not in capability_names:
                     error("unknown_requirement_group_member", f"{base}.requirements", name)
             if requirement.kind in {"at_least_one_param_nonzero", "nonneutral_params_require_param", "nonneutral_params_require_exact_param", "positive_param_requires_param"}:
                 if not requirement.nonzero_params:

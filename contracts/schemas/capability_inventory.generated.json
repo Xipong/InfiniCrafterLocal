@@ -591,11 +591,25 @@
       "finalWirePaths": [
         "gameplay.healLife",
         "gameplay.healMana",
-        "gameplay.potion"
+        "gameplay.potion",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].healLife",
+        "runtimeProgram.effectGroups[].healMana",
+        "runtimeProgram.effectGroups[].potion"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
+        },
         "healLife": {
           "enum": [],
           "kind": "integer",
@@ -677,7 +691,10 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "gameplay.extraBuffs[].buffCode",
-        "gameplay.extraBuffs[].buffTime"
+        "gameplay.extraBuffs[].buffTime",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffCode",
+        "runtimeProgram.effectGroups[].extraBuffs[].buffTime"
       ],
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -701,6 +718,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -745,7 +772,17 @@
         "gameplay.generatedBuff.movementSpeed",
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
-        "gameplay.generatedBuff.lifeRegen"
+        "gameplay.generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
+        "runtimeProgram.effectGroups[].generatedBuff.emitLightStrength",
+        "runtimeProgram.effectGroups[].generatedBuff.lightColorName",
+        "runtimeProgram.effectGroups[].generatedBuff.oreSenseRadiusTiles",
+        "runtimeProgram.effectGroups[].generatedBuff.movementSpeed",
+        "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
+        "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegen"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -759,6 +796,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         },
         "jumpSpeedBonusPxPerTick": {
           "enum": [],
@@ -873,6 +920,47 @@
           "target": "same_target"
         }
       ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "refresh_generated_effect_group_while_held",
+      "componentSlot": "held_generated_buff",
+      "conflicts": [],
+      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "decision": "expose",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.heldEffectGroupId"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "item_effect_group_reference",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restored explicit held generated utility buff refresh",
+      "purpose": "Refresh the one named generated utility buff group every world tick while this exact item is held. Its explicit duration controls lingering after release. The group may contain only apply_generated_buff_on_use; no healing, teleport, native buff or invisible projectile is inferred.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1391,7 +1479,12 @@
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
         "gameplay.mobilityCooldownTicks",
-        "gameplay.mobilitySafeTileOnly"
+        "gameplay.mobilitySafeTileOnly",
+        "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].mobilityMode",
+        "runtimeProgram.effectGroups[].mobilityRangeTiles",
+        "runtimeProgram.effectGroups[].mobilityCooldownTicks",
+        "runtimeProgram.effectGroups[].mobilitySafeTileOnly"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -1405,6 +1498,16 @@
           "required": true,
           "semanticType": "ticks",
           "units": "ticks"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "item_effect_group_identity",
+          "units": ""
         },
         "mode": {
           "enum": [
@@ -3091,6 +3194,138 @@
       "purpose": "Set projectile collision box and draw scale.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_hitbox_curve",
+      "componentSlot": "hitbox_curve",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "decision": "expose",
+      "dependencies": [
+        "set_projectile_hitbox"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].hitboxCurve.startScale",
+        "runtimeProgram.entities[].hitboxCurve.endScale",
+        "runtimeProgram.entities[].hitboxCurve.startDelayTicks",
+        "runtimeProgram.entities[].hitboxCurve.durationTicks",
+        "runtimeProgram.entities[].hitboxCurve.curve",
+        "runtimeProgram.entities[].hitboxCurve.mirrorToSprite"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "curve": {
+          "enum": [
+            "linear",
+            "exponential"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "endScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        },
+        "mirrorToSprite": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "startDelayTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "ticks"
+        },
+        "startScale": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 8,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "dimensionless multiplier"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "restored explicit active-age damage rectangle growth; legacy movement15 visual scale no longer implies collision",
+      "purpose": "Scale the native rectangular damage hitbox along an explicit active-age curve, independently of sprite/VFX size. Start/end are multipliers on set_projectile_hitbox.hitboxScale. Active world ticks begin after spawn activation delay; extraUpdates changes sample frequency, not duration. Optional visual coupling is an explicit mirrorToSprite choice. Beam and whip line geometry are excluded.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "set_projectile_hitbox",
+          "kind": "capability_present",
+          "message": "A hitbox curve multiplies the same entity's explicit static hitbox.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "channel_beam",
+            "move_whip_lash"
+          ],
+          "kind": "capability_absent",
+          "message": "Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "move_expanding_wave"
+          ],
+          "equals": true,
+          "kind": "capability_absent",
+          "message": "mirrorToSprite=true owns dynamic sprite scale; move_expanding_wave is a second owner. Disable the mirror or choose one scale owner.",
+          "param": "mirrorToSprite",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [

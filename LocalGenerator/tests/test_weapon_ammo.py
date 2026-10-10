@@ -101,12 +101,14 @@ def test_legacy_complete_wire_changes_only_the_two_declared_registry_audit_count
         from beam_contract_checks import without_declared_beam_neutrals
         from sentry_contract_checks import without_declared_targeting_neutrals
         final = compile_runtime_program(build_runtime_fixture(name))
-        assert final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]["requirements"] == 55
+        assert final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]["requirements"] == (
+            55 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        )
         final = historical_spawn_velocity_wire(historical_child_combat_wire(
             without_declared_targeting_neutrals(without_declared_beam_neutrals(final))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29
+        assert checks["requirements"] == 29 + len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
         checks["exclusiveGroups"] = ["controller", "movement"]
         checks["requirements"] = 28
         actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
