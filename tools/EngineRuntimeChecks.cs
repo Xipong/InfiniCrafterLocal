@@ -65,6 +65,8 @@ internal static partial class EngineRuntimeChecks
             ("VFX explicit sound strict DTO and pitch interval", VfxSoundControlsStrictDtoAndPitchInterval),
             ("VFX explicit sound owns pitch and preserves native policies", VfxSoundControlsOwnPitchAndPreserveNativePolicies),
             ("quality250 NativeDirectUseStackCostIsLiteralUnderSaving", NativeDirectUseStackCostIsLiteralUnderSaving),
+            ("own-stack chance one completed activation", NativeOwnStackChanceUsesOneCompletedActivation),
+            ("own-stack chance placement isolation", OwnStackChanceRejectsPlacementAndPassiveDtos),
             ("quality250 NativeQuickHealStackCostUsesPrimaryUnderSaving", NativeQuickHealStackCostUsesPrimaryUnderSaving),
             ("RT02 NativeQuickUtilityOpenedVoidPrerequisite", RT02NativeQuickUtilityOpenedVoidPrerequisite),
             ("RT02 NativeQuickUtilityFreshInventoryAndVoidWitness", RT02NativeQuickUtilityFreshInventoryAndVoidWitness),
