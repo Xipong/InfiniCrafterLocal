@@ -828,6 +828,25 @@
   "globalLowerers": [
     {
       "addsDesignChoice": false,
+      "equivalence": "literal optional authored probability on the same exact binding identity",
+      "id": "binding_stack_chance_identity",
+      "inputs": [
+        "runtimeProgram.bindings[].id",
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"
+      ],
+      "preserves": [
+        "binding identity",
+        "explicit zero",
+        "probability",
+        "absence",
+        "placement escrow"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
       "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
       "id": "entity_kind_to_visual_role",
       "inputs": [

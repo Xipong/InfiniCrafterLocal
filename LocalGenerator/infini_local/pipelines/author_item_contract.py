@@ -59,6 +59,7 @@ def _binding_prompt_shape_card() -> dict[str, Any]:
                 "placementCallId": "include only for place_item; otherwise omit",
             },
             "stackCost": "exact integer 0 or 1 allowed by the selected input/action",
+            "stackConsumeChancePercent": "optional integer 0..100, only active non-placement stackCost=1; omission keeps 100 percent. Own-stack debit after the completed use, never ammo or placement saving",
             "contactDamage": (
                 "boolean body-hitbox lane for this active use; independent from action/target, so "
                 "spawn_entity + true means item-body contact and projectile spawn on the same use; "

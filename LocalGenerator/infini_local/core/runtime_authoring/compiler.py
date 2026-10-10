@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring.technical_lowering import (
     primary_binding_role_receipt,
     primary_owner_for_kind,
     primary_owner_receipt,
+    stack_chance_receipt,
 )
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH,
@@ -441,6 +442,11 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             final_index=final_index,
             role=binding["role"],
         ))
+        if "stackConsumeChancePercent" in binding["usePolicy"]:
+            ctx.receipts.append(stack_chance_receipt(
+                source_index=source_index, final_index=final_index,
+                value=binding["usePolicy"]["stackConsumeChancePercent"],
+            ))
         if action_kind(authored_binding) == "place_item":
             call = placement_calls_by_id[placement_call_id(authored_binding)]
             source_call_index = int(call["_sourceIndex"])

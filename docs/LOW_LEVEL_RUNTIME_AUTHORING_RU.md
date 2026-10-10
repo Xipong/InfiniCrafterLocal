@@ -28,6 +28,11 @@ Item graphic/body-contact representation принадлежит `item_body`. Pro
 
 `stackCost=1` расходует **целую единицу** generated item на active use; projectile return не возвращает предмет и не является hidden charge counter. Reusable throw выбирает `0`. `place_item` требует `1`; предмет escrowed в world placement ledger и возвращается тем же generated item при сломе, не «навсегда расходуется». Reusable hybrid с placement и active `spawn_entity/use_item_body` при `stackCost=0` требует `maxStack=1`: одна durable вещь меняет inventory/placed form. One-shot non-placement use с cost `1` не подпадает под этот конкретный maxStack rule.
 
+Явная optional `stackConsumeChancePercent` (0..100) разрешена только active non-placement
+binding с `stackCost=1`: вероятность применяется после completed use. Отсутствие
+сохраняет deterministic расход; placement/аммо не затрагиваются. Hybrid с шансом
+сохранения собственного стека также требует `maxStack=1`. [Точные receipt/lifecycle правила](OWN_STACK_CHANCE_RU.md).
+
 <a id="construction"></a>
 ## Прямое построение, не procedural self-check
 

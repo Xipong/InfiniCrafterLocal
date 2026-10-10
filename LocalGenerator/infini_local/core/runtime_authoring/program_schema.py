@@ -88,7 +88,7 @@ def _binding_action_schema(action_name: str) -> dict[str, Any]:
     }
 
 
-def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]:
+def _binding_variant_schema(input_name: str, action_name: str, cost: int | None = None) -> dict[str, Any]:
     active_use = input_name in {"primary_use", "alternate_use"}
     may_contact = active_use and action_name != "place_item"
     return {
@@ -105,11 +105,15 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
                     "stackCost": (
                         {"const": 1}
                         if action_name == "place_item"
-                        else ({"type": "integer", "enum": [0, 1]} if active_use else {"const": 0})
+                        else ({"type": "integer", "const": cost} if active_use else {"const": 0})
                     ),
                     "contactDamage": (
                         {"type": "boolean"} if may_contact else {"const": False}
                     ),
+                    **({"stackConsumeChancePercent": {
+                        "type": "integer", "minimum": 0, "maximum": 100,
+                        "description": "Explicit chance of consuming one own stack unit after this use; requires stackCost=1. Omission preserves 100 percent. Never ammo saving or placement escrow.",
+                    }} if may_contact and cost == 1 else {}),
                 },
                 "required": ["action", "stackCost", "contactDamage"],
             },
@@ -121,9 +125,10 @@ def _binding_variant_schema(input_name: str, action_name: str) -> dict[str, Any]
 def binding_schema() -> dict[str, Any]:
     return {
         "oneOf": [
-            _binding_variant_schema(input_name, action_name)
+            _binding_variant_schema(input_name, action_name, cost)
             for input_name, input_spec in INPUT_KIND_REGISTRY.items()
             for action_name in input_spec.allowed_actions
+            for cost in ((0, 1) if input_name in {"primary_use", "alternate_use"} and action_name != "place_item" else (None,))
         ],
     }
 
@@ -461,12 +466,17 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 errors.extend(strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit - len(errors)))
 
     one_of = schema.get("oneOf")
-    if isinstance(one_of, list):
-        branches = [branch for branch in one_of if isinstance(branch, Mapping)]
+    union = one_of if isinstance(one_of, list) else schema.get("anyOf")
+    if isinstance(union, list):
+        exclusive = isinstance(one_of, list)
+        branches = [branch for branch in union if isinstance(branch, Mapping)]
         branch_results = [strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit) for branch in branches]
         matches = [branch for branch in branch_results if not branch]
-        if len(matches) != 1:
-            add("one_of", path, "exactly_one", len(matches))
+        if not matches or (exclusive and len(matches) != 1):
+            if exclusive:
+                add("one_of", path, "exactly_one", len(matches))
+            else:
+                add("any_of", path)
             if not matches and branch_results:
                 const_paths = [_schema_const_paths(branch) for branch in branches]
                 shared = set.intersection(*(set(paths) for paths in const_paths)) if const_paths else set()
@@ -478,11 +488,26 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                 # Non-discriminating consts (e.g. place_item stackCost=1) are
                 # ordinary validation constraints, not evidence of branch identity.
                 selected = [index for index, paths in enumerate(const_paths)
-                            if discriminators and all(_authored_const_matches(value, key, paths[key])
-                                                      for key in discriminators)]
+                            if all(_authored_const_matches(value, key, paths[key])
+                                   for key in discriminators)]
                 if len(selected) == 1:
                     errors.extend(branch_results[selected[0]][: max(0, limit - len(errors))])
+                elif selected:
+                    # Relaxed value variants can share the same registered
+                    # identity. Only expose errors common to every candidate.
+                    errors.extend(row for row in branch_results[selected[0]]
+                                  if all(row in branch_results[index] for index in selected[1:]))
                 elif not selected:
+                    # Numeric variants may reject a value without changing the
+                    # registered string identity (e.g. place_item cost=0). Keep
+                    # that exact branch's value error instead of losing its leaf.
+                    identity = {key for key in discriminators
+                                if all(isinstance(paths[key], str) for paths in const_paths)}
+                    identity_selected = [index for index, paths in enumerate(const_paths)
+                                         if identity and all(_authored_const_matches(value, key, paths[key]) for key in identity)]
+                    if len(identity_selected) == 1:
+                        errors.extend(branch_results[identity_selected[0]][: max(0, limit - len(errors))])
+                        return errors[:limit]
                     present = {key for key in discriminators if _authored_const_value(value, key)[0]}
                     partial = [index for index, paths in enumerate(const_paths)
                                if present and all(_authored_const_matches(value, key, paths[key]) for key in present)]
@@ -511,15 +536,8 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                                 error_path = path
                                 for part in key:
                                     error_path = json_path_child(error_path, part)
-                                add("one_of", error_path)
+                                add("one_of" if exclusive else "any_of", error_path)
                                 break
-        return errors[:limit]
-
-    any_of = schema.get("anyOf")
-    if isinstance(any_of, list):
-        branch_results = [strict_schema_errors(value, branch, path=path, root=root_schema, limit=limit) for branch in any_of if isinstance(branch, Mapping)]
-        if not any(not branch for branch in branch_results):
-            add("any_of", path)
         return errors[:limit]
 
     expected_type = schema.get("type")
@@ -716,6 +734,15 @@ def _repair_structure_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("oneOf", "anyOf", "allOf"):
         if isinstance(out.get(key), list):
             out[key] = [_repair_structure_schema(child) for child in out[key]]
+    # Relaxing numeric constants can make formerly disjoint value branches
+    # overlap. Pre-freeze validation requires a registered structure, while the
+    # original oneOf still enforces uniqueness on the final merged document.
+    if "oneOf" in out:
+        structural_union = out.pop("oneOf")
+        if "anyOf" in out:
+            out.setdefault("allOf", []).append({"anyOf": structural_union})
+        else:
+            out["anyOf"] = structural_union
     return out
 
 

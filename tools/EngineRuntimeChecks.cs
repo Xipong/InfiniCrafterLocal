@@ -49,6 +49,8 @@ internal static partial class EngineRuntimeChecks
             ("VFX sound selector native item projectile consumers", VfxSoundSelectorReachesItemAndProjectileNativeBoundary),
             ("VFX sound selector silence and server controls", VfxSoundSelectorPreservesSilentAndServerControls),
             ("quality250 NativeDirectUseStackCostIsLiteralUnderSaving", NativeDirectUseStackCostIsLiteralUnderSaving),
+            ("own-stack chance one completed activation", NativeOwnStackChanceUsesOneCompletedActivation),
+            ("own-stack chance placement isolation", OwnStackChanceRejectsPlacementAndPassiveDtos),
             ("quality250 NativeQuickHealStackCostUsesPrimaryUnderSaving", NativeQuickHealStackCostUsesPrimaryUnderSaving),
             ("RT02 NativeQuickUtilityOpenedVoidPrerequisite", RT02NativeQuickUtilityOpenedVoidPrerequisite),
             ("RT02 NativeQuickUtilityFreshInventoryAndVoidWitness", RT02NativeQuickUtilityFreshInventoryAndVoidWitness),

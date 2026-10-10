@@ -10,6 +10,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     placeable_input_contract,
     placement_call_id,
     stack_cost,
+    may_retain_stack,
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -858,7 +859,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             row for row in bindings
             if str(row.get("input") or "") in {"primary_use", "alternate_use"}
             and action_kind(row) in {"spawn_entity", "use_item_body"}
-            and stack_cost(row) == 0
+            and may_retain_stack(row)
         ]
         if reusable_active_uses:
             # Durable hybrid: the item is both a reusable tool/weapon and a placeable.

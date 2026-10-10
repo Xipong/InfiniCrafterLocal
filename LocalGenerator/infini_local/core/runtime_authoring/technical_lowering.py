@@ -20,6 +20,7 @@ MIN_EXACT_REPETITION_COMPRESSION = 5
 PRIMARY_BINDING_ROLE_LOWERER_ID = "primary_entity_to_binding_role"
 PRIMARY_OWNER_LOWERER_ID = "primary_entity_kind_to_owner"
 PRIMARY_OWNER_FINAL_PATH = "runtimeProgram.primaryOwner"
+STACK_CHANCE_LOWERER_ID = "binding_stack_chance_identity"
 EXACT_REPETITION_COMPRESSION_POLICY = {
     "kind": "exact_repetition",
     "minimumRepeatedPlacements": MIN_EXACT_REPETITION_COMPRESSION,
@@ -71,6 +72,16 @@ def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
         "status": "technical_projection",
     }
 
+
+def stack_chance_receipt(*, source_index: int, final_index: int, value: int) -> dict[str, Any]:
+    return {
+        "lowererId": STACK_CHANCE_LOWERER_ID,
+        "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
+                          f"runtimeProgram.bindings[{source_index}].usePolicy.stackConsumeChancePercent"],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.stackConsumeChancePercent",
+        "value": value, "status": "technical_projection",
+    }
+
 # These are the only non-capability design-neutral projections. They serialize one
 # authored value into the tModLoader-facing DTO shape or derive an opcode/role from
 # an already-authored exact capability/entity kind. They never choose movement,
@@ -84,6 +95,14 @@ _ITEM_TECHNICAL_OUTPUTS = tuple(dict.fromkeys(
 ))
 
 GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
+    {
+        "id": STACK_CHANCE_LOWERER_ID,
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"],
+        "outputs": ["runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"],
+        "equivalence": "literal optional authored probability on the same exact binding identity",
+        "preserves": ["binding identity", "explicit zero", "probability", "absence", "placement escrow"],
+        "addsDesignChoice": False,
+    },
     {
         "id": "entity_kind_to_visual_role",
         "inputs": ["runtimeProgram.entities[].kind"],
@@ -320,6 +339,24 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
     return "global receipt is not the declared projection of final wire facts" if receipt.get("value") != expected else ""
 
 
+def _stack_chance_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].usePolicy.stackConsumeChancePercent":
+        return "stack chance receipt lacks exact same-binding inputs"
+    binding_id = _final_value(authored, paths[0])
+    value = _final_value(authored, paths[1])
+    if type(value) is not int or not _same_receipt_value(value, receipt.get("value")):
+        return "stack chance receipt differs from the explicit authored probability"
+    if final is not None:
+        bindings = _final_value(final, "runtimeProgram.bindings")
+        matches = [i for i, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                   if isinstance(binding, Mapping) and binding.get("id") == binding_id]
+        if len(matches) != 1 or receipt.get("finalPath") != f"runtimeProgram.bindings[{matches[0]}].usePolicy.stackConsumeChancePercent":
+            return "stack chance receipt differs from its exact binding identity"
+    return ""
+
+
 def audit_compiler_receipts(
     receipts: Iterable[Any], *, authored_document: Mapping[str, Any] | None = None,
     final_document: Mapping[str, Any] | None = None,
@@ -400,7 +437,9 @@ def audit_compiler_receipts(
                 "reason": "final wire value differs from compiler receipt",
             })
         if authored_document is not None:
-            reason = (_visual_receipt_source_error(receipt, authored_document, final_document)
+            reason = (_stack_chance_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == STACK_CHANCE_LOWERER_ID
+                      else _visual_receipt_source_error(receipt, authored_document, final_document)
                       if lowerer_id == "entity_kind_to_visual_role"
                       else _primary_receipt_source_error(receipt, authored_document, final_document))
             if reason:
@@ -610,6 +649,13 @@ def audit_compiler_receipts(
             if len(matching) != 1:
                 violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
                                    "reason": "global projection has no unique compiler receipt"})
+            chance_path = f"runtimeProgram.bindings[{bi}].usePolicy.stackConsumeChancePercent"
+            if _final_value(authored_document, chance_path) is not _MISSING:
+                matching = [r for r in receipt_rows if r.get("lowererId") == STACK_CHANCE_LOWERER_ID
+                            and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", chance_path]]
+                if len(matching) != 1:
+                    violations.append({"lowererId": STACK_CHANCE_LOWERER_ID, "authoredPath": chance_path,
+                                       "reason": "global projection has no unique compiler receipt"})
         entities = _final_value(authored_document, "runtimeProgram.entities")
         for ei, _ in enumerate(entities if isinstance(entities, list) else []):
             source_path = f"runtimeProgram.entities[{ei}].kind"
@@ -626,6 +672,10 @@ def audit_compiler_receipts(
         bindings = _final_value(final_document, "runtimeProgram.bindings")
         expected_globals.extend((PRIMARY_BINDING_ROLE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].role")
                                 for bi, _ in enumerate(bindings if isinstance(bindings, list) else []))
+        expected_globals.extend((STACK_CHANCE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.stackConsumeChancePercent")
+                                for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                                if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                                and "stackConsumeChancePercent" in binding["usePolicy"])
         entities = _final_value(final_document, "runtimeProgram.entities")
         # Isolated capability projectors can supply partial entity DTOs without
         # global fields; require coverage for each actual global output slot.
@@ -747,7 +797,9 @@ def audit_compiler_receipts(
         "schema": "infini.technical-lowering-audit.v1",
         "ok": not violations,
         "violations": violations,
-        "lowerers": list(GLOBAL_TECHNICAL_LOWERINGS),
+        "lowerers": [row for row in GLOBAL_TECHNICAL_LOWERINGS
+                     if row["id"] != STACK_CHANCE_LOWERER_ID
+                     or any(receipt.get("lowererId") == STACK_CHANCE_LOWERER_ID for receipt in receipt_rows)],
         # Keep source-backed compiler serialization unchanged. Only standalone
         # audits need an explicit limit on what their successful check proves.
         **({"authoredSourceChecked": False} if authored_document is None else {}),

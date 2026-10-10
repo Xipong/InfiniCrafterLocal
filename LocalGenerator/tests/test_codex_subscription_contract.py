@@ -272,7 +272,9 @@ def test_subscription_disjoint_union_preserves_registered_variants_and_adversari
             action_kind = branch["properties"]["usePolicy"]["properties"]["action"]["properties"]["kind"]["const"]
             row = {"id": "binding_probe", "input": input_kind, "usePolicy": {
                 "action": {"kind": action_kind, "targetId": "item"},
-                "stackCost": 1 if action_kind == "place_item" else 0, "contactDamage": False}}
+                "stackCost": branch["properties"]["usePolicy"]["properties"]["stackCost"].get("const", 0), "contactDamage": False}}
+            if "stackConsumeChancePercent" in branch["properties"]["usePolicy"]["properties"]:
+                row["usePolicy"]["stackConsumeChancePercent"] = 35
             if action_kind == "place_item":
                 row["usePolicy"]["action"]["placementCallId"] = "place_call"
             selector = "input"

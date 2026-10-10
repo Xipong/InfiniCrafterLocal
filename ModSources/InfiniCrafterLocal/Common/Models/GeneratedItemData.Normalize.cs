@@ -103,10 +103,14 @@ public sealed partial class GeneratedItemData
             || Gameplay.GeneratedBuff?.HasAnyEffect == true
             || !string.IsNullOrWhiteSpace(Gameplay.MobilityMode);
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
+        bool hasPlacement = RuntimeProgram.Bindings.Any(b => b.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem);
 
         foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)
         {
             string action = binding.UsePolicy.Action.Kind;
+            if (hasPlacement && (action is RuntimeBindingAction.SpawnEntity or RuntimeBindingAction.UseItemBody)
+                && binding.UsePolicy.StackConsumeChancePercent is int chance && chance < 100 && Gameplay.MaxStack != 1)
+                throw new InvalidDataException("reusable placement hybrid with own-stack saving requires maxStack=1");
             if (action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
                 throw new InvalidDataException($"binding '{binding.Id}' apply_item_effects has no compiled item effect capability");
             if (action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
