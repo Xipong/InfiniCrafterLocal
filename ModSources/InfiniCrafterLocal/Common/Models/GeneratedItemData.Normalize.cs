@@ -99,17 +99,16 @@ public sealed partial class GeneratedItemData
     {
         if (RuntimeProgram.WeaponAmmo is not null && Gameplay.AmmoCategory.Length > 0)
             throw new InvalidDataException("one generated item cannot be both an ammo consumer and a native ammo stack");
-        bool hasExplicitUseEffects = Gameplay.HealLife > 0
-            || Gameplay.HealMana > 0
-            || (Gameplay.ExtraBuffs?.Length ?? 0) > 0
-            || Gameplay.GeneratedBuff?.HasAnyEffect == true
-            || !string.IsNullOrWhiteSpace(Gameplay.MobilityMode);
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
+        bool hasPlacement = RuntimeProgram.Bindings.Any(b => b.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem);
 
         foreach (RuntimeBindingSpec binding in RuntimeProgram.Bindings)
         {
             string action = binding.UsePolicy.Action.Kind;
-            if (action == RuntimeBindingAction.ApplyItemEffects && !hasExplicitUseEffects)
+            if (hasPlacement && (action is RuntimeBindingAction.SpawnEntity or RuntimeBindingAction.UseItemBody)
+                && binding.UsePolicy.StackConsumeChancePercent is int chance && chance < 100 && Gameplay.MaxStack != 1)
+                throw new InvalidDataException("reusable placement hybrid with own-stack saving requires maxStack=1");
+            if (action == RuntimeBindingAction.ApplyItemEffects && !RuntimeItemEffectGroupSpec.HasEffects(EffectsForBinding(binding)))
                 throw new InvalidDataException($"binding '{binding.Id}' apply_item_effects has no compiled item effect capability");
             if (action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
                 throw new InvalidDataException($"binding '{binding.Id}' equip_passive has no compiled accessory/armor capability");
