@@ -1027,7 +1027,7 @@
           "semanticType": "terraria_hammer_power",
           "units": ""
         },
-        "miningSpeedScale": {
+        "miningSpeedMultiplier": {
           "enum": [],
           "kind": "number",
           "maximum": 4,
@@ -1070,6 +1070,20 @@
           "target": "any_entity"
         }
       ],
+      "retainedWireProvenance": {
+        "miningSpeedScale": {
+          "priorAuthorSchema": {
+            "description": "Retained mining-speed divisor provenance",
+            "maximum": 4,
+            "minimum": 0.1,
+            "type": "number",
+            "x-infini-units": "engine units: pickSpeed divisor"
+          },
+          "wireFields": [
+            "miningSpeedScale"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4476,7 +4490,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "gravityVelocityPerUpdate": {
+        "accelY": {
           "enum": [],
           "kind": "number",
           "maximum": 2,
@@ -4493,6 +4507,27 @@
       "purpose": "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "gravityVelocityPerUpdate": {
+          "priorAuthorSchema": {
+            "description": "Retained signed vertical acceleration provenance",
+            "maximum": 2,
+            "minimum": -2,
+            "type": "number",
+            "x-infini-consumerConstraint": {
+              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+              "neutral": 0,
+              "rule": "nonneutral_must_remain_nonneutral",
+              "storage": "float32"
+            },
+            "x-infini-neutral": 0,
+            "x-infini-units": "engine units: vertical velocity increment per update"
+          },
+          "wireFields": [
+            "gravityPerTick"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4582,7 +4617,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "rangeTiles": {
+        "radiusTiles": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -4599,6 +4634,20 @@
       "purpose": "Curve around the owner while remaining a projectile.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "rangeTiles": {
+          "priorAuthorSchema": {
+            "description": "Retained orbit radius provenance",
+            "maximum": 80,
+            "minimum": 1,
+            "type": "number",
+            "x-infini-units": "tiles"
+          },
+          "wireFields": [
+            "rangeTiles"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5411,7 +5460,7 @@
           "semanticType": "tiles",
           "units": "tiles"
         },
-        "returnSpeed": {
+        "speed": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -5428,6 +5477,20 @@
       "purpose": "Follow owner cursor inside a leash and return on release.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "retainedWireProvenance": {
+        "returnSpeed": {
+          "priorAuthorSchema": {
+            "description": "Retained cursor-tracking and return speed provenance",
+            "maximum": 80,
+            "minimum": 1,
+            "type": "number",
+            "x-infini-units": "pixels/projectile update"
+          },
+          "wireFields": [
+            "returnSpeed"
+          ]
+        }
+      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [

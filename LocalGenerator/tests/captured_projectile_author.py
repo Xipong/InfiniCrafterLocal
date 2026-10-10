@@ -9,6 +9,16 @@ from copy import deepcopy
 from typing import Any
 
 
+# Only archived test inputs/provenance use these names. Production admission
+# accepts the canonical parameter exclusively; no saved document is rewritten.
+_SCALAR_RENAMES = {
+    "move_gravity_arc": ("gravityVelocityPerUpdate", "accelY", "gravityPerTick"),
+    "move_orbit": ("rangeTiles", "radiusTiles", "rangeTiles"),
+    "move_yoyo_hover": ("returnSpeed", "speed", "returnSpeed"),
+    "configure_tool": ("miningSpeedScale", "miningSpeedMultiplier", "miningSpeedScale"),
+}
+
+
 def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[str, Any]:
     """Reverse only proven alias/provenance deltas for frozen full-byte oracles.
 
@@ -59,7 +69,12 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
         if not row.get("fn"):
             continue  # Global lowerers keep every byte and all original omissions.
         path = row["authoredPath"]
-        if row["fn"] == "configure_spawn" and path.endswith(".params.position.at"):
+        scalar = _SCALAR_RENAMES.get(row["fn"])
+        if scalar and path.endswith(".params." + scalar[1]):
+            old, canonical, wire = scalar
+            assert row["status"] == "delivered" and row["finalPath"].endswith("." + wire)
+            row["authoredPath"] = path.removesuffix(canonical) + old
+        elif row["fn"] == "configure_spawn" and path.endswith(".params.position.at"):
             assert row["status"] == "delivered"
             row["authoredPath"] = path.removesuffix("position.at") + "placement"
         elif row["fn"] == "set_projectile_collision":
@@ -99,7 +114,12 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
 def project_captured_projectile_call(call: dict[str, Any]) -> None:
     params = call.get("params", {})
     fn = call.get("fn")
-    if fn == "configure_spawn" and "placement" in params:
+    scalar = _SCALAR_RENAMES.get(fn)
+    if scalar and scalar[0] in params:
+        old, canonical, _ = scalar
+        assert canonical not in params
+        params[canonical] = params.pop(old)
+    elif fn == "configure_spawn" and "placement" in params:
         anchor = params.pop("placement")
         assert anchor in {"item_use_origin", "ground_at_cursor", "cursor"}
         assert "position" not in params

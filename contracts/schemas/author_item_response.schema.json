@@ -1725,11 +1725,11 @@
                         "description": "Terraria Item.hammer tooltip power percent",
                         "x-infini-semanticType": "terraria_hammer_power"
                       },
-                      "miningSpeedScale": {
+                      "miningSpeedMultiplier": {
                         "type": "number",
                         "minimum": 0.1,
                         "maximum": 4,
-                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
+                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar"
                       }
@@ -1738,7 +1738,7 @@
                       "pickPower",
                       "axePowerTooltipPercent",
                       "hammerPower",
-                      "miningSpeedScale"
+                      "miningSpeedMultiplier"
                     ]
                   }
                 },
@@ -4767,11 +4767,11 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "gravityVelocityPerUpdate": {
+                      "accelY": {
                         "type": "number",
                         "minimum": -2,
                         "maximum": 2,
-                        "description": "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
+                        "description": "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
                         "x-infini-units": "engine units: vertical velocity increment per update",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-neutral": 0,
@@ -4784,7 +4784,7 @@
                       }
                     },
                     "required": [
-                      "gravityVelocityPerUpdate"
+                      "accelY"
                     ]
                   }
                 },
@@ -4884,17 +4884,17 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "rangeTiles": {
+                      "radiusTiles": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 80,
-                        "description": "Orbit leash",
+                        "description": "Fixed orbit radius around the owner",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       }
                     },
                     "required": [
-                      "rangeTiles"
+                      "radiusTiles"
                     ]
                   }
                 },
@@ -5641,18 +5641,18 @@
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },
-                      "returnSpeed": {
+                      "speed": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 80,
-                        "description": "Return speed",
+                        "description": "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
                         "x-infini-units": "pixels/projectile update",
                         "x-infini-semanticType": "unitless_scalar"
                       }
                     },
                     "required": [
                       "rangeTiles",
-                      "returnSpeed"
+                      "speed"
                     ]
                   }
                 },

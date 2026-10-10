@@ -1419,7 +1419,7 @@ _CAPS: list[CapabilitySpec] = [
             "pickPower": _p("integer", "Terraria Item.pick tooltip power percent", minimum=0, maximum=1000),
             "axePowerTooltipPercent": _p("integer", "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5", minimum=0, maximum=500, multiple_of=5, units="tooltip percent", wire_name="axePower", wire_divisor=5),
             "hammerPower": _p("integer", "Terraria Item.hammer tooltip power percent", minimum=0, maximum=1000),
-            "miningSpeedScale": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedScale - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor", wire_name="miningSpeedScale"),
         },
         py=_COMPILER_OWNER,
         cs="GeneratedItemData.Apply.cs::ApplyToItem",
@@ -1427,6 +1427,9 @@ _CAPS: list[CapabilitySpec] = [
         provenance="existing tool_capability",
         repair_group="tool",
         lowering=("gameplay.pickPower", "gameplay.axePower", "gameplay.hammerPower", "gameplay.miningSpeedScale"),
+        retained_receipt_params={
+            "miningSpeedScale": _p("number", "Retained mining-speed divisor provenance", minimum=0.1, maximum=4, units="engine units: pickSpeed divisor"),
+        },
     ),
     _cap(
         "configure_placeable",
@@ -1872,14 +1875,18 @@ _CAPS.extend([
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
     }, provenance="existing movement code 1"),
     _movement("move_gravity_arc", "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.", 2, {
-        "gravityVelocityPerUpdate": _p("number", "Signed increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
-    }, provenance="existing movement code 2"),
+        "accelY": _p("number", "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
+    }, provenance="existing movement code 2", retained_receipt_params={
+        "gravityVelocityPerUpdate": _p("number", "Retained signed vertical acceleration provenance", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
+    }),
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
         "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }, provenance="existing movement code 3"),
     _movement("move_orbit", "Curve around the owner while remaining a projectile.", 4, {
-        "rangeTiles": _p("number", "Orbit leash", minimum=1, maximum=80, units="tiles"),
-    }, provenance="existing movement code 4"),
+        "radiusTiles": _p("number", "Fixed orbit radius around the owner", minimum=1, maximum=80, units="tiles", wire_name="rangeTiles"),
+    }, provenance="existing movement code 4", retained_receipt_params={
+        "rangeTiles": _p("number", "Retained orbit radius provenance", minimum=1, maximum=80, units="tiles"),
+    }),
     _movement("move_boomerang", "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.", 5, {
         "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
@@ -1931,8 +1938,10 @@ _CAPS.extend([
     }, targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
     _movement("move_yoyo_hover", "Follow owner cursor inside a leash and return on release.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
-    }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro"),
+        "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
+    }, targets=("owner_attached_projectile",), provenance="yoyo movement extracted from the retired melee macro", retained_receipt_params={
+        "returnSpeed": _p("number", "Retained cursor-tracking and return speed provenance", minimum=1, maximum=80, units="pixels/projectile update"),
+    }),
     _movement("move_whip_lash", "Execute the bounded owner-attached curved polyline from hand to tip; collision checks every segment, while Projectile.Center is the terminal point. A baked/reused PNG draws once at that tip, not along the curve. runtime_geometry draws the exact collision curve; a separately authored VFX texturedPath source=whip can accompany a baked tip. A channel_beam controller takes collision/geometry precedence. No automatic sprite stretching or representation selection.", 18, {
         "rangeTiles": _p("number", "Lash reach", minimum=2, maximum=60, units="tiles"),
         "segments": _p("integer", "Collision curve segments", minimum=3, maximum=48),

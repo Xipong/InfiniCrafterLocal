@@ -413,7 +413,7 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
     if scenario == "projected-tool":
         assert program["bindings"][0]["action"]["kind"] == "spawn_entity"
         program["bindings"][0]["contactDamage"] = False
-        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.75}})
+        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 0.75}})
         assert validate_runtime_program(current)["ok"]
         return
     if scenario == "missing-contact":
@@ -545,7 +545,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
         {"id": "place", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}},
-        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
+        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 1.0}},
     ]
     program["bindings"] = [{
         "id": "primary_place",

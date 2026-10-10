@@ -7,6 +7,19 @@ Gameplay параметры, descriptions, domains, units и exact wire mapping 
 
 Путь изменения: registry → actual provider schema/prompt → validator/Repair → compiler receipt → strict wire → C# DTO/executor → regression. Исторический rename не становится Author alias; C# wire сохраняет объявленные старые leaves. Category/name/prose не выбирают единицу, sentinel, механическую композицию или default.
 
+Четыре обязательных scalar поля имеют уточнённые канонические имена. Преобразование каждого значения остаётся identity через существующий `wire_name`; единицы, диапазоны, opcodes и requiredness не меняются.
+
+| Capability | Author | Сохранённый wire | Смысл |
+|---|---|---|---|
+| `move_gravity_arc` | `accelY` | `movement.params.gravityPerTick` | Знаковое ускорение по Y на projectile update; это не world-tick duration или скорость. |
+| `move_orbit` | `radiusTiles` | `movement.params.rangeTiles` | Фиксированный радиус орбиты вокруг владельца. |
+| `move_yoyo_hover` | `speed` | `movement.params.returnSpeed` | Желаемая скорость и при слежении за курсором, и при возврате; velocity приближается к ней через lerp. |
+| `configure_tool` | `miningSpeedMultiplier` | `gameplay.miningSpeedScale` | Делитель Player.pickSpeed; >1 ускоряет добычу, с прежней проверкой tool power и порогом 0.001. |
+
+Прежние Author имена этих полей сохранены только как `retained_receipt_params`: старые receipts проверяются без миграции saved wire. Свежие Author и Repair принимают только новые имена; source-aware аудит требует фактического нового authored leaf. Замороженные test corpora сохраняют исходные JSON и hashes, а их входы переводятся в текущую нотацию только test-only helper.
+
+`test_registry_author_units.py` сравнивает полные compiled hashes с захватом до переименования, проверяет сохранённые receipts, запрет старых Author/Repair имён и точные новые field permissions. Эти проверки доказывают совместимость и строгость контракта; улучшение качества LLM-генераций ими не измеряется.
+
 <a id="clocks"></a>
 ## World ticks, updates, pixels
 
@@ -26,7 +39,7 @@ Projectile `extraUpdates=N` даёт N+1 AI/movement updates/world tick. `speedP
 
 При отсутствии steering/collision грубая дальность projectile в tiles: `speedPxPerUpdate × (1+extraUpdates) × lifetimeTicks / 16`; controller может полностью изменить оценку. Минимальный event period берётся из registry, не из этой формулы.
 
-Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `speedPxPerUpdate=9`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `placement=owner_center`; `move_gravity_arc` — `gravityVelocityPerUpdate=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
+Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `speedPxPerUpdate=9`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `placement=owner_center`; `move_gravity_arc` — `accelY=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
 
 <a id="gameplay"></a>
 ## Важные отличия единиц от обещаний

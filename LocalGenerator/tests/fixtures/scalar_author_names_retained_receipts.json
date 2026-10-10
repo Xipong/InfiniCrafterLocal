@@ -1,0 +1,750 @@
+{
+  "originCommit": "274d4c38849bff5b8f7ecde1c61d6276a4803712",
+  "purpose": "Frozen pre-rename Author choices and exact delivered receipt; current tests rename only the captured input leaf. compiledSha256 covers the complete original compiled output including all receipts.",
+  "cases": [
+    {
+      "fn": "move_gravity_arc",
+      "oldParameter": "gravityVelocityPerUpdate",
+      "canonicalParameter": "accelY",
+      "authored": {
+        "name": "Capability Witness move_gravity_arc",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute move_gravity_arc through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute move_gravity_arc through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing move_gravity_arc.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute move_gravity_arc through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the move_gravity_arc capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes move_gravity_arc.",
+                  "reportedBehavior": "The report says that the runtime executes move_gravity_arc.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.authoring.v5",
+          "primaryEntityId": "witness_entity",
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "witness_entity",
+              "kind": "owner_attached_projectile"
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "witness_entity"
+              },
+              "stackCost": 0,
+              "contactDamage": false
+            }
+          ],
+          "calls": [
+            {
+              "id": "item_stats",
+              "fn": "configure_item_stats",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "useTimeTicks": 20,
+                "useAnimationTicks": 20,
+                "manaCost": 0,
+                "rarity": 1,
+                "valueCopper": 1000,
+                "maxStack": 1,
+                "craftYield": 1,
+                "widthPx": 24,
+                "heightPx": 24,
+                "scale": 1.0
+              }
+            },
+            {
+              "id": "item_use",
+              "fn": "configure_item_use",
+              "params": {
+                "useStyle": "shoot",
+                "autoReuse": false,
+                "useTurn": true,
+                "hideUseGraphic": false,
+                "disableMeleeHitbox": true,
+                "channel": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "handPose": "one_handed",
+                "customHeldSprite": "hidden"
+              }
+            },
+            {
+              "id": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "target": "witness_entity",
+              "params": {
+                "velocity": {
+                  "constantSpeedPxPerUpdate": 8.0
+                },
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "position": {
+                  "at": "activation_origin"
+                }
+              }
+            },
+            {
+              "id": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "target": "witness_entity",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false
+              }
+            },
+            {
+              "id": "base_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "target": "witness_entity",
+              "params": {
+                "lifetimeTicks": 120
+              }
+            },
+            {
+              "id": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "target": "witness_entity",
+              "params": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              }
+            },
+            {
+              "id": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "target": "witness_entity",
+              "params": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "updatesPerTick": 1,
+                "immunity": {
+                  "localCooldown": 10
+                }
+              }
+            },
+            {
+              "id": "witness_call",
+              "fn": "move_gravity_arc",
+              "target": "witness_entity",
+              "params": {
+                "gravityVelocityPerUpdate": -0.1875
+              }
+            }
+          ]
+        }
+      },
+      "receipt": {
+        "callId": "witness_call",
+        "fn": "move_gravity_arc",
+        "authoredPath": "runtimeProgram.calls[7].params.gravityVelocityPerUpdate",
+        "finalPath": "runtimeProgram.entities[1].movement.params.gravityPerTick",
+        "value": -0.1875,
+        "status": "delivered"
+      },
+      "compiledSha256": "11d56f731c04f9d231ab18896f798311032d50543867fa252bc7e25f5a5d4b6a"
+    },
+    {
+      "fn": "move_orbit",
+      "oldParameter": "rangeTiles",
+      "canonicalParameter": "radiusTiles",
+      "authored": {
+        "name": "Capability Witness move_orbit",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute move_orbit through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute move_orbit through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing move_orbit.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute move_orbit through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the move_orbit capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes move_orbit.",
+                  "reportedBehavior": "The report says that the runtime executes move_orbit.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.authoring.v5",
+          "primaryEntityId": "witness_entity",
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "witness_entity",
+              "kind": "owner_attached_projectile"
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "witness_entity"
+              },
+              "stackCost": 0,
+              "contactDamage": false
+            }
+          ],
+          "calls": [
+            {
+              "id": "item_stats",
+              "fn": "configure_item_stats",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "useTimeTicks": 20,
+                "useAnimationTicks": 20,
+                "manaCost": 0,
+                "rarity": 1,
+                "valueCopper": 1000,
+                "maxStack": 1,
+                "craftYield": 1,
+                "widthPx": 24,
+                "heightPx": 24,
+                "scale": 1.0
+              }
+            },
+            {
+              "id": "item_use",
+              "fn": "configure_item_use",
+              "params": {
+                "useStyle": "shoot",
+                "autoReuse": false,
+                "useTurn": true,
+                "hideUseGraphic": false,
+                "disableMeleeHitbox": true,
+                "channel": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "handPose": "one_handed",
+                "customHeldSprite": "hidden"
+              }
+            },
+            {
+              "id": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "target": "witness_entity",
+              "params": {
+                "velocity": {
+                  "constantSpeedPxPerUpdate": 8.0
+                },
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "position": {
+                  "at": "activation_origin"
+                }
+              }
+            },
+            {
+              "id": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "target": "witness_entity",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false
+              }
+            },
+            {
+              "id": "base_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "target": "witness_entity",
+              "params": {
+                "lifetimeTicks": 120
+              }
+            },
+            {
+              "id": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "target": "witness_entity",
+              "params": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              }
+            },
+            {
+              "id": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "target": "witness_entity",
+              "params": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "updatesPerTick": 1,
+                "immunity": {
+                  "localCooldown": 10
+                }
+              }
+            },
+            {
+              "id": "witness_call",
+              "fn": "move_orbit",
+              "target": "witness_entity",
+              "params": {
+                "rangeTiles": 7.125
+              }
+            }
+          ]
+        }
+      },
+      "receipt": {
+        "callId": "witness_call",
+        "fn": "move_orbit",
+        "authoredPath": "runtimeProgram.calls[7].params.rangeTiles",
+        "finalPath": "runtimeProgram.entities[1].movement.params.rangeTiles",
+        "value": 7.125,
+        "status": "delivered"
+      },
+      "compiledSha256": "61429e70b2e76be953049f40ab2987791f50edacd4719c9be5254e1dabbfee6b"
+    },
+    {
+      "fn": "move_yoyo_hover",
+      "oldParameter": "returnSpeed",
+      "canonicalParameter": "speed",
+      "authored": {
+        "name": "Capability Witness move_yoyo_hover",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute move_yoyo_hover through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute move_yoyo_hover through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing move_yoyo_hover.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute move_yoyo_hover through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the move_yoyo_hover capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes move_yoyo_hover.",
+                  "reportedBehavior": "The report says that the runtime executes move_yoyo_hover.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.authoring.v5",
+          "primaryEntityId": "witness_entity",
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            },
+            {
+              "id": "witness_entity",
+              "kind": "owner_attached_projectile"
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "action": {
+                "kind": "spawn_entity",
+                "targetId": "witness_entity"
+              },
+              "stackCost": 0,
+              "contactDamage": false
+            }
+          ],
+          "calls": [
+            {
+              "id": "item_stats",
+              "fn": "configure_item_stats",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "useTimeTicks": 20,
+                "useAnimationTicks": 20,
+                "manaCost": 0,
+                "rarity": 1,
+                "valueCopper": 1000,
+                "maxStack": 1,
+                "craftYield": 1,
+                "widthPx": 24,
+                "heightPx": 24,
+                "scale": 1.0
+              }
+            },
+            {
+              "id": "item_use",
+              "fn": "configure_item_use",
+              "params": {
+                "useStyle": "shoot",
+                "autoReuse": false,
+                "useTurn": true,
+                "hideUseGraphic": false,
+                "disableMeleeHitbox": true,
+                "channel": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "handPose": "one_handed",
+                "customHeldSprite": "hidden"
+              }
+            },
+            {
+              "id": "base_configure_spawn",
+              "fn": "configure_spawn",
+              "target": "witness_entity",
+              "params": {
+                "velocity": {
+                  "constantSpeedPxPerUpdate": 8.0
+                },
+                "count": 1,
+                "spreadRadians": 0.0,
+                "offsetPx": 0,
+                "aim": "cursor",
+                "position": {
+                  "at": "activation_origin"
+                }
+              }
+            },
+            {
+              "id": "base_set_projectile_damage",
+              "fn": "set_projectile_damage",
+              "target": "witness_entity",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "ownerHitCheck": false
+              }
+            },
+            {
+              "id": "base_set_projectile_lifetime",
+              "fn": "set_projectile_lifetime",
+              "target": "witness_entity",
+              "params": {
+                "lifetimeTicks": 120
+              }
+            },
+            {
+              "id": "base_set_projectile_hitbox",
+              "fn": "set_projectile_hitbox",
+              "target": "witness_entity",
+              "params": {
+                "widthPx": 16,
+                "heightPx": 16,
+                "drawScale": 1.0,
+                "hitboxScale": 1.0
+              }
+            },
+            {
+              "id": "base_set_projectile_collision",
+              "fn": "set_projectile_collision",
+              "target": "witness_entity",
+              "params": {
+                "tileCollide": true,
+                "ignoreWater": false,
+                "bounceCount": 0,
+                "pierce": 1,
+                "updatesPerTick": 1,
+                "immunity": {
+                  "localCooldown": 10
+                }
+              }
+            },
+            {
+              "id": "witness_call",
+              "fn": "move_yoyo_hover",
+              "target": "witness_entity",
+              "params": {
+                "rangeTiles": 2.0,
+                "returnSpeed": 7.125
+              }
+            }
+          ]
+        }
+      },
+      "receipt": {
+        "callId": "witness_call",
+        "fn": "move_yoyo_hover",
+        "authoredPath": "runtimeProgram.calls[7].params.returnSpeed",
+        "finalPath": "runtimeProgram.entities[1].movement.params.returnSpeed",
+        "value": 7.125,
+        "status": "delivered"
+      },
+      "compiledSha256": "53c388293fcefe23231ff428b01351de76923a9f7aa7a111d69b5eae60510235"
+    },
+    {
+      "fn": "configure_tool",
+      "oldParameter": "miningSpeedScale",
+      "canonicalParameter": "miningSpeedMultiplier",
+      "authored": {
+        "name": "Capability Witness configure_tool",
+        "category": "generic",
+        "concept": {
+          "literalSynthesis": "A minimal literal test object.",
+          "coreMechanic": "Execute configure_tool through its public typed contract.",
+          "parentAContribution": "test body",
+          "parentBContribution": "test mechanism",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "plannedPlayerActions": [
+            {
+              "input": "primary_use",
+              "intent": "Execute configure_tool through its public typed contract."
+            }
+          ]
+        },
+        "realization": {
+          "description": "A minimal runtime witness executing configure_tool.",
+          "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+          "selfEvaluation": {
+            "planVsProgram": {
+              "verdict": "aligned",
+              "summary": "The witness draft selects the same public capability emitted by the program.",
+              "actionChecks": [
+                {
+                  "plannedIntent": "Execute configure_tool through its public typed contract.",
+                  "implementedBehavior": "The runtime program contains the configure_tool capability call.",
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "result": "aligned",
+                  "intentionality": "intentional",
+                  "reason": "The witness directly emits the selected public capability."
+                }
+              ]
+            },
+            "programVsReport": {
+              "verdict": "aligned",
+              "summary": "The witness report names the exact emitted capability.",
+              "behaviorChecks": [
+                {
+                  "runtimeRefs": [
+                    "witness_call"
+                  ],
+                  "programBehavior": "The runtime executes configure_tool.",
+                  "reportedBehavior": "The report says that the runtime executes configure_tool.",
+                  "result": "aligned",
+                  "reason": "The report names the exact cited capability."
+                }
+              ]
+            }
+          }
+        },
+        "runtimeProgram": {
+          "apiVersion": "infini.runtime-program.v5",
+          "schema": "infini.runtime-program.authoring.v5",
+          "primaryEntityId": "item",
+          "entities": [
+            {
+              "id": "item",
+              "kind": "item_body"
+            }
+          ],
+          "bindings": [
+            {
+              "id": "witness_binding",
+              "input": "primary_use",
+              "action": {
+                "kind": "use_item_body"
+              },
+              "stackCost": 0,
+              "contactDamage": true
+            }
+          ],
+          "calls": [
+            {
+              "id": "item_stats",
+              "fn": "configure_item_stats",
+              "params": {
+                "damageClass": "generic",
+                "damage": 20,
+                "knockback": 3.0,
+                "useTimeTicks": 20,
+                "useAnimationTicks": 20,
+                "manaCost": 0,
+                "rarity": 1,
+                "valueCopper": 1000,
+                "maxStack": 1,
+                "craftYield": 1,
+                "widthPx": 24,
+                "heightPx": 24,
+                "scale": 1.0
+              }
+            },
+            {
+              "id": "item_use",
+              "fn": "configure_item_use",
+              "params": {
+                "useStyle": "shoot",
+                "autoReuse": false,
+                "useTurn": true,
+                "hideUseGraphic": false,
+                "disableMeleeHitbox": true,
+                "channel": false,
+                "holdoutOffsetX": 0,
+                "holdoutOffsetY": 0,
+                "handPose": "one_handed",
+                "customHeldSprite": "hidden"
+              }
+            },
+            {
+              "id": "witness_call",
+              "fn": "configure_tool",
+              "params": {
+                "pickPower": 1,
+                "axePowerTooltipPercent": 5,
+                "hammerPower": 1,
+                "miningSpeedScale": 1.125
+              }
+            }
+          ]
+        }
+      },
+      "receipt": {
+        "callId": "witness_call",
+        "fn": "configure_tool",
+        "authoredPath": "runtimeProgram.calls[2].params.miningSpeedScale",
+        "finalPath": "gameplay.miningSpeedScale",
+        "value": 1.125,
+        "status": "delivered"
+      },
+      "compiledSha256": "e8578c17b5b93731b6350d573fab011c8aa4c813c31be395c8ecc41094bb06f4"
+    }
+  ]
+}
