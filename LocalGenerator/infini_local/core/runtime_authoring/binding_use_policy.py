@@ -61,7 +61,8 @@ def stack_chance_error(binding: Mapping[str, Any]) -> str:
     value = policy["stackConsumeChancePercent"]
     if type(value) is not int or not 0 <= value <= 100:
         return "stackConsumeChancePercent must be an integer 0..100."
-    if (binding.get("input") not in ACTIVE_USE_INPUTS or stack_cost(binding) != 1
+    input_name = binding.get("input")
+    if (not isinstance(input_name, str) or input_name not in ACTIVE_USE_INPUTS or stack_cost(binding) != 1
             or action_kind(binding) == PLACE_ITEM_ACTION):
         return "stackConsumeChancePercent requires an active non-placement binding with stackCost=1."
     return ""

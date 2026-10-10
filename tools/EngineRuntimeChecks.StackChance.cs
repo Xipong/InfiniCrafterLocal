@@ -25,11 +25,11 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, ItemLoader.ConsumeItem(host.Item, player), "no completed activation cannot roll");
                 player.ApplyItemTime(host.Item);
                 var expectedRandom = new UnifiedRandom(4179);
-                Main.rand = new UnifiedRandom(4179);
+                Terraria.Main.rand = new UnifiedRandom(4179);
                 bool expected = chance == 100 || (chance > 0 && expectedRandom.Next(100) < chance);
                 Equal(expected, ItemLoader.ConsumeItem(host.Item, player), "literal own-stack probability");
                 Equal(false, ItemLoader.ConsumeItem(host.Item, player), "a repeated hook cannot roll again");
-                Equal(expectedRandom.Next(), Main.rand.Next(), "exactly one interior roll and no endpoint/replay rolls");
+                Equal(expectedRandom.Next(), Terraria.Main.rand.Next(), "exactly one interior roll and no endpoint/replay rolls");
             });
         }
         WithPlayer((player, generated) =>

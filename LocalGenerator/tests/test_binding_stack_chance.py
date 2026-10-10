@@ -115,3 +115,56 @@ def test_probability_repair_changes_only_invalid_leaf_and_omission_does_not_defa
     del omitted["usePolicy"]["stackConsumeChancePercent"]
     filtered, _ = filter_repair_patch_scope(authored, {"bindingsUpsert": [omitted], "note": "No probability patch."}, scope)
     assert apply_repair_patch(authored, filtered)["runtimeProgram"]["bindings"][0]["usePolicy"]["stackConsumeChancePercent"] == 101
+
+
+@pytest.mark.parametrize("input_value", [[], {}, ["primary_use"], None, True, 1, "PRIMARY_USE"])
+def test_malformed_wire_input_with_stack_chance_is_structured_refusal(input_value):
+    wire = compile_runtime_program(_fixture())
+    wire.pop("runtimeContract")
+    wire["runtimeProgram"]["bindings"][0]["input"] = deepcopy(input_value)
+    before = deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(row["code"] == "unknown_runtime_input" for row in report["errors"])
+    assert wire == before  # Refusal never coerces or replaces the original input.
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("input_value", [[], {}])
+def test_explicit_input_repair_uses_real_caller_without_host_coercion(monkeypatch, format_mode, input_value):
+    import json
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _fixture()
+    binding = doc["runtimeProgram"]["bindings"][0]
+    binding["input"] = deepcopy(input_value)
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["bindings"] == [{"id": binding["id"], "paths": ["input"]}]
+    corrected = deepcopy(binding)
+    corrected["input"] = "primary_use"
+    expected = apply_repair_patch(doc, {"note": "model explicitly selects input", "bindingsUpsert": [corrected]})
+    corrected["usePolicy"].update(stackConsumeChancePercent=99, contactDamage=False)
+    incoming = {"note": "explicit input only", "realizationReplacement": doc["realization"], "bindingsUpsert": [corrected]}
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_stack_chance_noop_repair_does_not_default_invalid_probability(monkeypatch, format_mode):
+    from infini_local.core.errors import PlannerUnavailable
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = _fixture(101)
+    before = deepcopy(doc)
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc,
+            {"note": "no authored correction", "realizationReplacement": doc["realization"]}, format_mode)
+    assert doc == before
+    assert not validate_runtime_program(doc)["ok"]

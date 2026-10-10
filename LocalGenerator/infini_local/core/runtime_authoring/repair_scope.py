@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     expected_placeable_input,
     placement_call_id,
     stack_cost,
+    stack_chance_error,
     target_id as binding_target_id,
     complete_transaction as transaction,
 )
@@ -2545,17 +2546,27 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         binding = binding_rows_by_id.get(row_id)
         if binding is None:
             continue
-        allowed = binding_alternative_overrides.get(row_id)
-        if allowed is None:
-            allowed = _binding_repair_alternatives(
+        binding_choices = binding_alternative_overrides.get(row_id)
+        if binding_choices is None:
+            binding_choices = _binding_repair_alternatives(
                 rows,
                 binding,
                 input_mutable=row_id in binding_input_change_ids,
                 action_mutable=row_id in binding_action_change_ids,
                 target_mutable=row_id in binding_target_change_ids,
             )
-        binding_alternatives.append({"bindingId": row_id, "allowed": allowed})
-        retarget_binding_ids.update(binding_target_id(row) for row in allowed)
+        chance = _mapping(binding.get("usePolicy")).get("stackConsumeChancePercent")
+        if (type(chance) is int and 0 <= chance <= 100
+                and "usePolicy.stackConsumeChancePercent" not in field_permissions["bindings"].get(row_id, set())):
+            # The optional authored policy remains frozen during an input repair.
+            # Complete alternatives must include it rather than force its omission.
+            for alternative in binding_choices:
+                alternative_policy = dict(_mapping(alternative["usePolicy"]))
+                alternative_policy["stackConsumeChancePercent"] = chance
+                alternative["usePolicy"] = alternative_policy
+            binding_choices = [alternative for alternative in binding_choices if not stack_chance_error(alternative)]
+        binding_alternatives.append({"bindingId": row_id, "allowed": binding_choices})
+        retarget_binding_ids.update(binding_target_id(row) for row in binding_choices)
     scope["bindingAlternatives"] = binding_alternatives
     scope["eventAlternatives"] = event_alternative_rows
     scope["retarget"]["bindingTargetIds"] = sorted(retarget_binding_ids)
