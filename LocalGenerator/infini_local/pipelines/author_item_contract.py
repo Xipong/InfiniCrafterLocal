@@ -442,8 +442,11 @@ def author_item_provider_response_schema() -> dict[str, Any]:
     return _provider_strict_projection(author_item_response_schema(), omit_annotations=True)
 
 
-def author_item_repair_response_schema(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:
-    return copy.deepcopy(_repair_schema(capability_names=capability_names))
+def author_item_repair_response_schema(
+    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+) -> dict[str, Any]:
+    return copy.deepcopy(_repair_schema(
+        capability_names=capability_names, require_realization=require_realization))
 
 
 def author_item_repair_prompt_shape_card() -> dict[str, Any]:
