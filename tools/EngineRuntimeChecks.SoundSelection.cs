@@ -112,6 +112,26 @@ internal static partial class EngineRuntimeChecks
         Equal(0.37f, round.Slots[0].Sound!.Volume, "sound volume round trip");
         Equal(-0.9f, round.Slots[0].Sound!.Pitch, "sound pitch round trip");
         Equal(0.2f, round.Slots[0].Sound!.PitchVariance, "sound variance round trip");
+        foreach ((string field, string literal) in new[] {
+            ("volume", "1.00000001"), ("volume", "1.00000000000000000000000000000000000001"),
+            ("volume", "-1e-50"), ("volume", "1e-46"),
+            ("pitch", "0.900000001"), ("pitch", "-0.90000000000000000000000000000000000001"),
+            ("pitch", "1e-46"), ("pitchVariance", "0.60000001"), ("pitchVariance", "1e-46"),
+        }) {
+            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
+                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
+            Equal(0, VfxManifestSpec.FromJson(raw).Slots.Length, "original sound scalar refuses before float32 " + field + "=" + literal);
+        }
+        foreach ((string field, string literal) in new[] {
+            ("volume", "1e-40"), ("volume", "0.99999999999999999999999999999999999"),
+            ("pitch", "0.89999999999999999999999999999999999"), ("pitchVariance", "0.59999999999999999999999999999999999"),
+        }) {
+            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
+                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
+            var valid = VfxManifestSpec.FromJson(raw);
+            Equal(1, valid.Slots.Length, "in-domain sound rounding retained " + field);
+            Equal(1, VfxManifestSpec.FromJson(valid.ToJson()).Slots.Length, "sound writer retains admitted rounded endpoint " + field);
+        }
         var legacy = SoundSelectionRead("Item26");
         Equal(true, legacy.Slots[0].Sound is null, "absent sound keeps old mode");
         Equal(false, JsonNode.Parse(legacy.ToJson())!["Slots"]![0]!.AsObject().ContainsKey("Sound"), "serializer does not materialize sound controls");

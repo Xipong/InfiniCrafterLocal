@@ -73,6 +73,21 @@ def test_invalid_sound_scalar_is_strict_and_repairs_only_its_own_leaf(field, val
     assert not vfx.validate_vfx_manifest_wire(data)["ok"]
 
 
+@pytest.mark.parametrize("field", ["volume", "pitch", "pitchVariance"])
+def test_positive_sound_choice_cannot_become_consumer_neutral_and_repairs_only_that_leaf(field):
+    data = _data(); raw = _sound(data)
+    raw["slots"][0]["sound"][field] = 1e-46
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {f"$.slots[0].sound.{field}"}
+    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": [f"sound.{field}"]}]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "nonneutral-sound-control")
+    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    for accepted in (0, 1e-40):
+        control = _sound(data); control["slots"][0]["sound"][field] = accepted
+        assert vfx.validate_vfx_director_output(control, data)["ok"]
+
+
 @pytest.mark.parametrize("bad", [None, {}, [], "native", True])
 def test_present_sound_container_never_becomes_legacy_absence(bad):
     data = _data()

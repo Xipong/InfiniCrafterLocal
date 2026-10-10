@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+import struct
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
@@ -298,11 +299,11 @@ def _sound_schema() -> dict[str, Any]:
         "type": "object", "additionalProperties": False,
         "properties": {
             "volume": {"type": "number", "minimum": 0.0, "maximum": 1.0,
-                       "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. Native distance and user volume settings still apply."},
+                       "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. A nonzero choice must remain nonzero in native float32 playback; sub-storage values are rejected, not silenced. Native distance and user volume settings still apply."},
             "pitch": {"type": "number", "minimum": -0.9, "maximum": 0.9,
-                      "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added."},
+                      "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage."},
             "pitchVariance": {"type": "number", "minimum": 0.0, "maximum": 0.6,
-                              "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation."},
+                              "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter; a nonzero interval must remain nonzero in native float32 storage. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation."},
         },
         "required": ["volume", "pitch", "pitchVariance"],
     }
@@ -313,12 +314,18 @@ def _sound_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any
     if slot.get("rendererKind") != "soundCue" or not isinstance(payload, Mapping):
         return []
     properties = _sound_schema()["properties"]
+    errors = []
+    for field, schema in properties.items():
+        value = payload.get(field)
+        if not strict_schema_errors(value, schema) and value != 0 and struct.unpack("!f", struct.pack("!f", value))[0] == 0:
+            errors.append({"path": path + ".sound." + field,
+                           "message": "A nonzero authored sound control must remain nonzero in native float32 playback; choose an explicit representable value or deliberate zero."})
     pitch, variance = payload.get("pitch"), payload.get("pitchVariance")
     if (not strict_schema_errors(pitch, properties["pitch"])
             and not strict_schema_errors(variance, properties["pitchVariance"])
             and abs(pitch) + variance / 2 > 1.0):
-        return [{"path": path + ".sound.pitchVariance", "message": "pitchVariance must be <= 2*(1-abs(pitch)); preserve valid central pitch"}]
-    return []
+        errors.append({"path": path + ".sound.pitchVariance", "message": "pitchVariance must be <= 2*(1-abs(pitch)); preserve valid central pitch"})
+    return errors
 
 
 def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool = True) -> dict[str, Any]:

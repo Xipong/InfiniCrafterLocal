@@ -9,8 +9,23 @@ namespace InfiniCrafterLocal.Common.Models;
 /// <summary>Exact VFX-owned playback controls, independent of gameplay and slot alpha/phase.</summary>
 public sealed class VfxSoundSpec
 {
+    public sealed class VolumeJsonConverter : RawJsonFloatDomainConverter
+    {
+        public VolumeJsonConverter() : base("0", "1", "0") { }
+    }
+    [JsonConverter(typeof(VolumeJsonConverter))]
     [JsonRequired] public float Volume { get; set; }
+    public sealed class PitchJsonConverter : RawJsonFloatDomainConverter
+    {
+        public PitchJsonConverter() : base("-0.9", "0.9", "0") { }
+    }
+    [JsonConverter(typeof(PitchJsonConverter))]
     [JsonRequired] public float Pitch { get; set; }
+    public sealed class PitchVarianceJsonConverter : RawJsonFloatDomainConverter
+    {
+        public PitchVarianceJsonConverter() : base("0", "0.6", "0") { }
+    }
+    [JsonConverter(typeof(PitchVarianceJsonConverter))]
     [JsonRequired] public float PitchVariance { get; set; }
 
     public void NormalizeAndValidate()
