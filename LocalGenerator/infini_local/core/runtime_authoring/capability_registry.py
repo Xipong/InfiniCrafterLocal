@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import json
 import math
 import struct
 from types import MappingProxyType
@@ -356,7 +357,13 @@ class ParamSpec:
         capability's existing component; they may name a nested DTO field.
         Literal fields belong to an explicitly selected variant, not a default.
         """
+        from infini_local.core.schema_validation import strict_schema_errors
         selected = self.selected_variant(value)
+        if strict_schema_errors(value, self.schema()):
+            raise ValueError("parameter does not satisfy its declared schema")
+        if any(spec.consumer_value_error(leaf) is not None
+               for _, spec, leaf in self.leaf_values(value, name)):
+            raise ValueError("parameter does not satisfy its declared consumer domain")
         if selected is not self:
             return selected.projected_fields(value, name)
         rows = [ParamProjection(name, key, item, True) for key, item in self.wire_literals.items()]
@@ -398,6 +405,78 @@ class ParamSpec:
         elif not self.wire_literals or self.wire_name:
             rows.append((name, self.wire_name or name.rsplit(".", 1)[-1], False))
         return tuple(rows)
+
+    def matches_scalar_projection(self, value: Any) -> bool:
+        """Admitted wire domain only; never reconstruct or authenticate an Author."""
+        from infini_local.core.schema_validation import strict_schema_errors
+        if self.structured:
+            return False
+        if self.wire_enum:
+            return any(type(value) is type(v) and json.dumps(value) == json.dumps(v)
+                       for v in self.wire_enum.values())
+        if self.wire_boolean_true_value is not None:
+            return type(value) is int and value in (0, self.wire_boolean_true_value)
+        try:
+            if self.wire_offset:
+                if type(value) is not int:
+                    return False
+                authored = value - self.wire_offset
+            elif self.wire_multiplier != 1:
+                if type(value) is not int:
+                    return False
+                authored = value / self.wire_multiplier
+            elif self.wire_divisor != 1:
+                if self.kind == "number":
+                    # Binary64 division is not injective: retain its admitted
+                    # projected envelope, not a fabricated inverse Author float.
+                    return (type(value) in (int, float) and math.isfinite(value)
+                            and (self.minimum is None or value >= self.to_wire(self.minimum))
+                            and (self.maximum is None or value <= self.to_wire(self.maximum)))
+                authored = value * self.wire_divisor
+            else:
+                authored = value
+            return (not strict_schema_errors(authored, self.schema())
+                    and self.consumer_value_error(authored) is None
+                    and type(self.to_wire(authored)) is type(value)
+                    and json.dumps(self.to_wire(authored)) == json.dumps(value))
+        except (ValueError, TypeError, OverflowError):
+            return False
+
+    def matches_projection_records(self, records: tuple[tuple[str, str, bool, Any], ...], name: str) -> bool:
+        """Require one complete declared variant with unique typed output leaves.
+
+        Records describe claimed source paths, not available source values.
+        Recursion avoids enumerating optional-object Cartesian products.
+        """
+        if self.alternatives:
+            return sum(variant.matches_projection_records(records, name)
+                       for variant in self.alternatives) == 1
+        remaining = list(records)
+        for destination, value in self.wire_literals.items():
+            matches = [r for r in remaining if r[:3] == (name, destination, True)
+                       and type(r[3]) is type(value) and json.dumps(r[3]) == json.dumps(value)]
+            if len(matches) != 1:
+                return False
+            remaining.remove(matches[0])
+        if self.kind == "object":
+            count = 0
+            for key, spec in self.properties.items():
+                prefix = f"{name}.{key}"
+                group = tuple(r for r in remaining if r[0] == prefix or r[0].startswith(prefix + "."))
+                if not group:
+                    if spec.required:
+                        return False
+                    continue
+                if not spec.matches_projection_records(group, prefix):
+                    return False
+                count += 1
+                remaining = [r for r in remaining if r not in group]
+            return not remaining and (self.min_properties is None or count >= self.min_properties)
+        if not self.wire_literals or self.wire_name:
+            return (len(remaining) == 1
+                    and remaining[0][:3] == (name, self.wire_name or name.rsplit(".", 1)[-1], False)
+                    and self.matches_scalar_projection(remaining[0][3]))
+        return not remaining
 
     def consumer_constraint(self) -> dict[str, Any]:
         if self.consumer_storage == "float64":
