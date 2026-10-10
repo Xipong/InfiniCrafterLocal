@@ -336,11 +336,13 @@ def test_absent_member_keeps_complete_legacy_compiled_bytes():
         # Compose historical child combat and declared neutral reversals. The
         # archive also predates ammo and the curve's exact inventory requirements.
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        curve_requirements = len(CAPABILITY_REGISTRY["set_projectile_hitbox_curve"].requirements)
+        added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
+                      "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+        added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "movement"]
-        assert checks["requirements"] == 29 + curve_requirements
+        assert checks["requirements"] == 29 + added_requirements
         checks["exclusiveGroups"].remove("ammo_role")
-        checks["requirements"] -= 1 + curve_requirements
+        checks["requirements"] -= 1 + added_requirements
         actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     assert actual == baseline
 

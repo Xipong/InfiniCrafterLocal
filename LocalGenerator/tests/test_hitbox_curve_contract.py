@@ -15,6 +15,7 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.qa.capability_library_audit import capability_library_audit
+from sentry_contract_checks import without_declared_targeting_neutrals
 
 
 FN = "set_projectile_hitbox_curve"

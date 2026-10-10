@@ -15,6 +15,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     CONTROLLER_OPCODE,
     EVENT_ACTION_OPCODE,
     MOVEMENT_OPCODE,
+    PROJECTILE_MODIFIER_COMPONENTS,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
     ENTITY_KIND_REGISTRY,
@@ -342,6 +343,14 @@ def _compile_entity_call(
         return
     if fn == "set_projectile_hitbox_curve":
         project(component("hitboxCurve"), f"{base}.hitboxCurve", p)
+        return
+    if fn in PROJECTILE_MODIFIER_COMPONENTS:
+        name = PROJECTILE_MODIFIER_COMPONENTS[fn]
+        project(component(name), f"{base}.{name}", p)
+        return
+    if fn == "orient_whip_to_owner_gravity":
+        ctx.write_derived(call=call, path=f"{base}.whipUsesOwnerGravity", value=True, target=entity,
+                          key="whipUsesOwnerGravity", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "set_projectile_collision":
         project(component("collision"), f"{base}.collision", p)

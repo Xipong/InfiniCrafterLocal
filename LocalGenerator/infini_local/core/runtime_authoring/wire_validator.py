@@ -18,6 +18,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
+    PROJECTILE_MODIFIER_COMPONENTS,
     ENTITY_KINDS,
     EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
@@ -44,7 +45,7 @@ _FORBIDDEN_ROUTER_KEYS = {
 
 _RUNTIME_KEYS = frozenset({"apiVersion", "schema", "itemEntityId", "primaryEntityId", "primaryOwner", "limits", "entities", "bindings", "itemUse", "itemContact", "effectGroups", "heldEffectGroupId", "weaponAmmo"})
 _LIMIT_KEYS = frozenset({"maxEntityCount", "maxChildDepth", "maxEventSpawnsPerActivation"})
-_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "hitboxCurve", "nativeSentry", "collision", "movement", "controller", "targeting", "light", "events"})
+_ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage", "lifetimeTicks", "hitbox", "hitboxCurve", "collision", "movement", "controller", "targeting", "light", "events", "nativeSentry", "whipUsesOwnerGravity", *PROJECTILE_MODIFIER_COMPONENTS.values()})
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
@@ -359,6 +360,25 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         entity_id = str(entity.get("id") or "")
         kind = str(entity.get("kind") or "")
         _reject_unknown(entity, _ENTITY_KEYS, entity_path, errors)
+        movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
+        controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+        for modifier_fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+            if member not in entity:
+                continue
+            modifier_cap = CAPABILITY_REGISTRY[modifier_fn]
+            modifier_path = entity_path + "." + member
+            shape = strict_schema_errors(entity[member], modifier_cap.provider_variant_schema()["properties"]["params"], path=modifier_path)
+            if kind not in modifier_cap.target_kinds or shape:
+                errors.append({"path": modifier_path, "code": "invalid_projectile_modifier", "message": "Present modifier requires the exact target kind, all registry choices, finite ranges and no unknown fields."})
+                errors.extend(shape)
+            if modifier_cap.category == "motion_modifier" and controller.get("code", 0) != 0:
+                errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Velocity modifiers require movement to own motion."})
+            if member == "visualScaleCurve" and (movement.get("code") in {15, 18} or controller.get("code") == 1 or isinstance(entity.get("hitboxCurve"), Mapping) and entity["hitboxCurve"].get("mirrorToSprite") is True):
+                errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry."})
+        if "whipUsesOwnerGravity" in entity:
+            path = entity_path + ".whipUsesOwnerGravity"
+            if entity["whipUsesOwnerGravity"] is not True or kind != "owner_attached_projectile" or movement.get("code") != 18 or controller.get("code") == 1:
+                errors.append({"path": path, "code": "invalid_whip_gravity", "message": "The true marker requires actual owner-attached whip geometry without beam precedence."})
         if "hitboxCurve" in entity:
             curve_cap = CAPABILITY_REGISTRY["set_projectile_hitbox_curve"]
             curve_schema = curve_cap.provider_variant_schema()["properties"]["params"]
@@ -371,16 +391,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             else:
                 movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
                 controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
-                if controller.get("code") == 1 or movement.get("code") == 18 or (curve["mirrorToSprite"] and movement.get("code") == 15):
+                if controller.get("code") == 1 or movement.get("code") == 18 or (curve["mirrorToSprite"] and (movement.get("code") == 15 or "visualScaleCurve" in entity)):
                     errors.append({"path": curve_path, "code": "hitbox_curve_driver_conflict", "message": "Rectangle curves exclude beam/whip collisions; a sprite mirror excludes independent expanding-wave scale."})
-                contract = data.get("runtimeContract") if isinstance(data.get("runtimeContract"), Mapping) else {}
-                if "finalWireReceipts" in contract:
-                    receipts = contract["finalWireReceipts"]
-                    for name in curve_cap.params:
-                        final_path = curve_path.removeprefix("$.") + "." + name
-                        matches = [row for row in receipts if isinstance(row, Mapping) and row.get("fn") == curve_cap.name and row.get("finalPath") == final_path] if isinstance(receipts, list) else []
-                        if len(matches) != 1:
-                            errors.append({"path": curve_path + "." + name, "code": "missing_unique_hitbox_curve_receipt", "message": "A provenance-bearing wire must prove every present curve leaf exactly once on its actual entity."})
         component_specs = (
             ("visual", _VISUAL_KEYS), ("spawn", _SPAWN_KEYS), ("damage", _DAMAGE_KEYS),
             ("hitbox", _HITBOX_KEYS), ("collision", _COLLISION_KEYS), ("movement", _DRIVER_KEYS),

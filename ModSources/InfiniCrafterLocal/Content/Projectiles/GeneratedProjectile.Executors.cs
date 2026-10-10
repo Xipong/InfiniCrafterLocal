@@ -55,8 +55,13 @@ public sealed partial class GeneratedProjectile
 
         bool controllerOwnsMotion = RunController();
         if (!controllerOwnsMotion)
+        {
             RunMovement();
+            ApplyActiveModifiers();
+        }
+        ApplyNpcAttraction();
         ApplyHitboxCurveVisual();
+        ApplyVisualScaleCurve();
 
         if (_entity.Light.Strength > 0f && Main.netMode != NetmodeID.Server)
         {
@@ -523,13 +528,14 @@ public sealed partial class GeneratedProjectile
         float animationMax = Math.Max(1f, owner.itemAnimationMax);
         float progress = 1f - Math.Clamp(owner.itemAnimation / animationMax, 0f, 1f);
         float extension = MathF.Sin(progress * MathHelper.Pi);
-        Vector2 direction = _initialDirection.RotatedBy(MathHelper.Lerp(-0.75f, 0.75f, progress) * owner.direction);
+        float gravity = _entity!.WhipUsesOwnerGravity == true ? owner.gravDir : 1f;
+        Vector2 direction = _initialDirection.RotatedBy(MathHelper.Lerp(-0.75f, 0.75f, progress) * owner.direction * gravity);
         Vector2 normal = direction.RotatedBy(MathHelper.PiOver2);
         float reach = Math.Max(32f, p.RangeTiles * 16f) * owner.whipRangeMultiplier * extension;
         for (int i = 0; i <= segments; i++)
         {
             float t = i / (float)segments;
-            float bend = MathF.Sin(t * MathHelper.Pi) * MathF.Sin(progress * MathHelper.TwoPi) * reach * 0.12f;
+            float bend = MathF.Sin(t * MathHelper.Pi) * MathF.Sin(progress * MathHelper.TwoPi) * reach * 0.12f * gravity;
             _whipPoints.Add(owner.MountedCenter + direction * reach * t + normal * bend);
         }
     }
