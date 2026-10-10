@@ -127,9 +127,9 @@ internal static class RuntimeProgramExecutor
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget)
     {
-        int available = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Remaining;
-        if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth
-            || available <= 0)
+        // Reserve observes concurrent child retirement; a stale Remaining=0
+        // must not bypass it for an immediate event-only producer.
+        if (childDepth >= data.RuntimeProgram.Limits.MaxChildDepth)
         {
             budget.Return(reservedSpawnBudget);
             return;

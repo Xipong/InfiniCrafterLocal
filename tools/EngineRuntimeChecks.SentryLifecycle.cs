@@ -229,6 +229,49 @@ internal static partial class EngineRuntimeChecks
         Equal((byte)80, reader.ReadByte(), "concurrent-cap peer snapshot retains admitted observational range");
     }
 
+    private static void SentryEventOnlyPoolReapsBeforeSaturationRefusal()
+    {
+        using var state = new SentryLifeScope();
+        var data = RootSpawnFixture(32, 1);
+        var action = new RuntimeEventActionSpec { Id = "event_only", Event = RuntimeEventKind.Periodic,
+            ActionCode = RuntimeEventActionCode.SpawnEntity, EntityId = "root", Count = 1 };
+        int starts = 0;
+        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
+            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+            (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
+            ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
+                starts++;
+                throw new SentrySpawnProbeFailure();
+            }));
+        foreach (bool replaceIncarnation in new[] { false, true }) {
+            var pool = new RuntimeSpawnBudget(1, concurrent: true);
+            Equal(1, pool.Reserve(1), "event-only pool starts with one reservation");
+            var earlier = new Projectile { active = true };
+            bool current = true;
+            pool.TrackLive(earlier, () => current);
+            Equal(0, pool.Remaining, "event-only pool is saturated by a living child");
+            void Attempt() => RuntimeProgramExecutor.ExecuteAction(data, data.RuntimeProgram.Entities[0], action,
+                state.Owner, state.Owner.GetSource_Misc("event-only pool"), Vector2.Zero, Vector2.UnitX,
+                null, 0, 0, pool);
+            int before = starts;
+            Attempt();
+            Equal(before, starts, "live saturated pool still refuses actual native entry");
+            if (replaceIncarnation) current = false; else earlier.active = false;
+            try { Attempt(); } catch (SentrySpawnProbeFailure) { }
+            Equal(before + 1, starts, "immediate event reaches native spawn after unhooked retirement");
+            Equal(1, pool.Remaining, "failed native entry restores the exact available reservation");
+        }
+        var lifetime = new RuntimeSpawnBudget(1);
+        lifetime.Reserve(1);
+        var retired = new Projectile { active = false };
+        lifetime.TrackLive(retired, () => false);
+        int unchanged = starts;
+        RuntimeProgramExecutor.ExecuteAction(data, data.RuntimeProgram.Entities[0], action,
+            state.Owner, state.Owner.GetSource_Misc("lifetime pool"), Vector2.Zero, Vector2.UnitX,
+            null, 0, 0, lifetime);
+        Equal(unchanged, starts, "retirement never refills lifetime allowance");
+    }
+
     private sealed class SentrySpawnProbeFailure : Exception { }
     private static void SentryDescendantPoolNativeFailureRefundsUnusedSlots()
     {

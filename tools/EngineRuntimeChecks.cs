@@ -213,6 +213,7 @@ internal static partial class EngineRuntimeChecks
             ("explicit concurrency wire preserves absence and rejects invalid presence", ExplicitConcurrencyWirePreservesAbsenceAndRejectsInvalidPresence),
             ("sentry lifecycle explicit DTO and native projections", SentryLifecycleDtoAndNativeProjection),
             ("sentry lifecycle native resting spot and turret cap", SentryNativeRestingSpotAndTurretCap),
+            ("sentry event-only pool retirement", SentryEventOnlyPoolReapsBeforeSaturationRefusal),
             ("sentry descendant pool sustained firing and exact retirement", SentryDescendantPoolRetiresAndSustainsBeyond32),
             ("sentry descendant pool nested and lifetime ancestors", SentryDescendantPoolsPreserveEveryAncestor),
             ("sentry descendant pool pending cancellation and hydration", SentryDescendantPoolPendingAndHydration),
