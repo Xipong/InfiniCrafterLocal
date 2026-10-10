@@ -36,7 +36,7 @@ Source of truth — [vfx_manifest.py](../LocalGenerator/infini_local/core/vfx_ma
 | `impactSprite` | Dedicated generated impact PNG, duration world ticks + linear fade; `textureRole=impact` и непустой `spritePrompt`, не inventory/Dust substitute. |
 | `childMotes` | Bounded выбранный Terraria Dust, не gameplay children. |
 | `lightCue` | World Lighting, не drawn glow/trail: **channel=light, lane=cue**. |
-| `soundCue` | SoundID.Item1 на resolved anchor: **channel=sound, lane=cue**; alpha — volume, не sound-library classifier. |
+| `soundCue` | Exact finite `soundId` на resolved anchor: **channel=sound, lane=cue**; fresh output требует `sound={volume,pitch,pitchVariance}`. [Sound contract](VFX_SOUND_PALETTE_RU.md) сохраняет прежний alpha/phase/native-variance путь только при отсутствии `sound` в saved wire. |
 | `spriteElement`, `texturedPath` | Полный отдельный [material contract](VFX_MATERIAL_ELEMENTS_RU.md), не наследование legacy scale/density/lifetime semantics. |
 
 Conditional dependencies обязаны присутствовать в actual runtimeSurface и outputSchema Director **и Repair**, в том числе при json_object transport: отдельные enum lists их не сообщают. `allOf`/semantic diagnostics дают точный leaf error, не whole-slot размораживание. Код не дописывает lane/channel/textureRole. Repair сначала проверяет patch structure, затем frozen merge и full final constraints; попытка изменить frozen lane не отменяет полезный разрешённый leaf fix. Если tuple после bounded Repair невалиден — manifest не создаётся. Selected PNG dependencies — [одна projection](IMAGE_ASSET_LIFECYCLE_RU.md#dependencies).

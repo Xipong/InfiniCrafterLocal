@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+import struct
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
@@ -37,7 +38,7 @@ VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
 # and the output schema derived from the accepted runtime program.
 _VFX_RUNTIME_VOCABULARY_KEYS = (
     "schema", "rendererKind", "rendererRequirements", "rendererSemantics",
-    "colorPolicy", "heldRootVisibility", "soundId", "backend", "textureRole", "particleRole", "anchor", "channel",
+    "colorPolicy", "heldRootVisibility", "soundId", "sound", "backend", "textureRole", "particleRole", "anchor", "channel",
     "lane", "emissionMode", "blend", "layer", "particleSystemId",
     "visualBudgetClass", "numericRanges", "textureDependencyTuples", "maxSlots",
 )
@@ -95,7 +96,7 @@ _RENDERER_SEMANTICS = {
     "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt and impact texture; no inventory/dust substitute.",
     "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
     "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
-    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: fresh soundCue requires an explicit soundId from the general palette. Persisted legacy absence keeps SoundID.Item1. Only soundCue may carry soundId; present null, unknown names, aliases and free paths are invalid. alpha controls volume; the existing phase-to-pitch mapping is unchanged. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
+    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: fresh soundCue requires an explicit soundId from the general palette. Persisted legacy absence keeps SoundID.Item1. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Fresh soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and legacy phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Persisted absence of sound alone retains volume=clamp(alpha,0.05,1), pitch=clamp(phaseOffset*0.25,-0.5,0.5), native variance and native instrument policy unchanged. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
     "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. If the intended body covers that path, an explicit compatible source=whip/beam slot can coexist with a baked tip/body; runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
@@ -104,9 +105,19 @@ _RENDERER_SEMANTICS = {
 # Exact installed Terraria.ID.SoundID members, shared by schema and vocabulary.
 # This general sample palette carries no weapon/entity/category routing.
 _SOUND_IDS = (
-    "Item1", "Item2", "Item3", "Item4", "Item8", "Item9", "Item14", "Item20", "Item21", "Item29", "Item43",
-    "Dig", "Tink", "Grab", "Shatter", "Splash", "Coins", "Unlock", "MaxMana", "ResearchComplete",
+    "Item1", "Item2", "Item3", "Item4", "Item5", "Item7", "Item8", "Item9",
+    "Item10", "Item11", "Item12", "Item13", "Item14", "Item15", "Item17", "Item20",
+    "Item21", "Item26", "Item28", "Item29", "Item31", "Item33", "Item34", "Item36",
+    "Item37", "Item38", "Item40", "Item41", "Item42", "Item43", "Item44", "Item46",
+    "Item51", "Item54", "Item57", "Item58", "Item60", "Item62", "Item69", "Item70",
+    "Item71", "Item72", "Item73", "Item74", "Item76", "Item77", "Item78", "Item82",
+    "Item83", "Item84", "Item85", "Item88", "Item89", "Item91", "Item93", "Item94",
+    "Item97", "Item98", "Item99", "Item102", "Item103", "Item105", "Item106", "Item107",
+    "Item108", "Item109", "Item110", "Item113", "Item117", "Item123", "Item124", "Item152",
+    "Item157", "Item158", "Item169", "Coins", "Dig", "Grab", "MaxMana", "ResearchComplete",
+    "Shatter", "Splash", "Tink", "Unlock",
 )
+
 _BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
 _TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
@@ -141,7 +152,7 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     ),
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
     "duration": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
-    "alpha": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound volume clamp(alpha,0.05,1). Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+    "alpha": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; legacy sound without sound payload uses volume clamp(alpha,0.05,1); explicit sound.volume alone owns new audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
     "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
     "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
@@ -233,6 +244,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "rendererRequirements": copy.deepcopy(_RENDERER_REQUIREMENTS),
         "rendererSemantics": copy.deepcopy(_RENDERER_SEMANTICS),
         "soundId": list(_SOUND_IDS),
+        "sound": _sound_schema(),
         "heldRootVisibility": {
             field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
             for field in ("hideUseGraphic", "customHeldSprite")
@@ -279,6 +291,41 @@ def _impact_sprite_background_rule() -> str:
         + sprite_background_positive_clause()
         + ". Local postprocess owns final alpha; do not confuse raw background with final transparency."
     )
+
+
+def _sound_schema() -> dict[str, Any]:
+    """One VFX-owned exact playback contract; no gameplay capability or router."""
+    return {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "volume": {"type": "number", "minimum": 0.0, "maximum": 1.0,
+                       "description": "Final SoundStyle volume multiplier, independent of common alpha and native sample Volume; 0 is deliberate silence. A nonzero choice must remain nonzero in native float32 playback; sub-storage values are rejected, not silenced. Native distance and user volume settings still apply."},
+            "pitch": {"type": "number", "minimum": -0.9, "maximum": 0.9,
+                      "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage."},
+            "pitchVariance": {"type": "number", "minimum": 0.0, "maximum": 0.6,
+                              "description": "Full native random pitch interval width, not statistical variance: random pitch is pitch +/- pitchVariance/2. Zero disables native pitch jitter; a nonzero interval must remain nonzero in native float32 storage. Must be <= 2*(1-abs(pitch)); only this leaf is repairable for a failed interval relation."},
+        },
+        "required": ["volume", "pitch", "pitchVariance"],
+    }
+
+
+def _sound_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
+    payload = slot.get("sound")
+    if slot.get("rendererKind") != "soundCue" or not isinstance(payload, Mapping):
+        return []
+    properties = _sound_schema()["properties"]
+    errors = []
+    for field, schema in properties.items():
+        value = payload.get(field)
+        if not strict_schema_errors(value, schema) and value != 0 and struct.unpack("!f", struct.pack("!f", value))[0] == 0:
+            errors.append({"path": path + ".sound." + field,
+                           "message": "A nonzero authored sound control must remain nonzero in native float32 playback; choose an explicit representable value or deliberate zero."})
+    pitch, variance = payload.get("pitch"), payload.get("pitchVariance")
+    if (not strict_schema_errors(pitch, properties["pitch"])
+            and not strict_schema_errors(variance, properties["pitchVariance"])
+            and abs(pitch) + variance / 2 > 1.0):
+        errors.append({"path": path + ".sound.pitchVariance", "message": "pitchVariance must be <= 2*(1-abs(pitch)); preserve valid central pitch"})
+    return errors
 
 
 def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool = True) -> dict[str, Any]:
@@ -335,6 +382,7 @@ def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool =
             "path": path_schema(),
             "screenShake": screen_shake_schema(),
             "particle": library_particle_schema(),
+            "sound": _sound_schema(),
             "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement."},
         },
         "required": [
@@ -362,11 +410,15 @@ def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool =
     if require_sound_selection:
         slot["allOf"].append({
             "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind"]},
-            "then": {"required": ["soundId"]},
+            "then": {"required": ["soundId", "sound"]},
         })
     slot["allOf"].append({
         "if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "soundCue"]}}, "required": ["rendererKind"]},
-        "then": {"properties": {"soundId": {"enum": []}}},
+        "then": {"properties": {field: {"enum": []} for field in ("soundId", "sound")}},
+    })
+    slot["allOf"].append({
+        "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind", "sound"]},
+        "then": {"required": ["soundId"]},
     })
     slot["allOf"].extend([
         {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}}, "required": ["rendererKind"]},
@@ -691,6 +743,9 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["particle"] = copy.deepcopy(slot["particle"])
         if "soundId" in slot:
             clean["soundId"] = slot["soundId"]
+        if "sound" in slot:
+            clean["sound"] = copy.deepcopy(slot["sound"])
+        errors.extend(_sound_slot_errors(slot, path))
         errors.extend(_material_slot_errors(slot, path))
         for renderer in ("soundCue", "lightCue"):
             required = _RENDERER_REQUIREMENTS[renderer]
@@ -779,8 +834,9 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
             for error in strict_schema_errors(slot, slot_schema, path=path):
                 errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
             errors.extend(_material_slot_errors(slot, path))
+            errors.extend(_sound_slot_errors(slot, path))
         else:
-            for field in ("element", "path", "screenShake", "particle", "soundId"):
+            for field in ("element", "path", "screenShake", "particle", "soundId", "sound"):
                 if field in slot:
                     errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
     for error in vfx_png_dependencies(data, manifest)["errors"]:
@@ -1029,6 +1085,12 @@ def _vfx_filter_ignored(path: str, requested: Any, preserved: Any, reason: str) 
 def _vfx_repair_structure(schema: Mapping[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(dict(schema))
     out.pop("allOf", None)
+    # A typed attempt to rewrite an already-valid numeric leaf must reach the
+    # frozen merge even when its requested value exceeds the semantic bounds.
+    # Types, declared keys and required object shape stay checked here; bounds
+    # and cross-field relations are enforced on the resulting merged manifest.
+    for key in ("minimum", "maximum", "multipleOf"):
+        out.pop(key, None)
     if isinstance(out.get("properties"), dict):
         out["properties"] = {name: _vfx_repair_structure(child) for name, child in out["properties"].items()}
     if isinstance(out.get("items"), Mapping):
@@ -1354,6 +1416,45 @@ def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _sound_projection_receipts(authored: Mapping[str, Any]) -> list[dict[str, Any]]:
+    receipts: list[dict[str, Any]] = []
+    for index, slot in enumerate(_rows(authored, "slots")):
+        if not isinstance(slot, Mapping) or slot.get("rendererKind") != "soundCue":
+            continue
+        leaves = {"soundId": slot["soundId"]} if "soundId" in slot else {}
+        if isinstance(slot.get("sound"), Mapping):
+            leaves.update({f"sound.{field}": slot["sound"][field]
+                           for field in _sound_schema()["properties"] if field in slot["sound"]})
+        for leaf, value in leaves.items():
+            receipts.append({"slotId": slot.get("id"), "status": "identity",
+                             "authoredPath": f"slots[{index}].{leaf}",
+                             "finalPath": f"vfxManifest.slots[{index}].{leaf}",
+                             "value": copy.deepcopy(value)})
+    return receipts
+
+
+def audit_vfx_sound_projection(authored: Mapping[str, Any], manifest: Mapping[str, Any], receipts: Any) -> dict[str, Any]:
+    """Diagnostic identity receipts; playback remains owned solely by VFX wire."""
+    expected = _sound_projection_receipts(authored)
+    errors: list[dict[str, Any]] = []
+    if not json_values_equal(receipts, expected):
+        errors.append({"path": "$.debug.vfxSoundReceipts", "message": "exact source-backed sound receipts required"})
+    final_slots = _rows(manifest, "slots")
+    for index, source in enumerate(_rows(authored, "slots")):
+        if not isinstance(source, Mapping):
+            continue
+        delivered = final_slots[index] if index < len(final_slots) and isinstance(final_slots[index], Mapping) else {}
+        for field in ("soundId", "sound"):
+            if (field in source) != (field in delivered) or not json_values_equal(source.get(field), delivered.get(field)):
+                errors.append({"path": f"$.vfxManifest.slots[{index}].{field}",
+                               "message": "sound projection must preserve exact authored presence and value"})
+        if any(field in source for field in ("soundId", "sound")) and any(source.get(field) != delivered.get(field) for field in ("id", "entityId", "event", "rendererKind")):
+            errors.append({"path": f"$.vfxManifest.slots[{index}]", "message": "sound consumer identity must preserve its exact authored binding"})
+    if len(final_slots) != len(_rows(authored, "slots")):
+        errors.append({"path": "$.vfxManifest.slots", "message": "sound projection cannot add or remove slots"})
+    return {"ok": not errors, "errors": errors, "receiptCount": len(expected)}
+
+
 def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], recipe_key_value: str) -> dict[str, Any]:
     magnitude = float(authored["effectMagnitude"])
     budget_class = str(authored["visualBudgetClass"])
@@ -1474,8 +1575,16 @@ def attach_hybrid_vfx_manifest(
         data["debug"]["vfxRepairFilterAudit"] = copy.deepcopy(repair_audit)
         data["debug"]["vfxRepairScope"] = copy.deepcopy(repair_scope)
     _hydrate_vfx_asset_prompts(data, report["normalized"])
-    data["vfxManifest"] = _compile_manifest(data, report["normalized"], recipe_key_value)
+    manifest = _compile_manifest(data, report["normalized"], recipe_key_value)
+    sound_receipts = _sound_projection_receipts(report["normalized"])
+    sound_audit = audit_vfx_sound_projection(report["normalized"], manifest, sound_receipts)
+    if not sound_audit["ok"]:
+        raise PlannerUnavailable("VFX sound projection lost an authored choice: " + json.dumps(sound_audit["errors"], ensure_ascii=False))
+    data["vfxManifest"] = manifest
     debug = data.setdefault("debug", {})
+    if sound_receipts:
+        debug["vfxSoundReceipts"] = sound_receipts
+        debug["vfxSoundProjectionAudit"] = sound_audit
     debug["vfxDirectorStatus"] = "validated_and_compiled"
     debug["vfxDirectorRaw"] = copy.deepcopy(raw)
     debug["vfxRuntimePairs"] = _allowed_pairs(data)
