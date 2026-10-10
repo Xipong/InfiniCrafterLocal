@@ -6,6 +6,7 @@ import json
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, compact_capability_catalog
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_MIN_HEADROOM_CHARS, PLANNER_PROMPT_LIMIT_CHARS
+from test_author_request_compaction import _expand_constraint_references
 
 
 def _request(monkeypatch):
@@ -50,8 +51,9 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
     assert set(cards) == set(CAPABILITY_REGISTRY)
-    assert {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
-            for fn, card in cards.items()} == canonical
+    assert _expand_constraint_references(
+        {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
+         for fn, card in cards.items()}, catalog["fieldGuide"]["consumerConstraints"]) == canonical
     guide = catalog["fieldGuide"]["referenceRules"] + " " + payload["runtimeProgramInvariants"]["graphAndSpawnBudget"]
     assert all(term in guide for term in ("targetKinds", "compatible", "cycle", "depth", "static sum", "spawn_entity_on_event counts", "runtime activation budget"))
     assert catalog["limits"]["childDepth"] == 3
