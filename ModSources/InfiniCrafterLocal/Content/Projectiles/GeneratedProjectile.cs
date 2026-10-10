@@ -275,8 +275,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
             Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
             Vector2 velocity = entity.IsStationary ? Vector2.Zero : direction * entity.Spawn.SpeedPxPerTick;
-            // A supplied root value is the final native shooting result, including
-            // player/prefix/late hooks. Null retains the authored event-spawn lane.
+            // A supplied value is final native root combat or explicitly selected
+            // live-parent child combat. Never apply player/class modifiers again.
+            // Null retains the independently authored child lane.
             int damage = entity.Damage.Enabled
                 ? rootDamageOverride ?? Math.Max(0, (int)MathF.Round(entity.Damage.Damage * Math.Clamp(damageMultiplier, 0f, 10f)))
                 : 0;

@@ -182,10 +182,16 @@ public sealed partial class GeneratedProjectile
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
+        float damageMultiplier = _entity.Targeting.DamageMultiplier ?? 1f;
+        if (!RuntimeChildCombat.TryResolve(_entity.Targeting.DamageBasis, _entity.Targeting.KnockbackBasis,
+            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
+            out int? damageOverride, out float? knockbackOverride))
+            return true;
         int granted = budget.Reserve(1);
         int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
             Projectile.Center, direction, _childDepth + 1, granted, requestedCount: 1,
-            activationBudget: budget) : 0;
+            damageMultiplier: damageMultiplier, activationBudget: budget,
+            rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;
         budget.Return(granted - spawned);
         Projectile.netUpdate = true;
         return true;

@@ -33,6 +33,7 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "param_requires_target_kind",
     "capability_present",
     "capability_group_present",
     "item_capability_param",
@@ -207,6 +208,15 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "entity": "EntityId",
             }.get(param_name, param_name[:1].upper() + param_name[1:])
             csharp = bounds.get(csharp_name)
+            if cap.name == "target_and_fire" and param_name == "damageMultiplier":
+                from infini_local.qa.primitive_loss_audit import nullable_float_rejection_bounds
+                reject_bounds = nullable_float_rejection_bounds(text.encode(), class_name, csharp_name)
+                authored_bounds = [spec.minimum, spec.maximum]
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": authored_bounds,
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "preserved": reject_bounds == authored_bounds})
+                continue
             if cap.name == "set_projectile_concurrency":
                 block = _class_block(text, class_name)
                 declaration = re.search(

@@ -244,7 +244,7 @@ def _workbench_blade() -> dict[str, Any]:
     b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationTicks": 24}, width=64, height=34)
     b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
-    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0})
+    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"event": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"})
     return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
@@ -299,7 +299,7 @@ def _held_and_deployed() -> dict[str, Any]:
     b.call("held_light", "emit_light_while_active", "held_lantern_pike", {"strength": 0.9, "color": "orange"})
     b.projectile("deployed_lantern", "stationary_projectile", speed=0, lifetime=900, damage=0, tile=True, pierce=-1, movement=None, placement="ground_at_cursor", aim="none", width=28, height=42)
     b.projectile("lantern_bolt", "child_projectile", speed=11, lifetime=150, damage=18, damage_class="magic", tile=True, pierce=1, movement="move_slow_homing", movement_params={"rangeTiles": 28, "homingStrength": 0.08}, width=12, height=12)
-    b.call("deployed_targeter", "target_and_fire", "deployed_lantern", {"shotEntity": "lantern_bolt", "intervalTicks": 45, "rangeTiles": 30, "sameTargetBias": 0.35})
+    b.call("deployed_targeter", "target_and_fire", "deployed_lantern", {"shotEntity": "lantern_bolt", "intervalTicks": 45, "rangeTiles": 30, "sameTargetBias": 0.35, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0})
     b.bind("primary_pike", "primary_use", "spawn_entity", "held_lantern_pike")
     b.bind("alternate_deploy", "alternate_use", "spawn_entity", "deployed_lantern")
     return b.finish(primary_entity_id="held_lantern_pike", composition="A lantern is mounted on a pike and can be planted without ceasing to be literal.", parent_a="pike body", parent_b="lantern targeter")

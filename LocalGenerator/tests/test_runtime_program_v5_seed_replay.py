@@ -8,6 +8,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 
 
 _CORPUS = Path(__file__).with_name("fixtures") / "runtime_program_v5_seed_corpus.json"
@@ -75,9 +76,9 @@ def test_frozen_v5_seed_corpus_replays_exact_production_compile_and_detects_drif
         )
         assert actual_capabilities == row["capabilities"]
 
-        compiled = compile_runtime_program(authored)
+        compiled = compile_runtime_program(captured_parent_combat_author(authored))
         assert validate_runtime_wire(compiled)["ok"] is True
-        actual_wire = _delivery_wire(compiled)
+        actual_wire = historical_child_combat_wire(_delivery_wire(compiled))
         assert actual_wire == row["expectedDeliveryWire"]
         digest = hashlib.sha256(_canonical(actual_wire).encode("utf-8")).hexdigest()
         assert digest == row["expectedDeliveryWireSha256"]

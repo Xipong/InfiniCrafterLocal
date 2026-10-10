@@ -6,7 +6,9 @@ from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
+    CONTROLLER_OPCODE,
     ENTITY_KIND_REGISTRY,
+    EVENT_ACTION_OPCODE,
     VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
 )
@@ -157,6 +159,22 @@ def _parameter_outputs(fn: str, name: str, *, retained: bool = False) -> tuple[s
         candidate for candidate in cap.final_wire_paths
         if candidate.rsplit(".", 1)[-1] in names
     ))
+
+
+def _present_wire_paths(value: Any, pattern: str, prefix: str = "") -> Iterable[str]:
+    """Expand only declared exact paths and array slots; do not scan arbitrary keys."""
+    head, dot, tail = pattern.partition(".")
+    key = head[:-2] if head.endswith("[]") else head
+    if not isinstance(value, Mapping) or key not in value:
+        return
+    child = value[key]
+    base = f"{prefix}.{key}" if prefix else key
+    children = ((f"{base}[{index}]", row) for index, row in enumerate(child)) if head.endswith("[]") and isinstance(child, list) else ((base, child),) if not head.endswith("[]") else ()
+    for path, row in children:
+        if dot:
+            yield from _present_wire_paths(row, tail, path)
+        else:
+            yield path
 
 
 def _retained_projection_value_matches(spec: Any, value: Any) -> bool:
@@ -839,6 +857,47 @@ def audit_compiler_receipts(
                             "reason": "declared neutral omission has no unique omission receipt",
                         })
     if final_document is not None:
+        # A newly present design selector cannot acquire saved-wire authority
+        # merely because older payloads legitimately omitted the whole field.
+        for fn, cap in CAPABILITY_REGISTRY.items():
+            for name, spec in cap.params.items():
+                if not spec.wire_presence_requires_receipt:
+                    continue
+                for pattern in _parameter_outputs(fn, name):
+                    for path in _present_wire_paths(final_document, pattern):
+                        matching = [row for row in receipt_rows if row.get("fn") == fn
+                                    and row.get("finalPath") == path and row.get("status") == "delivered"
+                                    and not row.get("authoredPaths")
+                                    and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name),
+                                                     str(row.get("authoredPath") or ""))]
+                        if len(matching) != 1:
+                            violations.append({"fn": fn, "finalPath": path,
+                                               "reason": "present explicit wire parameter has no unique originating receipt"})
+                            continue
+                        receipt = matching[0]
+                        source_base = str(receipt["authoredPath"]).rsplit(".params.", 1)[0]
+                        entity_match = re.match(r"runtimeProgram\.entities\[\d+\]", path)
+                        entity_base = entity_match.group() if entity_match else ""
+                        event_base = path.rsplit(".", 1)[0] if cap.category == "event" else ""
+                        if event_base:
+                            action_code = _final_value(final_document, event_base + ".actionCode")
+                            associated = (_final_value(final_document, event_base + ".id") == receipt.get("callId")
+                                          and _final_value(final_document, event_base + ".action") == fn
+                                          and type(action_code) is int and action_code == EVENT_ACTION_OPCODE.get(fn))
+                        else:
+                            controller_code = _final_value(final_document, entity_base + ".controller.code")
+                            associated = (type(controller_code) is int and controller_code == CONTROLLER_OPCODE.get(fn)
+                                          and _final_value(final_document, entity_base + ".controller.name") == fn
+                                          and any(row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                                             and row.get("authoredPath") == source_base + ".fn"
+                                             and row.get("finalPath") == entity_base + ".controller.name"
+                                             and row.get("status") == "technical_projection" and row.get("value") == fn
+                                             for row in receipt_rows))
+                        if authored_document is not None:
+                            associated = associated and _final_value(authored_document, source_base + ".target") == _final_value(final_document, entity_base + ".id")
+                        if not associated:
+                            violations.append({"fn": fn, "finalPath": path, "callId": receipt.get("callId"),
+                                               "reason": "explicit wire parameter receipt has the wrong entity or event owner"})
         # Presence is an explicit root-PNG source selection. With provenance
         # supplied, every body requires one exact association and each transform
         # requires its own unique receipt from that association's source call.

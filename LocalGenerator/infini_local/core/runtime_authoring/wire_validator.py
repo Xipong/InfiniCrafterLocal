@@ -16,7 +16,9 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
+    CONTROLLER_OPCODE,
     ENTITY_KINDS,
+    EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
@@ -62,12 +64,13 @@ _PARAMS_KEYS = frozenset({
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
     "chargeTicks", "powerMultiplier", "shotEntity", "intervalTicks", "sameTargetBias",
 })
-_TARGETING_KEYS = frozenset({"shotEntityId", "intervalTicks", "rangeTiles", "sameTargetBias"})
+_TARGETING_KEYS = frozenset(spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["target_and_fire"].params.items())
 _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
+    "damageBasis", "knockbackBasis",
 })
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage"})
@@ -102,6 +105,29 @@ def _positive_integer_effect(value: Any, path: str, errors: list[dict[str, Any]]
         errors.append({"path": path, "code": "invalid_integer", "message": "Effect value must be an integer without coercion."})
         return False
     return value > 0
+
+
+def _validate_child_combat(
+    wire: Mapping[str, Any], capability: str, source_kind: str, active: bool,
+    path: str, errors: list[dict[str, Any]],
+) -> None:
+    """New present leaves are exact; omitted saved-wire leaves retain their old lane."""
+    cap = CAPABILITY_REGISTRY[capability]
+    names = ("damageBasis", "knockbackBasis", "damageMultiplier") if capability == "target_and_fire" else ("damageBasis", "knockbackBasis")
+    for name in names:
+        if name not in wire:
+            continue
+        leaf_path = f"{path}.{name}"
+        if not active:
+            errors.append({"path": leaf_path, "code": "inactive_child_combat_field",
+                           "message": "Child combat choices require this component's exact child-spawn consumer."})
+        errors.extend(strict_schema_errors(wire[name], cap.params[name].schema(), path=leaf_path))
+    for requirement in cap.requirements:
+        if (requirement.kind == "param_requires_target_kind"
+                and wire.get(requirement.param) == requirement.equals
+                and source_kind not in requirement.any_of):
+            errors.append({"path": f"{path}.{requirement.param}",
+                           "code": "unsupported_param_target_kind", "message": requirement.message})
 
 
 def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]]) -> None:
@@ -364,6 +390,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
         if isinstance(targeting, Mapping):
+            _validate_child_combat(targeting, "target_and_fire", kind,
+                                   isinstance(controller, Mapping) and type(controller.get("code")) is int
+                                   and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
+                                   and controller.get("name") == "target_and_fire",
+                                   f"$.runtimeProgram.entities[{index}].targeting", errors)
             child = str(targeting.get("shotEntityId") or "")
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})
@@ -377,6 +408,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             _reject_unknown(event, _EVENT_KEYS, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             action_code = event.get("actionCode")
+            _validate_child_combat(event, "spawn_entity_on_event", kind,
+                                   type(action_code) is int and action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"]
+                                   and event.get("action") == "spawn_entity_on_event",
+                                   f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             if not isinstance(action_code, int) or isinstance(action_code, bool) or not 1 <= action_code <= _MAX_EVENT_ACTION_CODE:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].actionCode", "code": "unsupported_opcode", "message": f"Event action opcode must be 1..{_MAX_EVENT_ACTION_CODE}."})
             child = str(event.get("entityId") or "")
