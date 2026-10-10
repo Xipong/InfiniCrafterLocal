@@ -11,6 +11,7 @@ from copy import deepcopy
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
+    CAPABILITY_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
 )
@@ -115,10 +116,15 @@ class _Builder:
         action_row: dict[str, Any] = {"kind": action, "targetId": target}
         if action == "place_item":
             action_row["placementCallId"] = placement_call_id
-        self.bindings.append({
+        from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+        if BINDING_ACTION_REGISTRY[action].target_kinds == ("item_body",):
+            action_row.pop("targetId")
+        if len(INPUT_KIND_REGISTRY[input_kind].allowed_actions) == 1:
+            action_row.pop("kind")
+        row: dict[str, Any] = {
             "id": binding_id,
             "input": input_kind,
-            "usePolicy": {
+            **{
                 "action": action_row,
                 "stackCost": stack_cost,
                 "contactDamage": (
@@ -127,10 +133,21 @@ class _Builder:
                     and action != "place_item"
                 ),
             },
-        })
+        }
+        if not action_row:
+            row.pop("action")
+        if input_kind not in {"primary_use", "alternate_use"} or action == "place_item":
+            row.pop("stackCost")
+            row.pop("contactDamage")
+        self.bindings.append(row)
 
     def call(self, call_id: str, fn: str, target: str, params: dict[str, Any]) -> None:
-        self.calls.append({"id": call_id, "fn": fn, "target": target, "params": deepcopy(params)})
+        row = {"id": call_id, "fn": fn, "target": target}
+        if CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",):
+            row.pop("target")
+        if CAPABILITY_REGISTRY[fn].params:
+            row["params"] = deepcopy(params)
+        self.calls.append(row)
 
     def projectile(
         self,
@@ -174,7 +191,7 @@ class _Builder:
                 "plannedPlayerActions": [
                     {
                         "input": str(row["input"]),
-                        "intent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
+                        "intent": f"Execute the authored {row.get('action', {}).get('kind', row['input'])} action.",
                     }
                     for row in self.bindings
                 ] or [{"input": "passive_or_event", "intent": "Execute the authored passive or event-driven behavior."}],
@@ -188,8 +205,8 @@ class _Builder:
                         "summary": "Every fixture draft action is represented by the explicit runtime program.",
                         "actionChecks": [
                             {
-                                "plannedIntent": f"Execute the authored {row['usePolicy']['action']['kind']} action.",
-                                "implementedBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "plannedIntent": f"Execute the authored {row.get('action', {}).get('kind', row['input'])} action.",
+                                "implementedBehavior": f"The binding executes {row.get('action', {}).get('kind', row['input'])}.",
                                 "runtimeRefs": [str(row["id"])],
                                 "result": "aligned",
                                 "intentionality": "intentional",
@@ -211,7 +228,7 @@ class _Builder:
                         "behaviorChecks": [
                             {
                                 "runtimeRefs": [str(row["id"])],
-                                "programBehavior": f"The binding executes {row['usePolicy']['action']['kind']}.",
+                                "programBehavior": f"The binding executes {row.get('action', {}).get('kind', row['input'])}.",
                                 "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
                                 "result": "aligned",
                                 "reason": "The fixture report is the accepted description of this explicit binding lane.",

@@ -302,7 +302,6 @@ def buff_document(name, value, companion):
             {
                 "id": "healing",
                 "fn": "restore_resources_on_use",
-                "target": next(c["target"] for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN),
                 "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False},
             }
         )

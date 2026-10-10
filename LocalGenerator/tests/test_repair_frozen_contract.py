@@ -121,7 +121,8 @@ def _historical_names(document):
             row["fn"] = "configure_wall_placement"
             del params["tileId"]
         project_captured_projectile_call(row)
-    return captured_parent_combat_author(projected)
+    from tests.captured_projectile_author import project_captured_author_notation
+    return project_captured_author_notation(captured_parent_combat_author(projected))
 
 
 def test_replay_frozen_provenance():
@@ -171,7 +172,7 @@ def test_captured_gameplay_repair_replay(section, case):
         expected_paths = replay.get("expectedMutableBindingPaths")
         if expected_paths is not None:
             actual = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["bindings"]}
-            projected = {identity: sorted("usePolicy.action.kind" if path == "action" else path for path in paths) for identity, paths in expected_paths.items()}
+            projected = {identity: sorted("action.kind" if path == "action" else path for path in paths) for identity, paths in expected_paths.items()}
             assert actual == projected
             assert all("action" not in paths for paths in actual.values())
             assert scope["retarget"]["bindingTargetIds"] == replay["expectedRetargetBindingTargetIds"]

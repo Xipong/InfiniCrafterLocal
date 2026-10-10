@@ -52,12 +52,36 @@ def primary_binding_role_receipt(
         "lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID,
         "authoredPaths": [
             PRIMARY_ENTITY_AUTHOR_PATH,
-            f"runtimeProgram.bindings[{source_index}].usePolicy.action.targetId",
+            f"runtimeProgram.bindings[{source_index}].action.targetId",
         ],
         "finalPath": f"runtimeProgram.bindings[{final_index}].role",
         "value": role,
         "status": "technical_projection",
     }
+
+
+def _placement_source_paths(source: Mapping[str, Any], call_index: int, binding_index: int) -> list[str]:
+    cb, bb = f"runtimeProgram.calls[{call_index}]", f"runtimeProgram.bindings[{binding_index}]"
+    entities = _final_value(source, "runtimeProgram.entities")
+    bodies = [i for i, row in enumerate(entities if isinstance(entities, list) else [])
+              if isinstance(row, Mapping) and row.get("kind") == "item_body"]
+    return [cb + ".fn", cb + ".id", cb + ".params.placementCallId", bb + ".id", bb + ".action.kind",
+            bb + ".action.placementCallId", *[f"runtimeProgram.entities[{bodies[0]}].{key}" for key in ("id", "kind")]] if len(bodies) == 1 else []
+
+
+def _binding_role_paths(source: Mapping[str, Any], index: int) -> list[str]:
+    base = f"runtimeProgram.bindings[{index}]"
+    if _final_value(source, base + ".action.targetId") is not _MISSING:
+        return [PRIMARY_ENTITY_AUTHOR_PATH, base + ".action.targetId"]
+    entities = _final_value(source, "runtimeProgram.entities")
+    bodies = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+              if isinstance(row, Mapping) and row.get("kind") == "item_body"]
+    if len(bodies) != 1:
+        return []
+    paths = [PRIMARY_ENTITY_AUTHOR_PATH, base + ".id", base + ".input"]
+    if _final_value(source, base + ".action.kind") is not _MISSING:
+        paths.append(base + ".action.kind")
+    return paths + [f"runtimeProgram.entities[{bodies[0][0]}].{key}" for key in ("id", "kind")]
 
 
 def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
@@ -79,7 +103,7 @@ def effect_group_binding_receipt(*, source_index: int, final_index: int, value: 
     return {
         "lowererId": EFFECT_GROUP_BINDING_LOWERER_ID,
         "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
-                          f"runtimeProgram.bindings[{source_index}].usePolicy.action.effectGroupId"],
+                          f"runtimeProgram.bindings[{source_index}].action.effectGroupId"],
         "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.effectGroupId",
         "value": value, "status": "technical_projection",
     }
@@ -98,8 +122,21 @@ _ITEM_TECHNICAL_OUTPUTS = tuple(dict.fromkeys(
 
 GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
     {
+        "id": "author_binding_lanes",
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind",
+                   "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].stackCost", "runtimeProgram.bindings[].contactDamage",
+                   "runtimeProgram.bindings[].action.effectGroupId", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId"],
+        "outputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].usePolicy.action.kind",
+                    "runtimeProgram.bindings[].usePolicy.action.targetId", "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+                    "runtimeProgram.bindings[].usePolicy.stackCost", "runtimeProgram.bindings[].usePolicy.contactDamage",
+                    "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId", "runtimeProgram.itemEntityId"],
+        "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
+        "preserves": ["input", "action", "target", "stack", "contact", "primary", "identity", "JSON type"],
+        "addsDesignChoice": False,
+    },
+    {
         "id": EFFECT_GROUP_BINDING_LOWERER_ID,
-        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].usePolicy.action.effectGroupId"],
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].action.effectGroupId"],
         "outputs": ["runtimeProgram.bindings[].usePolicy.action.effectGroupId"],
         "equivalence": "literal named effect group on the same exact authored binding",
         "preserves": ["binding identity", "group identity", "group contents", "shared mobility cooldown"],
@@ -115,7 +152,7 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": PRIMARY_BINDING_ROLE_LOWERER_ID,
-        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].usePolicy.action.targetId"],
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"],
         "outputs": ["runtimeProgram.bindings[].role"],
         "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
         "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],
@@ -146,6 +183,114 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "addsDesignChoice": False,
     },
 )
+
+
+def _exact_mechanical_view(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Private selected-branch expansion; never an admission/import/Repair writer."""
+    import copy
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+    out = copy.deepcopy(dict(document))
+    program = out.get("runtimeProgram")
+    if not isinstance(program, dict):
+        return out
+    entities = program.get("entities")
+    bodies = [row for row in entities if isinstance(row, Mapping) and row.get("kind") == "item_body"] if isinstance(entities, list) else []
+    body = bodies[0].get("id") if len(bodies) == 1 else None
+    if not isinstance(body, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", body):
+        body = None
+    for call in program.get("calls", []) if isinstance(program.get("calls"), list) else []:
+        if not isinstance(call, dict):
+            continue
+        cap = CAPABILITY_REGISTRY.get(str(call["fn"])) if isinstance(call.get("fn"), str) else None
+        if cap is None:
+            continue
+        if cap.target_kinds == ("item_body",) and body is not None and "target" not in call:
+            call["target"] = body
+        if not cap.params and "params" not in call:
+            call["params"] = {}
+    for binding in program.get("bindings", []) if isinstance(program.get("bindings"), list) else []:
+        if not isinstance(binding, dict):
+            continue
+        inp = INPUT_KIND_REGISTRY.get(str(binding["input"])) if isinstance(binding.get("input"), str) else None
+        if inp is None:
+            # A valid explicit action still declares its unique body dependency;
+            # this does not choose/repair the unknown input selector.
+            raw_action = binding.get("action")
+            explicit = BINDING_ACTION_REGISTRY.get(str(raw_action["kind"])) if isinstance(raw_action, dict) and isinstance(raw_action.get("kind"), str) else None
+            if isinstance(raw_action, dict) and explicit is not None and explicit.target_kinds == ("item_body",) and body is not None and "targetId" not in raw_action:
+                raw_action["targetId"] = body
+            continue
+        if len(inp.allowed_actions) == 1:
+            if "action" not in binding:
+                binding["action"] = {}
+            if isinstance(binding["action"], dict) and "kind" not in binding["action"]:
+                binding["action"]["kind"] = inp.allowed_actions[0]
+        action = binding.get("action")
+        spec = BINDING_ACTION_REGISTRY.get(str(action["kind"])) if isinstance(action, dict) and isinstance(action.get("kind"), str) else None
+        if spec is None or not isinstance(action, dict) or spec.name not in inp.allowed_actions:
+            continue
+        if spec.target_kinds == ("item_body",) and body is not None and "targetId" not in action:
+            action["targetId"] = body
+        if binding["input"] not in {"primary_use", "alternate_use"} or spec.name == "place_item":
+            binding.setdefault("stackCost", 1 if spec.name == "place_item" else 0)
+            binding.setdefault("contactDamage", False)
+    return out
+
+
+def _author_binding_receipts(source: Mapping[str, Any], final: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One typed proof chain for current source lanes, declarations and sorted identity."""
+    view = _exact_mechanical_view(source)
+    program = view.get("runtimeProgram", {})
+    raw_program = source.get("runtimeProgram", {})
+    wire = final.get("runtimeProgram", {})
+    if not isinstance(program, Mapping) or not isinstance(raw_program, Mapping) or not isinstance(wire, Mapping):
+        return []
+    rows: list[dict[str, Any]] = []
+    raw_entities = raw_program.get("entities", [])
+    bodies = [(i, entity) for i, entity in enumerate(raw_entities) if isinstance(entity, Mapping) and entity.get("kind") == "item_body"]
+    body_paths = [f"runtimeProgram.entities[{bodies[0][0]}].{key}" for key in ("id", "kind")] if len(bodies) == 1 else []
+    def emit(paths: list[str], destination: str, value: Any) -> None:
+        rows.append({"lowererId": "author_binding_lanes", "authoredPaths": paths,
+                     "finalPath": destination, "value": value, "status": "technical_projection"})
+    for bi, binding in enumerate(program.get("bindings", [])):
+        if not isinstance(binding, Mapping):
+            continue
+        matches = [(i, row) for i, row in enumerate(wire.get("bindings", [])) if isinstance(row, Mapping) and row.get("id") == binding.get("id")]
+        if len(matches) != 1:
+            continue
+        fi, _ = matches[0]
+        raw = raw_program["bindings"][bi]
+        base = f"runtimeProgram.bindings[{bi}]"
+        dest = f"runtimeProgram.bindings[{fi}]"
+        identity = [base + ".id"]
+        emit(identity, dest + ".id", binding["id"])
+        emit(identity + [base + ".input"], dest + ".input", binding["input"])
+        for key in ("kind", "targetId", "effectGroupId"):
+            if key not in binding.get("action", {}):
+                continue
+            raw_action = raw.get("action", {})
+            paths = identity + ([base + ".action." + key] if isinstance(raw_action, Mapping) and key in raw_action else
+                                [base + ".input"] if key == "kind" else
+                                [base + ".input", *([base + ".action.kind"] if isinstance(raw_action, Mapping) and "kind" in raw_action else []), *body_paths])
+            emit(paths, dest + ".usePolicy.action." + key, binding["action"][key])
+        for key in ("stackCost", "contactDamage"):
+            paths = identity + ([base + "." + key] if key in raw else
+                                [base + ".input", *([base + ".action.kind"] if isinstance(raw.get("action"), Mapping) and "kind" in raw["action"] else [])])
+            emit(paths, dest + ".usePolicy." + key, binding[key])
+    for key in ("primaryEntityId", "itemEntityId"):
+        paths = ["runtimeProgram.primaryEntityId"] if key == "primaryEntityId" else body_paths
+        value = program.get("primaryEntityId") if key == "primaryEntityId" else bodies[0][1]["id"] if len(bodies) == 1 else None
+        if paths and value is not None:
+            emit(paths, "runtimeProgram." + key, value)
+    for ei, entity in enumerate(program.get("entities", [])):
+        if not isinstance(entity, Mapping):
+            continue
+        matches = [i for i, row in enumerate(wire.get("entities", [])) if isinstance(row, Mapping) and row.get("id") == entity.get("id")]
+        if len(matches) == 1:
+            for key in ("id", "kind"):
+                emit([f"runtimeProgram.entities[{ei}].id", f"runtimeProgram.entities[{ei}].{key}"],
+                     f"runtimeProgram.entities[{matches[0]}].{key}", entity[key])
+    return rows
 
 
 def _normalize(path: str) -> str:
@@ -335,12 +480,13 @@ def _primary_receipt_source_error(
             return "global receipt has an undeclared primary entity kind"
     else:
         paths = receipt.get("authoredPaths", [])
-        match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.usePolicy\.action\.targetId", paths[1]) if len(paths) == 2 else None
+        binding_paths = [path for path in paths if re.fullmatch(r"runtimeProgram\.bindings\[\d+\]\.(?:action\.targetId|id)", path)]
+        match = re.match(r"runtimeProgram\.bindings\[(\d+)\]", binding_paths[0]) if len(binding_paths) == 1 else None
         if match is None:
             return "global receipt lacks exact declared binding inputs"
         source_index = int(match.group(1))
         binding = _final_value(authored_document, f"runtimeProgram.bindings[{source_index}]")
-        target = _final_value(authored_document, paths[1])
+        target = _final_value(_exact_mechanical_view(authored_document), f"runtimeProgram.bindings[{source_index}].action.targetId")
         if not isinstance(binding, Mapping) or not isinstance(target, str) or not target:
             return "global receipt lacks its originating authored binding"
         final_index = 0
@@ -356,6 +502,8 @@ def _primary_receipt_source_error(
         expected = primary_binding_role_receipt(
             source_index=source_index, final_index=final_index, role=primary_binding_role(primary, target),
         )
+    if lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+        expected["authoredPaths"] = _binding_role_paths(authored_document, source_index)
     if any(receipt.get(key) != expected[key] for key in ("authoredPaths", "value", "status")):
         return "global receipt is not the exact declared projection of its authored source"
     if final_document is not None and receipt.get("finalPath") != expected["finalPath"]:
@@ -414,7 +562,7 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
 def _effect_group_binding_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
     paths = receipt.get("authoredPaths", [])
     match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
-    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].usePolicy.action.effectGroupId":
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].action.effectGroupId":
         return "effect-group receipt lacks exact same-binding inputs"
     binding_id = _final_value(authored, paths[0])
     value = _final_value(authored, paths[1])
@@ -476,6 +624,8 @@ def audit_compiler_receipts(
     final_document: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Audit supplied evidence; without Author, success is wire consistency only."""
+    literal_source = authored_document
+    authored_document = _exact_mechanical_view(authored_document) if authored_document is not None else None
     program = authored_document.get("runtimeProgram") if authored_document is not None else None
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
@@ -521,6 +671,15 @@ def audit_compiler_receipts(
             continue
         # Only structurally valid rows can participate in source coverage.
         receipt_rows.append(receipt)
+    if literal_source is not None and final_document is not None:
+        expected_rows = _author_binding_receipts(literal_source, final_document)
+        actual_rows = [row for row in receipt_rows if row.get("lowererId") == "author_binding_lanes"]
+        for expected in expected_rows:
+            matches = [row for row in actual_rows if row.get("finalPath") == expected["finalPath"]]
+            if len(matches) != 1 or not _same_receipt_value(dict(matches[0]), expected):
+                violations.append({"finalPath": expected["finalPath"], "reason": "current source lane lacks one exact typed provenance receipt"})
+        if len(expected_rows) != len(actual_rows):
+            violations.append({"reason": "current source lane receipt coverage differs from original source"})
     delivered_equipment: dict[str, int] = {}
     structured_groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     for receipt in receipt_rows:
@@ -535,6 +694,16 @@ def audit_compiler_receipts(
             len(authored_paths) == len(declared_inputs)
             and all(path_matches(pattern, value) for pattern, value in zip(declared_inputs, authored_paths))
         )
+        if literal_source is None and lowerer_id in {PRIMARY_BINDING_ROLE_LOWERER_ID, EFFECT_GROUP_BINDING_LOWERER_ID}:
+            retained_inputs = ((PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].usePolicy.action.targetId")
+                               if lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID else
+                               tuple(path.replace(".action.", ".usePolicy.action.") for path in declared_inputs))
+            inputs_match = inputs_match or (len(authored_paths) == len(retained_inputs) and
+                all(path_matches(pattern, value) for pattern, value in zip(retained_inputs, authored_paths)))
+        if lowerer_id in {"author_binding_lanes", PRIMARY_BINDING_ROLE_LOWERER_ID}:
+            inputs_match = inputs_match or (bool(authored_paths) and all(any(path_matches(pattern, value) for pattern in declared_inputs) for value in authored_paths))
+        if lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+            inputs_match = inputs_match and bool(authored_paths) and authored_paths[0] == PRIMARY_ENTITY_AUTHOR_PATH and len(set(authored_paths)) == len(authored_paths)
         if lowerer_id == PRIMARY_OWNER_LOWERER_ID and inputs_match:
             inputs_match = authored_paths[1].rsplit(".", 1)[0] == authored_paths[2].rsplit(".", 1)[0]
         if not declared or not any(path_matches(pattern, path) for pattern in declared) or not inputs_match:
@@ -575,7 +744,7 @@ def audit_compiler_receipts(
                       if lowerer_id == EFFECT_GROUP_BINDING_LOWERER_ID
                       else _visual_receipt_source_error(receipt, authored_document, final_document)
                       if lowerer_id == "entity_kind_to_visual_role"
-                      else _primary_receipt_source_error(receipt, authored_document, final_document))
+                      else _primary_receipt_source_error(receipt, literal_source or authored_document, final_document))
             if reason:
                 violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
         if final_document is not None and lowerer_id:
@@ -608,20 +777,18 @@ def audit_compiler_receipts(
                 source_bindings = source_bindings if isinstance(source_bindings, list) else []
                 source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
                 matches = [(i, binding) for i, binding in enumerate(source_bindings)
-                           if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
-                           and isinstance(binding["usePolicy"].get("action"), Mapping)
+                           if isinstance(binding, Mapping) and isinstance(binding.get("action"), Mapping)
                            and isinstance(source_call, Mapping) and isinstance(source_params, Mapping)
-                           and binding["usePolicy"]["action"].get("kind") == "place_item"
-                           and binding["usePolicy"]["action"].get("targetId") == source_call.get("target")
-                           and binding["usePolicy"]["action"].get("placementCallId") == source_params.get("placementCallId")]
+                           and binding["action"].get("kind") == "place_item"
+                           and binding["action"].get("targetId") == source_call.get("target")
+                           and binding["action"].get("placementCallId") == source_params.get("placementCallId")]
                 expected_inputs = []
                 expected_path = ""
                 if len(matches) == 1:
                     bi, binding = matches[0]
                     cb = f"runtimeProgram.calls[{source_index}]"
-                    bb = f"runtimeProgram.bindings[{bi}].usePolicy.action"
-                    expected_inputs = [f"{cb}.fn", f"{cb}.target", f"{cb}.params.placementCallId",
-                                       f"{bb}.kind", f"{bb}.targetId", f"{bb}.placementCallId"]
+                    bb = f"runtimeProgram.bindings[{bi}].action"
+                    expected_inputs = _placement_source_paths(literal_source or authored_document, source_index, bi)
                     final_bindings = final_document.get("runtimeProgram", {}).get("bindings", []) if final_document is not None else []
                     finals = [i for i, b in enumerate(final_bindings) if isinstance(b, Mapping) and b.get("id") == binding.get("id")]
                     if len(finals) == 1:
@@ -632,10 +799,23 @@ def audit_compiler_receipts(
                     violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
                                        "reason": "placed-body receipt lacks exact target/placement/binding association"})
             else:
-                binding_match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.usePolicy\.action\.kind", authored_paths[3]) if len(authored_paths) == 6 else None
+                binding_match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.action\.kind", authored_paths[3]) if len(authored_paths) == 6 else None
                 expected_inputs = [pattern.replace("[]", f"[{match.group(1) if i < 3 and match else binding_match.group(1) if binding_match else '?'}]")
                                    for i, pattern in enumerate(CAPABILITY_REGISTRY[fn].technical_lowering_inputs)]
-                if not match or not binding_match or list(authored_paths) != expected_inputs:
+                retained_match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.usePolicy\.action\.kind", authored_paths[3]) if len(authored_paths) == 6 else None
+                retained_inputs = [pattern.replace("[]", f"[{match.group(1) if i < 3 and match else retained_match.group(1) if retained_match else '?'}]").replace(".action.", ".usePolicy.action.")
+                                   for i, pattern in enumerate(CAPABILITY_REGISTRY[fn].technical_lowering_inputs)]
+                current_binding = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", authored_paths[3]) if len(authored_paths) == 8 else None
+                current_body = re.fullmatch(r"runtimeProgram\.entities\[(\d+)\]\.id", authored_paths[6]) if len(authored_paths) == 8 else None
+                current_inputs = []
+                if match and current_binding and current_body:
+                    cb, bb, eb = (f"runtimeProgram.{name}[{index}]" for name, index in
+                                  (("calls", match.group(1)), ("bindings", current_binding.group(1)), ("entities", current_body.group(1))))
+                    current_inputs = [cb + ".fn", cb + ".id", cb + ".params.placementCallId", bb + ".id", bb + ".action.kind",
+                                      bb + ".action.placementCallId", eb + ".id", eb + ".kind"]
+                if not match or not ((binding_match and list(authored_paths) == expected_inputs) or
+                                     (retained_match and list(authored_paths) == retained_inputs) or
+                                     (current_inputs and list(authored_paths) == current_inputs)):
                     violations.append({"fn": fn, "finalPath": path, "reason": "placed-body association receipt missing exact declared source paths"})
             continue
         nested_match = re.fullmatch(
@@ -991,13 +1171,13 @@ def audit_compiler_receipts(
                                    "reason": "global projection has no unique compiler receipt"})
         bindings = _final_value(authored_document, "runtimeProgram.bindings")
         for bi, _ in enumerate(bindings if isinstance(bindings, list) else []):
-            source_path = f"runtimeProgram.bindings[{bi}].usePolicy.action.targetId"
+            source_path = f"runtimeProgram.bindings[{bi}].action.targetId"
             matching = [r for r in receipt_rows if r.get("lowererId") == PRIMARY_BINDING_ROLE_LOWERER_ID
-                        and r.get("authoredPaths") == [PRIMARY_ENTITY_AUTHOR_PATH, source_path]]
+                        and r.get("authoredPaths") == _binding_role_paths(literal_source or authored_document, bi)]
             if len(matching) != 1:
                 violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
                                    "reason": "global projection has no unique compiler receipt"})
-            group_path = f"runtimeProgram.bindings[{bi}].usePolicy.action.effectGroupId"
+            group_path = f"runtimeProgram.bindings[{bi}].action.effectGroupId"
             if _final_value(authored_document, group_path) is not _MISSING:
                 matching = [r for r in receipt_rows if r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID
                             and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", group_path]]

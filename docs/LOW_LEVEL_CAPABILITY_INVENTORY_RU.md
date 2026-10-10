@@ -3,7 +3,7 @@
 > Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).
 > Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [capability_library_audit.py](../LocalGenerator/infini_local/qa/capability_library_audit.py). [Lowery](../lowery.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.
 
-Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v4` / `infini.runtime-program.wire.v3`.
+Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v5` / `infini.runtime-program.wire.v3`.
 
 Inventory: **59 public capabilities**, **3 internal retained entries**, **7 entity kinds**, **4 inputs**, **5 binding actions**, **10 events**. Machine audit: **100/100**, errors=0, warnings=0.
 

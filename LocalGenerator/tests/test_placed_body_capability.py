@@ -24,7 +24,7 @@ TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
 def placed():
     document = _dual_use_placeable()
     document["runtimeProgram"]["calls"].append(dict(
-        id="placed_body", fn=FN, target="item",
+        id="placed_body", fn=FN,
         params={"placementCallId": "install_tile", **TRANSFORM}))
     return document
 
@@ -49,8 +49,8 @@ def test_explicit_capability_has_required_schema_and_exact_compiler_projection()
     assert len(receipts) == len(TRANSFORM) + 1
     assert {r["authoredPath"].rsplit(".",1)[-1] for r in receipts} == {"placementCallId", *TRANSFORM}
     association = next(r for r in receipts if r["authoredPath"].endswith(".placementCallId"))
-    assert any(p.endswith(".target") for p in association["authoredPaths"])
-    assert any(p.endswith(".usePolicy.action.placementCallId") for p in association["authoredPaths"])
+    assert any(p.endswith(".kind") and ".entities[" in p for p in association["authoredPaths"])
+    assert any(p.endswith(".action.placementCallId") for p in association["authoredPaths"])
     assert json.dumps(document, sort_keys=True) == before
 
 @pytest.mark.parametrize("fault", ["unknown", "wrong-fn", "cross-item", "wall", "tile-and-wall", "unused", "duplicate"])
@@ -191,7 +191,7 @@ def test_frozen_repair_closes_only_causal_leaf_or_duplicate_index(fault, repair)
         assert permission["paths"] == [f"params.{leaf}"]
         incoming = copy.deepcopy(row)
         incoming["params"].update({leaf: "install_tile" if fault == "reference" else 1, "renderSizePx":512, "flipY":True})
-        incoming["target"] = "arbitrary"
+        incoming["id"] = row["id"]  # identity remains exact; transform companions are hostile
         patch = {"note":"exact leaf", "callsUpsert":[incoming]}
         expected["runtimeProgram"]["calls"][-1]["params"][leaf] = incoming["params"][leaf]
     else:
@@ -342,6 +342,7 @@ def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts(
 
 def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
     from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical, _historical_spawn_defaults
+    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
 
     from beam_contract_checks import without_declared_beam_neutrals
     from sentry_contract_checks import without_declared_targeting_neutrals
@@ -351,8 +352,8 @@ def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts(
     # explicit at-position zero DTO defaults with an exact assertion.
     corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
     for row in corpus["cases"]:
-        compiled = compile_runtime_program(_current_author_seed(row["authored"]))
-        delivered = _historical_spawn_defaults(_delivery_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled))), row["expectedDeliveryWire"])
+        compiled = compile_runtime_program(captured_parent_combat_author(_current_author_seed(row["authored"])))
+        delivered = _historical_spawn_defaults(_delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))), row["expectedDeliveryWire"])
         assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
         assert delivered == row["expectedDeliveryWire"]
         assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]

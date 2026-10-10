@@ -147,7 +147,7 @@ def _conditional_param_dependencies(cap: CapabilitySpec) -> tuple[tuple[str, Any
                 dependencies.append((requirement.param, expected, required))
     # Some conditional requiredness belongs to the registry's provider shape
     # rather than a semantic RequirementSpec; consume that shape, not event names.
-    params_schema = cap.provider_variant_schema()["properties"]["params"]
+    params_schema = cap.provider_variant_schema()["properties"].get("params", {})
     condition = params_schema.get("if", {})
     for selector, predicate in condition.get("properties", {}).items():
         if selector in condition.get("required", ()) and "const" in predicate:
@@ -165,6 +165,61 @@ def _program_rows(current: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]
         "bindings": _rows(program.get("bindings")),
         "calls": _rows(program.get("calls")),
     }
+
+
+def _graph_rows(current: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    from infini_local.core.runtime_authoring.technical_lowering import _exact_mechanical_view  # pyright: ignore[reportPrivateUsage] -- private canonical lowering
+    return _program_rows(_exact_mechanical_view(current))
+
+
+def _body_id(rows: Mapping[str, list[dict[str, Any]]]) -> str:
+    bodies = [row for row in rows.get("entities", []) if row.get("kind") == "item_body"]
+    return str(bodies[0].get("id") or "") if len(bodies) == 1 else ""
+
+
+def _binding_target(binding: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
+    explicit = binding_target_id(binding)
+    spec = BINDING_ACTION_REGISTRY.get(action_kind(binding))
+    return explicit or (_body_id(rows) if spec is not None and spec.target_kinds == ("item_body",) else "")
+
+
+def _call_target(call: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
+    explicit = str(call.get("target") or "")
+    cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+    return explicit or (_body_id(rows) if cap is not None and cap.target_kinds == ("item_body",) else "")
+
+
+def _source_transaction(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a graph-selected transaction into the single source shape."""
+    result = copy.deepcopy(dict(row))
+    inp = INPUT_KIND_REGISTRY.get(str(result.get("input") or ""))
+    action = result.get("action")
+    kind = action_kind(result)
+    spec = BINDING_ACTION_REGISTRY.get(kind)
+    if inp is None or spec is None:
+        return result
+    if isinstance(action, dict):
+        if spec.target_kinds == ("item_body",):
+            action.pop("targetId", None)
+        if len(inp.allowed_actions) == 1:
+            action.pop("kind", None)
+        if not action:
+            result.pop("action")
+    if result["input"] not in {"primary_use", "alternate_use"} or kind == "place_item":
+        result.pop("stackCost", None)
+        result.pop("contactDamage", None)
+    return result
+
+
+def _source_scope_transactions(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_source_scope_transactions(row) for row in value]
+    if isinstance(value, Mapping):
+        result = {key: _source_scope_transactions(row) for key, row in value.items()}
+        if "input" in result and isinstance(result.get("action"), Mapping):
+            return _source_transaction(result)
+        return result
+    return value
 
 
 def _program_index_rows(current: Mapping[str, Any]) -> dict[str, list[Any]]:
@@ -984,6 +1039,11 @@ def _binding_repair_alternatives(
                     stack_cost_value=stack_cost(binding),
                     contact_damage_value=contact_damage(binding),
                 ))
+    group_id = _mapping(binding.get("action")).get("effectGroupId")
+    if group_id is not None:
+        for row in alternatives:
+            if action_kind(row) == "apply_item_effects" and isinstance(row.get("action"), dict):
+                row["action"]["effectGroupId"] = copy.deepcopy(group_id)
     return sorted(alternatives, key=lambda row: repr(row))
 
 
@@ -1038,8 +1098,9 @@ def _binding_creation_alternatives(
 def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     error_rows = [dict(row) for row in errors]
     error_codes = {str(row.get("code") or "") for row in error_rows}
-    rows = _program_rows(current)
-    indexed_rows = _program_index_rows(current)
+    rows = _graph_rows(current)
+    from infini_local.core.runtime_authoring.technical_lowering import _exact_mechanical_view  # pyright: ignore[reportPrivateUsage] -- private canonical lowering
+    indexed_rows = _program_index_rows(_exact_mechanical_view(current))
     ambiguous_ids = {namespace: _ambiguous_row_ids(values) for namespace, values in rows.items()}
     error_paths_all = [str(row.get("path") or "$") for row in error_rows]
     namespace_by_id, row_by_id = _id_maps(rows)
@@ -1246,7 +1307,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     if (
                         code == "missing_binding_dependency"
                         and node_namespace == "bindings"
-                        and path == f"$.runtimeProgram.bindings[{node_index}].usePolicy.action.placementCallId"
+                        and path == f"$.runtimeProgram.bindings[{node_index}].action.placementCallId"
                     ):
                         mark(node_namespace, node_id)
                 else:
@@ -1261,7 +1322,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     kind = str(node_row.get("kind") or "")
                     create_entity_kinds.update({kind} if kind in ENTITY_KIND_REGISTRY else ENTITY_KIND_REGISTRY)
                 elif node_namespace == "bindings":
-                    target = binding_target_id(node_row) or str(node_row.get("target") or "")
+                    target = _binding_target(node_row, rows) or str(node_row.get("target") or "")
                     if target:
                         create_binding_targets.add(target)
                     input_name = str(node_row.get("input") or "")
@@ -1288,13 +1349,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if node_namespace == "bindings":
                 if path.startswith(f"$.runtimeProgram.bindings[{node_index}].input"):
                     binding_input_change_ids.add(node_id)
-                if path.startswith((
-                    f"$.runtimeProgram.bindings[{node_index}].usePolicy.action.kind",
-                    f"$.runtimeProgram.bindings[{node_index}].action",
-                )):
+                if path == f"$.runtimeProgram.bindings[{node_index}].action" or path.startswith(
+                    f"$.runtimeProgram.bindings[{node_index}].action.kind"
+                ):
                     binding_action_change_ids.add(node_id)
                 if path.startswith((
-                    f"$.runtimeProgram.bindings[{node_index}].usePolicy.action.targetId",
+                    f"$.runtimeProgram.bindings[{node_index}].action.targetId",
                     f"$.runtimeProgram.bindings[{node_index}].target",
                 )):
                     binding_target_change_ids.add(node_id)
@@ -1442,6 +1502,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 retarget_call_ids.update(_matching_entity_ids(rows, kinds))
             elif node_namespace == "entities" and not node_id:
                 create_entity_kinds.update(ENTITY_KIND_REGISTRY)
+        elif (code.startswith("shape_") and node_namespace == "entities"
+              and path.endswith(".id") and node_row.get("kind") == "item_body"):
+            # Invalid declaration identity cannot be addressed by a valid-ID upsert.
+            # The model may replace this exact original occurrence explicitly.
+            deletable_indices["entities"].add(node_index)
+            create_entity_kinds.add("item_body")
         elif code == "item_body_count":
             for row in rows["entities"]:
                 if row.get("kind") == "item_body":
@@ -1457,16 +1523,16 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     binding_input_change_ids.add(node_id)
                     binding_action_change_ids.add(node_id)
                     grant("bindings", node_id, "input")
-                    grant("bindings", node_id, "usePolicy")
+                    grant("bindings", node_id, "action")
                 elif code == "entity_not_binding_spawnable":
                     binding_action_change_ids.add(node_id)
                     binding_target_change_ids.add(node_id)
                     retarget_binding_ids.update(_matching_entity_ids(rows, _binding_target_kinds(node_row)))
-                    grant("bindings", node_id, "usePolicy")
+                    grant("bindings", node_id, "action")
                 else:
                     binding_target_change_ids.add(node_id)
                     retarget_binding_ids.update(_matching_entity_ids(rows, _binding_target_kinds(node_row)))
-                    grant("bindings", node_id, "usePolicy")
+                    grant("bindings", node_id, "action")
         elif code in {"wrong_target_kind", "wrong_reference_target_kind", "self_reference_forbidden"}:
             if node_namespace == "calls":
                 param_match = re.search(r"\.params\.([A-Za-z0-9_]+)$", path)
@@ -1541,14 +1607,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 if not any(
                                     str(binding.get("input") or "") in allowed_inputs
                                     and (not allowed_actions or action_kind(binding) in allowed_actions)
-                                    and binding_target_id(binding) == action_target
+                                    and _binding_target(binding, rows) == action_target
                                     and (required_contact is None or contact_damage(binding) is required_contact)
                                     for binding in rows["bindings"]
                                 ):
                                     contact_updates = [
                                         binding for binding in rows["bindings"]
                                         if required_contact is not None
-                                        and binding_target_id(binding) == action_target
+                                        and _binding_target(binding, rows) == action_target
                                         and str(binding.get("input") or "") in allowed_inputs
                                         and action_kind(binding) in allowed_actions
                                         and contact_damage(binding) is not required_contact
@@ -1564,7 +1630,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                             placement_call=placement_call_id(binding),
                                         )
                                         mark("bindings", binding_id)
-                                        grant("bindings", binding_id, "usePolicy")
+                                        grant("bindings", binding_id, "contactDamage")
                                         binding_alternative_overrides.setdefault(binding_id, []).append(fixed)
                                     if contact_updates:
                                         continue
@@ -1581,7 +1647,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                         ),
                                     ) if owner_item_target else []
                                     if not any(
-                                        binding_target_id(candidate) == action_target
+                                        _binding_target(candidate, rows) == action_target
                                         and action_kind(candidate) in allowed_actions
                                         and (required_contact is None or contact_damage(candidate) is required_contact)
                                         and not (
@@ -1646,12 +1712,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         elif code == "place_item_without_stack_cost":
             if node_namespace == "bindings":
                 binding_id = str(node_row.get("id") or "")
-                target_id = binding_target_id(node_row)
+                target_id = _binding_target(node_row, rows)
                 mark("bindings", binding_id)
                 binding_input_change_ids.add(binding_id)
                 binding_action_change_ids.add(binding_id)
                 binding_target_change_ids.add(binding_id)
-                grant("bindings", binding_id, "usePolicy")
+                grant("bindings", binding_id, "action")
                 binding_alternative_overrides[binding_id] = [transaction(
                     input_name=(
                         "alternate_use"
@@ -1678,7 +1744,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for binding in related_bindings:
                 binding_id = str(binding.get("id") or "")
                 action_name = action_kind(binding)
-                target_id = binding_target_id(binding)
+                target_id = _binding_target(binding, rows)
                 expected_input = expected_placeable_input(binding, rows["bindings"]) or ""
                 if not expected_input:
                     continue
@@ -1691,7 +1757,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 binding_action_change_ids.add(binding_id)
                 binding_target_change_ids.add(binding_id)
                 grant("bindings", binding_id, "input")
-                grant("bindings", binding_id, "usePolicy")
+                grant("bindings", binding_id, "action")
                 binding_alternative_overrides[binding_id] = [transaction(
                     input_name=expected_input,
                     action_name=action_name,
@@ -1726,10 +1792,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             and str(selector.get("target") or "") == node_target_id):
                         held_selector_covers_group = True
                     elif (selector_code == "missing_effect_group" and selector_namespace == "bindings"
-                            and binding_target_id(selector) == node_target_id):
+                            and _binding_target(selector, rows) == node_target_id):
                         fixed = copy.deepcopy(dict(selector))
                         binding_id = str(fixed.pop("id", ""))
-                        fixed["usePolicy"]["action"]["effectGroupId"] = effect_group_id
+                        fixed["action"]["effectGroupId"] = effect_group_id
                         selector_choices.append((binding_id, fixed))
             if held_selector_covers_group:
                 pending_groups = set()
@@ -1793,14 +1859,14 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     return None
                 binding_id = str(existing_primary.get("id") or "")
                 action_name = action_kind(existing_primary)
-                target_id = binding_target_id(existing_primary)
+                target_id = _binding_target(existing_primary, rows)
                 action_spec = BINDING_ACTION_REGISTRY.get(action_name)
                 alternate_spec = INPUT_KIND_REGISTRY.get("alternate_use")
                 target_kind = next((
                     str(row.get("kind") or "") for row in rows["entities"]
                     if str(row.get("id") or "") == target_id
                 ), "")
-                use_policy = existing_primary.get("usePolicy")
+                use_policy = existing_primary
                 if (
                     not binding_id
                     or not isinstance(use_policy, Mapping)
@@ -1813,7 +1879,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     return None
                 return binding_id, {
                     "input": "alternate_use",
-                    "usePolicy": copy.deepcopy(dict(use_policy)),
+                    **{key: copy.deepcopy(use_policy[key]) for key in ("action", "stackCost", "contactDamage") if key in use_policy},
                 }
 
             primary_relocation: tuple[str, dict[str, Any]] | None = None
@@ -1824,7 +1890,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         reference_bindings = [
                             row for row in rows["bindings"]
                             if action_kind(row) in capability_requirement.any_of
-                            and binding_target_id(row) == required_target
+                            and _binding_target(row, rows) == required_target
                         ]
                         if reference_bindings:
                             # Reuse the authored action root with its exact broken
@@ -1832,7 +1898,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             for binding in reference_bindings:
                                 fixed = copy.deepcopy(binding)
                                 fixed.pop("id", None)
-                                fixed["usePolicy"]["action"]["placementCallId"] = node_id
+                                fixed["action"]["placementCallId"] = node_id
                                 existing_binding_choices.append({
                                     "bindingId": str(binding.get("id") or ""),
                                     "allowed": [fixed],
@@ -1870,7 +1936,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 required_inputs=capability_requirement.any_of,
                                 additional_item_capabilities=authorized_capabilities,
                             )
-                            if binding_target_id(row) == required_target
+                            if _binding_target(row, rows) == required_target
                         )
                     elif capability_requirement.kind == "binding_action_present":
                         existing_primary = next((
@@ -1905,12 +1971,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             )
                             if action_kind(row) in capability_requirement.any_of
                             and bool(required_target)
-                            and binding_target_id(row) == required_target
+                            and _binding_target(row, rows) == required_target
                         )
                         if isinstance(effect_group_id, str):
                             for row in allowed_rows:
                                 if action_kind(row) == "apply_item_effects":
-                                    row["usePolicy"]["action"]["effectGroupId"] = effect_group_id
+                                    row["action"]["effectGroupId"] = effect_group_id
                     elif capability_requirement.kind == "binding_tuple_present":
                         required_patterns: list[tuple[str, str, bool | None]] = []
                         for value in capability_requirement.any_of:
@@ -1939,7 +2005,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 not target_is_any_entity
                                 and (
                                     not required_target
-                                    or binding_target_id(existing) != required_target
+                                    or _binding_target(existing, rows) != required_target
                                 )
                             ):
                                 continue
@@ -1956,16 +2022,16 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             fixed = transaction(
                                 input_name=existing_pair[0],
                                 action_name=existing_pair[1],
-                                target=binding_target_id(existing),
+                                target=_binding_target(existing, rows),
                                 stack_cost_value=stack_cost(existing),
                                 contact_damage_value=required_contact,
                                 placement_call=placement_call_id(existing),
                             )
                             mark("bindings", binding_id)
-                            grant("bindings", binding_id, "usePolicy")
+                            grant("bindings", binding_id, "contactDamage")
                             binding_alternative_overrides[binding_id] = [fixed]
                             context["bindings"].add(binding_id)
-                            context["entities"].add(binding_target_id(existing))
+                            context["entities"].add(_binding_target(existing, rows))
                             existing_binding_choices.append({
                                 "bindingId": binding_id,
                                 "allowed": [copy.deepcopy(fixed)],
@@ -2030,7 +2096,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                 target_is_any_entity
                                 or (
                                     bool(required_target)
-                                    and binding_target_id(row) == required_target
+                                    and _binding_target(row, rows) == required_target
                                 )
                             )
                         )
@@ -2043,7 +2109,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 binding_input_change_ids.add(binding_id)
                 binding_alternative_overrides[binding_id] = [relocated]
                 context["bindings"].add(binding_id)
-                context["entities"].add(binding_target_id(relocated))
+                context["entities"].add(_binding_target(relocated, rows))
                 required_binding_updates.append({
                     "bindingId": binding_id,
                     "allowed": [copy.deepcopy(relocated)],
@@ -2070,8 +2136,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for allowed_row in allowed_rows:
                 create_binding_inputs.add(allowed_row["input"])
                 create_binding_actions.add(action_kind(allowed_row))
-                create_binding_targets.add(binding_target_id(allowed_row))
-                context["entities"].add(binding_target_id(allowed_row))
+                create_binding_targets.add(_binding_target(allowed_row, rows))
+                context["entities"].add(_binding_target(allowed_row, rows))
             requirement_row["allowedBindingTransactions"] = binding_choice_rows
             requirement_row["allowedExistingBindingIds"] = sorted(
                 str(choice.get("bindingId") or "")
@@ -2202,7 +2268,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             "requiredContactDamage": required_contact,
                         })
                         exact_binding_present = any(
-                            binding_target_id(binding) == action_target_id
+                            _binding_target(binding, rows) == action_target_id
                             and str(binding.get("input") or "") in allowed_inputs
                             and action_kind(binding) in allowed_actions
                             and (
@@ -2217,7 +2283,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         if required_contact is not None:
                             for binding in rows["bindings"]:
                                 if (
-                                    binding_target_id(binding) != action_target_id
+                                    _binding_target(binding, rows) != action_target_id
                                     or str(binding.get("input") or "") not in allowed_inputs
                                     or action_kind(binding) not in allowed_actions
                                     or contact_damage(binding) is required_contact
@@ -2256,7 +2322,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             projected_row
                             for projected_row in projected_rows
                             if not pending_existing_choices
-                            and binding_target_id(projected_row) == action_target_id
+                            and _binding_target(projected_row, rows) == action_target_id
                             and action_kind(projected_row) in allowed_actions
                             and not (
                                 INPUT_KIND_REGISTRY[str(projected_row.get("input") or "")].exclusive
@@ -2309,12 +2375,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     binding_id = str(choice["bindingId"])
                     fixed = copy.deepcopy(choice["allowed"][0])
                     mark("bindings", binding_id)
-                    grant("bindings", binding_id, "usePolicy")
+                    grant("bindings", binding_id, "contactDamage")
                     binding_alternative_overrides.setdefault(binding_id, []).append(fixed)
                     context["bindings"].add(binding_id)
                 create_binding_alternatives.extend(event_create_choices)
                 for choice in event_create_choices:
-                    create_binding_targets.add(binding_target_id(choice))
+                    create_binding_targets.add(_binding_target(choice, rows))
                     create_binding_inputs.add(str(choice.get("input") or ""))
                     create_binding_actions.add(action_kind(choice))
                 all_binding_choices = [
@@ -2403,7 +2469,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     # A mutable node may depend on other valid nodes. Include those as immutable context.
     for binding_id in list(mutable["bindings"]):
         binding = row_by_id.get(binding_id, {})
-        context["entities"].add(binding_target_id(binding))
+        context["entities"].add(_binding_target(binding, rows))
     for call_id in list(mutable["calls"]):
         call = row_by_id.get(call_id, {})
         context["entities"].add(str(call.get("target") or ""))
@@ -2464,7 +2530,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         )
         for projected_row in projected_rows:
             if (
-                binding_target_id(projected_row) != requested_target
+                _binding_target(projected_row, rows) != requested_target
                 or action_kind(projected_row) not in requested_actions_for_target
                 or (
                     requested_contact is not None
@@ -2477,13 +2543,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         {
             repr(row): row
             for row in create_binding_alternatives
-            if binding_target_id(row) in requested_binding_targets
+            if _binding_target(row, rows) in requested_binding_targets
             and (not requested_binding_inputs or row.get("input") in requested_binding_inputs)
             and (not requested_binding_actions or action_kind(row) in requested_binding_actions)
         }.values(),
         key=repr,
     )
-    create_binding_targets = {binding_target_id(row) for row in create_binding_alternatives}
+    create_binding_targets = {_binding_target(row, rows) for row in create_binding_alternatives}
     create_binding_inputs = {row["input"] for row in create_binding_alternatives}
     create_binding_actions = {action_kind(row) for row in create_binding_alternatives}
 
@@ -2494,7 +2560,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     for row_id in binding_input_change_ids:
         grant("bindings", row_id, "input")
     for row_id in binding_action_change_ids:
-        grant("bindings", row_id, "usePolicy.action.kind")
+        grant("bindings", row_id, "action.kind")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
     for row_id in call_fn_change_ids:
@@ -2663,8 +2729,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 action_mutable=row_id in binding_action_change_ids,
                 target_mutable=row_id in binding_target_change_ids,
             )
+        selector_domains = [error.get("allowed") or [] for error in error_rows
+                            if str(error.get("code") or "") == "missing_effect_group"
+                            and row_id in (error.get("relatedIds") or [])]
+        if selector_domains:
+            allowed = [{**copy.deepcopy(row), "action": {**copy.deepcopy(_mapping(row.get("action"))), "effectGroupId": group}}
+                       for row in allowed if action_kind(row) == "apply_item_effects"
+                       for group in selector_domains[0]]
         binding_alternatives.append({"bindingId": row_id, "allowed": allowed})
-        retarget_binding_ids.update(binding_target_id(row) for row in allowed)
+        retarget_binding_ids.update(_binding_target(row, rows) for row in allowed)
     scope["bindingAlternatives"] = binding_alternatives
     scope["eventAlternatives"] = event_alternative_rows
     scope["retarget"]["bindingTargetIds"] = sorted(retarget_binding_ids)
@@ -2717,6 +2790,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     scope["errorPaths"] = error_paths
     scope["capabilitySubset"] = sorted(capability_subset)
     scope["nonRepairableErrors"] = non_repairable_errors
+    # Only compiler-view transaction alternatives are projected; raw source facts
+    # and diagnostic values must never be normalized by a recursive walker.
+    for key in ("bindingAlternatives", "repairRequirements", "create", "blockerPlan"):
+        scope[key] = _source_scope_transactions(scope[key])
     return scope
 
 
@@ -2783,6 +2860,7 @@ def _new_row_allowed(
     policy: Mapping[str, Any],
     *,
     created_entity_kinds: Mapping[str, str] | None = None,
+    source_rows: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[bool, str]:
     if not bool(policy.get("allowed")):
         return False, "creation_not_required"
@@ -2796,7 +2874,7 @@ def _new_row_allowed(
             return False, "entity_kind_not_compatible"
         return True, ""
     if namespace == "bindings":
-        if binding_target_id(row) not in set(str(value) for value in policy.get("allowedTargetIds") or []):
+        if _binding_target(row, source_rows or {}) not in set(str(value) for value in policy.get("allowedTargetIds") or []):
             return False, "binding_target_not_required"
         if str(row.get("input") or "") not in set(str(value) for value in policy.get("allowedInputs") or []):
             return False, "binding_input_not_allowed"
@@ -2804,7 +2882,7 @@ def _new_row_allowed(
             return False, "binding_action_not_allowed"
         requested_transaction = {
             "input": str(row.get("input") or ""),
-            "usePolicy": copy.deepcopy(row.get("usePolicy")),
+            **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage") if key in row},
         }
         allowed_transactions = [
             value for value in policy.get("allowedTransactions") or []
@@ -2814,7 +2892,10 @@ def _new_row_allowed(
             return False, "binding_transaction_not_in_registry_projection"
         return True, ""
     if namespace == "calls":
-        target_id = str(row.get("target") or "")
+        context_rows = {key: list(value) for key, value in (source_rows or {}).items()}
+        context_rows["entities"] = [*context_rows.get("entities", []),
+                                    *[{"id": key, "kind": kind} for key, kind in (created_entity_kinds or {}).items()]]
+        target_id = _call_target(row, context_rows)
         allowed_target_ids = set(str(value) for value in policy.get("allowedTargetIds") or [])
         allowed_target_kinds = set(str(value) for value in policy.get("allowedTargetKinds") or [])
         created_target_kind = str((created_entity_kinds or {}).get(target_id) or "")
@@ -3007,7 +3088,7 @@ def filter_repair_patch_scope(
                     actual_transaction = json.dumps(
                         {
                             "input": str(candidate.get("input") or ""),
-                            "usePolicy": copy.deepcopy(candidate.get("usePolicy")),
+                            **{key: copy.deepcopy(candidate[key]) for key in ("action", "stackCost", "contactDamage") if key in candidate},
                         },
                         sort_keys=True,
                         separators=(",", ":"),
@@ -3018,7 +3099,7 @@ def filter_repair_patch_scope(
                     # must still pass through the frozen-subtree merge below.
                     if (allowed_transactions is not None
                             and actual_transaction in allowed_transactions
-                            and {"", "usePolicy"}.intersection(permissions.get(row_id, ()))):
+                            and {""}.intersection(permissions.get(row_id, ()))):
                         replacement = copy.deepcopy(dict(candidate))
                         if not json_values_equal(replacement, original):
                             filtered[upsert_key].append(replacement)
@@ -3106,6 +3187,7 @@ def filter_repair_patch_scope(
                 candidate,
                 create_policy,
                 created_entity_kinds=accepted_created_entity_kinds,
+                source_rows=_graph_rows(current),
             )
             if allowed:
                 filtered[upsert_key].append(copy.deepcopy(dict(candidate)))
@@ -3230,7 +3312,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
     if errors:
         return {"schema": RUNTIME_REPAIR_SCOPE_REPORT_SCHEMA, "ok": False, "errors": errors}
 
-    rows = _program_rows(current)
+    rows = _graph_rows(current)
     existing = {namespace: {str(row.get("id") or "") for row in values if str(row.get("id") or "")} for namespace, values in rows.items()}
     mutable = _mapping(scope.get("mutable"))
     deletable = _mapping(scope.get("deletable"))
@@ -3259,7 +3341,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         return json.dumps(
             {
                 "input": str(row.get("input") or ""),
-                "usePolicy": copy.deepcopy(row.get("usePolicy")),
+                **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage") if key in row},
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -3412,14 +3494,14 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 if str(row.get("kind") or "") not in allowed_kinds:
                     errors.append(_scope_error(path + ".kind", "new entity kind is outside the inferred target-kind scope", actual=row.get("kind")))
             elif namespace == "bindings":
-                if binding_target_id(row) not in set(create_policy.get("allowedTargetIds") or []):
-                    errors.append(_scope_error(path + ".usePolicy.action.targetId", "new binding target is outside repair scope", actual=binding_target_id(row)))
+                if _binding_target(row, rows) not in set(create_policy.get("allowedTargetIds") or []):
+                    errors.append(_scope_error(path + ".action.targetId", "new binding target is outside repair scope", actual=_binding_target(row, rows)))
                 if str(row.get("input") or "") not in set(create_policy.get("allowedInputs") or []):
                     errors.append(_scope_error(path + ".input", "new binding input is outside repair scope", actual=row.get("input")))
                 if action_kind(row) not in set(create_policy.get("allowedActions") or []):
-                    errors.append(_scope_error(path + ".usePolicy.action.kind", "new binding action is outside repair scope", actual=action_kind(row)))
+                    errors.append(_scope_error(path + ".action.kind", "new binding action is outside repair scope", actual=action_kind(row)))
             elif namespace == "calls":
-                target_id = str(row.get("target") or "")
+                target_id = _call_target(row, rows)
                 allowed_target_ids = set(str(value) for value in create_policy.get("allowedTargetIds") or [])
                 allowed_target_kinds = set(str(value) for value in create_policy.get("allowedTargetKinds") or [])
                 if (
@@ -3435,24 +3517,24 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
 
             if row_id in existing[namespace]:
                 original_raw = next(
-                    (value for value in rows[namespace] if str(value.get("id") or "") == row_id),
+                    (value for value in _program_rows(current)[namespace] if str(value.get("id") or "") == row_id),
                     {},
                 )
                 original = _mapping(original_raw)
                 if namespace == "entities" and row_id not in set(_values(identity.get("entityKindIds"))) and row.get("kind") != original.get("kind"):
                     errors.append(_scope_error(path + ".kind", "entity kind is immutable for this parameter repair", actual=row.get("kind")))
                 if namespace == "bindings":
-                    if row_id not in set(_values(identity.get("bindingTargetIds"))) and binding_target_id(row) != binding_target_id(original):
-                        errors.append(_scope_error(path + ".usePolicy.action.targetId", "binding target is immutable for this parameter repair", actual=binding_target_id(row)))
+                    if row_id not in set(_values(identity.get("bindingTargetIds"))) and _binding_target(row, rows) != _binding_target(original, rows):
+                        errors.append(_scope_error(path + ".action.targetId", "binding target is immutable for this parameter repair", actual=_binding_target(row, rows)))
                     if row_id not in set(_values(identity.get("bindingInputIds"))) and row.get("input") != original.get("input"):
                         errors.append(_scope_error(path + ".input", "binding input is immutable for this repair", actual=row.get("input")))
                     if row_id not in set(_values(identity.get("bindingActionIds"))) and action_kind(row) != action_kind(original):
-                        errors.append(_scope_error(path + ".usePolicy.action.kind", "binding action is immutable for this repair", actual=action_kind(row)))
+                        errors.append(_scope_error(path + ".action.kind", "binding action is immutable for this repair", actual=action_kind(row)))
                     allowed_transactions = binding_alternative_map.get(row_id)
                     actual_transaction = json.dumps(
                         {
                             "input": str(row.get("input") or ""),
-                            "usePolicy": copy.deepcopy(row.get("usePolicy")),
+                            **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage") if key in row},
                         },
                         sort_keys=True,
                         separators=(",", ":"),
@@ -3463,13 +3545,13 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                             "complete binding use transaction is outside canonical repair alternatives",
                             actual={
                                 "input": str(row.get("input") or ""),
-                                "usePolicy": copy.deepcopy(row.get("usePolicy")),
+                                **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage") if key in row},
                             },
                         ))
                 if namespace == "calls":
                     if row_id not in set(_values(identity.get("callFnIds"))) and row.get("fn") != original.get("fn"):
                         errors.append(_scope_error(path + ".fn", "capability identity is immutable; repair params or the reported reference instead", actual=row.get("fn")))
-                    if row_id not in set(_values(identity.get("callTargetIds"))) and row.get("target") != original.get("target"):
+                    if row_id not in set(_values(identity.get("callTargetIds"))) and _call_target(row, rows) != _call_target(original, rows):
                         errors.append(_scope_error(path + ".target", "call target is immutable for this parameter repair", actual=row.get("target")))
                     params = _mapping(row.get("params"))
                     original_params = _mapping(original.get("params"))
@@ -3486,13 +3568,13 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             # Complete-node provider responses are permitted, but only scoped identity fields may change.
             if namespace == "bindings" and row_id in existing[namespace] and row_id in set(_values(identity.get("bindingTargetIds"))):
                 allowed_targets = set(str(value) for value in _values(retarget.get("bindingTargetIds")))
-                original = _mapping(next((value for value in rows[namespace] if str(value.get("id") or "") == row_id), {}))
-                allowed_targets.add(binding_target_id(original))
-                if binding_target_id(row) not in allowed_targets:
-                    errors.append(_scope_error(path + ".usePolicy.action.targetId", "binding retargets outside compatible repair context", actual=binding_target_id(row)))
+                original = _mapping(next((value for value in _program_rows(current)[namespace] if str(value.get("id") or "") == row_id), {}))
+                allowed_targets.add(_binding_target(original, rows))
+                if _binding_target(row, rows) not in allowed_targets:
+                    errors.append(_scope_error(path + ".action.targetId", "binding retargets outside compatible repair context", actual=_binding_target(row, rows)))
             if namespace == "calls" and row_id in existing[namespace] and row_id in set(_values(identity.get("callTargetIds"))):
                 allowed_targets = set(str(value) for value in _values(retarget.get("callTargetIds")))
-                original = _mapping(next((value for value in rows[namespace] if str(value.get("id") or "") == row_id), {}))
+                original = _mapping(next((value for value in _program_rows(current)[namespace] if str(value.get("id") or "") == row_id), {}))
                 allowed_targets.add(str(original.get("target") or ""))
                 if str(row.get("target") or "") not in allowed_targets:
                     errors.append(_scope_error(path + ".target", "call retargets outside compatible repair context", actual=row.get("target")))
@@ -3591,7 +3673,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                     allowed_actions = {str(value) for value in requirement.get("anyOfActions") or []}
                     required_contact = requirement.get("requiredContactDamage")
                     if not any(
-                        binding_target_id(binding) == required_target
+                        _binding_target(binding, rows) == required_target
                         and str(binding.get("input") or "") in allowed_inputs
                         and (not allowed_actions or action_kind(binding) in allowed_actions)
                         and (
@@ -3668,7 +3750,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 continue
             row_id = str(row.get("id") or "")
             input_name = str(row.get("input") or "")
-            target_id = str(row.get("target") or "")
+            target_id = _call_target(row, rows)
             independently_required = (
                 row_id in independent_affected_ids
                 or target_id in independent_binding_target_ids
@@ -3935,7 +4017,7 @@ def runtime_repair_fragments(current: Mapping[str, Any], scope: Mapping[str, Any
             ]
         elif namespace == "bindings":
             summaries[namespace] = [
-                {key: copy.deepcopy(row[key]) for key in ("id", "input", "usePolicy") if key in row}
+                {key: copy.deepcopy(row[key]) for key in ("id", "input", "action", "stackCost", "contactDamage") if key in row}
                 for row in values
             ]
         elif namespace == "calls":

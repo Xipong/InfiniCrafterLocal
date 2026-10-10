@@ -102,7 +102,12 @@ def _params(fn: str) -> dict[str, Any]:
 
 
 def _call(call_id: str, fn: str, target: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"id": call_id, "fn": fn, "target": target, "params": deepcopy(_params(fn) if params is None else params)}
+    row = {"id": call_id, "fn": fn, "target": target}
+    if CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",):
+        row.pop("target")
+    if CAPABILITY_REGISTRY[fn].params:
+        row["params"] = deepcopy(_params(fn) if params is None else params)
+    return row
 
 
 def _binding(
@@ -117,15 +122,27 @@ def _binding(
     action: dict[str, Any] = {"kind": action_kind, "targetId": target}
     if placement_call_id:
         action["placementCallId"] = placement_call_id
-    return {
+    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+    if BINDING_ACTION_REGISTRY[action_kind].target_kinds == ("item_body",):
+        action.pop("targetId")
+    if len(INPUT_KIND_REGISTRY[input_kind].allowed_actions) == 1:
+        action.pop("kind")
+    row = {
         "id": binding_id,
         "input": input_kind,
-        "usePolicy": {
+        **{
             "action": action,
             "stackCost": 1 if action_kind == "place_item" else 0,
             "contactDamage": contact_damage,
         },
     }
+
+    if not action:
+        row.pop("action")
+    if input_kind not in {"primary_use", "alternate_use"} or action_kind == "place_item":
+        row.pop("stackCost")
+        row.pop("contactDamage")
+    return row
 
 
 def build_capability_witness(fn: str) -> dict[str, Any]:

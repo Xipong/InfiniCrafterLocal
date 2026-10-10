@@ -99,7 +99,7 @@
           "const": "infini.runtime-program.v5"
         },
         "schema": {
-          "const": "infini.runtime-program.authoring.v4"
+          "const": "infini.runtime-program.authoring.v5"
         },
         "primaryEntityId": {
           "type": "string",
@@ -172,65 +172,54 @@
                   "input": {
                     "const": "primary_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "spawn_entity"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
+                      "kind": {
+                        "const": "spawn_entity"
                       },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "targetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field"
+                          ],
+                          "allowSelf": true,
+                          "graphEdge": false
+                        }
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind",
+                      "targetId"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -246,65 +235,35 @@
                   "input": {
                     "const": "primary_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "use_item_body"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
-                      },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "kind": {
+                        "const": "use_item_body"
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -320,72 +279,41 @@
                   "input": {
                     "const": "primary_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "apply_item_effects"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          },
-                          "effectGroupId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects."
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
+                      "kind": {
+                        "const": "apply_item_effects"
                       },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "effectGroupId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -401,77 +329,39 @@
                   "input": {
                     "const": "primary_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "place_item"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          },
-                          "placementCallId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "call",
-                              "capabilities": [
-                                "configure_tile_placement",
-                                "configure_wall_placement"
-                              ],
-                              "allowSelf": false,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId",
-                          "placementCallId"
-                        ]
+                      "kind": {
+                        "const": "place_item"
                       },
-                      "stackCost": {
-                        "const": 1
-                      },
-                      "contactDamage": {
-                        "const": false
+                      "placementCallId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "call",
+                          "capabilities": [
+                            "configure_tile_placement",
+                            "configure_wall_placement"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind",
+                      "placementCallId"
                     ]
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action"
                 ]
               },
               {
@@ -487,65 +377,54 @@
                   "input": {
                     "const": "alternate_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "spawn_entity"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
+                      "kind": {
+                        "const": "spawn_entity"
                       },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "targetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field"
+                          ],
+                          "allowSelf": true,
+                          "graphEdge": false
+                        }
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind",
+                      "targetId"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -561,65 +440,35 @@
                   "input": {
                     "const": "alternate_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "use_item_body"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
-                      },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "kind": {
+                        "const": "use_item_body"
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -635,72 +484,41 @@
                   "input": {
                     "const": "alternate_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "apply_item_effects"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          },
-                          "effectGroupId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "description": "Exact named group explicitly authored in item-effect capability params. Omit only to select the existing ungrouped item effects."
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
+                      "kind": {
+                        "const": "apply_item_effects"
                       },
-                      "stackCost": {
-                        "type": "integer",
-                        "enum": [
-                          0,
-                          1
-                        ]
-                      },
-                      "contactDamage": {
-                        "type": "boolean"
+                      "effectGroupId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind"
                     ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  },
+                  "contactDamage": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action",
+                  "stackCost",
+                  "contactDamage"
                 ]
               },
               {
@@ -716,77 +534,39 @@
                   "input": {
                     "const": "alternate_use"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "place_item"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          },
-                          "placementCallId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "call",
-                              "capabilities": [
-                                "configure_tile_placement",
-                                "configure_wall_placement"
-                              ],
-                              "allowSelf": false,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId",
-                          "placementCallId"
-                        ]
+                      "kind": {
+                        "const": "place_item"
                       },
-                      "stackCost": {
-                        "const": 1
-                      },
-                      "contactDamage": {
-                        "const": false
+                      "placementCallId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "call",
+                          "capabilities": [
+                            "configure_tile_placement",
+                            "configure_wall_placement"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "kind",
+                      "placementCallId"
                     ]
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action"
                 ]
               },
               {
@@ -802,61 +582,38 @@
                   "input": {
                     "const": "hold"
                   },
-                  "usePolicy": {
+                  "action": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "spawn_entity"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
-                      },
-                      "stackCost": {
-                        "const": 0
-                      },
-                      "contactDamage": {
-                        "const": false
+                      "targetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field"
+                          ],
+                          "allowSelf": true,
+                          "graphEdge": false
+                        }
                       }
                     },
                     "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
+                      "targetId"
                     ]
                   }
                 },
                 "required": [
                   "id",
                   "input",
-                  "usePolicy"
+                  "action"
                 ]
               },
               {
@@ -871,62 +628,11 @@
                   },
                   "input": {
                     "const": "equipped"
-                  },
-                  "usePolicy": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "action": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "equip_passive"
-                          },
-                          "targetId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 48,
-                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                            "x-infini-reference": {
-                              "namespace": "entity",
-                              "targetKinds": [
-                                "item_body",
-                                "owner_attached_projectile",
-                                "free_projectile",
-                                "stationary_projectile",
-                                "temporary_helper",
-                                "field",
-                                "child_projectile"
-                              ],
-                              "allowSelf": true,
-                              "graphEdge": false
-                            }
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "targetId"
-                        ]
-                      },
-                      "stackCost": {
-                        "const": 0
-                      },
-                      "contactDamage": {
-                        "const": false
-                      }
-                    },
-                    "required": [
-                      "action",
-                      "stackCost",
-                      "contactDamage"
-                    ]
                   }
                 },
                 "required": [
                   "id",
-                  "input",
-                  "usePolicy"
+                  "input"
                 ]
               }
             ]
@@ -949,19 +655,6 @@
                   },
                   "fn": {
                     "const": "configure_item_stats"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1085,7 +778,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1100,19 +792,6 @@
                   },
                   "fn": {
                     "const": "configure_item_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1219,7 +898,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1234,19 +912,6 @@
                   },
                   "fn": {
                     "const": "configure_item_contact_hitbox"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1277,7 +942,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1292,19 +956,6 @@
                   },
                   "fn": {
                     "const": "configure_weapon_ammo"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1351,7 +1002,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1366,19 +1016,6 @@
                   },
                   "fn": {
                     "const": "configure_vanilla_ammo_item"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1438,7 +1075,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1453,19 +1089,6 @@
                   },
                   "fn": {
                     "const": "restore_resources_on_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1509,7 +1132,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1524,19 +1146,6 @@
                   },
                   "fn": {
                     "const": "apply_vanilla_buff_on_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1573,7 +1182,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1588,19 +1196,6 @@
                   },
                   "fn": {
                     "const": "apply_generated_buff_on_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1740,7 +1335,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1755,19 +1349,6 @@
                   },
                   "fn": {
                     "const": "refresh_generated_effect_group_while_held"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1788,7 +1369,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1803,19 +1383,6 @@
                   },
                   "fn": {
                     "const": "configure_tool"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1864,7 +1431,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1879,19 +1445,6 @@
                   },
                   "fn": {
                     "const": "configure_tile_placement"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1921,7 +1474,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1936,19 +1488,6 @@
                   },
                   "fn": {
                     "const": "configure_wall_placement"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -1978,7 +1517,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -1993,19 +1531,6 @@
                   },
                   "fn": {
                     "const": "present_placed_item_sprite"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2139,7 +1664,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2154,19 +1678,6 @@
                   },
                   "fn": {
                     "const": "require_use_condition"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2233,7 +1744,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2248,19 +1758,6 @@
                   },
                   "fn": {
                     "const": "add_hold_light"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2302,7 +1799,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2317,19 +1813,6 @@
                   },
                   "fn": {
                     "const": "move_player_on_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2382,7 +1865,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2397,19 +1879,6 @@
                   },
                   "fn": {
                     "const": "recall_home_on_use"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2432,7 +1901,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2447,19 +1915,6 @@
                   },
                   "fn": {
                     "const": "configure_accessory"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -2779,7 +2234,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -2794,19 +2248,6 @@
                   },
                   "fn": {
                     "const": "configure_armor"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -3296,7 +2737,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -3311,19 +2751,6 @@
                   },
                   "fn": {
                     "const": "add_equipment_damage_bonus"
-                  },
-                  "target": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                    "description": "Authored entity id. Target kind is checked locally.",
-                    "x-infini-reference": {
-                      "namespace": "entity",
-                      "targetKinds": [
-                        "item_body"
-                      ],
-                      "allowSelf": true,
-                      "graphEdge": false
-                    }
                   },
                   "params": {
                     "type": "object",
@@ -3380,7 +2807,6 @@
                 "required": [
                   "id",
                   "fn",
-                  "target",
                   "params"
                 ]
               },
@@ -4067,19 +3493,12 @@
                       "allowSelf": true,
                       "graphEdge": false
                     }
-                  },
-                  "params": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {},
-                    "required": []
                   }
                 },
                 "required": [
                   "id",
                   "fn",
-                  "target",
-                  "params"
+                  "target"
                 ]
               },
               {

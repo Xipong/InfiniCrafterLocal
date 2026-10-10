@@ -397,7 +397,8 @@ def _compile_entity_call(
 def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     validation = assert_valid_runtime_program(document)
     out = copy.deepcopy(dict(document))
-    authored_program = _dict(out.get("runtimeProgram"))
+    from infini_local.core.runtime_authoring.technical_lowering import _exact_mechanical_view  # pyright: ignore[reportPrivateUsage] -- canonical private lowering, not public admission
+    authored_program = _dict(_exact_mechanical_view(document).get("runtimeProgram"))
     authored_entities = [dict(row) for row in authored_program.get("entities", []) if isinstance(row, Mapping)]
     calls = [dict(row) for row in authored_program.get("calls", []) if isinstance(row, Mapping)]
     for index, call in enumerate(calls):
@@ -453,11 +454,10 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         binding["role"] = primary_binding_role(primary_entity_id, binding_target_id(authored_binding))
         final_index = len(bindings)
         bindings.append(binding)
-        ctx.receipts.append(primary_binding_role_receipt(
-            source_index=source_index,
-            final_index=final_index,
-            role=binding["role"],
-        ))
+        from infini_local.core.runtime_authoring.technical_lowering import _binding_role_paths  # pyright: ignore[reportPrivateUsage]
+        role_receipt = primary_binding_role_receipt(source_index=source_index, final_index=final_index, role=binding["role"])
+        role_receipt["authoredPaths"] = _binding_role_paths(document, source_index)
+        ctx.receipts.append(role_receipt)
         if "effectGroupId" in binding["usePolicy"]["action"]:
             ctx.receipts.append(effect_group_binding_receipt(source_index=source_index, final_index=final_index,
                 value=binding["usePolicy"]["action"]["effectGroupId"]))
@@ -489,15 +489,12 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                     if key != "placementCallId":
                         ctx.write(call=presentation, path=f"{base}.{key}", value=value,
                                   target=body, key=key)
+                from infini_local.core.runtime_authoring.technical_lowering import _placement_source_paths  # pyright: ignore[reportPrivateUsage]
                 call_base = f"runtimeProgram.calls[{presentation['_sourceIndex']}]"
-                binding_base = f"runtimeProgram.bindings[{source_index}].usePolicy.action"
                 ctx.receipts.append({
                     "callId": presentation["id"], "fn": "present_placed_item_sprite",
                     "authoredPath": f"{call_base}.params.placementCallId",
-                    "authoredPaths": [f"{call_base}.fn", f"{call_base}.target",
-                                      f"{call_base}.params.placementCallId",
-                                      f"{binding_base}.kind", f"{binding_base}.targetId",
-                                      f"{binding_base}.placementCallId"],
+                    "authoredPaths": _placement_source_paths(document, int(presentation["_sourceIndex"]), source_index),
                     "finalPath": base, "value": copy.deepcopy(body),
                     "status": "technical_projection",
                 })
@@ -593,6 +590,8 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             receipt["finalPath"] = f"{prefix}{event_index_by_id[event_id]}]{suffix}"
     runtime["bindings"] = sorted(runtime["bindings"], key=lambda row: str(row.get("id") or ""))
 
+    from infini_local.core.runtime_authoring.technical_lowering import _author_binding_receipts  # pyright: ignore[reportPrivateUsage] -- canonical private lowering, not public admission
+    ctx.receipts.extend(_author_binding_receipts(document, {"runtimeProgram": runtime}))
     lowering_audit = audit_compiler_receipts(
         ctx.receipts,
         authored_document=document,
@@ -632,7 +631,10 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             for entity in runtime.get("entities") or []
             if isinstance(entity, Mapping) and str(entity.get("kind") or "") == "item_body"
         ), "")
-    bindings = tuple(row for row in runtime.get("bindings") or [] if isinstance(row, Mapping))
+    # Wire-only caller: feed the shared event predicate its explicit flat view.
+    # Never admit or auto-detect an Author wrapper here.
+    bindings = tuple({"id": row.get("id"), "input": row.get("input"), **_dict(row.get("usePolicy"))}
+                     for row in runtime.get("bindings") or [] if isinstance(row, Mapping))
     contact_suppressed = bool(
         _dict(runtime.get("itemUse")).get("disableMeleeHitbox")
         or _dict(data.get("gameplay")).get("ammoCategory")

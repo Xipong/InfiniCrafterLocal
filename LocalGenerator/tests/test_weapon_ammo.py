@@ -158,7 +158,7 @@ def test_hold_only_spawner_is_not_a_native_ammo_consumer_and_repair_uses_existin
     scope = build_runtime_repair_scope(doc, report["errors"])
     choices = scope["create"]["bindings"]["allowedTransactions"]
     assert choices and all(row["input"] in ("primary_use", "alternate_use")
-                           and row["usePolicy"]["action"]["kind"] == "spawn_entity" for row in choices)
+                           and row["action"]["kind"] == "spawn_entity" for row in choices)
     candidate = {"id": "active_ammo_use", **deepcopy(choices[0])}
     filtered, audit = filter_repair_patch_scope(doc, {"note": "Attach explicit active consumer", "bindingsUpsert": [candidate]}, scope)
     assert audit["ok"], audit

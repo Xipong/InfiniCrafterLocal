@@ -122,18 +122,15 @@ def test_binding_alternatives_are_atomic(scenario, ok):
     binding = current["runtimeProgram"]["bindings"][0]
     accepted = copy.deepcopy(binding)
     if scenario == "unknown-kind":
-        binding["usePolicy"]["action"]["kind"] = "not_registered"
+        binding["action"]["kind"] = "not_registered"
     elif scenario == "wrong-target":
-        binding["usePolicy"]["action"]["targetId"] = "item"
+        binding["action"]["targetId"] = "item"
     elif scenario == "legacy-row":
-        binding["action"] = binding["usePolicy"]["action"]["kind"]
-        binding["target"] = binding["usePolicy"]["action"]["targetId"]
-        binding.pop("usePolicy")
-        accepted["usePolicy"]["contactDamage"] = False
+        binding["usePolicy"] = {key: binding.pop(key) for key in ("action", "stackCost", "contactDamage")}
     errors = validate_runtime_program(current)["errors"] if scenario != "cross-product" else [{"path": "$.runtimeProgram.bindings[0]", "code": "unsupported_input_action", "message": "exact tuple", "relatedIds": [binding["id"]]}]
     assert errors
     if scenario == "unknown-kind":
-        assert any(e["path"].endswith(".usePolicy.action.kind") for e in errors)
+        assert any(e["path"].endswith(".action.kind") for e in errors)
     if scenario == "legacy-row":
         assert any(e["code"] == "shape_additional_property" for e in errors)
     scope = build_runtime_repair_scope(current, errors)
@@ -141,7 +138,7 @@ def test_binding_alternatives_are_atomic(scenario, ok):
     if scenario == "unknown-kind":
         assert binding["id"] in scope["identityChanges"]["bindingActionIds"]
     assert {k: v for k, v in accepted.items() if k != "id"} in alternatives
-    assert not any(row["input"] == "hold" and row["usePolicy"]["action"]["kind"] == "use_item_body" for row in alternatives)
+    assert not any(row["input"] == "hold" and row.get("action", {}).get("kind") == "use_item_body" for row in alternatives)
     if not ok:
         accepted = _binding_row(binding["id"], "hold", "use_item_body", "item")
     patch = dict(_empty_gameplay_patch(), bindingsUpsert=[accepted])
@@ -149,7 +146,7 @@ def test_binding_alternatives_are_atomic(scenario, ok):
     assert audit["ok"] is ok, audit
     if ok:
         assert filtered["bindingsUpsert"] == [accepted]
-        assert all(k not in filtered["bindingsUpsert"][0] for k in ("action", "target"))
+        assert all(k not in filtered["bindingsUpsert"][0] for k in ("usePolicy", "target"))
         assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
     else:
         assert any(e.get("code") == "repair_scope_violation" or e.get("kind") in {"additional_property", "one_of", "any_of", "exactly_one"} for e in audit["errors"])
@@ -212,7 +209,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
         assert next(e["paths"] for e in scope["fieldPermissions"]["calls"] if e["id"] == "item_use") == ["params.useStyle"]
     fixed = copy.deepcopy(use)
     fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", customHeldSprite="visible")
-    fixed["target"] = "nail"
+    fixed["params"]["channel"] = True  # hostile frozen sibling
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
     patch = dict(_empty_gameplay_patch(), callsUpsert=[fixed, unrelated])
@@ -224,7 +221,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     assert calls["item_use"]["params"]["useStyle"] == "shoot"
     assert calls["item_use"]["params"]["autoReuse"] is True
     assert calls["item_use"]["params"]["handPose"] == original["params"]["handPose"]
-    assert calls["item_use"]["target"] == original["target"]
+    assert "target" not in calls["item_use"]
     assert calls["item_stats"]["params"]["damage"] != 999
     if scenario == "required-pair":
         assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
@@ -346,7 +343,7 @@ def test_requirement_owner_refuses_foreign_binding_choices(monkeypatch, capabili
     current = build_runtime_fixture(fixture) if fixture == "workbench_blade" else build_capability_witness(fixture)
     program = current["runtimeProgram"]
     if retain_binding:
-        program["bindings"][0]["usePolicy"]["contactDamage"] = False
+        program["bindings"][0]["contactDamage"] = False
     else:
         program["bindings"] = []
     if kind == "binding_input_present":
@@ -366,14 +363,14 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
     current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     binding = program["bindings"][0]
-    binding["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "item"}
-    binding["usePolicy"]["contactDamage"] = scenario == "no-optional-geometry"
+    binding["action"] = {"kind": "use_item_body"}
+    binding["contactDamage"] = scenario == "no-optional-geometry"
     event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
     event_call["target"] = "item"
     event_call["params"]["when"] = "on_use" if scenario == "placement" else "on_hit"
     if scenario == "placement":
-        binding["usePolicy"] = {"action": {"kind": "place_item", "targetId": "item", "placementCallId": "place_bench"}, "stackCost": 1, "contactDamage": False}
-        program["calls"].append({"id": "place_bench", "fn": "configure_tile_placement", "target": "item", "params": {"tileId": 18, "placeStyle": 0}})
+        binding.pop("stackCost"); binding.pop("contactDamage"); binding["action"] = {"kind": "place_item", "placementCallId": "place_bench"}
+        program["calls"].append({"id": "place_bench", "fn": "configure_tile_placement", "params": {"tileId": 18, "placeStyle": 0}})
         event_call["params"]["entity"] = "workbench_blade"
     else:
         program["bindings"].append(_binding_row("projectile_root", "alternate_use" if scenario == "foreign-target-contact" else "hold", "spawn_entity", "workbench_blade", contact_damage=scenario == "foreign-target-contact"))
@@ -388,10 +385,10 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
         scope = build_runtime_repair_scope(current, report["errors"])
         requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
         assert binding["id"] in requirement["allowedExistingBindingIds"]
-        assert any(e["usePolicy"]["contactDamage"] is True and e["usePolicy"]["action"]["targetId"] == "item" for e in requirement["allowedBindingTransactions"])
-        assert any(e["usePolicy"]["action"]["kind"] == "spawn_entity" and e["usePolicy"]["action"]["targetId"] == "workbench_blade" for e in requirement["allowedBindingTransactions"])
+        assert any(e["contactDamage"] is True and e["action"] == {"kind": "use_item_body"} for e in requirement["allowedBindingTransactions"])
+        assert any(e["action"]["kind"] == "spawn_entity" and e["action"]["targetId"] == "workbench_blade" for e in requirement["allowedBindingTransactions"])
         fixed = copy.deepcopy(binding)
-        fixed["usePolicy"]["contactDamage"] = True
+        fixed["contactDamage"] = True
         filtered, audit = filter_repair_patch_scope(current, dict(_empty_gameplay_patch(), bindingsUpsert=[fixed]), scope)
         assert audit["ok"] and filtered["bindingsUpsert"] == [fixed]
         current = apply_repair_patch(current, filtered)
@@ -414,13 +411,13 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
     current = build_runtime_fixture("workbench_blade") if scenario == "projected-tool" else build_capability_witness("configure_tool")
     program = current["runtimeProgram"]
     if scenario == "projected-tool":
-        assert program["bindings"][0]["usePolicy"]["action"]["kind"] == "spawn_entity"
-        program["bindings"][0]["usePolicy"]["contactDamage"] = False
-        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "target": "item", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.75}})
+        assert program["bindings"][0]["action"]["kind"] == "spawn_entity"
+        program["bindings"][0]["contactDamage"] = False
+        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 0.75}})
         assert validate_runtime_program(current)["ok"]
         return
     if scenario == "missing-contact":
-        program["bindings"][0]["usePolicy"]["contactDamage"] = False
+        program["bindings"][0]["contactDamage"] = False
     else:
         program["bindings"] = []
     patch = _empty_gameplay_patch()
@@ -450,7 +447,7 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         return
     if scenario == "missing-contact":
         binding = copy.deepcopy(program["bindings"][0])
-        binding["usePolicy"]["contactDamage"] = True
+        binding["contactDamage"] = True
     else:
         binding = _binding_row("repair_tool_primary", "primary_use", "use_item_body", "item", contact_damage=True)
     patch["bindingsUpsert"] = [binding]
@@ -495,12 +492,12 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
     current = build_capability_witness("configure_tool") if scenario == "tool" else build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     original = program["bindings"][0]
-    original["usePolicy"]["contactDamage"] = False
+    original["contactDamage"] = False
     duplicate = copy.deepcopy(original)
     duplicate["id"] = "duplicate_tool_primary" if scenario == "tool" else "alternate_body"
     if scenario == "contact":
-        original["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "item"}
-        duplicate["usePolicy"]["action"] = copy.deepcopy(original["usePolicy"]["action"])
+        original["action"] = {"kind": "use_item_body"}
+        duplicate["action"] = copy.deepcopy(original["action"])
         duplicate["input"] = "alternate_use"
         program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
         event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
@@ -523,7 +520,7 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
     else:
         assert len(requirement["allowedBindingTransactions"]) == 2
     fixed_original, fixed_duplicate = copy.deepcopy(original), copy.deepcopy(duplicate)
-    fixed_original["usePolicy"]["contactDamage"] = fixed_duplicate["usePolicy"]["contactDamage"] = True
+    fixed_original["contactDamage"] = fixed_duplicate["contactDamage"] = True
     patch = dict(_empty_gameplay_patch(), bindingsUpsert=[fixed_original, fixed_duplicate] if repair == "both" else [fixed_original if scenario == "tool" else fixed_duplicate])
     if scenario == "tool":
         patch["exclusiveInputSelections"] = [{"input": "primary_use", "keepBindingId": duplicate["id"] if repair == "misaligned" else original["id"]}]
@@ -546,8 +543,8 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     program["calls"] = [
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
-        {"id": "place", "fn": "configure_tile_placement", "target": "item", "params": {"tileId": 1, "placeStyle": 0}},
-        {"id": "tool", "fn": "configure_tool", "target": "item", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
+        {"id": "place", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}},
+        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedScale": 1.0}},
     ]
     program["bindings"] = [{
         "id": "primary_place",
@@ -574,7 +571,7 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     }]
     primary_create = next(
         row for row in scope["create"]["bindings"]["allowedTransactions"]
-        if row["input"] == "primary_use" and row["usePolicy"]["action"]["kind"] == "use_item_body"
+        if row["input"] == "primary_use" and row.get("action", {}).get("kind") == "use_item_body"
     )
     requirement = next(row for row in scope["repairRequirements"] if row["code"] == "missing_binding_dependency")
     assert requirement["mustApplyAll"] is True
@@ -762,7 +759,7 @@ def test_shape_failure_still_exposes_graph_semantic_blockers() -> None:
     binding = current["runtimeProgram"]["bindings"][0]
     duplicate = copy.deepcopy(binding)
     duplicate["id"] = "duplicate_primary_use"
-    duplicate["usePolicy"]["action"]["targetId"] = "nail"
+    duplicate["action"]["targetId"] = "nail"
     current["runtimeProgram"]["bindings"].append(duplicate)
     current["runtimeProgram"]["bindings"].append(
         _binding_row("wrong_item_spawn", "alternate_use", "spawn_entity", "item")
@@ -774,7 +771,6 @@ def test_shape_failure_still_exposes_graph_semantic_blockers() -> None:
     current["runtimeProgram"]["calls"].append({
         "id": "invalid_placeable",
         "fn": "configure_tile_placement",
-        "target": "item",
         "params": {"tileId": -2, "placeStyle": 0},
     })
 
@@ -878,8 +874,8 @@ def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() 
     other_item["id"] = "other_item"
     program["entities"].append(other_item)
     binding = program["bindings"][0]
-    binding["usePolicy"]["action"] = {"kind": "use_item_body", "targetId": "other_item"}
-    binding["usePolicy"]["contactDamage"] = False
+    binding["action"] = {"kind": "use_item_body", "targetId": "other_item"}
+    binding["contactDamage"] = False
     event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
     event_call["target"] = "item"
     event_call["params"]["when"] = "on_use"
@@ -897,12 +893,12 @@ def test_event_repair_uses_exact_call_target_despite_foreign_related_producer() 
     requirement = scope["repairRequirements"][0]
     assert requirement["allowedBindingTransactions"]
     assert {
-        row["usePolicy"]["action"]["targetId"]
+        row["action"]["targetId"]
         for row in requirement["allowedBindingTransactions"]
     } == {"item", "workbench_blade"}
     assert all(
-        row["usePolicy"]["action"]["kind"] == "spawn_entity"
-        or row["usePolicy"]["action"]["targetId"] == "item"
+        row["action"]["kind"] == "spawn_entity"
+        or row["action"]["targetId"] == "item"
         for row in requirement["allowedBindingTransactions"]
     )
 
@@ -947,8 +943,8 @@ def test_event_repair_preserves_complete_binding_alternatives_without_cross_prod
     actual = {
         (
             row["input"],
-            row["usePolicy"]["action"]["kind"],
-            row["usePolicy"]["contactDamage"],
+            row["action"]["kind"],
+            row["contactDamage"],
         )
         for row in requirement["allowedBindingTransactions"]
     }
@@ -964,7 +960,7 @@ def test_binding_choice_is_owned_by_requirement_specific_existing_ids(
     current = build_capability_witness("configure_tool")
     program = current["runtimeProgram"]
     original = program["bindings"][0]
-    original["usePolicy"]["contactDamage"] = False
+    original["contactDamage"] = False
     duplicate = copy.deepcopy(original)
     duplicate["id"] = "duplicate_tool_primary"
     unrelated = copy.deepcopy(original)
@@ -1010,7 +1006,7 @@ def test_create_only_binding_choice_rejects_additional_existing_transaction(
     unrelated = copy.deepcopy(program["bindings"][0])
     unrelated["id"] = "unrelated_mutable_binding"
     unrelated["input"] = "equipped"
-    unrelated["usePolicy"]["contactDamage"] = False
+    unrelated["contactDamage"] = False
     program["bindings"] = [unrelated]
 
     report = validate_runtime_program(current)
@@ -1050,7 +1046,7 @@ def test_equipment_set_damage_repair_can_fill_its_declared_set_key() -> None:
     armor = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_armor")
     armor["params"]["setKey"] = ""
     current["runtimeProgram"]["calls"].append({
-        "id": "set_damage", "fn": "add_equipment_damage_bonus", "target": "item",
+        "id": "set_damage", "fn": "add_equipment_damage_bonus",
         "params": {"phase": "matching_armor_set", "damageClass": "magic", "bonusPercent": 15},
     })
     report = validate_runtime_program(current)
@@ -1073,7 +1069,7 @@ def test_body_armor_set_damage_repair_can_remove_only_invalid_modifier() -> None
     armor = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_armor")
     armor["params"]["slot"] = "body"
     current["runtimeProgram"]["calls"].append({
-        "id": "set_damage", "fn": "add_equipment_damage_bonus", "target": "item",
+        "id": "set_damage", "fn": "add_equipment_damage_bonus",
         "params": {"phase": "matching_armor_set", "damageClass": "magic", "bonusPercent": 15},
     })
     report = validate_runtime_program(current)
@@ -1570,7 +1566,7 @@ def test_maximal_author_schema_shape_keeps_worst_branch_and_report_tail():
     schema = program_schema.author_item_response_schema()
     program_schema_properties = schema["properties"]["runtimeProgram"]["properties"]
     branches = program_schema_properties["calls"]["items"]["oneOf"]
-    worst = max(branches, key=lambda branch: len(branch["properties"]["params"]["properties"]))
+    worst = max(branches, key=lambda branch: len(branch["properties"].get("params", {}).get("properties", {})))
     fn = worst["properties"]["fn"]["const"]
     good = build_capability_witness(fn)
     call = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)

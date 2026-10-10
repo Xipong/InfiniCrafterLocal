@@ -7,11 +7,14 @@ import struct
 from types import MappingProxyType
 from typing import Any, Final, Iterable, Mapping
 
-from infini_local.core.runtime_authoring.binding_use_policy import (
-    STACK_COST_RULE,
-    action_kind,
-    contact_damage as binding_contact_damage,
-    target_id as binding_target_id,
+STACK_COST_RULE = (
+    "place_item requires stackCost=1 on its own binding; the stack is spent only after accepted placement "
+    "and the placed generated item is returned by the placement ledger when broken. "
+    "For every other active use, stackCost=1 consumes one generated item; stackCost=0 retains it. "
+    "A projectile return does not refund a consumed item: choose stackCost=0 for a reusable throw. "
+    "Before answering, compare each active binding with the intended item lifetime: if the generated item "
+    "remains in inventory for another activation, choose stackCost=0 even for spawn_entity. "
+    "stackCost=1 on spawn_entity consumes the whole generated item, not a projectile or separate ammo."
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKEN_PATTERN,
@@ -23,7 +26,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v4"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v5"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -678,6 +681,12 @@ class CapabilitySpec:
             },
             "required": ["id", "fn", "target", "params"],
         }
+        if self.target_kinds == ("item_body",):
+            del variant["properties"]["target"]
+            variant["required"].remove("target")
+        if not self.params:
+            del variant["properties"]["params"]
+            variant["required"].remove("params")
         return variant
 
     def prompt_card(self) -> dict[str, Any]:
@@ -1409,9 +1418,9 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedBody",),
         lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
                          "runtimeProgram.calls[].params.placementCallId",
-                         "runtimeProgram.bindings[].usePolicy.action.kind",
-                         "runtimeProgram.bindings[].usePolicy.action.targetId",
-                         "runtimeProgram.bindings[].usePolicy.action.placementCallId"),
+                         "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.targetId",
+                         "runtimeProgram.bindings[].action.placementCallId"),
     ),
     _cap(
         "require_use_condition",
@@ -2261,16 +2270,21 @@ def event_alternative_is_present(
     def binding_present(requirement: EventBindingRequirement) -> bool:
         allowed_inputs = set(requirement.any_of_inputs)
         allowed_actions = set(requirement.any_of_actions)
-        return any(
-            str(row.get("input") or "") in allowed_inputs
-            and (not allowed_actions or action_kind(row) in allowed_actions)
-            and binding_target_id(row) == target_id
-            and (
-                requirement.required_contact_damage is None
-                or binding_contact_damage(row) is requirement.required_contact_damage
-            )
-            for row in binding_rows
-        )
+        for row in binding_rows:
+            raw_action = row.get("action")
+            action: Mapping[str, Any] = raw_action if isinstance(raw_action, Mapping) else {}
+            input_name = row.get("input")
+            inp = INPUT_KIND_REGISTRY.get(input_name) if isinstance(input_name, str) else None
+            action_name = action.get("kind")
+            if action_name is None and inp is not None and len(inp.allowed_actions) == 1:
+                action_name = inp.allowed_actions[0]
+            if (isinstance(input_name, str) and input_name in allowed_inputs
+                and (not allowed_actions or isinstance(action_name, str) and action_name in allowed_actions)
+                and action.get("targetId") == target_id
+                and (requirement.required_contact_damage is None or
+                     (row.get("contactDamage") is True) is requirement.required_contact_damage)):
+                return True
+        return False
 
     return (
         all(call_present(requirement) for requirement in alternative.required_calls)
@@ -2532,7 +2546,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                             message="Only one explicit placed-body presentation may reference a placement call."),
         )
     if cap.name in PLACEMENT_CAPABILITIES:
-        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding usePolicy.action.placementCallId."),)
+        return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding action.placementCallId."),)
     if cap.name == "configure_placeable":
         return (
             RequirementSpec("at_least_one_param_nonnegative", param="tileId|wallId", message="at least one of tileId/wallId must be enabled"),
@@ -2540,7 +2554,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
                 kind="binding_action_reference",
                 target="item_body",
                 any_of=("place_item",),
-                message="configure_placeable must be referenced by exactly one binding usePolicy.action.placementCallId.",
+                message="configure_placeable must be referenced by exactly one binding action.placementCallId.",
             ),
         )
     if cap.name == "configure_tool":
@@ -2858,13 +2872,14 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             }),
         },
         "bindingTarget": (
-            "bindings[].usePolicy.action.targetId is the exact entity acted on. The selected action's targets list "
+            "bindings[].action.targetId is the exact entity acted on. The selected action's targets list "
             "is the entity-kind allowlist; spawn_entity targets the entity created, while "
             "use_item_body targets the item body being used. Only place_item additionally requires "
-            "bindings[].usePolicy.action.placementCallId; every other action must omit that key. "
-            "usePolicy.contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
+            "bindings[].action.placementCallId; every other action must omit that key. "
+            "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; place_item/hold/equipped require false."
+            "It does not select primaryEntityId or projectile held ownership; omit fixed contactDamage for place_item/hold/equipped. "
+            "Omit action.targetId for item_body-only actions with one declared item_body; projectile targets remain explicit."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",
