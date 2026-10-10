@@ -72,6 +72,26 @@ def test_csharp_policy_accepts_repository(gates, csharp_sources):
     assert scanner.source_policy_issues(csharp_sources) == []
 
 
+@pytest.mark.parametrize("path,before,after", [
+    ("Common/Models/RuntimeProgramSpec.cs", "GravityPerTick, -2f, 2f", "GravityPerTick, 0f, 2f"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 2: Projectile.velocity.Y += p.GravityPerTick;", "case 2: Projectile.velocity.Y += Math.Abs(p.GravityPerTick);"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 6: Projectile.velocity.Y += p.GravityPerTick;", "case 6: Projectile.velocity.Y += p.GravityPerTick * 2;"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "if (!controllerOwnsMotion)\n        {\n            RunMovement();\n            ApplyActiveModifiers();\n        }", "RunMovement();\n        ApplyActiveModifiers();"),
+    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "if (_activationDelayTicks > 0)", "if (_activationDelayTicks < 0)"),
+])
+def test_signed_acceleration_source_gate_rejects_native_domain_and_timing_mutants(gates, csharp_sources, monkeypatch, path, before, after):
+    _, scanner = gates
+    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
+    scanner.ERRORS.clear()
+    scanner.check_signed_vertical_acceleration()
+    assert scanner.ERRORS == []
+    assert before in csharp_sources[path]
+    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
+    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
+    scanner.check_signed_vertical_acceleration()
+    assert any("signed vertical acceleration" in row for row in scanner.ERRORS)
+
+
 @pytest.mark.parametrize("path,addition,code", [
     ("Common/Models/GeneratedItemData.Model.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
     ("Content/Items/GeneratedItem.cs", "public void ModifyTooltips() {}", "authored_tooltip"),

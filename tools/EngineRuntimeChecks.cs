@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("signed vertical acceleration native DTO active updates and hydration", SignedVerticalAccelerationUsesNativeDtoAndEveryActiveUpdate),
+            ("signed vertical acceleration activation delay and update rate", SignedVerticalAccelerationWaitsForActivationThenPreservesAuthoredRate),
             ("sampled launch strict DTO and old saved absence", SampledLaunchDtoRejectsInvalidAndPreservesOldAbsence),
             ("sampled launch raw numeric domain and round trips", SampledVelocityRawNumericDomainAndRoundTrips),
             ("sampled velocity seeded geometry and area moments", SampledVelocitySeededGeometryAndAreaMoments),

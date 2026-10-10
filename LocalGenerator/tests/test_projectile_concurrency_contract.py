@@ -326,7 +326,10 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
         broken = copy.deepcopy(good)
         call = next(row for row in broken["runtimeProgram"]["calls"] if row["id"] == "witness_call")
         param = next(iter(call["params"]))
-        call["params"][param] = -1
+        # Signed gravity now deliberately admits -1. Keep this Repair witness
+        # outside the current canonical domain for either selected driver.
+        call["params"][param] = CAPABILITY_REGISTRY[driver].params[param].minimum - 1
+        assert not validate_runtime_program(broken)["ok"]
         response = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["id"] == "witness_call"))
         responses, requests = wire_transport
         responses.append({"callsUpsert": [response], "realizationReplacement": good["realization"], "note": "Exact movement leaf"})
