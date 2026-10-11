@@ -915,6 +915,82 @@ def test_placement_action_selection_requires_explicit_call_reference(monkeypatch
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("invalid_reference", ["unknown_reference", None, False, 2, {}, [], "witness_call"])
+def test_missing_kind_present_invalid_placement_reference_repair(monkeypatch, format_mode, invalid_reference):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    _assert_delivery(expected)
+    if invalid_reference == "witness_call":
+        invalid_reference = next(c["id"] for c in doc["runtimeProgram"]["calls"]
+                                 if c["fn"] == "configure_item_stats")
+    row["action"] = {"placementCallId": deepcopy(invalid_reference)}
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "explicit kind and exact invalid reference correction",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["create"]["bindings"]["allowed"] is False
+    assert scope["fieldPermissions"]["bindings"] == [{
+        "id": row["id"], "paths": ["action.kind", "action.placementCallId"]}]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+    hostile = deepcopy(candidate)
+    hostile["input"] = "primary_use"
+    hostile["action"]["targetId"] = "foreign_body"
+    again, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "do not thaw input or accepted target omission",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [hostile],
+    }, format_mode)
+    assert again["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    again.pop("debug")
+    assert json.dumps(again, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(again)
+
+    from infini_local.core.errors import PlannerUnavailable
+    incomplete = deepcopy(candidate)
+    incomplete["action"].pop("placementCallId")
+    foreign = deepcopy(candidate)
+    foreign["action"]["placementCallId"] = "unknown_reference"
+    for incoming in ([], [incomplete], [foreign]):
+        with pytest.raises(PlannerUnavailable):
+            _offline_gameplay_repair(monkeypatch, doc, {
+                "note": "no host-selected placement reference",
+                "realizationReplacement": doc["realization"], "bindingsUpsert": incoming,
+            }, format_mode)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_missing_kind_keeps_valid_placement_reference_frozen(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    row["action"].pop("kind")
+    candidate["action"]["placementCallId"] = "unknown_reference"
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "valid existing placement reference remains frozen",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [{
+        "id": row["id"], "paths": ["action.kind"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_placement_target_repair_freezes_valid_reference_and_use_lanes(monkeypatch, format_mode):
     from test_repair_gameplay_contract import _offline_gameplay_repair
 

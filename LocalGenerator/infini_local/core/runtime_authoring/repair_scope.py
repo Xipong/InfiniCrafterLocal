@@ -2700,11 +2700,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             action_shape = variant["properties"]["action"]
             if (variant["properties"]["input"]["const"] == binding.get("input")
                     and "placementCallId" in action_shape["required"]
-                    and "placementCallId" not in _mapping(binding.get("action"))
-                    and _complete_binding_transactions(
+                    and (placement_choices := _complete_binding_transactions(
                         rows, input_name=str(binding.get("input") or ""),
                         action_name=action_shape["properties"]["kind"]["const"],
-                        target_id=_body_id(rows))):
+                        target_id=_body_id(rows)))
+                    and not any(
+                        _mapping(binding.get("action")).get("placementCallId")
+                        == _mapping(choice.get("action")).get("placementCallId")
+                        for choice in placement_choices
+                    )):
                 grant("bindings", row_id, "action.placementCallId")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
