@@ -860,7 +860,7 @@
                   },
                   "manaCost": {
                     "default": 0,
-                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent; omitted means no mana cost, independently of DamageClass",
+                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",

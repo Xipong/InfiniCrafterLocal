@@ -91,6 +91,38 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     assert "do not rewrite source" in glossary["readingRule"]
 
 
+def _assert_native_mana_timing(notation):
+    for rule in (
+        "useTimeTicks is the base native activation interval",
+        "useAnimationTicks is the base animation duration",
+        "Native manaCost payment is attempted at animation start, not at every activation inside it",
+        "spawn count is a batch count, not a payment count",
+        "Extra recurring payment requires an explicit capability",
+        "Player/prefix timing and mana modifiers can change effective values",
+        "do not report base ticks or mana as measured totals",
+    ):
+        assert rule in notation, "shared guide omits native timing/payment semantics"
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_explains_native_mana_payment_boundary(monkeypatch, mode):
+    _, packet = _author_request(monkeypatch, mode, _source())
+    catalog = packet["runtimeCapabilityContract"]["catalog"]
+    stats = next(card for card in catalog["capabilities"] if card["fn"] == "configure_item_stats")
+    mana = stats["params"]["manaCost"]
+    for rule in (
+        "For primary_use/alternate_use, native mana payment is attempted when a new use animation starts",
+        "useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment",
+        "not a per-projectile or per-successful-spawn debit",
+        "explicit controller manaPayment may add recurring payment; do not infer it",
+        "before player mana-cost modifiers, not guaranteed final mana spent",
+        "Omitted means no mana cost, independently of DamageClass",
+    ):
+        assert rule in mana["meaning"], "mana card omits native payment boundary"
+    assert mana["optional"] is True and mana["default"] == 0
+    _assert_native_mana_timing(catalog["fieldGuide"]["paramNotation"])
+
+
 class _Captured(BaseException):
     """Stop before transport without pretending a provider returned anything."""
 
@@ -153,6 +185,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
     for clock in ("60/s", "updatesPerTick", "world ticks", "per projectile update", "immunity.localCooldown"):
         assert clock in units["paramNotation"]
+    _assert_native_mana_timing(units["paramNotation"])
     report = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, report["errors"])
     assert packet["repairScope"] == scope
@@ -313,7 +346,9 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
     packet = json.loads(request["messages"][1]["content"])
     units = packet["runtimeExecutionTruth"]["units"]
-    assert len(json.dumps(units, separators=(",", ":"))) < 12_000
+    # Offline capture: 11,767 baseline chars + 443 timing/payment chars.
+    # Retain headroom without changing the request or production limits below.
+    assert len(json.dumps(units, separators=(",", ":"))) < 12_500
     assert len(request["messages"][1]["content"]) < 60_000
     authored_request, _ = _author_request(monkeypatch, mode, _source())
     assert len(authored_request["messages"][1]["content"]) < PLANNER_PROMPT_LIMIT_CHARS
