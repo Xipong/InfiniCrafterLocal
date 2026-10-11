@@ -1062,13 +1062,17 @@ def _binding_repair_alternatives(
                         target_id=target_id,
                     ))
                     continue
-                alternatives.append(transaction(
-                    input_name=input_name,
-                    action_name=action_name,
-                    target=target_id,
-                    stack_cost_value=stack_cost(binding),
-                    contact_damage_value=contact_damage(binding),
-                ))
+                costs = (0, 1) if "stackCost" in mutable_paths else (stack_cost(binding),)
+                contacts = (False, True) if "contactDamage" in mutable_paths else (contact_damage(binding),)
+                for cost in costs:
+                    for contact in contacts:
+                        alternatives.append(transaction(
+                            input_name=input_name,
+                            action_name=action_name,
+                            target=target_id,
+                            stack_cost_value=cost,
+                            contact_damage_value=contact,
+                        ))
     group_id = _mapping(binding.get("action")).get("effectGroupId")
     if group_id is not None:
         for row in alternatives:
@@ -2054,9 +2058,18 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                                     fixed["action"]["targetId"] = required_target
                                 if kind_path in error_paths_all:
                                     fixed["action"]["kind"] = action_name
+                                # Co-diagnosed leaves have their own exact grants.
+                                # They must not force an existing consumer into a
+                                # new lane; only the model patch corrects them.
+                                frozen_shape_errors = [
+                                    shape_error for shape_error in strict_schema_errors(fixed, binding_schema())
+                                    if str(shape_error.get("path") or "$").replace(
+                                        "$", f"$.runtimeProgram.bindings[{binding_index}]", 1
+                                    ) not in error_paths_all
+                                ]
                                 if (action_kind(fixed) != action_name
                                         or _binding_target(fixed, rows) != required_target
-                                        or strict_schema_errors(fixed, binding_schema())):
+                                        or frozen_shape_errors):
                                     continue
                                 fixed.pop("id")
                                 choices.append(fixed)
@@ -2892,6 +2905,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for alternative in binding_choices:
                 alternative["stackConsumeChancePercent"] = chance
             binding_choices = [alternative for alternative in binding_choices if not stack_chance_error(alternative)]
+        elif "stackConsumeChancePercent" in field_permissions["bindings"].get(row_id, set()):
+            # Explicit bounded model choices, not a correction/default in source.
+            chance_shapes = [variant["properties"]["stackConsumeChancePercent"]
+                             for variant in binding_schema()["oneOf"]
+                             if "stackConsumeChancePercent" in variant["properties"]]
+            chance_values = sorted({value for shape in chance_shapes
+                                    for value in range(shape["minimum"], shape["maximum"] + 1)})
+            binding_choices = [
+                {**copy.deepcopy(alternative), "stackConsumeChancePercent": value}
+                for alternative in binding_choices
+                for value in chance_values
+                if not stack_chance_error({**alternative, "stackConsumeChancePercent": value})
+            ]
         group_id = _mapping(binding.get("action")).get("effectGroupId")
         if (isinstance(group_id, str)
                 and "action.effectGroupId" not in field_permissions["bindings"].get(row_id, set())):
