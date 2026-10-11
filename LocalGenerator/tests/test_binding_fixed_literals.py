@@ -724,6 +724,68 @@ def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, f
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("contact", [False, True])
+@pytest.mark.parametrize("invalid_leaf", ["contactDamage", "stackCost", "stackConsumeChancePercent"])
+def test_compound_effect_consumer_target_and_contact_repair(monkeypatch, format_mode, contact, invalid_leaf):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    row.update(_explicit(doc, row))
+    row.update(stackCost=1, stackConsumeChancePercent=23, contactDamage=contact)
+    row["action"]["effectGroupId"] = "independent_group"
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "independent_group"
+    expected = deepcopy(doc)
+    _assert_delivery(expected)
+    candidate = deepcopy(row)
+    row["action"]["targetId"] = "foreign_body"
+    row[invalid_leaf] = "invalid"
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "explicit compound consumer correction", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["create"]["bindings"]["allowed"] is False
+    assert scope["fieldPermissions"]["bindings"] == [{
+        "id": row["id"], "paths": sorted(["action.targetId", invalid_leaf, "target"])}]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+    # Frozen group, input and every valid sibling survive hostile full rows.
+    hostile = deepcopy(candidate)
+    hostile["action"]["effectGroupId"] = "foreign_group"
+    hostile["input"] = "alternate_use"
+    for leaf, value in {"contactDamage": not contact, "stackCost": 0,
+                        "stackConsumeChancePercent": 97}.items():
+        if leaf != invalid_leaf:
+            hostile[leaf] = value
+    if format_mode == "json_schema":
+        # The strict provider union only admits chance on a cost=1 row.
+        hostile["stackCost"] = 1
+    again, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "hostile valid siblings stay frozen", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [hostile],
+    }, format_mode)
+    assert again["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    again.pop("debug")
+    assert json.dumps(again, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(again)
+
+    from infini_local.core.errors import PlannerUnavailable
+    incomplete = deepcopy(candidate)
+    incomplete.pop(invalid_leaf)
+    for incoming in ([], [incomplete]):
+        with pytest.raises(PlannerUnavailable):
+            _offline_gameplay_repair(monkeypatch, doc, {
+                "note": "the host must not finish the compound correction",
+                "realizationReplacement": doc["realization"], "bindingsUpsert": incoming,
+            }, format_mode)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_named_effect_kind_repair_reuses_explicit_body_consumer(monkeypatch, format_mode):
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
