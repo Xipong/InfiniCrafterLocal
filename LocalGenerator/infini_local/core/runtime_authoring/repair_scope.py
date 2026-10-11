@@ -189,7 +189,9 @@ def _body_id(rows: Mapping[str, list[dict[str, Any]]]) -> str:
 def _binding_target(binding: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
     explicit = binding_target_id(binding)
     spec = BINDING_ACTION_REGISTRY.get(action_kind(binding))
-    return explicit or (_body_id(rows) if spec is not None and spec.target_kinds == ("item_body",) else "")
+    if "targetId" in _mapping(binding.get("action")):
+        return explicit
+    return _body_id(rows) if spec is not None and spec.target_kinds == ("item_body",) else ""
 
 
 def _call_target(call: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
@@ -978,15 +980,37 @@ def _binding_repair_alternatives(
     input_mutable: bool,
     action_mutable: bool,
     target_mutable: bool,
+    mutable_paths: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Project complete registry-valid use transactions without choosing one."""
 
     if input_mutable and not action_mutable and not target_mutable and not action_kind(binding):
         # Omission-only source rows carry no action/target choice to retarget.
-        # Expose only schema-valid explicit input replacements; no host completion.
-        return [{key: copy.deepcopy(value) for key, value in candidate.items() if key != "id"}
-                for name in sorted(INPUT_KIND_REGISTRY)
-                if not strict_schema_errors(candidate := {**binding, "input": name}, binding_schema())]
+        # Comparison candidates may also correct exact diagnosed fixed literals
+        # or forbidden keys. Never materialize these corrections into the source
+        # or patch: Repair must explicitly supply every required correction.
+        permissions = set(mutable_paths)
+
+        def project_fixed_leaves(candidate: dict[str, Any], schema: Mapping[str, Any], prefix: str = "") -> None:
+            properties = _mapping(schema.get("properties"))
+            for key in list(candidate):
+                relative = json_path_child(prefix, key)
+                child_schema = _mapping(properties.get(key))
+                if relative in permissions:
+                    if key not in properties and schema.get("additionalProperties") is False:
+                        candidate.pop(key)
+                    elif "const" in child_schema:
+                        candidate[key] = copy.deepcopy(child_schema["const"])
+                if isinstance(candidate.get(key), dict) and child_schema:
+                    project_fixed_leaves(candidate[key], child_schema, relative)
+
+        alternatives = []
+        for variant in binding_schema()["oneOf"]:
+            candidate = {**copy.deepcopy(binding), "input": variant["properties"]["input"]["const"]}
+            project_fixed_leaves(candidate, variant)
+            if not strict_schema_errors(candidate, variant):
+                alternatives.append(canonical_transaction(candidate, item_body_id=_body_id(rows)))
+        return sorted({repr(row): row for row in alternatives}.values(), key=repr)
     original_input = str(binding.get("input") or "")
     original_action = action_kind(binding)
     original_target = binding_target_id(binding)
@@ -1013,6 +1037,12 @@ def _binding_repair_alternatives(
                 sorted(entity_id for entity_id, kind in entity_kind_by_id.items() if kind in action_spec.target_kinds)
                 if target_mutable else [original_target]
             )
+            if (not target_mutable and not original_target and action_mutable
+                    and "targetId" not in _mapping(binding.get("action"))
+                    and action_spec.target_kinds == ("item_body",) and _body_id(rows)):
+                # A model-selected body-only action has one technical owner.
+                # Preserve source omission; projectile targets remain explicit.
+                target_ids = [_body_id(rows)]
             for target_id in target_ids:
                 if entity_kind_by_id.get(target_id) not in action_spec.target_kinds:
                     continue
@@ -1032,13 +1062,17 @@ def _binding_repair_alternatives(
                         target_id=target_id,
                     ))
                     continue
-                alternatives.append(transaction(
-                    input_name=input_name,
-                    action_name=action_name,
-                    target=target_id,
-                    stack_cost_value=stack_cost(binding),
-                    contact_damage_value=contact_damage(binding),
-                ))
+                costs = (0, 1) if "stackCost" in mutable_paths else (stack_cost(binding),)
+                contacts = (False, True) if "contactDamage" in mutable_paths else (contact_damage(binding),)
+                for cost in costs:
+                    for contact in contacts:
+                        alternatives.append(transaction(
+                            input_name=input_name,
+                            action_name=action_name,
+                            target=target_id,
+                            stack_cost_value=cost,
+                            contact_damage_value=contact,
+                        ))
     group_id = _mapping(binding.get("action")).get("effectGroupId")
     if group_id is not None:
         for row in alternatives:
@@ -1543,7 +1577,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 else:
                     binding_target_change_ids.add(node_id)
                     retarget_binding_ids.update(_matching_entity_ids(rows, _binding_target_kinds(node_row)))
-                    grant("bindings", node_id, "action")
+                    grant("bindings", node_id, "action.targetId")
         elif code == "reference_requirements_unsatisfied" and node_namespace == "calls":
             param_match = re.search(r"\.params\.([A-Za-z0-9_]+)$", path)
             cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
@@ -1926,17 +1960,41 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 for capability_requirement in capability.requirements:
                     if capability_requirement.kind == "binding_action_reference":
                         required_target = requirement_target_id(capability_requirement.target)
-                        reference_bindings = [
-                            row for row in rows["bindings"]
-                            if action_kind(row) in capability_requirement.any_of
-                            and _binding_target(row, rows) == required_target
-                        ]
+                        reference_bindings = []
+                        selector_can_repair = False
+                        for binding_index, binding in enumerate(indexed_rows["bindings"]):
+                            if not isinstance(binding, Mapping):
+                                continue
+                            target_path = f"$.runtimeProgram.bindings[{binding_index}].action.targetId"
+                            kind_path = f"$.runtimeProgram.bindings[{binding_index}].action.kind"
+                            if action_kind(binding) not in capability_requirement.any_of:
+                                if kind_path in error_paths_all and isinstance(binding.get("action"), Mapping):
+                                    for action_name in capability_requirement.any_of:
+                                        choice = copy.deepcopy(binding)
+                                        choice["action"].update(kind=action_name, placementCallId=node_id)
+                                        if target_path in error_paths_all:
+                                            choice["action"]["targetId"] = required_target
+                                        if (required_target and _binding_target(choice, rows) == required_target
+                                                and not strict_schema_errors(choice, binding_schema())):
+                                            selector_can_repair = True
+                                continue
+                            if (_binding_target(binding, rows) == required_target
+                                    or (required_target and target_path in error_paths_all)):
+                                reference_bindings.append((binding, target_path in error_paths_all))
+                        if selector_can_repair:
+                            # A model-selected action and explicit call reference
+                            # may restore this root; final validation proves exact
+                            # one-consumer ownership without creating another lane.
+                            requirement_row["repairStrategy"] = "repair_existing_binding_selectors"
+                            continue
                         if reference_bindings:
                             # Reuse the authored action root with its exact broken
                             # call reference; adding a second root is not necessary.
-                            for binding in reference_bindings:
+                            for binding, target_invalid in reference_bindings:
                                 fixed = copy.deepcopy(binding)
                                 fixed.pop("id", None)
+                                if target_invalid:
+                                    fixed["action"]["targetId"] = required_target
                                 fixed["action"]["placementCallId"] = node_id
                                 existing_binding_choices.append({
                                     "bindingId": str(binding.get("id") or ""),
@@ -1978,6 +2036,54 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                             if _binding_target(row, rows) == required_target
                         )
                     elif capability_requirement.kind == "binding_action_present":
+                        required_target = requirement_target_id(capability_requirement.target)
+                        consumer_repairs = []
+                        for binding_index, existing in enumerate(indexed_rows["bindings"]):
+                            if not isinstance(existing, Mapping):
+                                continue
+                            binding_id = str(existing.get("id") or "")
+                            target_path = f"$.runtimeProgram.bindings[{binding_index}].action.targetId"
+                            kind_path = f"$.runtimeProgram.bindings[{binding_index}].action.kind"
+                            if (not required_target or not binding_id
+                                    or binding_id in ambiguous_ids["bindings"]
+                                    or not {target_path, kind_path}.intersection(error_paths_all)
+                                    or not isinstance(existing.get("action"), Mapping)
+                                    or (capability.effect_groupable and
+                                        _mapping(existing.get("action")).get("effectGroupId") != effect_group_id)):
+                                continue
+                            choices = []
+                            for action_name in capability_requirement.any_of:
+                                fixed = copy.deepcopy(existing)
+                                if target_path in error_paths_all:
+                                    fixed["action"]["targetId"] = required_target
+                                if kind_path in error_paths_all:
+                                    fixed["action"]["kind"] = action_name
+                                # Co-diagnosed leaves have their own exact grants.
+                                # They must not force an existing consumer into a
+                                # new lane; only the model patch corrects them.
+                                frozen_shape_errors = [
+                                    shape_error for shape_error in strict_schema_errors(fixed, binding_schema())
+                                    if str(shape_error.get("path") or "$").replace(
+                                        "$", f"$.runtimeProgram.bindings[{binding_index}]", 1
+                                    ) not in error_paths_all
+                                ]
+                                if (action_kind(fixed) != action_name
+                                        or _binding_target(fixed, rows) != required_target
+                                        or frozen_shape_errors):
+                                    continue
+                                fixed.pop("id")
+                                choices.append(fixed)
+                            if choices:
+                                consumer_repairs.append({"bindingId": binding_id, "allowed": choices})
+                        if consumer_repairs:
+                            # Exact diagnosed selectors can restore the already
+                            # authored consumer. Do not demand a second use lane;
+                            # separate leaf permissions own every edit, and final
+                            # validation still requires the dependency. Undecided
+                            # actions remain model choices, not mandatory consumers.
+                            requirement_row["repairStrategy"] = "repair_existing_binding_selectors"
+                            context["bindings"].update(row["bindingId"] for row in consumer_repairs)
+                            continue
                         existing_primary = next((
                             row for row in rows["bindings"]
                             if str(row.get("input") or "") == "primary_use"
@@ -2600,6 +2706,23 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         grant("bindings", row_id, "input")
     for row_id in binding_action_change_ids:
         grant("bindings", row_id, "action.kind")
+        binding = row_by_id.get(row_id, {})
+        # Expose the required call reference of a possible selected placement
+        # branch. The model must supply it; no value is copied into the patch.
+        for variant in binding_schema()["oneOf"]:
+            action_shape = variant["properties"]["action"]
+            if (variant["properties"]["input"]["const"] == binding.get("input")
+                    and "placementCallId" in action_shape["required"]
+                    and (placement_choices := _complete_binding_transactions(
+                        rows, input_name=str(binding.get("input") or ""),
+                        action_name=action_shape["properties"]["kind"]["const"],
+                        target_id=_body_id(rows)))
+                    and not any(
+                        _mapping(binding.get("action")).get("placementCallId")
+                        == _mapping(choice.get("action")).get("placementCallId")
+                        for choice in placement_choices
+                    )):
+                grant("bindings", row_id, "action.placementCallId")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
     for row_id in call_fn_change_ids:
@@ -2767,6 +2890,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 input_mutable=row_id in binding_input_change_ids,
                 action_mutable=row_id in binding_action_change_ids,
                 target_mutable=row_id in binding_target_change_ids,
+                mutable_paths=field_permissions["bindings"].get(row_id, set()),
             )
         selector_domains = [error.get("allowed") or [] for error in error_rows
                             if str(error.get("code") or "") == "missing_effect_group"
@@ -2781,6 +2905,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for alternative in binding_choices:
                 alternative["stackConsumeChancePercent"] = chance
             binding_choices = [alternative for alternative in binding_choices if not stack_chance_error(alternative)]
+        elif "stackConsumeChancePercent" in field_permissions["bindings"].get(row_id, set()):
+            # Explicit bounded model choices, not a correction/default in source.
+            chance_shapes = [variant["properties"]["stackConsumeChancePercent"]
+                             for variant in binding_schema()["oneOf"]
+                             if "stackConsumeChancePercent" in variant["properties"]]
+            chance_values = sorted({value for shape in chance_shapes
+                                    for value in range(shape["minimum"], shape["maximum"] + 1)})
+            binding_choices = [
+                {**copy.deepcopy(alternative), "stackConsumeChancePercent": value}
+                for alternative in binding_choices
+                for value in chance_values
+                if not stack_chance_error({**alternative, "stackConsumeChancePercent": value})
+            ]
         group_id = _mapping(binding.get("action")).get("effectGroupId")
         if (isinstance(group_id, str)
                 and "action.effectGroupId" not in field_permissions["bindings"].get(row_id, set())):
@@ -3590,19 +3727,28 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                     original_target = _binding_target(original, rows)
                     allowed_transactions = binding_alternative_map.get(row_id)
                     actual_transaction = transaction_key(row, item_body_id=_body_id(rows))
-                    corrected_input = {**original, "input": row.get("input")}
-                    corrected_action = BINDING_ACTION_REGISTRY.get(action_kind(corrected_input))
-                    if (original.get("action") == {} and row.get("action") == {}
+                    corrected_selectors = copy.deepcopy(dict(original))
+                    binding_permissions = _field_permission_map(scope, "bindings").get(row_id, ())
+                    if (row_id in set(_values(identity.get("bindingInputIds")))
+                            and "input" in binding_permissions):
+                        corrected_selectors["input"] = row.get("input")
+                    if (row_id in set(_values(identity.get("bindingActionIds")))
+                            and "action.kind" in binding_permissions):
+                        corrected_selectors["action"] = {
+                            **_mapping(original.get("action")),
+                            "kind": _mapping(row.get("action")).get("kind"),
+                        }
+                    corrected_action = BINDING_ACTION_REGISTRY.get(action_kind(corrected_selectors))
+                    if ("targetId" not in _mapping(original.get("action"))
+                            and "targetId" not in _mapping(row.get("action"))
                             and not original_target and not action_kind(original)
-                            and row.get("input") != original.get("input")
-                            and row_id in set(_values(identity.get("bindingInputIds")))
-                            and "input" in _field_permission_map(scope, "bindings").get(row_id, ())
+                            and not json_values_equal(corrected_selectors, original)
                             and allowed_transactions is not None and actual_transaction in allowed_transactions
                             and corrected_action is not None and corrected_action.target_kinds == ("item_body",)
                             and _body_id(rows)):
-                        # Comparison only: the explicit, scoped input selects a unique
-                        # fixed body action. Keep frozen action={} and raw absence intact.
-                        original_target = _binding_target(corrected_input, rows)
+                        # Comparison only: an explicit, scoped selector chooses
+                        # the fixed body owner. Keep raw target absence intact.
+                        original_target = _binding_target(corrected_selectors, rows)
                     if row_id not in set(_values(identity.get("bindingTargetIds"))) and ("action" in row or "action" in original) and _binding_target(row, rows) != original_target:
                         errors.append(_scope_error(path + ".action.targetId", "binding target is immutable for this parameter repair", actual=_binding_target(row, rows)))
                     if row_id not in set(_values(identity.get("bindingInputIds"))) and row.get("input") != original.get("input"):
