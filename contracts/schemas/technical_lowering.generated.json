@@ -322,7 +322,13 @@
         "accessory.lightColorName",
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
-        "accessory.waterWalk"
+        "accessory.waterWalk",
+        "accessory.iceSkate",
+        "accessory.noKnockback",
+        "accessory.fireWalk",
+        "accessory.accRunSpeed",
+        "accessory.rocketBoots",
+        "accessory.wireVision"
       ]
     },
     {
@@ -1388,6 +1394,12 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.iceSkate",
+        "accessory.noKnockback",
+        "accessory.fireWalk",
+        "accessory.accRunSpeed",
+        "accessory.rocketBoots",
+        "accessory.wireVision",
         "armor.enabled",
         "armor.slot",
         "armor.setKey",

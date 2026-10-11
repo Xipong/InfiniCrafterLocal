@@ -87,6 +87,8 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private float _generatedAmmoSaveChance;
     private float _generatedSummonTagDamage;
     private float _generatedMaxRunSpeedBonus;
+    private int _generatedRocketBootsMode;
+    private float _generatedAccRunSpeedFloor;
     private string _lastGeneratedMobilityFailureMessage = "";
     private int _heldItemPresentationSyncTick;
     private string _heldItemPresentationSyncKey = "";
@@ -116,13 +118,20 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
 
     public override void ResetEffects()
     {
-        // Equipment hooks run again every tick. Keep the generated chance exact
-        // and rebuild it from the currently equipped authored items instead of
-        // converting it to one of Terraria's coarse 20%/25% flags.
+        // Rebuild generated grants from currently equipped items every tick.
+        // Keep the exact ammo chance instead of Terraria's coarse 20%/25% flags.
         _generatedAmmoSaveChance = 0f;
         _generatedSummonTagDamage = 0f;
         _generatedMaxRunSpeedBonus = 0f;
+        _generatedRocketBootsMode = 0;
+        _generatedAccRunSpeedFloor = 0f;
     }
+
+    public void AddGeneratedRocketBootsMode(int mode)
+        => _generatedRocketBootsMode = Math.Max(_generatedRocketBootsMode, mode);
+
+    public void AddGeneratedAccRunSpeedFloor(float pixelsPerTick)
+        => _generatedAccRunSpeedFloor = Math.Max(_generatedAccRunSpeedFloor, pixelsPerTick);
 
     public void AddGeneratedMaxRunSpeedBonus(float pixelsPerTick)
         => _generatedMaxRunSpeedBonus += pixelsPerTick;

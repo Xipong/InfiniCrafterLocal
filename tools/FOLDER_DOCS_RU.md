@@ -2,6 +2,7 @@
 
 Development/agent utilities. None of these files are imported by the game runtime.
 
+- `EngineRuntimeChecks.EquipmentUtilities.cs` — independent wire/ice/hot-block/knockback flags, bounded native rocket mode and sprint speed; actual DTO/equip/reset, native refill, horizontal movement, hurt-info and hot-tile consumers; no game loop/GPU proof.
 - `EngineRuntimeChecks.QuickUtilityActivation.cs` — native QuickHeal/QuickMana once, real compact inventory/void identity, writer→server→remote utility, replay/sender/session/lifetime/capacity controls; native SyncEquipment is observed at socket boundary, no socket match.
 - `EngineRuntimeChecks.DelayedNpcIncarnation.cs` — actual OnHitNPC/SetDefaults/ExtraAI/Transform and due target/status, no area-pull substitution, immediate/terminal/refund controls.
 - `EngineRuntimeChecks.ForgePresentation.cs` — native HJSON/prefix/Language и реальные lane statuses RU/EN; timers/host/accepted parent names неизменны.

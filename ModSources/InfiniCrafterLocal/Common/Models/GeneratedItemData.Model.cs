@@ -304,6 +304,29 @@ public sealed class BuffEntrySpec
 public sealed class AccessorySpec
 {
     public bool Enabled { get; set; } = false;
+    public bool WireVision { get; set; } = false;
+    public bool IceSkate { get; set; } = false;
+    public bool NoKnockback { get; set; } = false;
+    public bool FireWalk { get; set; } = false;
+    public sealed class AccRunSpeedJsonConverter : RawJsonFloatDomainConverter
+    {
+        public AccRunSpeedJsonConverter() : base("0", "20", "0") { }
+    }
+    private float _accRunSpeed;
+    [System.Text.Json.Serialization.JsonConverter(typeof(AccRunSpeedJsonConverter))]
+    public float AccRunSpeed
+    {
+        get => _accRunSpeed;
+        set => _accRunSpeed = float.IsFinite(value) && value is >= 0f and <= 20f ? value
+            : throw new System.IO.InvalidDataException("accRunSpeed requires finite 0..20 pixels/tick");
+    }
+    private int _rocketBoots;
+    public int RocketBoots
+    {
+        get => _rocketBoots;
+        set => _rocketBoots = value is >= 0 and <= 5 ? value
+            : throw new System.IO.InvalidDataException("rocketBoots requires native mode 0..5");
+    }
     public string Archetype { get; set; } = "generic"; // Legacy metadata only; never selects an equipment effect.
     public int Defense { get; set; } = 0;
     public int MaxLife { get; set; } = 0;
@@ -335,7 +358,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

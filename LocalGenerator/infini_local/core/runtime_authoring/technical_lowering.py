@@ -711,6 +711,16 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
             associated = (_final_value(final, event_base + ".id") == receipt.get("callId")
                           and _final_value(final, event_base + ".action") == wire_action
                           and type(code) is int and code == EVENT_ACTION_OPCODE.get(wire_action))
+        elif cap.category == "equipment":
+            component = path.split(".", 1)[0]
+            associated = _same_receipt_value(_final_value(final, component + ".enabled"), True)
+            associated = associated and sum(row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".fn" and row.get("finalPath") == component + ".enabled"
+                and row.get("status") == "technical_projection" and row.get("value") is True
+                for row in receipts) == 1
+            entity_base = next((f"runtimeProgram.entities[{index}]"
+                for index, entity in enumerate(final.get("runtimeProgram", {}).get("entities", []))
+                if entity.get("id") == final.get("runtimeProgram", {}).get("itemEntityId")), "")
         else:
             field, expected = ("spawn.enabled", True) if fn == "configure_spawn" else ("controller.name", fn)
             associated = _same_receipt_value(_final_value(final, entity_base + "." + field), expected)
