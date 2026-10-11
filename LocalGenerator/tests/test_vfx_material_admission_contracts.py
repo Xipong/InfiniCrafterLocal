@@ -396,9 +396,19 @@ def _renderer_material(data, renderer):
         raw["slots"][0].update(textureRole="impact", spritePrompt="one transparent impact sprite")
     return raw
 
-@pytest.mark.parametrize("renderer,channel,lane,invalid_field", RENDERER_ROUTES)
-def test_renderer_route_admission(renderer, channel, lane, invalid_field):
+@pytest.fixture(scope="module")
+def renderer_route_inputs():
+    # Route cases only vary the authored slot below. Build the identical accepted
+    # gameplay/Visual context and capture its serialized Director schema once;
+    # each case receives detached copies, and still checks both real validators.
     data = _accepted_visual_data("workbench_blade")
+    schema = _sent(data, False)["outputSchema"]["properties"]["slots"]["items"]
+    return data, schema
+
+
+@pytest.mark.parametrize("renderer,channel,lane,invalid_field", RENDERER_ROUTES)
+def test_renderer_route_admission(renderer_route_inputs, renderer, channel, lane, invalid_field):
+    data, schema = copy.deepcopy(renderer_route_inputs)
     raw = _renderer_material(data, renderer)
     slot = raw["slots"][0]
     slot.update(channel=channel, lane=lane)
@@ -409,7 +419,6 @@ def test_renderer_route_admission(renderer, channel, lane, invalid_field):
     else:
         expected = channel != "screenShake" and (channel not in {"light", "sound"} if renderer in {"spriteElement", "texturedPath"} else renderer not in {"lightCue", "soundCue"} or (channel, lane) == ("light" if renderer == "lightCue" else "sound", "cue"))
     before = copy.deepcopy(raw)
-    schema = _sent(data, False)["outputSchema"]["properties"]["slots"]["items"]
     schema_errors = strict_schema_errors(slot, schema)
     assert (not schema_errors) is expected
     report = vfx.validate_vfx_director_output(raw, data)
