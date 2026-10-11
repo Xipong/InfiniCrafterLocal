@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -26,9 +27,15 @@ def offline(monkeypatch):
 
 def test_native_csharp_crit_projection_uses_only_request_normalized_item():
     # Static source regression, not a substitute for EngineRuntimeChecks.ParentCrit.
-    from tools.check_csharp_contracts import method_body, stripped
+    root = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location(
+        "check_csharp_contracts_parent_crit_test", root / "tools/check_csharp_contracts.py")
+    assert spec is not None and spec.loader is not None
+    contracts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contracts)
+    method_body, stripped = contracts.method_body, contracts.stripped
 
-    source = (Path(__file__).resolve().parents[2] /
+    source = (root /
               "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs").read_text()
     wire = stripped(method_body(source, "ToWireItem"))
     assert re.search(r"\bcrit\s*=\s*craftItem\.crit\b", wire), "real native craft snapshot drops base Item.crit"

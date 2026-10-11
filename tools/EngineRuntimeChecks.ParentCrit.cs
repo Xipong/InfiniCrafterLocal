@@ -52,6 +52,9 @@ internal static partial class EngineRuntimeChecks
         data.SourceMode = "test_fixture";
         data.Accessory.Enabled = true;
         data.Accessory.GenericCrit = 17f;
+        // Metadata-only fixture; Prepare does not open a texture or initialize graphics.
+        data.Visual.EquipOverlayPath = "parent_crit_probe_overlay.png";
+        data.Visual.EquipOverlayStatus = "generated";
         data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec {
             Id = "equip_crit_source", Input = RuntimeInputKind.Equipped, Role = RuntimeEntityRole.Primary,
             UsePolicy = new RuntimeBindingUsePolicySpec {
