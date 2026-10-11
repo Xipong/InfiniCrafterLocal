@@ -29,8 +29,20 @@ RUNTIME_ROW_SHAPE_RULE = (
     "Binding/call rows in requiredJsonShape illustrate separate forms, not a complete program. "
     "Example ids and values are placeholders, not defaults or edit permissions. "
     "Use actual ids and the selected capability card's exact required/conditional and permitted optional keys. "
-    "Item-body-only calls omit target; zero-argument calls omit params. "
-    "In a complete Author binding, action.effectGroupId is optional only for apply_item_effects; absence selects ungrouped item effects."
+    "Call examples use one explicit id/fn/target/params envelope. "
+    "target is an exact existing compatible entity id, including the declared item_body id, not a literal item alias; "
+    "zero-argument calls use params={}. "
+    "Exact existing omissions remain valid in the same grammar: only item-body-only target and zero-argument params. "
+    "During Repair preserve accepted values and absences rather than reformatting existing calls. "
+    "For new bindings use id/input/action:{kind,targetId}/stackCost/contactDamage. "
+    "Fixed binding literals may be explicit or omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
+    "item-body-only action targetId=the exact unique declared item_body id; hold/equipped stackCost=0 and contactDamage=false; "
+    "place_item stackCost=1 and contactDamage=false. Historical sparse forms remain valid. "
+    "Every present literal must be exact and correctly typed; never choose a different action from these equivalences. "
+    "Active non-placement kind, stackCost and contactDamage remain explicit independent decisions. "
+    "placementCallId is required only for place_item; effectGroupId is optional only for apply_item_effects; "
+    "stackConsumeChancePercent is optional only for active non-placement stackCost=1. "
+    "In a complete Author binding, absent effectGroupId selects ungrouped item effects."
 )
 
 
@@ -70,7 +82,7 @@ def _binding_prompt_shape_cards() -> list[dict[str, Any]]:
             return schema["const"]
         if schema.get("type") == "object":
             return {key: project(child, key) for key, child in schema["properties"].items()}
-        return example_leaves[name]
+        return "exact_item_body_id" if name == "targetId" and schema.get("x-infini-reference", {}).get("targetKinds") == ["item_body"] else example_leaves[name]
 
     return [project(_binding_variant_schema(input_name, action, cost)) for input_name, action, cost in (
         ("primary_use", "spawn_entity", 0),

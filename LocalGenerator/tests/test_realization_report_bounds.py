@@ -181,9 +181,13 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     # Repeated singleton components make this shape-only, not valid gameplay.
     assert program_schema.strict_author_shape_report(item)["ok"]
     provider = author_item_provider_response_schema()
-    jsonschema.Draft202012Validator(provider).validate(item)
-    candidate, _ = program_schema.assert_bounded_author_input(item, schema=provider, authored_only=False)
-    assert candidate == item
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    # Provider required+nullable scaffolding is not the sparse local Author shape.
+    encoded = _encode_nullable_fixture(copy.deepcopy(item), schema)
+    jsonschema.Draft202012Validator(provider).validate(encoded)
+    candidate, _ = program_schema.assert_bounded_author_input(encoded, schema=provider, authored_only=False)
+    assert candidate == encoded
     item["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"][-1]["runtimeRefs"][-1] = 0
     errors = program_schema.strict_author_shape_report(item)["errors"]
     assert len(errors) == 1 and errors[0]["kind"] == "type"

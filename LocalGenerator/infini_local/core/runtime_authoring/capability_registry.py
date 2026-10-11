@@ -10,8 +10,8 @@ from typing import Any, Final, Iterable, Mapping
 from infini_local.core.repair_merge import json_values_equal
 
 STACK_COST_RULE = (
-    "For place_item, Author omits stackCost and contactDamage; Lowery writes fixed stackCost=1 and contactDamage=false. "
-    "For hold/equipped, Author omits both fields; Lowery writes fixed stackCost=0 and contactDamage=false. "
+    "For place_item, write fixed stackCost=1 and contactDamage=false; exact omission remains valid. "
+    "For hold/equipped, write fixed stackCost=0 and contactDamage=false; exact omission remains valid. "
     "The placement stack is spent only after accepted placement "
     "and the placed generated item is returned by the placement ledger when broken. "
     "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
@@ -704,11 +704,12 @@ class CapabilitySpec:
             },
             "required": ["id", "fn", "target", "params"],
         }
+        # One call envelope for the model. Existing exact omissions remain
+        # valid; a redundant *correct* owner or empty params is not an error.
+        # Present fields still receive the same type/reference/key validation.
         if self.target_kinds == ("item_body",):
-            del variant["properties"]["target"]
             variant["required"].remove("target")
         if not self.params:
-            del variant["properties"]["params"]
             variant["required"].remove("params")
         return variant
 
@@ -3285,8 +3286,8 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "bindings[].action.placementCallId; every other action must omit that key. "
             "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; omit fixed contactDamage for place_item/hold/equipped. "
-            "Omit action.targetId for item_body-only actions with one declared item_body; projectile targets remain explicit."
+            "It does not select primaryEntityId or projectile held ownership; fixed contactDamage=false for place_item/hold/equipped may be explicit or omitted. "
+            "action.targetId for item_body-only actions may be explicit with the exact unique declared item_body id or omitted; projectile targets remain explicit."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",

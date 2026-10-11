@@ -126,9 +126,9 @@ def test_immunity_is_one_required_typed_choice(monkeypatch):
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 @pytest.mark.parametrize('fn,leaf,bad_value,expected_keys', [
-    ('configure_item_stats', 'damage', True, {'id', 'fn', 'params'}),
+    ('configure_item_stats', 'damage', True, {'id', 'fn', 'target', 'params'}),
     ('set_projectile_lifetime', 'lifetimeTicks', 0, {'id', 'fn', 'target', 'params'}),
-    ('move_straight', None, 'missing_entity', {'id', 'fn', 'target'}),
+    ('move_straight', None, 'missing_entity', {'id', 'fn', 'target', 'params'}),
 ])
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value, expected_keys):
     from copy import deepcopy
@@ -156,11 +156,11 @@ def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatc
     assert offered_forms == {frozenset(row['properties']) for row in local['properties']['callsUpsert']['items']['oneOf']}
     rules = ' '.join(dossier['rules'])
     assert 'copy id, fn, target' not in rules
-    assert 'Item-body-only calls have no target' in rules
-    assert 'zero-argument calls have no params object' in rules
+    assert 'one explicit id/fn/target/params envelope' in rules
+    assert 'zero-argument calls use params={}' in rules
     assert 'preserve unchanged required fields and accepted optional values or absences' in rules
     assert 'not defaults or edit permissions' in rules
-    assert 'In a complete Author binding, action.effectGroupId is optional only for apply_item_effects' in rules
+    assert 'effectGroupId is optional only for apply_item_effects' in rules
     assert 'In a complete Author binding, optional stackConsumeChancePercent is an explicit integer 0..100' in rules
     assert 'omission means no change' in rules
 
@@ -175,11 +175,11 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     rule = catalog['fieldGuide']['stackCost']
     assert rule == STACK_COST_RULE  # The presentation must not replace this and lose optional chance semantics.
-    assert 'For place_item, Author omits stackCost and contactDamage' in rule
-    assert 'For hold/equipped, Author omits both fields' in rule
+    assert 'For place_item, write fixed stackCost=1 and contactDamage=false' in rule
+    assert 'For hold/equipped, write fixed stackCost=0 and contactDamage=false' in rule
     assert 'only with stackCost=1 outside placement' in rule
     assert 'omission retains the existing 100 percent debit' in rule
-    assert 'action.effectGroupId is optional only for apply_item_effects' in catalog['fieldGuide']['rowShapes']
+    assert 'effectGroupId is optional only for apply_item_effects' in catalog['fieldGuide']['rowShapes']
     for variant in binding_schema()['oneOf']:
         props = variant['properties']
         if 'stackConsumeChancePercent' in props:
@@ -187,7 +187,7 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
             assert 'stackConsumeChancePercent' not in variant['required']
             assert f"{chance['type']} {chance['minimum']}..{chance['maximum']}" in rule
     placement = next(row for row in catalog['bindingActions'] if row['action'] == 'place_item')
-    assert 'Author omits stackCost and contactDamage' in placement['constructionMeaning']
+    assert 'Write fixed stackCost=1 and contactDamage=false' in placement['constructionMeaning']
 
 
 def test_condition_card_describes_its_existing_union_and_placement_guide_matches_public_ids(monkeypatch):

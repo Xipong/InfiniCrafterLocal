@@ -1,0 +1,487 @@
+"""Exact redundant binding literals preserve mechanics and source presence."""
+from copy import deepcopy
+import json
+
+import pytest
+
+from infini_local.core.runtime_authoring import (
+    compile_runtime_program, validate_runtime_program, validate_runtime_wire,
+)
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.qa.capability_witnesses import build_capability_witness
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+
+def _binding_case(case):
+    if case == "equipped":
+        doc = build_capability_witness("configure_accessory")
+    elif case == "effects":
+        doc = build_capability_witness("move_player_on_use")
+    elif case == "body":
+        doc = build_capability_witness("configure_item_use")
+    elif case == "hold":
+        doc = build_runtime_fixture("held_and_deployed")
+        row = doc["runtimeProgram"]["bindings"][0]
+        row["input"] = "hold"
+        row["action"].pop("kind")
+        row.pop("stackCost")
+        row.pop("contactDamage")
+    else:
+        doc = build_runtime_fixture("fishing_platform_tool")
+    row = next(row for row in doc["runtimeProgram"]["bindings"]
+               if (row["input"] == case if case in {"equipped", "hold"}
+                   else action_kind(row) == {"body": "use_item_body", "effects": "apply_item_effects",
+                                             "placement": "place_item"}[case]))
+    return doc, row
+
+
+def _explicit(doc, row):
+    result = deepcopy(row)
+    kind = action_kind(row)
+    result.setdefault("action", {})["kind"] = kind
+    if kind != "spawn_entity":
+        result["action"]["targetId"] = next(e["id"] for e in doc["runtimeProgram"]["entities"]
+                                             if e["kind"] == "item_body")
+    if row["input"] in {"equipped", "hold"} or kind == "place_item":
+        result.update(stackCost=1 if kind == "place_item" else 0, contactDamage=False)
+    return result
+
+
+def _assert_delivery(doc):
+    final = compile_runtime_program(doc)
+    assert validate_runtime_wire(final)["ok"]
+    assert audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=doc, final_document=final)["ok"]
+    return final
+
+
+@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
+def test_fixed_explicit_binding_envelope_has_exact_sparse_effect_parity(case):
+    sparse, row = _binding_case(case)
+    explicit = deepcopy(sparse)
+    explicit["runtimeProgram"]["bindings"][sparse["runtimeProgram"]["bindings"].index(row)] = _explicit(sparse, row)
+    before = json.dumps(explicit, sort_keys=True)
+    assert validate_runtime_program(sparse)["ok"]
+    assert validate_runtime_program(explicit)["ok"]
+    sparse_final, explicit_final = _assert_delivery(sparse), _assert_delivery(explicit)
+    # Provenance legitimately differs: explicit leaves cite their literal source.
+    sparse_final.pop("runtimeContract")
+    explicit_final.pop("runtimeContract")
+    assert json.dumps(explicit_final, sort_keys=True) == json.dumps(sparse_final, sort_keys=True)
+    assert json.dumps(explicit, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
+@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+def test_binding_input_leaf_repair_preserves_exact_envelope(monkeypatch, format_mode, case, explicit):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case(case)
+    if explicit:
+        row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    before = json.dumps(doc, sort_keys=True)
+    selected_input = row["input"]
+    row["input"] = "not_an_input"
+    candidate = deepcopy(row)
+    candidate["input"] = selected_input
+    if explicit:
+        if case in {"equipped", "hold"}:
+            candidate["action"].pop("kind")
+        if case != "hold":
+            candidate["action"].pop("targetId")
+        if case in {"equipped", "hold", "placement"}:
+            candidate.pop("stackCost")
+            candidate.pop("contactDamage")
+        if not candidate["action"]:
+            candidate.pop("action")
+    else:
+        candidate = _explicit(doc, candidate)
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "exact input correction", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == before
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_missing_effects_binding_creation_accepts_explicit_fixed_transaction(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    candidate = _explicit(doc, row)
+    expected = deepcopy(doc)
+    expected["runtimeProgram"]["bindings"] = [candidate]
+    assert validate_runtime_program(expected)["ok"]
+    doc["runtimeProgram"]["bindings"] = []
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "exact required effects root", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("case,leaf,value", [
+    pytest.param("equipped", "kind", "spawn_entity", id="wrong-equip-action"),
+    pytest.param("hold", "kind", "equip_passive", id="wrong-hold-action"),
+    pytest.param("equipped", "targetId", "missing", id="foreign-body-id"),
+    pytest.param("equipped", "targetId", None, id="null-target"),
+    pytest.param("equipped", "stackCost", 1, id="passive-cost-choice-forbidden"),
+    pytest.param("placement", "stackCost", 0, id="placement-escrow-required"),
+    pytest.param("placement", "contactDamage", True, id="placement-contact-forbidden"),
+    pytest.param("equipped", "stackCost", False, id="boolean-not-zero"),
+    pytest.param("equipped", "stackCost", 0.0, id="float-not-integer"),
+    pytest.param("hold", "contactDamage", 0, id="integer-not-false"),
+])
+def test_invalid_fixed_literal_never_collapses_into_sparse_admission(case, leaf, value):
+    from infini_local.core.runtime_authoring.binding_use_policy import transaction_key
+
+    doc, row = _binding_case(case)
+    candidate = _explicit(doc, row)
+    canonical = transaction_key(row, item_body_id="item")
+    (candidate["action"] if leaf in {"kind", "targetId"} else candidate)[leaf] = value
+    row.update(candidate)
+    before = json.dumps(doc, sort_keys=True)
+    assert not validate_runtime_program(doc)["ok"]
+    assert transaction_key(candidate, item_body_id="item") != canonical
+    with pytest.raises(ValueError):
+        compile_runtime_program(doc)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("case", ["equipped", "body", "effects", "placement"])
+def test_explicit_body_owner_is_exact_arbitrary_declared_id_and_source_authenticated(case):
+    doc, row = _binding_case(case)
+    doc["runtimeProgram"]["entities"][0]["id"] = "opaque_body"
+    if doc["runtimeProgram"]["primaryEntityId"] == "item":
+        doc["runtimeProgram"]["primaryEntityId"] = "opaque_body"
+    row.update(_explicit(doc, row))
+    final = _assert_delivery(doc)
+    forged = deepcopy(doc)
+    forged["runtimeProgram"]["bindings"][doc["runtimeProgram"]["bindings"].index(row)]["action"]["targetId"] = "item"
+    audit = audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=forged, final_document=final)
+    assert not audit["ok"]
+    assert any("binding" in json.dumps(error).lower() for error in audit["violations"])
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
+@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch, format_mode, case, explicit):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case(case)
+    sparse_row = deepcopy(row)
+    explicit_row = _explicit(doc, row)
+    if explicit:
+        row.update(explicit_row)
+    expected_binding = deepcopy(row)
+    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    damage = stats["params"]["damage"]
+    stats["params"]["damage"] = True
+    correction = deepcopy(stats)
+    correction["params"]["damage"] = damage
+    hostile = sparse_row if explicit else explicit_row
+    if case in {"body", "effects"}:
+        hostile.update(stackCost=1, contactDamage=not row["contactDamage"])
+        hostile["action"]["kind"] = "apply_item_effects" if case == "body" else "use_item_body"
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "damage correction with frozen binding rewrite", "realizationReplacement": doc["realization"],
+        "callsUpsert": [correction], "bindingsUpsert": [hostile],
+    }, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert next(b for b in repaired["runtimeProgram"]["bindings"] if b["id"] == row["id"]) == expected_binding
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_fixed_literal_type_repair_retains_other_exact_lanes(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("equipped")
+    row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    row["stackCost"] = False
+    correction = deepcopy(row)
+    correction["stackCost"] = 0
+    correction["action"]["targetId"] = "foreign_body"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "literal integer correction only", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [correction],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["stackCost"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_actual_author_packet_explains_uniform_binding_and_keeps_sparse_valid(monkeypatch, format_mode):
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "fixed-binding-proof", model_name="offline")
+    assert request["messages"][1]["content"] == user
+    assert "Fixed binding literals may be explicit or omitted" in user
+    cards = json.loads(user)["requiredJsonShape"]["runtimeProgram"]["bindings"]
+    assert all({"id", "input", "action", "stackCost", "contactDamage"} <= set(card) for card in cards)
+    assert all({"kind", "targetId"} <= set(card["action"]) for card in cards)
+    guide = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
+    assert "omit fixed contactDamage for place_item/hold/equipped" not in guide
+    assert "Omit action.targetId for item_body-only actions" not in guide
+    assert "fixed contactDamage=false for place_item/hold/equipped may be explicit or omitted" in guide
+    assert "action.targetId for item_body-only actions may be explicit with the exact unique declared item_body id or omitted" in guide
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
+@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+def test_actual_author_preparation_roundtrip_preserves_binding_source(monkeypatch, format_mode, case, explicit):
+    from jsonschema import Draft202012Validator
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+
+    doc, row = _binding_case(case)
+    if explicit:
+        row.update(_explicit(doc, row))
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    request, _, _ = author.build_initial_author_request({}, {}, {}, {}, "fixed-binding-wire", model_name="offline")
+    payload = deepcopy(doc)
+    if format_mode == "json_schema":
+        payload = _encode_nullable_fixture(doc, author_item_response_schema())
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+    source = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
+    assert json.dumps(source, sort_keys=True) == json.dumps(doc, sort_keys=True)
+    _assert_delivery(source)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("leaf,old,new", [
+    ("kind", "spawn_entity", "equip_passive"),
+    ("targetId", "foreign_body", "item"),
+    ("stackCost", 1, 0),
+    ("contactDamage", True, False),
+])
+def test_fixed_binding_wrong_present_leaf_requires_exact_explicit_repair(monkeypatch, format_mode, leaf, old, new):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("equipped")
+    row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    (row["action"] if leaf in {"kind", "targetId"} else row)[leaf] = old
+    correction = deepcopy(row)
+    (correction["action"] if leaf in {"kind", "targetId"} else correction)[leaf] = new
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "exact fixed leaf", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [correction],
+    }, format_mode)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_explicit_effect_group_and_probability_remain_frozen_independent_lanes(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    effects = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")
+    effects["params"]["effectGroupId"] = "chosen_group"
+    row.update(_explicit(doc, row))
+    row["action"]["effectGroupId"] = "chosen_group"
+    row.update(stackCost=1, stackConsumeChancePercent=35)
+    assert validate_runtime_program(doc)["ok"]
+    expected = deepcopy(doc)
+    row["input"] = "not_an_input"
+    correction = deepcopy(row)
+    correction["input"] = "primary_use"
+    correction["action"]["effectGroupId"] = "other_group"
+    correction["stackConsumeChancePercent"] = 99
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "input only, group/chance frozen", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [correction],
+    }, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("body_id", ["item", "opaque_body"])
+def test_empty_action_input_repair_preserves_frozen_source_through_real_caller(monkeypatch, format_mode, body_id):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("equipped")
+    doc["runtimeProgram"]["entities"][0]["id"] = body_id
+    doc["runtimeProgram"]["primaryEntityId"] = body_id
+    row["action"] = {}
+    expected = deepcopy(doc)
+    assert validate_runtime_program(expected)["ok"]
+    _assert_delivery(expected)  # The complete, unfiltered candidate is independently valid.
+    row["input"] = "invalid_input"
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["input"]}]
+    assert scope["identityChanges"]["bindingActionIds"] == []
+    assert scope["identityChanges"]["bindingTargetIds"] == []
+    assert scope["bindingAlternatives"] == [{"bindingId": row["id"], "allowed": [{"input": "equipped"}]}]
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "input only; empty action is frozen", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [deepcopy(expected["runtimeProgram"]["bindings"][0])],
+    }, format_mode)
+    assert dossier["repairScope"] == scope
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ok"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert repaired["runtimeProgram"]["bindings"][0]["action"] == {}
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("source_shape", ["omitted", "empty", "explicit"])
+@pytest.mark.parametrize("body_id", ["item", "opaque_body"])
+def test_input_only_repair_ignores_hostile_frozen_binding_lanes(monkeypatch, format_mode, source_shape, body_id):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope, filter_repair_patch_scope, apply_repair_patch
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("equipped")
+    doc["runtimeProgram"]["entities"][0]["id"] = body_id
+    doc["runtimeProgram"]["primaryEntityId"] = body_id
+    if source_shape == "empty":
+        row["action"] = {}
+    elif source_shape == "explicit":
+        row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    row["input"] = "invalid_input"
+    before = json.dumps(doc, sort_keys=True)
+    hostile = {"id": row["id"], "input": "equipped",
+               "action": {"kind": "equip_passive", "targetId": "foreign_body"},
+               "stackCost": 1, "contactDamage": True}
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    filtered, audit = filter_repair_patch_scope(doc, {"note": "frozen hostile lanes", "bindingsUpsert": [hostile]}, scope)
+    assert audit["ok"] and audit["ignoredChanges"]
+    assert apply_repair_patch(doc, filtered) == expected
+    # The serialized caller also enforces provider grammar before frozen merge;
+    # send a grammar-valid foreign target and redundant fixed literals there.
+    correction = {"id": row["id"], "input": "equipped",
+                  "action": {"kind": "equip_passive", "targetId": "foreign_body"},
+                  "stackCost": 0, "contactDamage": False}
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "input only; hostile action/cost/contact ignored", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [correction],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["input"]}]
+    assert scope["identityChanges"]["bindingActionIds"] == []
+    assert scope["identityChanges"]["bindingTargetIds"] == []
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and audit["ignoredChanges"]
+    assert audit["acceptedPaths"] == ["$.bindingsUpsert[0].input", "$.realizationReplacement"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("attack", ["no-input-authority", "no-input-permission", "missing-alternatives",
+                                    "unoffered-input", "unknown-input", "ambiguous-input",
+                                    "wrong-target", "wrong-kind", "wrong-stack-cost"])
+def test_empty_action_dependency_comparison_requires_exact_scoped_proof(attack):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope, validate_repair_patch_scope
+
+    doc, row = _binding_case("equipped")
+    row.update(input="invalid_input", action={})
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    candidate = {**deepcopy(row), "input": "equipped"}
+    if attack == "no-input-authority":
+        scope["identityChanges"]["bindingInputIds"] = []
+    elif attack == "no-input-permission":
+        scope["fieldPermissions"]["bindings"][0]["paths"] = []
+    elif attack == "missing-alternatives":
+        scope["bindingAlternatives"] = []
+    elif attack == "unoffered-input":
+        candidate["input"] = "hold"
+    elif attack in {"unknown-input", "ambiguous-input"}:
+        candidate["input"] = "unknown" if attack == "unknown-input" else "primary_use"
+    elif attack == "wrong-target":
+        candidate["action"]["targetId"] = "foreign_body"
+    elif attack == "wrong-kind":
+        candidate["action"]["kind"] = "hold_entity"
+    else:
+        candidate["stackCost"] = 1
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_repair_patch_scope(doc, {"note": "no broad dependency defaults", "bindingsUpsert": [candidate]}, scope)
+    assert not report["ok"]
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("body_ids", [[], ["body_a", "body_b"]], ids=["no-body", "ambiguous-body"])
+def test_empty_action_input_correction_never_selects_missing_or_ambiguous_body(body_ids):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope, filter_repair_patch_scope, apply_repair_patch
+
+    doc, row = _binding_case("equipped")
+    doc["runtimeProgram"]["entities"] = [{"id": body_id, "kind": "item_body"} for body_id in body_ids]
+    row.update(input="invalid_input", action={})
+    before = json.dumps(doc, sort_keys=True)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    filtered, _ = filter_repair_patch_scope(doc, {
+        "note": "input correction cannot create an owner",
+        "bindingsUpsert": [{**deepcopy(row), "input": "equipped"}],
+    }, scope)
+    repaired = apply_repair_patch(doc, filtered)
+    assert not validate_runtime_program(repaired)["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(repaired)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("case,leaf,value", [
+    ("equipped", "kind", "use_item_body"),
+    ("equipped", "stackCost", False),
+    ("equipped", "contactDamage", 0),
+])
+def test_fixed_literal_source_aware_receipts_refuse_source_only_typed_forgeries(case, leaf, value):
+    doc, row = _binding_case(case)
+    row.update(_explicit(doc, row))
+    final = _assert_delivery(doc)
+    forged = deepcopy(doc)
+    target = forged["runtimeProgram"]["bindings"][0]
+    (target["action"] if leaf == "kind" else target)[leaf] = value
+    assert not audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=forged, final_document=final)["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_placement_fixed_cost_repair_does_not_thaw_valid_action_presence(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    row["stackCost"] = 0
+    expected = deepcopy(doc)
+    expected["runtimeProgram"]["bindings"][1]["stackCost"] = 1
+    correction = _explicit(doc, row)
+    correction["action"]["placementCallId"] = "other_placement"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "escrow cost only; target presence and payload frozen", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [correction],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["stackCost"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)

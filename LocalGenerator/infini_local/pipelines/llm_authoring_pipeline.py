@@ -439,7 +439,7 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. Copy the existing node from readOnlySourceFragments.brokenFragments, changing only permitted fields; preserve unchanged required fields and accepted optional values or absences. Item-body-only calls have no target; zero-argument calls have no params object.",
+            "Every upsert entry must be a complete schema-valid node. Copy the existing node from readOnlySourceFragments.brokenFragments, changing only permitted fields; preserve unchanged required fields and accepted optional values or absences. Do not add or remove target/params merely to match an example; only exact fieldPermissions authorize edits.",
             RUNTIME_ROW_SHAPE_RULE,
             STACK_COST_RULE,
             "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",

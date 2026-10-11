@@ -773,11 +773,24 @@ def _capability_receipt_owner_error(
             or not isinstance(calls, list)
             or sum(isinstance(c, Mapping) and c.get("id") == receipt.get("callId") for c in calls) != 1):
             return "capability receipt lacks a unique originating source call"
+        cap = CAPABILITY_REGISTRY.get(receipt["fn"])
+        if cap is not None and cap.prompt_visible and cap.decision == "expose" and cap.target_kinds == ("item_body",):
+            entities = _final_value(authored_document, "runtimeProgram.entities")
+            bodies = [e for e in entities if isinstance(e, Mapping) and e.get("kind") == "item_body"] if isinstance(entities, list) else []
+            identity = bodies[0].get("id") if len(bodies) == 1 else None
+            # The existing mechanical view resolves only a declared item-only omission.
+            # Present owners stay literal; global item outputs must authenticate them too.
+            if (not isinstance(identity, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", identity)
+                or sum(isinstance(e, Mapping) and e.get("id") == identity for e in entities) != 1
+                or not _same_receipt_value(source_call.get("target"), identity)
+                or (final_document is not None and not _same_receipt_value(
+                    _final_value(final_document, "runtimeProgram.itemEntityId"), identity))):
+                return "capability receipt item owner differs from the unique declared body and final item identity"
     if final_document is None:
         return ""
     match = re.match(r"(runtimeProgram\.entities\[\d+\])(?:\.events\[\d+\])?\.", receipt["finalPath"])
     if match is None:
-        return ""  # global item fields and binding projections have their own owners
+        return ""  # item source ownership is authenticated above; other projections have their own owners
     entity = _final_value(final_document, match.group(1))
     entities = _final_value(final_document, "runtimeProgram.entities")
     identity = entity.get("id") if isinstance(entity, Mapping) else None

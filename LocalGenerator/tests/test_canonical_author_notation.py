@@ -4,12 +4,372 @@ from copy import deepcopy
 import pytest
 
 from infini_local.core.runtime_authoring import (
-    compile_runtime_program, validate_runtime_program, validate_runtime_wire,
+    CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
 )
+from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def test_current_noarg_call_has_no_params_property_and_no_old_author_admission():
+def _explicit_calls(source):
+    """Render only the two exact existing omission branches, without editing fixtures."""
+    out = deepcopy(source)
+    body = next(row["id"] for row in out["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+    for call in out["runtimeProgram"]["calls"]:
+        cap = CAPABILITY_REGISTRY[call["fn"]]
+        if cap.target_kinds == ("item_body",):
+            call["target"] = body
+        if not cap.params:
+            call["params"] = {}
+    return out
+
+
+@pytest.mark.parametrize("fn", [cap.name for cap in visible_capabilities()])
+def test_registry_calls_share_explicit_envelope_without_changing_wire_or_receipts(fn):
+    from jsonschema import Draft202012Validator
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    import json
+    sparse = build_capability_witness(fn)
+    sparse_before = deepcopy(sparse)
+    source = _explicit_calls(sparse)
+    before = deepcopy(source)
+    assert all(set(call) == {"id", "fn", "target", "params"} for call in source["runtimeProgram"]["calls"])
+    assert Draft202012Validator(author_item_response_schema()).is_valid(source)
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    assert json.dumps(wire, ensure_ascii=False) == json.dumps(compile_runtime_program(sparse), ensure_ascii=False), "Exact serialized executable wire AND receipts remain unchanged"
+    assert sparse == sparse_before
+    assert validate_runtime_wire(wire)["ok"]
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    for authored in (sparse, source):
+        assert audit_compiler_receipts(receipts, authored_document=authored, final_document=wire)["ok"]
+    assert source == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("fn", ["configure_accessory", "set_projectile_lifetime", "move_straight"])
+def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
+    import json
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines.author_item_contract import author_item_response_schema, project_provider_author_item_to_local
+    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    # Heavy serialized observers cover each distinct branch, not the registry x format product.
+    shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in visible_capabilities()}
+    assert shapes == {(True, True), (False, True), (False, False)}
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    request, user, _ = build_initial_author_request({}, {}, {}, {}, "call-envelope", model_name="offline")
+    packet = json.loads(user)
+    assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
+    assert "Write id, fn, target and params for every new call" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
+    schema = author_item_response_schema()
+    for source in (build_capability_witness(fn), _explicit_calls(build_capability_witness(fn))):
+        encoded = _encode_nullable_fixture(source, schema) if mode == "json_schema" else deepcopy(source)
+        if mode == "json_schema":
+            Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
+        restored = project_provider_author_item_to_local(encoded, response_format=request["response_format"])
+        assert restored == source
+        assert validate_runtime_wire(compile_runtime_program(restored))["ok"]
+
+
+@pytest.mark.parametrize("field,value", [
+    pytest.param("target", "missing", id="missing-id"),
+    pytest.param("target", "item", id="not-a-literal-item-alias"),
+    pytest.param("target", "nail", id="existing-incompatible-projectile"),
+    pytest.param("target", "", id="empty-id"),
+    pytest.param("target", None, id="null-target"),
+    pytest.param("target", [], id="list-target"),
+    pytest.param("target", {}, id="object-target"),
+    pytest.param("target", True, id="boolean-target"),
+    pytest.param("target", 7, id="integer-target"),
+    pytest.param("params", None, id="null-params"),
+    pytest.param("params", [], id="list-params"),
+    pytest.param("params", "", id="string-params"),
+    pytest.param("params", True, id="boolean-params"),
+    pytest.param("params", 0, id="integer-params"),
+    pytest.param("params", {"speed": 1}, id="unknown-noarg-member"),
+])
+def test_present_call_fields_are_never_ignored(field, value):
+    source = _explicit_calls(build_runtime_fixture("workbench_blade"))
+    body = next(row for row in source["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+    old_id = body["id"]
+    body["id"] = "opaque_body"
+    for call in source["runtimeProgram"]["calls"]:
+        if call["target"] == old_id:
+            call["target"] = body["id"]
+    if source["runtimeProgram"]["primaryEntityId"] == old_id:
+        source["runtimeProgram"]["primaryEntityId"] = body["id"]
+    assert validate_runtime_program(source)["ok"], validate_runtime_program(source)
+    call = next(row for row in source["runtimeProgram"]["calls"]
+                if row["fn"] == ("configure_item_stats" if field == "target" else "move_straight"))
+    call[field] = value
+    before = deepcopy(source)
+    report = validate_runtime_program(source)
+    assert not report["ok"]
+    assert any("." + field in row["path"] for row in report["errors"]), report
+    with pytest.raises(ValueError):
+        compile_runtime_program(source)
+    assert source == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monkeypatch, mode):
+    from infini_local.pipelines.author_item_contract import author_item_response_schema, project_provider_author_item_to_local
+    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    request, _, _ = build_initial_author_request({}, {}, {}, {}, "invalid-call-envelope", model_name="offline")
+    source = _explicit_calls(build_runtime_fixture("workbench_blade"))
+    encoded = _encode_nullable_fixture(source, author_item_response_schema()) if mode == "json_schema" else deepcopy(source)
+    noarg = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
+    # Required selectors and unknown null members are authored invalid content, never transport omissions.
+    noarg["target"] = None
+    noarg["params"] = {"foreign": None}
+    stats = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats["params"] = None  # required object, not a nullable optional
+    if mode == "json_object":
+        stats["target"] = None  # without schema transport, even optional null remains authored
+    before = deepcopy(encoded)
+    restored = project_provider_author_item_to_local(encoded, response_format=request["response_format"])
+    noarg = next(row for row in restored["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
+    stats = next(row for row in restored["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    assert noarg["target"] is None and noarg["params"] == {"foreign": None}
+    assert stats["params"] is None
+    if mode == "json_object":
+        assert stats["target"] is None
+    assert not validate_runtime_program(restored)["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(restored)
+    assert encoded == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("explicit", [False, True], ids=["frozen-omission", "frozen-present"])
+@pytest.mark.parametrize("fn,field", [("configure_item_stats", "target"), ("move_straight", "params")])
+def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monkeypatch, format_mode, explicit, fn, field):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+    expected = build_capability_witness(fn)
+    if explicit:
+        expected = _explicit_calls(expected)
+    broken = deepcopy(expected)
+    call = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == fn)
+    candidate = deepcopy(call)
+    path = "params.damage" if fn == "configure_item_stats" else "target"
+    if fn == "configure_item_stats":
+        call["params"]["damage"] = -1
+        body_id = next(row["id"] for row in broken["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+        if explicit:
+            candidate.pop("target")
+        else:
+            candidate["target"] = body_id
+    else:
+        call["target"] = "missing"
+        if explicit:
+            candidate.pop("params")
+        else:
+            candidate["params"] = {}
+    before = deepcopy(broken)
+    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": [path]}]
+    incoming = {"note": "fix only actual invalid leaf", "realizationReplacement": broken["realization"], "callsUpsert": [candidate]}
+    if explicit:
+        # A missing upsert property means no edit; challenge an actual deletion separately.
+        incoming["callPropertyKeysDelete"] = [{"callId": call["id"], "key": field}]
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, broken, incoming, format_mode)
+    assert dossier["repairScope"] == scope
+    assert repaired["runtimeProgram"] == expected["runtimeProgram"]
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and audit["ignoredChanges"], "Valid selector presence changes are audited and ignored"
+    repaired.pop("debug")
+    assert repaired == expected
+    assert compile_runtime_program(repaired) == compile_runtime_program(expected)
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert broken == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+def test_real_repair_ignores_hostile_retarget_when_only_damage_is_invalid(monkeypatch, format_mode, explicit):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+    expected = build_capability_witness("configure_item_stats")
+    if explicit:
+        expected = _explicit_calls(expected)
+    broken = deepcopy(expected)
+    call = broken["runtimeProgram"]["calls"][0]
+    candidate = deepcopy(call)
+    call["params"]["damage"] = -1
+    candidate["target"] = "foreign_owner"
+    before = deepcopy(broken)
+    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.damage"]}]
+    repaired, _ = _offline_gameplay_repair(monkeypatch, broken,
+        {"note": "hostile selector beside valid leaf correction", "realizationReplacement": broken["realization"], "callsUpsert": [candidate]}, format_mode)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert repaired == expected
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert broken == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_real_repair_corrects_invalid_present_noarg_params_without_retargeting(monkeypatch, format_mode):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+    expected = _explicit_calls(build_capability_witness("move_straight"))
+    broken = deepcopy(expected)
+    call = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
+    candidate = deepcopy(call)
+    call["params"] = None
+    candidate["target"] = "foreign_owner"
+    before = deepcopy(broken)
+    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params"]}]
+    repaired, _ = _offline_gameplay_repair(monkeypatch, broken,
+        {"note": "explicit empty params correction only", "realizationReplacement": broken["realization"], "callsUpsert": [candidate]}, format_mode)
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and audit["ignoredChanges"]
+    repaired.pop("debug")
+    assert repaired == expected
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert broken == before
+
+
+@pytest.mark.parametrize("fn", [cap.name for cap in visible_capabilities() if cap.target_kinds == ("item_body",)])
+def test_source_provenance_rejects_global_item_target_forgery(fn):
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    source = build_capability_witness(fn)
+    wire = compile_runtime_program(source)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
+    forged = deepcopy(source)
+    call = next(row for row in forged["runtimeProgram"]["calls"] if row["fn"] == fn)
+    call["target"] = "missing"
+    before = deepcopy((forged, wire, receipts))
+    assert not validate_runtime_program(forged)["ok"]
+    wire_only = audit_compiler_receipts(receipts, final_document=wire)
+    assert wire_only["ok"] and wire_only["authoredSourceChecked"] is False
+    audit = audit_compiler_receipts(receipts, authored_document=forged, final_document=wire)
+    assert not audit["ok"], "Unchanged valid wire/receipts must not authenticate a forged source owner"
+    assert any(row.get("callId") == call["id"] and row["reason"] ==
+               "capability receipt item owner differs from the unique declared body and final item identity"
+               for row in audit["violations"]), audit
+    assert (forged, wire, receipts) == before
+
+
+@pytest.mark.parametrize("owner_field,value", [
+    pytest.param("target", "missing", id="missing-reference"),
+    pytest.param("target", "item", id="no-literal-item-alias"),
+    pytest.param("target", "nail", id="declared-projectile"),
+    pytest.param("target", "", id="empty-target"),
+    pytest.param("target", None, id="null-target"),
+    pytest.param("target", True, id="boolean-target"),
+    pytest.param("target", 1, id="integer-target"),
+    pytest.param("target", [], id="list-target"),
+    pytest.param("target", {}, id="object-target"),
+    pytest.param("bodies", "ambiguous", id="ambiguous-body"),
+    pytest.param("bodies", "absent", id="no-body"),
+    pytest.param("bodies", "duplicate-id", id="duplicate-source-identity"),
+    pytest.param("body-id", None, id="null-body-identity"),
+    pytest.param("body-id", True, id="boolean-body-identity"),
+    pytest.param("body-id", 1, id="integer-body-identity"),
+    pytest.param("body-id", "", id="empty-body-identity"),
+    pytest.param("body-id", "Opaque", id="invalid-body-id-token"),
+    pytest.param("itemEntityId", "nail", id="wrong-final-item-owner"),
+    pytest.param("itemEntityId", None, id="null-final-item-owner"),
+    pytest.param("itemEntityId", True, id="boolean-final-item-owner"),
+    pytest.param("itemEntityId", 1, id="integer-final-item-owner"),
+    pytest.param("itemEntityId", [], id="list-final-item-owner"),
+    pytest.param("itemEntityId", {}, id="object-final-item-owner"),
+    pytest.param("itemEntityId", "absent", id="missing-final-item-owner"),
+])
+def test_item_receipt_owner_requires_exact_declared_and_final_identity(owner_field, value):
+    import json
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    source = build_runtime_fixture("workbench_blade")
+    program = source["runtimeProgram"]
+    body = next(row for row in program["entities"] if row["kind"] == "item_body")
+    old_id = body["id"]
+    body["id"] = "opaque_body"
+    if program["primaryEntityId"] == old_id:
+        program["primaryEntityId"] = body["id"]
+    for call in program["calls"]:
+        if call.get("target") == old_id:
+            call["target"] = body["id"]
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    wire_bytes = json.dumps(wire, ensure_ascii=False)
+    for positive in (source, _explicit_calls(source)):
+        assert json.dumps(compile_runtime_program(positive), ensure_ascii=False) == wire_bytes
+        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=positive, final_document=wire)["ok"]
+    forged = deepcopy(source)
+    forged_program = forged["runtimeProgram"]
+    call = next(row for row in forged_program["calls"] if row["fn"] == "configure_item_stats")
+    if owner_field == "target":
+        call["target"] = value
+    elif owner_field == "bodies":
+        forged_body = next(row for row in forged_program["entities"] if row["kind"] == "item_body")
+        if value == "absent":
+            forged_program["entities"].remove(forged_body)
+        else:
+            forged_program["entities"].append({"id": "other_body" if value == "ambiguous" else forged_body["id"],
+                                               "kind": "item_body" if value == "ambiguous" else "free_projectile"})
+    elif owner_field == "body-id":
+        next(row for row in forged_program["entities"] if row["kind"] == "item_body")["id"] = value
+        call["target"] = value  # Coherent malformed identities must not authenticate each other.
+    else:
+        if value == "absent":
+            wire["runtimeProgram"].pop("itemEntityId")
+        else:
+            wire["runtimeProgram"]["itemEntityId"] = value
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    before = json.dumps((forged, wire, receipts), ensure_ascii=False)
+    if owner_field != "itemEntityId":
+        wire_only = audit_compiler_receipts(receipts, final_document=wire)
+        assert wire_only["ok"] and wire_only["authoredSourceChecked"] is False
+    audit = audit_compiler_receipts(receipts, authored_document=forged, final_document=wire)
+    assert not audit["ok"]
+    assert any(row.get("callId") == call["id"] and row["reason"] ==
+               "capability receipt item owner differs from the unique declared body and final item identity"
+               for row in audit["violations"]), audit
+    assert json.dumps((forged, wire, receipts), ensure_ascii=False) == before
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_source_provenance_rejects_equal_value_call_target_swap(explicit):
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    source = build_capability_witness("move_straight")
+    program = source["runtimeProgram"]
+    original = next(row for row in program["entities"] if row["id"] == "witness_entity")
+    program["entities"].append({**deepcopy(original), "id": "other_projectile"})
+    binding = deepcopy(program["bindings"][0])
+    binding.update(id="other_use", input="alternate_use")
+    binding["action"]["targetId"] = "other_projectile"
+    program["bindings"].append(binding)
+    for call in list(program["calls"]):
+        if call.get("target") == "witness_entity":
+            program["calls"].append({**deepcopy(call), "id": "other_" + call["id"], "target": "other_projectile"})
+    if explicit:
+        source = _explicit_calls(source)
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
+    forged = deepcopy(source)
+    for call in forged["runtimeProgram"]["calls"]:
+        if call["fn"] == "set_projectile_lifetime":
+            call["target"] = "other_projectile" if call["target"] == "witness_entity" else "witness_entity"
+    assert validate_runtime_program(forged)["ok"], "Negative reaches provenance with an otherwise valid source"
+    audit = audit_compiler_receipts(receipts, authored_document=forged, final_document=wire)
+    assert not audit["ok"]
+    assert any(row["reason"] == "capability receipt final entity differs from its exact authored target" for row in audit["violations"]), audit
+
+
+def test_noarg_call_accepts_empty_params_and_exact_omission_without_old_author_admission():
     source = build_runtime_fixture("workbench_blade")
     source["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v5"
     noarg = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
@@ -29,11 +389,16 @@ def test_current_noarg_call_has_no_params_property_and_no_old_author_admission()
         audit = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=bad, final_document=wire)
         assert not audit["ok"]
         assert audit["violations"][0]["reason"] == "source provenance requires the sole current Author grammar"
-    bad = deepcopy(source)
-    next(row for row in bad["runtimeProgram"]["calls"] if row["id"] == noarg["id"])["params"] = {}
-    report = validate_runtime_program(bad)
-    assert not report["ok"]
-    assert any(row["path"].endswith(".params") for row in report["errors"])
+    explicit = deepcopy(source)
+    next(row for row in explicit["runtimeProgram"]["calls"] if row["id"] == noarg["id"])["params"] = {}
+    assert validate_runtime_program(explicit)["ok"]
+    assert compile_runtime_program(explicit) == wire
+    for invalid in (None, [], {"speed": 1}):
+        bad = deepcopy(explicit)
+        next(row for row in bad["runtimeProgram"]["calls"] if row["id"] == noarg["id"])["params"] = invalid
+        report = validate_runtime_program(bad)
+        assert not report["ok"]
+        assert any(".params" in row["path"] for row in report["errors"])
 
 
 def test_flat_active_binding_preserves_independent_contact_and_stack_lanes():
@@ -77,15 +442,21 @@ def test_fixed_branches_and_unique_arbitrary_body_references_are_exact():
     binding = wire["runtimeProgram"]["bindings"][0]
     assert binding["usePolicy"] == {"action": {"kind": "equip_passive", "targetId": "opaque_body"}, "stackCost": 0, "contactDamage": False}
     assert wire["runtimeProgram"]["primaryEntityId"] == "opaque_body"
-    for foreign in ("target", "params"):
+    explicit = deepcopy(source)
+    explicit["runtimeProgram"]["calls"][0]["target"] = "opaque_body"
+    assert validate_runtime_program(explicit)["ok"]
+    assert compile_runtime_program(explicit) == wire
+    for target in ("item", "missing", "", None, 1, True):
         bad = deepcopy(source)
-        call = bad["runtimeProgram"]["calls"][0]
-        if foreign == "target":
-            call["target"] = "opaque_body"
-        else:
-            continue
+        bad["runtimeProgram"]["calls"][0]["target"] = target
         assert not validate_runtime_program(bad)["ok"]
-    for foreign, value in (("action", {"kind": "equip_passive"}), ("stackCost", 0), ("contactDamage", False)):
+    explicit_binding = deepcopy(source)
+    explicit_binding["runtimeProgram"]["bindings"][0].update(
+        action={"kind": "equip_passive", "targetId": "opaque_body"}, stackCost=0, contactDamage=False)
+    assert validate_runtime_program(explicit_binding)["ok"]
+    projected = compile_runtime_program(explicit_binding)
+    assert projected["runtimeProgram"] == wire["runtimeProgram"]
+    for foreign, value in (("action", {"kind": "use_item_body"}), ("stackCost", 1), ("contactDamage", True)):
         bad = deepcopy(source)
         bad["runtimeProgram"]["bindings"][0][foreign] = value
         assert not validate_runtime_program(bad)["ok"]
@@ -276,7 +647,7 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
-def test_real_author_card_explains_forbidden_implied_call_fields(monkeypatch):
+def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     import json
     from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
@@ -286,10 +657,12 @@ def test_real_author_card_explains_forbidden_implied_call_fields(monkeypatch):
     calls = packet["requiredJsonShape"]["runtimeProgram"]["calls"]
     assert {frozenset(row) for row in calls} == {
         frozenset(variant["properties"]) for variant in capability_provider_union()
-    } == {frozenset(keys) for keys in (("id", "fn", "params"), ("id", "fn", "target", "params"), ("id", "fn", "target"))}
+    } == {frozenset(("id", "fn", "target", "params"))}
     guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
-    assert "Item-body-only calls omit target" in guide["rowShapes"]
-    assert "zero-argument calls omit params" in guide["rowShapes"]
+    assert "one explicit id/fn/target/params envelope" in guide["rowShapes"]
+    assert "zero-argument calls use params={}" in guide["rowShapes"]
+    assert "Exact existing omissions remain valid in the same grammar" in guide["rowShapes"]
+    assert "not a literal item alias" in guide["rowShapes"]
     assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["bindingTarget"]
 
 

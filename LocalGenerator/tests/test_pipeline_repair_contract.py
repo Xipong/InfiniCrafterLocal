@@ -699,7 +699,7 @@ def test_repair_scope_does_not_mask_same_path_error_for_different_related_ids(
     )
     scope = build_runtime_repair_scope(current, [source_error])
     fixed = copy.deepcopy(stats)
-    del fixed["target"]  # Remove the exact forbidden selector; declaration identity is frozen.
+    fixed["target"] = next(row["id"] for row in current["runtimeProgram"]["entities"] if row["kind"] == "item_body")
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [fixed]
 
@@ -1313,7 +1313,7 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
     assert "Copy the existing node from readOnlySourceFragments.brokenFragments" in repair_rules
     assert "preserve unchanged required fields and accepted optional values or absences" in repair_rules
-    assert "zero-argument calls have no params object" in repair_rules
+    assert "zero-argument calls use params={}" in repair_rules
     required_shape = dossier["requiredJsonShape"]
     assert not any(key in dossier for key in ("brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments"))
     assert set(dossier["readOnlySourceFragments"]) == {
@@ -1322,7 +1322,6 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "claimsUpsert" not in required_shape
     assert "claimIdsDelete" not in required_shape
     assert {frozenset(row) for row in required_shape["callsUpsert"]} == {
-        frozenset({"id", "fn", "target"}),
         frozenset({"id", "fn", "target", "params"}),
     }
     card_fns = {

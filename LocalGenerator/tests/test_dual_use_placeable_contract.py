@@ -256,7 +256,7 @@ def test_atomic_use_policy_is_the_only_author_and_wire_owner() -> None:
 def test_place_policy_is_structurally_closed_and_legacy_fragments_fail() -> None:
     free_place = _dual_use_placeable()
     free_place["runtimeProgram"]["bindings"][-1]["stackCost"] = 0
-    assert "shape_additional_property" in _codes(validate_runtime_program(free_place))
+    assert "shape_const" in _codes(validate_runtime_program(free_place))
 
     wrong_contact = _dual_use_placeable()
     wrong_contact["runtimeProgram"]["bindings"][-1]["contactDamage"] = True

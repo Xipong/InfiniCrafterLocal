@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any, Iterable, Mapping
 
 
@@ -149,18 +150,44 @@ def complete_transaction(
         action_row["placementCallId"] = placement_call
     elif placement_call:
         raise ValueError("placementCallId is legal only for place_item")
+    row: dict[str, Any] = {"input": input_name, "action": action_row,
+                           "stackCost": stack_cost_value, "contactDamage": contact_damage_value}
+    return canonical_transaction(row, item_body_id=target)
+
+
+def canonical_transaction(binding: Mapping[str, Any], *, item_body_id: str) -> dict[str, Any]:
+    """Comparison-only exact fixed-literal equivalence; never rewrite source/patch.
+
+    Sparse is the historical representative. Only schema-valid complete rows
+    with the exact unique body may lose redundant literals in this private key.
+    Independent actions, cost/contact choices and conditional selectors survive.
+    """
     from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
-    if BINDING_ACTION_REGISTRY[action_name].target_kinds == ("item_body",):
-        action_row.pop("targetId")
-    if len(INPUT_KIND_REGISTRY[input_name].allowed_actions) == 1:
-        action_row.pop("kind")
-    row: dict[str, Any] = {"input": input_name}
-    if action_row:
-        row["action"] = action_row
-    if input_name in ACTIVE_USE_INPUTS and action_name != PLACE_ITEM_ACTION:
-        row["stackCost"] = stack_cost_value
-        row["contactDamage"] = contact_damage_value
-    return row
+    from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
+
+    result = {key: copy.deepcopy(value) for key, value in binding.items() if key != "id"}
+    if strict_schema_errors({**result, "id": "transaction_probe"}, binding_schema()):
+        return result
+    inp = INPUT_KIND_REGISTRY[result["input"]]
+    kind = action_kind(result)
+    spec = BINDING_ACTION_REGISTRY[kind]
+    action_row = result.get("action")
+    if isinstance(action_row, dict):
+        if spec.target_kinds == ("item_body",) and item_body_id and action_row.get("targetId") == item_body_id:
+            action_row.pop("targetId")
+        if len(inp.allowed_actions) == 1:
+            action_row.pop("kind", None)
+        if not action_row:
+            result.pop("action")
+    if result["input"] not in ACTIVE_USE_INPUTS or kind == PLACE_ITEM_ACTION:
+        result.pop("stackCost", None)
+        result.pop("contactDamage", None)
+    return result
+
+
+def transaction_key(binding: Mapping[str, Any], *, item_body_id: str) -> str:
+    return json.dumps(canonical_transaction(binding, item_body_id=item_body_id),
+                      sort_keys=True, separators=(",", ":"))
 
 
 def project_to_wire(
@@ -218,6 +245,8 @@ __all__ = [
     "action",
     "action_kind",
     "complete_transaction",
+    "canonical_transaction",
+    "transaction_key",
     "contact_damage",
     "expected_placeable_input",
     "placeable_input_contract",
