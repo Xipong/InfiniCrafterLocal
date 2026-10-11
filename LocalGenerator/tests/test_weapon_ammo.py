@@ -304,3 +304,22 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
         assert [row["path"] for row in report["errors"]] == [f"$.runtimeProgram.calls[{index}].params.velocity"]
         scope = build_runtime_repair_scope(doc, report["errors"])
         assert scope["fieldPermissions"]["calls"] == [{"id": side_spawn["id"], "paths": ["params.velocity"]}]
+
+
+@pytest.mark.parametrize("basis", ["native_shot", "authored_spawn"])
+@pytest.mark.parametrize("delay", [1, 600])
+def test_weapon_ammo_constant_speed_and_activation_delay_are_an_accepted_composition(basis, delay):
+    doc = _weapon(speed=basis)
+    spawn = next(call for call in doc["runtimeProgram"]["calls"] if call["fn"] == "configure_spawn")
+    spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, "activationDelayTicks": delay}
+    before = deepcopy(doc)
+    assert validate_runtime_program(doc)["ok"]
+    final = compile_runtime_program(doc)
+    assert validate_runtime_wire(final)["ok"]
+    entity = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == spawn["target"])
+    assert entity["spawn"]["overTarget"]["delayTicks"] == delay
+    assert entity["spawn"]["speedPxPerTick"] == 8.0
+    assert final["runtimeProgram"]["weaponAmmo"]["speedBasis"] == basis
+    assert doc == before
+    assert audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=doc, final_document=final)["ok"]

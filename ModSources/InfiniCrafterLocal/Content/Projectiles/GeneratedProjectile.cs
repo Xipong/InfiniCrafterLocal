@@ -7,6 +7,7 @@ using InfiniCrafterLocal.Common.VFX;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -53,6 +54,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _lastOwnerVectorSyncAge = -1000;
     private Vector2 _initialDirection = Vector2.UnitX;
     private Vector2? _sampledInitialVelocity;
+    private Vector2? _nativeShotInitialVelocity;
     private Vector2 _spawnCenter;
     private readonly List<Vector2> _whipPoints = new(32);
     private InfiniVfxState _vfxState = new();
@@ -123,7 +125,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Vector2 initialDirection,
         bool preserveSyncedState = false,
         RuntimeSpawnBudget? activationBudget = null,
-        bool ownsSpawnReservation = false)
+        bool ownsSpawnReservation = false,
+        Vector2? nativeShotInitialVelocity = null)
     {
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedBounces = _remainingBounces;
@@ -165,6 +168,17 @@ public sealed partial class GeneratedProjectile : ModProjectile
             _sampledInitialVelocity = entity.Spawn.VelocityDistribution is null ? null : Projectile.velocity;
         else if ((entity.Spawn.VelocityDistribution is null) != (_sampledInitialVelocity is null))
             throw new System.IO.InvalidDataException("sampled launch state does not match this entity's exact velocity variant");
+        if (!preserveSyncedState)
+            _nativeShotInitialVelocity = nativeShotInitialVelocity;
+        if (_nativeShotInitialVelocity is { } nativeLaunch
+            && (!float.IsFinite(nativeLaunch.X) || !float.IsFinite(nativeLaunch.Y)
+                || childDepth != 0 || entity.Spawn.OverTarget.DelayTicks <= 0
+                || entity.Spawn.VelocityDistribution is not null
+                || data.RuntimeProgram.WeaponAmmo?.SpeedBasis != "native_shot"
+                || !data.RuntimeProgram.Bindings.Any(binding => RuntimeBindingSpec.IsActiveInput(binding.Input)
+                    && binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity
+                    && binding.UsePolicy.Action.TargetId == entity.Id)))
+            throw new System.IO.InvalidDataException("native shot launch state does not match an exact delayed active root");
         _spawnCenter = Projectile.Center;
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
@@ -378,7 +392,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 try
                 {
                     generated.Configure(data, entity, childDepth, activationBudget.Remaining, initialDirection,
-                        activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0);
+                        activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0,
+                        nativeShotInitialVelocity: rootSpeedOverride.HasValue && entity.Spawn.OverTarget.DelayTicks > 0
+                            ? projectile.velocity : null);
                     generated.SetInitialNpcExclusion(initialNpcExclusion ?? RuntimeInitialNpcExclusion.None);
                 }
                 catch
@@ -466,14 +482,24 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(_entityId);
                 if (entity is not null)
                 {
-                    Configure(
-                        data,
-                        entity,
-                        _childDepth,
-                        _remainingSpawnBudget,
-                        _initialDirection,
-                        preserveSyncedState: _preserveSyncedStateOnHydrate);
-                    return true;
+                    try
+                    {
+                        Configure(
+                            data,
+                            entity,
+                            _childDepth,
+                            _remainingSpawnBudget,
+                            _initialDirection,
+                            preserveSyncedState: _preserveSyncedStateOnHydrate);
+                        return true;
+                    }
+                    catch (System.IO.InvalidDataException) when (_preserveSyncedStateOnHydrate)
+                    {
+                        // A definition can arrive after ExtraAI. Invalid launch
+                        // metadata must fail closed here just as in the decoder.
+                        RejectRuntimePayload();
+                        return false;
+                    }
                 }
             }
             if (Main.netMode == NetmodeID.MultiplayerClient && _pendingHydrationTicks % 60 == 1)
