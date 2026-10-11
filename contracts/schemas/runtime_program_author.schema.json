@@ -4084,7 +4084,7 @@
                 "properties": {
                   "lifetimeTicks": {
                     "description": "Lifetime",
-                    "maximum": 21600,
+                    "maximum": 36000,
                     "minimum": 1,
                     "type": "integer",
                     "x-infini-semanticType": "ticks",
