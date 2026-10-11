@@ -58,9 +58,14 @@ internal static partial class EngineRuntimeChecks
                     string clientId = new string((char)('a' + index), 32);
                     typeof(InfiniCraftPlayer).GetField("_stationEscrowClientId", CraftFields)!.SetValue(owner, clientId);
                     typeof(InfiniCraftPlayer).GetField("_stationEscrowUsesRemoteAuthority", CraftFields)!.SetValue(owner, true);
+                    // Admit the real registered session while live; disconnect only after durable capture.
+                    owner.Player.active = true;
+                    Equal(true, GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, owner), "live fixture owner admitted before material capture");
+                    Equal(true, GeneratedStationEscrowStateSystem.IsBoundOwner(clientId, owner), "fixture owns the exact admitted session");
                     owner.RestoreServerStationEscrowSlots(Enumerable.Range(0, 6)
                         .Select(slot => new Item(slot % 2 == 0 ? ItemID.CopperShortsword : ItemID.WoodenSword, 1)).ToArray());
                     GeneratedStationEscrowStateSystem.CaptureOwnerState(clientId, owner);
+                    if (index == 2) owner.Player.active = false; // Retain the disconnected-owner unload control.
                     for (int lane = 0; lane < 3; lane++)
                     {
                         string requestId = new string((char)('1' + index * 3 + lane), 32);
@@ -93,6 +98,22 @@ internal static partial class EngineRuntimeChecks
                     }
                 }
                 var before = new TagCompound(); world.SaveWorldData(before);
+                var durableOwners = before.GetList<TagCompound>("infiniStationEscrowOwnersV1");
+                Equal(owners.Length, durableOwners.Count, "saved authority contains every material owner, not an empty journal-only fixture");
+                for (int index = 0; index < owners.Length; index++)
+                {
+                    var slots = durableOwners.Single(row => row.GetString("clientId") == new string((char)('a' + index), 32))
+                        .GetList<TagCompound>("slots");
+                    Equal(6, slots.Count, "each durable owner contains all six material slots before unload");
+                    for (int slot = 0; slot < 6; slot++)
+                    {
+                        Item material = ItemIO.Load(slots.Single(row => row.GetInt("index") == slot).GetCompound("item"));
+                        Equal(slot % 2 == 0 ? (int)ItemID.CopperShortsword : (int)ItemID.WoodenSword,
+                            material.type, "native saved material retains the exact slot item");
+                        Equal(1, material.stack, "native saved material retains the sole input stack");
+                    }
+                }
+                Equal(9, before.GetList<TagCompound>("infiniStationCraftTransactionsV1").Count, "saved journal includes every pending craft lane");
                 string beforeBytes = PersistenceRawBytes(before);
                 new InfiniCraftWorldExitSystem().OnWorldUnload();
                 // Assert remote first so baseline RED identifies the confirmed caller bug.
@@ -127,7 +148,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(scope, GeneratedStationEscrowStateSystem.AuthorityScope, "native reload preserves exact world authority scope");
                 WithPlayer((replacement, restored) => {
                     restored.Initialize();
+                    replacement.whoAmI = 2; replacement.active = true;
+                    Terraria.Main.player[replacement.whoAmI] = replacement;
                     Equal(true, GeneratedStationEscrowStateSystem.RestoreOwnerState(new string('b', 32), restored), "same durable owner restores on new player");
+                    Equal(true, GeneratedStationEscrowStateSystem.IsBoundOwner(new string('b', 32), restored), "reload binds the exact registered replacement session");
                     Equal(6, restored.SnapshotServerStationEscrowSlots().Count(item => !item.IsAir), "reload retains sole six-slot material authority");
                     Equal(0, replacement.inventory.Sum(item => item.IsAir ? 0 : item.stack), "reconnect does not also refund inventory");
                 });
