@@ -32,6 +32,25 @@
 5. [VFX fixtures](../LocalGenerator/tests/vfx_material_fixtures.py) и [image fixtures](../LocalGenerator/tests/vfx_image_fixtures.py) — общие builders. Два `fixtures/vfx_image_*.json` содержат literal boundary/merge cases, не второй production registry и не автоматически обновляемые snapshots.
 6. После переноса проверь imports, selection, обязательные CLI и изоляцию. Удалённый filename не должен остаться исполняемой командой. Считай реальные defs/helpers/принимающие gates и corpus bytes отдельно от pytest items.
 
+## Сокращение независимых матриц (2026-10-11)
+
+От базы `a9237fa` (7 291 collected cases) сокращены **524 реальных pytest cases**: остаётся 6 767. Изменение fixture из PR #51 само по себе количество cases не меняет. Параметры не перенесены в цикл внутри теста, не скрыты markers/skip/CI selection; production-код не меняется.
+
+| Прежнее семейство | Осталось | Что покрывает удалённые повторы |
+|---|---:|---|
+| `test_renderer_route_admission`: 595 положительных + 27 отрицательных | 149 + 27 | Каждый renderer × допустимый channel, каждый renderer × допустимый lane и каждый channel × lane внутри семейства с одинаковыми допустимыми domains остаются отдельными именованными cases. |
+| `test_selected_sample_survives_director_compiler_and_wire`: 84 item samples + projectile Item4 | 6 + 1 | `Item1`, `Item4`, `Item169`, `Coins`, `ResearchComplete`, `Unlock` проверяют default/non-default, numeric endpoints и named selectors; projectile Item4 сохраняет отдельный binding. Полный palette проверяется равенством serialized schema/vocabulary, тестом inventory и `check_vfx_sound_contract` для каждого C# SoundID mapping. |
+
+Основание route-факторизации — независимые ограничения channel/lane в `_director_schema`, `material_slot_clauses` и renderer requirements. `_admitted_route_witnesses` сначала покрывает оба renderer-пересечения, затем добавляет отсутствующие channel/lane pairs внутри каждого domain-семейства. У двух material renderers общий channel-clause; у libraryParticle — отдельные channel/lane enums. Все 27 прежних forbidden-channel/lane случаев остаются без изменений.
+
+Sound admission проверяет membership в полном enum, а normalizer копирует `soundId` без ветвления по имени. Native instrument `Item26` дополнительно проходит пять неизменённых integration cases в `test_vfx_sound_controls`. Null/unknown/foreign payload, explicit silence, legacy absence, frozen Repair и scalar boundaries не сокращаются.
+
+Это **не доказательство всех произвольных трёхфакторных взаимодействий**. Если появится содержательная связь renderer + channel + lane либо отдельная обработка имени soundId, ей нужен новый явный regression. При сокращении проверены причинные consumer mutations: исчезновение обязательного cue channel/lane, ошибочное ограничение допустимой channel/lane пары, подмена Item4 на Item1 и потеря Item2 из полного palette. Рабочие controls GREEN, каждая мутация RED.
+
+Для этих двух семейств сравнён Python execution trace до/после: 707 → 183 cases, те же 1 010 source lines и 1 388 line-transition arcs в `vfx_manifest.py`, `vfx_material_contract.py` и `schema_validation.py`. Это ограниченная проверка текущих исполненных ветвей, не оценка полного покрытия проекта и не замена проверкам поведения.
+
+Подход следует конкретным примерам, а не приписывает upstream универсальный pairwise-алгоритм: [Hermes убирает независимые оси и повторные boundary rows](https://github.com/NousResearch/hermes-agent/commit/fe422a690a2f75342b814a3aa854a6bc4d260718), [Codex оставляет command semantics и один owner rendering layout](https://github.com/openai/codex/commit/e57fc9ea5a7ccdf1d45b5c9d50047ebd8e344b05).
+
 ## Запуск и сила доказательства
 
 Из корня репозитория, в окружении с test dependencies:
