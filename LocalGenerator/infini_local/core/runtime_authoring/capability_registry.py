@@ -1253,7 +1253,7 @@ _CAPS: list[CapabilitySpec] = [
             "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20, units="engine units: Item.knockBack"),
             "useTimeTicks": _p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
             "useAnimationTicks": _p("integer", "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
-            "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent; omitted means no mana cost, independently of DamageClass", minimum=0, maximum=500, required=False, default=0, neutral=0),
+            "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.", minimum=0, maximum=500, required=False, default=0, neutral=0),
             "rarity": _p("integer", "Exact loaded Item.rare ID; copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
             "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
             "maxStack": _p("integer", "Maximum stack", minimum=1, maximum=9999),
@@ -3260,6 +3260,11 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
             "has no fan; pierce=-1 is infinite. configure_tile_placement selects tileId>=0; configure_wall_placement selects wallId>=0. The inactive -1 placement field exists only in wire. "
             "Use each card's own bounds/units; no universal zero neutral."
+            " Item timing/cost: useTimeTicks is the base native activation interval; useAnimationTicks is "
+            "the base animation duration. Native manaCost payment is attempted at animation start, not "
+            "at every activation inside it; spawn count is a batch count, not a payment count. "
+            "Extra recurring payment requires an explicit capability. Player/prefix timing and mana "
+            "modifiers can change effective values; do not report base ticks or mana as measured totals."
         ),
         "stackCost": STACK_COST_RULE,
         "armorParamInheritance": "configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.",
