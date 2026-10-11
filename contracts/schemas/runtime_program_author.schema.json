@@ -2207,6 +2207,94 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "add_placed_light"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "description": "Canonical light color",
+                    "enum": [
+                      "white",
+                      "red",
+                      "orange",
+                      "yellow",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "purple",
+                      "pink",
+                      "gray",
+                      "black"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_color"
+                  },
+                  "placementCallId": {
+                    "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "graphEdge": false,
+                      "namespace": "call",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    },
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "strength": {
+                    "description": "RGB coefficient multiplying the explicit color, not tile radius",
+                    "maximum": 1.5,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "effect_strength",
+                    "x-infini-units": "engine units: RGB coefficient"
+                  }
+                },
+                "required": [
+                  "placementCallId",
+                  "strength",
+                  "color"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "require_use_condition"
               },
               "id": {
@@ -2512,6 +2600,21 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "accRunSpeedPxPerTick": {
+                    "description": "Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus",
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "pixels_per_tick"
+                  },
                   "aggroPoints": {
                     "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
                     "maximum": 1000,
@@ -2574,6 +2677,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "fireWalk": {
+                    "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "genericArmorPenetrationPoints": {
                     "description": "Add flat armor penetration points to DamageClass.Generic; not damage percent",
                     "maximum": 100,
@@ -2629,6 +2738,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
+                  },
+                  "iceSkate": {
+                    "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "jumpSpeedBonusPxPerTick": {
                     "description": "Add to Player.jumpSpeedBoost (positive raises jump speed)",
@@ -2766,6 +2881,21 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
+                  "noKnockback": {
+                    "description": "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "rocketBoots": {
+                    "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
+                    "maximum": 5,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "native rocket flight mode"
+                  },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
                     "maximum": 20,
@@ -2818,6 +2948,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
+                  },
+                  "wireVision": {
+                    "description": "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [],

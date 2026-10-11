@@ -234,6 +234,26 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "add_placed_light",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.strength",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.color"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn",
+        "runtimeProgram.calls[].target",
+        "runtimeProgram.calls[].params.placementCallId",
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].action.placementCallId"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "require_use_condition",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",
@@ -322,7 +342,13 @@
         "accessory.lightColorName",
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
-        "accessory.waterWalk"
+        "accessory.waterWalk",
+        "accessory.iceSkate",
+        "accessory.noKnockback",
+        "accessory.fireWalk",
+        "accessory.accRunSpeed",
+        "accessory.rocketBoots",
+        "accessory.wireVision"
       ]
     },
     {
@@ -1388,6 +1414,12 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.iceSkate",
+        "accessory.noKnockback",
+        "accessory.fireWalk",
+        "accessory.accRunSpeed",
+        "accessory.rocketBoots",
+        "accessory.wireVision",
         "armor.enabled",
         "armor.slot",
         "armor.setKey",

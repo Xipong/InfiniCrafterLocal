@@ -320,18 +320,20 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "csharpBounds": list(csharp),
                 "preserved": bool(projected and projected[0] >= csharp[0] and projected[1] <= csharp[1]),
             })
-    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
-    placed = placed_body_surface_audit(text.encode())
-    for name, spec in CAPABILITY_REGISTRY["present_placed_item_sprite"].params.items():
-        if spec.kind not in {"integer", "number"}:
-            continue
-        field = name[:1].upper() + name[1:]
-        rows.append({"capability": "present_placed_item_sprite", "param": name,
-                     "csharpClass": "RuntimePlacedBodySpec", "authorBounds": [spec.minimum, spec.maximum],
-                     "csharpBounds": placed["boundsByField"].get(field),
-                     "csharpStorage": placed["storageByField"].get(field),
-                     "admission": "reject_without_clamp",
-                     "preserved": bool(placed["ok"])})
+    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit, placed_light_surface_audit
+    for fn, cls, observe in (("present_placed_item_sprite", "RuntimePlacedBodySpec", placed_body_surface_audit),
+                             ("add_placed_light", "RuntimePlacedLightSpec", placed_light_surface_audit)):
+        placed = observe(text.encode())
+        for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+            if spec.kind not in {"integer", "number"}:
+                continue
+            field = name[:1].upper() + name[1:]
+            rows.append({"capability": fn, "param": name,
+                         "csharpClass": cls, "authorBounds": [spec.minimum, spec.maximum],
+                         "csharpBounds": placed["boundsByField"].get(field),
+                         "csharpStorage": placed["storageByField"].get(field),
+                         "admission": "reject_without_clamp",
+                         "preserved": bool(placed["ok"])})
     return rows
 
 

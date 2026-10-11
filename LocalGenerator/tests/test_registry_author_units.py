@@ -542,11 +542,15 @@ def _scalar_name_restored_wire(case):
 
 @pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
 def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(case):
+    from captured_item_alias_wire import historical_equipment_inventory_wire
+
     assert _SCALAR_NAME_CAPTURE["originCommit"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
     source = _scalar_name_current_source(case)
     wire = compile_runtime_program(source)
+    assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)["ok"]
     retained, receipt = _scalar_name_restored_wire(case)
+    retained = historical_equipment_inventory_wire(retained)
     assert hashlib.sha256(_bytes(retained)).hexdigest() == case["compiledSha256"]
     assert validate_runtime_wire(retained)["ok"]
     saved = retained["runtimeContract"]["finalWireReceipts"]

@@ -2363,6 +2363,94 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "add_placed_light"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "placementCallId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-reference": {
+                          "namespace": "call",
+                          "targetKinds": [
+                            "item_body"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
+                      },
+                      "strength": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 1.5,
+                        "description": "RGB coefficient multiplying the explicit color, not tile radius",
+                        "x-infini-units": "engine units: RGB coefficient",
+                        "x-infini-semanticType": "effect_strength",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float64",
+                          "rule": "finite_double_no_normalization",
+                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                        }
+                      },
+                      "color": {
+                        "type": "string",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "description": "Canonical light color",
+                        "x-infini-semanticType": "runtime_color"
+                      }
+                    },
+                    "required": [
+                      "placementCallId",
+                      "strength",
+                      "color"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "require_use_condition"
                   },
                   "target": {
@@ -2981,6 +3069,54 @@
                       "waterWalk": {
                         "type": "boolean",
                         "description": "Walk on water while equipped",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "iceSkate": {
+                        "type": "boolean",
+                        "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "noKnockback": {
+                        "type": "boolean",
+                        "description": "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fireWalk": {
+                        "type": "boolean",
+                        "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "accRunSpeedPxPerTick": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus",
+                        "x-infini-units": "pixels_per_tick",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "rocketBoots": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 5,
+                        "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
+                        "x-infini-units": "native rocket flight mode",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "wireVision": {
+                        "type": "boolean",
+                        "description": "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       }

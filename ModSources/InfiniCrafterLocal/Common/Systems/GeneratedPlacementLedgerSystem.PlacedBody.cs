@@ -27,7 +27,9 @@ public sealed partial class GeneratedPlacementLedgerSystem
             // failure. No cosmetic parse or texture error may destroy a healthy claim.
             GeneratedPlacementKey? missing = group.Cells.FirstOrDefault(cell =>
                 cell.Layer == GeneratedPlacementLayer.Tile && (!WorldGen.InWorld(cell.X,cell.Y,1)
-                    || !Main.tile[cell.X,cell.Y].HasTile));
+                    || !Main.tile[cell.X,cell.Y].HasTile
+                    || group.PlacedBody!.ContainsKey("tileType") && group.PlacedBody["tileType"] is int type
+                        && Main.tile[cell.X,cell.Y].TileType != type));
             if (missing is { Layer: GeneratedPlacementLayer.Tile } cell)
                 TryQueueReturn(cell.Layer,cell.X,cell.Y);
         }
@@ -118,7 +120,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static List<GeneratedPlacementKey> FindExactPlacedBodyCells(PlacementAuthorization authorization)
     {
         RuntimePlacementSpec? placement = authorization.ExactPlacement;
-        if (placement?.PlacedBody is null || authorization.Layer != GeneratedPlacementLayer.Tile)
+        if (placement?.HasPlacedFootprint != true || authorization.Layer != GeneratedPlacementLayer.Tile)
             return new();
         if (!TryResolveMaterialFootprint(authorization.TargetX, authorization.TargetY,
             authorization.ExpectedType, placement.PlaceStyle, out int x, out int y,
@@ -141,7 +143,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static TagCompound? CapturePlacedBodyWitness(PlacementAuthorization authorization, List<GeneratedPlacementKey> cells)
     {
-        if (authorization.ExactPlacement?.PlacedBody is null) return null;
+        if (authorization.ExactPlacement?.HasPlacedFootprint != true) return null;
         // The authored selection is retained even if a cosmetic pose cannot be
         // decoded after native success. Material accounting has already succeeded.
         var witness = new TagCompound
@@ -152,6 +154,16 @@ public sealed partial class GeneratedPlacementLedgerSystem
             ["tileType"] = authorization.ExpectedType,
             ["nativeStyle"] = authorization.ExactPlacement.PlaceStyle,
         };
+        if (authorization.ExactPlacement.PlacedBody is null) witness["lightOnly"] = 1;
+        if (authorization.ExactPlacement.PlacedLight is not null)
+        {
+            // FindExactPlacedBodyCells already proved this complete rectangle.
+            // Light needs material geometry, not the optional PNG pose decoder.
+            int left = cells.Min(cell => cell.X), top = cells.Min(cell => cell.Y);
+            witness["originX"] = left; witness["originY"] = top;
+            witness["width"] = cells.Max(cell => cell.X) - left + 1;
+            witness["height"] = cells.Max(cell => cell.Y) - top + 1;
+        }
         try
         {
             if (!TryResolveNativeFootprint(authorization.TargetX, authorization.TargetY,

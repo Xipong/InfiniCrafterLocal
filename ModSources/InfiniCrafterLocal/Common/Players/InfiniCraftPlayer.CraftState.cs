@@ -536,6 +536,12 @@ public sealed partial class InfiniCraftPlayer
 
     public override void PostUpdateEquips()
     {
+        // All native accessory assignments have finished; movement consumers have not.
+        // Grant only mode/sprint floor, leaving native charge/refill/release/delay ownership intact.
+        if (_generatedRocketBootsMode > 0)
+            Player.rocketBoots = Math.Max(Player.rocketBoots, _generatedRocketBootsMode);
+        if (_generatedAccRunSpeedFloor > 0f)
+            Player.accRunSpeed = Math.Max(Player.accRunSpeed, _generatedAccRunSpeedFloor);
         ApplyGeneratedUtilityBuffEffects();
     }
 

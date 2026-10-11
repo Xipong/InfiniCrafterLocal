@@ -156,17 +156,18 @@ public sealed partial class GeneratedPlacementLedgerSystem
         if (registry is null) return false;
         try
         {
+            if (!TryReadPlacedBodySelection(group.PlacedBody!,out string bindingId,out _,out int tileType,out int nativeStyle)) return false;
             GeneratedItemData? data = GeneratedItemData.FromJson(group.DefinitionJson);
             if (data is null || data.Id != group.GeneratedItemId || !IsMaterialPlacementDefinition(data)
                 || !GeneratedItemRegistryService.IsCurrentWorldData(data)
                 || GeneratedItemRegistryService.DefinitionIdentity(data) != identity) return false;
-            string bindingId = group.PlacedBody!.GetString("bindingId");
+
             RuntimeBindingSpec? binding = data.RuntimeProgram.Bindings.SingleOrDefault(b => b.Id == bindingId);
             RuntimePlacementSpec? placement = binding?.UsePolicy.Action.Placement;
             if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem || binding.UsePolicy.StackCost != 1
-                || placement?.PlacedBody is null || group.Cells.Any(c => c.Layer != GeneratedPlacementLayer.Tile)
-                || placement.TileId != group.PlacedBody.GetInt("tileType")
-                || placement.PlaceStyle != group.PlacedBody.GetInt("nativeStyle")) return false;
+                || placement?.HasPlacedFootprint != true || group.Cells.Any(c => c.Layer != GeneratedPlacementLayer.Tile)
+                || placement.TileId != tileType
+                || placement.PlaceStyle != nativeStyle) return false;
             if (registry.TryGet(group.GeneratedItemId,out GeneratedItemData existing)
                 && GeneratedItemRegistryService.DefinitionIdentity(existing) != identity)
             {
@@ -281,5 +282,6 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         RefreshPlacedBodyDefinitionMirrors();
         RefreshPlacedBodyViews();
+        EmitPlacedLights();
     }
 }

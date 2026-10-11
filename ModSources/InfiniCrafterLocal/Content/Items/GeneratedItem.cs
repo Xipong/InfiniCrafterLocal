@@ -716,6 +716,13 @@ public partial class GeneratedItem : ModItem
         player.aggro += a.Aggro; player.endurance += a.Endurance; player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
         player.whipRangeMultiplier += a.WhipRange;
         if (a.FallDamageImmune) player.noFallDmg = true; if (a.LavaImmune) player.lavaImmune = true; if (a.WaterWalk) player.waterWalk = true;
+        if (a.WireVision) player.InfoAccMechShowWires = true;
+        if (a.IceSkate) player.iceSkate = true;
+        if (a.NoKnockback) player.noKnockback = true;
+        if (a.FireWalk) player.fireWalk = true;
+        // Native Player.Update owns rocketTime/refill/delay/thrust. Never refill per equip tick.
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedRocketBootsMode(a.RocketBoots);
+        player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAccRunSpeedFloor(a.AccRunSpeed);
         AddEquipmentLight(player, a.LightStrength, a.LightColorName);
     }
 

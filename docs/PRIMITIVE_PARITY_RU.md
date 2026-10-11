@@ -62,6 +62,12 @@ Author schema ограничивает новые значения всех пр
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
+| iceSkate | Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed | bounded_text | False | boolean | accessory.iceSkate | ModItem.UpdateAccessory |
+| noKnockback | Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate | bounded_text | False | boolean | accessory.noKnockback | ModItem.UpdateAccessory |
+| fireWalk | Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles | bounded_text | False | boolean | accessory.fireWalk | ModItem.UpdateAccessory |
+| accRunSpeedPxPerTick | Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus | pixels_per_tick | 0 | 0…20 | accessory.accRunSpeed | ModItem.UpdateAccessory |
+| rocketBoots | Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight | native rocket flight mode | 0 | 0…5 | accessory.rocketBoots | ModItem.UpdateAccessory |
+| wireVision | Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation | bounded_text | False | boolean | accessory.wireVision | ModItem.UpdateAccessory |
 
 Authority: `owner_execute_sync`; техническая фаза/сетевая роль выбираются runtime, не LLM.
 

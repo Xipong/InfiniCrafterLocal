@@ -23,6 +23,7 @@ public sealed class GeneratedPlacedBodyDrawSystem : ModSystem
         {
             foreach (GeneratedPlacedBodyView view in GeneratedPlacementLedgerSystem.VisiblePlacedBodies())
             {
+                if (view.Body is null) continue;
                 int x = view.Footprint.X / 16, y = view.Footprint.Y / 16;
                 Tile tile = Main.tile[x,y];
                 if (!TileDrawing.IsVisible(tile)) continue;

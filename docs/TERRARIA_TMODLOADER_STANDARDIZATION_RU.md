@@ -48,6 +48,8 @@ Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, 
 
 Author-valid value не должно тихо меняться на C# boundary: несовпадение — contract defect и range-parity regression. Legacy safety envelope может быть шире Author, не уже; отсутствующая доказанная биекция не разрешает удобный approximate conversion. Event producer/timing units — [Author events](LOW_LEVEL_RUNTIME_AUTHORING_RU.md#validation-events).
 
+[Независимые native equipment utilities и границы headless proof](NATIVE_EQUIPMENT_UTILITIES_RU.md): wire visibility, ice skating, hot-block/knockback immunity, bounded rocket mode и native sprint speed. Это explicit accessory params, не whole-item presets.
+
 <a id="custom"></a>
 ## Намеренно custom runtime
 

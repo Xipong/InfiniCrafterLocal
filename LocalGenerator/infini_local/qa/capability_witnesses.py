@@ -73,6 +73,7 @@ def _params(fn: str) -> dict[str, Any]:
         "configure_tile_placement": {"tileId": 4, "placeStyle": 0},
         "configure_wall_placement": {"wallId": 1, "placeStyle": 0},
         "present_placed_item_sprite": {"placementCallId": "native_placement"},
+        "add_placed_light": {"placementCallId": "native_placement"},
         "require_use_condition": {"condition": "grounded"},
         "move_player_on_use": {"mode": "blink_to_cursor", "rangeTiles": 5, "cooldownTicks": 60, "safeTileOnly": True},
         "recall_home_on_use": {"cooldownTicks": 60},
@@ -191,9 +192,9 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call("held_utility_effect", "apply_generated_buff_on_use", "item", effect))
             action = "use_item_body"
             input_kind = "primary_use"
-            if fn in {"configure_tile_placement", "configure_wall_placement", "present_placed_item_sprite"}:
+            if fn in {"configure_tile_placement", "configure_wall_placement"} or cap.category == "item_placed_body":
                 action = "place_item"
-                if fn == "present_placed_item_sprite":
+                if cap.category == "item_placed_body":
                     calls.append(_call("native_placement", "configure_tile_placement", "item"))
             elif fn in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
                 action = "equip_passive"; input_kind = "equipped"
@@ -204,7 +205,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 input_kind,
                 action,
                 "item",
-                placement_call_id=("native_placement" if fn == "present_placed_item_sprite" else "witness_call") if action == "place_item" else "",
+                placement_call_id=("native_placement" if cap.category == "item_placed_body" else "witness_call") if action == "place_item" else "",
                 contact_damage=fn in {"configure_item_contact_hitbox", "configure_tool"},
             ))
     else:

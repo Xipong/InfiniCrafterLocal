@@ -711,6 +711,16 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
             associated = (_final_value(final, event_base + ".id") == receipt.get("callId")
                           and _final_value(final, event_base + ".action") == wire_action
                           and type(code) is int and code == EVENT_ACTION_OPCODE.get(wire_action))
+        elif cap.category == "equipment":
+            component = path.split(".", 1)[0]
+            associated = _same_receipt_value(_final_value(final, component + ".enabled"), True)
+            associated = associated and sum(row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".fn" and row.get("finalPath") == component + ".enabled"
+                and row.get("status") == "technical_projection" and row.get("value") is True
+                for row in receipts) == 1
+            entity_base = next((f"runtimeProgram.entities[{index}]"
+                for index, entity in enumerate(final.get("runtimeProgram", {}).get("entities", []))
+                if entity.get("id") == final.get("runtimeProgram", {}).get("itemEntityId")), "")
         else:
             field, expected = ("spawn.enabled", True) if fn == "configure_spawn" else ("controller.name", fn)
             associated = _same_receipt_value(_final_value(final, entity_base + "." + field), expected)
@@ -974,7 +984,7 @@ def audit_compiler_receipts(
                 if not valid_literal:
                     violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
                                        "reason": "fixed wire literal is not the exact projection of the originating capability"})
-        if fn == "present_placed_item_sprite" and receipt.get("status") == "technical_projection":
+        if literal_cap is not None and literal_cap.category == "item_placed_body" and receipt.get("status") == "technical_projection":
             match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.params\.placementCallId", authored_path)
             source_call = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
             if authored_document is not None:
@@ -998,7 +1008,7 @@ def audit_compiler_receipts(
                     final_bindings = final_document.get("runtimeProgram", {}).get("bindings", []) if final_document is not None else []
                     finals = [i for i, b in enumerate(final_bindings) if isinstance(b, Mapping) and b.get("id") == binding.get("id")]
                     if len(finals) == 1:
-                        expected_path = f"runtimeProgram.bindings[{finals[0]}].usePolicy.action.placement.placedBody"
+                        expected_path = f"runtimeProgram.bindings[{finals[0]}].usePolicy.action.placement.{literal_cap.params['placementCallId'].wire_name}"
                 if (not isinstance(source_call, Mapping) or source_call.get("fn") != fn
                     or source_call.get("id") != receipt.get("callId") or not expected_inputs
                     or list(authored_paths) != expected_inputs or (final_document is not None and path != expected_path)):
@@ -1571,26 +1581,30 @@ def audit_compiler_receipts(
             policy = binding.get("usePolicy", {}) if isinstance(binding, Mapping) else {}
             action = policy.get("action", {}) if isinstance(policy, Mapping) else {}
             placement = action.get("placement", {}) if isinstance(action, Mapping) else {}
-            if not isinstance(placement, Mapping) or "placedBody" not in placement:
+            if not isinstance(placement, Mapping):
                 continue
-            base = f"runtimeProgram.bindings[{bi}].usePolicy.action.placement.placedBody"
-            associations = [r for r in receipt_rows if r.get("fn") == "present_placed_item_sprite"
-                            and r.get("finalPath") == base and r.get("status") == "technical_projection"
-                            and str(r.get("authoredPath") or "").endswith(".params.placementCallId")]
-            if len(associations) != 1:
-                violations.append({"finalPath": base, "reason": "placed body has no unique association receipt"})
-                continue
-            association = associations[0]
-            source_base = association["authoredPath"].rsplit(".", 1)[0]
-            for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params:
-                if name == "placementCallId":
+            for component_cap in (cap for cap in CAPABILITY_REGISTRY.values() if cap.category == "item_placed_body"):
+                component = component_cap.params["placementCallId"].wire_name
+                if component not in placement:
                     continue
-                matching = [r for r in receipt_rows if r.get("fn") == "present_placed_item_sprite"
-                            and r.get("callId") == association.get("callId")
-                            and r.get("authoredPath") == f"{source_base}.{name}"
-                            and r.get("finalPath") == f"{base}.{name}" and r.get("status") == "delivered"]
-                if len(matching) != 1:
-                    violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
+                base = f"runtimeProgram.bindings[{bi}].usePolicy.action.placement.{component}"
+                associations = [r for r in receipt_rows if r.get("fn") == component_cap.name
+                                and r.get("finalPath") == base and r.get("status") == "technical_projection"
+                                and str(r.get("authoredPath") or "").endswith(".params.placementCallId")]
+                if len(associations) != 1:
+                    violations.append({"finalPath": base, "reason": "placed body has no unique association receipt"})
+                    continue
+                association = associations[0]
+                source_base = association["authoredPath"].rsplit(".", 1)[0]
+                for name in component_cap.params:
+                    if name == "placementCallId":
+                        continue
+                    matching = [r for r in receipt_rows if r.get("fn") == component_cap.name
+                                and r.get("callId") == association.get("callId")
+                                and r.get("authoredPath") == f"{source_base}.{name}"
+                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") == "delivered"]
+                    if len(matching) != 1:
+                        violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
         # Wire-only auditing has no Author call list: require coverage of each
         # present declared default slot, but do not claim whether it was omitted.
         for fn, cap in CAPABILITY_REGISTRY.items():

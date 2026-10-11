@@ -215,7 +215,7 @@ def test_new_reference_requirements_and_bounds_are_in_canonical_audit():
     from infini_local.qa.capability_library_audit import capability_library_audit
     report = capability_library_audit()
     assert report["metrics"]["typedEntityReferences"] == sum(1 for c in CAPABILITY_REGISTRY.values() for p in c.params.values() if p.reference is not None and p.reference.namespace == "entity")
-    assert report["metrics"]["typedCallReferences"] == 1
+    assert report["metrics"]["typedCallReferences"] == sum(1 for c in CAPABILITY_REGISTRY.values() for p in c.params.values() if p.reference is not None and p.reference.namespace == "call")
     relevant = [row for row in report["issues"] if FN in row.get("path", "")]
     assert not [r for r in relevant if r["code"] in {"unknown_requirement_kind", "incomplete_typed_reference"}], relevant
     from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
@@ -333,7 +333,7 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
 def test_absent_member_keeps_complete_historical_wire_bytes():
     """Keep the original cec64b6 complete-wire oracle, including provenance."""
     from captured_parent_combat_author import historical_child_combat_wire
-    from captured_item_alias_wire import historical_item_alias_wire
+    from captured_item_alias_wire import historical_equipment_inventory_wire, historical_item_alias_wire
     from beam_contract_checks import without_declared_beam_neutrals
     from tests.captured_projectile_author import without_captured_projectile_alias_delta
 
@@ -349,7 +349,7 @@ def test_absent_member_keeps_complete_historical_wire_bytes():
                                        authored_document=authored, final_document=compiled)["ok"]
         final = historical_item_alias_wire(without_declared_targeting_neutrals(
             without_declared_beam_neutrals(without_captured_projectile_alias_delta(
-                historical_child_combat_wire(compiled)))))
+                historical_child_combat_wire(historical_equipment_inventory_wire(compiled))))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
                       "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")

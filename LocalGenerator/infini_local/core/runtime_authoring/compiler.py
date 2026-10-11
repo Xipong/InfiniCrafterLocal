@@ -452,10 +452,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         for call in calls
         if str(call.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
     }
-    placed_body_calls = {
-        call["params"]["placementCallId"]: call
-        for call in calls if call.get("fn") == "present_placed_item_sprite"
-    }
+    placed_components = [call for call in calls
+                         if (cap := CAPABILITY_REGISTRY.get(str(call["fn"]))) is not None
+                         and cap.category == "item_placed_body"]
     bindings: list[dict[str, Any]] = []
     for source_index, authored_binding in binding_sources:
         binding = project_to_wire(
@@ -498,11 +497,13 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                     path=f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
                     value=value, target=binding["usePolicy"]["action"]["placement"], key=key,
                     source=f"runtimeProgram.calls[{source_call_index}].fn")
-            presentation = placed_body_calls.get(str(call["id"]))
-            if presentation is not None:
+            for presentation in placed_components:
+                if presentation["params"]["placementCallId"] != call["id"]:
+                    continue
+                component = CAPABILITY_REGISTRY[str(presentation["fn"])].params["placementCallId"].wire_name
                 body: dict[str, Any] = {}
-                base = f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.placedBody"
-                binding["usePolicy"]["action"]["placement"]["placedBody"] = body
+                base = f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{component}"
+                binding["usePolicy"]["action"]["placement"][component] = body
                 for key, value in presentation["params"].items():
                     if key != "placementCallId":
                         ctx.write(call=presentation, path=f"{base}.{key}", value=value,
@@ -510,7 +511,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                 from infini_local.core.runtime_authoring.technical_lowering import _placement_source_paths  # pyright: ignore[reportPrivateUsage]
                 call_base = f"runtimeProgram.calls[{presentation['_sourceIndex']}]"
                 ctx.receipts.append({
-                    "callId": presentation["id"], "fn": "present_placed_item_sprite",
+                    "callId": presentation["id"], "fn": presentation["fn"],
                     "authoredPath": f"{call_base}.params.placementCallId",
                     "authoredPaths": _placement_source_paths(document, int(presentation["_sourceIndex"]), source_index),
                     "finalPath": base, "value": copy.deepcopy(body),
@@ -571,9 +572,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         entity_index = entity_index_by_id[target]
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
-        if fn in {"configure_tile_placement", "configure_wall_placement", "present_placed_item_sprite"}:
-            continue
         cap = CAPABILITY_REGISTRY.get(fn)
+        if fn in {"configure_tile_placement", "configure_wall_placement"} or cap is not None and cap.category == "item_placed_body":
+            continue
         if target == item_entity_id and (cap is None or cap.category != "event"):
             _compile_item_call(
                 ctx,
