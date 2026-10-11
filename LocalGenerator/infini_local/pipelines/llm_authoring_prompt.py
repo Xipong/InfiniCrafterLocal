@@ -63,11 +63,10 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
 
 def planner_priority_header_for_llm() -> list[str]:
     return [
-        "Directly compose low-level entities, bindings, capabilities and event links. Never classify the item into sword/bow/staff/sentry for execution.",
-        "category is UI/equipment metadata only. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; use source-backed parent facts only to author explicit runtimeProgram mechanics.",
-        "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities. Catalog membership is not a recommendation; select only mechanics belonging to your authored design. Do not describe gameplay that has no exact runtimeProgram backing.",
+        "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; use source-backed parent facts only to author explicit runtimeProgram mechanics.",
+        "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         "Do not add a mandatory weird twist. Novelty comes from the authored composition itself, not an unrelated gimmick.",
-        "Use source tempo and motion when available and useful to the composition; make deviations intentional. Source flags or aiStyle are not an algorithm and do not specify gravity, acceleration or timing. You may use your knowledge to choose familiar or novel physics explicitly with the available capabilities; distinguish that authored choice from verified source facts. The host supplies no weapon preset or inferred movement.",
+        "Use source tempo when available and useful to the composition; make deviations intentional.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
 
@@ -230,7 +229,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if kind == "item_body":
             entity["constructionMeaning"] = "Exactly one item_body."
         elif kind == "free_projectile":
-            entity["constructionMeaning"] = "Use requiredComponents for spawn/lifetime/hitbox/collision and positionRequirement for movement. An admitted spawn creates independent projectiles, not a singleton minion/companion; no minion-slot behavior or per-owner cap is implied. configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive."
+            entity["constructionMeaning"] = "An admitted spawn creates independent projectiles, not a singleton minion/companion; no minion-slot behavior or per-owner cap is implied. configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive."
     inputs = [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]
     for row in inputs:
         if row["input"] == "hold":
@@ -242,7 +241,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if action["action"] == "place_item":
             action["constructionMeaning"] = (
                 "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
-                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. Write fixed stackCost=1 and contactDamage=false; exact omission remains valid. "
+                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. "
                 "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
                 "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
             )
@@ -266,7 +265,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     for card in capabilities:
         if card["fn"] == "present_placed_item_sprite":
-            card["constructionMeaning"] = "placementCallId is an exact configure_tile_placement call id, not an entity reference: use the same item_body and exact place_item binding reference, tile-only. This operation explicitly selects that item's existing root PNG; no new image project/source field. Native support, solidity, wiring, mining, interaction and light remain native. Independent placed size/full-frame pivot/offset/flips/rotation are all required; no grip or forward-axis inference. Omit this call to retain native presentation. Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+            card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
         elif card["fn"] == "charge_then_release":
             card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
         elif card["fn"] == "configure_item_use":

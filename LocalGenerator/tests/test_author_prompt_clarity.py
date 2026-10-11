@@ -175,8 +175,10 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     rule = catalog['fieldGuide']['stackCost']
     assert rule == STACK_COST_RULE  # The presentation must not replace this and lose optional chance semantics.
-    assert 'For place_item, write fixed stackCost=1 and contactDamage=false' in rule
-    assert 'For hold/equipped, write fixed stackCost=0 and contactDamage=false' in rule
+    shapes = catalog['fieldGuide']['rowShapes']
+    assert 'Fixed binding literals may be explicit or omitted' in shapes
+    assert 'place_item stackCost=1 and contactDamage=false' in shapes
+    assert 'hold/equipped stackCost=0 and contactDamage=false' in shapes
     assert 'only with stackCost=1 outside placement' in rule
     assert 'omission retains the existing 100 percent debit' in rule
     assert 'effectGroupId is optional only for apply_item_effects' in catalog['fieldGuide']['rowShapes']
@@ -187,7 +189,7 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
             assert 'stackConsumeChancePercent' not in variant['required']
             assert f"{chance['type']} {chance['minimum']}..{chance['maximum']}" in rule
     placement = next(row for row in catalog['bindingActions'] if row['action'] == 'place_item')
-    assert 'Write fixed stackCost=1 and contactDamage=false' in placement['constructionMeaning']
+    assert 'Only accepted placement spends the stack' in placement['constructionMeaning']
 
 
 def test_condition_card_describes_its_existing_union_and_placement_guide_matches_public_ids(monkeypatch):

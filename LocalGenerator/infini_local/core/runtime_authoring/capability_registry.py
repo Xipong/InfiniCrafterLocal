@@ -10,8 +10,6 @@ from typing import Any, Final, Iterable, Mapping
 from infini_local.core.repair_merge import json_values_equal
 
 STACK_COST_RULE = (
-    "For place_item, write fixed stackCost=1 and contactDamage=false; exact omission remains valid. "
-    "For hold/equipped, write fixed stackCost=0 and contactDamage=false; exact omission remains valid. "
     "The placement stack is spent only after accepted placement "
     "and the placed generated item is returned by the placement ledger when broken. "
     "For non-placement active use, stackCost=1 consumes one whole generated item (not ammo, projectile or a charge); "
@@ -3282,13 +3280,10 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
         "bindingTarget": (
             "bindings[].action.targetId is the exact entity acted on. The selected action's targets list "
             "is the entity-kind allowlist; spawn_entity targets the entity created, while "
-            "use_item_body targets the item body being used. Only place_item additionally requires "
-            "bindings[].action.placementCallId; every other action must omit that key. "
+            "use_item_body targets the item body being used. "
             "contactDamage is an independent item-body hitbox lane for primary_use/alternate_use: "
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
-            "It does not select primaryEntityId or projectile held ownership; fixed contactDamage=false for place_item/hold/equipped may be explicit or omitted. "
-            "action.targetId for item_body-only actions may be explicit with the exact unique declared item_body id or omitted; projectile targets remain explicit."
-            " Bindings use the selected input/action's exact shape. Exact fixed branch literals may be explicit or omitted; active non-placement stack/contact remain independent required choices. Write id, fn, target and params for every new call. Use the exact declared item_body id for item-only calls and params={} for zero-argument calls. "
+            "It does not select primaryEntityId or projectile held ownership. "
             "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
             "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
             "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
