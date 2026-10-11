@@ -100,6 +100,7 @@ internal static partial class EngineRuntimeChecks
             ("quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry", NativeFloat32BuffNearNeutralIdentityAndExpiry),
             ("quality250 NativeFloat32BuffAllComponentsAndExactRefresh", NativeFloat32BuffAllComponentsAndExactRefresh),
             ("persistence PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn", PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn),
+            ("persistence PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation", PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation),
             ("persistence PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed", PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed),
             ("persistence RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial", RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial),
             ("persistence ScopedRemoteEscrowResponseRequiresExactOrigin", ScopedRemoteEscrowResponseRequiresExactOrigin),

@@ -1048,6 +1048,13 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             pending.FailureCause = "prefix_identity_invalid";
             return PendingSpawnOutcome.PermanentFailure;
         }
+        // Native NewItem replaces an occupied world drop when no inactive slot
+        // with an exactly-zero reuse timer exists. The dummy slot is not capacity.
+        // Keep the existing authoritative pending claim until allocation is safe;
+        // ordinary pool pressure must never erase a drop or quarantine this return.
+        if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false }
+            && Main.timeItemSlotCannotBeReusedFor[index] == 0))
+            return PendingSpawnOutcome.TransientFailure;
         bool asArmorProxy = GeneratedArmorItemTypes.CanRepresent(data);
         int itemType = asArmorProxy
             ? GeneratedArmorItemTypes.ItemTypeFor(data)
