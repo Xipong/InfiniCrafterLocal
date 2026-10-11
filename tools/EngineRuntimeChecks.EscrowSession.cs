@@ -23,7 +23,7 @@ internal static partial class EngineRuntimeChecks
                 writer.Write((byte)0);
                 for (int i = 0; i < 2; i++)
                 {
-                    writer.Write(ItemID.CopperShortsword); writer.Write(0); writer.Write(1);
+                    writer.Write((int)ItemID.CopperShortsword); writer.Write(0); writer.Write(1);
                     writer.Write(""); writer.Write("");
                 }
             }
