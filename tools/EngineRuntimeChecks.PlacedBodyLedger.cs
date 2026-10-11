@@ -83,6 +83,7 @@ internal static partial class EngineRuntimeChecks
         WithPlacedLedger((player,ledger) => {
             Terraria.ObjectData.TileObjectData.Initialize();
             var data = PlacedLedgerData("native-pose-control");
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
             placement.TileId = TileID.Torches;
             MethodInfo decode = typeof(GeneratedPlacementLedgerSystem).GetMethod("TryResolveNativeFootprint",PersistenceStatic)!;
@@ -109,6 +110,7 @@ internal static partial class EngineRuntimeChecks
     {
         WithPlacedLedger((player, ledger) => {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; var data = PlacedLedgerData("cosmetic-failure-material");
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
             var target = Terraria.Main.tile[40,40]; var adjacent = Terraria.Main.tile[41,40];
             target.HasTile = adjacent.HasTile = false;
@@ -257,6 +259,7 @@ internal static partial class EngineRuntimeChecks
         WithPlacedLedger((player, ledger) => {
             using var peers = new ReviewPeers(); var data = PlacedLedgerData("actual-server-placed-body"); peers.Register(data);
             peers.Mode(NetmodeID.Server,255); Terraria.Main.player[0] = player;
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             var cell = Terraria.Main.tile[40,40]; cell.HasTile = false;
             Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!,40,40), "server captures native before-state");
             cell.HasTile = true; cell.TileType = TileID.Stone;

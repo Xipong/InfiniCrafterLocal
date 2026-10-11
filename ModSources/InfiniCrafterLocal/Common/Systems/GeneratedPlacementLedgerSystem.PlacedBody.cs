@@ -44,6 +44,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
                 ["layer"] = (int)cell.Layer, ["x"] = cell.X, ["y"] = cell.Y,
             }).ToList(),
         };
+        WritePlacementPrefixEnvelope(row, group.NativePrefixEnvelope);
         if (group.RawPlacedBodyEnvelope is not null)
             row["placedBody"] = ((TagCompound)group.RawPlacedBodyEnvelope.Clone())["placedBody"];
         else if (group.PlacedBody is not null) row["placedBody"] = group.PlacedBody.Clone();

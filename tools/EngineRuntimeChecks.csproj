@@ -77,6 +77,8 @@
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />
     <Compile Include="EngineRuntimeChecks.ForgeHeart.cs" />
     <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacementPrefix.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacementPool.cs" />
     <Compile Include="EngineRuntimeChecks.RootCombat.cs" />
     <Compile Include="EngineRuntimeChecks.ChildCombat.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />

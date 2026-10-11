@@ -724,6 +724,7 @@ internal static partial class EngineRuntimeChecks
     {
         WithPersistenceTilemap((player, ledger) => {
             var data = PersistencePlacementData(); var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             PersistenceMatrix(new (string, Action)[] {
                 ("SP abandoned unmutated target supersession", () => {
                     ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.SinglePlayer; MaterialClock(100);
@@ -952,6 +953,7 @@ internal static partial class EngineRuntimeChecks
         using var serializer = WithPersistenceBoolSerializer();
         WithPersistenceTilemap((player, ledger) => {
             var data = PersistencePlacementData("exact_return_id");
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
             string json = data.ToNetworkJson();
             Equal(true, GeneratedItemData.FromJson(json) is not null, "strict current-world repair fixture");

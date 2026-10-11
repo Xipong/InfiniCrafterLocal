@@ -56,6 +56,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         public string GroupId { get; init; } = "";
         public string GeneratedItemId { get; init; } = "";
         public string DefinitionJson { get; set; } = "";
+        public TagCompound? NativePrefixEnvelope { get; init; }
         public List<GeneratedPlacementKey> Cells { get; init; } = new();
         // Optional exact opt-in witness; cosmetic corruption never erases material ownership.
         public TagCompound? PlacedBody { get; init; }
@@ -69,6 +70,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         public string GroupId { get; init; } = "";
         public string GeneratedItemId { get; init; } = "";
         public string DefinitionJson { get; init; } = "";
+        public TagCompound? NativePrefixEnvelope { get; init; }
         public int X { get; init; }
         public int Y { get; init; }
         // Transient attempt count is diagnostic only. World pressure retries
@@ -96,6 +98,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         public int PlayerIndex { get; init; }
         public Player? SourcePlayer { get; init; }
         public GeneratedItemData? SourceData { get; init; }
+        public Item? SourceItem { get; init; }
+        public TagCompound? NativePrefixEnvelope { get; init; }
         public ulong Sequence { get; set; }
         // Allocated by the authority before native mutation; Ready lends this exact
         // identity to the original placing client, never the other way around.
@@ -226,6 +230,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
                 GroupId = groupId,
                 GeneratedItemId = generatedItemId,
                 DefinitionJson = definitionJson,
+                NativePrefixEnvelope = ReadPlacementPrefixEnvelope(row),
                 Cells = cells,
                 PlacedBody = row.ContainsKey("placedBody") && row["placedBody"] is TagCompound rawBody
                     ? (TagCompound)rawBody.Clone() : null,
@@ -251,6 +256,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
                 {
                     GroupId = groupId, GeneratedItemId = id, DefinitionJson = json, X = x, Y = y,
                     RawClaim = (TagCompound)row.Clone(),
+                    NativePrefixEnvelope = ReadPlacementPrefixEnvelope(row),
                 });
             }
             catch
@@ -287,7 +293,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     }
 
     private static TagCompound ReturnClaim(PendingReturnRecord pending)
-        => pending.RawClaim is not null ? (TagCompound)pending.RawClaim.Clone() : new TagCompound
+    {
+        var claim = pending.RawClaim is not null ? (TagCompound)pending.RawClaim.Clone() : new TagCompound
         {
             ["groupId"] = pending.GroupId,
             ["generatedItemId"] = pending.GeneratedItemId,
@@ -295,6 +302,9 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             ["x"] = pending.X,
             ["y"] = pending.Y,
         };
+        WritePlacementPrefixEnvelope(claim, pending.NativePrefixEnvelope);
+        return claim;
+    }
 
     internal static bool TryRequeueQuarantinedReturn(string groupId, string definitionJson)
     {
@@ -313,6 +323,9 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             || !IsMaterialPlacementDefinition(data)
             || !GeneratedItemRegistryService.IsCurrentWorldData(data) || !WorldGen.InWorld(x, y, 1))
             return false;
+        TagCompound? prefixEnvelope = ReadPlacementPrefixEnvelope(record.Claim);
+        try { ResolvePlacementPrefixEnvelope(prefixEnvelope); }
+        catch { return false; }
         if (record.Requeued)
             return string.Equals(record.RequeueDefinitionJson, definitionJson, StringComparison.Ordinal);
         if (Groups.Count + PendingReturns.Count >= MaxGroups
@@ -321,6 +334,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         PendingReturns.Add(new PendingReturnRecord
         {
             GroupId = groupId, GeneratedItemId = id, DefinitionJson = definitionJson, X = x, Y = y,
+            NativePrefixEnvelope = prefixEnvelope,
         });
         record.Requeued = true;
         record.RequeueDefinitionJson = definitionJson;
@@ -454,6 +468,12 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     {
         if (player is null || data is null || placement is null || player.whoAmI < 0 || player.whoAmI >= Main.maxPlayers)
             return false;
+        // Placement prefix is instance state captured only from the observed held
+        // item, never definition metadata or a client-supplied prefix upgrade.
+        if (player.HeldItem is not { IsAir: false, stack: > 0 } sourceItem
+            || sourceItem.ModItem is not GeneratedItem sourceGenerated
+            || !ReferenceEquals(sourceGenerated.Data, data))
+            return false;
         bool tile = placement.TileId >= 0 && placement.WallId < 0;
         bool wall = placement.WallId >= 0 && placement.TileId < 0;
         if (!tile && !wall)
@@ -474,6 +494,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             && (int)Main.GameUpdateCount <= existing.ExpiresAtTick)
         {
             if (ReferenceEquals(existing.SourcePlayer, player) && ReferenceEquals(existing.SourceData, data)
+                && ReferenceEquals(existing.SourceItem, sourceItem)
                 && existing.TargetX == targetX && existing.TargetY == targetY
                 && existing.Layer == layer && string.Equals(existing.GeneratedItemId, data.Id, StringComparison.Ordinal)) return true;
             // Nonzero remote activations require explicit ordered supersession at
@@ -507,6 +528,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
                 PlayerIndex = player.whoAmI,
                 SourcePlayer = player,
                 SourceData = data,
+                SourceItem = sourceItem,
+                NativePrefixEnvelope = new TagCompound { ["nativePrefix"] = sourceGenerated.CapturePlacementPrefix() },
                 GroupId = Main.netMode == NetmodeID.MultiplayerClient ? "" : Guid.NewGuid().ToString("N"),
                 Layer = layer,
                 TargetX = targetX,
@@ -593,6 +616,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             GroupId = groupId,
             GeneratedItemId = authorization.GeneratedItemId,
             DefinitionJson = authorization.DefinitionJson,
+            NativePrefixEnvelope = authorization.NativePrefixEnvelope,
             Cells = committedCells,
             PlacedBody = CapturePlacedBodyWitness(authorization, committedCells),
         };
@@ -964,6 +988,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             GroupId = group.GroupId,
             GeneratedItemId = group.GeneratedItemId,
             DefinitionJson = group.DefinitionJson,
+            NativePrefixEnvelope = group.NativePrefixEnvelope,
             X = x,
             Y = y,
         };
@@ -1016,6 +1041,20 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             pending.FailureCause = "definition_not_material_placement";
             return PendingSpawnOutcome.PermanentFailure;
         }
+        int nativePrefix;
+        try { nativePrefix = ResolvePlacementPrefixEnvelope(pending.NativePrefixEnvelope); }
+        catch
+        {
+            pending.FailureCause = "prefix_identity_invalid";
+            return PendingSpawnOutcome.PermanentFailure;
+        }
+        // Native NewItem replaces an occupied world drop when no inactive slot
+        // with an exactly-zero reuse timer exists. The dummy slot is not capacity.
+        // Keep the existing authoritative pending claim until allocation is safe;
+        // ordinary pool pressure must never erase a drop or quarantine this return.
+        if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false }
+            && Main.timeItemSlotCannotBeReusedFor[index] == 0))
+            return PendingSpawnOutcome.TransientFailure;
         bool asArmorProxy = GeneratedArmorItemTypes.CanRepresent(data);
         int itemType = asArmorProxy
             ? GeneratedArmorItemTypes.ItemTypeFor(data)
@@ -1046,6 +1085,17 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         {
             spawned.TurnToAir();
             pending.FailureCause = "projection_identity_mismatch";
+            return PendingSpawnOutcome.PermanentFailure;
+        }
+        try
+        {
+            if (!generated.RestorePlacementPrefix(nativePrefix))
+                throw new InvalidDataException("Native item refused the retained placement prefix");
+        }
+        catch
+        {
+            spawned.TurnToAir();
+            pending.FailureCause = "prefix_application_refused";
             return PendingSpawnOutcome.PermanentFailure;
         }
         spawned.stack = 1;
