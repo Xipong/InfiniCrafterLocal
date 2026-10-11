@@ -310,7 +310,13 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
                     for key, child in value.items()}
         return [expanded(child) for child in value] if isinstance(value, list) else value
     for fn in (feature, "configure_spawn", *PROJECTILE_MODIFIER_COMPONENTS):
-        assert expanded(cards[fn]) == CAPABILITY_REGISTRY[fn].author_prompt_card()
+        expected = CAPABILITY_REGISTRY[fn].author_prompt_card()
+        if fn == "spawn_entity_on_event":
+            expected["constructionMeaning"] = (
+                "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
+                "interval and entity lifetime do not guarantee sustained output."
+            )
+        assert expanded(cards[fn]) == expected
     encoded = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
     if format_mode == "json_schema":
         Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
