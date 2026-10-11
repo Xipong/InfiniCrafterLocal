@@ -422,14 +422,14 @@ public sealed partial class InfiniCraftPlayer
             SendStationEscrowResult(whoAmI, operationId, action, index, false, "некорректный escrow clientId");
             return;
         }
+        if (!GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow owner недоступен для этой сессии");
+            return;
+        }
         modPlayer._stationEscrowClientId = clientId;
         modPlayer._stationEscrowOriginScope = scope;
         modPlayer._stationEscrowUsesRemoteAuthority = true;
-        if (!GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
-        {
-            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow owner capacity исчерпана");
-            return;
-        }
         if (GeneratedStationEscrowStateSystem.TryReplay(clientId, operationId, out GeneratedStationEscrowStateSystem.ReplayOutcome replay))
         {
             var replayAction = (StationEscrowAction)replay.Action;
@@ -736,7 +736,8 @@ public sealed partial class InfiniCraftPlayer
         string itemName,
         string message)
     {
-        if (Main.netMode != NetmodeID.Server || !HasCraftRequestId(requestId))
+        if (Main.netMode != NetmodeID.Server || !HasCraftRequestId(requestId)
+            || !GeneratedStationEscrowStateSystem.IsBoundOwner(_stationEscrowClientId, this))
             return false;
         string outcomeName = success && string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName ?? "";
         string outcomeMessage = message ?? "";
@@ -748,7 +749,12 @@ public sealed partial class InfiniCraftPlayer
                 outcomeMessage))
             return false;
         if (success)
-            ClearServerStationEscrowLane(laneIndex);
+        {
+            // The durable owner slots were consumed together with the outcome.
+            // Mirror cleanup cannot undo that commit or trigger an output refund.
+            try { ClearServerStationEscrowLane(laneIndex); }
+            catch (Exception ex) { LogServerCraftTransaction(Player.whoAmI, requestId, "mirror_cleanup_failed", ex.Message); }
+        }
         LogServerCraftTransaction(
             Player.whoAmI,
             requestId,
@@ -1225,7 +1231,6 @@ public sealed partial class InfiniCraftPlayer
             return;
         InputSlot(laneIndex * 2).TurnToAir();
         InputSlot(laneIndex * 2 + 1).TurnToAir();
-        CaptureCurrentServerStationEscrowState();
     }
 
     private void SyncServerMouseSlot()
@@ -1311,9 +1316,12 @@ public sealed partial class InfiniCraftPlayer
             data.RecipeMeta.AssetFiles = files;
     }
 
-    private static bool SpawnGeneratedItemServerSide(Player player, GeneratedItemData data, out string error)
+    private static bool SpawnGeneratedItemServerSide(
+        Player player, GeneratedItemData data, out string error, string requestId = "", int laneIndex = 0)
     {
         error = "";
+        Item? allocatedOutput = null;
+        bool committed = false;
         try
         {
             if (data is null)
@@ -1322,6 +1330,21 @@ public sealed partial class InfiniCraftPlayer
                 return false;
             }
 
+            InfiniCraftPlayer modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+            if (Main.netMode == NetmodeID.Server
+                && !GeneratedStationEscrowStateSystem.CanCommitCraft(modPlayer._stationEscrowClientId, requestId, laneIndex, modPlayer))
+            {
+                error = "server craft transaction no longer owns this session/lane";
+                return false;
+            }
+            // Native NewItem replaces an existing world drop when the pool is
+            // full. Refuse before allocation so rollback cannot erase that drop.
+            if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false }
+                && Main.timeItemSlotCannotBeReusedFor[index] <= 0))
+            {
+                error = "world item pool is full; inputs remain in station";
+                return false;
+            }
             StampHostAssetSyncMetadata(data);
             string[] assetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
             if (assetFiles.Length > 0
@@ -1336,14 +1359,15 @@ public sealed partial class InfiniCraftPlayer
             int itemType = asArmorProxy
                 ? global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.ItemTypeFor(data)
                 : ModContent.ItemType<GeneratedItem>();
-            int index = Item.NewItem(player.GetSource_Misc("InfiniCraft"), player.Hitbox, itemType);
+            int index = Item.NewItem(player.GetSource_Misc("InfiniCraft"), player.Hitbox, itemType, noBroadcast: true);
             if (index < 0 || index >= Main.maxItems)
             {
                 error = "Item.NewItem не вернул предмет";
                 return false;
             }
 
-            if (Main.item[index].ModItem is not GeneratedItem generated)
+            allocatedOutput = Main.item[index];
+            if (allocatedOutput.ModItem is not GeneratedItem generated)
             {
                 error = "Item.NewItem не вернул GeneratedItem";
                 return false;
@@ -1356,6 +1380,15 @@ public sealed partial class InfiniCraftPlayer
             // compressed definition chunks; clients request only hash-verified final PNGs.
             // There is deliberately no second filename/base-URL broadcast.
             global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.PublishGeneratedItem(data);
+            // Allocation/configuration can fail without consuming inputs. Complete
+            // the world-owned journal before any item broadcast/pickup handoff.
+            if (Main.netMode == NetmodeID.Server
+                && !modPlayer.CompleteServerCraftTransaction(requestId, laneIndex, true, data.Name, "ok"))
+            {
+                error = "server craft transaction commit refused";
+                return false;
+            }
+            committed = true;
             if (Main.netMode != NetmodeID.SinglePlayer)
                 NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index);
             return true;
@@ -1363,7 +1396,14 @@ public sealed partial class InfiniCraftPlayer
         catch (Exception ex)
         {
             error = ex.Message;
-            return false;
+            // A transport exception after commit must never refund already-spent
+            // inputs. The authoritative world output remains available for sync.
+            return committed;
+        }
+        finally
+        {
+            if (!committed && allocatedOutput is not null)
+                allocatedOutput.TurnToAir();
         }
     }
 

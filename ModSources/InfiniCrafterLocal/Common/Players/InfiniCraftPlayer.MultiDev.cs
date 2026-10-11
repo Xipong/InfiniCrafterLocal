@@ -275,7 +275,7 @@ public sealed partial class InfiniCraftPlayer
                 _multiDevJobs[slot] = null;
                 continue;
             }
-            if (SpawnGeneratedItemServerSide(Player, data, out string error))
+            if (SpawnGeneratedItemServerSide(Player, data, out string error, job.RequestId, job.LaneIndex))
             {
                 CompleteExtraServerCraft(job, true, data.Name, "ok");
                 RunLocalCraftReveal(Player, data);
