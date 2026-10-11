@@ -150,6 +150,10 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
 def test_library_audit_and_shared_notation_have_no_missing_boundary():
     report = capability_library_audit()
     assert report["ok"] and report["score"] == report["scoreMax"], report["issues"]
+    lifetime = next(row for row in report["rangeParity"]
+                    if row["capability"] == "set_projectile_lifetime")
+    assert lifetime["authorBounds"] == lifetime["csharpBounds"] == [1, 36000]
+    assert lifetime["preserved"]
     metrics = report["metrics"]
     assert metrics["capabilities"] == len(CAPABILITY_REGISTRY)
     assert metrics["publicCapabilities"] == metrics["verticalSliceCount"] == sum(cap.prompt_visible and cap.decision == "expose" for cap in CAPABILITY_REGISTRY.values())

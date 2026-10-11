@@ -19,7 +19,9 @@ public static class InfiniRuntimeLimits
     public const int MaxRuntimeChildDepth = 3;
     public const int MaxRuntimeEventSpawns = 32;
     public const int MaxRuntimeSpawnCount = 12;
-    public const int MaxRuntimeLifetimeTicks = 21_600;
+    // Projectile world-tick ceiling; detached VFX source-budget retention shares it.
+    // Buff and modifier phase durations keep their independent 21_600-tick bounds.
+    public const int MaxRuntimeLifetimeTicks = 36_000;
     public const int MaxRuntimeRangeTiles = 120;
     public const int MaxRuntimeActiveProjectilesPerOwner = 96;
     public const int MaxRuntimePeriodicActionsPerTick = 16;

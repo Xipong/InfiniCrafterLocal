@@ -80,7 +80,7 @@
       "owner_execute_sync": 49,
       "client_visual_only": 3
     },
-    "rangeParityRows": 149,
+    "rangeParityRows": 150,
     "verticalSliceCount": 68
   },
   "issues": [],
@@ -424,6 +424,25 @@
       "csharpBounds": [
         0.0,
         20.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_lifetime",
+      "param": "lifetimeTicks",
+      "wireParam": "lifetimeTicks",
+      "csharpClass": "RuntimeEntitySpec",
+      "authorBounds": [
+        1,
+        36000
+      ],
+      "wireBounds": [
+        1,
+        36000
+      ],
+      "csharpBounds": [
+        1.0,
+        36000.0
       ],
       "preserved": true
     },
@@ -1075,7 +1094,7 @@
     },
     {
       "capability": "move_gravity_arc",
-      "param": "gravityVelocityPerUpdate",
+      "param": "accelY",
       "wireParam": "gravityPerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
@@ -1113,7 +1132,7 @@
     },
     {
       "capability": "move_orbit",
-      "param": "rangeTiles",
+      "param": "radiusTiles",
       "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
@@ -1569,7 +1588,7 @@
     },
     {
       "capability": "move_yoyo_hover",
-      "param": "returnSpeed",
+      "param": "speed",
       "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
