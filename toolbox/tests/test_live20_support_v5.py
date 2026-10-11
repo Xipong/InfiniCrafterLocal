@@ -121,6 +121,38 @@ def test_response_format_type_is_read_from_each_logical_payload() -> None:
     assert response_format_type({}) == ""
 
 
+@pytest.mark.parametrize("payload,accepted", [
+    pytest.param({"reasoning_effort": "high"}, True, id="scalar-high"),
+    pytest.param({"reasoning": {"effort": "high", "exclude": True}}, True, id="nested-high"),
+    pytest.param({"reasoning_effort": "high", "reasoning": {"effort": "high"}}, True, id="matching-forms"),
+    pytest.param({"reasoning_effort": "medium"}, False, id="wrong-scalar"),
+    pytest.param({"reasoning": {"effort": "medium"}}, False, id="wrong-nested"),
+    pytest.param({"reasoning_effort": "high", "reasoning": {"effort": "medium"}}, False, id="conflicting-forms"),
+    pytest.param({}, False, id="missing"),
+])
+def test_real_campaign_freeze_observes_provider_reasoning_forms(payload: dict[str, Any], accepted: bool) -> None:
+    import ast
+    from argparse import Namespace
+    from live20_support_v5 import expected_stage_max_tokens  # pyright: ignore[reportMissingImports]
+
+    source = (LIVE_GENERATION / "generate_20_items_without_images.py").read_text()
+    function = next(node for node in ast.parse(source).body
+                    if isinstance(node, ast.FunctionDef) and node.name == "assert_frozen_logical_settings")
+    namespace: dict[str, Any] = dict(args=Namespace(expected_temperature=None, expected_repair_temperature=None,
+        expected_vfx_temperature=None, expected_max_tokens=None, expected_visual_max_tokens=None,
+        expected_vfx_max_tokens=None, expected_reasoning_effort="high", expected_response_format=None),
+        expected_model="", NON_AUTHOR=NON_AUTHOR, FROZEN_LLM_STAGES=FROZEN_LLM_STAGES,
+        expected_stage_temperature=expected_stage_temperature, expected_stage_max_tokens=expected_stage_max_tokens,
+        response_format_type=response_format_type)
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "campaign-freeze", "exec"), namespace)
+    check = namespace["assert_frozen_logical_settings"]
+    if accepted:
+        check(payload, stage=INITIAL_AUTHOR)
+    else:
+        with pytest.raises(RuntimeError, match="reasoning effort"):
+            check(payload, stage=INITIAL_AUTHOR)
+
+
 def test_failed_logical_call_hidden_retry_is_caught_by_physical_http_overhead() -> None:
     summary = transport_retry_summary(
         [{
