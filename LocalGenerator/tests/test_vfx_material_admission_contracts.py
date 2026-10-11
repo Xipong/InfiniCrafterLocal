@@ -352,8 +352,11 @@ def test_material_payload_roundtrip(kind, source, capability):
     assert data["runtimeProgram"] == gameplay and raw == before
 
 ROUTE_SURFACE = vfx.vfx_director_surface(_accepted_visual_data("workbench_blade"))
-# Enumerate every admitted route, but only one independent failure per excluded
-# channel/lane class. Wrong channel + wrong lane has no additional contract.
+# Admission constrains channel and lane independently for each renderer.
+# Cover every renderer/channel and renderer/lane pair, rotating the lanes across
+# renderers to cover all admitted channel/lane pairs too. The old full triple
+# product repeated the same membership checks; these are real standalone cases,
+# not a product hidden inside a test. See docs/TEST_CONTRACT_OWNERS_RU.md.
 ROUTE_DOMAINS = {
     renderer: (
         ("screenShake",) if renderer == "screenShakeCue" else
@@ -366,9 +369,30 @@ ROUTE_DOMAINS = {
         ("primary", "support", "accent", "ornament") if renderer == "libraryParticle" else tuple(ROUTE_SURFACE["lane"]),
     ) for renderer in ROUTE_SURFACE["rendererKind"]
 }
+def _admitted_route_witnesses():
+    # Start with all renderer/channel and renderer/lane pairs. Domain families
+    # share the same channel/lane clauses; the second pass fills their missing
+    # channel/lane pairs without repeating every three-way combination.
+    routes = []
+    covered = set()
+    for offset, (renderer, (channels, lanes)) in enumerate(ROUTE_DOMAINS.items()):
+        for index in range(max(len(channels), len(lanes))):
+            channel, lane = channels[index % len(channels)], lanes[(index + offset) % len(lanes)]
+            routes.append((renderer, channel, lane))
+            covered.add((channels, lanes, channel, lane))
+    for renderer, (channels, lanes) in ROUTE_DOMAINS.items():
+        for channel in channels:
+            for lane in lanes:
+                key = (channels, lanes, channel, lane)
+                if key not in covered:
+                    routes.append((renderer, channel, lane))
+                    covered.add(key)
+    return routes
+
+
 RENDERER_ROUTES = [
     pytest.param(renderer, channel, lane, "", id=renderer + "-" + channel + "-" + lane)
-    for renderer, (channels, lanes) in ROUTE_DOMAINS.items() for channel in channels for lane in lanes
+    for renderer, channel, lane in _admitted_route_witnesses()
 ] + [
     pytest.param(renderer, channel, lanes[0], "channel", id=renderer + "-forbidden-" + channel)
     for renderer, (channels, lanes) in ROUTE_DOMAINS.items()
