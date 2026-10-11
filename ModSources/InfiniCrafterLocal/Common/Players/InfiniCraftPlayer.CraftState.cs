@@ -701,7 +701,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
-        if (SpawnGeneratedItemServerSide(Player, data, out string error))
+        if (SpawnGeneratedItemServerSide(Player, data, out string error, _serverRequestId, 0))
         {
             SendServerAuthoritativeResultIfNeeded(true, data.Name, "ok");
             RunLocalCraftReveal(Player, data);

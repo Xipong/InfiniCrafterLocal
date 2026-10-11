@@ -355,3 +355,26 @@ def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_p
         (tmp_path / path).write_text(changed, encoding="utf-8")
         monkeypatch.setattr(audit, "ROOT", tmp_path)
     assert diagnostic in {row["code"] for row in audit.report()["issues"]}
+
+
+@pytest.mark.parametrize("path,before,after", [
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "pair.Key != key && ReferenceEquals(pair.Value.SessionOwner, player)", "false"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "!ReferenceEquals(state.SessionOwner, player) && IsLiveSession(state.SessionOwner)", "false"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "if (!IsBoundOwner(key, player))", "if (false)"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "state.Pending && state.LaneIndex == laneIndex", "state.Pending"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)", "true"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "noBroadcast: true", "noBroadcast: false"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "Main.timeItemSlotCannotBeReusedFor[index] <= 0", "true"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "if (!committed && allocatedOutput is not null)", "if (false)"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "return committed;", "return false;"),
+])
+def test_escrow_session_gate_rejects_unsafe_commit_mutants(gates, csharp_sources, monkeypatch, path, before, after):
+    _, scanner = gates
+    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
+    scanner.check_escrow_session_fences()
+    assert scanner.ERRORS == []
+    assert before in csharp_sources[path]
+    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
+    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
+    scanner.check_escrow_session_fences()
+    assert any("escrow session:" in error for error in scanner.ERRORS)

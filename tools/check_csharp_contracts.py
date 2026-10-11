@@ -224,7 +224,7 @@ def check_network_boundaries() -> None:
         (net, "BroadcastAuthoritativeVfxEvent", ("Main.netMode != NetmodeID.Server", "packet.Send(-1, Projectile.owner)"), ()),
         (multiplayer, "HandleRequestServerCraftPacket", ("int firstInputIndex = laneIndex * 2", "TrySnapshotServerEscrowInput(firstInputIndex, aRef", "TrySnapshotServerEscrowInput(firstInputIndex + 1, bRef", "GeneratedStationEscrowStateSystem.TryBeginCraft", "LogServerCraftTransaction"), ()),
         (multiplayer, "SendServerAuthoritativeResultIfNeeded", ("CompleteServerCraftTransaction(_serverRequestId, 0, success" ,), ()),
-        (multiplayer, "CompleteServerCraftTransaction", ("LogServerCraftTransaction", "if (success) ClearServerStationEscrowLane(laneIndex)"), ()),
+        (multiplayer, "CompleteServerCraftTransaction", ("LogServerCraftTransaction", "if (success)", "ClearServerStationEscrowLane(laneIndex)", "GeneratedStationEscrowStateSystem.IsBoundOwner"), ()),
     ]
     for source, name, required, forbidden in obligations:
         body = method_body(source, name)
@@ -883,6 +883,48 @@ def check_signed_vertical_acceleration() -> None:
         fail("signed vertical acceleration: activation delay must return before active movement")
 
 
+def check_escrow_session_fences() -> None:
+    """Source fences only; actual packet/reconnect/pool cases are native tests."""
+    journal = read("Common/Systems/GeneratedStationEscrowStateSystem.cs")
+    mp = read("Common/Players/InfiniCraftPlayer.Multiplayer.cs")
+    def code(source: str, method: str) -> str:
+        return re.sub(r"\s+", "", stripped(method_body(source, method)))
+    def needs(body: str, tokens: tuple[str, ...], context: str) -> None:
+        for token in tokens:
+            if re.sub(r"\s+", "", token) not in body:
+                fail(f"escrow session: {context} missing {token}")
+    def ordered(body: str, tokens: tuple[str, ...], context: str) -> None:
+        offsets = [body.find(re.sub(r"\s+", "", token)) for token in tokens]
+        if any(offset < 0 for offset in offsets) or offsets != sorted(offsets):
+            fail(f"escrow session: {context} authority/commit ordering changed")
+    needs(code(journal, "IsLiveSession"), (
+        "ReferenceEquals(Main.player[player.whoAmI], player)",
+        "ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)",
+    ), "player incarnation")
+    needs(code(journal, "RestoreOwnerState"), (
+        "if (key.Length == 0 || !IsLiveSession(player)) return false;",
+        "if (Owners.Any(pair => pair.Key != key && ReferenceEquals(pair.Value.SessionOwner, player))) return false;",
+        "if (!ReferenceEquals(state.SessionOwner, player) && IsLiveSession(state.SessionOwner)) return false;",
+    ), "token admission")
+    needs(code(journal, "CanCommitCraft"), (
+        "IsBoundOwner(clientId, player)", "state.Pending && state.LaneIndex == laneIndex",
+    ), "output preflight")
+    needs(code(journal, "CaptureOwnerState"), ("if (!IsBoundOwner(key, player)) return;",), "stale owner capture")
+    for handler in ("HandleStationEscrowRequestPacket", "HandleRequestServerCraftPacket"):
+        ordered(code(mp, handler), ("RestoreOwnerState", "modPlayer._stationEscrowClientId = clientId;"), handler)
+    spawn = code(mp, "SpawnGeneratedItemServerSide")
+    ordered(spawn, ("CanCommitCraft", "Item.NewItem", "CompleteServerCraftTransaction", "committed = true", "NetMessage.SendData"), "output")
+    needs(spawn, (
+        "if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false } && Main.timeItemSlotCannotBeReusedFor[index] <= 0))",
+        "noBroadcast: true", "return committed;",
+        "if (!committed && allocatedOutput is not null) allocatedOutput.TurnToAir();",
+    ), "allocation rollback")
+    complete = code(journal, "CompleteCraft")
+    ordered(complete, ("committedSlots = (Item[])owner.Slots.Clone()", "owner.Slots = committedSlots!", "state.Pending = false"), "durable slots before outcome")
+    if "CaptureCurrentServerStationEscrowState" in code(mp, "ClearServerStationEscrowLane"):
+        fail("escrow session: mirror cleanup cannot reclone durable items after commit")
+
+
 def main() -> int:
     check_balanced_sources()
     check_source_policies()
@@ -895,6 +937,7 @@ def main() -> int:
     check_sampled_spawn_boundaries()
     check_client_source_contracts()
     check_world_transactions()
+    check_escrow_session_fences()
     check_delivery_metadata()
     check_visual_vfx_contract()
     check_vfx_sound_contract()
