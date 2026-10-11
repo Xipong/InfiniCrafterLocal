@@ -262,6 +262,15 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
                                     error_path = json_path_child(error_path, part)
                                 add("one_of" if exclusive else "any_of", error_path)
                                 break
+                    # No authored selector establishes one variant. Errors shared
+                    # by every branch still have exact authority (e.g. missing
+                    # input on a sparse binding); report them without choosing a
+                    # branch or granting a whole-row Repair rewrite.
+                    for row in branch_results[0]:
+                        if len(errors) >= limit:
+                            break
+                        if row not in errors and all(row in branch for branch in branch_results[1:]):
+                            errors.append(row)
         return errors[:limit]
 
     expected_type = schema.get("type")

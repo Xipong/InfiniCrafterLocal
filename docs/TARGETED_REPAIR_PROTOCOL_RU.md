@@ -24,6 +24,8 @@ Scope escape (valid damage/target/kind, соседний call, motif/magnitude, 
 
 Невалидные числа, включая JSON integer вне float range, дают structured refusal по точной leaf, а не исключение преобразования. Нулевое healing-only `apply_item_effects` требует исправления healing leaves; тот же нейтральный вызов с другим активным разрешённым use-effect допустим. Runtime не выбирает недостающий эффект за модель.
 
+Если ни один authored selector не определяет union-ветвь, общие для всех ветвей shape errors всё равно сообщаются по точным leaves. Например, отсутствующий `input` в sparse binding открывает только `input`, а не всю строку; одинаковые ошибки sibling-полей сообщаются независимо. Это диагностика обязательного поля, не выбор его значения: no-op Repair остаётся RED, принятые значения и отсутствие не меняются.
+
 Malformed provider/patch shape фатален: код не угадывает структуру. После tolerant filter всегда full stage validation; оставшаяся обязательная ошибка завершает единственный Repair неуспехом. Нет рекурсивного/бесконечного loop, hidden repair API или разрешения переносить авторство в compiler.
 
 <a id="format"></a>
