@@ -715,6 +715,15 @@ public sealed partial class InfiniCraftPlayer
 
     public void AbortTransientCraftForWorldExit()
     {
+        if (Main.netMode == NetmodeID.Server)
+        {
+            // Server inputs and pending outcomes belong to the world escrow journal.
+            // Retire result consumers synchronously; cancellation wakes the captured
+            // HTTP requests asynchronously. Do not wait, refund copies, or commit.
+            AbortMultiDevCraftsForWorldExit(refundLocally: false);
+            ClearCraft();
+            return;
+        }
         if (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server)
         {
             ParkRemoteStationClaim();

@@ -20,6 +20,7 @@
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.CraftCancellation.cs" />
+    <Compile Include="EngineRuntimeChecks.CraftWorldExit.cs" />
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />
     <Compile Include="EngineRuntimeChecks.LiteralStackCost.cs" />

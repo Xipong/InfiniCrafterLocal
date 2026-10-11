@@ -278,6 +278,7 @@ internal static partial class EngineRuntimeChecks
             ("named mobility groups share cooldown and consumption outcome", NamedMobilityGroupsShareCooldownAndConsumptionOutcome),
             ("named held effects refresh exact owner item and bound snapshots", NamedHeldEffectsRefreshExactOwnerItemAndBoundSnapshots),
             ("named item effects DTO roundtrip and invalid presence", NamedItemEffectsDtoRoundTripAndInvalidPresence),
+            ("craft cancellation server world unload retires owners without escrow refund", CraftWorldUnloadRetiresServerOwnersWithoutRefundingEscrow),
             ("craft cancellation exact owner retirement", CraftCancellationRetiresAllOwners),
             ("craft cancellation interrupts HTTP and recovery", CraftCancellationInterruptsHttpAndRecovery),
             ("craft cancellation preserves live retry and delivery", CraftCancellationKeepsLiveRetryAndDelivery),

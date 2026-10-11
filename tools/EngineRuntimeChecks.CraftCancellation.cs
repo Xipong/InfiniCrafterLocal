@@ -293,6 +293,7 @@ internal static partial class EngineRuntimeChecks
                 }
                 catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
                 catch (SocketException) when (stop.IsCancellationRequested) { }
+                catch (ObjectDisposedException) when (stop.IsCancellationRequested) { } // Stop may race the next accept on Windows.
             });
         }
         internal void Release() => release.TrySetResult(true);
