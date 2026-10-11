@@ -199,6 +199,8 @@ internal static partial class EngineRuntimeChecks
             ("live combat state survives rehydration", CombatStateSurvivesRehydration),
             ("hitbox sizing preserves spawn center", HitboxSizingPreservesCenter),
             ("activation delay preserves launch velocity", ActivationDelayPreservesVelocity),
+            ("weapon ammo activation delay retains native shot and hydration", WeaponAmmoActivationDelayPreservesNativeShotAndHydration),
+            ("weapon ammo delayed launch is per instance and producer", WeaponAmmoDelayedLaunchIsPerShotAndDoesNotLeakToOtherProducers),
             ("activation respects explicit zero motion", ActivationRespectsZeroMotion),
             ("activation does not relaunch live state", ActivationDoesNotRelaunchLiveState),
             ("expiry action waits for final update", ExpiryWaitsForFinalUpdate),

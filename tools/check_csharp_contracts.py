@@ -178,6 +178,53 @@ def check_sampled_spawn_boundaries() -> None:
             fail(f"sampled_spawn_raw_reference: {guard} must precede entity normalization")
 
 
+def check_native_shot_delay_boundaries() -> None:
+    """Source obligations for the explicit native-shot activation snapshot.
+
+    This proves production data flow, not native allocation or multiplayer.
+    EngineRuntimeChecks owns actual hook, delay, hydration and control scenarios.
+    """
+    projectile = read("Content/Projectiles/GeneratedProjectile.cs")
+    ai = read("Content/Projectiles/GeneratedProjectile.Executors.cs")
+    net = read("Content/Projectiles/GeneratedProjectile.NetSync.cs")
+    obligations = (
+        (projectile, "SpawnRuntimeEntity", (
+            "nativeShotInitialVelocity: rootSpeedOverride.HasValue && entity.Spawn.OverTarget.DelayTicks > 0 ? projectile.velocity : null",
+        )),
+        (projectile, "Configure", (
+            "if (!preserveSyncedState) _nativeShotInitialVelocity = nativeShotInitialVelocity",
+            "!float.IsFinite(nativeLaunch.X)", "!float.IsFinite(nativeLaunch.Y)",
+            "childDepth != 0", "entity.Spawn.OverTarget.DelayTicks <= 0",
+            'data.RuntimeProgram.WeaponAmmo?.SpeedBasis != "native_shot"',
+            "entity.Spawn.VelocityDistribution is not null",
+            "RuntimeBindingSpec.IsActiveInput(binding.Input)",
+            "binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity",
+            "binding.UsePolicy.Action.TargetId == entity.Id",
+        )),
+        (ai, "AI", (
+            "_age == 0", "Projectile.velocity = _sampledInitialVelocity ?? _nativeShotInitialVelocity ??",
+        )),
+        (projectile, "TryHydrate", (
+            "catch (System.IO.InvalidDataException) when (_preserveSyncedStateOnHydrate)",
+            "RejectRuntimePayload()",
+        )),
+        (net, "SendExtraAI", (
+            "writer.Write(_nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion)",
+            "writer.Write(nativeLaunch.X)", "writer.Write(nativeLaunch.Y)",
+        )),
+        (net, "ReceiveExtraAI", (
+            "runtimeVersion != NativeShotRuntimeNetVersion",
+            "receivedNativeLaunch = runtimeVersion == NativeShotRuntimeNetVersion ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null",
+            "!float.IsFinite(nativeLaunch.X)", "!float.IsFinite(nativeLaunch.Y)",
+            "if (!retainOwnerExclusion) _nativeShotInitialVelocity = receivedNativeLaunch",
+        )),
+    )
+    for source, name, tokens in obligations:
+        code = re.sub(r"\s+", "", stripped(method_body(source, name), keep_strings=True))
+        for token in tokens:
+            require(code, re.sub(r"\s+", "", token), name)
+
+
 def check_network_boundaries() -> None:
     # Method-scoped obligations: preserve authority, exact identities and fail
     # closed transport. Runtime behavior remains the EngineRuntimeChecks owner.
@@ -199,15 +246,16 @@ def check_network_boundaries() -> None:
         (asset, "ComputeSha256Hex", ("SHA256.HashData",), ()),
         (asset, "DownloadAssetBytesWithBoundedStreamAsync", ("HttpCompletionOption.ResponseHeadersRead", "ContentLength", "total > MaxAssetBytes"), ("GetByteArrayAsync",)),
         (net, "SendExtraAI", ("writer.Write(_generatedItemId", "writer.Write(_entityId"), ()),
-        (net, "ReceiveExtraAI", ("runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion", "_generatedItemId.Length > 96", "_entityId.Length > 48", "Projectile.friendly = false", "Projectile.velocity = Vector2.Zero", "TryHydrate()", "_preserveSyncedStateOnHydrate = true"), ()),
+        (net, "ReceiveExtraAI", ("runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion", "_generatedItemId.Length > 96", "_entityId.Length > 48", "RejectRuntimePayload()", "TryHydrate()", "_preserveSyncedStateOnHydrate = true"), ()),
         (projectile, "Configure", ("preserveSyncedState", "Projectile.timeLeft = Math.Max(1, syncedTimeLeft)", "_remainingBounces = Math.Clamp(syncedBounces", "_activationDelayTicks = Math.Max(0, syncedActivationDelay)"), ()),
         (initial_exclusion, "TryCapture", ("RuntimeHitNpcGeneration.Get(npc)", "if (generation == 0) return false", "ReferenceEquals(Main.npc[npc.whoAmI], npc)"), ()),
         (initial_exclusion, "AppliesTo", ("RuntimeHitNpcGeneration.Get(npc) == Generation", "ReferenceEquals(Main.npc[NpcSlot], npc)"), ()),
         (projectile_ai, "AI", ("_initialNpcExclusion = _initialNpcExclusion.AfterUpdate()",), ()),
         (projectile_events, "CanHitNPC", ("_initialNpcExclusion.AppliesTo(target)",), ()),
         (net, "SendExtraAI", ("_initialNpcExclusion.Write(writer)",), ()),
-        (net, "ReceiveExtraAI", ("RuntimeInitialNpcExclusion.Read(reader)", "if (!retainOwnerExclusion)", "_runtimePayloadRejected = true"), ()),
+        (net, "ReceiveExtraAI", ("RuntimeInitialNpcExclusion.Read(reader)", "if (!retainOwnerExclusion)", "RejectRuntimePayload()"), ()),
         (projectile, "TryHydrate", ("if (_runtimePayloadRejected) return false",), ()),
+        (net, "RejectRuntimePayload", ("_runtimePayloadRejected = true", "Projectile.friendly = false", "Projectile.velocity = Vector2.Zero"), ()),
         (projectile, "SpawnRuntimeEntity", ("if (!projectile.active || projectile.ModProjectile is not GeneratedProjectile generated)", "projectile.active = false", "if (childDepth > 0) activationBudget.Return(remainingSpawnBudget - spawned)", "throw;"), ()),
         (runtime, "PlanTargetEmissions", ("Math.Min(action.StepCount.Value, capacity)", "action.SelectionAnchor == \"previous_target\" ? previous : initialTarget", "action.RepeatPolicy == \"exclude_visited\" && visited.Contains(npc)", "distanceSquared > radiusSquared", "BigInteger radiusUnits = new(Math.ScaleB(radius, 149))", "BigInteger distanceSquared = dx * dx + dy * dy", "Collision.CanHit(anchor.position, anchor.width, anchor.height, npc.position, npc.width, npc.height)", "RuntimeInitialNpcExclusion.TryCapture(anchor, action.InitialIgnoreCountdownUpdates.Value", "previous = next", "npc.whoAmI < next.whoAmI"), ("ApplyDamageToNPC", "SpawnRuntimeEntity")),
         (runtime, "SelectTargetsAndEmit", ("childDepth >= data.RuntimeProgram.Limits.MaxChildDepth", "unattempted--", "GeneratedProjectile.SpawnRuntimeEntity", "requestedCount: 1", "spreadOverride: 0f", "initialNpcExclusion: step.Exclusion", "initialTransform: step.Transform", "finally { budget.Return(unattempted); }"), ("ApplyDamageToNPC", "ChainDamage(")),
@@ -893,6 +941,7 @@ def main() -> int:
     check_signed_vertical_acceleration()
     check_network_boundaries()
     check_sampled_spawn_boundaries()
+    check_native_shot_delay_boundaries()
     check_client_source_contracts()
     check_world_transactions()
     check_delivery_metadata()

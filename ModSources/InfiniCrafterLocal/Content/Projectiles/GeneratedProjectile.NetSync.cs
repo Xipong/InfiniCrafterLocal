@@ -15,6 +15,7 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
     private const byte RuntimeNetVersion = 4;
+    private const byte NativeShotRuntimeNetVersion = 5;
     private const byte VfxEventNetVersion = 5;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
@@ -37,7 +38,7 @@ public sealed partial class GeneratedProjectile
 
     public override void SendExtraAI(BinaryWriter writer)
     {
-        writer.Write(RuntimeNetVersion);
+        writer.Write(_nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion);
         writer.Write(_generatedItemId ?? "");
         writer.Write(_entityId ?? "");
         writer.Write((byte)Math.Clamp(_childDepth, 0, 255));
@@ -60,6 +61,13 @@ public sealed partial class GeneratedProjectile
             writer.Write(sampled.X);
             writer.Write(sampled.Y);
         }
+        // Keep v4 sampled/constant payloads byte-identical. Only an explicit
+        // native-shot launch snapshot needs this additional transport variant.
+        if (_nativeShotInitialVelocity is { } nativeLaunch)
+        {
+            writer.Write(nativeLaunch.X);
+            writer.Write(nativeLaunch.Y);
+        }
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
@@ -67,7 +75,7 @@ public sealed partial class GeneratedProjectile
         try
         {
             byte runtimeVersion = reader.ReadByte();
-            if (runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion)
+            if (runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion)
                 throw new InvalidDataException("unsupported generated runtime projectile payload");
             _generatedItemId = (reader.ReadString() ?? "").Trim();
             _entityId = (reader.ReadString() ?? "").Trim();
@@ -95,6 +103,11 @@ public sealed partial class GeneratedProjectile
                 ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
             if (receivedVelocity is { } sampled && (!float.IsFinite(sampled.X) || !float.IsFinite(sampled.Y)))
                 throw new InvalidDataException("non-finite sampled launch velocity");
+            Vector2? receivedNativeLaunch = runtimeVersion == NativeShotRuntimeNetVersion
+                ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
+            if (receivedNativeLaunch is { } nativeLaunch
+                && (!float.IsFinite(nativeLaunch.X) || !float.IsFinite(nativeLaunch.Y)))
+                throw new InvalidDataException("non-finite native shot launch velocity");
             // An owner already executing this exact physical source retains its
             // local counter. Relayed observations cannot extend or clear immunity.
             bool retainOwnerExclusion = _activationSpawnBudget is not null
@@ -104,6 +117,7 @@ public sealed partial class GeneratedProjectile
                 && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
             if (!retainOwnerExclusion) _initialNpcExclusion = receivedExclusion;
             if (!retainOwnerExclusion) _sampledInitialVelocity = receivedVelocity;
+            if (!retainOwnerExclusion) _nativeShotInitialVelocity = receivedNativeLaunch;
             if(_vfxSourceToken!=sourceToken){
                 _presentationGeneration=new object();_presentationRetired=false;
                 _vfxState=new InfiniVfxState {SourceKey=$"net:{Projectile.owner}:{sourceToken}:{_generatedItemId}:{_entityId}"};
@@ -116,15 +130,20 @@ public sealed partial class GeneratedProjectile
         }
         catch
         {
-            _runtimePayloadRejected = true;
-            _data = null;
-            _entity = null;
-            _configured = false;
-            _preserveSyncedStateOnHydrate = false;
-            Projectile.friendly = false;
-            Projectile.velocity = Vector2.Zero;
-            Projectile.timeLeft = Math.Min(Projectile.timeLeft, 30);
+            RejectRuntimePayload();
         }
+    }
+
+    private void RejectRuntimePayload()
+    {
+        _runtimePayloadRejected = true;
+        _data = null;
+        _entity = null;
+        _configured = false;
+        _preserveSyncedStateOnHydrate = false;
+        Projectile.friendly = false;
+        Projectile.velocity = Vector2.Zero;
+        Projectile.timeLeft = Math.Min(Projectile.timeLeft, 30);
     }
 
     private long VfxSourceToken()
