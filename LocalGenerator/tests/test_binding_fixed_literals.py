@@ -596,3 +596,266 @@ def test_placement_fixed_cost_repair_does_not_thaw_valid_action_presence(monkeyp
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
     _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("invalid_target", ["unknown", None, False, 2, {}])
+@pytest.mark.parametrize("grouped", [False, True])
+def test_effect_binding_target_repair_reuses_existing_consumer(monkeypatch, format_mode, invalid_target, grouped):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    doc["runtimeProgram"]["entities"][0]["id"] = "opaque_body"
+    doc["runtimeProgram"]["primaryEntityId"] = "opaque_body"
+    row.update(_explicit(doc, row))
+    row.update(stackCost=1, stackConsumeChancePercent=35)
+    if grouped:
+        row["action"]["effectGroupId"] = "chosen_group"
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "chosen_group"
+    expected = deepcopy(doc)
+    assert validate_runtime_program(expected)["ok"]
+    candidate = deepcopy(row)
+    row["action"]["targetId"] = deepcopy(invalid_target)
+    before = json.dumps(doc, sort_keys=True)
+    candidate["stackConsumeChancePercent"] = 99
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "repair only the existing consumer target", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["create"]["bindings"]["allowed"] is False
+    assert scope["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["action.targetId", "target"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("candidate_target", ["still_unknown", "omitted", "no_upsert"])
+def test_effect_binding_target_dependency_requires_explicit_exact_repair(candidate_target):
+    from infini_local.core.runtime_authoring import apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope
+
+    doc, row = _binding_case("effects")
+    row.update(_explicit(doc, row))
+    row["action"]["targetId"] = "unknown"
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    candidate = deepcopy(row)
+    if candidate_target == "omitted":
+        candidate["action"].pop("targetId")
+    else:
+        candidate["action"]["targetId"] = candidate_target
+    filtered, audit = filter_repair_patch_scope(doc, {
+        "note": "invalid references and omissions are never repaired by the host",
+        "bindingsUpsert": [] if candidate_target == "no_upsert" else [candidate],
+    }, scope)
+    assert not audit["ok"] or not validate_runtime_program(apply_repair_patch(doc, filtered))["ok"]
+
+
+@pytest.mark.parametrize("consumer", ["absent", "different_action", "different_group"])
+def test_effect_dependency_does_not_retarget_frozen_or_unrelated_consumer(consumer):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+
+    doc, row = _binding_case("effects")
+    row.update(_explicit(doc, row))
+    if consumer == "absent":
+        doc["runtimeProgram"]["bindings"] = []
+    elif consumer == "different_action":
+        row["action"]["kind"] = "use_item_body"
+    else:
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "unconsumed_group"
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["create"]["bindings"]["allowed"] is True
+    assert row["id"] not in scope["identityChanges"]["bindingTargetIds"]
+    # A different primary action may be explicitly relocated by the existing
+    # dependency policy, but its target is never granted a rewrite.
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_effect_target_repair_keeps_both_authored_consumers(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    row.update(_explicit(doc, row))
+    alternate = {**deepcopy(row), "id": "alternate_effects", "input": "alternate_use"}
+    doc["runtimeProgram"]["bindings"].append(alternate)
+    expected = deepcopy(doc)
+    assert validate_runtime_program(expected)["ok"]
+    corrections = deepcopy(doc["runtimeProgram"]["bindings"])
+    for binding in doc["runtimeProgram"]["bindings"]:
+        binding["action"]["targetId"] = "unknown"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "repair both invalid references without selecting or adding a consumer",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": corrections,
+    }, format_mode)
+    assert dossier["repairScope"]["create"]["bindings"]["allowed"] is False
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("move_straight")
+    effects, row = _binding_case("effects")
+    call = deepcopy(next(c for c in effects["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use"))
+    call["id"] = "extra_effect"
+    doc["runtimeProgram"]["calls"].append(call)
+    row.update(id="extra_binding", input="alternate_use")
+    row.update(_explicit(effects, row))
+    doc["runtimeProgram"]["bindings"].append(row)
+    expected = deepcopy(doc)
+    assert validate_runtime_program(expected)["ok"]
+    candidate = deepcopy(row)
+    row["action"]["targetId"] = "witness_entity"
+    candidate["action"]["kind"] = "use_item_body"
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "exact target correction cannot rewrite the valid action",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [
+        {"id": row["id"], "paths": ["action.targetId", "target"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_named_effect_kind_repair_reuses_explicit_body_consumer(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects")
+    row.update(_explicit(doc, row))
+    row["action"]["effectGroupId"] = "chosen_group"
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "chosen_group"
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    row["action"].pop("kind")
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "restore the authored named consumer action", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["create"]["bindings"]["allowed"] is False
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("case", ["body", "effects", "named_effects", "placement"])
+@pytest.mark.parametrize("kind_state", ["absent", "null"])
+def test_missing_action_kind_repair_preserves_omitted_body_target(monkeypatch, format_mode, case, kind_state):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("effects" if case == "named_effects" else case)
+    if case == "named_effects":
+        row["action"]["effectGroupId"] = "chosen_group"
+        row.update(stackCost=1, stackConsumeChancePercent=35)
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "chosen_group"
+    doc["runtimeProgram"]["entities"][0]["id"] = "opaque_body"
+    if doc["runtimeProgram"]["primaryEntityId"] == "item":
+        doc["runtimeProgram"]["primaryEntityId"] = "opaque_body"
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    if kind_state == "absent":
+        row["action"].pop("kind")
+    else:
+        row["action"]["kind"] = None
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "the model selects the exact missing action only", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["fieldPermissions"]["bindings"] == [{"id": row["id"], "paths": ["action.kind"]}]
+    assert scope["identityChanges"]["bindingTargetIds"] == []
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("alternate_error", ["target", "kind"])
+def test_consumer_repair_does_not_choose_other_unresolved_actions(monkeypatch, format_mode, alternate_error):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, primary = _binding_case("body")
+    effects, alternate = _binding_case("effects")
+    effect_call = deepcopy(next(c for c in effects["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use"))
+    effect_call["id"] = "effect"
+    doc["runtimeProgram"]["calls"].append(effect_call)
+    alternate.update(id="effect_binding", input="alternate_use")
+    alternate["action"]["targetId"] = "item"
+    doc["runtimeProgram"]["bindings"].append(alternate)
+    expected = deepcopy(doc)
+    assert validate_runtime_program(expected)["ok"]
+    corrections = deepcopy(doc["runtimeProgram"]["bindings"])
+    primary["action"].pop("kind")
+    if alternate_error == "target":
+        alternate["action"]["targetId"] = "unknown"
+    else:
+        alternate["action"].pop("kind")
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "model selects primary body and alternate effects independently",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": corrections,
+    }, format_mode)
+    assert dossier["repairScope"]["create"]["bindings"]["allowed"] is False
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("leaf", ["stackCost", "contactDamage", "foreign", "action.foreign"])
+def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
+    from infini_local.core.runtime_authoring import apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope
+
+    doc = build_capability_witness("configure_accessory")
+    binding = doc["runtimeProgram"]["bindings"][0]
+    if leaf == "action.foreign":
+        binding["action"] = {}
+    expected = deepcopy(doc)
+    candidate = deepcopy(binding)
+    binding.pop("input")
+    if leaf == "action.foreign":
+        binding["action"]["foreign"] = 3
+    else:
+        binding[leaf] = "invalid"
+    if leaf in {"stackCost", "contactDamage"}:
+        candidate[leaf] = 0 if leaf == "stackCost" else False
+        expected["runtimeProgram"]["bindings"][0][leaf] = candidate[leaf]
+    before = deepcopy(doc)
+    # The scope owner receives exact diagnostics; the shared union diagnostic
+    # regression separately proves this complete failure report is generated.
+    errors = [
+        {"path": "$.runtimeProgram.bindings[0].input", "code": "shape_required"},
+        {"path": "$.runtimeProgram.bindings[0]." + leaf,
+         "code": "shape_type" if leaf in {"stackCost", "contactDamage"} else "shape_additional_property"},
+    ]
+    scope = build_runtime_repair_scope(doc, errors)
+    assert scope["fieldPermissions"]["bindings"] == [
+        {"id": binding["id"], "paths": sorted(["input", leaf])},
+    ]
+    assert scope["bindingAlternatives"] == [{"bindingId": binding["id"], "allowed": [{"input": "equipped"}]}]
+    patch = {"note": "explicit exact corrections", "bindingsUpsert": [candidate]}
+    filtered, audit = filter_repair_patch_scope(doc, patch, scope)
+    assert audit["ok"], audit
+    result = apply_repair_patch(doc, filtered)
+    assert result == expected
+    assert doc == before
+    assert validate_runtime_program(result)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(result))["ok"]
+
+    # A candidate input alone cannot make the invalid sibling executable.
+    noop = {"note": "only input supplied", "bindingsUpsert": [{**deepcopy(binding), "input": "equipped"}]}
+    untouched, no_op_audit = filter_repair_patch_scope(doc, noop, scope)
+    assert not no_op_audit["ok"] or not validate_runtime_program(apply_repair_patch(doc, untouched))["ok"]
+
+    # Without a diagnostic for the bad sibling, it remains frozen and blocks
+    # every alternative rather than silently receiving a fixed value/removal.
+    frozen_scope = build_runtime_repair_scope(doc, errors[:1])
+    assert frozen_scope["bindingAlternatives"] == [{"bindingId": binding["id"], "allowed": []}]
+    assert doc == before
