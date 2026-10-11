@@ -667,6 +667,29 @@ def test_oneof_exact_diagnostic_selection(case):
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("fn", ["configure_item_stats", "configure_item_use"])
+def test_gameplay_forbidden_item_target_deletion_survives_real_caller(monkeypatch, format_mode, fn):
+    doc = build_capability_witness(fn)
+    expected = copy.deepcopy(doc)
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+    candidate = copy.deepcopy(node)
+    node["target"] = next(row["id"] for row in doc["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+    before = copy.deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": ["target"]}]
+    incoming = {
+        "note": "delete only forbidden target", "realizationReplacement": doc["realization"],
+        "callsUpsert": [candidate], "callPropertyKeysDelete": [{"callId": node["id"], "key": "target"}],
+    }
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    assert dossier["repairScope"] == scope
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ok"]
+    assert repaired["runtimeProgram"] == expected["runtimeProgram"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert doc == before
+
+
 @pytest.mark.parametrize("nested", [False, True], ids=["call-literal-key", "param-literal-key"])
 def test_gameplay_literal_member_deletion_is_exact(nested):
     doc = build_capability_witness("configure_item_stats")

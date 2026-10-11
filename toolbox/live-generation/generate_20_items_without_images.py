@@ -184,7 +184,9 @@ RESULTS = OUT / 'results.ndjson'
 HARNESS_EVENTS = OUT / 'harness_events.ndjson'
 for path in (LOGICAL, HTTP, IMAGES, RESULTS, HARNESS_EVENTS):
     path.write_text('', encoding='utf-8')
-NO_IMAGE_FIXTURE = write_no_image_fixture_png(OUT / 'qa-no-image-fixture.png')
+# Delivery transfers PNGs by basename from the canonical serving roots, not OUT.
+from infini_local.core.config_bootstrap import SPRITE_DIR  # noqa: E402
+NO_IMAGE_FIXTURE = write_no_image_fixture_png(SPRITE_DIR / 'qa-no-image-fixture.png')
 
 trace_write_lock = threading.Lock()
 progress_write_lock = threading.Lock()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import copy
 from io import BytesIO
 from pathlib import Path
 
@@ -16,6 +18,92 @@ from infini_local.qa.live_no_image_fixture import (
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import _vfx_output
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+
+
+@pytest.mark.parametrize("output_depth", ["short", "long"])
+def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, output_depth):
+    from infini_local.core import config_bootstrap
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
+    from infini_local.pipelines.combine_pipeline import _cached_payload_report
+    from infini_local.services.asset_sync_service import find_asset_file
+
+    output = tmp_path / ("run" if output_depth == "short" else "deep-campaign-" * 12)
+    sprites = output / "cache" / "sprites"
+    world_recipes = output / "cache" / "world_recipes"
+    monkeypatch.setattr(config_bootstrap, "SPRITE_DIR", sprites)
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", sprites)
+    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", world_recipes)
+
+    # Execute the actual campaign fixture owner without argparse, config loading
+    # or inference. A helper-only check would miss an OUT-local fixture again.
+    harness = Path(__file__).resolve().parents[2] / "toolbox/live-generation/generate_20_items_without_images.py"
+    nodes: list[ast.stmt] = [
+        node for node in ast.parse(harness.read_text(encoding="utf-8")).body
+        if (isinstance(node, ast.ImportFrom) and node.module == "infini_local.core.config_bootstrap")
+        or (isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "NO_IMAGE_FIXTURE"
+            for target in node.targets
+        ))
+    ]
+    assert sum(isinstance(node, ast.Assign) for node in nodes) == 1
+    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
+    fixture = namespace["NO_IMAGE_FIXTURE"]
+    if output_depth == "long":
+        assert len(str(fixture.resolve())) > 139
+
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data.update(id="qa-serving-root-control", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
+    data["vfxManifest"] = _compile_manifest(data, {
+        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
+        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
+                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
+    }, "no-image-serving-root")
+    for entity in data["runtimeProgram"]["entities"]:
+        entity.setdefault("visual", {})["assetMode"] = "baked_sprite"
+    before = copy.deepcopy(data)
+    delivered = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(data, fixture))
+    report = _cached_payload_report(delivered)
+    assert report.get("runtime", {}).get("ok"), report
+    assert report.get("vfx", {}).get("ok"), report
+    assert report["ok"], report["errors"]
+    assert fixture == sprites / "qa-no-image-fixture.png"
+    assert find_asset_file(fixture.name, sprite_dir=sprites, world_recipes_dir=world_recipes) == fixture
+    assert delivered["visual"]["spritePath"] == str(fixture.resolve())
+    for original, entity in zip(before["runtimeProgram"]["entities"], delivered["runtimeProgram"]["entities"]):
+        assert {key: value for key, value in entity.items() if key != "visual"} == {
+            key: value for key, value in original.items() if key != "visual"
+        }
+        assert entity["visual"]["assetMode"] == original["visual"]["assetMode"]
+        assert entity["visual"]["spritePath"] == str(fixture.resolve())
+
+    short_reference = copy.deepcopy(delivered)
+    short_reference["visual"]["spritePath"] = fixture.name
+    for entity in short_reference["runtimeProgram"]["entities"]:
+        entity["visual"]["spritePath"] = fixture.name
+    assert _cached_payload_report(short_reference)["ok"]
+
+    # An existing absolute outside-root PNG is not an authority. Keep this
+    # refusal even though it has the same basename and bytes as the QA fixture.
+    outside = write_no_image_fixture_png(output / fixture.name)
+    assert outside.read_bytes() == fixture.read_bytes()
+    fixture.unlink()
+    refused = _cached_payload_report(sanitize_recipe_for_delivery(
+        hydrate_no_image_fixture_assets(copy.deepcopy(before), outside)
+    ))
+    assert not refused["ok"]
+    codes = {problem["code"] for problem in refused["visual"]["problems"]}
+    assert {"required_entity_sprite_missing", "asset_roster_file_missing"} <= codes
+
+    # A present serving-root file still has to pass the production PNG gate.
+    write_no_image_fixture_png(fixture)
+    fixture.write_bytes(fixture.read_bytes()[:-1])
+    corrupt = _cached_payload_report(delivered)
+    assert not corrupt["ok"]
+    assert "asset_roster_invalid_png" in {
+        problem["code"] for problem in corrupt["visual"]["problems"]
+    }
 
 
 @pytest.fixture(autouse=True)
