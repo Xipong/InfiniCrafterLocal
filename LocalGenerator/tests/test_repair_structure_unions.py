@@ -54,3 +54,33 @@ def test_structural_union_preserves_parallel_anyof_and_allof_constraints():
     assert not strict_schema_errors({"kind": "use", "cost": 0, "tag": "kept"}, projected)
     assert strict_schema_errors({"kind": "use", "cost": 0}, projected)
     assert strict_schema_errors({"kind": "use", "cost": 0, "tag": 7}, projected)
+
+
+@pytest.mark.parametrize("union_key", ["oneOf", "anyOf"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("limit", [0, 1, 2, 128])
+def test_unselected_union_reports_only_proven_common_errors(union_key, reverse, limit):
+    branches = [{
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "input": {"const": name}, "amount": {"type": "integer"},
+            name + "Only": {"type": "string"},
+        },
+        "required": ["input", name + "Only"],
+    } for name in ("alpha", "beta")]
+    if reverse:
+        branches.reverse()
+    source = {"amount": "invalid", "foreign": 3}
+    before = copy.deepcopy(source)
+    schema = {union_key: branches}
+    schema_before = copy.deepcopy(schema)
+    errors = strict_schema_errors(source, schema, limit=limit)
+    expected = [
+        ({"path": "$", "kind": "one_of", "expected": "exactly_one", "actual": 0}
+         if union_key == "oneOf" else {"path": "$", "kind": "any_of"}),
+        {"path": "$.input", "kind": "required"},
+        {"path": "$.foreign", "kind": "additional_property"},
+        {"path": "$.amount", "kind": "type", "expected": "integer", "actual": "invalid"},
+    ]
+    assert errors == expected[:limit]
+    assert source == before and schema == schema_before

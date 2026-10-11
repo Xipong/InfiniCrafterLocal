@@ -638,7 +638,8 @@ def test_oneof_exact_diagnostic_selection(case):
         expected = [failure, {"path": "$.value", "kind": "required"}]
         if case == "nested-unknown":
             value["policy"]["action"]["kind"] = "unknown"
-            expected = [failure, {"path": "$.policy.action.kind", "kind": "one_of"}]
+            expected = [failure, {"path": "$.policy.action.kind", "kind": "one_of"},
+                        {"path": "$.value", "kind": "required"}]
         elif case == "nested-missing":
             value["policy"]["action"] = {}
             expected.append({"path": "$.policy.action.kind", "kind": "required"})
@@ -649,7 +650,8 @@ def test_oneof_exact_diagnostic_selection(case):
                 expected = [failure, {"path": "$.input", "kind": "required"}, {"path": "$.value", "kind": "required"}]
             else:
                 value["input"] = "unknown"
-                expected = [failure, {"path": "$.input", "kind": "one_of"}]
+                expected = [failure, {"path": "$.input", "kind": "one_of"},
+                            {"path": "$.value", "kind": "required"}]
     elif case in {"valid", "multi-match"}:
         branch = {"type": "object", "properties": {"fn": {"const": "same"}}, "required": ["fn"]}
         branches = [branch, copy.deepcopy(branch) if case == "multi-match" else {"properties": {"fn": {"const": "other"}}}]
@@ -664,6 +666,10 @@ def test_oneof_exact_diagnostic_selection(case):
         elif case in {"unknown-fn", "missing-fn", "empty"}:
             value = {"unknown-fn": {"fn": "unknown"}, "missing-fn": {"value": 1}, "empty": {}}[case]
             expected = [failure]
+            if "fn" not in value:
+                expected.append({"path": "$.fn", "kind": "required"})
+            if "value" not in value:
+                expected.append({"path": "$.value", "kind": "required"})
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 
@@ -715,3 +721,95 @@ def test_gameplay_literal_member_deletion_is_exact(nested):
     assert repaired == expected, "literal_member_must_not_alias_nested_permission"
     assert validate_runtime_program(repaired)["ok"] and compile_runtime_program(repaired)
     assert doc == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("input_name", ["equipped", "hold"])
+@pytest.mark.parametrize("explicit_frozen_literals", [False, True], ids=["sparse", "frozen-additions"])
+def test_sparse_binding_missing_input_survives_real_repair(
+    monkeypatch, format_mode, input_name, explicit_frozen_literals,
+):
+    doc = (build_capability_witness("configure_accessory") if input_name == "equipped"
+           else build_runtime_fixture("held_and_deployed"))
+    binding = doc["runtimeProgram"]["bindings"][0]
+    if input_name == "hold":
+        binding["input"] = "hold"
+        binding["action"].pop("kind")
+        binding.pop("stackCost")
+        binding.pop("contactDamage")
+    assert validate_runtime_program(doc)["ok"]
+    expected = copy.deepcopy(doc)
+    candidate = copy.deepcopy(binding)
+    if explicit_frozen_literals:
+        candidate.setdefault("action", {}).update(
+            kind="equip_passive" if input_name == "equipped" else "spawn_entity",
+        )
+        if input_name == "equipped":
+            candidate["action"]["targetId"] = next(
+                row["id"] for row in doc["runtimeProgram"]["entities"] if row["kind"] == "item_body"
+            )
+        candidate.update(stackCost=0, contactDamage=False)
+    binding.pop("input")
+    before = copy.deepcopy(doc)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "restore only the model-selected missing input",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["fieldPermissions"]["bindings"] == [{"id": binding["id"], "paths": ["input"]}]
+    assert scope["identityChanges"]["bindingInputIds"] == [binding["id"]]
+    assert scope["identityChanges"]["bindingActionIds"] == []
+    assert scope["identityChanges"]["bindingTargetIds"] == []
+    audit = repaired["debug"]["gameplayRepairFilterAudit"]
+    assert audit["ok"] and "$.bindingsUpsert[0].input" in audit["acceptedPaths"]
+    assert {path for path in audit["acceptedPaths"] if path.startswith("$.bindingsUpsert")} == {
+        "$.bindingsUpsert[0].input",
+    }
+    if explicit_frozen_literals:
+        assert audit["ignoredChanges"]
+    repaired.pop("debug")
+    assert repaired == expected
+    assert doc == before
+    assert validate_runtime_program(repaired)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch, format_mode):
+    from infini_local.core.errors import PlannerUnavailable
+
+    doc = build_capability_witness("configure_accessory")
+    doc["runtimeProgram"]["bindings"][0].pop("input")
+    before = copy.deepcopy(doc)
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc, {
+            "note": "no model-selected input", "realizationReplacement": doc["realization"],
+        }, format_mode)
+    assert doc == before
+    assert not validate_runtime_program(doc)["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(doc)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_missing_binding_input_and_unknown_action_have_independent_exact_scope(monkeypatch, format_mode):
+    doc = build_capability_witness("configure_accessory")
+    binding = doc["runtimeProgram"]["bindings"][0]
+    binding["action"] = {"kind": "equip_passive", "targetId": "item"}
+    expected = copy.deepcopy(doc)
+    candidate = copy.deepcopy(binding)
+    binding.pop("input")
+    binding["action"]["kind"] = "unknown"
+    before = copy.deepcopy(doc)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "model explicitly supplies both missing input and invalid action",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [
+        {"id": binding["id"], "paths": ["action.kind", "input"]},
+    ]
+    assert dossier["repairScope"]["identityChanges"]["bindingTargetIds"] == []
+    repaired.pop("debug")
+    assert repaired == expected
+    assert doc == before
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
