@@ -189,7 +189,9 @@ def _body_id(rows: Mapping[str, list[dict[str, Any]]]) -> str:
 def _binding_target(binding: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
     explicit = binding_target_id(binding)
     spec = BINDING_ACTION_REGISTRY.get(action_kind(binding))
-    return explicit or (_body_id(rows) if spec is not None and spec.target_kinds == ("item_body",) else "")
+    if "targetId" in _mapping(binding.get("action")):
+        return explicit
+    return _body_id(rows) if spec is not None and spec.target_kinds == ("item_body",) else ""
 
 
 def _call_target(call: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]]]) -> str:
@@ -1954,17 +1956,41 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 for capability_requirement in capability.requirements:
                     if capability_requirement.kind == "binding_action_reference":
                         required_target = requirement_target_id(capability_requirement.target)
-                        reference_bindings = [
-                            row for row in rows["bindings"]
-                            if action_kind(row) in capability_requirement.any_of
-                            and _binding_target(row, rows) == required_target
-                        ]
+                        reference_bindings = []
+                        selector_can_repair = False
+                        for binding_index, binding in enumerate(indexed_rows["bindings"]):
+                            if not isinstance(binding, Mapping):
+                                continue
+                            target_path = f"$.runtimeProgram.bindings[{binding_index}].action.targetId"
+                            kind_path = f"$.runtimeProgram.bindings[{binding_index}].action.kind"
+                            if action_kind(binding) not in capability_requirement.any_of:
+                                if kind_path in error_paths_all and isinstance(binding.get("action"), Mapping):
+                                    for action_name in capability_requirement.any_of:
+                                        choice = copy.deepcopy(binding)
+                                        choice["action"].update(kind=action_name, placementCallId=node_id)
+                                        if target_path in error_paths_all:
+                                            choice["action"]["targetId"] = required_target
+                                        if (required_target and _binding_target(choice, rows) == required_target
+                                                and not strict_schema_errors(choice, binding_schema())):
+                                            selector_can_repair = True
+                                continue
+                            if (_binding_target(binding, rows) == required_target
+                                    or (required_target and target_path in error_paths_all)):
+                                reference_bindings.append((binding, target_path in error_paths_all))
+                        if selector_can_repair:
+                            # A model-selected action and explicit call reference
+                            # may restore this root; final validation proves exact
+                            # one-consumer ownership without creating another lane.
+                            requirement_row["repairStrategy"] = "repair_existing_binding_selectors"
+                            continue
                         if reference_bindings:
                             # Reuse the authored action root with its exact broken
                             # call reference; adding a second root is not necessary.
-                            for binding in reference_bindings:
+                            for binding, target_invalid in reference_bindings:
                                 fixed = copy.deepcopy(binding)
                                 fixed.pop("id", None)
+                                if target_invalid:
+                                    fixed["action"]["targetId"] = required_target
                                 fixed["action"]["placementCallId"] = node_id
                                 existing_binding_choices.append({
                                     "bindingId": str(binding.get("id") or ""),
@@ -2667,6 +2693,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         grant("bindings", row_id, "input")
     for row_id in binding_action_change_ids:
         grant("bindings", row_id, "action.kind")
+        binding = row_by_id.get(row_id, {})
+        # Expose the required call reference of a possible selected placement
+        # branch. The model must supply it; no value is copied into the patch.
+        for variant in binding_schema()["oneOf"]:
+            action_shape = variant["properties"]["action"]
+            if (variant["properties"]["input"]["const"] == binding.get("input")
+                    and "placementCallId" in action_shape["required"]
+                    and "placementCallId" not in _mapping(binding.get("action"))
+                    and _complete_binding_transactions(
+                        rows, input_name=str(binding.get("input") or ""),
+                        action_name=action_shape["properties"]["kind"]["const"],
+                        target_id=_body_id(rows))):
+                grant("bindings", row_id, "action.placementCallId")
     for row_id in binding_target_change_ids:
         grant("bindings", row_id, "target")
     for row_id in call_fn_change_ids:

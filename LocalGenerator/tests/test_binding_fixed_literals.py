@@ -859,3 +859,112 @@ def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
     frozen_scope = build_runtime_repair_scope(doc, errors[:1])
     assert frozen_scope["bindingAlternatives"] == [{"bindingId": binding["id"], "allowed": []}]
     assert doc == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("invalid_target", [None, False, 0, "", [], {}, "unknown"])
+@pytest.mark.parametrize("root", ["pure", "hybrid"])
+def test_placement_target_repair_distinguishes_invalid_presence(monkeypatch, format_mode, invalid_target, root):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    if root == "pure":
+        doc = build_capability_witness("configure_tile_placement")
+        row = doc["runtimeProgram"]["bindings"][0]
+    row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    row["action"]["targetId"] = deepcopy(invalid_target)
+    before = json.dumps(doc, sort_keys=True)
+    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "repair the explicit invalid placement target", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("root", ["pure", "hybrid"])
+@pytest.mark.parametrize("explicit_envelope", [False, True])
+def test_placement_action_selection_requires_explicit_call_reference(monkeypatch, format_mode, root, explicit_envelope):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    if root == "pure":
+        doc = build_capability_witness("configure_tile_placement")
+        row = doc["runtimeProgram"]["bindings"][0]
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    if explicit_envelope:
+        candidate.update(_explicit(doc, candidate))
+    row["action"] = {}
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "explicitly select placement and its required existing call", "realizationReplacement": doc["realization"],
+        "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [
+        {"id": row["id"], "paths": ["action.kind", "action.placementCallId"]}]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert json.dumps(doc, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_placement_target_repair_freezes_valid_reference_and_use_lanes(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    row.update(_explicit(doc, row))
+    expected = deepcopy(doc)
+    candidate = deepcopy(row)
+    row["action"]["targetId"] = None
+    candidate["action"]["placementCallId"] = "unrelated_call"
+    candidate["input"] = "primary_use"
+    candidate["stackCost"] = 0
+    candidate["contactDamage"] = True
+    # Deliberately wrong fixed values use the real local structural boundary;
+    # strict provider-schema emission is covered separately with legal literals.
+    if format_mode == "json_schema":
+        candidate.update(stackCost=1, contactDamage=False)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "only target is mutable; retain valid reference and use policy",
+        "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
+    }, format_mode)
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [
+        {"id": row["id"], "paths": ["action.targetId", "target"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    _assert_delivery(repaired)
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("choice", ["missing_reference", "foreign_reference", "omitted_target", "no_upsert"])
+def test_placement_selector_repair_never_supplies_missing_model_values(monkeypatch, format_mode, choice):
+    from infini_local.core.errors import PlannerUnavailable
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc, row = _binding_case("placement")
+    row.update(_explicit(doc, row))
+    candidate = deepcopy(row)
+    if choice in {"missing_reference", "foreign_reference"}:
+        row["action"] = {}
+        if choice == "missing_reference":
+            candidate["action"].pop("placementCallId")
+        else:
+            candidate["action"]["placementCallId"] = "unrelated_call"
+    else:
+        row["action"]["targetId"] = None
+        candidate["action"].pop("targetId")
+    before = json.dumps(doc, sort_keys=True)
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc, {
+            "note": "no implicit selector or reference completion", "realizationReplacement": doc["realization"],
+            "bindingsUpsert": [] if choice == "no_upsert" else [candidate],
+        }, format_mode)
+    assert json.dumps(doc, sort_keys=True) == before
