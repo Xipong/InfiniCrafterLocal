@@ -64,6 +64,17 @@ internal sealed class RawJsonFloatDomain
         }
     }
 
+    internal double ReadDouble(ref Utf8JsonReader reader)
+    {
+        if (reader.TokenType != JsonTokenType.Number)
+            throw new JsonException("present numeric value must be a JSON number");
+        using JsonDocument token = JsonDocument.ParseValue(ref reader);
+        RequireDomain(ExactDecimal.Parse(token.RootElement.GetRawText()));
+        double stored = token.RootElement.GetDouble();
+        if (!double.IsFinite(stored)) throw new JsonException("numeric value must have finite double storage");
+        return stored;
+    }
+
     internal float Read(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.Number)

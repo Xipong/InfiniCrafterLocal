@@ -87,6 +87,16 @@ Offline Live20 DTO replay: `image_boundary.ndjson.finalContract` → `hydrate_no
 
 Projection gates: `PYTHONPATH=LocalGenerator python tools/generate_lowery.py --check`, `python tools/generate_low_level_runtime_docs.py --check`; regressions — registry tests, three-stage/pipeline Repair tests из [test owners](TEST_CONTRACT_OWNERS_RU.md).
 
+## Независимый свет размещённого предмета
+
+`add_placed_light(placementCallId,strength,color)` — отдельный явный выбор Gameplay Author. Reference указывает ровно same-item `configure_tile_placement`, исполняемый `place_item`; не выбирается из названия станции, SoulOfLight, категории или sprite. Strength обязателен в 0.01..1.5 (RGB coefficient, не радиус), color — обязательный canonical token. Отсутствующий call не добавляет `placedLight` и не излучает свет.
+
+Compiler losslessly копирует выбранные листья в exact binding `usePolicy.action.placement.placedLight`, с association и parameter receipts. `present_placed_item_sprite` и свет независимы: можно выбрать любой из них или оба; два нарисованных огонька не создают два emitters. Старые held/projectile lights не меняются. Свет native tile сохраняется отдельно.
+
+Runtime расширяет существующий placement group/witness/definition transport, не создаёт вторую ledger. Exact same definition hash, binding, world scope и committed rectangle удостоверяют один center tile. `PostUpdateEverything` отправляет authored RGB в штатный `Lighting.AddLight`; PNG/Visual и optional pose decoder не требуются: light берёт уже доказанный material rectangle, а failure PNG pose остаётся literal pending diagnostic. Native geometry ограничена certified 16x16/256 cells; независимые post-place actors не поддерживаются. Break и removal прекращают light, material возвращается по существующей ledger. World/mod unload очищают derived state. Malformed witness/foreign definition дают no-light quarantine с сохранением literal material record; MP mirrors принимают только server stream и exact registry hydration.
+
+Проверено offline Python и native CPU queue/NBT/hook observers. Это не game loop, GPU propagation, live multiplayer или inference.
+
 ## Проверенная согласованность prompt
 
 Удалено устаревшее глобальное утверждение об отсутствии weapon-side ammo: существующая карточка `configure_weapon_ammo` остаётся единственным подробным объяснением этой capability; новая глобальная инструкция вместо старой не добавлена. Registry params, dependencies, schema, validation, compiler и C# не меняются.

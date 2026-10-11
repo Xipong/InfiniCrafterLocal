@@ -1480,14 +1480,14 @@
           "capability": "configure_tile_placement",
           "equals": null,
           "kind": "executed_tile_placement_reference",
-          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference.",
+          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
           "param": "placementCallId",
           "target": "same_target"
         },
         {
           "equals": null,
           "kind": "unique_call_reference",
-          "message": "Only one explicit placed-body presentation may reference a placement call.",
+          "message": "Only one call of this operation may reference a placement call; independent placed sprite and light calls may compose.",
           "param": "placementCallId",
           "target": "same_target"
         }
@@ -1499,6 +1499,114 @@
       ],
       "technicalLoweringOutputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
+      ]
+    },
+    {
+      "authorityByEffect": {
+        "light": "client_visual_only",
+        "placement": "owner_request_server_execute"
+      },
+      "capability": "add_placed_light",
+      "componentSlot": "placed_light",
+      "conflicts": [],
+      "csharpOwner": "Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
+      "decision": "expose",
+      "dependencies": [
+        "configure_tile_placement"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.strength",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.color"
+      ],
+      "multiplicity": "per_placement_reference",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "color": {
+          "enum": [
+            "white",
+            "red",
+            "orange",
+            "yellow",
+            "green",
+            "cyan",
+            "blue",
+            "purple",
+            "pink",
+            "gray",
+            "black"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_color",
+          "units": ""
+        },
+        "placementCallId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": false,
+            "namespace": "call",
+            "targetKinds": [
+              "item_body"
+            ]
+          },
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "strength": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.5,
+          "minimum": 0.01,
+          "reference": null,
+          "required": true,
+          "semanticType": "effect_strength",
+          "units": "engine units: RGB coefficient"
+        }
+      },
+      "positionOwnership": "none",
+      "promptVisibility": true,
+      "provenance": "literal placement-owned light; same persisted group/witness/definition transport, independent of PNG presentation",
+      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "capability": "configure_tile_placement",
+          "equals": null,
+          "kind": "executed_tile_placement_reference",
+          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
+          "param": "placementCallId",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "unique_call_reference",
+          "message": "Only one call of this operation may reference a placement call; independent placed sprite and light calls may compose.",
+          "param": "placementCallId",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedLight"
       ]
     },
     {

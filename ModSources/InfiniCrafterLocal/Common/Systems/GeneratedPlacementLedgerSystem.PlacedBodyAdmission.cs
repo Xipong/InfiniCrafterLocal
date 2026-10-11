@@ -21,7 +21,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     public override void Unload()
     {
         try { GeneratedPlacedBodyNativeAdapter.Unload(); }
-        finally { PlacedBodyAdmissionDiagnostics.Clear(); PlacedBodyViews.Clear(); }
+        finally { ClearWorld(); PlacedBodyAdmissionDiagnostics.Clear(); }
     }
 
     private static void ReportPlacedBodyAdmissionFailure(string reason)
@@ -33,8 +33,9 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static bool AdmitPlacedBodyNativeBoundary(RuntimePlacementSpec placement)
     {
-        if (placement.PlacedBody is null) return true;
-        if (!GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))
+        if (!placement.HasPlacedFootprint) return true;
+        if (placement.PlacedBody is not null
+            && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))
         { ReportPlacedBodyAdmissionFailure(reason); return false; }
         try
         {

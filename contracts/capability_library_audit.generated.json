@@ -14,26 +14,26 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 72,
-    "publicCapabilities": 68,
+    "capabilities": 73,
+    "publicCapabilities": 69,
     "retainedCapabilities": 4,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
     "events": 10,
-    "parameters": 299,
-    "numericParameters": 211,
-    "boundedNumericParameters": 211,
-    "semanticParameters": 299,
+    "parameters": 308,
+    "numericParameters": 214,
+    "boundedNumericParameters": 214,
+    "semanticParameters": 308,
     "typedEntityReferences": 4,
-    "typedCallReferences": 1,
-    "requirements": 72,
+    "typedCallReferences": 2,
+    "requirements": 74,
     "bindingDependencyEdges": 9,
     "spawnBudgetCapabilities": 3,
     "stationaryMeaningfulCapabilities": 14,
-    "exactWirePaths": 446,
+    "exactWirePaths": 455,
     "globalTechnicalLowerers": 8,
-    "globalTechnicalLowererOutputs": 162,
+    "globalTechnicalLowererOutputs": 168,
     "exclusiveGroups": {
       "ammo_role": [
         "configure_vanilla_ammo_item",
@@ -75,13 +75,13 @@
       ]
     },
     "authorityDistribution": {
-      "owner_request_server_execute": 13,
+      "owner_request_server_execute": 14,
       "server_execute": 3,
       "owner_execute_sync": 49,
       "client_visual_only": 3
     },
-    "rangeParityRows": 150,
-    "verticalSliceCount": 68
+    "rangeParityRows": 151,
+    "verticalSliceCount": 69
   },
   "issues": [],
   "errorCount": 0,
@@ -2807,6 +2807,22 @@
       "csharpBounds": [
         -180.0,
         180.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "add_placed_light",
+      "param": "strength",
+      "csharpClass": "RuntimePlacedLightSpec",
+      "authorBounds": [
+        0.01,
+        1.5
+      ],
+      "csharpBounds": [
+        0.01,
+        1.5
       ],
       "csharpStorage": "double",
       "admission": "reject_without_clamp",

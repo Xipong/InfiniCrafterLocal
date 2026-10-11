@@ -2363,6 +2363,94 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "add_placed_light"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "placementCallId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-reference": {
+                          "namespace": "call",
+                          "targetKinds": [
+                            "item_body"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
+                      },
+                      "strength": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 1.5,
+                        "description": "RGB coefficient multiplying the explicit color, not tile radius",
+                        "x-infini-units": "engine units: RGB coefficient",
+                        "x-infini-semanticType": "effect_strength",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float64",
+                          "rule": "finite_double_no_normalization",
+                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                        }
+                      },
+                      "color": {
+                        "type": "string",
+                        "enum": [
+                          "white",
+                          "red",
+                          "orange",
+                          "yellow",
+                          "green",
+                          "cyan",
+                          "blue",
+                          "purple",
+                          "pink",
+                          "gray",
+                          "black"
+                        ],
+                        "description": "Canonical light color",
+                        "x-infini-semanticType": "runtime_color"
+                      }
+                    },
+                    "required": [
+                      "placementCallId",
+                      "strength",
+                      "color"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "require_use_condition"
                   },
                   "target": {

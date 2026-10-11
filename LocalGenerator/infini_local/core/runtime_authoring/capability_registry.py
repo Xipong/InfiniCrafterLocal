@@ -1511,6 +1511,25 @@ _CAPS: list[CapabilitySpec] = [
                          "runtimeProgram.bindings[].action.placementCallId"),
     ),
     _cap(
+        "add_placed_light",
+        "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+        "item_placed_body", ("item_body",),
+        {
+            "placementCallId": _p("string", "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedLight"),
+            "strength": _p("number", "RGB coefficient multiplying the explicit color, not tile radius", minimum=0.01, maximum=1.5, units="engine units: RGB coefficient", consumer_storage="float64", execution_phase="PostUpdateEverything: persistent committed placement light; final native RGB converts to float32"),
+            "color": _p("string", "Canonical light color", enum=_COLOR, execution_phase="PostUpdateEverything: persistent committed placement light"),
+        },
+        multiplicity="per_placement_reference", py=_COMPILER_OWNER,
+        cs="Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
+        wire=("runtimeProgram.bindings[].usePolicy.action.placement.placedLight",),
+        provenance="literal placement-owned light; same persisted group/witness/definition transport, independent of PNG presentation",
+        repair_group="placed_body",
+        lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedLight",),
+        lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
+                         "runtimeProgram.calls[].params.placementCallId", "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].action.placementCallId"),
+    ),
+    _cap(
         "require_use_condition",
         "Gate use on one explicit runtime condition.",
         "item",
@@ -2583,8 +2602,8 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
                                       for field_name in spec.wire_field_names(name)))
     if cap.name == "configure_weapon_ammo":
         return ("runtimeProgram.weaponAmmo", *(f"runtimeProgram.weaponAmmo.{name}" for name in cap.params))
-    if cap.name == "present_placed_item_sprite":
-        base = "runtimeProgram.bindings[].usePolicy.action.placement.placedBody"
+    if cap.category == "item_placed_body":
+        base = "runtimeProgram.bindings[].usePolicy.action.placement." + cap.params["placementCallId"].wire_name
         return (base, *(f"{base}.{name}" for name in cap.params if name != "placementCallId"))
     if cap.name == "configure_item_stats":
         return tuple(f"gameplay.{spec.wire_name or name}" for name, spec in cap.params.items())
@@ -2685,7 +2704,7 @@ def _component_slot(cap: CapabilitySpec) -> str:
     direct = {
         "configure_item_stats": "item_stats", "configure_item_use": "item_use", "configure_item_contact_hitbox": "item_contact",
         "configure_vanilla_ammo_item": "ammo_item", "configure_weapon_ammo": "weapon_ammo", "restore_resources_on_use": "resource_restore", "apply_vanilla_buff_on_use": "use_buff",
-        "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body",
+        "apply_generated_buff_on_use": "generated_use_buff", "configure_tool": "tool", "configure_placeable": "placeable", "present_placed_item_sprite": "placed_body", "add_placed_light": "placed_light",
         "refresh_generated_effect_group_while_held": "held_generated_buff",
         "require_use_condition": "use_condition", "add_hold_light": "held_light", "move_player_on_use": "item_mobility",
         "configure_accessory": "accessory", "configure_armor": "armor", "add_equipment_damage_bonus": "equipment_class_damage", "configure_spawn": "spawn", "set_projectile_concurrency": "spawn",
@@ -2730,6 +2749,7 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
         "configure_tool": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "configure_placeable": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
         "present_placed_item_sprite": "Common/Models/RuntimeProgramSpec.cs::Validate",
+        "add_placed_light": "Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
         "require_use_condition": "Content/Items/GeneratedItem.cs::UseBlockedReason",
         "add_hold_light": "Content/Items/GeneratedItem.cs::HoldItem",
         "move_player_on_use": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
@@ -2763,6 +2783,8 @@ def _csharp_owner_for(cap: CapabilitySpec) -> str:
 
 
 def _authority_for(cap: CapabilitySpec) -> tuple[str, Mapping[str, str]]:
+    if cap.name == "add_placed_light":
+        return "owner_request_server_execute", {"placement": "owner_request_server_execute", "light": "client_visual_only"}
     if cap.name == "configure_weapon_ammo":
         return "owner_execute_sync", {}
     if cap.name == "channel_beam":
@@ -2863,13 +2885,13 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         if cap.name == "charge_then_release":
             rows.append(RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement" and row.decision == "expose")), message="released projectile needs an explicit post-release movement"))
         return tuple(rows)
-    if cap.name == "present_placed_item_sprite":
+    if cap.category == "item_placed_body":
         return (
             RequirementSpec("executed_tile_placement_reference", capability="configure_tile_placement",
                             param="placementCallId", any_of=("place_item",),
-                            message="Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this presentation call. No wall presentation, inferred source, or unused reference."),
+                            message="Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference."),
             RequirementSpec("unique_call_reference", param="placementCallId",
-                            message="Only one explicit placed-body presentation may reference a placement call."),
+                            message="Only one call of this operation may reference a placement call; independent placed sprite and light calls may compose."),
         )
     if cap.name in PLACEMENT_CAPABILITIES:
         return (RequirementSpec("binding_action_reference", target="item_body", any_of=("place_item",), message="The placement call must be referenced by exactly one binding action.placementCallId."),)
