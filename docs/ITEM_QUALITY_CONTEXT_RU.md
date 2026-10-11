@@ -6,6 +6,8 @@
 
 Настоящий `GeneratorClient.Prepare` получает literal native tooltip через `Lang.GetTooltip`: строки, язык текущей UI culture, exact fullName и owner source. Prefix нормализуется только в request clone, оригинал и refund остаются прежними. Generated proxy tooltip не принимается за описание accepted generated definition. Если native text недоступен, он остаётся неизвестным. При более 64 строках или 16 384 символах отказывается вся optional source observation с provenance/status — предложение не обрезается и не подаётся как буквальная цитата. Tooltip не является числовым сертификатом native AI и не парсится хостом в механику.
 
+Числовой `raw.item.crit` копирует базовый `Item.crit` request clone после удаления prefix, включая явный ноль. Тот же исходный факт сохраняется в fingerprint/runtimeFacts. Это не измеренный итоговый шанс игрока и не сумма с `generatedParent.accessory.genericCrit`/armor bonuses; accepted generated definition остаётся отдельным read-only контекстом. Поле не добавляет capability, не заставляет Author наследовать крит и не изменяет generated gameplay или сохранённый рецепт.
+
 ## Движение
 
 `move_straight` сохраняет скорость без gravity/drag; generated proxy не исполняет native AI по `arrow`, имени или `aiStyle`. `move_gravity_arc` добавляет явно выбранный vertical velocity increment с первого projectile update. Author должен осмысленно выбрать траекторию; прямое движение остаётся допустимым, если оно намеренное. Код не добавляет bow preset и не меняет уже сохранённые снаряды.
