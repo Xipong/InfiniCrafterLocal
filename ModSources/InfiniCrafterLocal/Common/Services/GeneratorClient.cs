@@ -73,59 +73,68 @@ public sealed class GeneratorClient
 
     public int LastRecipeFailureStatusCode { get; private set; }
 
-    public string AssetBaseUrlForSharing(string preferred = "")
+    public string AssetBaseUrlForSharing(string preferred = "", CancellationToken cancellationToken = default)
     {
         string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
         if (!string.IsNullOrWhiteSpace(env)) return env;
-        string advertised = ReadGeneratorAdvertisedAssetBaseUrl();
+        string advertised = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken);
         if (!string.IsNullOrWhiteSpace(advertised)) return advertised;
         preferred = NormalizeAssetBaseUrl(preferred);
         if (!string.IsNullOrWhiteSpace(preferred)) return preferred;
         return GeneratedAssetSyncService.GuessLanBaseUrlFromEndpoint(Endpoint);
     }
 
-    public string AssetTransportForSharing()
+    public string AssetTransportForSharing(CancellationToken cancellationToken = default)
     {
-        _ = ReadGeneratorAdvertisedAssetBaseUrl();
-        lock (_assetPublicBaseUrlLock)
-            return _cachedGeneratorAssetTransport;
+        _ = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken);
+        EnterAssetPublicBaseUrlLock(cancellationToken);
+        try { return _cachedGeneratorAssetTransport; }
+        finally { Monitor.Exit(_assetPublicBaseUrlLock); }
     }
 
-    public void RefreshAssetTransportMetadata()
-    {
-        lock (_assetPublicBaseUrlLock)
-            _nextGeneratorAssetPublicBaseUrlProbeUtc = DateTime.MinValue;
-        _ = ReadGeneratorAdvertisedAssetBaseUrl();
-    }
+    public void RefreshAssetTransportMetadata(CancellationToken cancellationToken = default)
+        => _ = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken, force: true);
 
-    public void StampAssetTransportMetadata(GeneratedItemData data, bool refreshBaseUrl = false)
+    public void StampAssetTransportMetadata(GeneratedItemData data, bool refreshBaseUrl = false, CancellationToken cancellationToken = default)
     {
         if (data is null) return;
         data.RecipeMeta ??= new RecipeMetaSpec();
-        data.RecipeMeta.AssetTransport = AssetTransportForSharing();
+        data.RecipeMeta.AssetTransport = AssetTransportForSharing(cancellationToken);
         if (!string.Equals(data.RecipeMeta.AssetTransport, "http", StringComparison.Ordinal))
         {
             data.RecipeMeta.AssetBaseUrl = "";
             return;
         }
         if (refreshBaseUrl || string.IsNullOrWhiteSpace(data.RecipeMeta.AssetBaseUrl))
-            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl);
+            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl, cancellationToken);
     }
 
-    private string ReadGeneratorAdvertisedAssetBaseUrl()
+    private void EnterAssetPublicBaseUrlLock(CancellationToken cancellationToken)
     {
-        lock (_assetPublicBaseUrlLock)
+        cancellationToken.ThrowIfCancellationRequested();
+        while (!Monitor.TryEnter(_assetPublicBaseUrlLock, 50))
+            cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private string ReadGeneratorAdvertisedAssetBaseUrl(CancellationToken cancellationToken = default, bool force = false)
+    {
+        EnterAssetPublicBaseUrlLock(cancellationToken);
+        try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             DateTime now = DateTime.UtcNow;
-            if (now < _nextGeneratorAssetPublicBaseUrlProbeUtc)
+            if (!force && now < _nextGeneratorAssetPublicBaseUrlProbeUtc)
                 return _cachedGeneratorAssetPublicBaseUrl;
+            DateTime previousProbe = _nextGeneratorAssetPublicBaseUrlProbeUtc;
             _nextGeneratorAssetPublicBaseUrlProbeUtc = now.AddSeconds(15);
             try
             {
                 var combineUri = new Uri(Endpoint);
                 var connectUri = new Uri(combineUri, "/mp_connect.json");
-                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromMilliseconds(1200));
                 using var response = Http.GetAsync(connectUri, cts.Token).GetAwaiter().GetResult();
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!response.IsSuccessStatusCode)
                 {
                     _cachedGeneratorAssetTransport = "native";
@@ -133,6 +142,7 @@ public sealed class GeneratorClient
                 }
                 string json = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
                 using JsonDocument doc = JsonDocument.Parse(json);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (doc.RootElement.ValueKind == JsonValueKind.Object
                     && doc.RootElement.TryGetProperty("multiplayer", out JsonElement multiplayer)
                     && multiplayer.ValueKind == JsonValueKind.Object)
@@ -152,6 +162,13 @@ public sealed class GeneratorClient
                     _cachedGeneratorAssetTransport = "native";
                 }
             }
+            catch (Exception error) when (cancellationToken.IsCancellationRequested)
+            {
+                // Retirement did not observe an unavailable provider. Keep the
+                // accepted cache, including when a transport error races cancel.
+                _nextGeneratorAssetPublicBaseUrlProbeUtc = previousProbe;
+                throw new OperationCanceledException("Craft metadata request cancelled.", error, cancellationToken);
+            }
             catch
             {
                 _cachedGeneratorAssetPublicBaseUrl = "";
@@ -159,6 +176,7 @@ public sealed class GeneratorClient
             }
             return _cachedGeneratorAssetPublicBaseUrl;
         }
+        finally { Monitor.Exit(_assetPublicBaseUrlLock); }
     }
 
     private static string NormalizeAssetBaseUrl(string value)
@@ -205,6 +223,13 @@ public sealed class GeneratorClient
 
     public sealed class PreparedGenerationRequest
     {
+        // A request survives transport retries, but never its owning craft. The
+        // token only retires our HTTP work; Python may finish an admitted craft
+        // and keep the completed world recipe available for a later request.
+        private readonly CancellationTokenSource _lifetime = new();
+        public CancellationToken CancellationToken => _lifetime.Token;
+        public void Cancel() => _lifetime.Cancel();
+
         public string PayloadJson { get; set; } = "{}";
         public string ParentA { get; set; } = "Unknown";
         public string ParentB { get; set; } = "Unknown";
@@ -254,6 +279,8 @@ public sealed class GeneratorClient
 
     public GeneratedItemData? GeneratePreparedBlocking(PreparedGenerationRequest request)
     {
+        if (request.CancellationToken.IsCancellationRequested)
+            return null;
         LastRecipeFailureIsFatal = false;
         LastRecipeFailureMessage = "";
         LastRecipeFailurePlayerMessage = "";
@@ -275,12 +302,16 @@ public sealed class GeneratorClient
         // the Terraria client timed out, the world recipe file already exists and should
         // be delivered without starting another generation.
         var cached = GeneratePreparedCacheOnly(request, cacheTimeoutSeconds);
+        if (request.CancellationToken.IsCancellationRequested)
+            return null;
         if (cached is not null)
             return cached;
 
-        for (int attempt = 1; attempt <= attempts; attempt++)
+        for (int attempt = 1; attempt <= attempts && !request.CancellationToken.IsCancellationRequested; attempt++)
         {
             var result = GeneratePreparedBlockingOnce(request, timeoutSeconds);
+            if (request.CancellationToken.IsCancellationRequested)
+                return null;
             if (result.HasData)
                 return result.Data;
 
@@ -305,6 +336,8 @@ public sealed class GeneratorClient
             // so do not immediately fail/restart: poll cache-only for a short recovery
             // window and return the completed item if it appears.
             cached = PollCacheOnlyUntilReady(request, cacheTimeoutSeconds, cacheRecoverySeconds);
+            if (request.CancellationToken.IsCancellationRequested)
+                return null;
             if (cached is not null)
                 return cached;
         }
@@ -321,17 +354,26 @@ public sealed class GeneratorClient
 
     private GeneratedItemData? PollCacheOnlyUntilReady(PreparedGenerationRequest request, int requestTimeoutSeconds, int totalSeconds)
     {
+        if (request.CancellationToken.IsCancellationRequested)
+            return null;
         if (totalSeconds <= 0)
             return GeneratePreparedCacheOnly(request, requestTimeoutSeconds);
 
         DateTime deadline = DateTime.UtcNow.AddSeconds(totalSeconds);
-        while (DateTime.UtcNow <= deadline)
+        while (DateTime.UtcNow <= deadline && !request.CancellationToken.IsCancellationRequested)
         {
             var cached = GeneratePreparedCacheOnly(request, requestTimeoutSeconds);
             if (cached is not null)
                 return cached;
 
-            Thread.Sleep(2000);
+            try
+            {
+                System.Threading.Tasks.Task.Delay(2000, request.CancellationToken).GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
         }
 
         return GeneratePreparedCacheOnly(request, requestTimeoutSeconds);
@@ -357,7 +399,9 @@ public sealed class GeneratorClient
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            request.CancellationToken.ThrowIfCancellationRequested();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             using var body = new StringContent(WithCacheOnlyFlag(request.PayloadJson), Encoding.UTF8, "application/json");
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
@@ -368,16 +412,18 @@ public sealed class GeneratorClient
             var data = GeneratedItemData.FromJson(json);
             if (data is null || !IsDeliverableGeneratedData(data))
                 return null;
+            request.CancellationToken.ThrowIfCancellationRequested();
             Normalize(data, request.ParentA, request.ParentB);
             GeneratedItemRegistryService.StampCurrentWorld(data);
-            RefreshAssetTransportMetadata();
-            StampAssetTransportMetadata(data, refreshBaseUrl: true);
+            RefreshAssetTransportMetadata(request.CancellationToken);
+            StampAssetTransportMetadata(data, refreshBaseUrl: true, cancellationToken: request.CancellationToken);
+            request.CancellationToken.ThrowIfCancellationRequested();
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
             return data;
         }
         catch (Exception ex)
         {
-            if (LocalHttpQuietFailure.IsExpectedOffline(ex))
+            if (!request.CancellationToken.IsCancellationRequested && LocalHttpQuietFailure.IsExpectedOffline(ex))
                 LocalHttpQuietFailure.Record(EndpointGuardKey, ex, TimeSpan.FromSeconds(45));
             return null;
         }
@@ -439,7 +485,9 @@ public sealed class GeneratorClient
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            request.CancellationToken.ThrowIfCancellationRequested();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             using var body = new StringContent(request.PayloadJson, Encoding.UTF8, "application/json");
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             string responseJson = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
@@ -467,12 +515,20 @@ public sealed class GeneratorClient
                     PlayerMessage = "Generation failed: LocalGenerator returned a broken item payload. Items were returned; try again."
                 };
             }
+            request.CancellationToken.ThrowIfCancellationRequested();
             Normalize(data, request.ParentA, request.ParentB);
             GeneratedItemRegistryService.StampCurrentWorld(data);
-            RefreshAssetTransportMetadata();
-            StampAssetTransportMetadata(data, refreshBaseUrl: true);
+            RefreshAssetTransportMetadata(request.CancellationToken);
+            StampAssetTransportMetadata(data, refreshBaseUrl: true, cancellationToken: request.CancellationToken);
+            request.CancellationToken.ThrowIfCancellationRequested();
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
             return new GenerationAttemptResult { Data = data, FailureKind = GenerationFailureKind.None, StatusCode = 200 };
+        }
+        catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+        {
+            // Retiring one lane is not an offline endpoint and must not cool
+            // down other live crafts sharing the same generator.
+            return new GenerationAttemptResult { FailureKind = GenerationFailureKind.Transient };
         }
         catch (OperationCanceledException ex)
         {
@@ -481,7 +537,7 @@ public sealed class GeneratorClient
         }
         catch (Exception ex)
         {
-            if (LocalHttpQuietFailure.IsExpectedOffline(ex))
+            if (!request.CancellationToken.IsCancellationRequested && LocalHttpQuietFailure.IsExpectedOffline(ex))
                 LocalHttpQuietFailure.Record(EndpointGuardKey, ex, TimeSpan.FromSeconds(45));
             return new GenerationAttemptResult { FailureKind = GenerationFailureKind.Transient, Message = ex.Message };
         }

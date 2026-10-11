@@ -121,6 +121,8 @@ public sealed partial class InfiniCraftPlayer
 
     private void InitializeMultiDevCraftState()
     {
+        foreach (MultiDevCraftJob? job in _multiDevJobs)
+            job?.Request?.Cancel();
         InputC = NewAirItem();
         InputD = NewAirItem();
         InputE = NewAirItem();
@@ -334,6 +336,7 @@ public sealed partial class InfiniCraftPlayer
             MultiDevCraftJob? job = _multiDevJobs[slot];
             if (job is null || !string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
                 continue;
+            job.Request.Cancel();
             CompleteExtraServerCraft(job, false, "", string.IsNullOrWhiteSpace(reason) ? "cancelled" : reason);
             _multiDevJobs[slot] = null;
             return true;
@@ -348,6 +351,7 @@ public sealed partial class InfiniCraftPlayer
             MultiDevCraftJob? job = _multiDevJobs[slot];
             if (job is null)
                 continue;
+            job.Request.Cancel();
             if (refundLocally && Main.netMode == NetmodeID.MultiplayerClient && job.AwaitingServerCommit)
                 SendExtraCraftCancel(job, "client_world_exit");
             else if (refundLocally)

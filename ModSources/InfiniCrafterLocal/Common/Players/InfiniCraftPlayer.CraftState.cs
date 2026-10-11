@@ -878,6 +878,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void ClearCraft()
     {
+        _request?.Cancel();
         RestoreSuspiciousAudioMute();
         _craftAudioGuardTicks = Math.Max(_craftAudioGuardTicks, PostCraftAudioGuardTicks);
 
