@@ -10,6 +10,7 @@ guidance only and never selects mechanics, entity kinds, inputs or assets.
 from typing import Any
 
 from infini_local.core.item_identity_tools import item_num
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -83,7 +84,10 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "powerBudget": power_budget,
         "balanceEnvelope": {
             "useTimeTicks": {"minimum": 4, "suggested": int(_clamp(fastest_use, 4, 600)), "maximum": 600},
-            "lifetimeTicks": {"minimum": 1, "maximum": 36000},
+            "lifetimeTicks": {
+                "minimum": 1,
+                "maximum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"].maximum,
+            },
             "entityCount": {"minimum": 1, "maximum": 12},
             "eventSpawnsPerActivation": {"minimum": 0, "maximum": 32},
             "note": "Wide numeric guidance only. The Author chooses every runtime component; deterministic code applies hard safety bounds only.",

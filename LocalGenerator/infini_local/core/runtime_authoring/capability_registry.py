@@ -2885,7 +2885,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             RequirementSpec(
                 kind="binding_tuple_present",
                 target="any_entity",
-                any_of=("primary_use|use_item_body|contactDamage=true", "primary_use|spawn_entity"),
+                any_of=("primary_use|use_item_body", "primary_use|spawn_entity"),
                 message="A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
             ),
         )
@@ -3288,6 +3288,10 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "spawn_entity with contactDamage=true executes both body contact and projectile spawn without a second binding. "
             "It does not select primaryEntityId or projectile held ownership; fixed contactDamage=false for place_item/hold/equipped may be explicit or omitted. "
             "action.targetId for item_body-only actions may be explicit with the exact unique declared item_body id or omitted; projectile targets remain explicit."
+            " Bindings use the selected input/action's exact shape. Exact fixed branch literals may be explicit or omitted; active non-placement stack/contact remain independent required choices. Write id, fn, target and params for every new call. Use the exact declared item_body id for item-only calls and params={} for zero-argument calls. "
+            "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
+            "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
+            "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
         ),
         "positionOwnership": {
             "none": "Does not author movement or position ownership.",

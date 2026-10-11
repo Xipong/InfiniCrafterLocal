@@ -48,6 +48,117 @@ def _explicit(doc, row):
     return result
 
 
+@pytest.mark.parametrize("contact_damage", [False, True], ids=["mining-only", "mining-and-contact"])
+def test_primary_body_tool_admission_preserves_independent_contact_lane(contact_damage):
+    doc = build_capability_witness("configure_tool")
+    doc["runtimeProgram"]["bindings"][0]["contactDamage"] = contact_damage
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    assert report["ok"], report["errors"]
+    final = _assert_delivery(doc)
+    assert final["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] is contact_damage
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("root", ["body", "spawn"])
+@pytest.mark.parametrize("contact_damage", [False, True])
+def test_native_tool_stats_are_identical_across_independent_primary_contact(root, contact_damage):
+    doc = build_capability_witness("configure_tool") if root == "body" else build_runtime_fixture("workbench_blade")
+    if root == "spawn":
+        doc["runtimeProgram"]["calls"].append({"id": "native_tool", "fn": "configure_tool", "params": {
+            "pickPower": 190, "axePowerTooltipPercent": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}})
+    else:
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_tool")["params"] = {
+            "pickPower": 190, "axePowerTooltipPercent": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}
+    doc["runtimeProgram"]["bindings"][0]["contactDamage"] = contact_damage
+    final = _assert_delivery(doc)
+    assert {key: final["gameplay"][key] for key in ("pickPower", "axePower", "hammerPower", "miningSpeedScale")} == {
+        "pickPower": 190, "axePower": 9, "hammerPower": 20, "miningSpeedScale": 0.75}
+    assert final["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] is contact_damage
+
+
+@pytest.mark.parametrize("case", ["alternate-only", "equipped-only", "effects-primary", "placement-primary", "missing-item-use"])
+def test_native_tool_requires_legitimate_primary_root_not_arbitrary_binding(case):
+    doc = build_capability_witness("configure_tool")
+    row = doc["runtimeProgram"]["bindings"][0]
+    if case == "alternate-only":
+        row["input"] = "alternate_use"
+    elif case == "equipped-only":
+        row.update(input="equipped", action={"kind": "equip_passive"})
+        row.pop("stackCost")
+        row.pop("contactDamage")
+        doc["runtimeProgram"]["calls"].append({"id": "equipped", "fn": "configure_accessory", "params": {"defensePoints": 1}})
+    elif case == "effects-primary":
+        row["action"] = {"kind": "apply_item_effects"}
+        doc["runtimeProgram"]["calls"].append({"id": "utility", "fn": "restore_resources_on_use", "params": {
+            "healLife": 1, "healMana": 0, "usesPotionRules": False}})
+    elif case == "placement-primary":
+        row.update(action={"kind": "place_item", "placementCallId": "placement"}, stackCost=1, contactDamage=False)
+        doc["runtimeProgram"]["calls"].append({"id": "placement", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}})
+    else:
+        doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != "configure_item_use"]
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    tool_index = next(i for i, c in enumerate(doc["runtimeProgram"]["calls"]) if c["fn"] == "configure_tool")
+    code = "missing_capability_dependency" if case == "missing-item-use" else "missing_binding_dependency"
+    assert [e["code"] for e in report["errors"]] == ([code, "binding_dependency"] if case == "missing-item-use" else [code])
+    assert any(e["code"] == code and e["path"] == f"$.runtimeProgram.calls[{tool_index}]" for e in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(doc)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_noncontact_tool_unrelated_repair_keeps_binding_and_tool_stats_frozen(monkeypatch, format_mode):
+    from infini_local.core.errors import PlannerUnavailable
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("configure_tool")
+    row = doc["runtimeProgram"]["bindings"][0]
+    row["contactDamage"] = False
+    expected = deepcopy(doc)
+    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats["params"]["damage"] = True
+    before = json.dumps(doc, sort_keys=True)
+    noop = {"note": "no-op cannot repair unrelated invalid damage", "realizationReplacement": doc["realization"]}
+    with pytest.raises(PlannerUnavailable):
+        _offline_gameplay_repair(monkeypatch, doc, noop, format_mode)
+    correction = deepcopy(stats)
+    correction["params"]["damage"] = next(c for c in expected["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")["params"]["damage"]
+    hostile = deepcopy(row)
+    hostile.update(stackCost=1, contactDamage=True, action={"kind": "apply_item_effects", "targetId": "foreign_body"})
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "damage exact leaf only; contact/action/cost/target frozen", "realizationReplacement": doc["realization"],
+        "callsUpsert": [correction], "bindingsUpsert": [hostile],
+    }, format_mode)
+    scope = dossier["repairScope"]
+    assert scope["fieldPermissions"]["calls"] == [{"id": stats["id"], "paths": ["params.damage"]}]
+    assert scope["fieldPermissions"]["bindings"] == []
+    assert all(not values for values in scope["identityChanges"].values())
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+    assert _assert_delivery(repaired) == _assert_delivery(expected)
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_valid_noncontact_tool_noop_repair_preserves_complete_source(monkeypatch, format_mode):
+    from test_repair_gameplay_contract import _offline_gameplay_repair
+
+    doc = build_capability_witness("configure_tool")
+    doc["runtimeProgram"]["bindings"][0]["contactDamage"] = False
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "valid native mining needs no contact correction", "realizationReplacement": doc["realization"],
+    }, format_mode)
+    assert dossier["exactValidationErrors"] == []
+    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == []
+    repaired.pop("debug")
+    assert json.dumps(repaired, sort_keys=True) == before
+    _assert_delivery(repaired)
+
+
 def _assert_delivery(doc):
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]

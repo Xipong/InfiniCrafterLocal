@@ -21,6 +21,40 @@ from test_low_level_three_stage_pipeline import _vfx_output
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
 
+def _campaign_observers(fixture):
+    """Execute only the campaign's real observer installation, without inference."""
+    from types import SimpleNamespace
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.qa import live_no_image_fixture
+
+    harness = Path(__file__).resolve().parents[2] / "toolbox/live-generation/generate_20_items_without_images.py"
+    nodes = []
+    for node in ast.parse(harness.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.ImportFrom) and node.module == "infini_local.qa.live_no_image_fixture":
+            nodes.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in {
+            "identity_data", "no_image_cached_payload_report", "no_image_assert_visual_delivery_ready",
+        }:
+            nodes.append(node)
+        elif isinstance(node, ast.Assign) and any(
+            (isinstance(target, ast.Name) and target.id in {
+                "original_cached_payload_report", "original_assert_visual_delivery_ready",
+            }) or (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                   and target.value.id == "combine" and target.attr in {
+                       "_cached_payload_report", "assert_visual_delivery_ready",
+                   }) for target in node.targets
+        ):
+            nodes.append(node)
+    observer = SimpleNamespace(
+        _cached_payload_report=combine_pipeline._cached_payload_report,
+        assert_visual_delivery_ready=combine_pipeline.assert_visual_delivery_ready,
+    )
+    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy}
+    namespace.update(vars(live_no_image_fixture))
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
+    return observer
+
+
 @pytest.mark.parametrize("output_depth", ["short", "long"])
 def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, output_depth):
     from infini_local.core import config_bootstrap
@@ -62,12 +96,28 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
     }, "no-image-serving-root")
     for entity in data["runtimeProgram"]["entities"]:
         entity.setdefault("visual", {})["assetMode"] = "baked_sprite"
+    # Selected baked history consumes real PNG execution metadata, not just a
+    # hydrated filename. Exercise the actual harness-installed final observer.
+    authored = _vfx_output(data)
+    selected = next(entity for entity in data["runtimeProgram"]["entities"] if entity["kind"] != "item_body")
+    authored["slots"][0].update(entityId=selected["id"], event="periodic")
+    admitted = validate_vfx_director_output(authored, data)
+    assert admitted["ok"], admitted["errors"]
+    data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], "qa-history-control")
     before = copy.deepcopy(data)
     delivered = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(data, fixture))
-    report = _cached_payload_report(delivered)
+    qa_before = copy.deepcopy(delivered)
+    observer = _campaign_observers(fixture)
+    report = observer._cached_payload_report(delivered)
     assert report.get("runtime", {}).get("ok"), report
     assert report.get("vfx", {}).get("ok"), report
     assert report["ok"], report["errors"]
+    assert delivered == qa_before
+    assert not _cached_payload_report(delivered)["ok"]  # Production stays strict.
+    assert report["noImageExecutionControl"]["synthetic"] is True
+    assert report["noImageExecutionControl"]["realImageGeneration"] is False
+    assert observer.assert_visual_delivery_ready(delivered) is delivered
+    assert delivered == qa_before
     assert fixture == sprites / "qa-no-image-fixture.png"
     assert find_asset_file(fixture.name, sprite_dir=sprites, world_recipes_dir=world_recipes) == fixture
     assert delivered["visual"]["spritePath"] == str(fixture.resolve())
@@ -82,14 +132,14 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
     short_reference["visual"]["spritePath"] = fixture.name
     for entity in short_reference["runtimeProgram"]["entities"]:
         entity["visual"]["spritePath"] = fixture.name
-    assert _cached_payload_report(short_reference)["ok"]
+    assert observer._cached_payload_report(short_reference)["ok"]
 
     # An existing absolute outside-root PNG is not an authority. Keep this
     # refusal even though it has the same basename and bytes as the QA fixture.
     outside = write_no_image_fixture_png(output / fixture.name)
     assert outside.read_bytes() == fixture.read_bytes()
     fixture.unlink()
-    refused = _cached_payload_report(sanitize_recipe_for_delivery(
+    refused = observer._cached_payload_report(sanitize_recipe_for_delivery(
         hydrate_no_image_fixture_assets(copy.deepcopy(before), outside)
     ))
     assert not refused["ok"]
@@ -99,11 +149,305 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
     # A present serving-root file still has to pass the production PNG gate.
     write_no_image_fixture_png(fixture)
     fixture.write_bytes(fixture.read_bytes()[:-1])
-    corrupt = _cached_payload_report(delivered)
+    corrupt = observer._cached_payload_report(delivered)
     assert not corrupt["ok"]
     assert "asset_roster_invalid_png" in {
         problem["code"] for problem in corrupt["visual"]["problems"]
     }
+
+
+@pytest.mark.parametrize("selection", ["baked_history", "projectile_alias", "reuse_item_icon", "item_body"])
+def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(tmp_path, monkeypatch, selection):
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
+    from infini_local.core.vfx_manifest import vfx_png_dependencies
+    from infini_local.pipelines import combine_pipeline, visual_sprite_generation as sprites
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+    import hashlib
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png")
+    data = compile_runtime_program(build_runtime_fixture("returning_potion" if selection == "projectile_alias" else "workbench_blade"))
+    data.update(id="qa-selected-owner", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
+    entity = next(row for row in data["runtimeProgram"]["entities"] if (row["kind"] == "item_body") == (selection == "item_body"))
+    for row in data["runtimeProgram"]["entities"]:
+        row.setdefault("visual", {})["assetMode"] = "baked_sprite"
+    entity["visual"]["assetMode"] = "reuse_item_icon" if selection == "reuse_item_icon" else "baked_sprite"
+    authored = _vfx_output(data)
+    authored["slots"][0].update(entityId=entity["id"], event="periodic",
+                                textureRole="projectile" if selection == "projectile_alias" else "entity")
+    admitted = validate_vfx_director_output(authored, data)
+    assert admitted["ok"], admitted["errors"]
+    data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], "qa-selected-owner")
+    hydrated = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(data, fixture))
+    before = copy.deepcopy(hydrated)
+    owner_id = entity["id"]
+    expected_role = "item" if selection in {"reuse_item_icon", "item_body"} else "entity:" + owner_id
+    observer = _campaign_observers(fixture)
+    projector_globals_before = {key: getattr(sprites, key) for key in (
+        "maybe_generate_sprite", "generate_visual_asset", "_generate_backend_variants", "write_visual_manifest",
+    )}
+    control = synthetic_no_image_execution_control(hydrated, fixture)
+    assert {key: getattr(sprites, key) for key in projector_globals_before} == projector_globals_before
+    assert hydrated == before
+    assert control["vfxManifest"] == hydrated["vfxManifest"]
+    execution_keys = {"spritePath", "spriteStatus", "spriteUrl", "spriteTechnicalScore"}
+    assert {key: value for key, value in control.items() if key not in {"visual", "debug", "runtimeProgram"}} == {
+        key: value for key, value in hydrated.items() if key not in {"visual", "debug", "runtimeProgram"}
+    }
+    assert {key: value for key, value in control["visual"].items() if key not in execution_keys} == {
+        key: value for key, value in hydrated["visual"].items() if key not in execution_keys
+    }
+    for projected, original in zip(control["runtimeProgram"]["entities"], hydrated["runtimeProgram"]["entities"]):
+        assert {key: value for key, value in projected.items() if key != "visual"} == {
+            key: value for key, value in original.items() if key != "visual"
+        }
+        assert {key: value for key, value in projected["visual"].items() if key not in execution_keys} == {
+            key: value for key, value in original["visual"].items() if key not in execution_keys
+        }
+    dependency = vfx_png_dependencies(control)["dependencies"][0]
+    assert dependency["role"] == expected_role
+    assert dependency["spriteStatus"] == "generated"
+    assert control["debug"]["noImageExecutionControl"]["synthetic"] is True
+    assert control["debug"]["noImageExecutionControl"]["realImageGeneration"] is False
+    witness = next(row for row in control["debug"]["noImageExecutionControl"]["owners"] if row["role"] == expected_role)
+    assert witness["selectedServingPath"] == str(fixture.resolve())
+    assert witness["sha256"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+    assert witness["completePng"] is True
+    assert not combine_pipeline._cached_payload_report(hydrated)["ok"]
+    assert observer._cached_payload_report(hydrated)["ok"]
+    assert observer.assert_visual_delivery_ready(hydrated) is hydrated
+    assert hydrated == before
+
+    def selected_owner(payload):
+        if selection == "reuse_item_icon":
+            return payload["visual"]
+        return next(row["visual"] for row in payload["runtimeProgram"]["entities"] if row["id"] == owner_id)
+
+    for mutation in ("pending", "missing_path", "wrong_owner"):
+        negative = copy.deepcopy(hydrated)
+        selected = selected_owner(negative)
+        if mutation == "pending":
+            selected["spriteStatus"] = "pending"
+        elif mutation == "missing_path":
+            selected["spritePath"] = ""
+        else:
+            # A generated sibling/root cannot lend readiness to the selected owner.
+            selected["spritePath"] = str(tmp_path / "missing-selected-owner.png")
+            if selection != "reuse_item_icon":
+                negative["visual"]["spriteStatus"] = "generated"
+        immutable = copy.deepcopy(negative)
+        refused = observer._cached_payload_report(negative)
+        assert not refused["ok"], mutation
+        assert "required_vfx_texture_not_ready" in {row["code"] for row in refused["visual"]["problems"]}, mutation
+        with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked):
+            observer.assert_visual_delivery_ready(negative)
+        assert negative == immutable
+
+    # A healthy same-name shadow must not authenticate the fixture's exact bytes.
+    shadow = tmp_path / "other-serving-root"
+    write_no_image_fixture_png(shadow / fixture.name, size=16)
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", shadow)
+    assert not observer._cached_payload_report(hydrated)["ok"]
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    fixture.write_bytes(fixture.read_bytes()[:-1])
+    corrupt = observer._cached_payload_report(hydrated)
+    assert not corrupt["ok"]
+    assert "asset_roster_invalid_png" in {row["code"] for row in corrupt["visual"]["problems"]}
+    fixture.unlink()
+    missing = observer._cached_payload_report(hydrated)
+    assert not missing["ok"]
+    assert "asset_roster_file_missing" in {row["code"] for row in missing["visual"]["problems"]}
+    assert hydrated == before
+
+
+@pytest.fixture
+def execution_control_case(tmp_path):
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png")
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data.update(id="qa-fixture-byte-identity", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
+    for entity in data["runtimeProgram"]["entities"]:
+        entity.setdefault("visual", {})["assetMode"] = "baked_sprite"
+    selected = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
+    authored = _vfx_output(data)
+    authored["slots"][0].update(entityId=selected["id"], event="periodic")
+    admitted = validate_vfx_director_output(authored, data)
+    assert admitted["ok"], admitted["errors"]
+    data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], "qa-fixture-byte-identity")
+    return fixture, sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(data, fixture))
+
+
+def test_campaign_refuses_fixture_byte_swap_during_projection(execution_control_case, monkeypatch):
+    from infini_local.qa import live_no_image_fixture as qa
+
+    fixture, data = execution_control_case
+    observer = _campaign_observers(fixture)
+    assert observer._cached_payload_report(data)["ok"]
+    before = copy.deepcopy(data)
+    original = qa.FunctionType
+    projected = []
+
+    def swap_during_projection(code, globals_, *args):
+        projector = original(code, globals_, *args)
+
+        def swapped(control):
+            write_no_image_fixture_png(fixture, size=16)
+            projected.append(True)
+            return projector(control)
+
+        return swapped
+
+    monkeypatch.setattr(qa, "FunctionType", swap_during_projection)
+    report = observer._cached_payload_report(data)
+    assert projected == [True]
+    assert not report["ok"], "different complete fixture bytes survived metadata projection"
+    assert "qa_fixture_identity_changed" in {row["code"] for row in report["visual"]["problems"]}
+    assert report["noImageExecutionControl"]["owners"] == []
+    assert data == before
+    write_no_image_fixture_png(fixture)
+    with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked, match="qa_fixture_identity_changed"):
+        observer.assert_visual_delivery_ready(data)
+    assert data == before
+
+
+@pytest.mark.parametrize("consumer", ["early", "final"])
+@pytest.mark.parametrize("swap_at", ["after_projection", "before_gate", "after_gate"])
+def test_campaign_refuses_fixture_byte_swap_at_readiness_consumption(
+    execution_control_case, monkeypatch, consumer, swap_at,
+):
+    from infini_local.pipelines import combine_pipeline
+
+    fixture, data = execution_control_case
+    before = copy.deepcopy(data)
+    attr = "assert_visual_delivery_ready" if consumer == "early" else "_cached_payload_report"
+    original = getattr(combine_pipeline, attr)
+    visited = []
+
+    def swapping_gate(control):
+        # This callback is the actual consumer held by the campaign wrapper, not
+        # another QA report. Swap after projection immediately before its read,
+        # or after a successful read but before returning the cached result.
+        if swap_at == "before_gate":
+            write_no_image_fixture_png(fixture, size=16)
+        result = original(control)
+        visited.append(True)
+        if consumer == "final":
+            assert result["ok"]
+        if swap_at == "after_gate":
+            write_no_image_fixture_png(fixture, size=16)
+        return result
+
+    if swap_at == "after_projection":
+        from infini_local.qa import live_no_image_fixture as qa
+        project = qa.synthetic_no_image_execution_control
+
+        def swap_after_projection(*args):
+            control = project(*args)
+            write_no_image_fixture_png(fixture, size=16)
+            return control
+
+        monkeypatch.setattr(qa, "synthetic_no_image_execution_control", swap_after_projection)
+    monkeypatch.setattr(combine_pipeline, attr, swapping_gate)
+    observer = _campaign_observers(fixture)
+    if consumer == "early":
+        with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked, match="qa_fixture_identity_changed"):
+            observer.assert_visual_delivery_ready(data)
+    else:
+        report = observer._cached_payload_report(data)
+        assert not report["ok"], "different complete fixture bytes survived final readiness consumption"
+        assert "qa_fixture_identity_changed" in {row["code"] for row in report["visual"]["problems"]}
+        assert report["noImageExecutionControl"]["owners"] == []
+    assert visited == ([] if swap_at == "after_projection" else [True])
+    assert data == before
+
+
+@pytest.mark.parametrize("swap_at", ["projection", "before_gate", "after_gate"])
+def test_campaign_accepts_same_fixture_bytes_replacement(execution_control_case, monkeypatch, swap_at):
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.qa import live_no_image_fixture as qa
+    import hashlib
+
+    fixture, data = execution_control_case
+    before = copy.deepcopy(data)
+    expected_sha = hashlib.sha256(fixture.read_bytes()).hexdigest()
+    visited = []
+
+    def replace_same_bytes():
+        replacement = fixture.with_name("replacement.png")
+        replacement.write_bytes(fixture.read_bytes())
+        replacement.replace(fixture)
+        visited.append(True)
+
+    if swap_at == "projection":
+        original = qa.FunctionType
+
+        def same_byte_projector(code, globals_, *args):
+            projector = original(code, globals_, *args)
+
+            def replaced(control):
+                replace_same_bytes()
+                return projector(control)
+
+            return replaced
+
+        monkeypatch.setattr(qa, "FunctionType", same_byte_projector)
+    else:
+        for attr in ("_cached_payload_report", "assert_visual_delivery_ready"):
+            original = getattr(combine_pipeline, attr)
+
+            def same_byte_gate(control, original=original):
+                if swap_at == "before_gate":
+                    replace_same_bytes()
+                result = original(control)
+                if swap_at == "after_gate":
+                    replace_same_bytes()
+                return result
+
+            monkeypatch.setattr(combine_pipeline, attr, same_byte_gate)
+
+    observer = _campaign_observers(fixture)
+    report = observer._cached_payload_report(data)
+    assert report["ok"], report
+    assert {row["sha256"] for row in report["noImageExecutionControl"]["owners"]} == {expected_sha}
+    assert observer.assert_visual_delivery_ready(data) is data
+    assert visited == [True, True]
+    assert data == before
+
+
+@pytest.mark.parametrize("consumer", ["early", "final"])
+def test_campaign_refuses_changed_canonical_selection_with_same_fixture_bytes(
+    execution_control_case, monkeypatch, consumer,
+):
+    from infini_local.pipelines import combine_pipeline
+
+    fixture, data = execution_control_case
+    before = copy.deepcopy(data)
+    shadow_root = fixture.parent / "new-serving-root"
+    shadow = write_no_image_fixture_png(shadow_root / fixture.name)
+    assert shadow.read_bytes() == fixture.read_bytes()
+    attr = "assert_visual_delivery_ready" if consumer == "early" else "_cached_payload_report"
+    original = getattr(combine_pipeline, attr)
+    visited = []
+
+    def root_changed_gate(control):
+        monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", shadow_root)
+        result = original(control)
+        visited.append(True)
+        if consumer == "final":
+            assert result["ok"]
+        return result
+
+    monkeypatch.setattr(combine_pipeline, attr, root_changed_gate)
+    observer = _campaign_observers(fixture)
+    if consumer == "early":
+        with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked, match="qa_fixture_identity_changed"):
+            observer.assert_visual_delivery_ready(data)
+    else:
+        report = observer._cached_payload_report(data)
+        assert not report["ok"]
+        assert "qa_fixture_identity_changed" in {row["code"] for row in report["visual"]["problems"]}
+    assert visited == [True]
+    assert data == before
 
 
 @pytest.fixture(autouse=True)

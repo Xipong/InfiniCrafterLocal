@@ -167,6 +167,10 @@ def test_captured_gameplay_repair_replay(section, case):
                 row["params"]["axePowerTooltipPercent"] = old_axe * 5
     report = validate_runtime_program(initial)
     expected_codes = set(replay["expectedInitialCodes"])
+    if case == "obsidian_pickaxe":
+        # Native tool admission no longer requires an independent combat lane.
+        # Preserve captured bytes and every remaining historical refusal.
+        expected_codes.remove("missing_binding_dependency")
     if case in {"ropebound_spear", "silt_extractinator"}:
         # Fixed placement cost is legal again only as exact integer one.
         # Captured wrong cost still receives the original const + semantic refusal.

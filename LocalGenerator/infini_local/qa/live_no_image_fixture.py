@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import copy
+import hashlib
 from pathlib import Path
 import struct
-from typing import Any
+from types import FunctionType
+from typing import Any, Callable
 import zlib
 
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
@@ -128,4 +131,155 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
     return data
 
 
-__all__ = ["hydrate_no_image_fixture_assets", "write_no_image_fixture_png"]
+def _verify_no_image_fixture_identity(
+    fixture: Path, selected_fixture: Path, fixture_sha: str,
+) -> None:
+    """Bind one QA observation to exact bytes and canonical serving selection."""
+    from infini_local.pipelines import visual_delivery_gate as gate
+
+    try:
+        paths = {fixture, selected_fixture}
+        snapshots = {path: gate._file_snapshot(path) for path in paths}
+        selected = gate._resolved_asset_path(str(fixture))
+        unchanged = selected is not None and selected.resolve() == selected_fixture
+        unchanged = unchanged and all(
+            hashlib.sha256(path.read_bytes()).hexdigest() == fixture_sha for path in paths
+        )
+        selected_after = gate._resolved_asset_path(str(fixture))
+        unchanged = unchanged and selected_after is not None and selected_after.resolve() == selected_fixture
+        unchanged = unchanged and all(gate._file_snapshot(path) == snapshots[path] for path in paths)
+    except (OSError, ValueError):
+        unchanged = False
+    if not unchanged:
+        raise gate.VisualDeliveryBlocked("qa_fixture_identity_changed: synthetic QA fixture bytes or serving selection changed")
+
+
+def observe_no_image_readiness(
+    data: dict[str, Any], fixture_path: Path,
+    readiness_check: Callable[[dict[str, Any]], Any],
+) -> tuple[dict[str, Any], Any]:
+    """Consume a private execution control inside its exact-byte QA proof."""
+    control = synthetic_no_image_execution_control(data, fixture_path)
+    binding = control.get("debug", {}).get("noImageExecutionControl", {}).get("fixture")
+    if binding is None:
+        return control, readiness_check(control)
+    fixture = Path(binding["path"])
+    selected = Path(binding["selectedServingPath"])
+    _verify_no_image_fixture_identity(fixture, selected, binding["sha256"])
+    try:
+        result = readiness_check(control)
+    finally:
+        # A fresh canonical assessment can accept another complete PNG, or a
+        # cached/wrapped consumer can replace it after its own assessment.
+        _verify_no_image_fixture_identity(fixture, selected, binding["sha256"])
+    return control, result
+
+
+def synthetic_no_image_execution_control(
+    data: dict[str, Any], fixture_path: Path,
+) -> dict[str, Any]:
+    """Observe a private copy through the real image metadata projector.
+
+    Only this harness-owned technical fixture can supply synthetic completed
+    execution results. The original QA labels/evidence are never rewritten.
+    Clone the projector's globals rather than patching its module: concurrent
+    crafts and production callers must not see these backend substitutions.
+    """
+    from infini_local.core.vfx_manifest import vfx_png_dependencies
+    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.pipelines import visual_sprite_generation as sprites
+    from infini_local.services.asset_sync_service import is_complete_png_file
+
+    control = copy.deepcopy(data)
+    evidence: dict[str, Any] = {
+        "kind": "synthetic_no_image_execution_control",
+        "synthetic": True,
+        "realImageGeneration": False,
+        "owners": [],
+    }
+    control.setdefault("debug", {})["noImageExecutionControl"] = evidence
+    # Keep every canonical owner/path/roster refusal. Only the explicitly QA
+    # execution-status seam can be bridged, never other readiness failures.
+    baseline = gate.visual_delivery_report(data, check_backend_config=False)
+    if any(row["code"] != "required_vfx_texture_not_ready" for row in baseline["problems"]):
+        return control
+    fixture = fixture_path.resolve()
+    selected_fixture = gate._resolved_asset_path(str(fixture))
+    if selected_fixture is None:
+        return control
+    selected_fixture = selected_fixture.resolve()
+    try:
+        snapshots = {path: gate._file_snapshot(path) for path in {fixture, selected_fixture}}
+        if not is_complete_png_file(selected_fixture):
+            return control
+        fixture_sha = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        if any(gate._file_snapshot(path) != snapshot for path, snapshot in snapshots.items()):
+            raise gate.VisualDeliveryBlocked("qa_fixture_identity_changed: synthetic QA fixture changed during authentication")
+        _verify_no_image_fixture_identity(fixture, selected_fixture, fixture_sha)
+    except OSError:
+        return control
+
+    entities = {row["id"]: row for row in data.get("runtimeProgram", {}).get("entities", [])}
+    for dependency in vfx_png_dependencies(data)["dependencies"]:
+        if dependency["spriteStatus"] != "qa_no_image_fixture":
+            # The projector mirrors item-body/reuse execution metadata; do not
+            # let that projection erase a pending/non-QA selected producer.
+            return control
+        selected = gate._resolved_asset_path(dependency["spritePath"])
+        if selected is None or selected.resolve() != selected_fixture.resolve():
+            return control
+
+    def execution_result(role: str, owner: dict[str, Any], prefix: str) -> tuple[str, str, float, str]:
+        path = str(owner.get(prefix + "Path") or "")
+        status = str(owner.get(prefix + "Status") or "")
+        selected = gate._resolved_asset_path(path)
+        if status == "qa_no_image_fixture" and selected is not None and selected.resolve() == selected_fixture.resolve():
+            evidence["owners"].append({
+                "role": role, "statusBefore": status,
+                "selectedServingPath": str(selected.resolve()), "sha256": fixture_sha,
+                "completePng": True,
+            })
+            return path, "", 1.0, "generated"
+        return path, str(owner.get(prefix + "Url") or ""), float(owner.get(prefix + "TechnicalScore") or 0.0), status
+
+    def synthetic_item(item: dict[str, Any]) -> dict[str, Any]:
+        path, url, score, status = execution_result("item", data.get("visual", {}), "sprite")
+        item.setdefault("visual", {}).update(
+            spritePath=path, spriteUrl=url, spriteTechnicalScore=score, spriteStatus=status,
+        )
+        return item
+
+    def synthetic_asset(_item: dict[str, Any], role: str, *_args: Any, **kwargs: Any) -> tuple[str, str, float, str]:
+        entity_id = kwargs.get("entity_id") or kwargs.get("publication_entity_id")
+        if entity_id:
+            prefix = "impactSprite" if role == "impact" else "sprite"
+            owner = entities.get(entity_id, {}).get("visual", {})
+            return execution_result(("impact:" if prefix == "impactSprite" else "entity:") + entity_id, owner, prefix)
+        if role == "equip_overlay":
+            return execution_result(role, data.get("visual", {}), "equipOverlay")
+        # Requested VFX ingredients are not supplied by this ordinary fixture.
+        return "", "", 0.0, "pending"
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("image backend reached by synthetic no-image observer")
+
+    projector = sprites.maybe_generate_visual_assets
+    isolated_globals = dict(projector.__globals__)
+    isolated_globals.update(
+        maybe_generate_sprite=synthetic_item,
+        generate_visual_asset=synthetic_asset,
+        _generate_backend_variants=forbidden,
+        write_visual_manifest=lambda *_args, **_kwargs: None,
+        VISUAL_ASSET_MODE="full",
+    )
+    isolated_projector = FunctionType(projector.__code__, isolated_globals, projector.__name__, projector.__defaults__, projector.__closure__)
+    evidence["fixture"] = {
+        "path": str(fixture), "selectedServingPath": str(selected_fixture), "sha256": fixture_sha,
+    }
+    _verify_no_image_fixture_identity(fixture, selected_fixture, fixture_sha)
+    projected = isolated_projector(control)
+    _verify_no_image_fixture_identity(fixture, selected_fixture, fixture_sha)
+    return projected
+
+
+__all__ = ["hydrate_no_image_fixture_assets", "write_no_image_fixture_png", "synthetic_no_image_execution_control", "observe_no_image_readiness"]
