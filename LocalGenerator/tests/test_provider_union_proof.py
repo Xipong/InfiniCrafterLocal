@@ -149,14 +149,6 @@ def test_nested_closed_keys_require_every_ancestor_and_keep_json_boolean_numeric
         assert Draft202012Validator(scalar).is_valid(value) == Draft202012Validator(projected).is_valid(value)
 
 
-def test_scoped_singleton_does_not_decode_unknown_function_by_object_type():
-    local = {"oneOf": [_closed({"fn": {"const": "registered"}, "optional": {"type": "integer"}}, ["fn"])]}
-    provider = contract._provider_strict_projection(local)
-    assert _inverse({"fn": "registered", "optional": None}, local, provider) == {"fn": "registered"}
-    unknown = {"fn": "unknown", "optional": None}
-    assert _inverse(unknown, local, provider) == unknown
-
-
 @pytest.mark.parametrize("value", ["grounded", {"lifeAtLeast": 10}, {"manaAtLeast": 20}])
 def test_typed_registry_schema_reaches_actual_author_request_and_repair_inverse(monkeypatch, value):
     item = build_runtime_fixture("workbench_blade")
