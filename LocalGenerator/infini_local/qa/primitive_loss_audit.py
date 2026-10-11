@@ -321,19 +321,26 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 
 def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
-    """Classify the new nested DTO and exact scalar storage, not GPU execution."""
-    from infini_local.core.runtime_authoring.wire_validator import _PLACED_BODY_KEYS
+    return _placed_component_surface_audit("present_placed_item_sprite", "RuntimePlacedBodySpec", dto)
+
+
+def placed_light_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    return _placed_component_surface_audit("add_placed_light", "RuntimePlacedLightSpec", dto)
+
+
+def _placed_component_surface_audit(fn: str, class_name: str, dto: bytes | None) -> dict[str, Any]:
+    """Classify nested placed DTO storage/bounds, not GPU execution."""
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
-    cap = CAPABILITY_REGISTRY["present_placed_item_sprite"]
+    cap = CAPABILITY_REGISTRY[fn]
     expected = {(spec.wire_name or name)[0].upper() + (spec.wire_name or name)[1:]:
                 ("double" if spec.consumer_storage == "float64" else "float") if spec.kind == "number"
-                else "int" if spec.kind == "integer" else "bool"
+                else "int" if spec.kind == "integer" else "bool" if spec.kind == "boolean" else "string"
                 for name, spec in cap.params.items() if name != "placementCallId"}
     actual: dict[str, str] = {}
     block = ""
     for declaration in _nodes(_PARSER.parse(dto).root_node, "class_declaration"):
         name = declaration.child_by_field_name("name")
-        if name is None or dto[name.start_byte:name.end_byte] != b"RuntimePlacedBodySpec":
+        if name is None or dto[name.start_byte:name.end_byte].decode() != class_name:
             continue
         # Inspect code only: comments/string literals cannot satisfy a guard.
         code = bytearray(dto[declaration.start_byte:declaration.end_byte])
@@ -341,12 +348,17 @@ def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             code[child.start_byte-declaration.start_byte:child.end_byte-declaration.start_byte] = b" " * (child.end_byte-child.start_byte)
         for child in _nodes(declaration, "string_literal"):
             code[child.start_byte-declaration.start_byte:child.end_byte-declaration.start_byte] = b" " * (child.end_byte-child.start_byte)
+        for nested in _nodes(declaration, "class_declaration"):
+            if nested != declaration:
+                code[nested.start_byte-declaration.start_byte:nested.end_byte-declaration.start_byte] = b" " * (nested.end_byte-nested.start_byte)
         block = code.decode()
         for prop in _nodes(declaration, "property_declaration"):
+            if prop.parent != declaration.child_by_field_name("body"):
+                continue
             identifier, storage = prop.child_by_field_name("name"), prop.child_by_field_name("type")
             if identifier is not None and storage is not None:
                 actual[dto[identifier.start_byte:identifier.end_byte].decode()] = dto[storage.start_byte:storage.end_byte].decode()
-    wire = {name[0].upper() + name[1:] for name in _PLACED_BODY_KEYS}
+    wire = {name[0].upper() + name[1:] for name in cap.params if name != "placementCallId"}
     import re
     bounds: dict[str, list[int | float]] = {}
     number = r"(-?\d+(?:\.\d+)?)"
@@ -437,6 +449,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingActionSpec": (pascal(actions) - {"PlacementCallId"}) | {"Placement"},
         "RuntimePlacementSpec": pascal(placement_fields),
         "RuntimePlacedBodySpec": pascal(wire._PLACED_BODY_KEYS),
+        "RuntimePlacedLightSpec": pascal(CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"}),
         "RuntimeEntitySpec": pascal(author.entity_schema()["properties"]) | pascal(entity_components)
                              | {"Visual", "VisualRole"},
         "RuntimeEntityVisualSpec": visual_contract | vfx_director_fields | visual_internal,
@@ -451,6 +464,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingActionSpec": wire._BINDING_ACTION_KEYS,
         "RuntimePlacementSpec": wire._PLACEMENT_KEYS,
         "RuntimePlacedBodySpec": wire._PLACED_BODY_KEYS,
+        "RuntimePlacedLightSpec": CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"},
         "RuntimeEntitySpec": wire._ENTITY_KEYS,
         "RuntimeEntityVisualSpec": wire._VISUAL_KEYS,
         "RuntimeMovementSpec": wire._DRIVER_KEYS,
@@ -463,10 +477,12 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         unclassified[cls] = sorted(properties - owner_fields)
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
     placed_storage = placed_body_surface_audit(dto)
+    placed_light = placed_light_surface_audit(dto)
     effect_groups = item_effect_group_surface_audit()
     weapon_ammo = weapon_ammo_surface_audit()
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and placed_light["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
             "placedBodyStorage": placed_storage,
+            "placedLightStorage": placed_light,
             "itemEffectGroups": effect_groups,
             "weaponAmmo": weapon_ammo,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,

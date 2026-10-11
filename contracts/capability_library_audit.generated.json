@@ -14,24 +14,24 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 72,
-    "publicCapabilities": 68,
+    "capabilities": 73,
+    "publicCapabilities": 69,
     "retainedCapabilities": 4,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
     "events": 10,
-    "parameters": 299,
-    "numericParameters": 211,
-    "boundedNumericParameters": 211,
-    "semanticParameters": 299,
+    "parameters": 302,
+    "numericParameters": 212,
+    "boundedNumericParameters": 212,
+    "semanticParameters": 302,
     "typedEntityReferences": 4,
-    "typedCallReferences": 1,
-    "requirements": 72,
+    "typedCallReferences": 2,
+    "requirements": 74,
     "bindingDependencyEdges": 9,
     "spawnBudgetCapabilities": 3,
     "stationaryMeaningfulCapabilities": 14,
-    "exactWirePaths": 446,
+    "exactWirePaths": 449,
     "globalTechnicalLowerers": 8,
     "globalTechnicalLowererOutputs": 162,
     "exclusiveGroups": {
@@ -75,13 +75,13 @@
       ]
     },
     "authorityDistribution": {
-      "owner_request_server_execute": 13,
+      "owner_request_server_execute": 14,
       "server_execute": 3,
       "owner_execute_sync": 49,
       "client_visual_only": 3
     },
-    "rangeParityRows": 149,
-    "verticalSliceCount": 68
+    "rangeParityRows": 150,
+    "verticalSliceCount": 69
   },
   "issues": [],
   "errorCount": 0,
@@ -1075,7 +1075,7 @@
     },
     {
       "capability": "move_gravity_arc",
-      "param": "gravityVelocityPerUpdate",
+      "param": "accelY",
       "wireParam": "gravityPerTick",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
@@ -1113,7 +1113,7 @@
     },
     {
       "capability": "move_orbit",
-      "param": "rangeTiles",
+      "param": "radiusTiles",
       "wireParam": "rangeTiles",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
@@ -1569,7 +1569,7 @@
     },
     {
       "capability": "move_yoyo_hover",
-      "param": "returnSpeed",
+      "param": "speed",
       "wireParam": "returnSpeed",
       "csharpClass": "RuntimeParamsSpec",
       "authorBounds": [
@@ -2788,6 +2788,22 @@
       "csharpBounds": [
         -180.0,
         180.0
+      ],
+      "csharpStorage": "double",
+      "admission": "reject_without_clamp",
+      "preserved": true
+    },
+    {
+      "capability": "add_placed_light",
+      "param": "strength",
+      "csharpClass": "RuntimePlacedLightSpec",
+      "authorBounds": [
+        0.01,
+        1.5
+      ],
+      "csharpBounds": [
+        0.01,
+        1.5
       ],
       "csharpStorage": "double",
       "admission": "reject_without_clamp",

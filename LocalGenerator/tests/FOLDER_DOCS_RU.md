@@ -1,5 +1,7 @@
 # Python-тесты
 
+- `test_placed_light_capability.py` — explicit call/reference/schema/compiler receipts/strict wire, независимая композиция sprite+light, serialized Author/leaf-local frozen Repair и native DTO bound/storage drift. Offline, без inference.
+
 [Канонические владельцы и приёмка](../../docs/TEST_CONTRACT_OWNERS_RU.md) — единая инструкция по тестам, gates и мутациям. `fixtures/` хранит неизменяемые regression inputs; общие VFX builders — `vfx_material_fixtures.py` и `vfx_image_fixtures.py`.
 
 [conftest.py](conftest.py) до collection отключает операторский `config.env`, live LLM и autostart SD.cpp, создаёт изолированный cache. Изменения среды выполняются через `monkeypatch`. `INFINI_TEST_USE_PROJECT_CONFIG=1` допустим только для отдельно запрошенного эксперимента, не release gate.

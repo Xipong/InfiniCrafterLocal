@@ -550,6 +550,16 @@ public sealed class RuntimePlacementSpec
         set => _placedBody = value ?? throw new InvalidDataException("present placedBody cannot be null");
     }
 
+    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null;
+
+    private RuntimePlacedLightSpec? _placedLight;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePlacedLightSpec? PlacedLight
+    {
+        get => _placedLight;
+        set => _placedLight = value ?? throw new InvalidDataException("present placedLight cannot be null");
+    }
+
     public void NormalizeAndValidate()
     {
         if (TileId < -1 || TileId >= TileLoader.TileCount)
@@ -560,12 +570,45 @@ public sealed class RuntimePlacementSpec
             throw new InvalidDataException("placement must enable a tile or wall");
         if (PlaceStyle is < 0 or > 1000)
             throw new InvalidDataException("placement style must be 0..1000");
+        if (PlacedLight is not null)
+        {
+            if (TileId < 0 || WallId >= 0)
+                throw new InvalidDataException("placedLight requires exact tile-only placement");
+            PlacedLight.Validate();
+        }
         if (PlacedBody is not null)
         {
             if (TileId < 0 || WallId >= 0)
                 throw new InvalidDataException("placedBody requires exact tile-only placement");
             PlacedBody.Validate();
         }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimePlacedLightSpec
+{
+    public sealed class StrengthJsonConverter : JsonConverter<double>
+    {
+        private static readonly RawJsonFloatDomain Domain = new("0.01", "1.5", null);
+        public override bool HandleNull => true;
+        public override double Read(ref System.Text.Json.Utf8JsonReader reader, Type type, System.Text.Json.JsonSerializerOptions options)
+            => Domain.ReadDouble(ref reader);
+        public override void Write(System.Text.Json.Utf8JsonWriter writer, double value, System.Text.Json.JsonSerializerOptions options)
+        {
+            if (!double.IsFinite(value) || value is < 0.01 or > 1.5) throw new System.Text.Json.JsonException("placed light strength out of domain");
+            writer.WriteNumberValue(value);
+        }
+    }
+
+    [JsonRequired, JsonConverter(typeof(StrengthJsonConverter))] public double Strength { get; init; }
+    [JsonRequired] public string Color { get; init; } = null!;
+
+    public void Validate()
+    {
+        if (!double.IsFinite(Strength) || Strength is < 0.01 or > 1.5
+            || string.IsNullOrEmpty(Color) || RuntimeColorPolicy.NormalizeRequired(Color) != Color)
+            throw new InvalidDataException("placedLight requires explicit bounded strength and exact color");
     }
 }
 

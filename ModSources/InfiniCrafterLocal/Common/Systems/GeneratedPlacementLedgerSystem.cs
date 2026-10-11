@@ -157,6 +157,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     private static readonly Dictionary<int, PlacementAuthorization> PendingAuthorizations = new();
     private static readonly Dictionary<int, int> PlacementReceiptExpiryByPlayer = new();
 
+    public override void OnWorldUnload() => ClearWorld();
+
     public override void ClearWorld()
     {
         Placements.Clear();
@@ -508,7 +510,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         {
             RuntimeBindingSpec? exactBinding = data.RuntimeProgram.Bindings.SingleOrDefault(binding =>
                 ReferenceEquals(binding.UsePolicy.Action.Placement, placement));
-            if (placement.PlacedBody is not null && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
+            if (placement.HasPlacedFootprint && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
                 return false;
             string definitionJson = data.ToNetworkJson();
             string definitionHash = PlacementDefinitionHash(definitionJson);
@@ -600,7 +602,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (!WithinPlacementReach(player, authorization.TargetX, authorization.TargetY))
             return false;
 
-        List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.PlacedBody is not null
+        List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.HasPlacedFootprint == true
             ? FindExactPlacedBodyCells(authorization) : FindCommittedCells(authorization);
         if (committedCells.Count == 0 || committedCells.Count > MaxCellsPerGroup)
             return false;

@@ -2284,6 +2284,7 @@
                           "configure_tile_placement",
                           "configure_wall_placement",
                           "present_placed_item_sprite",
+                          "add_placed_light",
                           "require_use_condition",
                           "add_hold_light",
                           "move_player_on_use",

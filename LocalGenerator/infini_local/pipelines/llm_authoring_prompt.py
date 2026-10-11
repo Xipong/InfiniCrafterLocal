@@ -266,6 +266,8 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     for card in capabilities:
         if card["fn"] == "present_placed_item_sprite":
             card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+        elif card["fn"] == "add_placed_light":
+            card["constructionMeaning"] = "Independent explicit light; one center cell per committed native footprint, not player/held PNG or sprite heads. Certified 16x16/256 cells max; unproved post-place actors refused before mutation. Strength/color remain required; no default."
         elif card["fn"] == "charge_then_release":
             card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
         elif card["fn"] == "configure_item_use":

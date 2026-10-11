@@ -95,7 +95,7 @@ _EVENT_KEYS = frozenset({
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
-_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody"})
+_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
@@ -911,13 +911,16 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "binding_action_mismatch", "message": "place_item cannot deal item-body contact damage."})
             if isinstance(placement, Mapping):
                 _reject_unknown(placement, _PLACEMENT_KEYS, f"{binding_path}.usePolicy.action.placement", errors)
-                if "placedBody" in placement:
-                    specs = CAPABILITY_REGISTRY["present_placed_item_sprite"].params
+                for component_cap in (cap for cap in CAPABILITY_REGISTRY.values() if cap.category == "item_placed_body"):
+                    component = component_cap.params["placementCallId"].wire_name
+                    if component not in placement:
+                        continue
+                    specs = component_cap.params
                     body_schema = {"type": "object", "additionalProperties": False,
                                    "properties": {name: spec.schema() for name, spec in specs.items() if name != "placementCallId"},
                                    "required": [name for name in specs if name != "placementCallId"]}
-                    body_path = f"{binding_path}.usePolicy.action.placement.placedBody"
-                    for issue in strict_schema_errors(placement["placedBody"], body_schema, path=body_path):
+                    body_path = f"{binding_path}.usePolicy.action.placement.{component}"
+                    for issue in strict_schema_errors(placement[component], body_schema, path=body_path):
                         errors.append({**issue, "code": "invalid_placed_body", "message": "Placed body must match every required canonical transform leaf."})
                     if type(placement.get("tileId")) is not int or not 0 <= placement["tileId"] <= 65535 or type(placement.get("wallId")) is not int or placement["wallId"] != -1:
                         errors.append({"path": body_path, "code": "placed_body_tile_only", "message": "Placed body requires tile-only placement."})
