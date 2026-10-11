@@ -199,7 +199,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     class_bounds = {
         name: _clamp_bounds(text, name, constants)
         for name in (
-            "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
+            "RuntimeEntitySpec", "RuntimeSpawnSpec", "RuntimeOverTargetSpec", "RuntimeDamageSpec", "RuntimeHitboxSpec", "RuntimeHitboxCurveSpec",
             "RuntimeTurnModifierSpec", "RuntimeSpeedModifierSpec", "RuntimeHomingModifierSpec", "RuntimeNpcAttractionSpec", "RuntimeVisualScaleCurveSpec",
             "RuntimeCollisionSpec", "RuntimeParamsSpec", "RuntimeTargetingSpec", "RuntimeLightSpec",
             "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
@@ -207,6 +207,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     }
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
+        "set_projectile_lifetime": ("RuntimeEntitySpec", ""),
         "set_projectile_concurrency": ("RuntimeSpawnSpec", ""),
         "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
         "set_projectile_damage": ("RuntimeDamageSpec", ""),
@@ -306,11 +307,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "preserved": reject_bounds == authored_bounds})
                 continue
             if csharp is None:
-                # Lifetime is clamped at the entity level, not a sub-spec.
-                if cap.name == "set_projectile_lifetime" and param_name == "lifetimeTicks":
-                    csharp = (1.0, constants.get("InfiniRuntimeLimits.MaxRuntimeLifetimeTicks", 21600.0))
-                else:
-                    continue
+                continue
             authored = (spec.minimum, spec.maximum) if spec.minimum is not None and spec.maximum is not None else None
             projected = (spec.to_wire(authored[0]), spec.to_wire(authored[1])) if authored else None
             rows.append({

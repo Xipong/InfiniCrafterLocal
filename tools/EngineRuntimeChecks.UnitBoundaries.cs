@@ -9,6 +9,40 @@ using Terraria;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void ProjectileLifetimeCeilingSurvivesNativeBoundary()
+    {
+        foreach (int ticks in new[] { 1, 21600, 36000 })
+        foreach (int extra in new[] { 0, 2 })
+        {
+            using var scope = new SwarmRuntimeScope();
+            var source = SwarmGameplayFixture();
+            var sourceEntity = source.RuntimeProgram.TryGetEntity("root")!;
+            sourceEntity.LifetimeTicks = ticks;
+            sourceEntity.Collision.ExtraUpdates = extra;
+            // Raw writer must not Normalize away the old ceiling before admission.
+            var data = GeneratedItemData.FromJson(JsonSerializer.Serialize(source,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
+                ?? throw new InvalidOperationException("projectile lifetime rejected: " + ticks);
+            var entity = data.RuntimeProgram.TryGetEntity("root")!;
+            Equal(ticks, entity.LifetimeTicks, "native DTO retains lifetime");
+            foreach (string payload in new[] { data.ToJson(), data.ToLocalCacheJson(), data.ToNetworkJson() })
+                Equal(ticks, GeneratedItemData.FromJson(payload)!.RuntimeProgram.TryGetEntity("root")!.LifetimeTicks,
+                    "native full/cache/network round trip");
+            var generated = SwarmHost(data, entity);
+            Equal(ticks * (1 + extra), generated.Projectile.timeLeft, "actual Configure world-tick lifetime");
+        }
+    }
+
+    private static void ProjectileLifetimeOutsideCeilingIsRefused()
+    {
+        var source = SwarmGameplayFixture();
+        var root = source.RuntimeProgram.TryGetEntity("root")!;
+        root.LifetimeTicks = 36001;
+        string raw = JsonSerializer.Serialize(source,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Equal(true, GeneratedItemData.FromJson(raw) is null, "native lifetime refuses 36001");
+    }
+
     private static GeneratedItemData UnitChargeFixture(float speed, int ticks, float power, int extraUpdates)
     {
         var data = SwarmGameplayFixture();

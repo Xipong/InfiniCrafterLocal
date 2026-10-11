@@ -1714,7 +1714,7 @@ _CAPS: list[CapabilitySpec] = [
         "Set exact bounded entity lifetime.",
         "entity_lifecycle",
         PROJECTILE_ENTITY_KINDS,
-        {"lifetimeTicks": _p("integer", "Lifetime", minimum=1, maximum=21600, units="ticks")},
+        {"lifetimeTicks": _p("integer", "Lifetime", minimum=1, maximum=36000, units="ticks")},
         py=_COMPILER_OWNER,
         cs="GeneratedProjectile.cs::SetDefaults",
         wire=("runtimeProgram.entities[].lifetimeTicks",),
