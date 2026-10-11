@@ -62,7 +62,9 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
 
     private sealed class OwnerState
     {
-        public Item[] Slots { get; init; } = NewAirSlots();
+        public Item[] Slots { get; set; } = NewAirSlots();
+        // Transient bearer-token pin. This is not authenticated player identity.
+        public InfiniCraftPlayer? SessionOwner { get; set; }
     }
 
     private sealed class CraftTransactionState
@@ -188,29 +190,53 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
         }
     }
 
+    private static bool IsLiveSession(InfiniCraftPlayer? owner)
+        => owner?.Player is { active: true } player
+            && player.whoAmI >= 0 && player.whoAmI < Main.maxPlayers
+            && ReferenceEquals(Main.player[player.whoAmI], player)
+            && ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner);
+
+    internal static bool IsBoundOwner(string clientId, InfiniCraftPlayer player)
+        => IsLiveSession(player)
+            && Owners.TryGetValue(NormalizeClientId(clientId), out OwnerState? state)
+            && ReferenceEquals(state.SessionOwner, player);
+
     internal static bool RestoreOwnerState(string clientId, InfiniCraftPlayer player)
     {
         string key = NormalizeClientId(clientId);
-        if (key.Length == 0 || player is null)
+        if (key.Length == 0 || !IsLiveSession(player))
+            return false;
+        // One live session cannot rotate tokens, even with an empty station.
+        // Otherwise restoring B while A is crafting changes the completion owner.
+        if (Owners.Any(pair => pair.Key != key && ReferenceEquals(pair.Value.SessionOwner, player)))
             return false;
         if (Owners.TryGetValue(key, out OwnerState? state))
         {
+            // Reconnect is allowed only after the previous incarnation has left.
+            if (!ReferenceEquals(state.SessionOwner, player) && IsLiveSession(state.SessionOwner))
+                return false;
+            state.SessionOwner = player;
             player.RestoreServerStationEscrowSlots(state.Slots);
             return true;
         }
         if (Owners.Count >= MaxOwners)
             return false;
-        CaptureOwnerState(key, player);
+        Owners[key] = new OwnerState { Slots = player.SnapshotServerStationEscrowSlots(), SessionOwner = player };
         return true;
     }
 
     internal static void CaptureOwnerState(string clientId, InfiniCraftPlayer player)
     {
         string key = NormalizeClientId(clientId);
-        if (key.Length == 0 || player is null || (!Owners.ContainsKey(key) && Owners.Count >= MaxOwners))
+        if (!IsBoundOwner(key, player))
             return;
-        Owners[key] = new OwnerState { Slots = player.SnapshotServerStationEscrowSlots() };
+        Owners[key].Slots = player.SnapshotServerStationEscrowSlots();
     }
+
+    internal static bool CanCommitCraft(string clientId, string requestId, int laneIndex, InfiniCraftPlayer player)
+        => IsBoundOwner(clientId, player)
+            && CraftTransactions.TryGetValue(OutcomeKey(clientId, requestId), out CraftTransactionState? state)
+            && state.Pending && state.LaneIndex == laneIndex;
 
     internal static bool CanAcceptNewOperation(string clientId, string operationId)
     {
@@ -283,14 +309,30 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
         string key = OutcomeKey(clientId, requestId);
         if (!CraftTransactions.TryGetValue(key, out CraftTransactionState? state))
             return false;
+        string acceptedName = (itemName ?? "")[..Math.Min((itemName ?? "").Length, 120)];
+        string acceptedMessage = (message ?? "")[..Math.Min((message ?? "").Length, 500)];
         if (!state.Pending)
             return state.Success == success
-                && string.Equals(state.ItemName, itemName ?? "", StringComparison.Ordinal)
-                && string.Equals(state.Message, message ?? "", StringComparison.Ordinal);
+                && string.Equals(state.ItemName, acceptedName, StringComparison.Ordinal)
+                && string.Equals(state.Message, acceptedMessage, StringComparison.Ordinal);
+        OwnerState? owner = null;
+        Item[]? committedSlots = null;
+        if (success)
+        {
+            if (!Owners.TryGetValue(NormalizeClientId(clientId), out owner))
+                return false;
+            // Prepare all allocations before committing. Never clone unrelated
+            // modded items after recording success: their Clone hooks can throw.
+            committedSlots = (Item[])owner.Slots.Clone();
+            committedSlots[state.LaneIndex * 2] = new Item();
+            committedSlots[state.LaneIndex * 2 + 1] = new Item();
+        }
+        // Main-thread atomic durable transition: no Item hooks or allocation below.
+        if (owner is not null) owner.Slots = committedSlots!;
         state.Pending = false;
         state.Success = success;
-        state.ItemName = (itemName ?? "")[..Math.Min((itemName ?? "").Length, 120)];
-        state.Message = (message ?? "")[..Math.Min((message ?? "").Length, 500)];
+        state.ItemName = acceptedName;
+        state.Message = acceptedMessage;
         return true;
     }
 

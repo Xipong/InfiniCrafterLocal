@@ -37,11 +37,10 @@ RUNTIME_ROW_SHAPE_RULE = (
     "For new bindings use id/input/action:{kind,targetId}/stackCost/contactDamage. "
     "Fixed binding literals may be explicit or omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
     "item-body-only action targetId=the exact unique declared item_body id; hold/equipped stackCost=0 and contactDamage=false; "
-    "place_item stackCost=1 and contactDamage=false. Historical sparse forms remain valid. "
+    "place_item stackCost=1 and contactDamage=false. Projectile action targets remain explicit. Historical sparse forms remain valid. "
     "Every present literal must be exact and correctly typed; never choose a different action from these equivalences. "
     "Active non-placement kind, stackCost and contactDamage remain explicit independent decisions. "
-    "placementCallId is required only for place_item; effectGroupId is optional only for apply_item_effects; "
-    "stackConsumeChancePercent is optional only for active non-placement stackCost=1. "
+    "placementCallId is required for place_item and forbidden for other actions; effectGroupId is optional only for apply_item_effects. "
     "In a complete Author binding, absent effectGroupId selects ungrouped item effects."
 )
 
@@ -200,12 +199,6 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 },
             },
         },
-        "forbidden": [
-            "weapon archetype selector",
-            "family-derived movement/attachment/delivery",
-            "compiler receipts",
-            "gameplay claimed only in prose rather than runtimeProgram",
-        ],
     }
 
 

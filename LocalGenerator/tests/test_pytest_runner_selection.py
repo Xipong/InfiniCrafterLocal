@@ -234,3 +234,58 @@ def test_native_pytest_command_timeout_has_a_distinct_receipt(tmp_path: Path, sl
     assert receipt["exitCode"] == (124 if slow else 0)
     assert receipt["status"] == ("failed" if slow else "passed")
     assert receipt["passed"] == (None if slow else 1)
+
+
+def _workflow_section(name: str, *, indent: int = 0) -> list[str]:
+    """Read a workflow block at its declared indent, without optional YAML deps."""
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    lines = workflow.split(" " * indent + name + ":\n", 1)[1].splitlines()
+    block: list[str] = []
+    for line in lines:
+        if line and not line.lstrip().startswith("#") and not line.startswith(" " * (indent + 1)):
+            break
+        if line.strip() and not line.lstrip().startswith("#"):
+            block.append(line)
+    return block
+
+
+def test_hosted_events_keep_every_pr_main_push_and_manual_run_without_branch_duplicates() -> None:
+    # No path/type/base-branch filters: contract/docs/tooling changes and fork or
+    # draft PRs still receive the full suite. Standalone branches use manual CI.
+    assert _workflow_section("on") == [
+        "  push:", "    branches: [main]", "  pull_request:", "  workflow_dispatch:",
+    ]
+
+
+@pytest.mark.parametrize("previous,current,same_group,cancel_current", [
+    (("pull_request", 41, 100), ("pull_request", 41, 101), True, True),
+    (("pull_request", 41, 100), ("pull_request", 42, 101), False, True),
+    (("push", None, 100), ("push", None, 101), False, False),
+    (("workflow_dispatch", None, 100), ("workflow_dispatch", None, 101), False, False),
+    (("pull_request", 41, 100), ("workflow_dispatch", None, 41), False, False),
+    (("push", None, 41), ("pull_request", 41, 101), False, True),
+], ids=["superseded-same-pr", "independent-prs", "every-main-commit", "independent-manual-runs", "manual-cannot-cancel-pr", "pr-cannot-cancel-main"])
+def test_hosted_concurrency_only_replaces_the_same_pull_request(previous, current, same_group, cancel_current) -> None:
+    # Pin the small supported Actions expression, then substitute its contexts.
+    # This tests our grouping policy; it is not an Actions scheduler emulator.
+    group, cancellation = (line.split(": ", 1)[1] for line in _workflow_section("concurrency"))
+    assert group == "${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}"
+    assert cancellation == "${{ github.event_name == 'pull_request' }}"
+
+    def key(context, workflow="InfiniCrafterLocal CI"):
+        event, number, run_id = context
+        return (group.replace("${{ github.workflow }}", workflow)
+                .replace("${{ github.event_name }}", event)
+                .replace("${{ github.event.pull_request.number || github.run_id }}", str(number or run_id)))
+
+    assert (key(previous) == key(current)) is same_group
+    assert (current[0] == "pull_request") is cancel_current
+    assert key(previous) != key(previous, workflow="Another workflow")
+
+
+def test_hosted_python_cache_uses_the_lockfile_without_skipping_installation() -> None:
+    for job in ("python-tests", "strict-hygiene"):
+        block = "\n".join(_workflow_section(job, indent=2))
+        assert "          cache: pip\n          cache-dependency-path: LocalGenerator/requirements-dev.lock" in block
+        assert "python -m pip install -r LocalGenerator/requirements-dev.lock" in block
+        assert "cache-hit" not in block

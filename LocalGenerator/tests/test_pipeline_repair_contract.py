@@ -1356,7 +1356,7 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     }
     author = json.loads(author_payload)
     assert "selfEvaluation" in author["diagnosticReport"]
-    assert "on_expire" in next(row for row in author["runtimeCapabilityContract"]["catalog"]["events"] if row["event"] == "on_expire")["constructionMeaning"]
+    assert "early kill otherwise emits on_kill only" in next(row for row in author["runtimeCapabilityContract"]["catalog"]["events"] if row["event"] == "on_expire")["does"]
     assert "interpretation of the exact post-merge program, not an observed run" in repair_rules
     assert "rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport" in repair_rules
     assert set(dossier["acceptedItemContext"]) == {"name", "category", "realization", "concept", "runtimeProgram"}

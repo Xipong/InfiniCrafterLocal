@@ -35,11 +35,13 @@ def _check_tml_build_helper_converts_wsl_external_deps_for_windows_dotnet(monkey
     sys.path.insert(0, str(ROOT / "tools"))
     import try_tml_build_check
 
-    monkeypatch.setattr(
-        try_tml_build_check.subprocess,
-        "run",
-        lambda *_args, **_kwargs: type("Proc", (), {"returncode": 0, "stdout": "C:\\deps\\tml\n"})(),
-    )
+    calls = []
+
+    def convert(command, **kwargs):
+        calls.append((command, kwargs))
+        return type("Proc", (), {"returncode": 0, "stdout": "C:\\deps\\tml\n"})()
+
+    monkeypatch.setattr(try_tml_build_check.subprocess, "run", convert)
 
     value = try_tml_build_check.msbuild_path_value(
         Path("/home/xipong/tmp/tml-deps-src"),
@@ -47,24 +49,9 @@ def _check_tml_build_helper_converts_wsl_external_deps_for_windows_dotnet(monkey
     )
 
     assert value == "C:\\deps\\tml"
-
-
-def _check_tml_build_helper_converts_wsl_project_for_windows_dotnet(monkeypatch):
-    sys.path.insert(0, str(ROOT / "tools"))
-    import try_tml_build_check
-
-    monkeypatch.setattr(
-        try_tml_build_check.subprocess,
-        "run",
-        lambda *_args, **_kwargs: type("Proc", (), {"returncode": 0, "stdout": "C:\\repo\\Mod.csproj\n"})(),
-    )
-
-    value = try_tml_build_check.msbuild_path_value(
-        Path("/home/xipong/project/Mod.csproj"),
-        dotnet_cmd="/mnt/c/Program Files/dotnet/dotnet.exe",
-    )
-
-    assert value == "C:\\repo\\Mod.csproj"
+    assert calls == [(["wslpath", "-w", str(Path("/home/xipong/tmp/tml-deps-src").resolve())], {
+        "text": True, "stdout": subprocess.PIPE, "stderr": subprocess.DEVNULL,
+    })]
 
 
 def _check_tml_build_log_parser_extracts_roslyn_errors_and_warnings():

@@ -29,10 +29,15 @@ def _sound(data, sound_id: Any = "Item4", *, projectile=False):
     return raw
 
 
-# Every finite sample traverses one canonical consumer. Binding to a projectile
-# is independent of the enum member; Item4 proves that selector wiring once.
+# The exact full palette is owned by the vocabulary/schema equality below,
+# test_palette_restores_every_historical_sample_and_keeps_every_recent_sample,
+# and check_vfx_sound_contract (every C# SoundID mapping). Admission and copying
+# do not branch on an enum member. Retain default/non-default numeric samples,
+# the numeric endpoint, named endpoints and a long name, plus projectile binding.
+# Invalid values, silence, legacy absence and frozen Repair keep their own tests.
 @pytest.mark.parametrize("sound_id,projectile", [
-    pytest.param(sound_id, False, id="item-" + sound_id) for sound_id in SOUND_IDS
+    pytest.param(sound_id, False, id="item-" + sound_id)
+    for sound_id in ("Item1", "Item4", "Item169", "Coins", "ResearchComplete", "Unlock")
 ] + [pytest.param("Item4", True, id="projectile-Item4")])
 def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_id, projectile):
     data = _data()

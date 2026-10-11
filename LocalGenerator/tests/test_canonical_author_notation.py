@@ -62,7 +62,7 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     request, user, _ = build_initial_author_request({}, {}, {}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
     assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
-    assert "Write id, fn, target and params for every new call" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
+    assert "one explicit id/fn/target/params envelope" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
     schema = author_item_response_schema()
     for source in (build_capability_witness(fn), _explicit_calls(build_capability_witness(fn))):
         encoded = _encode_nullable_fixture(source, schema) if mode == "json_schema" else deepcopy(source)
@@ -663,7 +663,7 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     assert "zero-argument calls use params={}" in guide["rowShapes"]
     assert "Exact existing omissions remain valid in the same grammar" in guide["rowShapes"]
     assert "not a literal item alias" in guide["rowShapes"]
-    assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["bindingTarget"]
+    assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["rowShapes"]
 
 
 def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes():

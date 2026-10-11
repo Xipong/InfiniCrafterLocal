@@ -42,11 +42,11 @@ public sealed partial class GeneratedProjectile
         if (!_spawnEventRan)
         {
             // Waiting suppresses movement, not the authored launch. Replay its
-            // exact speed and synced initial direction only at first activation;
+            // exact sampled/native-shot vector (or authored constant) only at first activation;
             // later hydration must not reset an already moving projectile.
             if (_age == 0 && _entity.Spawn.OverTarget.DelayTicks > 0
                 && !_entity.IsStationary)
-                Projectile.velocity = _sampledInitialVelocity
+                Projectile.velocity = _sampledInitialVelocity ?? _nativeShotInitialVelocity
                     ?? (_entity.Spawn.Aim != "none" ? _initialDirection * _entity.Spawn.SpeedPxPerTick : Vector2.Zero);
             _spawnEventRan = true;
             RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);

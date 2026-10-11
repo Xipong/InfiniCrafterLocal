@@ -88,7 +88,10 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     cards = payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(c for c in cards if c["fn"] == FN)
     assert set(card["params"]) == {"placementCallId", *TRANSFORM}
-    assert "call id" in card["constructionMeaning"] and "native" in card["constructionMeaning"]
+    reference = card["params"]["placementCallId"]
+    assert reference["reference"]["namespace"] == "call"
+    assert "Exact same-item configure_tile_placement call" in reference["meaning"]
+    assert "native" in card["does"]
     assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "before mutation"))
     wire = compile_runtime_program(document)
     before = json.dumps(wire, sort_keys=True)

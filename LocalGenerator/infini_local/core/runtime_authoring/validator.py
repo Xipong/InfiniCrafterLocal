@@ -1049,10 +1049,13 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                     ))
         referenced_call_id = placement_call_id(binding)
         referenced_call = calls_by_id.get(referenced_call_id)
+        # An invalid binding target is diagnosed at targetId. It does not
+        # invalidate an otherwise accepted placement-call identity for Repair.
         if (
             referenced_call is None
             or str(referenced_call.get("fn") or "") not in {"configure_tile_placement", "configure_wall_placement"}
-            or str(referenced_call.get("target") or "") != binding_target_id(binding)
+            or (binding_target_id(binding) == item_id
+                and str(referenced_call.get("target") or "") != binding_target_id(binding))
         ):
             issues.append(ValidationIssue(
                 f"$.runtimeProgram.bindings[{index}].action.placementCallId",

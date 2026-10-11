@@ -85,23 +85,13 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
     assert "source-only" in guide["damageClass"]["scope"] and "no other tokens" in guide["damageClass"]["scope"]
     assert cards_from(catalog)["configure_item_stats"]["params"]["valueCopper"]["units"] == "copper"
     assert "value" not in cards_from(catalog)["configure_item_stats"]["params"]
-    stages = payload["gameplayAuthoringStages"]
-    assert [r["name"] for r in stages] == [
-        "initial_concept",
-        "executable_gameplay_program",
-        "final_gameplay_report",
-        "same_pass_self_evaluation",
-    ]
-    assert [r["field"] for r in stages] == [
-        "concept",
-        "runtimeProgram",
-        "realization.description + realization.playerExperience",
-        "realization.selfEvaluation",
-    ]
-    encoded = json.dumps(stages).casefold()
-    for phrase in ("non-binding", "not a rejection", "only executable gameplay authority", "same immutable response"):
-        assert phrase in encoded
-    assert "program_evidence_claims" not in encoded
+    # The system and field-local shape describe the same single response once.
+    assert "gameplayAuthoringStages" not in payload
+    assert payload["requiredJsonShape"]["root"] == ["name", "category", "concept", "runtimeProgram", "realization"]
+    assert "runtimeProgram alone defines executable gameplay" in system
+    assert "non-binding" in payload["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
+    assert "diagnostic" in system and "not evidence of an observed run" in system
+
 
 
 def cards_from(catalog):
@@ -571,16 +561,16 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
                 ("fieldGuide", "stackCost", "", "stackCost=1"),
                 ("fieldGuide", "bindingTarget", "", "contactDamage=true"),
                 ("fieldGuide", "bindingTarget", "", "bindings[].action.targetId"),
-                ("bindingActions", "place_item", "constructionMeaning", "stackCost=1"),
+                ("fieldGuide", "rowShapes", "", "place_item stackCost=1"),
                 ("bindingActions", "place_item", "constructionMeaning", "returned"),
                 ("bindingActions", "place_item", "constructionMeaning", "item_body.on_use"),
                 ("bindingActions", "apply_item_effects", "does", "only active binding"),
                 ("bindingActions", "use_item_body", "does", "never pair it with spawn_entity"),
-                ("inputs", "primary_use", "constructionMeaning", "does not require use_item_body"),
-                ("events", "on_use", "constructionMeaning", "spawned entity"),
-                ("events", "on_expire", "constructionMeaning", "on_expire"),
+                ("inputs", "primary_use", "does", "exactly one action root"),
+                ("events", "on_use", "does", "including spawn_entity actions"),
+                ("events", "on_expire", "does", "an early kill otherwise emits on_kill only"),
                 ("entityKinds", "item_body", "requiredComponents", "configure_item_stats"),
-                ("entityKinds", "stationary_projectile", "constructionMeaning", "target_and_fire"),
+                ("entityKinds", "stationary_projectile", "positionRequirement", "movement is optional"),
                 ("fieldGuide", "paramNotation", "", "15 means 15%, not 0.15"),
             )
         )

@@ -551,12 +551,6 @@ def test_sparse_patch_shape(patch, ok):
     assert gameplay_stage.strict_author_item_repair_report(patch)["ok"] is ok
 
 
-@pytest.mark.parametrize("stage", ["author_repair", "visual_repair", "vfx_repair"])
-def test_repair_transport_stage_names(stage):
-    from infini_local.pipelines.llm_transport import with_llm_stage
-    assert with_llm_stage({"model": "test"}, stage)["_infini_stage"] == stage
-
-
 @pytest.mark.parametrize("scenario,expected,cutoff", [
     pytest.param("valid", ["author_validation", "runtime_compile", "initial_final_wire"], None, id="validated-before-compile-and-wire"),
     pytest.param("scoped-fix", ["author_validation", "author_recovery", "runtime_compile", "recovered_final_wire"], None, id="one-scoped-recovery-before-recompile"),

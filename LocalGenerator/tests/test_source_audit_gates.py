@@ -221,6 +221,13 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Normalize.cs', 'RarityLoader.RarityCount', 'ItemRarityID.Count', 'RarityLoader.RarityCount', id='vanilla-rarity-ceiling'),
     pytest.param('check_runtime_contract', 'Common/Models/RuntimeProgramSpec.cs', 'TileLoader.TileCount', 'TileID.Count', 'TileLoader.TileCount', id='vanilla-tile-ceiling'),
     pytest.param('check_runtime_contract', 'Common/Models/RuntimeProgramSpec.cs', 'BuffId <= 0', 'BuffId < 0', 'BuffId <= 0', id='zero-buff'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', '? projectile.velocity : null', '? velocity : null', 'SpawnRuntimeEntity', id='native-delay-post-allocation-velocity'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', '_nativeShotInitialVelocity = nativeShotInitialVelocity', '_nativeShotInitialVelocity = null', 'Configure', id='native-delay-capture'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', 'childDepth != 0', 'childDepth < 0', 'Configure', id='native-delay-root-only'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.Executors.cs', '?? _nativeShotInitialVelocity', '?? null', 'AI', id='native-delay-replay'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.NetSync.cs', 'writer.Write(nativeLaunch.X)', 'writer.Write(0f)', 'SendExtraAI', id='native-delay-transport'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.NetSync.cs', '!float.IsFinite(nativeLaunch.X)', 'float.IsNaN(nativeLaunch.X)', 'ReceiveExtraAI', id='native-delay-infinity'),
+    pytest.param('check_native_shot_delay_boundaries', 'Content/Projectiles/GeneratedProjectile.NetSync.cs', 'if (!retainOwnerExclusion) _nativeShotInitialVelocity', 'if (true) _nativeShotInitialVelocity', 'ReceiveExtraAI', id='native-delay-retain-owner-snapshot'),
     pytest.param('check_sampled_spawn_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', 'initialVelocitySeed ?? Main.rand.Next()', 'Main.rand.Next()', 'SpawnRuntimeEntity', id='sampled-seed-retained'),
     pytest.param('check_sampled_spawn_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', 'if (rootSpeedOverride.HasValue && entity.Spawn.VelocityDistribution is not null)', 'if (false)', 'SpawnRuntimeEntity', id='sampled-native-shot-no-second-speed-owner'),
     pytest.param('check_sampled_spawn_boundaries', 'Content/Projectiles/GeneratedProjectile.cs', 'entity.Spawn.AcceptsEmissionSpread(spreadOverride ?? entity.Spawn.SpreadRadians)', 'entity.Spawn.AcceptsEmissionSpread(0)', 'SpawnRuntimeEntity', id='sampled-override-not-ignored'),
@@ -355,3 +362,26 @@ def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_p
         (tmp_path / path).write_text(changed, encoding="utf-8")
         monkeypatch.setattr(audit, "ROOT", tmp_path)
     assert diagnostic in {row["code"] for row in audit.report()["issues"]}
+
+
+@pytest.mark.parametrize("path,before,after", [
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "pair.Key != key && ReferenceEquals(pair.Value.SessionOwner, player)", "false"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "!ReferenceEquals(state.SessionOwner, player) && IsLiveSession(state.SessionOwner)", "false"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "if (!IsBoundOwner(key, player))", "if (false)"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "state.Pending && state.LaneIndex == laneIndex", "state.Pending"),
+    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)", "true"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "noBroadcast: true", "noBroadcast: false"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "Main.timeItemSlotCannotBeReusedFor[index] <= 0", "true"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "if (!committed && allocatedOutput is not null)", "if (false)"),
+    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "return committed;", "return false;"),
+])
+def test_escrow_session_gate_rejects_unsafe_commit_mutants(gates, csharp_sources, monkeypatch, path, before, after):
+    _, scanner = gates
+    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
+    scanner.check_escrow_session_fences()
+    assert scanner.ERRORS == []
+    assert before in csharp_sources[path]
+    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
+    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
+    scanner.check_escrow_session_fences()
+    assert any("escrow session:" in error for error in scanner.ERRORS)

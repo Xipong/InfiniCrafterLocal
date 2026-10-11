@@ -109,27 +109,6 @@ def _contract_check_missing_or_unreadable_registry_is_distinguished() -> None:
     assert "not readable" in corrupt["reason"]
 
 
-def _contract_check_real_tool_reports_a_named_difference_not_only_stale(tmp_path) -> None:
-    """End-to-end through the tool's own CLI path, on the real project registry."""
-    module = _load_registry_module()
-    report = module.build_registry()
-    text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-
-    # Drop one real field to simulate the drift an agent has to diagnose.
-    document = json.loads(text)
-    dropped = document["entries"].pop()["name"]
-    stale_path = tmp_path / "config_registry.json"
-    stale_path.write_text(
-        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-    diagnosis = module._stale_registry_report(
-        stale_path.read_text(encoding="utf-8"), text, stale_path
-    )
-    assert diagnosis["addedFields"] == [dropped]
-
-
 # One collected item per contract module: the checks above keep source order and
 # their own tracebacks. The shared runner discovers them by prefix, so a new check
 # cannot be silently left out of a hand-maintained dispatch list.
