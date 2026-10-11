@@ -22,8 +22,7 @@ jobs:
         run: python tools/test_tml_ci.py -v
       - name: Run pytest in isolated deterministic shards
         run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
-      - name: Live20 harness contract tests (offline)
-        run: INFINI_TEST_USE_PROJECT_CONFIG=0 PYTHONPATH=LocalGenerator python -m pytest toolbox/tests -q
+      # The canonical shard runner includes LocalGenerator/tests and toolbox/tests.
       - name: Python compileall
         run: python -m compileall LocalGenerator toolbox
       - name: Env poisoning smoke

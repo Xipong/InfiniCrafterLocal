@@ -8,7 +8,7 @@
 
 | Инвариант | Канонический вход / семейство |
 |---|---|
-| Registry → schema/card → validator → compiler → receipts/wire | [registry vertical](../LocalGenerator/tests/test_registry_vertical_contract.py); `test_registry_*` отдельно покрывают units, neutral provenance, receipt identity, wire/cache, Author packet и composition |
+| Registry → schema/card → validator → compiler → receipts/wire | [registry vertical](../LocalGenerator/tests/test_registry_vertical_contract.py); [units и percent projection](../LocalGenerator/tests/test_registry_author_units.py) — единый numeric owner; `test_registry_*` отдельно покрывают neutral provenance, receipt identity, wire/cache, Author packet и composition |
 | Typed frozen merge, literal JSON members, captured Gameplay/Visual replay | [frozen Repair](../LocalGenerator/tests/test_repair_frozen_contract.py) |
 | Exact permissions → filter → apply → validator | [Gameplay Repair](../LocalGenerator/tests/test_repair_gameplay_contract.py), [VFX Repair](../LocalGenerator/tests/test_repair_vfx_contract.py) |
 | Identity/binding/producer transactions и три реальные LLM-стадии | [pipeline Repair](../LocalGenerator/tests/test_pipeline_repair_contract.py), [stage ordering/budgets](../LocalGenerator/tests/test_low_level_three_stage_pipeline.py) |
@@ -42,7 +42,7 @@ PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4
 python tools/validate_release.py
 ```
 
-Discovery охватывает `LocalGenerator/tests` **и** `toolbox/tests`. Shard runner не пропускает параметры: обычные модули идут пакетами до четырёх файлов с конечным timeout, process-global случаи изолируются. GitNexus/cache metadata в sandbox не копируется. При нехватке зависимостей [validate_sandbox.py](../tools/validate_sandbox.py) даёт только ограниченную structural-проверку.
+Discovery охватывает `LocalGenerator/tests` **и** `toolbox/tests`. Hosted CI запускает оба roots один раз через canonical shard runner, без отдельного повторного toolbox pytest. Runner не пропускает параметры: обычные модули идут пакетами до четырёх файлов с конечным timeout, process-global случаи изолируются. GitNexus/cache metadata в sandbox не копируется. При нехватке зависимостей [validate_sandbox.py](../tools/validate_sandbox.py) даёт только ограниченную structural-проверку.
 
 Штатные gates защищают registry/schema/prompt/C# parity, refs/kinds/inputs/events, receipt paths, bounds, strict unknown-field rejection, non-archetypal witnesses, stage accounting и отсутствие semantic routers. [mutation_contract_gate.py](../tools/mutation_contract_gate.py) проверяет missing executor, duplicate writer, undeclared lowering output, missing DTO field и API-version drift; актуальный roster принадлежит самому gate.
 

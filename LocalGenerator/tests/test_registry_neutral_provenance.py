@@ -184,14 +184,27 @@ def test_present_optional_parameter_keeps_type_bounds_and_projection(fn, param, 
     assert rows and all(r["status"] == "delivered" and r["value"] == CAPABILITY_REGISTRY[fn].params[param].to_wire(value) for r in rows)
 
 
-# Invalid present mana shares the optional parameter schema/compile boundary.
+# Optional neutral leaves are independent; all 64 masks repeat the same two
+# activation branches. Keep both complete endpoints, each singly present/absent
+# leaf, and both halves together. Single-leaf projection is covered above.
+BUFF_PRESENCE = (
+    pytest.param((False,) * len(BUFF_NEUTRALS), id="all-omitted"),
+    pytest.param((True,) * len(BUFF_NEUTRALS), id="all-present"),
+    *(
+        pytest.param(tuple(j == i for j in range(len(BUFF_NEUTRALS))), id="only-" + name)
+        for i, name in enumerate(BUFF_NEUTRALS)
+    ),
+    *(
+        pytest.param(tuple(j != i for j in range(len(BUFF_NEUTRALS))), id="without-" + name)
+        for i, name in enumerate(BUFF_NEUTRALS)
+    ),
+    pytest.param((True, True, True, False, False, False), id="mining-sense-speed"),
+    pytest.param((False, False, False, True, True, True), id="jump-mana-life"),
+)
 
 
 @pytest.mark.parametrize("active", [False, True], ids=["inert", "selected-light"])
-@pytest.mark.parametrize(
-    "present",
-    [pytest.param(p, id="present-" + "".join("1" if v else "0" for v in p)) for p in product([False, True], repeat=len(BUFF_NEUTRALS))],
-)
+@pytest.mark.parametrize("present", BUFF_PRESENCE)
 def test_joint_buff_omissions_preserve_light_or_reject_inert(present, active):
     explicit = build_capability_witness("apply_generated_buff_on_use")
     params = _call(explicit, "apply_generated_buff_on_use")["params"]

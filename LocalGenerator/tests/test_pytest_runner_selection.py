@@ -196,6 +196,15 @@ def test_hosted_shards_use_the_accepted_finite_command_budget() -> None:
     assert int(arguments[arguments.index("--timeout-seconds") + 1]) == 300
 
 
+def test_hosted_suite_executes_supported_roots_once() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    commands = [line.split("run:", 1)[1].strip() for line in workflow.splitlines()
+                if line.lstrip().startswith("run:")]
+    assert sum("tools/run_pytest_shards.py" in command for command in commands) == 1
+    assert not any("-m pytest toolbox/tests" in command for command in commands), \
+        "toolbox is already included by the canonical shard runner"
+
+
 def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py"])
     monkeypatch.setattr(shards, "run", lambda *args: {

@@ -426,8 +426,12 @@ def test_actual_provider_transport_optional_nulls(monkeypatch, mode, debug, omit
         assert "choose item.effectColor" in " ".join(packet["rules"])
 
 
-@pytest.mark.parametrize("item_canvas,entity_canvas", [(32, 64), (96, 64), (128, 32)])
-def test_declared_render_size_and_bake_canvas_do_not_change_mechanics(item_canvas, entity_canvas):
+@pytest.mark.parametrize("item_canvas,entity_canvas", [
+    pytest.param(32, 64, id="small-root-distinct-medium"),
+    pytest.param(96, 64, id="large-root-distinct-medium"),
+    pytest.param(128, 32, id="max-root-distinct-small"),
+])
+def test_presentation_projection_delivery_and_bake_keep_mechanics(item_canvas, entity_canvas):
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     before = copy.deepcopy(data)
     raw = _visual_kit(data)
@@ -441,473 +445,346 @@ def test_declared_render_size_and_bake_canvas_do_not_change_mechanics(item_canva
     accepted, errors = visual._validate_kit(raw, ids, item_id)
     assert accepted is not None and not errors, errors
     projected = visual._apply_kit(data, accepted)
-    assert projected["visual"]["renderSizePx"] == 40
-    assert projected["visual"]["forwardAngleDegrees"] == 45
-    entity = next(row for row in projected["runtimeProgram"]["entities"] if row["id"] == other["entityId"])
-    assert entity["visual"]["renderSizePx"] == 48
-    assert entity["visual"]["forwardAngleDegrees"] == -30
-    item_entity = next(row for row in projected["runtimeProgram"]["entities"] if row["id"] == item_id)
-    assert all(field not in item_entity["visual"] for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"))
-    assert entity["visual"]["preferredCanvasSize"] == entity_canvas
+    delivered = sanitize_recipe_for_delivery(projected)
+    assert validate_runtime_wire(delivered)["ok"]
+    assert "visualKit" not in delivered
+    assert {"renderSizePx", "forwardAngleDegrees"}.issubset(delivered["visual"])
+    assert {key: delivered["visual"][key] for key in ("renderSizePx", "forwardAngleDegrees")} == {
+        "renderSizePx": 40, "forwardAngleDegrees": 45}
+    entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == other["entityId"])
+    assert {key: entity["visual"][key] for key in ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize")} == {
+        "renderSizePx": 48, "forwardAngleDegrees": -30, "preferredCanvasSize": entity_canvas}
+    item_entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == item_id)
+    assert not PRESENTATION_FIELDS.intersection(item_entity["visual"])
     plan = build_visual_asset_plan(projected)
     assert next(row for row in plan if row["entityId"] == entity["id"])["canvas"] == entity_canvas
-    for old, new in zip(before["runtimeProgram"]["entities"], projected["runtimeProgram"]["entities"]):
-        assert {key: value for key, value in old.items() if key != "visual"} == {key: value for key, value in new.items() if key != "visual"}
     assert projected["gameplay"] == before["gameplay"]
+    assert delivered["gameplay"] == before["gameplay"]
+    assert projected["visual"]["renderSizePx"] == 40 and projected["visual"]["forwardAngleDegrees"] == 45
+    assert [{k: v for k, v in row.items() if k != "visual"} for row in delivered["runtimeProgram"]["entities"]] == [{k: v for k, v in row.items() if k != "visual"} for row in before["runtimeProgram"]["entities"]]
     assert data == before
 
 
-@pytest.mark.parametrize("field,good,bad", [
-    ("renderSizePx", 1, [None, True, "40", 0, -1, 513, 1.0]),
-    ("forwardAngleDegrees", -180, [None, True, "45", -181, 181, float("nan"), float("inf")]),
-    ("preferredCanvasSize", 128, [None, True, "64", 16, 65, 64.0]),
-])
-@pytest.mark.parametrize("owner", ["item", "distinct"])
-def test_wire_presentation_is_absence_compatible_but_strict_when_present(field, good, bad, owner):
+PRESENTATION_FIELDS = frozenset({"renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"})
+WIRE_PRESENTATION_CASES = [
+    pytest.param("item", {}, True, id="legacy-root-absence"),
+    pytest.param("distinct", {}, True, id="legacy-distinct-absence"),
+    pytest.param("item", {"renderSizePx": 1, "forwardAngleDegrees": -180}, True, id="root-lower-bounds"),
+    pytest.param("item", {"renderSizePx": 512, "forwardAngleDegrees": 180}, True, id="root-upper-bounds"),
+    pytest.param("distinct", {"renderSizePx": 1, "preferredCanvasSize": 32, "forwardAngleDegrees": -180}, True, id="distinct-lower-bounds"),
+    pytest.param("distinct", {"renderSizePx": 512, "preferredCanvasSize": 128, "forwardAngleDegrees": 180}, True, id="distinct-upper-bounds"),
+    # Complete field wiring once per owner; generic scalar shapes are not crossed with every owner.
+    *(pytest.param(owner, {field: None}, False, id=f"{owner}-{field}-null-wiring")
+      for owner, field in (("item", "renderSizePx"), ("item", "forwardAngleDegrees"),
+                           ("distinct", "renderSizePx"), ("distinct", "preferredCanvasSize"), ("distinct", "forwardAngleDegrees"))),
+    *(pytest.param("distinct", {field: value}, False, id=f"{field}-{name}")
+      for field, values in (
+          ("renderSizePx", (("bool", True), ("string", "40"), ("zero", 0), ("negative", -1), ("overflow", 513), ("float", 1.0))),
+          ("forwardAngleDegrees", (("bool", True), ("string", "45"), ("underflow", -181), ("overflow", 181), ("nan", float("nan")), ("infinity", float("inf")))),
+          ("preferredCanvasSize", (("bool", True), ("string", "64"), ("too-small", 16), ("nonselector", 65), ("float", 64.0))))
+      for name, value in values),
+    *(pytest.param(mode, {field: 32 for field in PRESENTATION_FIELDS}, False, id=f"nonowner-{mode}-all-fields")
+      for mode in ("reuse_item_icon", "runtime_geometry", "no_asset", "baked_sprite")),
+]
+
+
+@pytest.mark.parametrize("owner,values,valid", WIRE_PRESENTATION_CASES)
+def test_wire_presentation_observes_ownership_shape_and_legacy_absence(owner, values, valid):
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     before = copy.deepcopy(data)
     assert validate_runtime_wire(data)["ok"]
-    assert sanitize_recipe_for_delivery(data).get("visual") == sanitize_recipe_for_delivery(before).get("visual")
-    if owner == "item" and field == "preferredCanvasSize":
-        # The old root canvas normalization contract is deliberately unchanged.
-        return
+    index = 0
     if owner == "item":
-        target, path = data.setdefault("visual", {}), f"$.visual.{field}"
+        target, path = data.setdefault("visual", {}), "$.visual"
     else:
-        index = next(i for i, row in enumerate(data["runtimeProgram"]["entities"]) if row["kind"] != "item_body")
+        index = 0 if owner == "baked_sprite" else 1
         target = data["runtimeProgram"]["entities"][index]["visual"]
-        target["assetMode"] = "baked_sprite"
-        path = f"$.runtimeProgram.entities[{index}].visual.{field}"
-    target[field] = good
-    assert validate_runtime_wire(data)["ok"]
-    for value in bad:
-        target[field] = value
-        report = validate_runtime_wire(data)
-        assert not report["ok"], (field, value, report)
-        assert any(row["path"] == path for row in report["errors"])
+        target["assetMode"] = "baked_sprite" if owner == "distinct" else owner
+        path = f"$.runtimeProgram.entities[{index}].visual"
+    target.update(values)
+    if owner == "item" and not values:
+        data.pop("visual", None)
+    report = validate_runtime_wire(data)
+    assert report["ok"] is valid, report
+    if valid:
+        delivered = sanitize_recipe_for_delivery(data)
+        projected = delivered.get("visual", {}) if owner == "item" else delivered["runtimeProgram"]["entities"][index]["visual"]
+        assert {field: projected[field] for field in PRESENTATION_FIELDS if field in projected} == values
+        if not values:
+            assert delivered.get("visual") == sanitize_recipe_for_delivery(before).get("visual")
+    else:
+        assert {f"{path}.{field}" for field in values}.issubset({row["path"] for row in report["errors"]})
+        if owner not in {"item", "distinct"}:
+            assert {row["path"] for row in report["errors"] if row.get("code") == "nonowning_sprite_presentation"} == {f"{path}.{field}" for field in values}
+        elif "preferredCanvasSize" not in values:
+            # The same scalar cases reach fresh Author admission and exact root scope.
+            raw = kit()
+            raw["item"].update(values)
+            accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+            assert accepted is None
+            scope = visual._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+            assert scope["fieldPermissions"] == {"itemPaths": sorted(values), "equipOverlayPaths": [], "entities": []}
     assert before == compile_runtime_program(build_runtime_fixture("door_on_chain"))
 
 
-def test_delivered_presentation_survives_sanitizer_without_alias_authorities():
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    raw = _visual_kit(data)
-    ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
-    accepted, errors = visual._validate_kit(raw, ids, data["runtimeProgram"]["itemEntityId"])
-    assert accepted is not None, errors
-    applied = visual._apply_kit(data, accepted)
-    delivered = sanitize_recipe_for_delivery(applied)
-    assert delivered["visual"]["renderSizePx"] == 40
-    assert delivered["visual"]["forwardAngleDegrees"] == 45
-    assert validate_runtime_wire(delivered)["ok"]
-    for row in delivered["runtimeProgram"]["entities"]:
-        assert all(field not in row["visual"] for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"))
-    assert applied["gameplay"] == data["gameplay"]
-    assert "visualKit" not in delivered
-
-
-@pytest.mark.parametrize("mode", ["reuse_item_icon", "runtime_geometry", "no_asset", "baked_sprite"])
-@pytest.mark.parametrize("field", ["renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"])
-def test_wire_rejects_metadata_on_nonowning_projects(mode, field):
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    index = 0 if mode == "baked_sprite" else 1
-    entity = data["runtimeProgram"]["entities"][index]
-    entity["visual"].update(assetMode=mode, **{field: 32})
-    report = validate_runtime_wire(data)
-    assert not report["ok"]
-    assert any(e["path"] == f"$.runtimeProgram.entities[{index}].visual.{field}" for e in report["errors"])
-
-
-@pytest.mark.parametrize("field,value", [
-    ("renderSizePx", None), ("renderSizePx", True), ("renderSizePx", "40"),
-    ("renderSizePx", 0), ("renderSizePx", 513), ("renderSizePx", 40.0),
-    ("forwardAngleDegrees", None), ("forwardAngleDegrees", True), ("forwardAngleDegrees", "45"),
-    ("forwardAngleDegrees", -181), ("forwardAngleDegrees", float("nan")), ("forwardAngleDegrees", float("inf")),
-])
-def test_fresh_presentation_invalid_values_retain_exact_root_leaf(field, value):
-    raw = kit()
-    raw["item"][field] = value
-    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
-    assert accepted is None
-    scope = visual._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
-    assert scope["fieldPermissions"]["itemPaths"] == [field]
-    assert scope["fieldPermissions"]["entities"] == []
-
-
-@pytest.mark.parametrize("owner,field", [("item", "renderSizePx"), ("item", "forwardAngleDegrees"),
-    ("distinct", "renderSizePx"), ("distinct", "preferredCanvasSize"), ("distinct", "forwardAngleDegrees")])
-def test_missing_presentation_repair_is_exact_and_preserves_independent_mechanics(owner, field):
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    raw = _visual_kit(data)
-    ids, item_id = [row["id"] for row in data["runtimeProgram"]["entities"]], data["runtimeProgram"]["itemEntityId"]
-    row = next(e for e in raw["entities"] if e["entityId"] != item_id)
-    row.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="other", silhouette="other", visualIdentity="other", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=-90)
-    target = raw["item"] if owner == "item" else row
-    chosen = target.pop(field)
-    _, errors = visual._validate_kit(raw, ids, item_id)
-    scope = visual._build_visual_repair_scope(raw, errors, ids, item_id)
-    expected = {"itemPaths": [field] if owner == "item" else [], "equipOverlayPaths": [],
-                "entities": [] if owner == "item" else [{"entityId": row["entityId"], "paths": [field]}]}
-    assert scope["fieldPermissions"] == expected
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={field: chosen, "worldScale": 4} if owner == "item" else None,
-                 entitiesUpsert=[] if owner == "item" else [dict(row, **{field: chosen}, scale=4, prompt="hostile")],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan="hostile", note="repair exact missing choice")
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-    assert audit["ok"] and audit["ignoredChanges"]
-    expected_raw = copy.deepcopy(raw)
-    (expected_raw["item"] if owner == "item" else next(e for e in expected_raw["entities"] if e["entityId"] == row["entityId"]))[field] = chosen
-    assert repaired == expected_raw
-    accepted, errors = visual._validate_kit(repaired, ids, item_id)
-    assert accepted is not None, errors
-    applied = visual._apply_kit(data, accepted)
-    assert applied["gameplay"] == data["gameplay"]
-    assert applied["runtimeProgram"]["itemUse"] == data["runtimeProgram"]["itemUse"]
-
-
-@pytest.mark.parametrize("mode,ref", [("reuse_item_icon", "item"), ("runtime_geometry", "none"), ("no_asset", "none"), ("baked_sprite", "item")])
-@pytest.mark.parametrize("hostile_branch", [False, True])
-def test_selected_branch_repair_deletes_only_diagnosed_forbidden_presentation(mode, ref, hostile_branch):
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    raw = _visual_kit(data)
-    item_id = data["runtimeProgram"]["itemEntityId"]
-    ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
-    row = next(e for e in raw["entities"] if (e["entityId"] == item_id) == (mode == "baked_sprite"))
-    row.update(assetMode=mode, visualProjectRef=ref, renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=90)
-    _, errors = visual._validate_kit(raw, ids, item_id)
-    scope = visual._build_visual_repair_scope(raw, errors, ids, item_id)
-    assert scope["fieldPermissions"]["entities"] == [{"entityId": row["entityId"], "paths": ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx"]}]
-    candidate = {k: v for k, v in row.items() if k not in {"renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"}}
-    if hostile_branch:
-        candidate.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="hostile", silhouette="hostile", visualIdentity="hostile", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=90)
-    candidate["scale"] = 4
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None, entitiesUpsert=[candidate], entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="delete branch-forbidden leaves")
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-    assert audit["ok"], audit
-    expected = copy.deepcopy(raw)
-    expected_row = next(e for e in expected["entities"] if e["entityId"] == row["entityId"])
-    for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"):
-        del expected_row[field]
-    assert repaired == expected
-    assert len([p for p in audit["acceptedPaths"] if any(p.endswith(f) for f in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"))]) == 3
-    accepted, errors = visual._validate_kit(repaired, ids, item_id)
-    assert accepted is not None, errors
-
-
 def _known_project_transition_case(owner):
-    # Exact authored source/targets from the independent known_owner_repro and
-    # boundary_followups probes; no inferred presentation choices in production.
+    """Reuse the accepted runtime builder; only the authored project ref is broken."""
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     runtime = data["runtimeProgram"]
     item_id = runtime["itemEntityId"]
     ids = [row["id"] for row in runtime["entities"]]
-    item = dict(prompt="literal object", negativePrompt="", silhouette="literal outline",
-                visualIdentity="literal composition", palette=["brown"], preferredCanvasSize=32,
-                renderSizePx=40, forwardAngleDegrees=0, inventoryScale=1.0, worldScale=1.0)
-    rows = [dict(entityId=eid, assetMode="baked_sprite", visualProjectRef="item",
-                 prompt=item["prompt"], silhouette=item["silhouette"], visualIdentity=item["visualIdentity"], scale=1.0)
-            if eid == item_id else dict(entityId=eid, assetMode="reuse_item_icon", visualProjectRef="item", scale=1.0)
-            for eid in ids]
-    control: dict[str, Any] = dict(schema=visual.VISUAL_KIT_SCHEMA, item=item, entities=rows, animationPlan="Keep accepted movement")
+    control = _visual_kit(data)
     raw = copy.deepcopy(control)
+    row = next(e for e in raw["entities"] if (e["entityId"] == item_id) == (owner == "root"))
     if owner == "root":
-        row = next(e for e in raw["entities"] if e["entityId"] == item_id)
         row.update(visualProjectRef="entity", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=90)
     else:
-        row = next(e for e in raw["entities"] if e["entityId"] != item_id)
         row.update(assetMode="baked_sprite", visualProjectRef="item", prompt="separate object",
                    silhouette="separate outline", visualIdentity="separate identity")
-        fixed = next(e for e in control["entities"] if e["entityId"] == row["entityId"])
-        fixed.update(row, visualProjectRef="entity", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=0)
+        next(e for e in control["entities"] if e["entityId"] == row["entityId"]).update(
+            row, visualProjectRef="entity", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=0)
     return data, raw, control, row["entityId"], ids, item_id
 
 
-@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("hostile_mode", [False, True])
-def test_known_root_project_transition_closes_real_single_repair(wire_transport, monkeypatch, format_mode, hostile_mode):
+PRESENTATION_REPAIR_CASES = [
+    pytest.param({"owner": "root", "formats": ("json_schema", "json_object")}, id="known-root-delete-old-domain"),
+    pytest.param({"owner": "root", "hostileMode": True, "formats": ("json_schema", "json_object")}, id="known-root-frozen-hostile-mode"),
+    *(pytest.param({"owner": "distinct", "present": present, "formats": ("json_schema", "json_object")}, id=f"known-distinct-{name}")
+      for name, present in (("absent", ()), ("partial", ("renderSizePx",)), ("complete", tuple(sorted(PRESENTATION_FIELDS))))),
+    *(pytest.param({"owner": owner, "opaque": True}, id=f"opaque-{owner}-exact-identity") for owner in ("root", "distinct")),
+    *(pytest.param({"owner": owner, "duplicate": action}, id=f"original-index-{owner}-{action}")
+      for owner in ("root", "distinct") for action in ("delete", "keep")),
+    *(pytest.param({"owner": owner, "transition": transition, "field": field, "defect": "typed", "old": old, "new": new},
+                  id=f"{'transition' if transition else 'owned'}-{owner}-{field}-{name}")
+      for owner, transition in (("distinct", True), ("distinct", False))
+      for field, name, old, new in (("renderSizePx", "bool", True, 1), ("renderSizePx", "float", 1.0, 1),
+                                   ("preferredCanvasSize", "float", 64.0, 64), ("forwardAngleDegrees", "bool", True, 1.0))),
+    *(pytest.param({"owner": owner, "transition": False, "field": field, "defect": "missing", "formats": ("json_schema", "json_object") if (owner, field) != ("distinct", "renderSizePx") and (owner, field) != ("item", "forwardAngleDegrees") else ("json_schema",)}, id=f"owned-{owner}-{field}-missing")
+      for owner, field in (("item", "renderSizePx"), ("item", "forwardAngleDegrees"),
+                           ("distinct", "renderSizePx"), ("distinct", "preferredCanvasSize"), ("distinct", "forwardAngleDegrees"))),
+    pytest.param({"owner": "item", "transition": False, "field": "forwardAngleDegrees", "defect": "invalid", "old": None, "formats": ("json_schema", "json_object")}, id="owned-item-forwardAngleDegrees-null"),
+    pytest.param({"owner": "distinct", "transition": False, "field": "renderSizePx", "defect": "invalid", "old": None, "formats": ("json_schema", "json_object")}, id="owned-distinct-renderSizePx-null"),
+    *(pytest.param({"owner": "branch", "mode": mode, "ref": ref}, id=f"forbidden-{mode}-hostile-discriminator")
+      for mode, ref in (("reuse_item_icon", "item"), ("runtime_geometry", "none"), ("no_asset", "none"), ("baked_sprite", "item"))),
+    pytest.param({"owner": "reuse", "field": "renderSizePx", "defect": "invalid", "old": None, "formats": ("json_schema", "json_object")}, id="reuse-null-forbidden-leaf"),
+    *(pytest.param({"owner": owner, "returned": "no-op"}, id=f"no-invention-{owner}-no-op") for owner in ("root", "distinct")),
+    *(pytest.param({"owner": "distinct", "returned": defect, "field": field}, id=f"no-invention-{field}-{defect}")
+      for defect in ("missing", "invalid") for field in sorted(PRESENTATION_FIELDS)),
+    pytest.param({"owner": "root", "returned": "still-forbidden", "field": "renderSizePx"}, id="no-invention-root-still-forbidden"),
+]
+
+
+@pytest.mark.parametrize("format_mode,case", [
+    pytest.param(mode, param.values[0], id=f"{param.id}-{mode}")
+    for param in PRESENTATION_REPAIR_CASES
+    for mode in param.values[0].get("formats", ("json_schema",))
+])
+def test_serialized_presentation_repair_closes_only_exact_choices(wire_transport, monkeypatch, format_mode, case):
+    from infini_local.core.errors import PlannerUnavailable
     from infini_local.pipelines import llm_transport
-    responses, requests = wire_transport
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case("root")
-    before = copy.deepcopy(raw)
+    responses, requests = wire_transport
+    owner = case["owner"]
+    transition = case.get("transition", owner in {"root", "distinct"})
+    data, raw, control, entity_id, ids, item_id = _known_project_transition_case("root" if owner == "root" else "distinct")
+    if not transition:
+        raw = copy.deepcopy(control)
+    if owner in {"branch", "reuse"}:
+        control = _visual_kit(data)
+        raw = copy.deepcopy(control)
+        entity_id = item_id if case.get("mode") == "baked_sprite" else ids[1]
+    target = control["item"] if owner == "item" else next(e for e in control["entities"] if e["entityId"] == entity_id)
+    row = raw["item"] if owner == "item" else next(e for e in raw["entities"] if e["entityId"] == entity_id)
+    paths = []
+    if transition:
+        present = case.get("present", ())
+        if case.get("defect") == "typed":
+            present = tuple(sorted(PRESENTATION_FIELDS))
+            target[case["field"]] = case["new"]
+        if owner == "distinct":
+            row.update({field: target[field] for field in present})
+            paths = sorted([field for field in PRESENTATION_FIELDS if field not in present] + ["visualProjectRef"])
+        else:
+            paths = sorted(PRESENTATION_FIELDS | {"visualProjectRef"})
+        if case.get("opaque"):
+            opaque_id = "accepted_opaque_root"
+            data = {"name": "opaque root object", "runtimeProgram": {"itemEntityId": opaque_id, "entities": [
+                {"id": opaque_id if e["id"] == item_id else e["id"], "kind": e["kind"], "visualRole": e["visualRole"]}
+                for e in data["runtimeProgram"]["entities"]]}}
+            for document in (raw, control):
+                for e in document["entities"]:
+                    if e["entityId"] == item_id:
+                        e["entityId"] = opaque_id
+            ids = [opaque_id if eid == item_id else eid for eid in ids]
+            entity_id = opaque_id if owner == "root" else entity_id
+            item_id = opaque_id
+            if owner == "root":
+                for field in PRESENTATION_FIELDS:
+                    row.pop(field)
+                paths = ["visualProjectRef"]
+    field = case.get("field")
+    if case.get("defect"):
+        if case["defect"] == "typed":
+            target[field] = case["new"]
+        if case["defect"] == "missing":
+            row.pop(field)
+        else:
+            row[field] = case["old"]
+        paths = sorted(set(paths) | {field})
+    if owner == "branch":
+        target.update(assetMode=case["mode"], visualProjectRef=case["ref"])
+        row.update(target, renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=90)
+        paths = sorted(PRESENTATION_FIELDS)
+    if owner == "reuse":
+        paths = [field]
+    duplicate = None
+    if case.get("duplicate"):
+        duplicate = dict(row, prompt="duplicate art", silhouette="duplicate outline", visualIdentity="duplicate identity", scale=True)
+        raw["entities"].append(duplicate)
     assert visual._validate_kit(control, ids, item_id)[0] is not None
-    candidate = dict(next(e for e in control["entities"] if e["entityId"] == entity_id),
-                     prompt="hostile prompt", silhouette="hostile outline", visualIdentity="hostile art", scale=4)
-    if hostile_mode:
-        candidate = dict(entityId=entity_id, assetMode="reuse_item_icon", visualProjectRef="item", scale=4)
-    neighbor = dict(next(e for e in control["entities"] if e["entityId"] != entity_id), scale=4)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
-                 itemPatch={"worldScale": 4, "renderSizePx": 512, "preferredCanvasSize": 128, "forwardAngleDegrees": 180,
-                            "prompt": "hostile item", "palette": ["pink"], "grip": {"normalizedX": 0, "normalizedY": 0}},
-                 entitiesUpsert=[candidate, neighbor], entityIdsDelete=[neighbor["entityId"]],
-                 entityIndicesDelete=[1], animationPlan="hostile animation", note="Restore exact item root project")
-    responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    assert result["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
-    assert result["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    assert packet["repairScope"]["fieldPermissions"] == {
-        "itemPaths": [], "equipOverlayPaths": [], "entities": [{"entityId": entity_id,
-        "paths": ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx", "visualProjectRef"]}]}
-    assert all(e["path"] != "$.entities[0].entityId" for e in packet["exactErrors"])
-    assert packet["brokenFragments"]["entities"] == [before["entities"][0]]
-    assert result["visualKit"] == control
-    audit = result["debug"]["visualRepairFilterAudit"]
-    assert audit["ok"] and audit["ignoredChanges"]
-    assert audit["filteredPatch"]["entitiesUpsert"] == [control["entities"][0]]
-    assert visual._validate_kit(result["visualKit"], ids, item_id)[1] == []
-    assert result["gameplay"] == data["gameplay"]
-    assert result["runtimeProgram"]["itemUse"] == data["runtimeProgram"]["itemUse"]
-    assert raw == before
-
-
-@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("existing", ["absent", "partial", "complete"])
-def test_known_nonitem_project_transition_closes_real_single_repair(wire_transport, monkeypatch, format_mode, existing):
-    from infini_local.pipelines import llm_transport
-    responses, requests = wire_transport
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case("distinct")
-    row = next(e for e in raw["entities"] if e["entityId"] == entity_id)
-    target = next(e for e in control["entities"] if e["entityId"] == entity_id)
-    fields = ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx"]
-    present = fields if existing == "complete" else ["renderSizePx"] if existing == "partial" else []
-    for field in present:
-        row[field] = target[field]
-    candidate = dict(target, prompt="hostile art", silhouette="hostile outline", visualIdentity="hostile identity", scale=4)
-    # Existing, valid target-domain metadata is frozen even with a wrong ref.
-    for field in present:
-        candidate[field] = {"renderSizePx": 512, "preferredCanvasSize": 128, "forwardAngleDegrees": 180}[field]
-    root = dict(control["entities"][0], scale=4)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"worldScale": 4, "palette": ["pink"]},
-                 entitiesUpsert=[candidate, root], entityIdsDelete=[item_id], entityIndicesDelete=[0],
-                 animationPlan="hostile animation", note="Choose separate exact project")
-    assert visual._validate_kit(control, ids, item_id)[0] is not None
     before = copy.deepcopy(raw)
-    responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    assert result["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    assert packet["repairScope"]["fieldPermissions"] == {
-        "itemPaths": [], "equipOverlayPaths": [], "entities": [{"entityId": entity_id,
-        "paths": sorted([f for f in fields if f not in present] + ["visualProjectRef"])}]}
-    assert packet["repairScope"]["deletableEntityIndices"] == []
-    assert all(e["path"] != "$.entities[1].entityId" for e in packet["exactErrors"])
-    assert result["visualKit"] == control
-    audit = result["debug"]["visualRepairFilterAudit"]
-    assert audit["ok"] and audit["ignoredChanges"]
-    assert audit["filteredPatch"]["entitiesUpsert"] == [target]
-    assert visual._validate_kit(result["visualKit"], ids, item_id)[1] == []
-    assert result["gameplay"] == data["gameplay"]
-    assert result["runtimeProgram"]["itemUse"] == data["runtimeProgram"]["itemUse"]
-    assert raw == before
-
-
-@pytest.mark.parametrize("field,old,new", [("renderSizePx", True, 1), ("renderSizePx", 1.0, 1),
-    ("preferredCanvasSize", 64.0, 64), ("forwardAngleDegrees", True, 1.0)])
-def test_known_project_transition_repairs_only_invalid_target_typed_leaves(wire_transport, field, old, new):
-    responses, requests = wire_transport
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case("distinct")
-    row = next(e for e in raw["entities"] if e["entityId"] == entity_id)
-    target = next(e for e in control["entities"] if e["entityId"] == entity_id)
-    target[field] = new
-    row.update({f: target[f] for f in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees")})
-    row[field] = old
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None, entitiesUpsert=[copy.deepcopy(target)],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="Exact target-domain typed correction")
-    responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    assert packet["repairScope"]["fieldPermissions"]["entities"] == [{"entityId": entity_id,
-        "paths": sorted([field, "visualProjectRef"])}]
-    assert result["visualKit"] == control
-    fixed = next(e for e in result["visualKit"]["entities"] if e["entityId"] == entity_id)
-    assert type(fixed[field]) is type(new) and fixed[field] == new
-
-
-@pytest.mark.parametrize("owner", ["root", "distinct"])
-def test_known_project_transition_uses_exact_opaque_root_identity(wire_transport, owner):
-    responses, requests = wire_transport
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case(owner)
-    opaque_id = "accepted_opaque_root"
-    # A minimal accepted Visual runtime card, not a partially renamed gameplay
-    # fixture with stale binding references.
-    data = {"name": "opaque root object", "runtimeProgram": {"itemEntityId": opaque_id, "entities": [
-        {"id": opaque_id if e["id"] == item_id else e["id"], "kind": e["kind"], "visualRole": e["visualRole"]}
-        for e in data["runtimeProgram"]["entities"]]}}
-    for document in (raw, control):
-        for row in document["entities"]:
-            if row["entityId"] == item_id:
-                row["entityId"] = opaque_id
-    entity_id = opaque_id if owner == "root" else entity_id
-    ids = [opaque_id if eid == item_id else eid for eid in ids]
-    if owner == "root":
-        # Without old dependent fields, only the projectRef is broken; never
-        # grant arbitrary metadata additions just because that ref is wrong.
-        for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"):
-            raw["entities"][0].pop(field)
-    target = next(e for e in control["entities"] if e["entityId"] == entity_id)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None, entitiesUpsert=[copy.deepcopy(target)],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="Use exact accepted opaque identity")
-    responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    assert result["visualKit"] == control
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    expected_paths = ["visualProjectRef"] if owner == "root" else ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx", "visualProjectRef"]
-    assert packet["repairScope"]["fieldPermissions"]["entities"] == [{"entityId": entity_id, "paths": expected_paths}]
-    assert visual._validate_kit(result["visualKit"], ids, opaque_id)[1] == []
-
-
-@pytest.mark.parametrize("owner", ["root", "distinct"])
-@pytest.mark.parametrize("delete_duplicate", [False, True])
-def test_known_project_transition_keeps_original_index_provenance(wire_transport, owner, delete_duplicate):
-    responses, requests = wire_transport
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case(owner)
-    original = next(e for e in raw["entities"] if e["entityId"] == entity_id)
-    duplicate = dict(original, prompt="duplicate art", silhouette="duplicate outline", visualIdentity="duplicate identity", scale=3)
-    # Later malformed leaves authorize index deletion, never original-row edits.
-    duplicate["scale"] = True
-    raw["entities"].append(duplicate)
-    target = next(e for e in control["entities"] if e["entityId"] == entity_id)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None,
-                 entitiesUpsert=[dict(target, prompt="hostile", silhouette="hostile", visualIdentity="hostile", scale=4)],
-                 entityIdsDelete=[entity_id], entityIndicesDelete=[2] if delete_duplicate else [],
-                 animationPlan=None, note="Fix original and delete only diagnosed later duplicate")
     _, errors = visual._validate_kit(raw, ids, item_id)
     scope = visual._build_visual_repair_scope(raw, errors, ids, item_id)
-    assert scope["deletableEntityIndices"] == [2]
+    assert scope["fieldPermissions"] == {"itemPaths": paths if owner == "item" else [], "equipOverlayPaths": [],
+        "entities": [] if owner == "item" else [{"entityId": entity_id, "paths": paths}]}
+    assert scope["deletableEntityIndices"] == ([2] if duplicate else [])
     assert scope["deletableEntityIds"] == []
-    assert scope["fieldPermissions"]["entities"] == [{"entityId": entity_id,
-        "paths": ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx", "visualProjectRef"]}]
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-    assert audit["ok"]
+    index = 0
+    if transition:
+        index = next(i for i, e in enumerate(raw["entities"]) if e["entityId"] == entity_id)
+        assert all(e["path"] != f"$.entities[{index}].entityId" for e in errors)
+    candidate: dict[str, Any] = dict(target, scale=4)
+    if target.get("assetMode") == "baked_sprite":
+        candidate.update(prompt="hostile art", silhouette="hostile outline", visualIdentity="hostile identity")
+    if owner == "distinct" and transition:
+        for present in case.get("present", ()):
+            candidate[present] = {"renderSizePx": 512, "preferredCanvasSize": 128, "forwardAngleDegrees": 180}[present]
+    if case.get("hostileMode"):
+        candidate = dict(entityId=entity_id, assetMode="reuse_item_icon", visualProjectRef="item", scale=4)
+    if owner == "branch":
+        candidate.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="hostile", silhouette="hostile", visualIdentity="hostile", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=90)
+    returned = case.get("returned")
+    if returned == "missing":
+        candidate.pop(field)
+    elif returned == "invalid":
+        candidate[field] = True
+    elif returned == "still-forbidden":
+        candidate[field] = 48
+    neighbor = next(e for e in control["entities"] if e["entityId"] != entity_id)
+    patch: dict[str, Any] = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+        itemPatch={**target, "worldScale": 4} if owner == "item" else {"worldScale": 4, "renderSizePx": 512, "preferredCanvasSize": 128,
+                   "forwardAngleDegrees": 180, "prompt": "hostile item", "palette": ["pink"], "grip": {"normalizedX": 0, "normalizedY": 0}},
+        entitiesUpsert=[] if returned == "no-op" else ([dict(neighbor, scale=4)] if owner == "item" else [candidate, dict(neighbor, scale=4)]),
+        entityIdsDelete=[entity_id, neighbor["entityId"]],
+        entityIndicesDelete=[2] if case.get("duplicate") == "delete" else [0, 1],
+        animationPlan="hostile animation", note="Only exact diagnosed choices")
+    if returned == "no-op":
+        patch.update(itemPatch=None, entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None)
+    schema_refused = returned in {"missing", "invalid", "still-forbidden"}
+    if schema_refused:
+        with pytest.raises(PlannerUnavailable, match="patch shape rejected"):
+            visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
+        repaired, audit = None, {}
+    else:
+        repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
+        assert audit["ok"]
     expected = copy.deepcopy(control)
-    if not delete_duplicate:
+    if duplicate and case["duplicate"] == "keep":
         expected["entities"].append(duplicate)
-    assert repaired == expected
-    if not delete_duplicate:
+    if returned == "no-op":
+        expected = before
+    if not returned:
+        assert repaired is not None
+        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+        assert audit["ignoredChanges"]
+        if owner != "item":
+            assert json.dumps(audit["filteredPatch"]["entitiesUpsert"], sort_keys=True) == json.dumps([target], sort_keys=True)
+        if case.get("defect") == "typed":
+            fixed = next(e for e in repaired["entities"] if e["entityId"] == entity_id)
+            assert type(fixed[field]) is type(case["new"]) and fixed[field] == case["new"]
+        if owner == "branch":
+            assert {p.rsplit(".", 1)[-1] for p in audit["acceptedPaths"] if p.rsplit(".", 1)[-1] in PRESENTATION_FIELDS} == PRESENTATION_FIELDS
+    elif not schema_refused:
         assert visual._validate_kit(repaired, ids, item_id)[0] is None
-        return
+        if returned == "no-op":
+            assert json.dumps(repaired, sort_keys=True) == json.dumps(before, sort_keys=True)
     responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    refused = bool(returned) or case.get("duplicate") == "keep"
+    if refused:
+        with pytest.raises(PlannerUnavailable):
+            visual.apply_visual_director(data, {}, {}, {}, {})
+    else:
+        result = visual.apply_visual_director(data, {}, {}, {}, {})
+        assert json.dumps(result["visualKit"], sort_keys=True) == json.dumps(control, sort_keys=True)
+        assert result["visual"]["worldScale"] == control["item"]["worldScale"]
+        assert visual._validate_kit(result["visualKit"], ids, item_id)[1] == []
+        assert result["debug"]["visualRepairFilterAudit"]["ok"]
+        assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
+        if duplicate:
+            assert result["debug"]["visualRepairPatch"]["entityIndicesDelete"] == [2]
+            assert result["debug"]["visualRepairPatch"]["entityIdsDelete"] == []
+        if not case.get("opaque"):
+            assert result["gameplay"] == data["gameplay"]
+            assert result["runtimeProgram"]["itemUse"] == data["runtimeProgram"]["itemUse"]
+            assert validate_runtime_wire(sanitize_recipe_for_delivery(result))["ok"]
     assert len(requests) == 2 and not responses
+    assert data["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
+    assert data["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
+    assert all(request["response_format"]["type"] == format_mode for request in requests)
     packet = json.loads(requests[1]["messages"][1]["content"])
     assert packet["repairScope"] == scope
-    assert result["visualKit"] == control
-    assert result["debug"]["visualRepairPatch"]["entityIndicesDelete"] == [2]
-    assert result["debug"]["visualRepairPatch"]["entityIdsDelete"] == []
+    if transition:
+        assert all(error["path"] != f"$.entities[{index}].entityId" for error in packet["exactErrors"])
+    broken = packet["brokenFragments"]["item"] if owner == "item" else packet["brokenFragments"]["entities"][0]
+    assert json.dumps(broken, sort_keys=True) == json.dumps(row, sort_keys=True)
+    assert json.dumps(raw, sort_keys=True) == json.dumps(before, sort_keys=True)
 
 
-@pytest.mark.parametrize("owner,defect,field", [
-    ("root", "no-op", None), ("distinct", "no-op", None),
-    *(("distinct", defect, field) for defect in ("missing", "invalid")
-      for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees")),
-    ("root", "still-forbidden", "renderSizePx"),
+@pytest.mark.parametrize("owner,field,value", [
+    *(pytest.param(owner, field, value, id=f"{owner}-{field}-unknown-wiring")
+      for owner in ("root", "distinct") for field, value in (
+          ("entityId", "unaccepted"), ("assetMode", "unknown"), ("visualProjectRef", "unknown"))),
+    *(pytest.param("distinct", field, value, id=f"distinct-{field}-{name}") for field, name, value in (
+        ("entityId", "missing", None), ("entityId", "array", ["item"]),
+        ("assetMode", "nonbaked", "reuse_item_icon"), ("assetMode", "missing", None),
+        ("visualProjectRef", "none", "none"), ("visualProjectRef", "missing", None))),
+    pytest.param("root", "schema", "ambiguous", id="known-target-ambiguous-schema"),
+    *(pytest.param("deletion", "discriminator", value, id=f"deletion-{value}") for value in ("unknown", "ambiguous", "missing")),
 ])
-def test_known_project_transition_never_invents_unreturned_choices(wire_transport, owner, defect, field):
-    from infini_local.core.errors import PlannerUnavailable
-    responses, requests = wire_transport
-    data, raw, control, entity_id, ids, item_id = _known_project_transition_case(owner)
-    candidate = copy.deepcopy(next(e for e in control["entities"] if e["entityId"] == entity_id))
-    if defect == "missing":
-        candidate.pop(field)
-    elif defect == "invalid":
-        candidate[field] = True  # Never coerce bool to a numeric choice.
-    elif defect == "still-forbidden":
-        candidate[field] = 48
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None,
-                 entitiesUpsert=[] if defect == "no-op" else [candidate],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="No host completion allowed")
-    before = copy.deepcopy(raw)
-    responses.extend([raw, patch])
-    with pytest.raises(PlannerUnavailable):
-        visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    assert data["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    assert packet["repairScope"]["fieldPermissions"]["entities"] == [{"entityId": entity_id,
-        "paths": ["forwardAngleDegrees", "preferredCanvasSize", "renderSizePx", "visualProjectRef"]}]
-    assert raw == before
-    if defect == "no-op":
-        repaired, audit = visual._apply_visual_repair_patch(raw, patch, packet["repairScope"], ids, return_audit=True)
-        assert audit["ok"] and repaired == before
-        assert visual._validate_kit(repaired, ids, item_id)[0] is None
-
-
-@pytest.mark.parametrize("field,value", [
-    ("entityId", "unaccepted"), ("entityId", None), ("entityId", ["item"]),
-    ("assetMode", "unknown"), ("assetMode", "reuse_item_icon"), ("assetMode", None),
-    ("visualProjectRef", "unknown"), ("visualProjectRef", "none"), ("visualProjectRef", None),
-])
-@pytest.mark.parametrize("owner", ["root", "distinct"])
-def test_known_project_transition_does_not_guess_unknown_or_missing_literals(owner, field, value):
+def test_project_schema_selection_never_guesses_identity_or_discriminators(monkeypatch, owner, field, value):
     from infini_local.core.repair_merge import merge_frozen_subtree
-    _, raw, _, entity_id, ids, item_id = _known_project_transition_case(owner)
+    _, raw, _, entity_id, ids, item_id = _known_project_transition_case("root" if owner == "root" else "distinct")
     row = next(e for e in raw["entities"] if e["entityId"] == entity_id)
-    if value is None:
+    schema = visual._visual_entity_schema(ids, item_id)
+    if owner == "deletion":
+        row = {"entityId": entity_id, "assetMode": "reuse_item_icon", "visualProjectRef": "item", "scale": 1}
+        if value == "unknown":
+            row["assetMode"] = "unknown"
+        elif value == "missing":
+            row.pop("visualProjectRef")
+        else:
+            schema["oneOf"].append(copy.deepcopy(next(b for b in schema["oneOf"] if b["properties"]["assetMode"]["const"] == "reuse_item_icon")))
+    elif field == "schema":
+        branch = next(b for b in schema["oneOf"] if b["properties"]["assetMode"]["const"] == "baked_sprite"
+                      and b["properties"]["visualProjectRef"]["const"] == "item")
+        schema["oneOf"].append(copy.deepcopy(branch))
+        monkeypatch.setattr(visual, "_visual_entity_schema", lambda *_: schema)
+    elif value is None:
         row.pop(field)
     else:
         row[field] = value
     before = copy.deepcopy(row)
     assert visual._known_baked_project_target_schema(row, ids, item_id) is None
-    # A guessed incoming discriminator cannot affect deletion after frozen merge.
-    candidate = dict(row, assetMode="baked_sprite", visualProjectRef="item", foreign=12)
     source = dict(row, foreign=12)
+    candidate = dict(source, assetMode="baked_sprite", visualProjectRef="item")
     merged, _, _ = merge_frozen_subtree(source, candidate, mutable_paths=["foreign"], audit_path="$", allow_additions=False)
     assert "foreign" in merged
     accepted = []
     result = visual._drop_schema_forbidden_mutable_fields(source, merged, mutable_paths=("foreign",),
-        schema=visual._visual_entity_schema(ids, item_id), audit_path="$", accepted=accepted)
-    if field in {"assetMode", "visualProjectRef"} and value not in {"reuse_item_icon", "none"}:
+        schema=schema, audit_path="$", accepted=accepted)
+    if owner == "deletion" or field in {"assetMode", "visualProjectRef"} and value not in {"reuse_item_icon", "none"}:
         assert result == merged and accepted == []
     assert row == before
-
-
-def test_known_project_transition_declines_ambiguous_target_schema(monkeypatch):
-    _, raw, _, entity_id, ids, item_id = _known_project_transition_case("root")
-    schema = visual._visual_entity_schema(ids, item_id)
-    branch = next(b for b in schema["oneOf"] if b["properties"]["assetMode"]["const"] == "baked_sprite"
-                  and b["properties"]["visualProjectRef"]["const"] == "item")
-    schema["oneOf"].append(copy.deepcopy(branch))
-    monkeypatch.setattr(visual, "_visual_entity_schema", lambda *_: schema)
-    assert visual._known_baked_project_target_schema(raw["entities"][0], ids, item_id) is None
-
-
-@pytest.mark.parametrize("discriminator", ["unknown", "ambiguous", "missing"])
-def test_branch_forbidden_deletion_does_not_guess_discriminators(discriminator):
-    schema = visual._visual_entity_schema(["opaque_id"])
-    source = {"entityId": "opaque_id", "assetMode": "reuse_item_icon", "visualProjectRef": "item", "scale": 1, "foreign": 12}
-    if discriminator == "unknown":
-        source["assetMode"] = "unknown"
-    elif discriminator == "missing":
-        source.pop("visualProjectRef")
-    else:
-        schema["oneOf"].append(copy.deepcopy(next(b for b in schema["oneOf"] if b["properties"]["assetMode"]["const"] == "reuse_item_icon")))
-    accepted = []
-    result = visual._drop_schema_forbidden_mutable_fields(source, source, mutable_paths=("foreign",), schema=schema, audit_path="$.entities[0]", accepted=accepted)
-    assert result == source and accepted == []
-
-
-@pytest.mark.parametrize("field,old,new", [("renderSizePx", True, 1), ("renderSizePx", 1.0, 1), ("preferredCanvasSize", 64.0, 64), ("forwardAngleDegrees", True, 1.0)])
-def test_distinct_presentation_type_only_repair_is_retained(field, old, new):
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    raw = _visual_kit(data)
-    ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
-    item_id = data["runtimeProgram"]["itemEntityId"]
-    row = next(e for e in raw["entities"] if e["entityId"] != item_id)
-    row.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="other", silhouette="other", visualIdentity="other", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=0)
-    row[field] = old
-    _, errors = visual._validate_kit(raw, ids, item_id)
-    scope = visual._build_visual_repair_scope(raw, errors, ids, item_id)
-    assert scope["fieldPermissions"]["entities"] == [{"entityId": row["entityId"], "paths": [field]}]
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch=None, entitiesUpsert=[dict(row, **{field: new})], entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="exact typed correction")
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-    assert audit["ok"] and len(audit["filteredPatch"]["entitiesUpsert"]) == 1
-    corrected = next(e for e in repaired["entities"] if e["entityId"] == row["entityId"])
-    assert type(corrected[field]) is type(new) and corrected[field] == new
-    assert visual._validate_kit(repaired, ids, item_id)[0] is not None
 
 
 def test_new_visual_admission_does_not_accept_a_historical_v1_missing_choices():
@@ -922,51 +799,6 @@ def test_new_visual_admission_does_not_accept_a_historical_v1_missing_choices():
     assert raw == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("owner,field,defect", [("item", "renderSizePx", "missing"), ("item", "forwardAngleDegrees", "null"),
-    ("distinct", "preferredCanvasSize", "missing"), ("distinct", "renderSizePx", "null"), ("distinct", "forwardAngleDegrees", "missing"),
-    ("reuse", "renderSizePx", "forbidden")])
-def test_actual_sizing_director_and_one_repair_keep_exact_choices(wire_transport, monkeypatch, format_mode, owner, field, defect):
-    from infini_local.pipelines import llm_transport
-    responses, requests = wire_transport
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    raw = _visual_kit(data)
-    item_id = data["runtimeProgram"]["itemEntityId"]
-    row = next(e for e in raw["entities"] if e["entityId"] != item_id)
-    if owner == "distinct":
-        row.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="other", silhouette="other", visualIdentity="other", renderSizePx=48, preferredCanvasSize=64, forwardAngleDegrees=-90)
-    target = raw["item"] if owner == "item" else row
-    chosen = target.get(field)
-    if defect == "missing":
-        del target[field]
-    else:
-        target[field] = None
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={field: chosen, "worldScale": 4} if owner == "item" else None,
-                 entitiesUpsert=[] if owner == "item" else [{**{k:v for k,v in row.items() if k != field}, **({field: chosen} if defect != "forbidden" else {}), "scale": 4}],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="exact presentation correction")
-    responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
-    assert len(requests) == 2 and not responses
-    assert result["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
-    packet = json.loads(requests[1]["messages"][1]["content"])
-    assert packet["repairScope"]["fieldPermissions"] == {"itemPaths": [field] if owner == "item" else [], "equipOverlayPaths": [],
-           "entities": [] if owner == "item" else [{"entityId": row["entityId"], "paths": [field]}]}
-    broken = packet["brokenFragments"]["item"] if owner == "item" else packet["brokenFragments"]["entities"][0]
-    assert (field in broken) is (defect != "missing")
-    if defect != "missing":
-        assert broken[field] is None
-    target_result = result["visualKit"]["item"] if owner == "item" else next(e for e in result["visualKit"]["entities"] if e["entityId"] == row["entityId"])
-    if defect == "forbidden":
-        assert field not in target_result
-    else:
-        assert target_result[field] == chosen
-    assert result["gameplay"] == data["gameplay"]
-    assert result["runtimeProgram"]["itemUse"] == data["runtimeProgram"]["itemUse"]
-    assert result["visual"]["worldScale"] == raw["item"]["worldScale"]
-    assert next(e for e in result["visualKit"]["entities"] if e["entityId"] == row["entityId"])["scale"] == row["scale"]
-
-
 from infini_local.core.item_identity_tools import recipe_key
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
@@ -977,120 +809,103 @@ def _native_sprite_reference(frame_source="texture_bounds"):
                              "widthPx": 40, "heightPx": 68 if frame_source == "texture_bounds" else 32}}
 
 
-@pytest.mark.parametrize("frame_source", ["texture_bounds", "draw_animation"])
-def test_parent_native_sprite_reference_is_visual_only_exact_and_detached(frame_source):
-    parent = {"id": 1, "name": "literal", "damage": 17, "createTile": None,
-              "width": 999, "height": 888, "scale": 4, "spriteReferenceRaw": _native_sprite_reference(frame_source)}
+@pytest.mark.parametrize("raw,expected,location,proxy", [
+    *(pytest.param(_native_sprite_reference(source), _native_sprite_reference(source), "direct", False,
+                  id=f"loaded-{source}-zero-origin" if source == "texture_bounds" else "loaded-draw-animation-exact-frame")
+      for source in ("texture_bounds", "draw_animation")),
+    pytest.param({"source": "TextureAssets.Item", "textureWidthPx": 1, "textureHeightPx": 1},
+                 {"source": "TextureAssets.Item", "textureWidthPx": 1, "textureHeightPx": 1}, "direct", False, id="loaded-one-pixel-frame-unknown"),
+    pytest.param(_native_sprite_reference(), None, "fingerprint", False, id="fingerprint-not-observation"),
+    pytest.param(_native_sprite_reference(), None, "runtimeFacts", False, id="runtime-facts-not-observation"),
+    pytest.param(_native_sprite_reference(), None, "direct", True, id="generated-proxy-no-native-reference"),
+    *(pytest.param(raw, None, "direct", False, id=f"invalid-texture-{name}") for name, raw in (
+        ("null", None), ("object", {}), ("array", []), ("missing-height", {"source": "TextureAssets.Item", "textureWidthPx": 40}),
+        *((f"source-{name}", {**_native_sprite_reference(), "source": token}) for name, token in
+          (("wrong-owner", "texture_bounds"), ("case", "textureassets.item"), ("space", " TextureAssets.Item"), ("null", None))),
+        *((f"{key}-null-wiring", {**_native_sprite_reference(), key: None}) for key in ("textureWidthPx", "textureHeightPx")),
+        *((f"width-{name}", {**_native_sprite_reference(), "textureWidthPx": value}) for name, value in
+          (("bool", True), ("string", "40"), ("float", 40.0), ("zero", 0), ("negative", -1), ("overflow", 2_147_483_648))))),
+    *(pytest.param({**_native_sprite_reference(), "currentFrame": frame},
+                  {key: value for key, value in _native_sprite_reference().items() if key != "currentFrame"},
+                  "direct", False, id=f"unknown-frame-{name}") for name, frame in (
+        ("null", None), ("object", {}), ("array", []), ("missing-coordinates", {"source": "draw_animation"}),
+        *((f"source-{name}", {**_native_sprite_reference()["currentFrame"], "source": token}) for name, token in
+          (("case", "Draw_Animation"), ("wrong-owner", "TextureAssets.Item"), ("null", None))),
+        *((f"{key}-{name}", {**_native_sprite_reference("draw_animation")["currentFrame"], key: value})
+          for key, name, value in (("xPx", "bool", True), ("yPx", "string", "0"), ("widthPx", "float", 11.0), ("heightPx", "bool", False),
+              ("xPx", "negative", -1), ("yPx", "negative", -1), ("widthPx", "zero", 0), ("heightPx", "zero", 0),
+              ("xPx", "outside", 40), ("yPx", "outside", 68), ("widthPx", "overflow", 41), ("heightPx", "overflow", 69), ("xPx", "huge", 2_147_483_647))),
+        ("texture-bounds-not-full", {"source": "texture_bounds", "xPx": 0, "yPx": 0, "widthPx": 40, "heightPx": 32}))),
+    pytest.param({"source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 68},
+                 {"source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 68}, "direct", False, id="missing-frame-not-zero-frame"),
+    *(pytest.param({**_native_sprite_reference("draw_animation"), "privatePath": "/not/model/context.png",
+                   "currentFrame": {**_native_sprite_reference("draw_animation")["currentFrame"], "extra": "private"}},
+                  _native_sprite_reference("draw_animation"), name, False, id=f"native-whitelist-no-name-routing-{name}")
+      for name in ("Blade", "Staff")),
+])
+def test_parent_native_reference_preserves_only_loaded_literal_observations(raw, expected, location, proxy):
+    parent = {"id": 1, "name": location, "sourceMod": "UnrelatedMod" if location == "Staff" else "Terraria",
+              "damage": 17, "createTile": None, "width": 999, "height": 888, "scale": 4}
+    if location in {"fingerprint", "runtimeFacts"}:
+        parent[location] = {"spriteReferenceRaw": raw}
+    else:
+        parent["spriteReferenceRaw"] = raw
+    if proxy:
+        parent["generatedData"] = {}
     before = copy.deepcopy(parent)
-    gameplay = raw_parent_card_for_llm(parent)
     stripped = {key: value for key, value in parent.items() if key != "spriteReferenceRaw"}
+    gameplay = raw_parent_card_for_llm(parent)
     assert gameplay == raw_parent_card_for_llm(stripped)
     assert "spriteReference" not in gameplay["raw"]
     card = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert card["raw"]["spriteReference"] == parent["spriteReferenceRaw"]
-    assert {key: value for key, value in card["raw"].items() if key != "spriteReference"} == gameplay["raw"]
+    if expected is None:
+        assert card == gameplay
+    else:
+        assert card["raw"]["spriteReference"] == expected
+        assert {key: value for key, value in card["raw"].items() if key != "spriteReference"} == gameplay["raw"]
+        if "currentFrame" in expected:
+            card["raw"]["spriteReference"]["currentFrame"]["xPx"] = 1
+        else:
+            card["raw"]["spriteReference"]["textureWidthPx"] = 2
     assert parent == before
     assert recipe_key(parent, parent, 7, "frozen") == recipe_key(stripped, stripped, 7, "frozen")
-    card["raw"]["spriteReference"]["currentFrame"]["xPx"] = 1
-    assert parent == before
 
 
-@pytest.mark.parametrize("size", [1, 47, 512])
-def test_generated_parent_visual_reference_keeps_present_calibration_without_inference(size):
+@pytest.mark.parametrize("size,present,valid", [
+    *(pytest.param(size, True, True, id=f"authored-size-{size}") for size in (1, 47, 512)),
+    pytest.param(None, False, False, id="missing-size-stays-unknown"),
+    *(pytest.param(value, True, False, id=f"invalid-size-{name}") for name, value in (
+        ("null", None), ("false", False), ("true", True), ("string", "47"), ("float", 47.0),
+        ("zero", 0), ("negative", -1), ("overflow", 513), ("object", {}), ("array", []))),
+])
+def test_generated_parent_calibration_is_authored_visual_only_and_detached(size, present, valid):
+    calibration = {"preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3}
     parent = {"id": 1, "name": "shared proxy", "width": 123, "height": 456,
               "spriteReferenceRaw": _native_sprite_reference(),
-              "generatedData": {"id": "exact-definition", "visual": {"renderSizePx": size,
-                  "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3, "spritePath": "private.png"},
-                  "gameplay": {"damage": 17}, "runtimeProgram": {"entities": [], "bindings": []}}}
+              "generatedData": {"id": "exact-definition", "visual": {**calibration, "spritePath": "private.png"},
+                  "gameplay": {"damage": 17, "width": 64, "height": 32}, "runtimeProgram": {"entities": [], "bindings": []}}}
+    if present:
+        parent["generatedData"]["visual"]["renderSizePx"] = size
     before = copy.deepcopy(parent)
+    expected = {**calibration, **({"renderSizePx": size} if valid else {})}
     card = raw_parent_card_for_llm(parent, include_visual_reference=True)
     assert "spriteReference" not in card["raw"]
-    calibration = {"renderSizePx": size, "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3}
-    assert card["raw"]["generatedParent"]["visual"] == calibration
+    assert card["raw"]["generatedParent"]["visual"] == expected
     gameplay = raw_parent_card_for_llm(parent)
     assert "visual" not in gameplay["raw"]["generatedParent"]
-    assert parent == before
+    without_visual = copy.deepcopy(card)
+    without_visual["raw"]["generatedParent"].pop("visual")
+    assert without_visual == gameplay
     undeclared = copy.deepcopy(parent)
-    undeclared["generatedData"]["visual"].pop("renderSizePx")
-    assert raw_parent_card_for_llm(undeclared, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == {
-        key: value for key, value in calibration.items() if key != "renderSizePx"
-    }
+    undeclared["generatedData"]["visual"].pop("renderSizePx", None)
+    assert raw_parent_card_for_llm(undeclared, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == calibration
     assert recipe_key(parent, parent, 7, "frozen") == recipe_key(undeclared, undeclared, 7, "frozen")
     other = copy.deepcopy(parent)
     other["generatedData"]["id"] = "other-definition"
     other["generatedData"]["visual"]["renderSizePx"] = 91
     assert raw_parent_card_for_llm(other, include_visual_reference=True)["raw"]["generatedParent"]["visual"] == {**calibration, "renderSizePx": 91}
-    card["raw"]["generatedParent"]["visual"]["renderSizePx"] = 2
+    card["raw"]["generatedParent"]["visual"]["worldScale"] = 2
     assert parent == before
-
-
-@pytest.mark.parametrize("raw", [
-    None, {}, [], {"source": "TextureAssets.Item", "textureWidthPx": 40},
-    *({**_native_sprite_reference(), "source": token} for token in ("texture_bounds", "textureassets.item", " TextureAssets.Item", None)),
-    *({**_native_sprite_reference(), "textureWidthPx": value} for value in (True, "40", 40.0, 0, -1, 2_147_483_648)),
-    *({**_native_sprite_reference(), "textureHeightPx": value} for value in (False, "68", 68.0, 0, -1, 2_147_483_648)),
-])
-def test_parent_malformed_native_observation_is_omitted_without_gameplay_failure(raw):
-    parent = {"name": "still valid gameplay parent", "damage": 17, "spriteReferenceRaw": raw}
-    before = copy.deepcopy(parent)
-    card = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert card == raw_parent_card_for_llm(parent)
-    assert parent == before
-
-
-@pytest.mark.parametrize("frame", [
-    None, {}, [], {"source": "draw_animation"},
-    *({**_native_sprite_reference()["currentFrame"], "source": source} for source in ("Draw_Animation", "TextureAssets.Item", None)),
-    *({**_native_sprite_reference("draw_animation")["currentFrame"], key: value} for key, value in (
-        ("xPx", True), ("yPx", "0"), ("widthPx", 11.0), ("heightPx", False),
-        ("xPx", -1), ("yPx", -1), ("widthPx", 0), ("heightPx", 0),
-        ("xPx", 40), ("yPx", 68), ("widthPx", 41), ("heightPx", 69), ("xPx", 2_147_483_647))),
-    {"source": "texture_bounds", "xPx": 0, "yPx": 0, "widthPx": 40, "heightPx": 32},
-])
-def test_parent_unknown_or_bad_frame_keeps_only_valid_texture_dimensions(frame):
-    raw = _native_sprite_reference()
-    raw["currentFrame"] = frame
-    parent = {"name": "literal", "spriteReferenceRaw": raw}
-    card = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert card["raw"]["spriteReference"] == {key: value for key, value in raw.items() if key != "currentFrame"}
-
-
-@pytest.mark.parametrize("size", [None, False, True, "47", 47.0, 0, -1, 513, {}, []])
-def test_generated_parent_bad_or_old_size_stays_unknown_without_inference(size):
-    parent = {"name": "shared proxy", "spriteReferenceRaw": _native_sprite_reference(),
-              "generatedData": {"id": "same-definition", "visual": {"renderSizePx": size,
-                  "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3},
-                  "gameplay": {"width": 64, "height": 32}, "runtimeProgram": {"entities": [], "bindings": []}}}
-    card = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert card["raw"]["generatedParent"]["visual"] == {
-        "preferredCanvasSize": 32, "worldScale": 4, "inventoryScale": 3,
-    }
-    assert "spriteReference" not in card["raw"]
-    author_card = raw_parent_card_for_llm(parent)
-    without_visual = copy.deepcopy(card)
-    without_visual["raw"]["generatedParent"].pop("visual")
-    assert without_visual == author_card
-
-
-def test_parent_reference_never_reads_fingerprint_or_proxy_and_accepts_loaded_literal_one_pixel():
-    raw = {"source": "TextureAssets.Item", "textureWidthPx": 1, "textureHeightPx": 1}
-    parent = {"name": "literal", "fingerprint": {"spriteReferenceRaw": raw}, "runtimeFacts": {"spriteReferenceRaw": raw}}
-    assert "spriteReference" not in raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]
-    parent["spriteReferenceRaw"] = raw
-    assert raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["spriteReference"] == raw
-    parent["generatedData"] = {}
-    assert "spriteReference" not in raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]
-
-
-def test_parent_reference_is_key_name_independent_and_whitelists_native_fact_members():
-    raw = _native_sprite_reference("draw_animation")
-    raw["privatePath"] = "/not/model/context.png"
-    raw["currentFrame"]["extra"] = "not a captured rectangle member"
-    first = {"id": 7, "name": "Blade", "sourceMod": "Terraria", "spriteReferenceRaw": raw}
-    second = {**first, "id": 8, "name": "Staff", "sourceMod": "UnrelatedMod"}
-    expected = _native_sprite_reference("draw_animation")
-    for parent in (first, second):
-        assert raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["spriteReference"] == expected
 
 
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])

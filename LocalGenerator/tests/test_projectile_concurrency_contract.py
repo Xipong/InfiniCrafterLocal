@@ -56,7 +56,16 @@ def test_explicit_concurrency_projects_only_exact_spawn_leaf_with_receipt():
 
 
 @pytest.mark.parametrize("value", [None, False, True, 0, 97, 1.0, "1", [], {}])
-def test_present_malformed_wire_concurrency_refused_without_author_receipts(value):
+def test_present_malformed_concurrency_is_refused_at_author_and_saved_wire(value):
+    document = _with_concurrency(value)
+    before = copy.deepcopy(document)
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert any(row["path"].endswith(".params.maxActive") for row in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+    assert document == before
+
     compiled = compile_runtime_program(build_runtime_fixture("returning_potion"))
     compiled.pop("runtimeContract")  # Saved/delivery wire has no Author provenance.
     entity_index = next(i for i, row in enumerate(compiled["runtimeProgram"]["entities"]) if row["id"] == "tonic_flask")
@@ -117,18 +126,6 @@ def test_spawn_alias_keeps_historical_runtime_values_and_concurrency_absence():
     assert "maxActive" not in CAPABILITY_REGISTRY["configure_spawn"].params
 
 
-@pytest.mark.parametrize("value", [None, False, True, 0, 97, 1.0, "1", [], {}])
-def test_present_malformed_author_concurrency_refused_at_exact_leaf(value):
-    document = _with_concurrency(value)
-    before = copy.deepcopy(document)
-    report = validate_runtime_program(document)
-    assert not report["ok"]
-    assert any(row["path"].endswith(".params.maxActive") for row in report["errors"])
-    with pytest.raises(ValueError):
-        compile_runtime_program(document)
-    assert document == before
-
-
 def test_schema_registry_has_required_positive_param_but_optional_capability():
     cap = CAPABILITY_REGISTRY[CAPABILITY]
     variant = next(row for row in capability_provider_union() if row["properties"]["fn"]["const"] == CAPABILITY)
@@ -143,8 +140,17 @@ def test_schema_registry_has_required_positive_param_but_optional_capability():
     assert cap.final_wire_paths == ("runtimeProgram.entities[].spawn.maxActive",)
 
 
-@pytest.mark.parametrize("value", range(1, 97))
-def test_entire_positive_domain_is_exact_not_clipped_and_count_is_independent(value):
+# Identity projection has no value-dependent branch: cover cap below/equal/above
+# the batch count, an interior value and both domain endpoints, not 96 repeats.
+@pytest.mark.parametrize("value", [
+    pytest.param(1, id="minimum-below-batch"),
+    pytest.param(2, id="below-batch"),
+    pytest.param(3, id="equal-batch"),
+    pytest.param(4, id="above-batch"),
+    pytest.param(48, id="interior"),
+    pytest.param(96, id="maximum"),
+])
+def test_positive_concurrency_projection_is_exact_and_count_is_independent(value):
     document = _with_concurrency(value)
     spawn = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn")
     spawn["params"]["count"] = 3  # Even count > cap is an explicit, potentially refused batch, not a rewrite.
