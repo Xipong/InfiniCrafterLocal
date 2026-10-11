@@ -80,12 +80,8 @@
       "owner_execute_sync": 49,
       "client_visual_only": 3
     },
-    "rangeParityRows": 150,
-<<<<<<< HEAD
+    "rangeParityRows": 151,
     "verticalSliceCount": 69
-=======
-    "verticalSliceCount": 68
->>>>>>> main
   },
   "issues": [],
   "errorCount": 0,
