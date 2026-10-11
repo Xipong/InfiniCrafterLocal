@@ -38,8 +38,8 @@ def test_binding_contact_placement_and_events_are_local(monkeypatch) -> None:
     assert "whole generated item" in guide["stackCost"]
     assert "stackCost=0" in guide["stackCost"]
     event = {row["event"]: row for row in catalog["events"]}
-    assert "spawned entity" in event["on_use"]["constructionMeaning"]
-    assert "placement emits none" in event["on_use"]["constructionMeaning"]
+    assert "including spawn_entity actions" in event["on_use"]["does"]
+    assert "accepted non-placement" in event["on_use"]["does"]
     assert "enabled body hitbox" in event["on_hit"]["constructionMeaning"]
     assert "HoldItem" in event["periodic"]["constructionMeaning"]
     assert "source" in guide["eventSource"] and "binding action target" in guide["eventSource"]
@@ -85,7 +85,8 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     assert "While-selected HoldItem" in inputs["hold"]["constructionMeaning"]
     assert all(term in inputs["equipped"]["constructionMeaning"].lower() for term in ("passive", "runtime uses the first", "head only", "head/body/legs"))
     assert "requiredComponents" in entities["item_body"] and "configure_item_stats" in entities["item_body"]["requiredComponents"]
-    assert "target_and_fire" in entities["stationary_projectile"]["constructionMeaning"]
+    assert entities["stationary_projectile"]["requiresPositionDriver"] is False
+    assert "movement is optional" in entities["stationary_projectile"]["positionRequirement"]
     assert "per-owner cap" in entities["free_projectile"]["constructionMeaning"]
     assert "maxStack=1" in cards["configure_item_stats"]["constructionMeaning"]
     assert "category" in " ".join(payload["priorityHeader"])

@@ -15,7 +15,7 @@ def test_author_packet_names_real_fields_without_harness_instructions(monkeypatc
     assert 'capabilityCatalog' not in priority
     assert 'There is no subsequent model or tool pass' not in priority
     assert 'Visual/VFX' not in priority
-    assert 'runtimeProgram must explicitly implement the gameplay you describe' in priority
+    assert 'runtimeProgram alone defines executable gameplay' in req['messages'][0]['content']
     cards = {row['fn']: row for row in payload['runtimeCapabilityContract']['catalog']['capabilities']}
     # Cadence belongs to stats, not use: the packet must not imply an absent param.
     use_meaning = cards['configure_item_use']['constructionMeaning']
@@ -74,7 +74,7 @@ def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(
     assert 'group' in rule
     guide = payload['runtimeCapabilityContract']['catalog']['fieldGuide']
     assert 'Neutral values are not defaults' not in guide['sourceValues']
-    assert 'explicit card default' in guide['sourceValues']
+    assert 'explicit card default' in guide['paramNotation']
 
 
 def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fields(monkeypatch):

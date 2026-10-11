@@ -200,12 +200,6 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 },
             },
         },
-        "forbidden": [
-            "weapon archetype selector",
-            "family-derived movement/attachment/delivery",
-            "compiler receipts",
-            "gameplay claimed only in prose rather than runtimeProgram",
-        ],
     }
 
 

@@ -230,7 +230,10 @@ def test_author_request_owns_optional_alternate_cost_and_source_motion_advisorie
     packet = json.loads(request['messages'][1]['content'])
     assert user == request['messages'][1]['content']
     header = packet['priorityHeader']
-    assert any('alternate_use is optional' in line and 'purposeful' in line and 'not required to preserve' in line for line in header)
+    concept = packet['requiredJsonShape']['concept']
+    assert 'include extra control modes only for meaningful utility' in concept['plannedPlayerActions'][0]['intent']
+    assert all('copying every parent capability is not required' in concept[field]
+               for field in ('parentAContribution', 'parentBContribution'))
     assert any('source tempo and motion' in line and 'when available' in line and 'not an algorithm' in line and 'intentional' in line for line in header)
     assert any('use your knowledge' in line and 'verified source facts' in line for line in header), 'the model can choose physics creatively; source evidence must not become a blanket inference ban'
     from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm

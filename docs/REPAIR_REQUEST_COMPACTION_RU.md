@@ -33,8 +33,8 @@ object type. При json_object/off null остаётся authored value.
 
 ## Format Repair
 
-Из `originalRecipeContext` удаляется только копия шести `_AUTHOR_CACHE_PREFIX_KEYS`:
-priorityHeader, gameplayAuthoringStages, runtimeProgramInvariants,
+Из `originalRecipeContext` удаляется только копия пяти `_AUTHOR_CACHE_PREFIX_KEYS`:
+priorityHeader, runtimeProgramInvariants,
 runtimeCapabilityContract, requiredJsonShape, diagnosticReport.
 
 Точный malformedRawText, parse error, собственные syntax-only rules,
