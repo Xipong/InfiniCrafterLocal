@@ -1,6 +1,6 @@
 # No-image Live20 harness
 
-[`live-generation/generate_20_items_without_images.py`](live-generation/generate_20_items_without_images.py) runs the frozen 20-case campaign against a **real configured text provider**. It hard-blocks image backends and substitutes a deterministic test PNG only for delivery checks; it does not accept generated sprites, Terraria gameplay or MP. Parent rows default to [`fixtures/items.jsonl`](fixtures/items.jsonl); `--runtime-dump` selects another dump, whose SHA-256 is recorded in the manifest.
+[`live-generation/generate_20_items_without_images.py`](live-generation/generate_20_items_without_images.py) runs the frozen 20-case campaign against a **real configured text provider**. It hard-blocks image backends and substitutes a deterministic test PNG only for delivery checks; it does not accept generated sprites, Terraria gameplay or MP. The fixture belongs to the isolated campaign's canonical `SPRITE_DIR` (`OUT/cache/sprites`), so basename delivery uses the same serving-root admission as production. An existing PNG outside those roots is not delivery proof. Parent rows default to [`fixtures/items.jsonl`](fixtures/items.jsonl); `--runtime-dump` selects another dump, whose SHA-256 is recorded in the manifest.
 
 ## Offline checks / preflight
 

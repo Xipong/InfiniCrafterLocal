@@ -3676,8 +3676,8 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
             if namespace == "calls" and row_id in existing[namespace] and row_id in set(_values(identity.get("callTargetIds"))):
                 allowed_targets = set(str(value) for value in _values(retarget.get("callTargetIds")))
                 original = _mapping(next((value for value in _program_rows(current)[namespace] if str(value.get("id") or "") == row_id), {}))
-                allowed_targets.add(str(original.get("target") or ""))
-                if str(row.get("target") or "") not in allowed_targets:
+                allowed_targets.add(_call_target(original, rows))
+                if _call_target(row, rows) not in allowed_targets:
                     errors.append(_scope_error(path + ".target", "call retargets outside compatible repair context", actual=row.get("target")))
 
     transactions = _mapping(scope.get("repairTransactions"))

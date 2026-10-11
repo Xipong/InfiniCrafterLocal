@@ -289,50 +289,74 @@ def _reserve_remote_rate_slot(
     tokens = _estimated_wire_tokens(serialized_bytes)
     minimum_interval = _model_min_interval_seconds(payload.get("model"))
     deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
-    while True:
-        if deadline is not None:
-            remaining_seconds(deadline)
-        blocked_wait = 0.0
-        wait_seconds = 0.0
+    waiter = threading.Event()
+    with _LLM_RATE_LOCK:
+        state = _LLM_RATE_STATE.setdefault(
+            key,
+            {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
+        )
+        waiters = state.setdefault("waiters", [])
+        waiters.append(waiter)
+    try:
+        while True:
+            if deadline is not None:
+                remaining_seconds(deadline)
+            wait_seconds = 0.0
+            queue_timeout = None
+            with _LLM_RATE_LOCK:
+                now = time.monotonic()
+                if deadline is not None:
+                    remaining_seconds(deadline)
+                is_head = waiters[0] is waiter
+                row = _CURRENT_LLM_ATTEMPT.get()
+                if not is_head:
+                    # Only the oldest request may spend this key's quota. Smaller
+                    # newcomers must not keep renewing the window ahead of it.
+                    queue_timeout = None if deadline is None else deadline - now
+                    if row is not None:
+                        row["rateWaitReason"] = "rate_queue"
+                else:
+                    events = [
+                        (float(at), int(count))
+                        for at, count in state.get("events", [])
+                        if float(at) > now - _LLM_RATE_WINDOW_SECONDS
+                    ]
+                    state["events"] = events
+                    blocked_wait = max(0.0, float(state.get("blockedUntil") or 0.0) - now)
+                    pacing_wait = max(
+                        0.0,
+                        float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
+                    )
+                    wait_seconds = max(blocked_wait, pacing_wait)
+                    used_tokens = sum(count for _, count in events)
+                    if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW:
+                        wait_seconds = max(
+                            wait_seconds,
+                            events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
+                        )
+                    if row is not None and wait_seconds > 0.0:
+                        row["rateWaitReason"] = (
+                            "provider_cooldown" if blocked_wait >= wait_seconds else
+                            "token_window" if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW else "pacing")
+                    if wait_seconds <= 0.0:
+                        events.append((now, tokens))
+                        state["lastRequest"] = now
+                        return
+            if not is_head:
+                waiter.wait(queue_timeout)
+                continue
+            # Own pacing and provider cooldown both consume the logical budget;
+            # neither may reserve/send after it is spent. No event means no send.
+            if deadline is not None and now + wait_seconds > deadline:
+                time.sleep(max(0.0, deadline - time.monotonic()))
+                raise HttpDeadlineExceeded("remote LLM rate wait exhausted the deadline; request not sent")
+            time.sleep(wait_seconds)
+    finally:
         with _LLM_RATE_LOCK:
-            now = time.monotonic()
-            state = _LLM_RATE_STATE.setdefault(
-                key,
-                {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
-            )
-            events = [
-                (float(at), int(count))
-                for at, count in state.get("events", [])
-                if float(at) > now - _LLM_RATE_WINDOW_SECONDS
-            ]
-            state["events"] = events
-            blocked_wait = max(0.0, float(state.get("blockedUntil") or 0.0) - now)
-            pacing_wait = max(
-                0.0,
-                float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
-            )
-            wait_seconds = max(blocked_wait, pacing_wait)
-            used_tokens = sum(count for _, count in events)
-            if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW:
-                wait_seconds = max(
-                    wait_seconds,
-                    events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
-                )
-            row = _CURRENT_LLM_ATTEMPT.get()
-            if row is not None and wait_seconds > 0.0:
-                row["rateWaitReason"] = (
-                    "provider_cooldown" if blocked_wait >= wait_seconds else
-                    "token_window" if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW else "pacing")
-            if wait_seconds <= 0.0:
-                events.append((now, tokens))
-                state["lastRequest"] = now
-                return
-        # Own pacing and provider cooldown both consume the logical budget;
-        # neither may reserve/send after it is spent. No event means no send.
-        if deadline is not None and now + wait_seconds > deadline:
-            time.sleep(max(0.0, deadline - time.monotonic()))
-            raise HttpDeadlineExceeded("remote LLM rate wait exhausted the deadline; request not sent")
-        time.sleep(wait_seconds)
+            was_head = waiters[0] is waiter
+            waiters.remove(waiter)
+            if was_head and waiters:
+                waiters[0].set()
 
 
 def _mark_remote_rate_limited(url: str, payload: dict[str, Any], error: urlerror.HTTPError) -> None:

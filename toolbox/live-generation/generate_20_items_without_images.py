@@ -184,7 +184,9 @@ RESULTS = OUT / 'results.ndjson'
 HARNESS_EVENTS = OUT / 'harness_events.ndjson'
 for path in (LOGICAL, HTTP, IMAGES, RESULTS, HARNESS_EVENTS):
     path.write_text('', encoding='utf-8')
-NO_IMAGE_FIXTURE = write_no_image_fixture_png(OUT / 'qa-no-image-fixture.png')
+# Delivery transfers PNGs by basename from the canonical serving roots, not OUT.
+from infini_local.core.config_bootstrap import SPRITE_DIR  # noqa: E402
+NO_IMAGE_FIXTURE = write_no_image_fixture_png(SPRITE_DIR / 'qa-no-image-fixture.png')
 
 trace_write_lock = threading.Lock()
 progress_write_lock = threading.Lock()
@@ -314,10 +316,13 @@ def assert_frozen_logical_settings(payload: dict[str, Any], *, stage: str) -> No
                 f"!= frozen stage budget {frozen_max_tokens!r}"
             )
     if args.expected_reasoning_effort:
-        request_reasoning_effort = str(payload.get('reasoning_effort') or '').strip()
-        if request_reasoning_effort != args.expected_reasoning_effort:
+        reasoning = payload.get('reasoning')
+        efforts = [str(payload[key]).strip() for key in ('reasoning_effort',) if key in payload]
+        if isinstance(reasoning, dict) and 'effort' in reasoning:
+            efforts.append(str(reasoning['effort']).strip())
+        if not efforts or any(effort != args.expected_reasoning_effort for effort in efforts):
             raise RuntimeError(
-                f"logical request reasoning effort {request_reasoning_effort!r} != frozen campaign effort {args.expected_reasoning_effort!r}"
+                f"logical request reasoning effort {efforts!r} != frozen campaign effort {args.expected_reasoning_effort!r}"
             )
     frozen_response_format = str(args.expected_response_format or "").strip().lower()
     if frozen_response_format:

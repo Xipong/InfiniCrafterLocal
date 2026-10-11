@@ -17,6 +17,7 @@ import json
 import runpy
 import threading
 import urllib.error
+from types import SimpleNamespace
 
 import pytest
 
@@ -911,6 +912,234 @@ def test_remote_rate_budget_is_shared_token_aware_and_429_safe(wire, monkeypatch
         assert sum(count for _, count in transport._LLM_RATE_STATE[next(iter(transport._LLM_RATE_STATE))]["events"]) == 15_000
     if scenario == "local":
         assert transport._LLM_RATE_STATE == {}
+
+
+class RateClock:
+    """Explicit thread gates: elapsed quota/deadline time never uses real sleep."""
+    def __init__(self):
+        self.now = 1000.0
+        self.condition = threading.Condition()
+        self.parked = {}
+        self.releases = set()
+        self.results = {}
+        self.failures = {}
+        self.threads = {}
+        self.stopped = False
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        name = threading.current_thread().name
+        with self.condition:
+            self.parked[name] = float(seconds)
+            self.condition.notify_all()
+            self.condition.wait_for(lambda: name in self.releases or self.stopped)
+            if self.stopped:
+                raise RuntimeError("rate test stopped")
+            self.releases.remove(name)
+            if name in self.failures:
+                raise self.failures.pop(name)
+
+    def start(self, name, call):
+        def run():
+            try:
+                result = call()
+            except BaseException as error:
+                result = error
+            with self.condition:
+                self.results[name] = result
+                self.condition.notify_all()
+        worker = threading.Thread(target=run, name=name, daemon=True)
+        self.threads[name] = worker
+        worker.start()
+        return self.observe(name)
+
+    def observe(self, name):
+        with self.condition:
+            assert self.condition.wait_for(
+                lambda: name in self.parked or name in self.results, timeout=2,
+            ), f"worker {name} did not reach its gate"
+            return "done" if name in self.results else "waiting"
+
+    def step(self, name, now):
+        with self.condition:
+            assert name in self.parked, (name, self.results)
+            assert now >= self.now
+            self.now = now
+            del self.parked[name]
+            self.releases.add(name)
+            self.condition.notify_all()
+        return self.observe(name)
+
+    def close(self):
+        with self.condition:
+            self.stopped = True
+            self.condition.notify_all()
+        for worker in self.threads.values():
+            worker.join(timeout=2)
+            assert not worker.is_alive(), "rate waiter leaked a thread/lock"
+
+
+@pytest.fixture
+def rate_clock(monkeypatch):
+    from infini_local.core import http_io
+    clock = RateClock()
+    transport._reset_llm_pool_runtime_for_tests()
+    fake_time = SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep)
+    monkeypatch.setattr(transport, "time", fake_time)
+    monkeypatch.setattr(http_io, "time", fake_time)
+    monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
+
+    class GateEvent(threading.Event):
+        def wait(self, timeout=None):
+            if not self.is_set():
+                clock.sleep(timeout if timeout is not None else float("inf"))
+            return self.is_set()
+
+    # Isolate only this module's waiter primitive; never patch threading globally.
+    monkeypatch.setattr(transport, "threading", SimpleNamespace(Event=GateEvent))
+    yield clock
+    clock.close()
+    transport._reset_llm_pool_runtime_for_tests()
+
+
+@pytest.mark.parametrize("budget", [120, None], ids=["bounded", "unbounded"])
+def test_remote_rate_waiter_cannot_be_overtaken_by_newer_small_request(rate_clock, budget):
+    clock = rate_clock
+    url, payload = "https://provider.example/v1/chat/completions", {"model": "vendor/model"}
+    transport._reserve_remote_rate_slot(url, payload, b"{}")
+    admitted = []
+
+    def reserve(name, body):
+        transport._reserve_remote_rate_slot(url, payload, body, max_wait_seconds=budget)
+        admitted.append((name, clock.now))
+
+    assert clock.start("older", lambda: reserve("older", b"x" * 64_000)) == "waiting"
+    clock.now = 1010.0  # Small request fits the window and pacing, unlike the older one.
+    younger_state = clock.start("younger", lambda: reserve("younger", b"{}"))
+    try:
+        assert younger_state == "waiting", f"newer request overtook old waiter: {admitted}"
+        assert admitted == []
+        assert clock.step("older", 1060.0) == "done"
+        assert clock.step("younger", 1060.0) == "waiting"
+        assert clock.step("younger", 1120.0) == "done"
+        assert admitted == [("older", 1060.0), ("younger", 1120.0)]
+        state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+        assert state["events"] == [(1120.0, 1)]
+        assert not state.get("waiters")
+    finally:
+        # Teardown releases every controlled gate even on the causal RED assertion.
+        clock.close()
+
+
+@pytest.mark.parametrize("cancelled", ["head", "middle", "tail", "head-exception"])
+def test_remote_rate_cancelled_waiter_releases_only_its_fifo_position(rate_clock, cancelled):
+    clock = rate_clock
+    url, payload = "https://provider.example/v1/chat/completions", {"model": "vendor/model"}
+    transport._reserve_remote_rate_slot(url, payload, b"{}")
+    admitted = []
+
+    def reserve(name):
+        transport._reserve_remote_rate_slot(
+            url, payload, b"x" * 64_000,
+            max_wait_seconds=20 if name == cancelled else 300,
+        )
+        admitted.append(name)
+
+    for name in ("head", "middle", "tail"):
+        assert clock.start(name, lambda name=name: reserve(name)) == "waiting"
+    if cancelled == "head-exception":
+        clock.failures["head"] = RuntimeError("cancelled rate wait")
+        assert clock.step("head", 1020.0) == "done"
+        assert isinstance(clock.results["head"], RuntimeError)
+        removed = "head"
+    else:
+        assert clock.step(cancelled, 1020.0) == "done"
+        assert isinstance(clock.results[cancelled], transport.HttpDeadlineExceeded)
+        removed = cancelled
+    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+    assert state["events"] == [(1000.0, 1)] and state["lastRequest"] == 1000.0
+    assert len(state["waiters"]) == 2
+    survivors = [name for name in ("head", "middle", "tail") if name != removed]
+    # Wake the later survivor first: cancelling a middle/tail must not grant it priority.
+    assert clock.step(survivors[1], 1060.0) == "waiting"
+    assert clock.step(survivors[0], 1060.0) == "done"
+    assert clock.step(survivors[1], 1120.0) == "done"
+    assert admitted == survivors
+    assert all(clock.results[name] is None for name in survivors)
+    assert not state["waiters"]
+
+
+@pytest.mark.parametrize("independent", ["endpoint", "model", "localhost", "ipv4", "ipv6"])
+def test_remote_rate_queued_key_does_not_block_independent_or_local_route(rate_clock, independent):
+    clock = rate_clock
+    url, payload = "https://provider.example/v1/chat/completions", {"model": "vendor/model"}
+    transport._reserve_remote_rate_slot(url, payload, b"{}")
+    assert clock.start("head", lambda: transport._reserve_remote_rate_slot(
+        url, payload, b"x" * 64_000, max_wait_seconds=120,
+    )) == "waiting"
+    urls = {"endpoint": "https://other.example/v1/chat/completions", "model": url,
+            "localhost": "http://localhost:1234/v1/chat/completions",
+            "ipv4": "http://127.0.0.1:1234/v1/chat/completions", "ipv6": "http://[::1]:1234/v1/chat/completions"}
+    other_payload = {"model": "other/model"} if independent == "model" else payload
+    assert clock.start("independent", lambda: transport._reserve_remote_rate_slot(
+        urls[independent], other_payload, b"{}", max_wait_seconds=1,
+    )) == "done"
+    assert clock.results["independent"] is None
+    assert len(transport._LLM_RATE_STATE) == (2 if independent in {"endpoint", "model"} else 1)
+    assert clock.step("head", 1060.0) == "done"
+    assert clock.results["head"] is None
+
+
+def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_clock, monkeypatch):
+    clock = rate_clock
+    url = "https://provider.example/v1/chat/completions"
+    model = "vendor/model"
+    transport._reserve_remote_rate_slot(url, {"model": model}, b"{}")
+    sends, diagnostics = [], {}
+
+    class Response(io.BytesIO):
+        status = 200
+
+    def sender(request, *, deadline):
+        sends.append((json.loads(request.data), clock.now, deadline))
+        return Response(b'{}')
+    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+
+    def call(name, content):
+        request = transport.with_llm_stage({"model": model, "messages": [
+            {"role": "user", "content": content}], "response_format": {"type": "json_object"}}, "visual_director")
+        state = transport._new_llm_diagnostics(request)
+        token = transport._CURRENT_LLM_DIAGNOSTICS.set(state)
+        try:
+            result = transport._perform_llm_http(url, request, 70, {
+                "provider": "openai_compat", "model": model, "profile_id": "offline",
+            }, api_mode="chat_completions")
+            assert result == {}
+        finally:
+            diagnostics[name] = transport._llm_diagnostic_summary(state)
+            transport._CURRENT_LLM_DIAGNOSTICS.reset(token)
+
+    assert clock.start("older", lambda: call("older", "x" * 64_000)) == "waiting"
+    clock.now = 1010.0
+    assert clock.start("younger", lambda: call("younger", "small")) == "waiting"
+    assert sends == []
+    assert clock.step("older", 1060.0) == "done"
+    assert clock.results["older"] is None
+    assert sends[0][0]["messages"][0]["content"] == "x" * 64_000
+    assert sends[0][1:] == (1060.0, 1070.0)
+    assert clock.step("younger", 1060.0) == "waiting"
+    assert clock.step("younger", 1080.0) == "done"
+    assert isinstance(clock.results["younger"], transport.HttpDeadlineExceeded)
+    assert len(sends) == 1
+    first, second = diagnostics["older"], diagnostics["younger"]
+    assert first["physicalAttemptCount"] == 1 and first["rateWaitMsTotal"] == 60_000
+    assert first["physicalAttempts"][0]["httpStatus"] == 200
+    assert second["physicalAttemptCount"] == 0 and second["physicalAttempts"] == []
+    assert second["rateWaitReason"] == "token_window" and second["rateWaitMsTotal"] == 70_000
+    assert not transport._LLM_RATE_STATE[transport._remote_rate_key(url, {"model": model})]["waiters"]
 
 
 def test_concurrent_leases_isolate_profile_sequence_and_response_chain(wire, monkeypatch):
