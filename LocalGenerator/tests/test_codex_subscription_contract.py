@@ -971,7 +971,15 @@ def test_authorization_code_exchange_uses_native_form_encoding(monkeypatch):
 def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
     import io
     event = b'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
-    socket_limits = []
+    clock = [0.0]
+    def advance(seconds):
+        clock[0] += seconds
+    # Codex and HTTP I/O share this time module. Only reads spend the budget,
+    # so scheduler delays cannot expire it before the fake opener is reached.
+    monkeypatch.setattr(auth.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(auth.time, "sleep", advance)
+    socket_limits, read_lines, opens = [], [], []
+    read_delays = iter((0.005, 0.04))
     class Socket:
         def settimeout(self, value):
             socket_limits.append(value)
@@ -981,15 +989,25 @@ def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
             from types import SimpleNamespace
             self.fp = SimpleNamespace(raw=SimpleNamespace(_sock=Socket()))
         def readline(self, *args, **kwargs):
-            time.sleep(0.04)
-            return super().readline(*args, **kwargs)
+            assert len(socket_limits) == len(read_lines) + 1
+            # The data line is on time, but the completion delimiter is late.
+            time.sleep(next(read_delays))
+            line = super().readline(*args, **kwargs)
+            read_lines.append(line)
+            return line
     class Opener:
         def open(self, request, timeout):
+            opens.append(timeout)
+            assert clock[0] == 0.0
             return Response()
     monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
     with pytest.raises(auth.CodexError, match="timed out"):
         auth.post_sse("https://chatgpt.com/backend-api/codex/responses", {"stream": True}, timeout=0.02)
-    assert socket_limits and all(0 < value <= 0.02 for value in socket_limits)
+    assert opens == pytest.approx([0.02])
+    assert read_lines == event.splitlines(keepends=True)
+    assert socket_limits == pytest.approx([0.02, 0.015])
+    assert all(0 < value <= 0.02 for value in socket_limits)
+    assert clock[0] == pytest.approx(0.045)
 
 
 def test_bounded_catalog_get_uses_only_codex_origin_and_redacts_errors(monkeypatch):
