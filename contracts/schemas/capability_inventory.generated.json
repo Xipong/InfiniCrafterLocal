@@ -3594,7 +3594,7 @@
         "lifetimeTicks": {
           "enum": [],
           "kind": "integer",
-          "maximum": 21600,
+          "maximum": 36000,
           "minimum": 1,
           "reference": null,
           "required": true,

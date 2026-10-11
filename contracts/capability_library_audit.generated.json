@@ -81,7 +81,11 @@
       "client_visual_only": 3
     },
     "rangeParityRows": 150,
+<<<<<<< HEAD
     "verticalSliceCount": 69
+=======
+    "verticalSliceCount": 68
+>>>>>>> main
   },
   "issues": [],
   "errorCount": 0,
@@ -424,6 +428,25 @@
       "csharpBounds": [
         0.0,
         20.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "set_projectile_lifetime",
+      "param": "lifetimeTicks",
+      "wireParam": "lifetimeTicks",
+      "csharpClass": "RuntimeEntitySpec",
+      "authorBounds": [
+        1,
+        36000
+      ],
+      "wireBounds": [
+        1,
+        36000
+      ],
+      "csharpBounds": [
+        1.0,
+        36000.0
       ],
       "preserved": true
     },

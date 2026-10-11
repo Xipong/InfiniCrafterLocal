@@ -63,9 +63,9 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
 
 def planner_priority_header_for_llm() -> list[str]:
     return [
-        "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; use source-backed parent facts only to author explicit runtimeProgram mechanics.",
+        "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
-        "Do not add a mandatory weird twist. Novelty comes from the authored composition itself, not an unrelated gimmick.",
+        "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
@@ -139,12 +139,29 @@ def source_wire_units_for_llm(
             "or selector-dependent mappings. Use the exact scope and fn, never the bare field name. "
             "This is a unit explanation, not a bit-exact inverse for arbitrary legacy floating-point values; "
             "do not rewrite source, round it or replace it with tooltip prose. Values still must satisfy the selected "
-            "card's bounds/dependencies. Source facts neither require inheriting a mechanic nor grant defaults, "
-            "rebalance choices or additional Repair permissions."
+            "card's bounds/dependencies. This reading aid does not require an inherited ability for each new mechanic "
+            "or authorize code-selected rebalancing, defaults or additional Repair permissions."
         ),
         "fieldColumns": ["authorParam", "sourceToAuthor", "authorUnits"],
         "scopes": scope_rows,
     }
+
+
+def descendant_spawn_budget_for_llm() -> str:
+    """Shared execution meaning, not a required concurrency design."""
+    return (
+        "Projectile periodic/event/controller producers share the activation's default "
+        "32-successful-child-spawn lifetime allowance across descendants, unless the root explicitly "
+        "selects set_descendant_concurrency. Child death does not refund that allowance: later spawn "
+        "requests are refused after exhaustion even if the producer remains alive. Failed or cancelled "
+        "reservations are refunded. An optional set_descendant_concurrency on the root instead uses "
+        "pending/live descendant slots released at retirement; a nested pool retains every ancestor "
+        "pool and ancestor lifetime ledger. Intentionally finite producers remain valid without this "
+        "call. Describe the chosen finite or replenishable output honestly; an interval and long "
+        "lifetime alone are not guaranteed successful shots. Owner/entity/depth limits still apply. "
+        "This projectile lifetime ledger is not the item_body periodic clock's per-dispatch budget. "
+        "Read-only Repair context does not authorize adding a pool."
+    )
 
 
 def runtime_units_for_llm() -> dict[str, Any]:
@@ -154,6 +171,7 @@ def runtime_units_for_llm() -> dict[str, Any]:
         "paramNotation": guide["paramNotation"],
         "sourceWireUnits": source_wire_units_for_llm(),
         "bindingTarget": guide["bindingTarget"],
+        "descendantSpawnBudget": descendant_spawn_budget_for_llm(),
     }
 
 
@@ -190,6 +208,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     # Registry cards retain their canonical fields; only missing execution facts
     # are attached to the relevant presentation card.
     field_guide = runtime_authoring_prompt_field_guide()
+    field_guide["descendantSpawnBudget"] = descendant_spawn_budget_for_llm()
     if include_source_units:
         field_guide.update(runtime_units_for_llm())
 
@@ -264,7 +283,12 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "The referenced precision, neutral and wireProjection constraints all apply."
     )
     for card in capabilities:
-        if card["fn"] == "present_placed_item_sprite":
+        if card["fn"] in {"target_and_fire", "spawn_entity_on_event"}:
+            card["constructionMeaning"] = (
+                "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
+                "interval and entity lifetime do not guarantee sustained output."
+            )
+        elif card["fn"] == "present_placed_item_sprite":
             card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
         elif card["fn"] == "add_placed_light":
             card["constructionMeaning"] = "Independent explicit light; one center cell per committed native footprint, not player/held PNG or sprite heads. Certified 16x16/256 cells max; unproved post-place actors refused before mutation. Strength/color remain required; no default."
@@ -312,7 +336,7 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "parentUseTimeTicks": [item_field(parent, "useTime", None) for parent in (a, b)],
         "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
         "broadEnvelope": envelope,
-        "rule": "These are broad source-numeric balance bounds, not a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
+        "rule": "These are broad numeric bounds and literal parent observations, not proof of acquisition tier or expected power, a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
     }
 
 
@@ -324,7 +348,7 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
     return {
-        "authority": "realization.description, realization.playerExperience and realization.selfEvaluation are the final post-authoring report of the emitted runtimeProgram, not a repetition of the non-binding concept. Walk every input, entity, event and terminal path before writing them; report a behavior only when that exact topology executes it.",
+        "authority": "realization.description, realization.playerExperience and realization.selfEvaluation are the final post-authoring report of the emitted runtimeProgram, not a repetition of the non-binding concept. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
         "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
         "terminationEvents": "on_expire fires on natural lifetime expiry and move_proximity_missile proximity detonation; a kill before the final lifetime update does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, proximity detonation, natural expiry, ordinary return-to-owner completion and controller cancellation. Only explicitly attached actions execute. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. An on_expire effect is not guaranteed at an earlier final bounce/collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
         "entityTopology": "Stationary kind alone does not fire. Explicit periodic spawn_entity_on_event can shoot a referenced entity; target_and_fire separately provides NPC acquisition and timed shooting. An admitted free_projectile spawn creates independent projectiles; configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive. Do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless explicitly authored.",
@@ -332,7 +356,7 @@ def realization_execution_truth_for_llm() -> dict[str, str]:
         "stackCost": "For a non-placement active use, stackCost=1 consumes one whole generated item. There is no hidden charge counter; do not call whole-item consumption a charge unless an explicit supported state mechanic exists.",
         "durablePlacedForm": "When a hybrid has a reusable spawn_entity/use_item_body active use (stackCost=0), configure_item_stats.maxStack must be 1: one durable unit switches between inventory and escrowed placed form. A one-shot non-placement use (stackCost=1) is not subject to this particular maxStack rule; choose its stack size deliberately.",
         "placementEscrow": "For a successful placement binding, the committed generated item is held by the world-persistent placement ledger and returned as that same generated item when the placed tile is destroyed. Describe it as placed/recoverable, not permanently consumed; it remains unavailable while placed.",
-        "selfEvaluation": "Write realization.selfEvaluation last. planVsProgram.actionChecks covers each concept.plannedPlayerActions row and each implemented player action; mark an implementation with no concept counterpart as added. programVsReport.behaviorChecks covers the chosen inputs, entity behavior and authored event actions against description/playerExperience. You may group related calls into one behavior row with their exact runtimeProgram ids; include aligned rows as well as mismatches, with a concrete reason. A potential event without a subscribed action needs no separate row unless necessary to explain a claimed behavior. State intentionality for plan drift, and use uncertain for unresolved semantics. This is a textual comparison, not an observed run; concept drift is diagnostic, not a rejection.",
+        "selfEvaluation": "Write realization.selfEvaluation last. planVsProgram.actionChecks covers each concept.plannedPlayerActions row and each implemented player action; mark an implementation with no concept counterpart as added. programVsReport.behaviorChecks covers the chosen inputs, entity behavior and authored event actions against description/playerExperience. You may group related calls into one behavior row with their exact runtimeProgram ids; include aligned rows as well as mismatches, with a concrete reason. A potential event without a subscribed action needs no separate row unless necessary to explain a claimed behavior. State intentionality for plan drift, and use uncertain for unresolved semantics. This is a textual comparison, not an observed run; it is not a requirement to minimize mechanics or preserve every planned ability. concept drift is diagnostic, not a rejection.",
     }
 
 

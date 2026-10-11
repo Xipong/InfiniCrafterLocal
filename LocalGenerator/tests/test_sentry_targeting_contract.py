@@ -95,7 +95,12 @@ def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(
         profile = param.get("consumerConstraint")
         if isinstance(profile, str):
             param["consumerConstraint"] = deepcopy(catalog["fieldGuide"]["consumerConstraints"][profile])
-    assert card == CAPABILITY_REGISTRY["target_and_fire"].author_prompt_card()
+    expected = CAPABILITY_REGISTRY["target_and_fire"].author_prompt_card()
+    expected["constructionMeaning"] = (
+        "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
+        "interval and entity lifetime do not guarantee sustained output."
+    )
+    assert card == expected
     for term in ("Collision.CanHit", "hard geometric", "assigned NPC", "aim=velocity", "position={at:activation_origin}"):
         assert term in json.dumps(card)
     doc, call = _fixture(**OPTIONS)

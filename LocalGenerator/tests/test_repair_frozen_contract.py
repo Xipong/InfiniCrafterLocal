@@ -18,6 +18,49 @@ from tests.captured_parent_combat_author import captured_parent_combat_author
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
 
 
+def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
+    # Exact initial saved answer, not the campaign's later repaired/final output.
+    import hashlib
+    from test_gameplay_repair_readonly_context import _offline_builder
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import combine_pipeline as combine
+    from infini_local.core.runtime_authoring import validate_runtime_wire, audit_compiler_receipts
+
+    path = Path(__file__).with_name("fixtures") / "projectile_lifetime_initial_author.json"
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == "d9a149814d5fa0894e1757fe384882bffbfa20813c700f540c2a0b4404c6b89c"
+    saved = json.loads(raw)
+    before = copy.deepcopy(saved)
+    requests = []
+
+    def respond(request, **_kwargs):
+        requests.append(copy.deepcopy(request))
+        return {"choices": [{"message": {"content": raw.decode("utf-8")}}]}
+
+    def no_repair(*_args, **_kwargs):
+        raise AssertionError("saved initial Author must not invoke Repair")
+
+    _offline_builder(monkeypatch, "json_object", respond)
+    monkeypatch.setattr(combine, "repair_author_item_after_failure", no_repair)
+    initial = author.try_llm_plan({}, {}, {}, {}, "saved-initial-projectile-lifetime")
+    assert initial is not None
+    assert initial["runtimeProgram"] == saved["runtimeProgram"]
+    wire = combine.compile_and_validate_authored_runtime(
+        initial, {}, {}, {}, {}, "saved-initial-projectile-lifetime",
+        run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
+    assert len(requests) == 1
+    assert wire["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 0
+    assert saved == before
+    assert initial["runtimeProgram"] == saved["runtimeProgram"]
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=saved, final_document=wire)["ok"]
+    sentry = next(row for row in wire["runtimeProgram"]["entities"]
+                  if row["id"] == "queen_ichor_sentry")
+    assert sentry["lifetimeTicks"] == 36000
+    assert wire["runtimeProgram"]["limits"]["maxEventSpawnsPerActivation"] == 32
+
+
 _TYPE_PAIRS = [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)]
 _MERGE_CASES = [pytest.param("typed", old, new, shape, id=f"{shape}-{type(old).__name__}-{old}-to-{type(new).__name__}-{new}")
                 for old, new in _TYPE_PAIRS for shape in ("scalar", "object", "nested_array")]

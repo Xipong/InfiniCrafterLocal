@@ -4343,7 +4343,7 @@
                       "lifetimeTicks": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 21600,
+                        "maximum": 36000,
                         "description": "Lifetime",
                         "x-infini-units": "ticks",
                         "x-infini-semanticType": "ticks"

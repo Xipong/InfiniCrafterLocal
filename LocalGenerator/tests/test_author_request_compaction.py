@@ -51,26 +51,44 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert request["messages"][1]["content"] == serialized
     packet = json.loads(serialized)
     spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"]
-    assert (spec.minimum, spec.maximum) == (1, 21600)
+    assert (spec.minimum, spec.maximum) == (1, 36000)
     bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
     assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"] == bounds
     card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if row["fn"] == "set_projectile_lifetime")
-    assert (card["params"]["lifetimeTicks"]["min"], card["params"]["lifetimeTicks"]["max"]) == (1, 21600)
+    assert (card["params"]["lifetimeTicks"]["min"], card["params"]["lifetimeTicks"]["max"]) == (1, 36000)
 
     item = build_runtime_fixture("workbench_blade")
     index, lifetime = next((index, row) for index, row in enumerate(item["runtimeProgram"]["calls"])
                            if row["fn"] == "set_projectile_lifetime")
-    lifetime["params"]["lifetimeTicks"] = 21600
+    lifetime["params"]["lifetimeTicks"] = 36000
+    local_schema = contract.author_item_response_schema()
+    provider_schema = contract.author_item_provider_response_schema()
+    assert Draft202012Validator(local_schema).is_valid(item)
+    provider_item = _encode_nullable_fixture(item, local_schema)
+    assert Draft202012Validator(provider_schema).is_valid(provider_item)
     assert validate_runtime_program(item)["ok"]
     wire = compile_runtime_program(item)
     assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
                                    authored_document=item, final_document=wire)["ok"]
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == lifetime["target"])
-    assert entity["lifetimeTicks"] == 21600
+    assert entity["lifetimeTicks"] == 36000
+    accepted_before = copy.deepcopy(item)
+    for ticks in (1, 21600):
+        lifetime["params"]["lifetimeTicks"] = ticks
+        retained = compile_runtime_program(item)
+        retained_entity = next(row for row in retained["runtimeProgram"]["entities"]
+                               if row["id"] == lifetime["target"])
+        assert retained_entity["lifetimeTicks"] == ticks
+        assert validate_runtime_wire(retained)["ok"]
+    lifetime["params"]["lifetimeTicks"] = 36000
+    assert item == accepted_before
 
-    lifetime["params"]["lifetimeTicks"] = 21601
+    lifetime["params"]["lifetimeTicks"] = 36001
+    assert not Draft202012Validator(local_schema).is_valid(item)
+    provider_item["runtimeProgram"]["calls"][index]["params"]["lifetimeTicks"] = 36001
+    assert not Draft202012Validator(provider_schema).is_valid(provider_item)
     invalid_before = copy.deepcopy(item)
     failure = validate_runtime_program(item)
     path = f"$.runtimeProgram.calls[{index}].params.lifetimeTicks"
@@ -79,7 +97,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
                for row in failure["errors"]), failure
     with pytest.raises(ValueError):
         compile_runtime_program(item)
-    entity["lifetimeTicks"] = 21601
+    entity["lifetimeTicks"] = 36001
     assert not validate_runtime_wire(wire)["ok"]
     with pytest.raises(_CapturedBeforeTransport):
         author.repair_author_item_after_failure(
@@ -91,7 +109,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
                        if row["fn"] == "set_projectile_lifetime")
     assert (repair_card["params"]["lifetimeTicks"]["min"],
-            repair_card["params"]["lifetimeTicks"]["max"]) == (1, 21600)
+            repair_card["params"]["lifetimeTicks"]["max"]) == (1, 36000)
     assert repair["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert repair["repairScope"]["fieldPermissions"]["calls"] == [
         {"id": lifetime["id"], "paths": ["params.lifetimeTicks"]}]

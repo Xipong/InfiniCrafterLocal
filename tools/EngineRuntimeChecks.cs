@@ -250,6 +250,8 @@ internal static partial class EngineRuntimeChecks
             ("runtime entity count respects declared limit", RuntimeEntityCountRespectsDeclaredLimit),
             ("run-speed equipment applies after vanilla movement", RunSpeedEquipmentAppliesAfterVanillaMovement),
             ("equipment authored ranges reach player", EquipmentAuthoredRangesReachPlayer),
+            ("unit boundary projectile lifetime ceiling", ProjectileLifetimeCeilingSurvivesNativeBoundary),
+            ("unit boundary projectile lifetime outside refusal", ProjectileLifetimeOutsideCeilingIsRefused),
             ("unit boundary charge release preserves authored speed", ChargeReleasePreservesAuthoredZeroAndFractionalSpeed),
             ("unit boundary charge complete uses exact duration", ChargeCompleteRequiresExactAuthoredDuration),
             ("equipment class damage reaches exact DamageClass", EquipmentClassDamageReachesExactDamageClass),

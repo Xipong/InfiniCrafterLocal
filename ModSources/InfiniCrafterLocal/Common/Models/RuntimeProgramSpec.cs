@@ -747,6 +747,8 @@ public sealed class RuntimeEntitySpec
         {
             Spawn.Normalize();
             Damage.Normalize();
+            if (LifetimeTicks > InfiniRuntimeLimits.MaxRuntimeLifetimeTicks)
+                throw new InvalidDataException($"entity '{Id}' lifetime exceeds {InfiniRuntimeLimits.MaxRuntimeLifetimeTicks} world ticks");
             LifetimeTicks = Math.Clamp(LifetimeTicks, 1, InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
             Hitbox.Normalize();
             Collision.Normalize();

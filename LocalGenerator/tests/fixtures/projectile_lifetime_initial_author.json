@@ -1,0 +1,304 @@
+{
+  "name": "Golden Brood Scepter",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "Keep the recognizable staff identity of Посох королевы пауков (QueenSpiderStaff) and combine its spider-queen and SpiderHiver sentry motif with the golden ichor spray identity of Золотой душ (GoldenShower). The generated presentation remains a staff; its sentry fires narrow golden bolts rather than replacing either parent's identity.",
+    "coreMechanic": "Use the reusable staff to deploy a persistent, native sentry that acquires visible targets and fires authored golden bolts at a steady interval.",
+    "parentAContribution": "QueenSpiderStaff supplies the staff and spider-sentry identity, summon damage class, and source-backed sentry facts: its SpiderHiver projectile is marked as a sentry and has a 36000-tick lifetime. These facts inform the deployed sentry, not an inferred minion or egg-throwing AI.",
+    "parentBContribution": "GoldenShower supplies the golden ichor-spray identity and the authored bolt's magic damage and straight, fast projectile character. Its supplied projectile facts include 10 initial speed, 2 extra updates, five penetrations, and tile collision; no unprovided ichor debuff is inferred.",
+    "playerExperience": "Deploy a reusable sentry that automatically fires one line-of-sight bolt per firing interval. The sentry is range-limited, can be retired by Terraria's native sentry limit, and expires after its authored lifetime. Active use has a 10-point base mana cost at animation start; the 30-tick firing interval does not charge the player per bolt.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Deploy a spider-queen-themed sentry that fires golden ichor bolts at visible enemies."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v5",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {
+        "id": "item_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "queen_ichor_sentry",
+        "kind": "stationary_projectile"
+      },
+      {
+        "id": "golden_ichor_bolt",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "deploy_sentry_binding",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "queen_ichor_sentry"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "summon",
+          "damage": 26,
+          "knockback": 7.5,
+          "useTimeTicks": 30,
+          "useAnimationTicks": 30,
+          "manaCost": 10,
+          "rarity": 4,
+          "valueCopper": 250000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false
+        }
+      },
+      {
+        "id": "sentry_spawn",
+        "fn": "configure_spawn",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "velocity": {
+            "constantSpeedPxPerUpdate": 0
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetPx": 0,
+          "aim": "none",
+          "position": {
+            "at": "native_resting_spot"
+          }
+        }
+      },
+      {
+        "id": "sentry_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "lifetimeTicks": 36000
+        }
+      },
+      {
+        "id": "sentry_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "widthPx": 66,
+          "heightPx": 50,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "sentry_collision",
+        "fn": "set_projectile_collision",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "tileCollide": false,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "sentry_registration",
+        "fn": "set_projectile_sentry",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "enabled": true
+        }
+      },
+      {
+        "id": "sentry_target_fire",
+        "fn": "target_and_fire",
+        "target": "queen_ichor_sentry",
+        "params": {
+          "shotEntity": "golden_ichor_bolt",
+          "intervalTicks": 30,
+          "rangeTiles": 60,
+          "sameTargetBias": 0.2,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "count": 1,
+          "spreadRadians": 0,
+          "targetPolicy": "distance_score",
+          "requireLineOfSight": true,
+          "hardRange": true
+        }
+      },
+      {
+        "id": "bolt_spawn",
+        "fn": "configure_spawn",
+        "target": "golden_ichor_bolt",
+        "params": {
+          "velocity": {
+            "constantSpeedPxPerUpdate": 10
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetPx": 0,
+          "aim": "velocity",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "bolt_movement",
+        "fn": "move_straight",
+        "target": "golden_ichor_bolt",
+        "params": {}
+      },
+      {
+        "id": "bolt_damage",
+        "fn": "set_projectile_damage",
+        "target": "golden_ichor_bolt",
+        "params": {
+          "damageClass": "magic",
+          "damage": 30,
+          "knockback": 4,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "bolt_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "golden_ichor_bolt",
+        "params": {
+          "lifetimeTicks": 3600
+        }
+      },
+      {
+        "id": "bolt_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "golden_ichor_bolt",
+        "params": {
+          "widthPx": 32,
+          "heightPx": 32,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "bolt_collision",
+        "fn": "set_projectile_collision",
+        "target": "golden_ichor_bolt",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 5,
+          "updatesPerTick": 3,
+          "immunity": "owner_shared"
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "The generated item is presented as a visible staff, retaining the Queen Spider Staff identity while combining a spider-queen or hive crown motif with a bright golden ichor accent. On accepted primary use, the reusable item attempts its native 10-point base mana payment and spawns one sentry at Terraria's native resting spot. The sentry registers with the native sentry limit and has a 36000-tick lifetime. It selects chaseable targets within 60 tiles when it has line of sight and fires one bolt every 30 ticks. Each bolt uses authored magic damage of 30, travels straight at 10 pixels per projectile update with three updates per world tick, collides with tiles, and has five penetrations. The golden appearance does not apply an ichor defense debuff: no such effect is authored.",
+    "playerExperience": "Use the staff to deploy a persistent sentry; it handles aiming and firing at visible enemies without further input. Its shots are fast, straight golden bolts, not homing attacks, and walls can stop them. The sentry is subject to Terraria's native sentry limit and its own lifetime. The item is reusable, but primary use has a 30-tick base activation interval and a 10-point base mana cost attempted at animation start; mana is not paid separately for each sentry shot.",
+    "selfEvaluation": {
+      "planVsProgram": {
+        "verdict": "aligned",
+        "summary": "The sole planned action is implemented as a reusable primary-use sentry deployment with authored golden bolts.",
+        "actionChecks": [
+          {
+            "plannedIntent": "Deploy a spider-queen-themed sentry that fires golden ichor bolts at visible enemies.",
+            "implementedBehavior": "Primary use spawns the registered sentry; its targeting controller fires authored magic bolts at line-of-sight targets within its hard range.",
+            "runtimeRefs": [
+              "deploy_sentry_binding",
+              "queen_ichor_sentry",
+              "sentry_target_fire",
+              "golden_ichor_bolt"
+            ],
+            "result": "aligned",
+            "intentionality": "intentional",
+            "reason": "The binding, sentry controller, and bolt entity together implement the planned loop."
+          }
+        ]
+      },
+      "programVsReport": {
+        "verdict": "aligned",
+        "summary": "The report describes the authored use, sentry, and bolt behavior without claiming an unimplemented debuff or a guaranteed hit.",
+        "behaviorChecks": [
+          {
+            "runtimeRefs": [
+              "item_stats",
+              "item_use",
+              "deploy_sentry_binding"
+            ],
+            "programBehavior": "Primary use is configured as a non-consuming spawn action; the item has a 30-tick use interval, 30-tick animation, and 10 base mana cost.",
+            "reportedBehavior": "The item is reusable, deploys on primary use, and has the stated base use timing and mana cost.",
+            "result": "aligned",
+            "reason": "The report describes the configured binding and base item stats; it does not promise successful activation when mana is insufficient."
+          },
+          {
+            "runtimeRefs": [
+              "sentry_spawn",
+              "sentry_lifetime",
+              "sentry_collision",
+              "sentry_registration",
+              "sentry_target_fire"
+            ],
+            "programBehavior": "A stationary sentry spawns at the native resting spot, registers as a sentry, lasts 36000 ticks, and fires one authored shot every 30 ticks at line-of-sight targets within 60 tiles.",
+            "reportedBehavior": "The report describes native resting-spot placement, native sentry-limit participation, the authored lifetime, and bounded line-of-sight targeting and firing.",
+            "result": "aligned",
+            "reason": "Each stated sentry behavior has an explicit corresponding call; native sentry limits can retire a sentry before its lifetime ends."
+          },
+          {
+            "runtimeRefs": [
+              "bolt_spawn",
+              "bolt_movement",
+              "bolt_damage",
+              "bolt_lifetime",
+              "bolt_collision"
+            ],
+            "programBehavior": "The child bolt travels straight at 10 pixels per projectile update, has three updates per world tick, deals authored magic damage, collides with tiles, and has five penetrations.",
+            "reportedBehavior": "The report describes fast straight bolts with the authored damage class, update rate, tile collision, and penetration count.",
+            "result": "aligned",
+            "reason": "The report uses the explicit projectile configuration and does not claim homing or a guaranteed hit."
+          },
+          {
+            "runtimeRefs": [
+              "item_stats",
+              "sentry_target_fire",
+              "bolt_damage"
+            ],
+            "programBehavior": "The item and shot have explicit summon and magic damage stats, respectively; no status-on-hit call is authored.",
+            "reportedBehavior": "The golden ichor appearance is described as presentation only, with no ichor defense debuff claimed.",
+            "result": "aligned",
+            "reason": "A debuff ID and status capability were not supplied as authored mechanics, so the report does not imply that golden appearance applies one."
+          }
+        ]
+      }
+    }
+  }
+}
