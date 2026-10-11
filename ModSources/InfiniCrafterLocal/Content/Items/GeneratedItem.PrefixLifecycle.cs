@@ -99,6 +99,13 @@ public partial class GeneratedItem
     {
         _pendingNativePrefix = null;
         if (!tag.ContainsKey(NativePrefixSaveKey)) return; // legacy native Item.prefix still works
+        RetainNativePrefixForHydration(ResolveNativePrefixIdentity(tag));
+    }
+
+    private static int ResolveNativePrefixIdentity(TagCompound tag)
+    {
+        if (!tag.ContainsKey(NativePrefixSaveKey))
+            throw new InvalidDataException("Missing native prefix identity");
         if (tag.ContainsKey(NativePrefixSaveKey + "Mod") || tag.ContainsKey(NativePrefixSaveKey + "Name"))
         {
             if (!tag.ContainsKey(NativePrefixSaveKey + "Mod") || !tag.ContainsKey(NativePrefixSaveKey + "Name"))
@@ -106,9 +113,46 @@ public partial class GeneratedItem
             if (!ModContent.TryFind<ModPrefix>(tag.GetString(NativePrefixSaveKey + "Mod"),
                 tag.GetString(NativePrefixSaveKey + "Name"), out var modPrefix))
                 throw new InvalidDataException("Unavailable native mod-prefix identity");
-            RetainNativePrefixForHydration(modPrefix.Type);
+            return ValidateNativePrefixToken(modPrefix.Type);
         }
-        else RetainNativePrefixForHydration(tag.GetInt(NativePrefixSaveKey));
+        return ValidateNativePrefixToken(tag.GetInt(NativePrefixSaveKey));
+    }
+
+    internal TagCompound CapturePlacementPrefix()
+    {
+        var tag = new TagCompound();
+        SaveNativePrefixLifecycle(tag);
+        _ = ResolvePlacementPrefix(tag);
+        return tag;
+    }
+
+    // Old ledger rows never recorded a prefix. Their explicit historical meaning
+    // is unprefixed, not a request to roll a new prefix during reconstruction.
+    internal static int ResolvePlacementPrefix(TagCompound? tag)
+    {
+        if (tag is null) return 0;
+        if (!tag.ContainsKey(NativePrefixSaveKey) || tag[NativePrefixSaveKey] is not int token || token < 0)
+            throw new InvalidDataException("Malformed placement prefix token");
+        bool named = tag.ContainsKey(NativePrefixSaveKey + "Mod") || tag.ContainsKey(NativePrefixSaveKey + "Name");
+        if (named)
+        {
+            if (token < PrefixID.Count
+                || !tag.ContainsKey(NativePrefixSaveKey + "Mod") || tag[NativePrefixSaveKey + "Mod"] is not string { Length: > 0 }
+                || !tag.ContainsKey(NativePrefixSaveKey + "Name") || tag[NativePrefixSaveKey + "Name"] is not string { Length: > 0 })
+                throw new InvalidDataException("Malformed placement mod-prefix identity");
+            // The old numeric hint may exceed today's roster after load-order
+            // changes. The exact mod/name, resolved below, is its stable identity.
+        }
+        else if (token >= PrefixID.Count)
+            throw new InvalidDataException("Placement mod prefix requires stable mod/name identity");
+        return ResolveNativePrefixIdentity(tag);
+    }
+
+    internal bool RestorePlacementPrefix(int prefix)
+    {
+        RetainNativePrefixForHydration(prefix);
+        ApplyDataWithNativePrefix();
+        return Item.prefix == prefix;
     }
 
     private void ApplyDataWithNativePrefix()

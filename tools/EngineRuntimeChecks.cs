@@ -99,6 +99,8 @@ internal static partial class EngineRuntimeChecks
             ("quality250 NativePickAmmoSavingRemainsIndependentOfDirectStackCost", NativePickAmmoSavingRemainsIndependentOfDirectStackCost),
             ("quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry", NativeFloat32BuffNearNeutralIdentityAndExpiry),
             ("quality250 NativeFloat32BuffAllComponentsAndExactRefresh", NativeFloat32BuffAllComponentsAndExactRefresh),
+            ("persistence PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn", PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn),
+            ("persistence PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed", PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed),
             ("persistence RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial", RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial),
             ("persistence ScopedRemoteEscrowResponseRequiresExactOrigin", ScopedRemoteEscrowResponseRequiresExactOrigin),
             ("persistence NativePlacementIntentPrecedesMutationAndRejectsLateClaims", NativePlacementIntentPrecedesMutationAndRejectsLateClaims),

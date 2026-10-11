@@ -143,6 +143,7 @@ internal static partial class EngineRuntimeChecks
                 source.Visual.SpritePath = path; source.Visual.SpriteStatus = "generated";
                 source.Normalize(); string sourceBefore = source.ToJson();
                 peers.Mode(NetmodeID.SinglePlayer, 0); Terraria.Main.player[0] = player;
+                player.inventory[player.selectedItem] = ReviewItem(source).Item;
                 var placement = source.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
                 var cell = Terraria.Main.tile[40,40]; cell.HasTile = false;
                 Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, source, placement, 40,40), "actual opt-in placement captures pre-restamp identity");

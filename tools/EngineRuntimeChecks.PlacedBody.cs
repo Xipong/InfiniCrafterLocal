@@ -56,6 +56,7 @@ internal static partial class EngineRuntimeChecks
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
             var data = PersistencePlacementData("placed-body-witness");
+            player.inventory[player.selectedItem] = ReviewItem(data).Item;
             InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
             var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
             placement.TileId = TileID.Stone; placement.WallId = -1;
