@@ -527,6 +527,9 @@ public sealed class GeneratorClient
             originalPrefix,
             prefixIgnored,
             damage = craftItem.damage,
+            // Base Item.crit only: CraftIdentityItem already removed the reforge.
+            // Player-effective crit and equipment bonuses are separate observations.
+            crit = craftItem.crit,
             useTime = craftItem.useTime,
             useAnimation = craftItem.useAnimation,
             useStyle = craftItem.useStyle,
@@ -777,6 +780,7 @@ public sealed class GeneratorClient
             originalPrefix,
             prefixIgnored = originalPrefix != InfiniTerrariaSentinels.NoPrefix,
             damage = item.damage,
+            crit = item.crit,
             damageClass = DamageClassName(item),
             knockback = item.knockBack,
             useStyle = item.useStyle,
@@ -835,6 +839,7 @@ public sealed class GeneratorClient
         {
             type = item.type,
             damage = item.damage,
+            crit = item.crit,
             damageClass = DamageClassName(item),
             shootProjectileFullName = ProjectileFullName(item.shoot),
             useStyle = item.useStyle,

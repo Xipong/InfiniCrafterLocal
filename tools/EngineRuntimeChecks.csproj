@@ -88,6 +88,7 @@
     <Compile Include="EngineRuntimeChecks.TargetEmission.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
     <Compile Include="EngineRuntimeChecks.ParentTooltip.cs" />
+    <Compile Include="EngineRuntimeChecks.ParentCrit.cs" />
     <Compile Include="EngineRuntimeChecks.ParentMotion.cs" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />

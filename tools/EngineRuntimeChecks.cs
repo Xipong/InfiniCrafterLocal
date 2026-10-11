@@ -237,6 +237,7 @@ internal static partial class EngineRuntimeChecks
             ("inventory ammo keeps generated definition", InventoryAmmoKeepsGeneratedDefinition),
             ("parent placement facts reach craft snapshot", ParentPlacementFactsReachCraftSnapshot),
             ("literal parent tooltip reaches real craft snapshot", LiteralParentTooltipReachesRealCraftSnapshot),
+            ("base parent crit reaches real craft snapshot", ParentCritFactsReachCraftSnapshot),
             ("verified native motion reference reaches craft snapshot", VerifiedNativeMotionReferenceReachesCraftSnapshot),
             ("runtime entity count respects declared limit", RuntimeEntityCountRespectsDeclaredLimit),
             ("run-speed equipment applies after vanilla movement", RunSpeedEquipmentAppliesAfterVanillaMovement),
