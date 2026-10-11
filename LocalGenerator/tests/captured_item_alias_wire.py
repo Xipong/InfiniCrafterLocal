@@ -1,5 +1,39 @@
 """Exact test-only reversal of #12 notation/provenance; frozen archives stay untouched."""
 from copy import deepcopy
+import hashlib
+import json
+
+
+def historical_equipment_inventory_wire(document):
+    """Reverse only the six additive accessory paths in the registry inventory.
+
+    This is diagnostic metadata, not omitted-default materialization: historical
+    gameplay and receipts must contain none of these newly authorable leaves.
+    Complete before/after roster digests pin ordering and every retained path.
+    """
+    added = ("accessory.iceSkate", "accessory.noKnockback", "accessory.fireWalk",
+             "accessory.accRunSpeed", "accessory.rocketBoots", "accessory.wireVision")
+    assert all(path.split(".", 1)[1] not in document["accessory"] for path in added)
+    assert not any(row.get("finalPath") in added
+                   for row in document["runtimeContract"]["finalWireReceipts"])
+    projected = deepcopy(document)
+    lowerers = projected["runtimeContract"]["technicalLoweringAudit"]["lowerers"]
+    matches = [row for row in lowerers if row["id"] == "item_fields_to_tml_projection"]
+    assert len(matches) == 1
+    outputs = matches[0]["outputs"]
+
+    def digest(paths):
+        return hashlib.sha256(json.dumps(paths, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+    assert len(outputs) == 148
+    assert digest(outputs) == "98fe8cbef7787c5ae896ec50642a0e3ec55f0c73c522bcb04bd8308e5413fc8f"
+    start = outputs.index("accessory.waterWalk") + 1
+    assert outputs[start:start + len(added)] == list(added)
+    assert outputs[start + len(added)] == "armor.enabled"
+    del outputs[start:start + len(added)]
+    assert len(outputs) == 142
+    assert digest(outputs) == "dd625b6afd3cf3b5d15ec7d0c4645cd7538f2d1b323494c9f574445bab032274"
+    return projected
 
 
 def historical_item_alias_wire(document):

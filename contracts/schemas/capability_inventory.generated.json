@@ -1871,11 +1871,27 @@
         "accessory.lightColorName",
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
-        "accessory.waterWalk"
+        "accessory.waterWalk",
+        "accessory.iceSkate",
+        "accessory.noKnockback",
+        "accessory.fireWalk",
+        "accessory.accRunSpeed",
+        "accessory.rocketBoots",
+        "accessory.wireVision"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "accRunSpeedPxPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "pixels_per_tick"
+        },
         "aggroPoints": {
           "enum": [],
           "kind": "integer",
@@ -1926,6 +1942,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "fireWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "genericArmorPenetrationPoints": {
           "enum": [],
           "kind": "number",
@@ -1965,6 +1991,16 @@
           "required": false,
           "semanticType": "additive_percent",
           "units": "additive_percent"
+        },
+        "iceSkate": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "jumpSpeedBonusPxPerTick": {
           "enum": [],
@@ -2098,6 +2134,26 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
+        "noKnockback": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "rocketBoots": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 5,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "native rocket flight mode"
+        },
         "sentrySlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -2137,6 +2193,16 @@
           "required": false,
           "semanticType": "additive_percent",
           "units": "additive_percent"
+        },
+        "wireVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "none",
@@ -2175,7 +2241,13 @@
             "lightStrength",
             "fallDamageImmune",
             "lavaImmune",
-            "waterWalk"
+            "waterWalk",
+            "iceSkate",
+            "noKnockback",
+            "fireWalk",
+            "accRunSpeedPxPerTick",
+            "rocketBoots",
+            "wireVision"
           ],
           "target": "same_target"
         },

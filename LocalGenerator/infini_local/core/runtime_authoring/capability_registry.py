@@ -1100,6 +1100,17 @@ def _equipment_params(*, armor: bool, group_set_bonuses: bool = True) -> Mapping
     ):
         p[name] = _p("boolean", meaning, required=False, wire_name=name,
                      neutral=False, execution_phase=phase)
+    if not armor:
+        for name, meaning in (
+            ("iceSkate", "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed"),
+            ("noKnockback", "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate"),
+            ("fireWalk", "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles"),
+        ):
+            p[name] = _p("boolean", meaning, required=False, wire_name=name, neutral=False,
+                         execution_phase=phase, wire_presence_requires_receipt=True)
+        p["accRunSpeedPxPerTick"] = _p("number", "Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus", required=False, minimum=0, maximum=20, units="pixels_per_tick", wire_name="accRunSpeed", neutral=0, consumer_storage="float32", execution_phase=phase, wire_presence_requires_receipt=True)
+        p["rocketBoots"] = _p("integer", "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight", required=False, minimum=0, maximum=5, units="native rocket flight mode", wire_name="rocketBoots", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
+        p["wireVision"] = _p("boolean", "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation", required=False, wire_name="wireVision", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
     if armor:
         set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
         set_effects = (

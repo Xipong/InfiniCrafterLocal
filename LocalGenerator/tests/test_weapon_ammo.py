@@ -99,7 +99,7 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
     from sentry_contract_checks import without_declared_targeting_neutrals
     from beam_contract_checks import without_declared_beam_neutrals
     from captured_parent_combat_author import historical_child_combat_wire
-    from captured_item_alias_wire import historical_item_alias_wire
+    from captured_item_alias_wire import historical_equipment_inventory_wire, historical_item_alias_wire
 
     for name, expected_hash in baseline.items():
         authored = build_runtime_fixture(name)
@@ -108,7 +108,7 @@ def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neut
         assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
                                        authored_document=authored, final_document=compiled)["ok"]
         final = historical_item_alias_wire(without_captured_projectile_alias_delta(historical_child_combat_wire(
-            without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))))
+            without_declared_targeting_neutrals(without_declared_beam_neutrals(historical_equipment_inventory_wire(compiled))))))
         checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
         assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
         added_modifier_caps = (

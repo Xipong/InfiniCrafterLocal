@@ -983,6 +983,21 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     accessory = data.get("accessory") if isinstance(data.get("accessory"), Mapping) else {}
     armor = data.get("armor") if isinstance(data.get("armor"), Mapping) else {}
+    # New explicit equipment leaves have registry-owned domains even when
+    # delivery has intentionally stripped provenance. Historical absent leaves
+    # remain absent; this does not impose fresh Author ranges on legacy stats.
+    for fn in ("configure_accessory", "configure_armor"):
+        component = fn.removeprefix("configure_")
+        node = data.get(component)
+        if not isinstance(node, Mapping):
+            continue
+        for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+            if not spec.wire_presence_requires_receipt or spec.structured:
+                continue
+            field = spec.wire_name or name
+            if field in node and not spec.matches_scalar_projection(node[field]):
+                errors.append({"path": f"$.{component}.{field}", "code": "invalid_equipment_parameter",
+                               "message": "Present equipment value is outside the registered wire domain."})
     generated_buff_raw = gameplay.get("generatedBuff")
     generated_buff = generated_buff_raw if isinstance(generated_buff_raw, Mapping) else {}
     if "generatedBuff" in gameplay and not isinstance(generated_buff_raw, Mapping):
