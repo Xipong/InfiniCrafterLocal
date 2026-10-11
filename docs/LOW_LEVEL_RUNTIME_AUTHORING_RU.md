@@ -44,6 +44,8 @@ Author выдаёт один immutable JSON в причинном порядке
 
 Construction facts живут у своих owners, а не в повторных глобальных checklist. Порядок ответа задают system и `requiredJsonShape`; отдельные повторные `gameplayAuthoringStages`, `principle`/`reportEvidenceRule`/`literalSynthesisRule` и `forbidden` не передаются. Полные catalog cards, shape examples и диагностический selfEvaluation сохраняются во всех response modes, включая `json_object`/off: provider schema их не заменяет.
 
+Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Полные 68 capability cards и executable schema/grammar не меняются.
+
 | Место в packet | Правило построения |
 |---|---|
 | `requiredJsonShape.runtimeProgram.calls` | Единый явный пример `id/fn/target/params` из canonical schema; прежние точные item-only/noarg omissions допустимы, значения параметров принадлежат карточке выбранной capability |

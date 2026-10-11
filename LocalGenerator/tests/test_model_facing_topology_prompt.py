@@ -32,9 +32,10 @@ def test_binding_contact_placement_and_events_are_local(monkeypatch) -> None:
     ))
     placement = next(row["constructionMeaning"] for row in catalog["bindingActions"] if row["action"] == "place_item")
     assert all(term in placement for term in (
-        "primary_use", "alternate_use", "placementCallId", "stackCost=1", "contactDamage=false",
+        "primary_use", "alternate_use", "placementCallId",
         "placeStyle", "returned", "escrows", "item_body.on_use",
     ))
+    assert "place_item stackCost=1 and contactDamage=false" in guide["rowShapes"]
     assert "whole generated item" in guide["stackCost"]
     assert "stackCost=0" in guide["stackCost"]
     event = {row["event"]: row for row in catalog["events"]}

@@ -350,8 +350,11 @@ def test_actual_author_packet_explains_uniform_binding_and_keeps_sparse_valid(mo
     guide = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
     assert "omit fixed contactDamage for place_item/hold/equipped" not in guide
     assert "Omit action.targetId for item_body-only actions" not in guide
-    assert "fixed contactDamage=false for place_item/hold/equipped may be explicit or omitted" in guide
-    assert "action.targetId for item_body-only actions may be explicit with the exact unique declared item_body id or omitted" in guide
+    shapes = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
+    assert "Fixed binding literals may be explicit or omitted" in shapes
+    assert "hold/equipped stackCost=0 and contactDamage=false" in shapes
+    assert "place_item stackCost=1 and contactDamage=false" in shapes
+    assert "item-body-only action targetId=the exact unique declared item_body id" in shapes
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

@@ -561,7 +561,7 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
                 ("fieldGuide", "stackCost", "", "stackCost=1"),
                 ("fieldGuide", "bindingTarget", "", "contactDamage=true"),
                 ("fieldGuide", "bindingTarget", "", "bindings[].action.targetId"),
-                ("bindingActions", "place_item", "constructionMeaning", "stackCost=1"),
+                ("fieldGuide", "rowShapes", "", "place_item stackCost=1"),
                 ("bindingActions", "place_item", "constructionMeaning", "returned"),
                 ("bindingActions", "place_item", "constructionMeaning", "item_body.on_use"),
                 ("bindingActions", "apply_item_effects", "does", "only active binding"),
