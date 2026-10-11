@@ -184,7 +184,8 @@ def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, m
     suppression = "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category"
     assert json.dumps(author_packet).count(suppression) == 1
     assert json.dumps(repair_packet).count(suppression) == 1
-    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget"}
+    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget", "descendantSpawnBudget"}
+    assert units["descendantSpawnBudget"] == author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["descendantSpawnBudget"]
     assert repair_packet["repairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
     assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
 
@@ -373,11 +374,16 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
     packet = json.loads(request["messages"][1]["content"])
     units = packet["runtimeExecutionTruth"]["units"]
-    # Keep the pre-existing unit budget separately; add exactly one existing
-    # registry binding guide without widening the production request limits.
-    assert len(json.dumps({key: value for key, value in units.items() if key != "bindingTarget"}, separators=(",", ":"))) < 12_500
+    # Keep pre-existing unit/contact headroom separately; bound only the new
+    # owned producer explanation. No production prompt guard is widened.
+    existing = {key: value for key, value in units.items()
+                if key not in {"bindingTarget", "descendantSpawnBudget"}}
+    assert len(json.dumps(existing, separators=(",", ":"))) < 12_500
     assert len(units["bindingTarget"]) < 1_500
-    assert len(json.dumps(units, separators=(",", ":"))) < 14_000
+    assert len(json.dumps({key: value for key, value in units.items()
+                           if key != "descendantSpawnBudget"}, separators=(",", ":"))) < 14_000
+    assert len(units["descendantSpawnBudget"]) < 1_200
+    assert len(json.dumps(units, separators=(",", ":"))) < 15_200
     assert len(request["messages"][1]["content"]) < 60_000
     authored_request, _ = _author_request(monkeypatch, mode, _source())
     assert len(authored_request["messages"][1]["content"]) < PLANNER_PROMPT_LIMIT_CHARS

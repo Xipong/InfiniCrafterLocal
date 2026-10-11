@@ -129,17 +129,20 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "inheriting every parent capability."
             ),
             "coreMechanic": (
-                "non-empty string: choose one clear core gameplay loop with purposeful mechanics. "
-                "Prefer simple, immediately useful play at the supplied progression; add complexity "
-                "only when it serves that loop. This is design guidance, not a capability restriction."
+                "non-empty string: describe coherent, purposeful mechanics with simple, immediately useful play. "
+                "A clear central purpose can include multiple complementary actions; this is not a single-loop rule "
+                "or a capability restriction. Let complexity serve player value. Use supplied progression facts "
+                "when present; do not invent an acquisition tier from rarity, value or identity alone."
             ),
             "parentAContribution": (
                 "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution; copying every parent capability is not required."
+                "mechanical contribution, which may be newly invented rather than inherited; "
+                "copying every parent capability is not required."
             ),
             "parentBContribution": (
                 "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution; copying every parent capability is not required."
+                "mechanical contribution, which may be newly invented rather than inherited; "
+                "copying every parent capability is not required."
             ),
             "playerExperience": "non-empty string: explain practical player value and deliberate costs of the selected mechanics",
             "plannedPlayerActions": [{

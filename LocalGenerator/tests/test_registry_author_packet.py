@@ -111,7 +111,7 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
     concept = payload["requiredJsonShape"]["concept"]
     for field, phrases in {
         "literalSynthesis": ("actual parents", "appearance/identity", "deliberately surreal", "illustrative examples are not additional parents", "every parent capability"),
-        "coreMechanic": ("one clear core gameplay loop", "purposeful mechanics", "simple, immediately useful", "supplied progression", "not a capability restriction"),
+        "coreMechanic": ("multiple complementary actions", "purposeful mechanics", "simple, immediately useful", "supplied progression", "not a single-loop rule", "a capability restriction"),
         "parentAContribution": ("actual parent", "appearance/identity", "purposeful mechanical contribution", "not required"),
         "parentBContribution": ("actual parent", "appearance/identity", "purposeful mechanical contribution", "not required"),
     }.items():
