@@ -163,6 +163,33 @@ def _repair_request(monkeypatch, mode, source, item):
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, mode):
+    from infini_local.core.runtime_authoring import build_runtime_repair_scope, validate_runtime_program
+    from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
+
+    source, item = _source(), _broken_item()
+    _, author_packet = _author_request(monkeypatch, mode, source)
+    _, repair_packet = _repair_request(monkeypatch, mode, source, item)
+    canonical = runtime_authoring_prompt_field_guide()["bindingTarget"]
+    author_guide = author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
+    units = repair_packet["runtimeExecutionTruth"]["units"]
+    assert "bindingTarget" in units, "scoped Repair loses existing contact suppression guidance"
+    assert units["bindingTarget"] == author_guide == canonical
+    for fact in (
+        "configure_item_use.disableMeleeHitbox=false and no ammo category",
+        "Item.noMelee", "suppress item_body on_hit/on_crit despite contactDamage=true",
+        "configure_item_stats.damage", "set_projectile_damage",
+    ):
+        assert canonical.count(fact) == 1
+    suppression = "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category"
+    assert json.dumps(author_packet).count(suppression) == 1
+    assert json.dumps(repair_packet).count(suppression) == 1
+    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget"}
+    assert repair_packet["repairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
+    assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissions(monkeypatch, mode):
     from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, build_runtime_repair_scope, validate_runtime_program
     from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
@@ -346,9 +373,11 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
     packet = json.loads(request["messages"][1]["content"])
     units = packet["runtimeExecutionTruth"]["units"]
-    # Offline capture: 11,767 baseline chars + 443 timing/payment chars.
-    # Retain headroom without changing the request or production limits below.
-    assert len(json.dumps(units, separators=(",", ":"))) < 12_500
+    # Keep the pre-existing unit budget separately; add exactly one existing
+    # registry binding guide without widening the production request limits.
+    assert len(json.dumps({key: value for key, value in units.items() if key != "bindingTarget"}, separators=(",", ":"))) < 12_500
+    assert len(units["bindingTarget"]) < 1_500
+    assert len(json.dumps(units, separators=(",", ":"))) < 14_000
     assert len(request["messages"][1]["content"]) < 60_000
     authored_request, _ = _author_request(monkeypatch, mode, _source())
     assert len(authored_request["messages"][1]["content"]) < PLANNER_PROMPT_LIMIT_CHARS

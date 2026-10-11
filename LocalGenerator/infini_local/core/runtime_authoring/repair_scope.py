@@ -9,7 +9,6 @@ are represented as tightly constrained create policies.
 """
 
 import copy
-import json
 import re
 from dataclasses import replace
 from itertools import product
@@ -25,6 +24,8 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     stack_chance_error,
     target_id as binding_target_id,
     complete_transaction as transaction,
+    canonical_transaction,
+    transaction_key,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     authored_event,
@@ -197,35 +198,18 @@ def _call_target(call: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]
     return explicit or (_body_id(rows) if cap is not None and cap.target_kinds == ("item_body",) else "")
 
 
-def _source_transaction(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Project a graph-selected transaction into the single source shape."""
-    result = copy.deepcopy(dict(row))
-    inp = INPUT_KIND_REGISTRY.get(str(result.get("input") or ""))
-    action = result.get("action")
-    kind = action_kind(result)
-    spec = BINDING_ACTION_REGISTRY.get(kind)
-    if inp is None or spec is None:
-        return result
-    if isinstance(action, dict):
-        if spec.target_kinds == ("item_body",):
-            action.pop("targetId", None)
-        if len(inp.allowed_actions) == 1:
-            action.pop("kind", None)
-        if not action:
-            result.pop("action")
-    if result["input"] not in {"primary_use", "alternate_use"} or kind == "place_item":
-        result.pop("stackCost", None)
-        result.pop("contactDamage", None)
-    return result
+def _source_transaction(row: Mapping[str, Any], *, item_body_id: str) -> dict[str, Any]:
+    """Project offered alternatives only, never frozen authored presence."""
+    return canonical_transaction(row, item_body_id=item_body_id)
 
 
-def _source_scope_transactions(value: Any) -> Any:
+def _source_scope_transactions(value: Any, *, item_body_id: str) -> Any:
     if isinstance(value, list):
-        return [_source_scope_transactions(row) for row in value]
+        return [_source_scope_transactions(row, item_body_id=item_body_id) for row in value]
     if isinstance(value, Mapping):
-        result = {key: _source_scope_transactions(row) for key, row in value.items()}
+        result = {key: _source_scope_transactions(row, item_body_id=item_body_id) for key, row in value.items()}
         if "input" in result and isinstance(result.get("action"), Mapping):
-            return _source_transaction(result)
+            return _source_transaction(result, item_body_id=item_body_id)
         return result
     return value
 
@@ -997,7 +981,7 @@ def _binding_repair_alternatives(
 ) -> list[dict[str, Any]]:
     """Project complete registry-valid use transactions without choosing one."""
 
-    if input_mutable and not action_mutable and not target_mutable and not action_kind(binding) and "action" not in binding:
+    if input_mutable and not action_mutable and not target_mutable and not action_kind(binding):
         # Omission-only source rows carry no action/target choice to retarget.
         # Expose only schema-valid explicit input replacements; no host completion.
         return [{key: copy.deepcopy(value) for key, value in candidate.items() if key != "id"}
@@ -1775,13 +1759,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 binding_id = str(node_row.get("id") or "")
                 target_id = _binding_target(node_row, rows)
                 mark("bindings", binding_id)
-                binding_input_change_ids.add(binding_id)
-                binding_action_change_ids.add(binding_id)
-                binding_target_change_ids.add(binding_id)
-                grant("bindings", binding_id, "action")
+                grant("bindings", binding_id, "stackCost")
                 binding_alternative_overrides[binding_id] = [transaction(
                     input_name=(
-                        "alternate_use"
+                        (expected_placeable_input(node_row, rows["bindings"]) or "")
                         if "dual_use_placeable_input_contract" in error_codes
                         else str(node_row.get("input") or "")
                     ),
@@ -1815,10 +1796,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     continue
                 mark("bindings", binding_id)
                 binding_input_change_ids.add(binding_id)
-                binding_action_change_ids.add(binding_id)
-                binding_target_change_ids.add(binding_id)
                 grant("bindings", binding_id, "input")
-                grant("bindings", binding_id, "action")
                 binding_alternative_overrides[binding_id] = [transaction(
                     input_name=expected_input,
                     action_name=action_name,
@@ -2869,7 +2847,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
     # Only compiler-view transaction alternatives are projected; raw source facts
     # and diagnostic values must never be normalized by a recursive walker.
     for key in ("bindingAlternatives", "repairRequirements", "create", "blockerPlan"):
-        scope[key] = _source_scope_transactions(scope[key])
+        scope[key] = _source_scope_transactions(scope[key], item_body_id=_body_id(rows))
     return scope
 
 
@@ -2956,15 +2934,13 @@ def _new_row_allowed(
             return False, "binding_input_not_allowed"
         if action_kind(row) not in set(str(value) for value in policy.get("allowedActions") or []):
             return False, "binding_action_not_allowed"
-        requested_transaction = {
-            "input": str(row.get("input") or ""),
-            **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage", "stackConsumeChancePercent") if key in row},
-        }
         allowed_transactions = [
             value for value in policy.get("allowedTransactions") or []
             if isinstance(value, Mapping)
         ]
-        if not any(requested_transaction == value for value in allowed_transactions):
+        if not any(transaction_key(row, item_body_id=_body_id(source_rows or {})) ==
+                   transaction_key(value, item_body_id=_body_id(source_rows or {}))
+                   for value in allowed_transactions):
             return False, "binding_transaction_not_in_registry_projection"
         return True, ""
     if namespace == "calls":
@@ -3069,7 +3045,7 @@ def filter_repair_patch_scope(
             allowed_property_deletes.add((str(value.get("callId") or ""), str(value.get("key") or "")))
     binding_alternative_map = {
         str(row.get("bindingId") or ""): {
-            json.dumps(value, sort_keys=True, separators=(",", ":"))
+            transaction_key(value, item_body_id=_body_id(rows))
             for value in _values(row.get("allowed"))
             if isinstance(value, Mapping)
         }
@@ -3161,14 +3137,7 @@ def filter_repair_patch_scope(
                         ignored.append(_filter_ignored(path, candidate, original, "independent_valid_node_frozen"))
                     continue
                 if namespace == "bindings":
-                    actual_transaction = json.dumps(
-                        {
-                            "input": str(candidate.get("input") or ""),
-                            **{key: copy.deepcopy(candidate[key]) for key in ("action", "stackCost", "contactDamage", "stackConsumeChancePercent") if key in candidate},
-                        },
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
+                    actual_transaction = transaction_key(candidate, item_body_id=_body_id(rows))
                     allowed_transactions = binding_alternative_map.get(row_id)
                     # An alternative is a complete transaction only when Repair
                     # may replace the atomic usePolicy. A missing/invalid leaf
@@ -3422,7 +3391,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
     identity = _mapping(scope.get("identityChanges"))
     binding_alternative_map = {
         str(row.get("bindingId") or ""): {
-            json.dumps(value, sort_keys=True, separators=(",", ":"))
+            transaction_key(value, item_body_id=_body_id(rows))
             for value in _values(row.get("allowed"))
             if isinstance(value, Mapping)
         }
@@ -3439,14 +3408,7 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
         patch_bindings_by_id.setdefault(str(row.get("id") or ""), []).append(row)
 
     def serialized_binding_transaction(row: Mapping[str, Any]) -> str:
-        return json.dumps(
-            {
-                "input": str(row.get("input") or ""),
-                **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage", "stackConsumeChancePercent") if key in row},
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        return transaction_key(row, item_body_id=_body_id(rows))
 
     for requirement_index, requirement in enumerate(_values(scope.get("repairRequirements"))):
         if not isinstance(requirement, Mapping):
@@ -3625,21 +3587,28 @@ def validate_repair_patch_scope(current: Mapping[str, Any], patch: Mapping[str, 
                 if namespace == "entities" and row_id not in set(_values(identity.get("entityKindIds"))) and row.get("kind") != original.get("kind"):
                     errors.append(_scope_error(path + ".kind", "entity kind is immutable for this parameter repair", actual=row.get("kind")))
                 if namespace == "bindings":
-                    if row_id not in set(_values(identity.get("bindingTargetIds"))) and ("action" in row or "action" in original) and _binding_target(row, rows) != _binding_target(original, rows):
+                    original_target = _binding_target(original, rows)
+                    allowed_transactions = binding_alternative_map.get(row_id)
+                    actual_transaction = transaction_key(row, item_body_id=_body_id(rows))
+                    corrected_input = {**original, "input": row.get("input")}
+                    corrected_action = BINDING_ACTION_REGISTRY.get(action_kind(corrected_input))
+                    if (original.get("action") == {} and row.get("action") == {}
+                            and not original_target and not action_kind(original)
+                            and row.get("input") != original.get("input")
+                            and row_id in set(_values(identity.get("bindingInputIds")))
+                            and "input" in _field_permission_map(scope, "bindings").get(row_id, ())
+                            and allowed_transactions is not None and actual_transaction in allowed_transactions
+                            and corrected_action is not None and corrected_action.target_kinds == ("item_body",)
+                            and _body_id(rows)):
+                        # Comparison only: the explicit, scoped input selects a unique
+                        # fixed body action. Keep frozen action={} and raw absence intact.
+                        original_target = _binding_target(corrected_input, rows)
+                    if row_id not in set(_values(identity.get("bindingTargetIds"))) and ("action" in row or "action" in original) and _binding_target(row, rows) != original_target:
                         errors.append(_scope_error(path + ".action.targetId", "binding target is immutable for this parameter repair", actual=_binding_target(row, rows)))
                     if row_id not in set(_values(identity.get("bindingInputIds"))) and row.get("input") != original.get("input"):
                         errors.append(_scope_error(path + ".input", "binding input is immutable for this repair", actual=row.get("input")))
                     if row_id not in set(_values(identity.get("bindingActionIds"))) and _mapping(row.get("action")).get("kind") != _mapping(original.get("action")).get("kind"):
                         errors.append(_scope_error(path + ".action.kind", "binding action is immutable for this repair", actual=action_kind(row)))
-                    allowed_transactions = binding_alternative_map.get(row_id)
-                    actual_transaction = json.dumps(
-                        {
-                            "input": str(row.get("input") or ""),
-                            **{key: copy.deepcopy(row[key]) for key in ("action", "stackCost", "contactDamage", "stackConsumeChancePercent") if key in row},
-                        },
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
                     if allowed_transactions is not None and actual_transaction not in allowed_transactions:
                         errors.append(_scope_error(
                             path,

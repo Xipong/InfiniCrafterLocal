@@ -155,10 +155,12 @@ def source_wire_units_for_llm(
 
 
 def runtime_units_for_llm() -> dict[str, Any]:
-    """The same registry-owned clock/unit reading guide for Author and Repair."""
+    """The same registry-owned unit and binding reading guide for Author/Repair."""
+    guide = runtime_authoring_prompt_field_guide()
     return {
-        "paramNotation": runtime_authoring_prompt_field_guide()["paramNotation"],
+        "paramNotation": guide["paramNotation"],
         "sourceWireUnits": source_wire_units_for_llm(),
+        "bindingTarget": guide["bindingTarget"],
     }
 
 
@@ -197,12 +199,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide = runtime_authoring_prompt_field_guide()
     if include_source_units:
         field_guide.update(runtime_units_for_llm())
-    field_guide["bindingTarget"] += (
-        " Bindings use the selected input/action's exact shape. Omit declared fixed branch constants; active non-placement stack/contact remain independent required choices. Item-only targets use the unique declared item_body; projectile targets remain explicit. Zero-parameter calls omit params. "
-        "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category: "
-        "either may set Item.noMelee and suppress item_body on_hit/on_crit despite contactDamage=true. "
-        "Item-body damage uses configure_item_stats.damage; projectile damage uses set_projectile_damage."
-    )
+
     field_guide["referenceRules"] = (
         "Reference fields use their own targetKinds/allowSelf/graphEdge cards: an existing compatible entity, "
         "not a created-by-reference binding; graph edges cannot cycle. target_and_fire needs a source in its targets "
@@ -259,7 +256,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if action["action"] == "place_item":
             action["constructionMeaning"] = (
                 "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
-                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. Author omits stackCost and contactDamage; Lowery writes fixed stackCost=1 and contactDamage=false. "
+                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. Write fixed stackCost=1 and contactDamage=false; exact omission remains valid. "
                 "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
                 "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
             )

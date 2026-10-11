@@ -669,19 +669,20 @@ def test_oneof_exact_diagnostic_selection(case):
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn", ["configure_item_stats", "configure_item_use"])
-def test_gameplay_forbidden_item_target_deletion_survives_real_caller(monkeypatch, format_mode, fn):
+def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypatch, format_mode, fn):
     doc = build_capability_witness(fn)
-    expected = copy.deepcopy(doc)
     node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
-    candidate = copy.deepcopy(node)
     node["target"] = next(row["id"] for row in doc["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+    assert validate_runtime_program(doc)["ok"], "A correct redundant target must not require Format Repair"
+    expected = copy.deepcopy(doc)
+    candidate = copy.deepcopy(node)
+    leaf = "damage" if fn == "configure_item_stats" else "useStyle"
+    node["params"][leaf] = -1 if leaf == "damage" else "not_a_style"
     before = copy.deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": ["target"]}]
-    incoming = {
-        "note": "delete only forbidden target", "realizationReplacement": doc["realization"],
-        "callsUpsert": [candidate], "callPropertyKeysDelete": [{"callId": node["id"], "key": "target"}],
-    }
+    assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": ["params." + leaf]}]
+    incoming = {"note": "repair the actual invalid parameter", "realizationReplacement": doc["realization"],
+                "callsUpsert": [candidate]}
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
     assert dossier["repairScope"] == scope
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ok"]

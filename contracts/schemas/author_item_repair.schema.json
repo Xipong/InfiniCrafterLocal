@@ -159,6 +159,20 @@
                 "properties": {
                   "kind": {
                     "const": "use_item_body"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -200,6 +214,20 @@
                 "properties": {
                   "kind": {
                     "const": "use_item_body"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -253,6 +281,20 @@
                   },
                   "kind": {
                     "const": "apply_item_effects"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -300,6 +342,20 @@
                   },
                   "kind": {
                     "const": "apply_item_effects"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -362,6 +418,20 @@
                       "graphEdge": false,
                       "namespace": "call"
                     }
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -369,6 +439,10 @@
                   "placementCallId"
                 ],
                 "type": "object"
+              },
+              "contactDamage": {
+                "const": false,
+                "type": "boolean"
               },
               "id": {
                 "maxLength": 48,
@@ -378,6 +452,10 @@
               },
               "input": {
                 "const": "primary_use"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
@@ -521,6 +599,20 @@
                 "properties": {
                   "kind": {
                     "const": "use_item_body"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -562,6 +654,20 @@
                 "properties": {
                   "kind": {
                     "const": "use_item_body"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -615,6 +721,20 @@
                   },
                   "kind": {
                     "const": "apply_item_effects"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -662,6 +782,20 @@
                   },
                   "kind": {
                     "const": "apply_item_effects"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -724,6 +858,20 @@
                       "graphEdge": false,
                       "namespace": "call"
                     }
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -731,6 +879,10 @@
                   "placementCallId"
                 ],
                 "type": "object"
+              },
+              "contactDamage": {
+                "const": false,
+                "type": "boolean"
               },
               "id": {
                 "maxLength": 48,
@@ -740,6 +892,10 @@
               },
               "input": {
                 "const": "alternate_use"
+              },
+              "stackCost": {
+                "const": 1,
+                "type": "integer"
               }
             },
             "required": [
@@ -755,6 +911,9 @@
               "action": {
                 "additionalProperties": false,
                 "properties": {
+                  "kind": {
+                    "const": "spawn_entity"
+                  },
                   "targetId": {
                     "maxLength": 48,
                     "minLength": 1,
@@ -778,6 +937,10 @@
                   "targetId"
                 ],
                 "type": "object"
+              },
+              "contactDamage": {
+                "const": false,
+                "type": "boolean"
               },
               "id": {
                 "maxLength": 48,
@@ -787,6 +950,10 @@
               },
               "input": {
                 "const": "hold"
+              },
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -799,6 +966,34 @@
           {
             "additionalProperties": false,
             "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "equip_passive"
+                  },
+                  "targetId": {
+                    "maxLength": 48,
+                    "minLength": 1,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": true,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ]
+                    }
+                  }
+                },
+                "required": [],
+                "type": "object"
+              },
+              "contactDamage": {
+                "const": false,
+                "type": "boolean"
+              },
               "id": {
                 "maxLength": 48,
                 "minLength": 1,
@@ -807,6 +1002,10 @@
               },
               "input": {
                 "const": "equipped"
+              },
+              "stackCost": {
+                "const": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -1020,6 +1219,19 @@
                   "scale"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1140,6 +1352,19 @@
                   "channel"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1184,6 +1409,19 @@
                   "contactForgivenessPx"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1244,6 +1482,19 @@
                   "speedBasis"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1317,6 +1568,19 @@
                   "notAmmo"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1374,6 +1638,19 @@
                   "usesPotionRules"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1424,6 +1701,19 @@
                   "durationTicks"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1581,6 +1871,19 @@
                   "lightColor"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1615,6 +1918,19 @@
                   "effectGroupId"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1677,6 +1993,19 @@
                   "miningSpeedMultiplier"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1720,6 +2049,19 @@
                   "placeStyle"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1763,6 +2105,19 @@
                   "placeStyle"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1910,6 +2265,19 @@
                   "flipY"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -1990,6 +2358,19 @@
                   "condition"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -2045,6 +2426,19 @@
                   "color"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -2111,6 +2505,19 @@
                   "safeTileOnly"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -2153,6 +2560,19 @@
                   "cooldownTicks"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -2486,6 +2906,19 @@
                 },
                 "required": [],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -2989,6 +3422,19 @@
                   "setKey"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -3059,6 +3505,19 @@
                   "bonusPercent"
                 ],
                 "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
               }
             },
             "required": [
@@ -4428,6 +4887,12 @@
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
+              "params": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
               "target": {
                 "description": "Authored entity id. Target kind is checked locally.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
@@ -4580,6 +5045,12 @@
                 "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
               },
               "target": {
                 "description": "Authored entity id. Target kind is checked locally.",

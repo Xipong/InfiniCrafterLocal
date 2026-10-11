@@ -144,6 +144,17 @@ def test_captured_gameplay_repair_replay(section, case):
     replay = copy.deepcopy(_REPLAY[section][case])
     initial = _historical_names(replay["initialAuthor"])
     historical_patch = _historical_names(replay["repairPatch"]) if section == "gameplayApplyCases" else None
+    if historical_patch is not None:
+        # The old sparse-notation projector dropped valid fixed placement lanes.
+        # They are legal again: retain the captured model's explicit correction,
+        # never synthesize it from current alternatives or change archive bytes.
+        captured_by_id = {row["id"]: row for row in replay["repairPatch"].get("bindingsUpsert", [])}
+        for row in historical_patch.get("bindingsUpsert", []):
+            captured_policy = captured_by_id[row["id"]].get("usePolicy", {})
+            if captured_policy.get("action", {}).get("kind") == "place_item":
+                for key in ("stackCost", "contactDamage"):
+                    if key in captured_policy:
+                        row[key] = copy.deepcopy(captured_policy[key])
     old_axe = None
     if case == "obsidian_pickaxe":
         tool = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
@@ -156,13 +167,15 @@ def test_captured_gameplay_repair_replay(section, case):
                 row["params"]["axePowerTooltipPercent"] = old_axe * 5
     report = validate_runtime_program(initial)
     expected_codes = set(replay["expectedInitialCodes"])
+    if case == "obsidian_pickaxe":
+        # Native tool admission no longer requires an independent combat lane.
+        # Preserve captured bytes and every remaining historical refusal.
+        expected_codes.remove("missing_binding_dependency")
     if case in {"ropebound_spear", "silt_extractinator"}:
-        # Historical placement cost was a required const. Current source forbids
-        # that fixed property, while retaining the exact semantic cost diagnostic.
+        # Fixed placement cost is legal again only as exact integer one.
+        # Captured wrong cost still receives the original const + semantic refusal.
         assert "shape_const" in expected_codes
-        expected_codes.remove("shape_const")
-        expected_codes.add("shape_additional_property")
-        assert any(row["code"] == "shape_additional_property" and row["path"].endswith(".stackCost") for row in report["errors"])
+        assert any(row["code"] == "shape_const" and row["path"].endswith(".stackCost") for row in report["errors"])
         assert any(row["code"] == "place_item_without_stack_cost" and row["path"].endswith(".stackCost") for row in report["errors"])
     assert {str(row.get("code") or "") for row in report.get("errors") or []} == expected_codes
     scope = build_runtime_repair_scope(initial, report["errors"])

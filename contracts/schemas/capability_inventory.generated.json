@@ -1084,7 +1084,7 @@
         },
         {
           "anyOf": [
-            "primary_use|use_item_body|contactDamage=true",
+            "primary_use|use_item_body",
             "primary_use|spawn_entity"
           ],
           "kind": "binding_tuple_present",

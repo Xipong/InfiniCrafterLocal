@@ -3,15 +3,23 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import replace
 
 import pytest
 from jsonschema import Draft202012Validator
 
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+from infini_local.core.runtime_authoring import (
+    CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
+)
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines import author_item_contract as contract
+from infini_local.pipelines import combine_balance as balance
+from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines import llm_authoring_prompt as prompt
 from infini_local.qa.capability_witnesses import build_capability_witness
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture
+from test_gameplay_repair_readonly_context import _CapturedBeforeTransport, _offline_builder
 
 
 def _expand_constraint_references(value, profiles):
@@ -23,6 +31,92 @@ def _expand_constraint_references(value, profiles):
     if isinstance(value, list):
         return [_expand_constraint_references(child, profiles) for child in value]
     return copy.deepcopy(value)
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(monkeypatch, mode):
+    captured = []
+
+    def stop(request, **_kwargs):
+        captured.append(copy.deepcopy(request))
+        raise _CapturedBeforeTransport()
+
+    _offline_builder(monkeypatch, mode, stop)
+    parents = ({"name": "A", "damage": 52, "useTime": 10},
+               {"name": "B", "damage": 0, "useTime": 20})
+    before = copy.deepcopy(parents)
+    request, serialized, _ = author.build_initial_author_request(
+        *parents, {}, {}, "lifetime-guidance", model_name="offline-readonly-context")
+    assert request["response_format"]["type"] == mode
+    assert request["messages"][1]["content"] == serialized
+    packet = json.loads(serialized)
+    spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"]
+    assert (spec.minimum, spec.maximum) == (1, 21600)
+    bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
+    assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"] == bounds
+    card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
+                if row["fn"] == "set_projectile_lifetime")
+    assert (card["params"]["lifetimeTicks"]["min"], card["params"]["lifetimeTicks"]["max"]) == (1, 21600)
+
+    item = build_runtime_fixture("workbench_blade")
+    index, lifetime = next((index, row) for index, row in enumerate(item["runtimeProgram"]["calls"])
+                           if row["fn"] == "set_projectile_lifetime")
+    lifetime["params"]["lifetimeTicks"] = 21600
+    assert validate_runtime_program(item)["ok"]
+    wire = compile_runtime_program(item)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=item, final_document=wire)["ok"]
+    entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == lifetime["target"])
+    assert entity["lifetimeTicks"] == 21600
+
+    lifetime["params"]["lifetimeTicks"] = 21601
+    invalid_before = copy.deepcopy(item)
+    failure = validate_runtime_program(item)
+    path = f"$.runtimeProgram.calls[{index}].params.lifetimeTicks"
+    assert not failure["ok"]
+    assert any(row["path"] == path and row["code"] == "shape_maximum"
+               for row in failure["errors"]), failure
+    with pytest.raises(ValueError):
+        compile_runtime_program(item)
+    entity["lifetimeTicks"] = 21601
+    assert not validate_runtime_wire(wire)["ok"]
+    with pytest.raises(_CapturedBeforeTransport):
+        author.repair_author_item_after_failure(
+            item, *parents, {}, {}, "lifetime-guidance", failure_report=failure)
+    assert len(captured) == 1
+    repair_request = captured[0]
+    assert repair_request["response_format"]["type"] == mode
+    repair = json.loads(repair_request["messages"][1]["content"])
+    repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
+                       if row["fn"] == "set_projectile_lifetime")
+    assert (repair_card["params"]["lifetimeTicks"]["min"],
+            repair_card["params"]["lifetimeTicks"]["max"]) == (1, 21600)
+    assert repair["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+    assert repair["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": lifetime["id"], "paths": ["params.lifetimeTicks"]}]
+    assert item == invalid_before and parents == before
+
+    # Syntax-only Repair retains this exact recipe fact instead of rebuilding it.
+    with pytest.raises(_CapturedBeforeTransport):
+        author._repair_malformed_author_json(
+            malformed_raw_text=json.dumps(item)[:-1] + ",}", parse_error=ValueError("trailing comma"),
+            original_recipe_context=serialized, model_name="offline-readonly-context")
+    format_packet = json.loads(captured[1]["messages"][1]["content"])
+    assert format_packet["originalRecipeContext"]["balanceCorridor"] == packet["balanceCorridor"]
+
+    # A different declared maximum must reach the real packet, not a copied cap.
+    cap = CAPABILITY_REGISTRY["set_projectile_lifetime"]
+    changed = replace(cap, params={**cap.params, "lifetimeTicks": replace(spec, maximum=21000)})
+    monkeypatch.setattr(balance, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, cap.name: changed})
+    variant_request, variant_serialized, _ = author.build_initial_author_request(
+        *parents, {}, {}, "lifetime-guidance", model_name="offline-readonly-context")
+    variant_packet = json.loads(variant_serialized)
+    assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] == 21000
+    variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] = spec.maximum
+    assert variant_packet == packet
+    variant_request["messages"][1]["content"] = serialized
+    assert variant_request == request  # System, parents, other guidance and transport stay exact.
 
 
 def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutation():

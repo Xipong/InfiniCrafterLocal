@@ -506,10 +506,43 @@ def capture_image_boundary(data: dict[str, Any]) -> dict[str, Any]:
     return hydrate_no_image_fixture_assets(data, NO_IMAGE_FIXTURE)
 
 combine.maybe_generate_visual_assets = capture_image_boundary
-def identity_data(data: dict[str, Any]) -> dict[str, Any]:
+from infini_local.qa.live_no_image_fixture import observe_no_image_readiness  # noqa: E402
+
+original_cached_payload_report = combine._cached_payload_report
+original_assert_visual_delivery_ready = combine.assert_visual_delivery_ready
+
+
+def no_image_cached_payload_report(data: Any) -> dict[str, Any]:
+    from infini_local.pipelines.visual_delivery_gate import VisualDeliveryBlocked
+
+    try:
+        if not isinstance(data, dict):
+            return original_cached_payload_report(data)
+        control, report = observe_no_image_readiness(data, NO_IMAGE_FIXTURE, original_cached_payload_report)
+    except VisualDeliveryBlocked as exc:
+        if not str(exc).startswith('qa_fixture_identity_changed:'):
+            raise
+        return {
+            'ok': False,
+            'errors': [{'path': '$.visual', 'code': 'qa_fixture_identity_changed', 'message': str(exc)}],
+            'visual': {'ok': False, 'problems': [{'code': 'qa_fixture_identity_changed', 'message': str(exc)}]},
+            'noImageExecutionControl': {'kind': 'synthetic_no_image_execution_control', 'synthetic': True,
+                                        'realImageGeneration': False, 'owners': []},
+        }
+    if isinstance(control, dict):
+        report['noImageExecutionControl'] = copy.deepcopy(control.get('debug', {}).get('noImageExecutionControl'))
+    return report
+
+
+def no_image_assert_visual_delivery_ready(data: dict[str, Any]) -> dict[str, Any]:
+    # Real early gate, on the same explicitly synthetic/private execution copy
+    # as final/cache readiness. Never return or persist its generated statuses.
+    observe_no_image_readiness(data, NO_IMAGE_FIXTURE, original_assert_visual_delivery_ready)
     return data
 
-combine.assert_visual_delivery_ready = identity_data
+
+combine._cached_payload_report = no_image_cached_payload_report
+combine.assert_visual_delivery_ready = no_image_assert_visual_delivery_ready
 
 
 def parent(name: str, **fields: Any) -> dict[str, Any]:
@@ -684,6 +717,8 @@ campaign_identity = {
     'networkAttemptBudget': int(llm_transport.LLM_FALLBACK_NETWORK_FAILS),
     'parallelCrafts': args.parallel_crafts,
     'imagesDisabled': True,
+    'deliveryReadinessObserver': 'synthetic_no_image_execution_control',
+    'realImageGeneration': False,
     'preflightOnly': bool(args.preflight_only),
 }
 (OUT / 'campaign_manifest.json').write_text(

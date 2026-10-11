@@ -436,7 +436,7 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
     card = next(r.card() for r in CAPABILITY_REGISTRY["configure_tool"].requirements if r.kind == "binding_tuple_present")
     assert card == {
         "kind": "binding_tuple_present", "target": "any_entity",
-        "anyOf": ["primary_use|use_item_body|contactDamage=true", "primary_use|spawn_entity"],
+        "anyOf": ["primary_use|use_item_body", "primary_use|spawn_entity"],
         "message": "A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
     }
     current = build_runtime_fixture("workbench_blade") if scenario == "projected-tool" else build_capability_witness("configure_tool")
@@ -449,6 +449,10 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         return
     if scenario == "missing-contact":
         program["bindings"][0]["contactDamage"] = False
+        assert validate_runtime_program(current)["ok"]
+        from infini_local.core.runtime_authoring import validate_runtime_wire
+        assert validate_runtime_wire(compile_runtime_program(current))["ok"]
+        return
     else:
         program["bindings"] = []
     patch = _empty_gameplay_patch()
@@ -463,8 +467,8 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         assert scope["create"]["bindings"] == {
             "allowed": True, "allowedTargetIds": ["item"], "allowedInputs": ["primary_use"],
             "allowedActions": ["use_item_body"], "requiredTargetIds": ["item"],
-            "allowedTransactions": [_binding_transaction("primary_use", "use_item_body", "item", contact_damage=True),
-                                    _binding_transaction("primary_use", "use_item_body", "item", stack_cost=1, contact_damage=True)],
+            "allowedTransactions": [_binding_transaction("primary_use", "use_item_body", "item", stack_cost=cost, contact_damage=contact)
+                                    for cost in (0, 1) for contact in (False, True)],
             "mustChooseExactlyOne": True,
         }
     if scenario == "missing-binding-and-call":
@@ -476,11 +480,7 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         assert filtered["bindingsUpsert"] == []
         assert any(e["reason"] == "binding_transaction_not_in_registry_projection" for e in audit["ignoredChanges"])
         return
-    if scenario == "missing-contact":
-        binding = copy.deepcopy(program["bindings"][0])
-        binding["contactDamage"] = True
-    else:
-        binding = _binding_row("repair_tool_primary", "primary_use", "use_item_body", "item", contact_damage=True)
+    binding = _binding_row("repair_tool_primary", "primary_use", "use_item_body", "item", contact_damage=False)
     patch["bindingsUpsert"] = [binding]
     filtered, audit = filter_repair_patch_scope(current, patch, scope)
     assert audit["ok"] and filtered["bindingsUpsert"] == [binding]
@@ -497,31 +497,36 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
     pytest.param("contact", "single", True, id="contact-selected-single-lane"),
 ])
 def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scenario, repair, ok):
-    current = build_capability_witness("configure_tool") if scenario == "tool" else build_runtime_fixture("workbench_blade")
+    # Contact dependency comes from an actual hit event, never native tool power.
+    current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     original = program["bindings"][0]
     original["contactDamage"] = False
     duplicate = copy.deepcopy(original)
     duplicate["id"] = "duplicate_tool_primary" if scenario == "tool" else "alternate_body"
+    original["action"] = {"kind": "use_item_body"}
+    duplicate["action"] = copy.deepcopy(original["action"])
     if scenario == "contact":
-        original["action"] = {"kind": "use_item_body"}
-        duplicate["action"] = copy.deepcopy(original["action"])
         duplicate["input"] = "alternate_use"
-        program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
-        event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
-        event_call["target"] = "item"
-        event_call["params"]["when"] = "on_hit"
+    else:
+        program["calls"].append({"id": "native_tool", "fn": "configure_tool", "params": {
+            "pickPower": 190, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 1}})
+    program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
+    event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["when"] = "on_hit"
     program["bindings"].append(duplicate)
     report = validate_runtime_program(current)
-    assert [e["code"] for e in report["errors"]] == (["duplicate_exclusive_input", "missing_binding_dependency"] if scenario == "tool" else ["event_not_emitted"])
+    assert [e["code"] for e in report["errors"]] == (["duplicate_exclusive_input", "event_not_emitted"] if scenario == "tool" else ["event_not_emitted"])
     scope = build_runtime_repair_scope(current, report["errors"])
-    requirement = next(e for e in scope["repairRequirements"] if e["code"] == ("missing_binding_dependency" if scenario == "tool" else "event_not_emitted"))
+    requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
     assert "requiredBindingUpdates" not in requirement
     assert not requirement.get("mustApplyAll", False)
     assert requirement["mustChooseExactlyOne"] is True
     assert not requirement.get("mustCreateExactlyOne", False)
     if scenario == "tool":
-        assert requirement["allowedBindingTransactions"] == [_binding_transaction("primary_use", "use_item_body", "item", contact_damage=True)]
+        assert _binding_transaction("primary_use", "use_item_body", "item", contact_damage=True) in requirement["allowedBindingTransactions"]
+        assert all(row["contactDamage"] is True for row in requirement["allowedBindingTransactions"])
         assert requirement["allowedExistingBindingIds"] == [duplicate["id"], original["id"]]
         assert {e["bindingId"] for e in scope["bindingAlternatives"]} == {original["id"], duplicate["id"]}
         assert scope["repairTransactions"]["exclusiveInputSelections"] == [{"input": "primary_use", "candidateBindingIds": [duplicate["id"], original["id"]], "mustKeepExactlyOne": True}]
@@ -538,7 +543,7 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
         repaired = apply_repair_patch(current, filtered)
         assert validate_runtime_program(repaired)["ok"]
         if scenario == "tool":
-            assert [e["id"] for e in repaired["runtimeProgram"]["bindings"]] == [original["id"]]
+            assert [e["id"] for e in repaired["runtimeProgram"]["bindings"]] == [original["id"], "projectile_hold"]
     elif repair == "both":
         assert any("exactly one listed binding transaction" in e["message"] for e in audit["errors"])
 
@@ -699,7 +704,7 @@ def test_repair_scope_does_not_mask_same_path_error_for_different_related_ids(
     )
     scope = build_runtime_repair_scope(current, [source_error])
     fixed = copy.deepcopy(stats)
-    del fixed["target"]  # Remove the exact forbidden selector; declaration identity is frozen.
+    fixed["target"] = next(row["id"] for row in current["runtimeProgram"]["entities"] if row["kind"] == "item_body")
     patch = _empty_gameplay_patch()
     patch["callsUpsert"] = [fixed]
 
@@ -899,20 +904,26 @@ def test_event_binding_projection_preserves_exact_ownership(monkeypatch, scenari
     pytest.param(True, "exactly one listed binding transaction", id="create-only-refuses-existing-transaction"),
 ])
 def test_requirement_binding_choice_refuses_foreign_mutable_id(monkeypatch, create_only, message):
-    current = build_capability_witness("configure_tool")
+    current = build_runtime_fixture("workbench_blade")
     program = current["runtimeProgram"]
     original = program["bindings"][0]
     original["contactDamage"] = False
+    original["action"] = {"kind": "use_item_body"}
     duplicate = {**copy.deepcopy(original), "id": "duplicate_tool_primary"}
     unrelated = {**copy.deepcopy(original), "id": "unrelated_mutable_binding", "input": "unknown_input"}
     program["bindings"] = [unrelated] if create_only else [original, duplicate, unrelated]
+    program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
+    event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
+    event_call["target"] = "item"
+    event_call["params"]["when"] = "on_hit"
     report = validate_runtime_program(current)
     scope = build_runtime_repair_scope(current, report["errors"])
-    requirement = next(row for row in scope["repairRequirements"] if row["code"] == "missing_binding_dependency")
+    requirement = next(row for row in scope["repairRequirements"] if row["code"] == "event_not_emitted")
     assert requirement["allowedExistingBindingIds"] == ([] if create_only else [duplicate["id"], original["id"]])
     if create_only:
         assert requirement["mustCreateExactlyOne"] is True
-    transaction = copy.deepcopy(requirement["allowedBindingTransactions"][0])
+    transaction = copy.deepcopy(next(row for row in requirement["allowedBindingTransactions"]
+                                     if row["input"] == "primary_use" and row["action"]["kind"] == "use_item_body"))
     unrelated_alternatives = next(row["allowed"] for row in scope["bindingAlternatives"] if row["bindingId"] == unrelated["id"])
     assert transaction in unrelated_alternatives
     upserts = [{"id": unrelated["id"], **copy.deepcopy(transaction)}]
@@ -1313,7 +1324,7 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "Every upsert entry must be a complete schema-valid node" in repair_rules
     assert "Copy the existing node from readOnlySourceFragments.brokenFragments" in repair_rules
     assert "preserve unchanged required fields and accepted optional values or absences" in repair_rules
-    assert "zero-argument calls have no params object" in repair_rules
+    assert "zero-argument calls use params={}" in repair_rules
     required_shape = dossier["requiredJsonShape"]
     assert not any(key in dossier for key in ("brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments"))
     assert set(dossier["readOnlySourceFragments"]) == {
@@ -1322,7 +1333,6 @@ def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_p
     assert "claimsUpsert" not in required_shape
     assert "claimIdsDelete" not in required_shape
     assert {frozenset(row) for row in required_shape["callsUpsert"]} == {
-        frozenset({"id", "fn", "target"}),
         frozenset({"id", "fn", "target", "params"}),
     }
     card_fns = {

@@ -58,16 +58,16 @@ def _binding_action_schema(action_name: str, *, include_kind: bool = True) -> di
     from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, PLACEMENT_CAPABILITIES
     properties: dict[str, Any] = {}
     required: list[str] = []
+    properties["kind"] = {"const": action_name}
     if include_kind:
-        properties["kind"] = {"const": action_name}
         required.append("kind")
     action_spec = BINDING_ACTION_REGISTRY[action_name]
+    properties["targetId"] = {
+        **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
+        "x-infini-reference": {"namespace": "entity", "targetKinds": list(action_spec.target_kinds),
+                              "allowSelf": True, "graphEdge": False},
+    }
     if action_spec.target_kinds != ("item_body",):
-        properties["targetId"] = {
-            **_strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-            "x-infini-reference": {"namespace": "entity", "targetKinds": list(action_spec.target_kinds),
-                                  "allowSelf": True, "graphEdge": False},
-        }
         required.append("targetId")
     if action_name == "apply_item_effects":
         properties["effectGroupId"] = _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN)
@@ -90,8 +90,8 @@ def _binding_variant_schema(input_name: str, action_name: str, cost: int | None 
         "input": {"const": input_name},
     }
     required = ["id", "input"]
-    if action_shape["properties"]:
-        properties["action"] = action_shape
+    properties["action"] = action_shape
+    if action_shape["required"]:
         required.append("action")
     if active_use and action_name != "place_item":
         properties["stackCost"] = {"type": "integer", "const": cost}
@@ -100,6 +100,9 @@ def _binding_variant_schema(input_name: str, action_name: str, cost: int | None 
                 "description": "Explicit own-stack debit probability after completed use; omission means 100 percent. Never ammo or placement saving."}
         properties["contactDamage"] = {"type": "boolean"}
         required.extend(("stackCost", "contactDamage"))
+    else:
+        properties["stackCost"] = {"type": "integer", "const": 1 if action_name == "place_item" else 0}
+        properties["contactDamage"] = {"type": "boolean", "const": False}
     return {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
 
 
