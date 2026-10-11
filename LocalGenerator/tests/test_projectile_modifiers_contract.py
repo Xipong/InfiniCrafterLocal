@@ -84,27 +84,34 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
     assert audit_compiler_receipts(rows, authored_document=doc, final_document=compiled)["ok"]
     assert audit_compiler_receipts(rows, final_document=compiled)["ok"]
 
-@pytest.mark.parametrize("fn,leaf", [(fn, key) for fn, values in PARAMS.items() for key in values])
-def test_all_new_choices_are_required_in_author_and_persisted_component(fn, leaf):
-    doc = source(fn); compiled = compile_runtime_program(doc)
-    del call(doc, fn)["params"][leaf]
-    assert not validate_runtime_program(doc)["ok"]
-    with pytest.raises(ValueError): compile_runtime_program(doc)
-    del entity(compiled, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]][leaf]
-    compiled.pop("runtimeContract")
-    assert not validate_runtime_wire(compiled)["ok"]
-
-@pytest.mark.parametrize("fn,leaf,value", [
-    (fn, leaf, value)
+# Every exact leaf still exercises missing and all former present-invalid
+# classes. A single observer owns the Author/compiler and persisted DTO refusal.
+@pytest.mark.parametrize("fn,leaf,kind,value", [
+    pytest.param(fn, leaf, kind, value, id=f"{fn}-{leaf}-{kind}")
     for fn, values in PARAMS.items() for leaf, original in values.items()
-    for value in ([None, True, "1", -22000, float("inf"), float("nan")] if type(original) in (int, float)
-                  else [None, 0, "unknown"] if isinstance(original, bool) else [None, 1, "unknown"])
+    for kind, value in (
+        [("missing", None), ("null", None), ("boolean", True), ("numeric-text", "1"),
+         ("negative", -22000), ("infinity", float("inf")), ("nan", float("nan"))]
+        if type(original) in (int, float) else
+        [("missing", None), ("null", None), ("wrong-type", 0), ("unknown", "unknown")]
+        if isinstance(original, bool) else
+        [("missing", None), ("null", None), ("wrong-type", 1), ("unknown", "unknown")]
+    )
 ])
-def test_invalid_present_choice_is_red_at_author_and_wire_boundary(fn, leaf, value):
-    doc = source(fn); compiled = compile_runtime_program(doc)
-    call(doc, fn)["params"][leaf] = value
-    assert not validate_runtime_program(doc)["ok"]
-    entity(compiled, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]][leaf] = value
+def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, kind, value):
+    doc = source(fn)
+    compiled = compile_runtime_program(doc)
+    authored = call(doc, fn)["params"]
+    persisted = entity(compiled, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]]
+    if kind == "missing":
+        del authored[leaf]
+        del persisted[leaf]
+    else:
+        authored[leaf] = persisted[leaf] = value
+    report = validate_runtime_program(doc)
+    assert not report["ok"] and any(row["path"].endswith("." + leaf) for row in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(doc)
     compiled.pop("runtimeContract")
     assert not validate_runtime_wire(compiled)["ok"]
 
@@ -256,25 +263,18 @@ def test_actual_author_request_exposes_every_explicit_choice():
     cards = {row["fn"]: row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     for fn, params in PARAMS.items(): assert set(cards[fn]["params"]) == set(params)
 
-# Combined-owner acceptance: one composition, not a second provenance helper.
-# Every explicit combat basis and every sampled-velocity variant is exercised
-# beside the complete orthogonal modifier component inventory.
-_COMBAT_CHOICES = [("authored_child", "authored_child"), ("authored_child", "live_parent"),
-                   ("live_parent", "authored_child"), ("live_parent", "live_parent")]
-_HAS_COMBAT = "damageBasis" in CAPABILITY_REGISTRY["spawn_entity_on_event"].params
-_HAS_VELOCITY = "velocity" in CAPABILITY_REGISTRY["configure_spawn"].params
-_VELOCITY_CHOICES = [None] if not _HAS_VELOCITY else [
-    {"constantSpeedPxPerUpdate": 8.5},
-    {"fanSpeed": {"minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}},
-    {"radial": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}},
-    {"disk": {"maxSpeedPxPerUpdate": 6}},
-    {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": .2}},
-]
-
-
+# Individual combat and launch domains belong to test_runtime_parent_combat
+# and test_runtime_spawn_distributions. Composition only needs each producer
+# variant and each combat pair next to the complete modifier inventory, through
+# BOTH actual transports; repeating their 4 x 5 product adds no new ownership.
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("bases", _COMBAT_CHOICES if _HAS_COMBAT else [None])
-@pytest.mark.parametrize("velocity", _VELOCITY_CHOICES)
+@pytest.mark.parametrize("bases,velocity", [
+    pytest.param(("authored_child", "authored_child"), {"constantSpeedPxPerUpdate": 8.5}, id="authored-constant"),
+    pytest.param(("authored_child", "live_parent"), {"fanSpeed": {"minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}}, id="mixed-fan"),
+    pytest.param(("live_parent", "authored_child"), {"radial": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}}, id="mixed-radial"),
+    pytest.param(("live_parent", "live_parent"), {"disk": {"maxSpeedPxPerUpdate": 6}}, id="parent-disk"),
+    pytest.param(("authored_child", "authored_child"), {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": .2}}, id="authored-cone"),
+])
 def test_combined_feature_modifier_complete_projection_and_actual_serialized_repair(
     monkeypatch, format_mode, bases, velocity,
 ):

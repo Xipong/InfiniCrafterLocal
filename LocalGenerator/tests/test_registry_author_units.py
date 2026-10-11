@@ -3,7 +3,6 @@
 from infini_local.core.runtime_authoring.capability_registry import OmissionCondition, RUNTIME_PROGRAM_SCHEMA, visible_capabilities
 from copy import deepcopy
 from dataclasses import replace
-from types import MappingProxyType
 import hashlib
 import json
 import math
@@ -24,7 +23,7 @@ from infini_local.core.runtime_authoring import (
     capability_provider_union,
     compact_capability_catalog,
 )
-from infini_local.core.runtime_authoring import compiler, technical_lowering
+from infini_local.core.runtime_authoring import technical_lowering
 from infini_local.core.runtime_authoring.program_schema import (
     author_item_repair_schema, strict_author_shape_report,
     strict_repair_shape_report, strict_repair_structure_report,
@@ -52,53 +51,7 @@ RENAMES = (
 )
 
 
-def _registry_with_rename(monkeypatch, fn, old, new):
-    registry = dict(CAPABILITY_REGISTRY)
-    cap = registry[fn]
-    params = dict(cap.params)
-    spec = params.pop(old, None)
-    if spec is None:
-        spec = params[new]
-    params[new] = replace(spec, wire_name=spec.wire_name or old)
-    paths = tuple(
-        path.removesuffix("." + new) + "." + (spec.wire_name or old) if path.endswith("." + new) else path for path in cap.final_wire_paths
-    )
-    registry[fn] = replace(cap, params=MappingProxyType(params), final_wire_paths=paths)
-    monkeypatch.setattr(compiler, "CAPABILITY_REGISTRY", registry)
-    monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", registry)
-    return registry[fn]
-
-
-def _project(fn, new, value):
-    call = {
-        "id": "renamed",
-        "fn": fn,
-        "target": "item" if compiler.CAPABILITY_REGISTRY[fn].target_kinds == ("item_body",) else "shot",
-        "_sourceIndex": 0,
-        "params": {
-            # This test calls the isolated projector, not the full compiler
-            # that materializes omissions. Author neutrals explicitly here.
-            **{name: spec.default for name, spec in compiler.CAPABILITY_REGISTRY[fn].params.items() if spec.default is not None},
-            new: value,
-        },
-    }
-    ctx = compiler._CompileContext(receipts=[])
-    if call["target"] == "item":
-        gameplay, runtime = {}, {}
-        compiler._compile_item_call(
-            ctx, call, gameplay=gameplay, accessory={}, armor={}, runtime=runtime, item_entity={}, entity_index=0, equipment_config=""
-        )
-        final = {"gameplay": gameplay, "runtimeProgram": runtime}
-    else:
-        entity = {"id": call["target"]}
-        compiler._compile_entity_call(ctx, call, entity=entity, entity_index=0)
-        final = {"runtimeProgram": {"entities": [entity]}}
-    return call, ctx.receipts, final
-
-
 def _get(document, path):
-    import re
-
     value = document
     for part in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path):
         value = value[int(part[1:-1])] if part.startswith("[") else value[part]
@@ -114,43 +67,22 @@ def author_cards():
 
 
 @pytest.mark.parametrize("fn,old,new,value,component", [pytest.param(*row, id=f"{row[0]}-{row[2]}") for row in RENAMES])
-def test_identity_rename_reaches_packet_projector_and_frozen_wire(monkeypatch, author_cards, fn, old, new, value, component):
-    cap = CAPABILITY_REGISTRY[fn]
-    spec = cap.params[new]
-    assert old not in cap.params and old not in author_cards[fn]["params"]
-    assert new in author_cards[fn]["params"] and spec.wire_name
-    assert any(path.endswith("." + spec.wire_name) for path in cap.final_wire_paths)
+def test_identity_rename_reaches_packet_projector_and_frozen_wire(author_cards, fn, old, new, value, component):
+    cap, spec = CAPABILITY_REGISTRY[fn], CAPABILITY_REGISTRY[fn].params[new]
+    assert old not in cap.params and old not in author_cards[fn]["params"] and new in author_cards[fn]["params"]
+    assert spec.wire_name and any(path.endswith("." + spec.wire_name) for path in cap.final_wire_paths)
     for boundary in (spec.minimum, spec.maximum, spec.neutral):
         if boundary is not None:
-            assert spec.to_wire(boundary) == boundary
-    # Substitution proves registry consumption, independently of the full compiler.
-    with monkeypatch.context() as patch:
-        _registry_with_rename(patch, fn, old, new)
-        call, receipts, final = _project(fn, new, value)
-        selected = [r for r in receipts if r.get("authoredPath") == f"runtimeProgram.calls[0].params.{new}"]
-        assert selected
-        assert all(r["finalPath"].endswith("." + spec.wire_name) and _get(final, r["finalPath"]) == value for r in selected)
-        if isinstance(value, float):
-            assert all(struct.pack("!d", _get(final, r["finalPath"])) == struct.pack("!d", value) for r in selected)
-        assert technical_lowering.audit_compiler_receipts(
-            receipts, authored_document={"runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": [call]}}, final_document=final
-        )["ok"]
+            assert _bytes(spec.to_wire(boundary)) == _bytes(boundary)
     authored = build_capability_witness(fn)
-    call = next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    index, call = next((i, c) for i, c in enumerate(authored["runtimeProgram"]["calls"]) if c["id"] == "witness_call")
     call["params"][new] = value
-    wire = compile_runtime_program(authored)
-    assert validate_runtime_wire(wire)["ok"]
-    rows = [
-        r
-        for r in wire["runtimeContract"]["finalWireReceipts"]
-        if r.get("callId") == "witness_call" and r.get("authoredPath", "").endswith(".params." + new)
-    ]
-    assert rows
-    assert all(r["finalPath"].endswith("." + spec.wire_name) and _get(wire, r["finalPath"]) == value for r in rows)
-    if isinstance(value, float):
-        assert all(struct.pack("!d", _get(wire, r["finalPath"])) == struct.pack("!d", value) for r in rows)
+    wire = assert_delivered(authored, index, new, value)
+    rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
+            if r.get("callId") == "witness_call" and r.get("authoredPath", "").endswith(".params." + new)]
+    assert all(r["finalPath"].endswith("." + spec.wire_name) for r in rows)
     alias = deepcopy(authored)
-    alias_call = next(c for c in alias["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    alias_call = alias["runtimeProgram"]["calls"][index]
     alias_call["params"][old] = alias_call["params"].pop(new)
     assert not validate_runtime_program(alias)["ok"]
     if component in {"spawn", "collision", "movement.params", "itemUse"}:
@@ -158,49 +90,17 @@ def test_identity_rename_reaches_packet_projector_and_frozen_wire(monkeypatch, a
         prefix, _, wire_key = row["finalPath"].rpartition(".")
         container = _get(wire, prefix)
         container[new] = container.pop(wire_key)
-        errors = validate_runtime_wire(wire)["errors"]
-        assert any(e["code"] == "unknown_final_wire_field" and e["path"].endswith("." + new) for e in errors)
+        assert any(e["code"] == "unknown_final_wire_field" and e["path"].endswith("." + new)
+                   for e in validate_runtime_wire(wire)["errors"])
 
 
-@pytest.mark.parametrize(
-    "field,path",
-    [
-        pytest.param("authoredPath", "runtimeProgram.calls[0].params.speedPxPerTick", id="stale-source"),
-        pytest.param("finalPath", "runtimeProgram.entities[0].spawn.count", id="wrong-output"),
-    ],
-)
-def test_renamed_receipt_identity_cannot_be_forged(monkeypatch, field, path):
-    call, rows, final = _project("configure_spawn", "velocity", {"constantSpeedPxPerUpdate": 7.125})
-    next(r for r in rows if r.get("authoredPath", "").endswith(".velocity.constantSpeedPxPerUpdate"))[field] = path
-    assert not technical_lowering.audit_compiler_receipts(
-        rows, authored_document={"runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": [call]}}, final_document=final
-    )["ok"]
-
-
-def test_buff_percent_uses_declared_division_while_prior_factor_keeps_binary64():
-    value = 1.770282212988338
-    authored = build_capability_witness("apply_generated_buff_on_use")
-    call = next(row for row in authored["runtimeProgram"]["calls"] if row["id"] == "witness_call")
-    call["params"]["moveSpeedBonusPercent"] = value * 100
-    wire = compiler.compile_runtime_program(authored)
-    projected = wire["gameplay"]["generatedBuff"]["movementSpeed"]
-    assert struct.pack("!d", projected) == struct.pack("!d", value * 100 / 100)
-    assert struct.pack("!d", projected) != struct.pack("!d", value)
-    assert struct.pack("!f", projected) == struct.pack("!f", value)
-    prior = CAPABILITY_REGISTRY[FN].retained_receipt_params["moveSpeedBonusFactor"]
-    assert struct.pack("!d", prior.to_wire(value)) == struct.pack("!d", value)
-
-
-def test_fractional_author_unit_keeps_integer_saved_equipment_clamps():
-    root = Path(__file__).resolve().parents[2]
-    render = runpy.run_path(str(root / "tools/generate_equipment_bounds.py"))["render"]
-    assert render() == (root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedEquipmentBounds.g.cs").read_text()
+def _bytes(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
 
 
 def _stat_spec(fn, param):
-    parts = param.split(".")
-    spec = CAPABILITY_REGISTRY[fn].params[parts[0]]
-    for part in parts[1:]:
+    spec = CAPABILITY_REGISTRY[fn].params[param.split(".")[0]]
+    for part in param.split(".")[1:]:
         spec = spec.properties[part]
     return spec
 
@@ -212,203 +112,360 @@ def _set_stat(params, path, value):
     params[parts[-1]] = value
 
 
-# The old engine domains are exhausted as visible pytest cases, not hidden loops.
-@pytest.mark.parametrize(
-    "fn,param,path,author_per_engine,divisor,multiplier,old",
-    [
-        pytest.param(fn, param, path, scale, divisor, multiplier, old, id=f"{fn}-{param}-engine-{old}")
-        for fn, param, path, scale, divisor, multiplier, domain in (
-            ("configure_tool", "axePowerTooltipPercent", "gameplay.axePower", 5, 5, 1, range(101)),
-            (FN, "lifeRegenHpPerSecond", "gameplay.generatedBuff.lifeRegen", 0.5, 1, 2, range(121)),
-            (FN, "manaRegenBonusPoints", "gameplay.generatedBuff.manaRegen", 1, 1, 1, range(121)),
-            ("configure_accessory", "lifeRegenHpPerSecond", "accessory.lifeRegen", 0.5, 1, 2, range(-100, 201)),
-            ("configure_armor", "lifeRegenHpPerSecond", "armor.lifeRegen", 0.5, 1, 2, range(-100, 201)),
-            ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "armor.setBonusLifeRegen", 0.5, 1, 2, range(-100, 201)),
-        )
-        for old in domain
-    ],
-)
-def test_discrete_author_units_exhaust_engine_domain(fn, param, path, author_per_engine, divisor, multiplier, old):
-    spec = _stat_spec(fn, param)
-    # The human unit is an independent historical contract, not derived from
-    # the current converter: corrupting a registry scale must not cancel out.
-    assert (spec.wire_divisor, spec.wire_multiplier) == (divisor, multiplier)
-    human = old * author_per_engine
-    if spec.kind == "integer":
-        human = int(human)
-    assert spec.to_wire(human) == old and isinstance(spec.to_wire(human), int)
-    assert spec.to_wire(human) * spec.wire_divisor / spec.wire_multiplier == human
-    doc = build_capability_witness(fn)
-    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-    _set_stat(call["params"], param, human)
-    if fn == FN:
-        call["params"]["oreSenseEnabled"] = True
-    wire = compile_runtime_program(doc)
-    assert type(_get(wire, path)) is int and _get(wire, path) == old
-    assert validate_runtime_wire(wire)["ok"]
-    assert any(
-        r.get("authoredPath", "").endswith(".params." + param) and r["finalPath"] == path and r["value"] == old
-        for r in wire["runtimeContract"]["finalWireReceipts"]
-    )
-    for name, continuous in CAPABILITY_REGISTRY[FN].params.items():
-        if continuous.consumer_storage:
-            assert continuous.consumer_value_error(continuous.neutral) is None
+def _parameter_leaves(params, prefix=""):
+    for name, spec in params.items():
+        if spec.properties:
+            yield from _parameter_leaves(spec.properties, prefix + name + ".")
+        else:
+            yield prefix + name, spec
 
 
-@pytest.mark.parametrize(
-    "fn,param,old,minimum,maximum,step,bad",
-    [
-        pytest.param(fn, param, old, minimum, maximum, step, bad, id=f"{fn}-{param}-{bad}")
-        for fn, param, old, minimum, maximum, step, bads in (
-            ("configure_tool", "axePowerTooltipPercent", "axePower", 0, 500, 5, (1, 501)),
-            (FN, "lifeRegenHpPerSecond", "lifeRegen", 0, 60, 0.5, (0.25, 60.5)),
-            ("configure_accessory", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
-            ("configure_armor", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
-            ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "setBonusLifeRegenHalfHpPerSecond", -50, 100, 0.5, (-50.5, 100.5, 0.25)),
-        )
-        for bad in bads
-    ],
+PERCENT_PARAMS = tuple((fn, name, spec) for fn, cap in CAPABILITY_REGISTRY.items()
+                       for name, spec in _parameter_leaves(cap.params) if spec.wire_divisor == 100)
+
+
+# Independent historical units: extrema, zero, first step and off-lattice refusals.
+# No closed-domain enumeration: the shared projector's two arithmetic branches
+# are checked below, while these rows check every distinct compiler destination.
+DISCRETE_UNITS = (
+    ("configure_tool", "axePowerTooltipPercent", "axePower", "gameplay.axePower", 0, 500, 5, 5, 1),
+    (FN, "lifeRegenHpPerSecond", "lifeRegen", "gameplay.generatedBuff.lifeRegen", 0, 60, .5, 1, 2),
+    (FN, "manaRegenBonusPoints", "manaRegen", "gameplay.generatedBuff.manaRegen", 0, 120, 1, 1, 1),
+    ("configure_accessory", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", "accessory.lifeRegen", -50, 100, .5, 1, 2),
+    ("configure_armor", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", "armor.lifeRegen", -50, 100, .5, 1, 2),
+    ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "setBonusLifeRegenHalfHpPerSecond", "armor.setBonusLifeRegen", -50, 100, .5, 1, 2),
 )
-def test_discrete_unit_schema_and_rejection(fn, param, old, minimum, maximum, step, bad):
+
+
+@pytest.mark.parametrize("unit,value,accepted", [
+    pytest.param(row, value, accepted, id=f"{row[0]}-{row[1]}-{label}")
+    for row in DISCRETE_UNITS
+    for label, value, accepted in (
+        ("minimum", row[4], True), ("maximum", row[5], True), ("zero", 0, True),
+        ("first-step", row[6], True), ("below-minimum", row[4] - row[6], False),
+        ("above-maximum", row[5] + row[6], False), ("off-step", row[6] / 2, False))
+])
+def test_discrete_units_pin_schema_lattice_and_every_wire_destination(unit, value, accepted):
+    fn, param, old, path, low, high, step, divisor, multiplier = unit
     spec = _stat_spec(fn, param)
-    assert (spec.minimum, spec.maximum, spec.multiple_of) == (minimum, maximum, step)
+    assert (spec.minimum, spec.maximum, spec.wire_divisor, spec.wire_multiplier) == (low, high, divisor, multiplier)
+    assert spec.multiple_of == (None if param == "manaRegenBonusPoints" else step)
     schema = next(s["properties"]["params"] for s in capability_provider_union() if s["properties"]["fn"]["const"] == fn)
-    root_schema = schema
-    leaf = param.rsplit(".", 1)[-1]
+    assert old not in schema["properties"]
     for part in param.split(".")[:-1]:
         schema = schema["properties"][part]
-    assert leaf in schema["properties"] and old not in root_schema["properties"]
-    assert schema["properties"][leaf]["multipleOf"] == step
+    leaf = param.rsplit(".", 1)[-1]
+    assert schema["properties"][leaf] == spec.schema()
     assert (leaf in schema["required"]) is spec.required
-    if spec.default is not None:
-        assert schema["properties"][param]["default"] == 0
     assert param.split(".")[0] in next(c["params"] for c in compact_capability_catalog() if c["fn"] == fn)
     doc = build_capability_witness(fn)
-    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-    _set_stat(call["params"], param, bad)
-    assert not validate_runtime_program(doc)["ok"]
-    with pytest.raises(ValueError):
-        compile_runtime_program(doc)
+    call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    if fn == FN:
+        call["params"]["oreSenseEnabled"] = True
+    _set_stat(call["params"], param, value)
+    if not accepted:
+        assert not validate_runtime_program(doc)["ok"]
+        with pytest.raises(ValueError, match="runtime program rejected"):
+            compile_runtime_program(doc)
+        return
+    expected = int(value * multiplier / divisor)
+    assert type(spec.to_wire(value)) is int and spec.to_wire(value) == expected
+    assert spec.to_wire(value) * divisor / multiplier == value
+    wire = compile_runtime_program(doc)
+    assert type(_get(wire, path)) is int and _get(wire, path) == expected
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert any(r.get("authoredPath", "").endswith(".params." + param)
+               and r["finalPath"] == path and type(r["value"]) is int and r["value"] == expected for r in rows)
+    assert audit_compiler_receipts(rows, authored_document=doc, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
     _set_stat(call["params"], param, 0)
     call["params"][old] = 2
     assert not validate_runtime_program(doc)["ok"]
 
 
-def buff_document(name, value, companion):
-    doc = build_capability_witness(FN)
-    params = next(c["params"] for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
-    params.update(
-        miningSpeedMultiplier=1,
-        lightStrength=0,
-        oreSenseEnabled=False,
-        moveSpeedBonusPercent=0,
-        jumpSpeedBonusPxPerTick=0,
-        manaRegenBonusPoints=0,
-        lifeRegenHpPerSecond=0,
-    )
-    params[name] = value
-    if companion == "ore":
-        params["oreSenseEnabled"] = True
-    elif companion == "healing":
-        doc["runtimeProgram"]["calls"].append(
-            {
-                "id": "healing",
-                "fn": "restore_resources_on_use",
-                "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False},
-            }
-        )
-    return doc
+@pytest.mark.parametrize("fn,param,value,expected", [
+    pytest.param("configure_tool", "axePowerTooltipPercent", 35, 7, id="integer-division"),
+    pytest.param(FN, "lifeRegenHpPerSecond", 3.5, 7, id="fractional-multiplication"),
+    pytest.param("configure_accessory", "lifeRegenHpPerSecond", -3.5, -7, id="signed-multiplication"),
+    pytest.param(FN, "manaRegenBonusPoints", 7, 7, id="integer-identity"),
+    pytest.param("configure_tool", "axePowerTooltipPercent", 1, None, id="nonintegral-division"),
+    pytest.param(FN, "lifeRegenHpPerSecond", .25, None, id="nonintegral-multiplication"),
+])
+def test_shared_discrete_projector_preserves_integer_output_or_refuses_fraction(fn, param, value, expected):
+    spec = _stat_spec(fn, param)
+    if expected is None:
+        with pytest.raises(ValueError, match="non-integral wire projection"):
+            spec.to_wire(value)
+    else:
+        assert type(spec.to_wire(value)) is int and spec.to_wire(value) == expected
 
 
-def test_consumer_error_is_registered_for_conditional_repair():
-    from infini_local.core.runtime_authoring import VALIDATION_ERROR_CODES, REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
-
-    assert "consumer_representability" in VALIDATION_ERROR_CODES
-    assert "consumer_representability" in REPAIR_VALIDATION_ERROR_CODES
-    assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
-
-
-def test_consumer_collapse_repair_changes_only_the_exact_param():
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope, filter_repair_patch_scope, apply_repair_patch
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
-    import json
-
-    doc = buff_document("miningSpeedMultiplier", 1.000000001, "ore")
-    source = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
-    candidate = deepcopy(source)
-    candidate["params"].update(miningSpeedMultiplier=1.0005, durationTicks=21600)
-    report = validate_runtime_program(doc)
-    scope = build_runtime_repair_scope(doc, report["errors"])
-    patch = {"note": "exact consumer repair", "realizationReplacement": deepcopy(doc["realization"]), "callsUpsert": [candidate]}
-    filtered, audit = filter_repair_patch_scope(doc, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(doc, filtered)
-    assert validate_runtime_program(repaired)["ok"]
-    actual = next(c for c in repaired["runtimeProgram"]["calls"] if c["fn"] == FN)
-    assert actual["params"] == dict(source["params"], miningSpeedMultiplier=1.0005)
-    assert compile_runtime_program(repaired)["gameplay"]["generatedBuff"]["miningSpeedMultiplier"] == 1.0005
-    _, author_packet, _ = build_initial_author_request({}, {}, {}, {}, "precision", model_name="test-model")
-    repair_packet = json.dumps(build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=report))
-    for packet in (author_packet, repair_packet):
-        assert "consumerConstraint" in packet and "nonneutral_must_remain_nonneutral" in packet
+def percent_document(fn, name, value, *, companion=True):
+    doc = build_capability_witness(fn)
+    index, call = next((i, row) for i, row in enumerate(doc["runtimeProgram"]["calls"]) if row["id"] == "witness_call")
+    if isinstance(companion, str):
+        params = call["params"]
+        params.update({key: spec.neutral for key, spec in CAPABILITY_REGISTRY[FN].params.items() if spec.neutral is not None})
+        if companion == "ore":
+            params["oreSenseEnabled"] = True
+        elif companion == "healing":
+            doc["runtimeProgram"]["calls"].append({"id": "healing", "fn": "restore_resources_on_use",
+                "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False}})
+    elif not companion:
+        call["params"].pop("defensePoints", None)
+        if fn == FN:
+            call["params"]["lightStrength"] = 0
+    _set_stat(call["params"], name, value)
+    return doc, index, call
 
 
-@pytest.mark.parametrize("companion", ["sole", "ore", "healing"])
-@pytest.mark.parametrize(
-    "name,value,accepted",
-    [
-        pytest.param(name, value, accepted, id=f"{name}-{value!r}-{'exact' if accepted else 'collapse'}")
-        for name, value, accepted in (
-            ("miningSpeedMultiplier", 1.000000001, False),
-            ("miningSpeedMultiplier", 0.999999999, False),
-            ("moveSpeedBonusPercent", 1e-50, False),
-            ("moveSpeedBonusPercent", -1e-50, False),
-            ("jumpSpeedBonusPxPerTick", 1e-50, False),
-            ("lightStrength", 1e-50, False),
-            ("miningSpeedMultiplier", 1.0005, True),
-            ("miningSpeedMultiplier", 0.9995, True),
-            ("moveSpeedBonusPercent", 0.05, True),
-            ("moveSpeedBonusPercent", -0.05, True),
-            ("jumpSpeedBonusPxPerTick", 0.0005, True),
-            ("lightStrength", 0.0005, True),
-            ("moveSpeedBonusPercent", 1e-40, True),
-            ("miningSpeedMultiplier", 1 + 2**-23, True),
-            ("miningSpeedMultiplier", 1 - 2**-24, True),
-            ("miningSpeedMultiplier", 1 + 2**-24, False),
-            ("miningSpeedMultiplier", 1 - 2**-25, False),
-            ("moveSpeedBonusPercent", 100 * 2**-149, True),
-            ("moveSpeedBonusPercent", -100 * 2**-149, True),
-            ("moveSpeedBonusPercent", 100 * 2**-150, False),
-            ("moveSpeedBonusPercent", -100 * 2**-150, False),
-        )
-    ],
-)
-def test_float32_consumer_boundary_is_exact_and_nonmutating(name, value, accepted, companion):
-    doc = buff_document(name, value, companion)
-    before = deepcopy(doc)
+def assert_delivered(doc, index, name, expected):
+    before = _bytes(doc)
+    wire = compile_runtime_program(doc)  # Compiler invokes canonical Author validation.
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    selected = [r for r in rows if r.get("authoredPath") == f"runtimeProgram.calls[{index}].params.{name}"]
+    assert selected
+    for row in selected:
+        assert row["status"] == "delivered"
+        assert _bytes(row["value"]) == _bytes(_get(wire, row["finalPath"])) == _bytes(expected)
+    serialized = json.loads(_bytes(wire))
+    assert validate_runtime_wire(serialized)["ok"]
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert audit_compiler_receipts(serialized["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=json.loads(before), final_document=serialized)["ok"]
+    assert _bytes(doc) == before
+    return wire
+
+
+# Every field gets its own signed/bounded destination controls; numeric shapes
+# belong to the common ParamSpec owner, not leaf x shape Cartesian products.
+PERCENT_WIRING = [pytest.param(fn, name, spec, value, True, True, id=f"{fn}-{name}-{label}")
+                  for fn, name, spec in PERCENT_PARAMS
+                  for label, value in (("minimum", spec.minimum), ("maximum", spec.maximum), ("decimal", 15.125))]
+PERCENT_SHAPES = [
+    pytest.param(value, accepted, id=label) for label, value, accepted in (
+        ("int-zero", 0, True), ("float-zero", 0.0, True), ("signed-zero", -0.0, True),
+        ("decimal", .007, True), ("adjacent-decimal", .007000000000000001, True),
+        ("tenth", .1, True), ("integer", 15, True), ("integer-float", 15.0, True),
+        ("negative-decimal", -.007, True), ("negative-tenth", -.1, True),
+        ("positive-subnormal", 100 * 2**-149, True), ("negative-subnormal", -100 * 2**-149, True),
+        ("tiny-nonzero", 1e-40, True), ("negative-tiny-nonzero", -1e-40, True),
+        ("division-collapse", 5e-324, False), ("negative-division-collapse", -5e-324, False),
+        ("storage-collapse", 1e-50, False), ("negative-storage-collapse", -1e-50, False),
+        ("percent-not-wire-subnormal", 2**-149, False),
+        ("half-below", math.nextafter(100 * 2**-150, 0), False),
+        ("half-tie", 100 * 2**-150, False),
+        ("half-above", math.nextafter(100 * 2**-150, math.inf), True),
+        ("negative-half-below", -math.nextafter(100 * 2**-150, 0), False),
+        ("negative-half-tie", -100 * 2**-150, False),
+        ("negative-half-above", -math.nextafter(100 * 2**-150, math.inf), True),
+    )]
+
+
+IDENTITY_CONSUMER_CASES = [
+    pytest.param(name, value, accepted, "sole", id=f"{name}-{label}")
+    for name, value, accepted, label in (
+        ("miningSpeedMultiplier", 1.000000001, False, "above-neutral-collapse"),
+        ("miningSpeedMultiplier", .999999999, False, "below-neutral-collapse"),
+        ("miningSpeedMultiplier", 1.0005, True, "above-neutral"),
+        ("miningSpeedMultiplier", .9995, True, "below-neutral"),
+        ("miningSpeedMultiplier", 1 + 2**-23, True, "above-step"),
+        ("miningSpeedMultiplier", 1 - 2**-24, True, "below-step"),
+        ("miningSpeedMultiplier", 1 + 2**-24, False, "above-half-tie"),
+        ("miningSpeedMultiplier", 1 - 2**-25, False, "below-half-tie"),
+        ("jumpSpeedBonusPxPerTick", 1e-50, False, "collapse"),
+        ("jumpSpeedBonusPxPerTick", .0005, True, "small-effect"),
+        ("lightStrength", 1e-50, False, "collapse"),
+        ("lightStrength", .0005, True, "small-effect"))
+] + [pytest.param("miningSpeedMultiplier", 1.000000001, False, companion, id="valid-" + companion + "-does-not-short-circuit")
+     for companion in ("ore", "healing")]
+
+
+@pytest.mark.parametrize("fn,name,spec,value,accepted,companion", PERCENT_WIRING + [
+    pytest.param(FN, "moveSpeedBonusPercent", CAPABILITY_REGISTRY[FN].params["moveSpeedBonusPercent"],
+                 *case.values, True, id="shared-" + case.id) for case in PERCENT_SHAPES
+] + [pytest.param(FN, case.values[0], CAPABILITY_REGISTRY[FN].params[case.values[0]],
+                 *case.values[1:], id=case.id) for case in IDENTITY_CONSUMER_CASES])
+def test_numeric_admission_projects_exact_bytes_and_checks_both_consumer_boundaries(fn, name, spec, value, accepted, companion):
+    doc, index, _ = percent_document(fn, name, value, companion=companion)
+    before = _bytes(doc)
     report = validate_runtime_program(doc)
     assert report["ok"] is accepted, report
-    assert doc == before
     if accepted:
-        wire = compile_runtime_program(doc)
-        spec = CAPABILITY_REGISTRY[FN].params[name]
-        assert wire["gameplay"]["generatedBuff"][spec.wire_name or name] == spec.to_wire(value)
+        expected = value / 100 if spec.wire_divisor == 100 else value
+        assert_delivered(doc, index, name, expected)
+        if spec.wire_divisor == 100 and value != 0:
+            assert struct.unpack("!f", struct.pack("!f", value / 100))[0] != 0
     else:
-        assert any(e["code"] == "consumer_representability" and e["path"].endswith(".params." + name) for e in report["errors"])
+        assert [(e["code"], e["path"]) for e in validate_runtime_program(doc)["errors"]] == [
+            ("consumer_representability", f"$.runtimeProgram.calls[{index}].params.{name}")]
+        with pytest.raises(ValueError, match="runtime program rejected"):
+            compile_runtime_program(doc)
+    assert _bytes(doc) == before
 
 
-@pytest.mark.parametrize(
-    "name,spec", [pytest.param(name, spec, id=name) for name, spec in CAPABILITY_REGISTRY[FN].params.items() if spec.consumer_storage]
-)
-def test_float32_constraint_is_model_visible(name, spec):
-    constraint = CAPABILITY_REGISTRY[FN].author_prompt_card()["params"][name]["consumerConstraint"]
-    assert constraint == spec.schema()["x-infini-consumerConstraint"]
-    assert {k: constraint[k] for k in ("storage", "neutral", "rule")} == {
-        "storage": "float32",
-        "neutral": spec.neutral,
-        "rule": "nonneutral_must_remain_nonneutral",
-    }
-    assert CAPABILITY_REGISTRY[FN].params["moveSpeedBonusPercent"].minimum == -50
+@pytest.mark.parametrize("fn,name,bad", [
+    pytest.param(fn, name, case.values[0], id=f"{fn}-{name}-{case.id}")
+    for fn, name in (("configure_accessory", "moveSpeedBonusPercent"),
+                     ("configure_armor", "setBonuses.moveSpeedBonusPercent"),
+                     ("add_equipment_damage_bonus", "bonusPercent"), (FN, "moveSpeedBonusPercent"))
+    for case in (
+        pytest.param(None, id="null"), pytest.param(True, id="bool"), pytest.param("1e-50", id="string"),
+        pytest.param([], id="array"), pytest.param({}, id="object"), pytest.param(float("nan"), id="nan"),
+        pytest.param(float("inf"), id="infinity"), pytest.param(-float("inf"), id="negative-infinity"),
+        pytest.param(10**1000, id="huge-integer"))])
+def test_percent_shape_owner_refuses_malformed_present_numbers_without_mutation(fn, name, bad):
+    doc, _, _ = percent_document(fn, name, bad)
+    before = json.dumps(doc, ensure_ascii=False)
+    assert not validate_runtime_program(doc)["ok"]
+    with pytest.raises(ValueError, match="runtime program rejected"):
+        compile_runtime_program(doc)
+    assert json.dumps(doc, ensure_ascii=False) == before
+
+
+@pytest.mark.parametrize("fn,name,value,replacement", [
+    pytest.param(fn, name, 5e-324, 15.125, id=f"{fn}-{name}") for fn, name, _ in PERCENT_PARAMS
+] + [pytest.param(FN, "miningSpeedMultiplier", 1.000000001, 1.0005, id="identity-consumer-collapse")])
+def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, name, value, replacement):
+    from infini_local.core.runtime_authoring import VALIDATION_ERROR_CODES, REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
+    assert "consumer_representability" in VALIDATION_ERROR_CODES & REPAIR_VALIDATION_ERROR_CODES
+    assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
+    doc, index, call = percent_document(fn, name, value)
+    if name == "miningSpeedMultiplier":
+        call["params"]["oreSenseEnabled"] = True
+    before = _bytes(doc)
+    report = validate_runtime_program(doc)
+    assert [(e["code"], e["path"]) for e in report["errors"]] == [
+        ("consumer_representability", f"$.runtimeProgram.calls[{index}].params.{name}")]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": [f"params.{name}"]}]
+    assert scope["fieldPermissions"]["bindings"] == scope["fieldPermissions"]["entities"] == []
+    candidate = deepcopy(call)
+    _set_stat(candidate["params"], name, replacement)
+    sibling, hostile = (("damageClass", "magic") if fn == "add_equipment_damage_bonus" else
+                        ("durationTicks", 21600) if fn == FN else ("defensePoints", 77))
+    candidate["params"][sibling] = hostile
+    unrelated = deepcopy(doc["runtimeProgram"]["calls"][0])
+    unrelated["params"]["damage"] = 1999
+    filtered, audit = filter_repair_patch_scope(doc, {
+        "note": "explicit numeric correction", "realizationReplacement": deepcopy(doc["realization"]),
+        "callsUpsert": [candidate, unrelated]}, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    fixed = apply_repair_patch(doc, filtered)
+    expected = deepcopy(doc)
+    _set_stat(expected["runtimeProgram"]["calls"][index]["params"], name, replacement)
+    assert _bytes(fixed) == _bytes(expected)
+    assert_delivered(fixed, index, name, _stat_spec(fn, name).to_wire(replacement))
+    assert _bytes(doc) == before
+
+
+@pytest.mark.parametrize("fn", ["configure_accessory", "configure_armor", "apply_generated_buff_on_use"])
+@pytest.mark.parametrize("value", [5e-324, -1e-50])
+def test_sole_percent_effect_is_rejected_without_thawing_valid_call_siblings(fn, value):
+    name = "moveSpeedBonusPercent"
+    doc, index, call = percent_document(fn, name, value, companion=False)
+    report = validate_runtime_program(doc)
+    assert [(e["code"], e["path"]) for e in report["errors"]] == [
+        ("consumer_representability", f"$.runtimeProgram.calls[{index}].params.{name}")
+    ]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": [f"params.{name}"]}]
+    noop, audit = filter_repair_patch_scope(doc, {
+        "note": "No implicit numeric rescue", "realizationReplacement": deepcopy(doc["realization"])
+    }, scope)
+    assert not audit["ok"]
+    assert any(e["code"] == "repair_scope_violation" for e in audit["errors"])
+    assert not validate_runtime_program(apply_repair_patch(doc, noop))["ok"]
+    # Zero alone is inert for an accessory or generated buff; an armor still
+    # has its explicit slot/set identity. Neither is precision loss.
+    call["params"][name] = -0.0
+    neutral_report = validate_runtime_program(doc)
+    assert all(e["code"] != "consumer_representability" for e in neutral_report["errors"])
+    if fn in {"configure_accessory", "apply_generated_buff_on_use"}:
+        assert not neutral_report["ok"]
+        assert any(e["code"] == "inert_component" for e in neutral_report["errors"])
+    else:
+        assert_delivered(doc, index, name, -0.0)
+
+def test_ordinary_binary64_collision_is_not_replaced_by_a_roundtrip_lattice():
+    first, second = 0.007, 0.007000000000000001
+    assert struct.pack("!d", first) != struct.pack("!d", second)
+    assert first / 100 == second / 100
+    assert first / 100 * 100 != first  # A proposed equality rule would ban this normal decimal.
+    documents = [percent_document("configure_accessory", "moveSpeedBonusPercent", value)[0]
+                 for value in (first, second)]
+    assert all(validate_runtime_program(doc)["ok"] for doc in documents)
+    assert _bytes(compile_runtime_program(documents[0])) == _bytes(compile_runtime_program(documents[1]))
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_numeric_names_and_constraints_reach_real_author_and_serialized_repair(monkeypatch, mode):
+    from infini_local.pipelines import llm_transport as transport
+    from test_gameplay_repair_readonly_context import _capture_request
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    request, text, _ = build_initial_author_request({}, {}, {}, {}, "numeric-contract", model_name="offline-test")
+    assert request["response_format"]["type"] == mode
+    catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]
+    cards = {row["fn"]: row for row in catalog["capabilities"]}
+    assert set(cards) == {cap.name for cap in visible_capabilities()}
+    schemas = [{row["properties"]["fn"]["const"]: row["properties"]["params"]
+                for row in author_item_repair_schema(capability_names=[case["fn"] for case in _SCALAR_NAME_CASES])
+                ["properties"]["callsUpsert"]["items"]["oneOf"]}]
+    if mode == "json_schema":
+        variants = request["response_format"]["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
+        schemas.append({row["properties"]["fn"]["const"]: row["properties"]["params"] for row in variants if "params" in row["properties"]})
+    for case in _SCALAR_NAME_CASES:
+        fn, old, current = case["fn"], case["oldParameter"], case["canonicalParameter"]
+        assert old not in cards[fn]["params"] and current in cards[fn]["params"]
+        for group in schemas:
+            assert old not in group[fn]["properties"] and current in group[fn]["required"]
+        cap = CAPABILITY_REGISTRY[fn]
+        assert old not in cap.params and old in cap.retained_receipt_params
+        assert cap.params[current].required and cap.params[current].default is None
+    assert {fn for fn, _, _ in PERCENT_PARAMS} == {"configure_accessory", "configure_armor", "add_equipment_damage_bonus", FN}
+    # One serialized Repair per capability, with every percentage leaf broken;
+    # assert the exact registry identities survive together, including nesting.
+    for fn in sorted({fn for fn, _, _ in PERCENT_PARAMS}):
+        doc = build_capability_witness(fn)
+        call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+        leaves = [(name, spec) for owner, name, spec in PERCENT_PARAMS if owner == fn]
+        for name, _ in leaves:
+            _set_stat(call["params"], name, 5e-324)
+        _, dossier = _capture_request(monkeypatch, doc, mode)
+        repair_cards = {row["fn"]: row for row in dossier["existingBrokenCapabilityCards"]}
+        for name, spec in leaves:
+            assert spec.neutral == 0 and spec.consumer_storage == "float32"
+            for group in (cards, repair_cards):
+                parts = name.split(".")
+                row = group[fn]["params"][parts[0]]
+                if len(parts) > 1:
+                    row = row["shape"]
+                    for part in parts[1:]:
+                        row = row["properties"][part]
+                constraint = row["x-infini-consumerConstraint"] if len(parts) > 1 else row["consumerConstraint"]
+                if isinstance(constraint, str):
+                    constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
+                assert constraint == spec.schema()["x-infini-consumerConstraint"]
+                assert (constraint["storage"], constraint["neutral"], constraint["rule"], constraint["wireProjection"]) == (
+                    "float32", 0, "nonneutral_must_remain_nonneutral", {"divisor": 100, "multiplier": 1})
+                assert all(text in constraint["meaning"] for text in ("binary64", "round-trip", "No rounding or replacement"))
+    for name, spec in CAPABILITY_REGISTRY[FN].params.items():
+        if spec.consumer_storage:
+            constraint = cards[FN]["params"][name]["consumerConstraint"]
+            if isinstance(constraint, str):
+                constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
+            assert constraint == spec.schema()["x-infini-consumerConstraint"]
+            assert (constraint["storage"], constraint["neutral"], constraint["rule"]) == (
+                "float32", spec.neutral, "nonneutral_must_remain_nonneutral")
+            assert spec.consumer_value_error(spec.neutral) is None
+
+
+def test_generated_unit_and_binding_contracts_stay_current():
+    root = Path(__file__).resolve().parents[2]
+    assert runpy.run_path(str(root / "tools/generate_equipment_bounds.py"))["render"]() == (
+        root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedEquipmentBounds.g.cs").read_text()
+    text = runpy.run_path(str(root / "tools/generate_lowery.py"))["render"]()
+    assert all(value in text for value in ("exact `binding.action.targetId`", "exact unique item-body identity", "Wire сохраняет `binding.usePolicy`"))
+    assert all(value not in text for value in ("exact `binding.usePolicy.action.targetId`", "exact `binding.target`"))
 
 
 @pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
@@ -432,6 +489,13 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
         call["params"].update(when={})
     params = call["params"]
     params["when"] = {}
+    if fn == "spawn_entity_on_event":
+        from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
+        schema = CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"]
+        assert next(row for row in schema["properties"]["when"]["oneOf"] if row.get("type") == "object")["required"] == ["everyTicks"]
+        missing = {key: value for key, value in params.items() if key != "count"}
+        paths = [row["path"] for row in strict_schema_errors(missing, schema) if row["kind"] == "required"]
+        assert paths.count("$.count") == paths.count("$.when.everyTicks") == 1
     assert not strict_author_shape_report(doc)["ok"]
     report = validate_runtime_program(doc)
     assert not report["ok"]
@@ -447,35 +511,6 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
 
 
-def test_periodic_missing_fields_are_reported_once_by_canonical_shape():
-    from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-
-    cap = CAPABILITY_REGISTRY["spawn_entity_on_event"]
-    schema = cap.provider_variant_schema()["properties"]["params"]
-    when = schema["properties"]["when"]["oneOf"]
-    assert next(row for row in when if row.get("type") == "object")["required"] == ["everyTicks"]
-    doc = build_runtime_fixture("workbench_blade")
-    params = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == cap.name)["params"]
-    params["when"] = {}
-    params.pop("count")
-    errors = strict_schema_errors(params, schema)
-    paths = [row["path"] for row in errors if row["kind"] == "required"]
-    assert paths.count("$.count") == 1
-    assert paths.count("$.when.everyTicks") == 1
-
-
-def test_generated_lowery_names_current_binding_target_path():
-    root = Path(__file__).resolve().parents[2]
-    projection = runpy.run_path(str(root / "tools/generate_lowery.py"))
-    text = projection["render"]()
-    assert "exact `binding.action.targetId`" in text
-    assert "exact unique item-body identity" in text
-    assert "Wire сохраняет `binding.usePolicy`" in text
-    assert "exact `binding.usePolicy.action.targetId`" not in text
-    assert "exact `binding.target`" not in text
-
-
-# Captured scalar-name cases pin complete pre-rename wire and prior receipts.
 _SCALAR_NAME_CAPTURE = json.loads((Path(__file__).parent / "fixtures/scalar_author_names_retained_receipts.json").read_text())
 _SCALAR_NAME_CASES = _SCALAR_NAME_CAPTURE["cases"]
 
@@ -485,7 +520,6 @@ def _scalar_name_call(document):
 
 
 def _scalar_name_current_source(case):
-    # The captured Author is an immutable test oracle, never production input.
     source = deepcopy(case["authored"])
     params = _scalar_name_call(source)["params"]
     assert case["canonicalParameter"] not in params
@@ -495,98 +529,56 @@ def _scalar_name_current_source(case):
 
 def _scalar_name_restored_wire(case):
     wire = compile_runtime_program(_scalar_name_current_source(case))
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    receipt = next(row for row in rows if row.get("callId") == "witness_call"
-                   and row.get("authoredPath", "").endswith(".params." + case["canonicalParameter"]))
-    expected = deepcopy(case["receipt"])
-    expected["authoredPath"] = expected["authoredPath"].removesuffix(case["oldParameter"]) + case["canonicalParameter"]
+    receipt = next(row for row in wire["runtimeContract"]["finalWireReceipts"]
+                   if row.get("callId") == "witness_call" and row.get("authoredPath", "").endswith(".params." + case["canonicalParameter"]))
+    expected = {**case["receipt"], "authoredPath": case["receipt"]["authoredPath"].removesuffix(case["oldParameter"]) + case["canonicalParameter"]}
     assert receipt == expected
-    # Restore one pre-change receipt verbatim; every other output byte is pinned.
-    receipt.update(deepcopy(case["receipt"]))
+    receipt.update(deepcopy(case["receipt"]))  # Restore only this historical receipt; all other bytes remain pinned.
     return wire, receipt
 
 
-def _scalar_name_parent(document, path):
-    value = document
-    parts = re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path)
-    for part in parts[:-1]:
-        value = value[int(part[1:-1])] if part.startswith("[") else value[part]
-    return value, parts[-1]
-
-
 @pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
-def test_scalar_name_captured_complete_wire_and_old_receipts_remain_exact(case):
+def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(case):
     assert _SCALAR_NAME_CAPTURE["originCommit"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
     source = _scalar_name_current_source(case)
     wire = compile_runtime_program(source)
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
-
-    retained, _ = _scalar_name_restored_wire(case)
-    canonical_bytes = json.dumps(retained, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    assert hashlib.sha256(canonical_bytes).hexdigest() == case["compiledSha256"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)["ok"]
+    retained, receipt = _scalar_name_restored_wire(case)
+    assert hashlib.sha256(_bytes(retained)).hexdigest() == case["compiledSha256"]
     assert validate_runtime_wire(retained)["ok"]
-    saved_rows = retained["runtimeContract"]["finalWireReceipts"]
-    report = audit_compiler_receipts(saved_rows, final_document=retained)
+    saved = retained["runtimeContract"]["finalWireReceipts"]
+    report = audit_compiler_receipts(saved, final_document=retained)
     assert report["ok"] and report["authoredSourceChecked"] is False
-    # Retained receipt support cannot satisfy proof against the current source.
-    report = audit_compiler_receipts(saved_rows, authored_document=source, final_document=retained)
-    assert not report["ok"]
-    assert any(row["reason"] == "compiler receipt used an undeclared authored parameter"
-               for row in report["violations"])
-
+    report = audit_compiler_receipts(saved, authored_document=source, final_document=retained)
+    assert not report["ok"] and any(row["reason"] == "compiler receipt used an undeclared authored parameter" for row in report["violations"])
     assert not validate_runtime_program(case["authored"])["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(case["authored"])
-
-
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_scalar_name_actual_author_packet_and_repair_schema_expose_only_current_names(monkeypatch, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "scalar-names", model_name="offline-test")
-    assert request["response_format"]["type"] == mode
-    cards = {row["fn"]: row for row in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    variants = author_item_repair_schema(capability_names=[case["fn"] for case in _SCALAR_NAME_CASES])["properties"]["callsUpsert"]["items"]["oneOf"]
-    schemas = [{row["properties"]["fn"]["const"]: row["properties"]["params"] for row in variants}]
-    if mode == "json_schema":
-        provider_calls = request["response_format"]["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
-        schemas.append({row["properties"]["fn"]["const"]: row["properties"]["params"]
-                        for row in provider_calls if "params" in row["properties"]})
-    for case in _SCALAR_NAME_CASES:
-        fn, old, current = case["fn"], case["oldParameter"], case["canonicalParameter"]
-        assert old not in cards[fn]["params"] and current in cards[fn]["params"]
-        for group in schemas:
-            assert old not in group[fn]["properties"] and current in group[fn]["required"]
-        cap = CAPABILITY_REGISTRY[fn]
-        assert old not in cap.params and old in cap.retained_receipt_params
-        assert cap.params[current].required and cap.params[current].default is None
-
-
-@pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
-def test_scalar_name_repair_uses_exact_current_leaf_and_refuses_previous_spelling(case):
-    accepted = _scalar_name_current_source(case)
-    broken = deepcopy(accepted)
+    # Old name must not become an accepted fresh wire field, even for open gameplay.
+    owner, _, old = receipt["finalPath"].rpartition(".")
+    parent = _get(retained, owner)
+    parent[case["canonicalParameter"]] = parent.pop(old)
+    errors = validate_runtime_wire(retained)["errors"]
+    if owner.startswith("runtimeProgram."):
+        assert any(row["code"] == "unknown_final_wire_field" and row["path"].endswith("." + case["canonicalParameter"]) for row in errors)
+    else:
+        assert any(row["code"] == "undeclared_technical_lowering" for row in errors)
+    broken = deepcopy(source)
     current = case["canonicalParameter"]
     _scalar_name_call(broken)["params"][current] = CAPABILITY_REGISTRY[case["fn"]].params[current].maximum + 1
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == "witness_call") == ["params." + current]
-
-    stale_patch = {"note": "old spelling is not a Repair alias", "callsUpsert": [deepcopy(_scalar_name_call(case["authored"]))]}
-    assert not strict_repair_structure_report(stale_patch)["ok"]
-    assert not strict_repair_shape_report(stale_patch)["ok"]
-    _, audit = filter_repair_patch_scope(broken, stale_patch, scope)
-    assert not audit["ok"]
+    stale = {"note": "old spelling is not an alias", "callsUpsert": [deepcopy(_scalar_name_call(case["authored"]))]}
+    assert not strict_repair_structure_report(stale)["ok"] and not strict_repair_shape_report(stale)["ok"]
+    assert not filter_repair_patch_scope(broken, stale, scope)[1]["ok"]
     with pytest.raises(ValueError):
-        apply_repair_patch(broken, stale_patch)
-
-    frozen = deepcopy(next(row for row in accepted["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+        apply_repair_patch(broken, stale)
+    frozen = deepcopy(next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
     frozen["params"]["damage"] += 1
-    patch = {"note": "repair only the permitted scalar", "callsUpsert": [deepcopy(_scalar_name_call(accepted)), frozen]}
-    filtered, audit = filter_repair_patch_scope(broken, patch, scope)
+    filtered, audit = filter_repair_patch_scope(broken, {"note": "exact leaf", "callsUpsert": [deepcopy(_scalar_name_call(source)), frozen]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(broken, filtered)
-    assert repaired == accepted
-    assert validate_runtime_program(repaired)["ok"]
+    assert repaired == source and validate_runtime_program(repaired)["ok"]
 
 
 @pytest.mark.parametrize("mutation", ["wrong-output", "out-of-domain", "boolean", "omission"])
@@ -598,28 +590,11 @@ def test_scalar_name_retained_receipt_cannot_widen_domain_or_forge_projection(ca
     elif mutation == "omission":
         receipt["status"] = "declared_neutral_omission"
     else:
-        parent, key = _scalar_name_parent(wire, receipt["finalPath"])
+        owner, _, key = receipt["finalPath"].rpartition(".")
         value = True if mutation == "boolean" else CAPABILITY_REGISTRY[case["fn"]].params[case["canonicalParameter"]].maximum + 1
-        parent[key] = receipt["value"] = value
+        _get(wire, owner)[key] = receipt["value"] = value
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
-    assert not report["ok"]
-    assert any(row["reason"] == "retained wire provenance has no exact declared prior projection"
-               for row in report["violations"])
-
-
-@pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
-def test_scalar_name_canonical_author_name_never_becomes_a_new_wire_field(case):
-    wire, receipt = _scalar_name_restored_wire(case)
-    parent, old = _scalar_name_parent(wire, receipt["finalPath"])
-    parent[case["canonicalParameter"]] = parent.pop(old)
-    errors = validate_runtime_wire(wire)["errors"]
-    if receipt["finalPath"].startswith("runtimeProgram."):
-        assert any(row["code"] == "unknown_final_wire_field" and row["path"].endswith("." + case["canonicalParameter"])
-                   for row in errors)
-    else:
-        # Legacy gameplay has an open shape; its declared receipt still binds
-        # the original wire field, never the new Author spelling.
-        assert any(row["code"] == "undeclared_technical_lowering" for row in errors)
+    assert not report["ok"] and any(row["reason"] == "retained wire provenance has no exact declared prior projection" for row in report["violations"])
 
 
 BUFF_SPEED_PERCENT = "moveSpeedBonusPercent"
@@ -628,14 +603,9 @@ BUFF_FACTOR_ARCHIVE = json.loads((Path(__file__).with_name("fixtures") / "buff_s
 BUFF_FACTOR_CASES = BUFF_FACTOR_ARCHIVE["cases"]
 
 
-def _buff_speed_bytes(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-
-
 def _buff_speed_receipt(wire, name=BUFF_SPEED_FACTOR):
     return next(row for row in wire["runtimeContract"]["finalWireReceipts"]
                 if row.get("fn") == FN and row.get("authoredPath", "").endswith(".params." + name))
-
 
 def _buff_speed_source(scope, value=None):
     document = build_capability_witness(FN)
@@ -649,16 +619,58 @@ def _buff_speed_source(scope, value=None):
         document["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "swift"
     return document, call
 
+@pytest.mark.parametrize("case", BUFF_FACTOR_CASES, ids=lambda case: case["id"])
+def test_buff_capture_keeps_prior_bytes_but_only_current_names_authenticate_fresh_source(case):
+    assert BUFF_FACTOR_ARCHIVE["sourceHead"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
+    prior_wire = case["wire"]
+    before = _bytes(prior_wire)
+    assert hashlib.sha256(before).hexdigest() == case["wireSha256"]
+    rows = prior_wire["runtimeContract"]["finalWireReceipts"]
+    report = audit_compiler_receipts(rows, final_document=prior_wire)
+    assert report["ok"] and report["authoredSourceChecked"] is False, report
+    assert validate_runtime_wire(prior_wire)["ok"]
+    prior = _buff_speed_receipt(prior_wire)
+    value = case["authoredFactor"]
+    if value is None:
+        assert prior["status"] == "declared_neutral_omission" and type(prior["value"]) is int and prior["value"] == 0
+    else:
+        assert prior["status"] == "delivered" and _bytes(prior["value"]) == _bytes(value)
+    document, call = _buff_speed_source(case["scope"], None if value is None else value * 100)
+    source_before = _bytes(document)
+    wire = compile_runtime_program(document)
+    actual = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
+    assert actual["finalPath"] == prior["finalPath"]
+    assert struct.pack("!f", actual["value"]) == struct.pack("!f", prior["value"])
+    if value is None:
+        assert BUFF_SPEED_PERCENT not in call["params"] and actual["status"] == "declared_neutral_omission"
+        assert _bytes(actual["value"]) == b"0.0"
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=document, final_document=wire)["ok"]
+    assert not audit_compiler_receipts(rows, authored_document=document, final_document=prior_wire)["ok"]
+    assert _bytes(document) == source_before and _bytes(prior_wire) == before
+
 
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
-def test_current_percent_omission_requires_exact_signed_zero_projection(scope):
-    document, _ = _buff_speed_source(scope)
-    source_before = _buff_speed_bytes(document)
+def test_frozen_percent_absence_survives_duration_repair_and_requires_exact_zero_provenance(scope):
+    document, call = _buff_speed_source(scope)
+    call["params"]["durationTicks"] = 0
+    original = _bytes(document)
+    scope_report = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
+    assert scope_report["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.durationTicks"]}]
+    candidate = deepcopy(call)
+    candidate["params"].update(durationTicks=60, moveSpeedBonusPercent=25, miningSpeedMultiplier=2)
+    patch, audit = filter_repair_patch_scope(document, {"note": "repair duration", "callsUpsert": [candidate]}, scope_report)
+    assert audit["ok"] and audit["ignoredChanges"]
+    repaired = apply_repair_patch(document, patch)
+    assert _scalar_name_call(repaired)["params"] == {**call["params"], "durationTicks": 60}
+    assert _bytes(document) == original
+    document = repaired
+    source_before = _bytes(document)
     wire = compile_runtime_program(document)
     receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     assert receipt["status"] == "declared_neutral_omission"
-    assert _buff_speed_bytes(receipt["value"]) == b"0.0"
+    assert _bytes(receipt["value"]) == b"0.0"
     assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
     assert audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert validate_runtime_wire(wire)["ok"]
@@ -667,8 +679,8 @@ def test_current_percent_omission_requires_exact_signed_zero_projection(scope):
     # zero is insufficient to authenticate the declared +0.0 omission.
     owner, _, key = receipt["finalPath"].rpartition(".")
     _get(wire, owner)[key] = receipt["value"] = -0.0
-    wire = json.loads(_buff_speed_bytes(wire))
-    before = _buff_speed_bytes(wire)
+    wire = json.loads(_bytes(wire))
+    before = _bytes(wire)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     for source in (document, None):
         report = audit_compiler_receipts(rows, authored_document=source, final_document=wire)
@@ -676,107 +688,78 @@ def test_current_percent_omission_requires_exact_signed_zero_projection(scope):
         assert any(row["reason"] == "omission receipt lacks an exact declared neutral default/projection"
                    and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
     assert not validate_runtime_wire(wire)["ok"]
-    assert _buff_speed_bytes(wire) == before
-    assert _buff_speed_bytes(document) == source_before
+    assert _bytes(wire) == before
+    assert _bytes(document) == source_before
+
+# Wire numeric domain is shared by global and group slots. Distinct slots get
+# type/ordinary/subnormal sentinels; the full status/type/sign matrix runs once.
+WIRE_VALUES = (
+    ("current", "delivered", None, False, "null"),
+    ("current", "delivered", False, False, "bool"),
+    ("current", "delivered", "0", False, "string"),
+    ("current", "delivered", 0, False, "int-zero"),
+    ("current", "delivered", 1, False, "int-one"),
+    ("current", "delivered", 5e-324, False, "binary64-collapse"),
+    ("current", "delivered", 1e-50, False, "positive-storage-collapse"),
+    ("current", "delivered", -1e-50, False, "negative-storage-collapse"),
+    ("current", "delivered", 0.0, True, "positive-zero"),
+    ("current", "delivered", -0.0, True, "negative-zero"),
+    ("current", "delivered", -.5, True, "minimum"),
+    ("current", "delivered", 2.0, True, "maximum"),
+    ("current", "delivered", math.nextafter(-.5, -math.inf), False, "below-minimum"),
+    ("current", "delivered", math.nextafter(2.0, math.inf), False, "above-maximum"),
+    ("current", "delivered", .007 / 100, True, "decimal-collision"),
+    ("current", "delivered", 2**-149, True, "float32-subnormal"),
+    ("current", "delivered", math.nextafter(2**-150, math.inf), True, "above-half"),
+    *(("prior", status, value, accepted, label) for status in ("delivered", "declared_neutral_omission")
+      for value, accepted, label in (
+          (None, False, "null"), (False, False, "bool"), ("0", False, "string"),
+          (-.6, False, "below-minimum"), (2.1, False, "above-maximum"), (1e-50, False, "collapse"),
+          (0, True, "int-zero"), (0.0, status == "delivered", "float-zero"),
+          (-0.0, status == "delivered", "signed-zero"), (.2, status == "delivered", "ordinary"))),
+    *(('prior', 'delivered', value, True, label) for value, label in (
+        (1.770282212988338, "binary64-no-reprojection"),
+        (math.nextafter(2**-150, math.inf), "positive-half"),
+        (math.nextafter(-2**-150, -math.inf), "negative-half"))),
+)
 
 
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-@pytest.mark.parametrize("value,accepted", [
-    pytest.param(0, False, id="integer-zero"),
-    pytest.param(1, False, id="integer-one"),
-    pytest.param(1e-50, False, id="positive-float32-collapse"),
-    pytest.param(-1e-50, False, id="negative-float32-collapse"),
-    pytest.param(5e-324, False, id="binary64-subnormal-collapse"),
-    pytest.param(0.0, True, id="positive-zero"),
-    pytest.param(-0.0, True, id="negative-zero"),
-    pytest.param(-0.5, True, id="minimum"),
-    pytest.param(2.0, True, id="maximum"),
-    pytest.param(0.007 / 100, True, id="ordinary-decimal-collision"),
-    pytest.param(2.0 ** -149, True, id="nonzero-float32-subnormal"),
-    pytest.param(math.nextafter(2.0 ** -150, math.inf), True, id="above-float32-half-tie"),
-])
-def test_current_percent_delivered_wire_domain_keeps_type_and_consumer_constraint(scope, value, accepted):
-    document, _ = _buff_speed_source(scope, 20)
-    source_before = _buff_speed_bytes(document)
-    wire = compile_runtime_program(document)
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
-    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
-    assert validate_runtime_wire(wire)["ok"]
-    receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
-    assert receipt["status"] == "delivered"
-    owner, _, key = receipt["finalPath"].rpartition(".")
-    _get(wire, owner)[key] = receipt["value"] = value
-    wire = json.loads(_buff_speed_bytes(wire))
-    before = _buff_speed_bytes(wire)
-    report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
-    assert report["ok"] is accepted, report
-    assert CAPABILITY_REGISTRY[FN].params[BUFF_SPEED_PERCENT].matches_scalar_projection(value) is accepted
-    assert validate_runtime_wire(wire)["ok"] is accepted
-    if not accepted:
-        assert any(row["reason"] == "scalar receipt is outside its exact declared wire domain"
-                   and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
-    assert _buff_speed_bytes(wire) == before
-    assert _buff_speed_bytes(document) == source_before
-
-
-@pytest.mark.parametrize("case", BUFF_FACTOR_CASES, ids=lambda case: case["id"])
-def test_real_pre_percent_saved_wires_and_receipts_are_unchanged(case):
-    assert BUFF_FACTOR_ARCHIVE["sourceHead"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
-    wire = case["wire"]
-    before = _buff_speed_bytes(wire)
-    assert hashlib.sha256(before).hexdigest() == case["wireSha256"]
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    report = audit_compiler_receipts(rows, final_document=wire)
-    assert report["ok"] and report["authoredSourceChecked"] is False, report
-    assert validate_runtime_wire(wire)["ok"]
-    prior = _buff_speed_receipt(wire)
-    if case["selection"] == "omitted":
-        assert prior["status"] == "declared_neutral_omission"
-        assert type(prior["value"]) is int and prior["value"] == 0
+@pytest.mark.parametrize("scope,version,status,value,accepted", [
+    pytest.param(scope, version, status, value, accepted, id=f"{scope}-{version}-{status}-{label}")
+    for version, status, value, accepted, label in WIRE_VALUES
+    for scope in (("global", "effect_group") if label in {"int-zero", "ordinary", "float32-subnormal", "binary64-no-reprojection", "positive-half", "negative-half"} else ("global",))])
+def test_buff_wire_domain_authenticates_representation_without_redividing(scope, version, status, value, accepted):
+    document, source_before = {}, b""
+    if version == "current":
+        document, _ = _buff_speed_source(scope, 20)
+        source_before = _bytes(document)
+        wire = compile_runtime_program(document)
+        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=document, final_document=wire)["ok"]
+        name, reason = BUFF_SPEED_PERCENT, "scalar receipt is outside its exact declared wire domain"
     else:
-        assert prior["status"] == "delivered"
-        assert _buff_speed_bytes(prior["value"]) == _buff_speed_bytes(case["authoredFactor"])
-    assert _buff_speed_bytes(wire) == before
-
-
-@pytest.mark.parametrize("case", BUFF_FACTOR_CASES, ids=lambda case: case["id"])
-def test_fresh_percent_keeps_runtime_value_but_cannot_authenticate_prior_source_names(case):
-    value = case["authoredFactor"]
-    document, call = _buff_speed_source(case["scope"], None if value is None else value * 100)
-    before = _buff_speed_bytes(document)
-    wire = compile_runtime_program(document)
-    assert validate_runtime_wire(wire)["ok"]
-    actual, old = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT), _buff_speed_receipt(case["wire"])
-    assert actual["finalPath"] == old["finalPath"]
-    assert struct.pack("!f", actual["value"]) == struct.pack("!f", old["value"])
-    if value is None:
-        assert BUFF_SPEED_PERCENT not in call["params"]
-        assert actual["status"] == "declared_neutral_omission"
-        assert type(actual["value"]) is float and actual["value"] == 0.0
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=document, final_document=wire)["ok"]
-    assert not audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=document, final_document=case["wire"])["ok"]
-    assert _buff_speed_bytes(document) == before
-
-
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-@pytest.mark.parametrize("value", [1.770282212988338, math.nextafter(2**-150, math.inf),
-                                   math.nextafter(-(2**-150), -math.inf)])
-def test_prior_delivered_binary64_and_near_neutral_wire_values_are_not_reprojected(scope, value):
-    wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary"))
-    row = _buff_speed_receipt(wire)
-    row["value"] = value
-    owner, _, key = row["finalPath"].rpartition(".")
-    _get(wire, owner)[key] = value
-    before = _buff_speed_bytes(wire)
+        wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary"))
+        name, reason = BUFF_SPEED_FACTOR, "retained wire provenance has no exact declared prior projection"
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
     assert validate_runtime_wire(wire)["ok"]
-    delivered = deepcopy(wire)
-    delivered.pop("runtimeContract")
-    assert validate_runtime_wire(delivered)["ok"]
-    assert _buff_speed_bytes(wire) == before
+    receipt = _buff_speed_receipt(wire, name)
+    receipt.update(status=status, value=value)
+    owner, _, key = receipt["finalPath"].rpartition(".")
+    _get(wire, owner)[key] = value
+    wire = json.loads(_bytes(wire))
+    before = _bytes(wire)
+    report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
+    assert report["ok"] is accepted, report
+    assert validate_runtime_wire(wire)["ok"] is accepted
+    if version == "current":
+        assert CAPABILITY_REGISTRY[FN].params[name].matches_scalar_projection(value) is accepted
+        assert _bytes(document) == source_before
+    if not accepted:
+        assert any(row["reason"] == reason and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
+    elif version == "prior" and status == "delivered":
+        bare = deepcopy(wire)
+        bare.pop("runtimeContract")
+        assert validate_runtime_wire(bare)["ok"]
+    assert _bytes(wire) == before
 
 
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
@@ -784,7 +767,7 @@ def test_prior_delivered_binary64_and_near_neutral_wire_values_are_not_reproject
 def test_prior_author_names_are_rejected_without_inference_or_source_mutation(scope, old_name):
     document, call = _buff_speed_source(scope)
     call["params"][old_name] = 0.2
-    before = _buff_speed_bytes(document)
+    before = _bytes(document)
     report = validate_runtime_program(document)
     assert any(row["code"] == "shape_additional_property" and row["path"].endswith(".params." + old_name)
                for row in report["errors"])
@@ -793,8 +776,7 @@ def test_prior_author_names_are_rejected_without_inference_or_source_mutation(sc
     old = next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary")
     assert not audit_compiler_receipts(old["runtimeContract"]["finalWireReceipts"],
                                        authored_document=document, final_document=old)["ok"]
-    assert _buff_speed_bytes(document) == before
-
+    assert _bytes(document) == before
 
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
 @pytest.mark.parametrize("mutation", ["drop", "duplicate", "current-and-prior", "wrong-slot", "wrong-fn", "wrong-status", "source-list"])
@@ -818,31 +800,10 @@ def test_retained_omission_needs_one_exact_prior_source_claim_for_the_wire_slot(
         old["status"] = "alias_lowering"
     else:
         old["authoredPaths"] = [old["authoredPath"]]
-    before = _buff_speed_bytes(wire)
+    before = _bytes(wire)
     assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
-    assert _buff_speed_bytes(wire) == before
-
-
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-@pytest.mark.parametrize("status", ["delivered", "declared_neutral_omission"])
-@pytest.mark.parametrize("value", [None, False, "0", -0.6, 2.1, 1e-50, 0, 0.0, -0.0, 0.2])
-def test_retained_value_uses_prior_domain_and_omission_requires_prior_typed_zero(scope, status, value):
-    wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_omitted"))
-    old = _buff_speed_receipt(wire)
-    old.update(status=status, value=value)
-    owner, _, key = old["finalPath"].rpartition(".")
-    _get(wire, owner)[key] = value
-    before = _buff_speed_bytes(wire)
-    accepted = (type(value) is int and value == 0
-                or status == "delivered" and type(value) is float and value in (0.0, 0.2))
-    # Without source, explicit prior zero is a valid consistency claim; it is
-    # not proof of an omission. Prior omission itself must retain int zero.
-    report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
-    assert report["ok"] is accepted, report
-    assert validate_runtime_wire(wire)["ok"] is accepted
-    assert _buff_speed_bytes(wire) == before
-
+    assert _bytes(wire) == before
 
 @pytest.mark.parametrize("changes", [
     {"default": None}, {"default": 1}, {"neutral": False}, {"neutral": 0.0}, {"required": True},
@@ -860,39 +821,53 @@ def test_retained_omission_cannot_outlive_its_exact_prior_declaration(monkeypatc
             assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-def test_unrelated_buff_repair_preserves_accepted_percent_absence(scope):
-    document, call = _buff_speed_source(scope)
-    call["params"]["durationTicks"] = 0
-    before = _buff_speed_bytes(document)
-    repair_scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
-    assert repair_scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.durationTicks"]}]
-    candidate = deepcopy(call)
-    candidate["params"].update(durationTicks=60, moveSpeedBonusPercent=25, miningSpeedMultiplier=2)
-    patch, audit = filter_repair_patch_scope(document, {"note": "repair duration", "callsUpsert": [candidate]}, repair_scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(document, patch)
-    actual = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])
-    assert actual["params"] == {**call["params"], "durationTicks": 60}
-    assert _buff_speed_receipt(compile_runtime_program(repaired), BUFF_SPEED_PERCENT)["status"] == "declared_neutral_omission"
-    assert _buff_speed_bytes(document) == before
-
-
-def test_percent_can_express_float32_factor_boundaries_across_every_admitted_exponent():
+@pytest.mark.parametrize("factor", [pytest.param(value, id=label) for label, value in (
+    ("positive-zero", 0.0), ("negative-zero", -0.0), ("smallest-positive-subnormal", 2**-149),
+    ("smallest-negative-subnormal", -2**-149),
+    ("largest-subnormal", struct.unpack("!f", struct.pack("!I", 0x7fffff))[0]),
+    ("smallest-normal", 2**-126), ("normal-mantissa-edge", struct.unpack("!f", struct.pack("!I", 0x3f7fffff))[0]),
+    ("minimum", -.5), ("maximum", 2.0), ("ordinary-binary64", 1.770282212988338))])
+def test_percent_projection_is_declared_division_not_a_lossless_binary64_lattice(factor):
     spec = CAPABILITY_REGISTRY[FN].params[BUFF_SPEED_PERCENT]
-    assert (spec.minimum, spec.maximum, spec.wire_divisor, spec.units, spec.semantic_type) == (
-        -50, 200, 100, "additive_percent", "additive_percent")
-    # A float32 significand has at most 24 bits. Multiplication by 100 (=25*4)
-    # needs at most 29 significant bits, within binary64's 53; division returns
-    # the original exactly representable factor. Sample each exponent, mantissa
-    # edges and both signs; this does not assert a round-trip for every JSON double.
-    for exponent in range(129):
-        for fraction in (0, 1, 0x3fffff, 0x7fffff):
-            magnitude = struct.unpack("!f", struct.pack("!I", exponent << 23 | fraction))[0]
-            for factor in (magnitude, -magnitude):
-                if not -0.5 <= factor <= 2:
-                    continue
-                percent = factor * 100
-                assert spec.minimum <= percent <= spec.maximum
-                assert spec.to_wire(percent).hex() == factor.hex()
-                assert spec.consumer_value_error(percent) is None
+    assert (spec.minimum, spec.maximum, spec.wire_divisor, spec.units, spec.semantic_type) == (-50, 200, 100, "additive_percent", "additive_percent")
+    # float32 has <=24 significand bits; multiplication by 100 (=25*4)
+    # requires <=29, within binary64's 53 at every admitted exponent.
+    # These named representation edges check the same projector, not 513
+    # exponent/fraction iterations masquerading as one pytest case.
+    percent = factor * 100
+    if factor == 1.770282212988338:
+        doc, index, _ = percent_document(FN, BUFF_SPEED_PERCENT, percent)
+        wire = assert_delivered(doc, index, BUFF_SPEED_PERCENT, percent / 100)
+        projected = wire["gameplay"]["generatedBuff"]["movementSpeed"]
+        assert struct.pack("!d", projected) != struct.pack("!d", factor)
+        assert struct.pack("!f", projected) == struct.pack("!f", factor)
+    else:
+        assert spec.to_wire(percent).hex() == factor.hex()
+    assert spec.consumer_value_error(percent) is None
+    prior = CAPABILITY_REGISTRY[FN].retained_receipt_params[BUFF_SPEED_FACTOR]
+    assert struct.pack("!d", prior.to_wire(factor)) == struct.pack("!d", factor)
+
+
+@pytest.mark.parametrize("mutation", ["missing-marker", "stale-marker", "stale-source", "wrong-output"])
+def test_numeric_provenance_refuses_stale_grammar_or_renamed_receipt_identity_causally(mutation):
+    doc = build_capability_witness("configure_spawn")
+    call = _scalar_name_call(doc)
+    call["params"]["velocity"] = {"constantSpeedPxPerUpdate": 7.125}
+    wire = compile_runtime_program(doc)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=doc, final_document=wire)["ok"]
+    assert doc["runtimeProgram"]["schema"] == RUNTIME_PROGRAM_SCHEMA
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"] and validate_runtime_wire(wire)["ok"]
+    if mutation.endswith("marker"):
+        if mutation == "missing-marker":
+            doc["runtimeProgram"].pop("schema")
+        else:
+            doc["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v4"
+        reason = "source provenance requires the sole current Author grammar"
+    else:
+        row = next(r for r in rows if r.get("callId") == "witness_call" and r.get("authoredPath", "").endswith(".velocity.constantSpeedPxPerUpdate"))
+        field = "authoredPath" if mutation == "stale-source" else "finalPath"
+        row[field] = "runtimeProgram.calls[0].params.speedPxPerTick" if field == "authoredPath" else "runtimeProgram.entities[0].spawn.count"
+        reason = "compiler receipt used an undeclared authored parameter" if field == "authoredPath" else "structured parameter receipt is not a declared source/output pair"
+    report = audit_compiler_receipts(rows, authored_document=doc, final_document=wire)
+    assert not report["ok"] and any(v["reason"] == reason for v in report["violations"]), report

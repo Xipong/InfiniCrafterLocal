@@ -5,9 +5,6 @@ import copy
 import json
 import pytest
 from infini_local.core import vfx_manifest as vfx
-from infini_local.core.runtime_authoring import compile_runtime_program
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.pipelines import pipeline_visual_config as config
 from infini_local.pipelines import llm_authoring_pipeline as stage
 from tests.test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
 from tests.test_repair_vfx_contract import _offline_transport
@@ -55,12 +52,13 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
         "events": [{"event": "periodic"}],
     }]}}
     packet = vfx._prompt_packet(data, None, None)
-    normal = packet["outputSchema"]
-    repair = vfx._vfx_repair_schema_from_packet(packet)
+    normal = _sent(data, False, packet)["outputSchema"]
+    repair = _sent(data, True, packet)["outputSchema"]
     standalone_repair = vfx.vfx_repair_schema(data)
     original_slot = normal["properties"]["slots"]["items"]
     repair_slot = repair["properties"]["slotsUpsert"]["items"]
     assert repair_slot == original_slot == standalone_repair["properties"]["slotsUpsert"]["items"]
+    assert repair["properties"]["assetsUpsert"]["items"] == normal["properties"]["assets"]["items"]
     assert repair["properties"]["motif"]["anyOf"][0] == normal["properties"]["motif"]
     assert repair["properties"]["effectMagnitude"]["anyOf"][0] == normal["properties"]["effectMagnitude"]
     # Additive payloads/asset requests are conditionally required, never legacy defaults.
@@ -95,12 +93,15 @@ def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -
     for field in _EXPECTED_BOUNDS:
         assert report["normalized"]["slots"][0][field] == authored["slots"][0][field]
 
-@pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize("fixture", [
     "workbench_blade", "umbrella_grenade", "door_on_chain", "returning_potion",
     "fishing_platform_tool", "shield_and_disc", "held_and_deployed", "equipment_tool_combat",
+    pytest.param(None, id="empty"),
 ])
-def test_actual_vfx_packet_contains_exact_read_only_runtime_mechanics(repair, fixture):
+def test_actual_vfx_packet_contains_exact_read_only_runtime_mechanics(fixture):
+    if fixture is None:
+        assert _sent({}, False).get("acceptedRuntimeProgramReadOnly") == _sent({}, True).get("acceptedRuntimeProgramReadOnly") == {}
+        return
     data = _accepted_visual_data(fixture)
     # Compare the actual compiler projection, not a guessed second mechanics DTO.
     entity = data["runtimeProgram"]["entities"][0]
@@ -110,15 +111,17 @@ def test_actual_vfx_packet_contains_exact_read_only_runtime_mechanics(repair, fi
     for row in expected["entities"]:
         row.pop("visual", None)
     packet = vfx._prompt_packet(data, None, None)
-    sent = [_sent(data, repair, packet)]
-    vocabulary_key = "runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"
-    surface_key = "runtimeSurfaceReadOnly" if repair else "runtimeSurface"
-    vocabulary, surface = sent[0][vocabulary_key], sent[0][surface_key]
+    sent = _sent(data, False, packet)
+    repair = _sent(data, True, packet)
+    vocabulary, surface = sent["runtimeVocabulary"], sent["runtimeSurface"]
+    assert repair["runtimeVocabularyReadOnly"] == vocabulary
+    assert repair["runtimeSurfaceReadOnly"] == surface
+    assert repair["acceptedRuntimeProgramReadOnly"] == expected
     assert not (vocabulary.keys() & surface.keys())
     assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(vfx.vfx_director_surface(data), sort_keys=True)
-    assert vocabulary == _sent({}, repair)[vocabulary_key]
-    assert sent[0].get("acceptedRuntimeProgramReadOnly") == expected
-    assert "private-local-path.png" not in json.dumps(sent[0])
+    assert vocabulary == _sent({}, False)["runtimeVocabulary"]
+    assert sent.get("acceptedRuntimeProgramReadOnly") == expected
+    assert "private-local-path.png" not in json.dumps([sent, repair])
     assert data == original
     packet["acceptedRuntimeProgramReadOnly"]["entities"][0]["lifetimeTicks"] = 999
     packet["runtimeVocabulary"]["rendererRequirements"]["impactSprite"]["textureRole"] = "none"
@@ -126,26 +129,28 @@ def test_actual_vfx_packet_contains_exact_read_only_runtime_mechanics(repair, fi
     assert data == original
     assert vfx.vfx_director_surface(data)["rendererRequirements"]["impactSprite"]["textureRole"] == "impact"
 
-def test_empty_mechanical_context_does_not_invent_entities_or_parameters():
-    packet = vfx._prompt_packet({}, None, None)
-    assert packet.get("acceptedRuntimeProgramReadOnly") == {}
 
-
-@pytest.mark.parametrize("sound_only", [False, True], ids=["silent", "sound-only"])
-def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choices(monkeypatch, sound_only):
+@pytest.mark.parametrize("sound_id", [pytest.param(None, id="silent"), "Item1", "Tink"])
+def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choices(monkeypatch, sound_id):
     data = _accepted_visual_data("workbench_blade")
     accepted = _legacy(data)
     accepted.update(effectMagnitude=0.2, visualBudgetClass="tiny")
     sound = copy.deepcopy(accepted["slots"][0])
     sound.update(id="explicit_audio_choice", rendererKind="soundCue", channel="sound", lane="cue",
                  emissionMode="none", particleSystemId="none", textureRole="none", soundId="Item1", sound={"volume": 0.4, "pitch": 0, "pitchVariance": 0})
+    sound_only = sound_id is not None
+    if sound_only:
+        sound["soundId"] = sound_id
+        if sound_id == "Tink":
+            sound["sound"] = {"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12}
     accepted["slots"] = [sound] if sound_only else []
     assert vfx.validate_vfx_director_output(accepted, data)["ok"]
     original = copy.deepcopy(data)
     raw = copy.deepcopy(accepted)
     raw["effectMagnitude"] = 2.0  # Metadata-only fault, never permission to redesign audio.
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.2,
-             "slotsUpsert": [{**sound, "id": "unrequested_audio"}],
+             "slotsUpsert": [{**sound, "id": "unrequested_audio", "soundId": "Tink"},
+                             {**sound, "soundId": "Item14"}],
              "slotIdsDelete": [sound["id"]] if sound_only else [],
              "note": "correct only the magnitude"}
     sent = _offline_transport(monkeypatch, "audio_ownership_" + str(sound_only), [raw, patch])
@@ -166,6 +171,7 @@ def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choice
         "globals": {"effectMagnitude": [""]}, "slots": [], "assets": [],
     }
     assert not repair["repairScope"]["allowCreateSlots"]
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.effectMagnitude"]
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert final["vfxManifest"]["slots"] == vfx._compile_manifest(original, accepted, "audio-ownership")["slots"]
     assert final["gameplay"] == original["gameplay"]
@@ -267,12 +273,12 @@ FIELD_CONTRACTS += [(payload, field + "." + knot, (), None, False)
 FIELD_CONTRACTS += [("element", "inheritVelocity", ("world tick", "extraUpdates", "Player.velocity", "not measured anchor displacement"), None, False)]
 
 @pytest.mark.parametrize("container,field,terms,bounds,engine_units", FIELD_CONTRACTS, ids=[container + "." + field for container, field, *_ in FIELD_CONTRACTS])
-@pytest.mark.parametrize("repair", [False, True])
-def test_transported_vfx_field_contract(container, field, terms, bounds, engine_units, repair):
+def test_transported_vfx_field_contract(container, field, terms, bounds, engine_units):
     assert set(_SLOT_DESCRIPTIONS) == set(_EXPECTED_BOUNDS)
-    output = _sent(_data(), repair)["outputSchema"]["properties"]
-    slot = output["slotsUpsert" if repair else "slots"]["items"]["properties"]
-    schema = output[field]["anyOf"][0] if container == "global" and repair else output[field] if container == "global" else ((output["motif"]["anyOf"][0] if repair else output["motif"])["properties"][field] if container == "motif" else slot[field] if container == "slot" else slot[container])
+    output = _sent(_data(), False)["outputSchema"]["properties"]
+    slot = output["slots"]["items"]["properties"]
+    schema = (output[field] if container == "global" else output["motif"]["properties"][field]
+              if container == "motif" else slot[field] if container == "slot" else slot[container])
     if container in {"element", "path"}:
         for token in field.split("."):
             schema = schema["properties"][token]

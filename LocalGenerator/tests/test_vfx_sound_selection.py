@@ -29,8 +29,11 @@ def _sound(data, sound_id: Any = "Item4", *, projectile=False):
     return raw
 
 
-@pytest.mark.parametrize("projectile", [False, True], ids=["item", "projectile"])
-@pytest.mark.parametrize("sound_id", SOUND_IDS)
+# Every finite sample traverses one canonical consumer. Binding to a projectile
+# is independent of the enum member; Item4 proves that selector wiring once.
+@pytest.mark.parametrize("sound_id,projectile", [
+    pytest.param(sound_id, False, id="item-" + sound_id) for sound_id in SOUND_IDS
+] + [pytest.param("Item4", True, id="projectile-Item4")])
 def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_id, projectile):
     data = _data()
     before = copy.deepcopy(data)
@@ -52,19 +55,32 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
     assert raw == raw_before
 
 
-@pytest.mark.parametrize("bad", [None, "", "item4", " Item4", "Item9999", "frozenRepair", 4, True, {}, []])
-def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad):
+@pytest.mark.parametrize("bad,renderer,field", [
+    pytest.param(bad, "soundCue", "soundId", id=name)
+    for name, bad in (("null", None), ("empty", ""), ("case", "item4"), ("whitespace", " Item4"),
+                      ("unknown", "Item9999"), ("alias", "frozenRepair"), ("integer", 4),
+                      ("boolean", True), ("object", {}), ("array", []))
+] + [
+    pytest.param("Item4", "impactRing", "soundId", id="foreign-impactRing"),
+    pytest.param("Item4", "lightCue", "soundId", id="foreign-lightCue"),
+    pytest.param({"soundId": "Item4"}, "soundCue", "frozenRepair", id="unknown-payload"),
+])
+def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, renderer, field):
     data = _data()
-    raw = _sound(data, bad)
+    raw = _sound(data) if renderer == "soundCue" else _legacy(data)
+    raw["slots"][0].update(rendererKind=renderer)
+    if renderer == "lightCue":
+        raw["slots"][0].update(channel="light", lane="cue")
+    raw["slots"][0][field] = bad
     before = copy.deepcopy(raw)
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId"}
+    assert {e["path"] for e in report["errors"]} == {"$.slots[0]." + field}
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "bad-sound")
     wire_before = copy.deepcopy(data)
     persisted = vfx.validate_vfx_manifest_wire(data)
     assert not persisted["ok"], persisted
-    assert {e["path"] for e in persisted["errors"]} == {"$.vfxManifest.slots[0].soundId"}
+    assert {e["path"] for e in persisted["errors"]} == {"$.vfxManifest.slots[0]." + field}
     assert data == wire_before and raw == before
 
 
@@ -83,31 +99,6 @@ def test_fresh_sound_requires_explicit_choice_but_legacy_wire_absence_stays_abse
     # Native DTO serialization has always carried this legacy pitch input.
     data["vfxManifest"]["slots"][0]["phaseOffset"] = -0.75
     assert vfx.validate_vfx_manifest_wire(data)["ok"]
-
-
-@pytest.mark.parametrize("renderer", ["impactRing", "lightCue"])
-def test_sound_selector_is_forbidden_on_other_legacy_renderer_branches(renderer):
-    data = _data()
-    raw = _legacy(data)
-    raw["slots"][0].update(rendererKind=renderer, soundId="Item4")
-    if renderer == "lightCue":
-        raw["slots"][0].update(channel="light", lane="cue")
-    report = vfx.validate_vfx_director_output(raw, data)
-    assert not report["ok"]
-    assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId"}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "foreign-sound")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
-
-
-def test_wire_sound_branch_rejects_unknown_frozen_repair_payload():
-    data = _data()
-    raw = _sound(data)
-    raw["slots"][0]["frozenRepair"] = {"soundId": "Item4"}
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "unknown-payload")
-    report = vfx.validate_vfx_manifest_wire(data)
-    assert not report["ok"]
-    assert {e["path"] for e in report["errors"]} == {"$.vfxManifest.slots[0].frozenRepair"}
 
 
 @pytest.mark.parametrize("bad", [None, "missing-sample", "absent"])
@@ -147,24 +138,6 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
         assert request["response_format"]["type"] == mode
         if mode == "json_schema":
             assert "soundId" in json.dumps(request["response_format"]["json_schema"]["schema"])
-
-
-@pytest.mark.parametrize("silent", [False, True])
-def test_unrelated_repair_keeps_explicit_sample_or_silence_frozen(monkeypatch, silent):
-    data = _data()
-    accepted = _sound(data, "Tink")
-    if silent:
-        accepted["slots"] = []
-    raw = copy.deepcopy(accepted)
-    raw["effectMagnitude"] = 2
-    hostile = _sound(data, "Item14")["slots"][0]
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "metadata only", "effectMagnitude": 0.5,
-             "slotsUpsert": [hostile], "slotIdsDelete": ["explicit_sound"]}
-    _offline_transport(monkeypatch, "frozen_audio_" + str(silent), [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, "frozen-audio", llm_director=stage.call_llm_vfx_director)
-    assert final["debug"]["vfxDirectorRaw"] == accepted
-    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.effectMagnitude"]
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
 
 
 @pytest.mark.parametrize("sound_id", [None, "Item1", "Item4", "Dig", "ResearchComplete"])
