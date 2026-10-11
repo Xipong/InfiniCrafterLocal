@@ -127,6 +127,8 @@ PERCENT_PARAMS = tuple((fn, name, spec) for fn, cap in CAPABILITY_REGISTRY.items
 # Independent historical units: extrema, zero, first step and off-lattice refusals.
 # No closed-domain enumeration: the shared projector's two arithmetic branches
 # are checked below, while these rows check every distinct compiler destination.
+# For unsigned domains the minimum already is zero; retain a separate zero only
+# when it is an interior point of a signed domain.
 DISCRETE_UNITS = (
     ("configure_tool", "axePowerTooltipPercent", "axePower", "gameplay.axePower", 0, 500, 5, 5, 1),
     (FN, "lifeRegenHpPerSecond", "lifeRegen", "gameplay.generatedBuff.lifeRegen", 0, 60, .5, 1, 2),
@@ -141,7 +143,8 @@ DISCRETE_UNITS = (
     pytest.param(row, value, accepted, id=f"{row[0]}-{row[1]}-{label}")
     for row in DISCRETE_UNITS
     for label, value, accepted in (
-        ("minimum", row[4], True), ("maximum", row[5], True), ("zero", 0, True),
+        ("minimum", row[4], True), ("maximum", row[5], True),
+        *((("zero", 0, True),) if row[4] != 0 else ()),
         ("first-step", row[6], True), ("below-minimum", row[4] - row[6], False),
         ("above-maximum", row[5] + row[6], False), ("off-step", row[6] / 2, False))
 ])
