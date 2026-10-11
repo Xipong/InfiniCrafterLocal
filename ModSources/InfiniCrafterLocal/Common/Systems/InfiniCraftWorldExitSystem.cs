@@ -20,14 +20,20 @@ public sealed class InfiniCraftWorldExitSystem : ModSystem
 
     public override void OnWorldUnload()
     {
-        try
+        if (Main.netMode == Terraria.ID.NetmodeID.Server)
         {
-            if (Main.LocalPlayer is not null)
-                Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>().AbortTransientCraftForWorldExit();
+            // Each server player owns its workers, including disconnected players
+            // whose transient state has not yet been retired. Never refund escrow here.
+            foreach (Player player in Main.player)
+            {
+                try { player?.GetModPlayer<InfiniCraftPlayer>().AbortTransientCraftForWorldExit(); }
+                catch { } // One missing/unloading ModPlayer must not strand later owners.
+            }
         }
-        catch
+        else
         {
-            // Best-effort inventory protection on world exit. Avoid throwing while Terraria is unloading.
+            try { Main.LocalPlayer?.GetModPlayer<InfiniCraftPlayer>().AbortTransientCraftForWorldExit(); }
+            catch { } // Best-effort inventory protection while Terraria is unloading.
         }
         try { GeneratedHeldItemDrawLayer.ClearNetCaches(); }
         catch { }
