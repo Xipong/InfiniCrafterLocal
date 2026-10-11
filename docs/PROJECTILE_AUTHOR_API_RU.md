@@ -4,6 +4,25 @@
 
 Дополнение B15: [точное имя `damage_nearest_on_event` и fresh/wire диапазоны `sameTargetBias`](AUTHOR_EVENT_DOMAINS_RU.md) сохраняют те же consumers и прежнюю wire provenance, уточняя доступные новые решения Author.
 
+## Lifetime и независимые пределы
+
+`set_projectile_lifetime.lifetimeTicks` принимает **1…36000 world ticks**.
+Author/provider schema, обычный и Repair catalog, validator и compiler берут
+предел из canonical registry; wire сохраняет выбранное целое без изменения.
+C# `InfiniRuntimeLimits.MaxRuntimeLifetimeTicks` сохраняет 36000 при
+`FromJson` и full/cache/network round trips; значение выше предела отклоняется,
+а не превращается в допустимое через clamp. Прежний нижний normalization
+persisted DTO не меняется. `GeneratedProjectile.Configure` переводит world ticks
+в projectile updates через `1 + extraUpdates`; activation delay добавляется отдельно.
+
+Этот же canonical C# constant уже используется detached VFX для **retention
+неактивного source particle-budget ledger**: запись теперь удаляется после более
+чем 36000 ticks без активности вместо 21600. Это намеренный сопутствующий эффект,
+не увеличение duration самих VFX emissions или particle/draw allowance.
+Buff durations, modifier/curve `startDelayTicks`/`durationTicks`, spawn activation
+delay, event delays и `maxEventSpawnsPerActivation=32` сохраняют свои прежние пределы.
+Native sentry limit может удалить sentry раньше заданной lifetime.
+
 ## NPC immunity и число обновлений
 
 Полный пример collision:
