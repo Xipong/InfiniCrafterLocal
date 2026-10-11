@@ -73,7 +73,7 @@ from infini_local.storage.trace_runtime import _trace_message_summary, trace_eve
 
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
-    "priorityHeader", "gameplayAuthoringStages", "runtimeProgramInvariants",
+    "priorityHeader", "runtimeProgramInvariants",
     "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
