@@ -19,4 +19,11 @@ def dossier_text(request, *, declaration=None):
 
 
 def request_dossier(request, *, declaration=None):
-    return json.loads(dossier_text(request, declaration=declaration))
+    dossier = json.loads(dossier_text(request, declaration=declaration))
+    # Canonical Visual framing separates invariant presentation instructions
+    # from the runtime-selected bake roster. Semantic observers retain the
+    # original nested view; authority tests inspect the actual message rows.
+    if "bakeFillByProcessingRole" in dossier:
+        assert "bakeFillByProcessingRole" not in dossier["spritePresentationReadOnly"]
+        dossier["spritePresentationReadOnly"]["bakeFillByProcessingRole"] = dossier.pop("bakeFillByProcessingRole")
+    return dossier

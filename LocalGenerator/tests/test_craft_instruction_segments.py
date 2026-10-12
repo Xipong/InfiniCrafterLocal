@@ -150,6 +150,36 @@ def test_actual_stage_senders_preserve_roles_and_reuse_changed_tail_identity(mon
     assert transport._prompt_cache_identity(changed, model, context=context) != wires[0]["prompt_cache_key"]
 
 
+@pytest.mark.parametrize("stage", ["visual", "visual_repair"])
+def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(monkeypatch, stage):
+    from infini_local.pipelines import visual_generation_pipeline as visual
+    from prompt_packet_helpers import request_dossier
+    first, second = stage_packets(monkeypatch, stage)
+    static = json.loads(first["messages"][1]["content"])
+    dynamic = json.loads(first["messages"][2]["content"])
+    assert "spritePresentationReadOnly" in static
+    assert "bakeFillByProcessingRole" not in static["spritePresentationReadOnly"]
+    assert "spritePresentationReadOnly" not in dynamic
+    assert dynamic["bakeFillByProcessingRole"]
+    assert "acceptedPresentationMechanicsReadOnly" in dynamic
+    assert "responseSchema" in dynamic
+    reconstructed = request_dossier(first)
+    assert reconstructed["spritePresentationReadOnly"] == {
+        **static["spritePresentationReadOnly"],
+        "bakeFillByProcessingRole": dynamic["bakeFillByProcessingRole"],
+    }
+    assert first["messages"][:2] == second["messages"][:2]
+    # Role roster and gameplay alter only facts, never the instructions.
+    for kind, role in (("item_body", "item"), ("projectile", "field"), ("projectile", "helper")):
+        context = visual._presentation_packet_context(
+            {"gameplay": {"itemScale": 3}, "runtimeProgram": {"bindings": [{"id": role}]}},
+            [{"kind": kind, "visualRole": role}],
+        )
+        assert context["spritePresentationReadOnly"] == static["spritePresentationReadOnly"]
+        assert set(context["bakeFillByProcessingRole"]) == ({"item"} if kind == "item_body" else {"item", "runtime:" + role})
+        assert context["acceptedPresentationMechanicsReadOnly"]["bindings"] == [{"id": role}]
+
+
 def test_canonical_author_native_wire_and_affinity_equal_existing_declared_projection(monkeypatch):
     from infini_local.core.llm_prompt_cache import with_prompt_cache_prefix
     from infini_local.services.codex_text_backend import _request_payload
