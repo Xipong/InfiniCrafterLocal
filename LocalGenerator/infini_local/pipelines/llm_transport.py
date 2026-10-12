@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from email.utils import parsedate_to_datetime
 from functools import wraps
 import copy
 import hashlib
@@ -236,16 +237,98 @@ _LLM_POOL_LOCK = threading.Lock()
 _LLM_POOL_CURSOR = 0
 _LLM_LEASE_SEQUENCE = 0
 
-# Remote providers share one process-wide limiter per endpoint+model.  The input
-# estimate deliberately uses the serialized wire body rather than prompt prose so
-# schemas, repair dossiers and provider wrappers are all accounted for.  Local
-# endpoints are excluded: they have no external quota and already serialize at the
-# inference server.
+# Remote admission is process-wide per endpoint+model. Unknown routes retain the
+# legacy conservative wire estimate; this is local policy, NOT a provider quota.
+# The verified Nous OpenAI route uses pacing + provider feedback instead (see
+# docs/LLM_PROVIDER_ADMISSION_RU.md). Native Codex owns its separate SSE transport.
 _LLM_RATE_LOCK = threading.Lock()
 _LLM_RATE_STATE: dict[str, dict[str, Any]] = {}
 _LLM_RATE_WINDOW_SECONDS = 60.0
 _LLM_RATE_TOKENS_PER_WINDOW = 16_000
 _LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS = 5.1
+
+
+def _quota_reset_seconds(value: Any) -> float | None:
+    if not isinstance(value, str) or len(value) > 64:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"\d+(?:\.\d+)?", value):
+        seconds = float(value)
+    elif re.fullmatch(r"(?:\d+(?:\.\d+)?(?:ms|s|m|h|d))+", value):
+        units = {"ms": .001, "s": 1, "m": 60, "h": 3600, "d": 86400}
+        seconds = sum(float(count) * units[unit] for count, unit in re.findall(r"(\d+(?:\.\d+)?)(ms|s|m|h|d)", value))
+    else:
+        return None
+    return seconds if math.isfinite(seconds) and 0 <= seconds <= 31_536_000 else None
+
+
+def _selected_quota_headers(headers: Any) -> dict[str, int | float]:
+    # Never retain raw headers, account IDs, cookies or unvalidated strings.
+    safe: dict[str, int | float] = {}
+    if headers is None:
+        return safe
+    for resource in ("requests", "tokens", "project-tokens"):
+        for field_name in ("limit", "remaining", "reset"):
+            name = f"x-ratelimit-{field_name}-{resource}"
+            values = headers.get_all(name, []) if hasattr(headers, "get_all") else [
+                value for key, value in headers.items() if key.lower() == name]
+            if len(values) != 1 or not isinstance(values[0], str):
+                continue
+            value = values[0].strip()
+            if field_name == "reset":
+                parsed = _quota_reset_seconds(value)
+            else:
+                parsed = int(value) if len(value) <= 12 and re.fullmatch(r"\d+", value) else None
+            if parsed is not None:
+                safe[name] = parsed
+    values = headers.get_all("retry-after", []) if hasattr(headers, "get_all") else [
+        value for key, value in headers.items() if key.lower() == "retry-after"]
+    if len(values) == 1:
+        seconds = _quota_reset_seconds(values[0])
+        if seconds is None and isinstance(values[0], str) and len(values[0]) <= 64:
+            try:
+                date = parsedate_to_datetime(values[0])
+                seconds = max(0.0, date.timestamp() - time.time()) if date.tzinfo is not None else None
+            except (ValueError, TypeError, OverflowError):
+                seconds = None
+            if seconds is not None and (not math.isfinite(seconds) or seconds > 31_536_000):
+                seconds = None
+        if seconds is not None:
+            safe["retry-after"] = seconds
+    return safe
+
+
+def _observe_remote_quota_headers(url: str, payload: dict[str, Any], headers: Any) -> dict[str, int | float]:
+    safe = _selected_quota_headers(headers)
+    row = _CURRENT_LLM_ATTEMPT.get()
+    if row is not None:
+        row["rateLimitHeaders"] = safe
+    key = _remote_rate_key(url, payload)
+    if key:
+        # Only explicit exhaustion establishes a block. Positive remaining tokens
+        # are not a tokenizer, a cache discount or permission to lift local policy.
+        resets = [safe[f"x-ratelimit-reset-{resource}"] for resource in ("requests", "tokens", "project-tokens")
+                  if safe.get(f"x-ratelimit-remaining-{resource}") == 0 and f"x-ratelimit-reset-{resource}" in safe]
+        if resets:
+            with _LLM_RATE_LOCK:
+                state = _LLM_RATE_STATE.setdefault(key, {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0})
+                state["quotaUntil"] = max(float(state.get("quotaUntil") or 0.0), time.monotonic() + max(resets))
+    return safe
+
+
+def _remote_admission_policy(url: str, payload: dict[str, Any]) -> str:
+    parsed = urlsplit(url)
+    try:
+        canonical = (parsed.scheme == "https" and parsed.port is None
+                     and parsed.username is None and parsed.password is None
+                     and not parsed.query and not parsed.fragment)
+    except ValueError:
+        canonical = False
+    if (canonical and parsed.hostname == "inference-api.nousresearch.com"
+            and parsed.path in {"/v1/chat/completions", "/v1/responses"}
+            and isinstance(payload.get("model"), str) and payload["model"].startswith("openai/")):
+        return "nous_openai_feedback"
+    return "unknown_conservative"
 
 
 def _remote_rate_key(url: str, payload: dict[str, Any]) -> str:
@@ -284,10 +367,16 @@ def _reserve_remote_rate_slot(
     max_wait_seconds: float | None = None,
 ) -> None:
     key = _remote_rate_key(url, payload)
+    policy = _remote_admission_policy(url, payload) if key else "local_exempt"
+    row = _CURRENT_LLM_ATTEMPT.get()
+    if row is not None:
+        row["rateAdmissionPolicy"] = policy
     if not key:
         return
-    tokens = _estimated_wire_tokens(serialized_bytes)
-    minimum_interval = _model_min_interval_seconds(payload.get("model"))
+    uses_token_window = policy == "unknown_conservative"
+    tokens = _estimated_wire_tokens(serialized_bytes) if uses_token_window else 0
+    minimum_interval = (_model_min_interval_seconds(payload.get("model")) if uses_token_window
+                        else _LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS)
     deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
     waiter = threading.Event()
     with _LLM_RATE_LOCK:
@@ -323,13 +412,15 @@ def _reserve_remote_rate_slot(
                     ]
                     state["events"] = events
                     blocked_wait = max(0.0, float(state.get("blockedUntil") or 0.0) - now)
+                    quota_wait = max(0.0, float(state.get("quotaUntil") or 0.0) - now)
                     pacing_wait = max(
                         0.0,
                         float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
                     )
-                    wait_seconds = max(blocked_wait, pacing_wait)
+                    wait_seconds = max(blocked_wait, quota_wait, pacing_wait)
                     used_tokens = sum(count for _, count in events)
-                    if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW:
+                    token_wait = uses_token_window and events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW
+                    if token_wait:
                         wait_seconds = max(
                             wait_seconds,
                             events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
@@ -337,9 +428,11 @@ def _reserve_remote_rate_slot(
                     if row is not None and wait_seconds > 0.0:
                         row["rateWaitReason"] = (
                             "provider_cooldown" if blocked_wait >= wait_seconds else
-                            "token_window" if events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW else "pacing")
+                            "provider_quota" if quota_wait >= wait_seconds else
+                            "token_window" if token_wait else "pacing")
                     if wait_seconds <= 0.0:
-                        events.append((now, tokens))
+                        if uses_token_window:
+                            events.append((now, tokens))
                         state["lastRequest"] = now
                         return
             if not is_head:
@@ -363,11 +456,7 @@ def _mark_remote_rate_limited(url: str, payload: dict[str, Any], error: urlerror
     key = _remote_rate_key(url, payload)
     if not key:
         return
-    retry_after = 0.0
-    try:
-        retry_after = float((error.headers or {}).get("Retry-After") or 0.0)
-    except (TypeError, ValueError):
-        retry_after = 0.0
+    retry_after = _selected_quota_headers(error.headers).get("retry-after", 0.0)
     cooldown = max(60.0, retry_after, _model_min_interval_seconds(payload.get("model")))
     with _LLM_RATE_LOCK:
         state = _LLM_RATE_STATE.setdefault(
@@ -1297,6 +1386,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
             if row is not None:
                 row["openMs"] = round((time.monotonic() - open_started) * 1000, 3)
         with response as resp:
+            _observe_remote_quota_headers(url, payload, getattr(resp, "headers", None))
             if row is not None:
                 row["httpStatus"] = resp.status
             read_started = time.monotonic()
@@ -1311,6 +1401,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
             return result
     except urlerror.HTTPError as error:
         setattr(error, "_infini_deadline", deadline)
+        _observe_remote_quota_headers(url, payload, error.headers)
         if error.code == 429:
             _mark_remote_rate_limited(url, payload, error)
         raise
