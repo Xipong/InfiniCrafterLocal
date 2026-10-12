@@ -36,13 +36,18 @@ internal static partial class EngineRuntimeChecks
             if (transport is null) GeneratorProperty.SetValue(null, null);
             else
             {
-                var generator = new GeneratorClient { Endpoint = "http://192.0.2.42:5055/combine" };
-                typeof(GeneratorClient).GetField("_cachedGeneratorAssetTransport", PersistenceInstance)!.SetValue(generator, transport);
-                typeof(GeneratorClient).GetField("_cachedGeneratorAssetPublicBaseUrl", PersistenceInstance)!.SetValue(generator, PublicUrl);
-                // Cache contents stand for a completed host metadata probe. The real
-                // StampAssetTransportMetadata runs; no discovery HTTP is issued.
-                typeof(GeneratorClient).GetField("_nextGeneratorAssetPublicBaseUrlProbeUtc", PersistenceInstance)!.SetValue(generator, DateTime.MaxValue);
-                GeneratorProperty.SetValue(null, generator);
+                // Establish an actual observed snapshot through production discovery
+                // against a loopback double. Private cache fields are not observations.
+                var discovery = new CraftHttpFixture(0) { DiscoveryJson =
+                    "{\"multiplayer\":{\"assetTransport\":\"" + transport + "\",\"assetPublicBaseUrl\":\"" + PublicUrl + "\"}}" };
+                try
+                {
+                    var generator = new GeneratorClient { Endpoint = discovery.Endpoint };
+                    generator.RefreshAssetTransportMetadata();
+                    Equal(1, discovery.DiscoveryRequests, "PB-02 observes actual host discovery");
+                    GeneratorProperty.SetValue(null, generator);
+                }
+                finally { discovery.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
             }
         }
         public void Dispose()
@@ -163,11 +168,23 @@ internal static partial class EngineRuntimeChecks
                 var descriptor = serverAssets.BuildServerAssetDescriptors(source).Single();
                 byte[][] packets = Pb02DefinitionPackets(peers, serverAssets, source);
                 var foreign = GeneratedItemData.FromJson(source.ToNetworkJson())!;
-                foreign.RecipeMeta.WorldId = "pb02_foreign_world";
-                byte[][] foreignPackets = Pb02DefinitionPackets(peers, serverAssets, foreign);
+                foreign.Visual.SpritePath = path; // real host asset source; network projection remains filename-only
+                // A genuine foreign host must publish while its own world is current.
+                // The current host producer correctly refuses foreign-world selectors.
+                int originalWorld = Terraria.Main.worldID;
+                byte[][] foreignPackets;
+                try
+                {
+                    Terraria.Main.worldID = originalWorld == 42993 ? 42994 : 42993;
+                    GeneratedItemRegistryService.StampCurrentWorld(foreign);
+                    foreignPackets = Pb02DefinitionPackets(peers, serverAssets, foreign);
+                }
+                finally { Terraria.Main.worldID = originalWorld; }
                 var gameplayConflict = GeneratedItemData.FromJson(source.ToNetworkJson())!;
+                gameplayConflict.Visual.SpritePath = path; // real host asset source; network projection remains filename-only
                 gameplayConflict.Gameplay.Damage += 1;
                 var transformConflict = GeneratedItemData.FromJson(source.ToNetworkJson())!;
+                transformConflict.Visual.SpritePath = path; // real host asset source; network projection remains filename-only
                 Pb02ShiftTransform(transformConflict);
                 byte[][][] contentConflictPackets = new[] {
                     Pb02DefinitionPackets(peers, serverAssets, gameplayConflict),

@@ -59,6 +59,12 @@ internal static partial class EngineRuntimeChecks
                 var save = new Terraria.ModLoader.IO.TagCompound(); owner.SaveData(save);
                 Equal(0, save.GetList<Terraria.ModLoader.IO.TagCompound>("infiniPendingRemoteCrafts").Count, "resolved ack leaves no pending saved request");
                 Equal(false, owner.HasPendingCraftRefunds, "ack cannot create deferred material copies");
+                WithForgePresentationLanguages(locale =>
+                {
+                    string status = owner.CraftLaneStatus(lane);
+                    Equal(!success, status.Contains(locale == "ru-RU" ? "Материалы остаются в кузне хозяина" : "Ingredients remain in the host forge"), "canonical failed host ack states retention, not inventory delivery");
+                    Equal(false, status.Contains(locale == "ru-RU" ? "Материалы доставлены" : "Ingredients delivered"), "client never infers native refund delivery");
+                });
                 owner.HandleCraftCommitResult(requestId, !success, "Replayed", "contradictory late ack");
                 Equal(success ? InfiniCraftPlayer.CraftLaneOutcomeKind.Succeeded : InfiniCraftPlayer.CraftLaneOutcomeKind.Cancelled,
                     owner.GetCraftLaneOutcome(lane).Kind, "late repeated ack cannot replace accepted outcome");
@@ -351,8 +357,9 @@ internal static partial class EngineRuntimeChecks
                     (InfiniCraftPlayer.CraftLaneOutcomeKind.Failed, "exact backend reason", ru ? "Ковка не удалась" : "Forging failed"),
                     (InfiniCraftPlayer.CraftLaneOutcomeKind.Succeeded, "Exact authored name", ru ? "Готово" : "Completed") })
                 {
-                    set.Invoke(owner, new object[] { 0, row.Item1, row.Item2 });
+                    set.Invoke(owner, new object[] { 0, row.Item1, row.Item2, InfiniCraftPlayer.CraftLaneMaterialDisposition.Unobserved });
                     Equal(true, owner.CraftLaneStatus(0).StartsWith(row.Item3, StringComparison.Ordinal), "localized retained outcome " + row.Item1);
+                    Equal(false, owner.CraftLaneStatus(0).Contains(ru ? "Материалы доставлены" : "Ingredients delivered"), "unobserved terminal state cannot claim delivery");
                     if (row.Item1 is InfiniCraftPlayer.CraftLaneOutcomeKind.Failed or InfiniCraftPlayer.CraftLaneOutcomeKind.Succeeded)
                         Equal(true, owner.CraftLaneDetails(0).Contains(row.Item2), "bounded original detail retained");
                 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -124,8 +125,10 @@ internal static partial class EngineRuntimeChecks
         data.Id = "craft-metadata-control"; data.Name = "Craft metadata control"; data.SourceMode = "test_fixture";
         await using var server = new CraftHttpFixture(0) { SuccessJson = data.ToJson(), HoldDiscovery = true };
         var client = new GeneratorClient { Endpoint = server.Endpoint };
-        typeof(GeneratorClient).GetField("_cachedGeneratorAssetPublicBaseUrl", CraftFields)!.SetValue(client, "http://192.0.2.44:5055");
-        typeof(GeneratorClient).GetField("_cachedGeneratorAssetTransport", CraftFields)!.SetValue(client, "http");
+        server.HoldDiscovery = false;
+        server.DiscoveryJson = "{\"multiplayer\":{\"assetTransport\":\"http\",\"assetPublicBaseUrl\":\"http://192.0.2.44:5055\"}}";
+        await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
+        server.HoldDiscovery = true;
         var request = new GeneratorClient.PreparedGenerationRequest();
         // Hold the real lock ourselves so the waiter proof is independent of
         // the production discovery request's 1.2-second timeout.
@@ -150,7 +153,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, waiter.Join(TimeSpan.FromMilliseconds(500)), "metadata lock wait is cancellable");
                 Equal(true, waiterError is OperationCanceledException, "waiting lane retires as cancellation");
                 Equal(false, request.CancellationToken.IsCancellationRequested, "waiting lane never cancels independent request");
-                Equal(0, server.DiscoveryRequests, "waiting lane starts no discovery request");
+                Equal(1, server.DiscoveryRequests, "waiting lane starts no discovery request beyond accepted observation");
             }
             finally
             {
@@ -169,11 +172,13 @@ internal static partial class EngineRuntimeChecks
                 "cancellation preserves previously accepted metadata");
             Equal("http", (string)typeof(GeneratorClient).GetField("_cachedGeneratorAssetTransport", CraftFields)!.GetValue(client)!,
                 "cancellation does not reclassify transport as native");
+            Equal("http", client.AssetTransportForSharing(), "cancel preserves accepted published snapshot");
+            Equal("http://192.0.2.44:5055", client.AssetBaseUrlForSharing(), "cancel preserves published route");
             Equal(false, client.IsEndpointCoolingDown, "cancelled discovery is not endpoint outage");
             server.HoldDiscovery = false;
             server.Release();
             await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
-            Equal(2, server.DiscoveryRequests, "independent refresh owns a fresh uncancelled token");
+            Equal(3, server.DiscoveryRequests, "independent refresh owns a fresh uncancelled token");
         }
         finally { request.Cancel(); server.Release(); await worker.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
@@ -234,6 +239,10 @@ internal static partial class EngineRuntimeChecks
         internal bool RejectSecondGeneration;
         internal string? SuccessJson;
         internal bool CacheHit;
+        internal string DiscoveryJson = "{\"multiplayer\":{\"assetTransport\":\"native\",\"assetPublicBaseUrl\":\"\"}}";
+        internal int DiscoveryStatus = 200;
+        internal int FailureStatus = 422;
+        internal string FailureJson = "{\"error\":\"offline_fixture\"}";
         internal volatile bool HoldDiscovery;
         private int discoveryRequests;
         internal int DiscoveryRequests => Volatile.Read(ref discoveryRequests);
@@ -262,7 +271,8 @@ internal static partial class EngineRuntimeChecks
                             Interlocked.Increment(ref discoveryRequests);
                             bool heldDiscovery = HoldDiscovery;
                             if (heldDiscovery) { Held.TrySetResult(true); await release.Task.WaitAsync(stop.Token); }
-                            byte[] metadata = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
+                            byte[] bodyBytes = Encoding.UTF8.GetBytes(DiscoveryJson);
+                            byte[] metadata = Encoding.ASCII.GetBytes($"HTTP/1.1 {DiscoveryStatus} Fixture\r\nContent-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n").Concat(bodyBytes).ToArray();
                             try { await stream.WriteAsync(metadata, stop.Token); }
                             catch (Exception error) when (heldDiscovery && error is IOException or SocketException) { }
                             continue;
@@ -283,8 +293,8 @@ internal static partial class EngineRuntimeChecks
                         if (!cache) generations++;
                         if (ordinal == heldOrdinal) { Held.TrySetResult(true); await release.Task.WaitAsync(stop.Token); }
                         bool success = SuccessJson is not null && (!cache || CacheHit);
-                        int status = success ? 200 : cache ? 404 : FatalGeneration || RejectSecondGeneration && generations > 1 ? 422 : 503;
-                        byte[] responseBody = Encoding.UTF8.GetBytes(success ? SuccessJson! : "{\"error\":\"offline_fixture\"}");
+                        int status = success ? 200 : cache ? 404 : FatalGeneration || RejectSecondGeneration && generations > 1 ? FailureStatus : 503;
+                        byte[] responseBody = Encoding.UTF8.GetBytes(success ? SuccessJson! : FailureJson);
                         byte[] headers = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {responseBody.Length}\r\nConnection: close\r\n\r\n");
                         try { await stream.WriteAsync(headers, stop.Token); await stream.WriteAsync(responseBody, stop.Token); await stream.FlushAsync(stop.Token); }
                         catch (Exception error) when (ordinal == heldOrdinal && error is IOException or SocketException) { }

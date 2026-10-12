@@ -42,6 +42,122 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void CraftQolUnknownMetadataPreservesAcceptedRouting()
+        => CraftQolUnknownMetadataPreservesAcceptedRoutingAsync().GetAwaiter().GetResult();
+
+    private static async Task CraftQolUnknownMetadataPreservesAcceptedRoutingAsync()
+    {
+        var generator = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Generator")!;
+        object? previous = generator.GetValue(null); int mode = Terraria.Main.netMode;
+        string? url = Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL");
+        await using var server = new CraftHttpFixture(0) { HoldDiscovery = true };
+        var client = new GeneratorClient { Endpoint = server.Endpoint };
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.Server;
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", null);
+            generator.SetValue(null, client);
+            var source = Pb02Data("cold-http-metadata", "http");
+            string before = source.ToJson();
+            Task<GeneratedItemData> prepare = Task.Run(() => Pb02Prepare(source));
+            var cold = await prepare.WaitAsync(TimeSpan.FromMilliseconds(250));
+            Equal("http", cold.RecipeMeta.AssetTransport, "unobserved snapshot cannot assert native transport");
+            Equal(source.RecipeMeta.AssetBaseUrl, cold.RecipeMeta.AssetBaseUrl, "unobserved host retains accepted validated HTTP route");
+            Equal(before, source.ToJson(), "cold publication never mutates accepted definition");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", "https://192.0.2.45:5055/path");
+            Equal("https://192.0.2.45:5055", Pb02Prepare(source).RecipeMeta.AssetBaseUrl, "cold configured host URL overrides retained route without inventing mode");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", null);
+            await server.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Equal(1, server.DiscoveryRequests, "cold publication queues discovery on a worker");
+            var held = await Task.Run(() => Pb02Prepare(source)).WaitAsync(TimeSpan.FromMilliseconds(250));
+            Equal("http", held.RecipeMeta.AssetTransport, "registry consumer never waits on held discovery lock");
+            Equal(1, server.DiscoveryRequests, "pending discovery is coalesced");
+            foreach (string invalid in new[] { "ftp://192.0.2.17:5055", "http://127.0.0.1:5055", "http://0.0.0.0:5055", "http://224.0.0.1:5055" })
+            {
+                var foreign = Pb02Data("cold-invalid-route", "http"); foreign.RecipeMeta.AssetBaseUrl = invalid;
+                Equal("", Pb02Prepare(foreign).RecipeMeta.AssetBaseUrl, "unknown preserves no unsafe foreign route: " + invalid);
+            }
+            var coldNative = Pb02Prepare(Pb02Data("cold-native-metadata", "native"));
+            Equal("native", coldNative.RecipeMeta.AssetTransport, "unknown retains accepted native transport too");
+            Equal("", coldNative.RecipeMeta.AssetBaseUrl, "accepted native never acquires an HTTP route");
+            server.HoldDiscovery = false; server.Release();
+            await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
+            var native = Pb02Prepare(source);
+            Equal("native", native.RecipeMeta.AssetTransport, "actually observed native host supersedes accepted HTTP");
+            Equal("", native.RecipeMeta.AssetBaseUrl, "observed native removes HTTP route");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", "https://192.0.2.45:5055");
+            Equal("native", Pb02Prepare(source).RecipeMeta.AssetTransport, "configured URL cannot override observed native mode");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", null);
+            server.DiscoveryJson = "{\"multiplayer\":{\"assetTransport\":\"http\",\"assetPublicBaseUrl\":\"http://192.0.2.44:5055/path\"}}";
+            await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
+            var http = Pb02Prepare(source);
+            Equal("http://192.0.2.44:5055", http.RecipeMeta.AssetBaseUrl, "observed current host supersedes foreign accepted URL");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", "https://192.0.2.45:5055/path");
+            Equal("https://192.0.2.45:5055", Pb02Prepare(source).RecipeMeta.AssetBaseUrl, "validated configured host override wins");
+            Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", null);
+            server.DiscoveryStatus = 503;
+            await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
+            Equal("http://192.0.2.44:5055", Pb02Prepare(source).RecipeMeta.AssetBaseUrl, "failed discovery is not observed native");
+            server.DiscoveryStatus = 200; server.DiscoveryJson = "{}";
+            await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
+            Equal("http://192.0.2.44:5055", Pb02Prepare(source).RecipeMeta.AssetBaseUrl, "missing mode is not observed native");
+            using var cancelled = new System.Threading.CancellationTokenSource(); cancelled.Cancel();
+            try { client.StampAssetTransportMetadata(source, true, cancelled.Token); throw new InvalidOperationException("cancel must throw"); }
+            catch (OperationCanceledException) { }
+            Equal(before, source.ToJson(), "cancelled snapshot projection cannot mutate accepted definition");
+        }
+        finally { server.Release(); generator.SetValue(null, previous); Terraria.Main.netMode = mode; Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", url); }
+    }
+
+    private static void CraftQolFatalHttpRefundPresentationTracksDelivery()
+        => CraftQolFatalHttpRefundPresentationTracksDeliveryAsync().GetAwaiter().GetResult();
+
+    private static async Task CraftQolFatalHttpRefundPresentationTracksDeliveryAsync()
+    {
+        using var serializer = WithPersistenceBoolSerializer();
+        int mode = Terraria.Main.netMode; bool inventory = Terraria.Main.playerInventory;
+        Item[] items = Terraria.Main.item; int[] timers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+        CombatText[] combat = Terraria.Main.combatText;
+        try
+        {
+            Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.playerInventory = true;
+            Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item(ItemID.Wood, 3) { active = true }).ToArray();
+            Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
+            Terraria.Main.combatText = Enumerable.Range(0, 100).Select(_ => new CombatText { active = true }).ToArray();
+            await using var server = new CraftHttpFixture(0) { FatalGeneration = true, FailureStatus = 424,
+                FailureJson = "{\"error\":\"llm_auth_failed\",\"playerMessage\":\"Generation failed: check credentials and access before retrying. Items were returned.\"}" };
+            var client = new GeneratorClient { Endpoint = server.Endpoint };
+            foreach (bool full in new[] { true, false })
+            {
+                var request = new GeneratorClient.PreparedGenerationRequest { RefundA = new Item(ItemID.CopperShortsword), RefundB = new Item(ItemID.WoodenSword) };
+                Equal(true, await Task.Run(() => client.GeneratePreparedBlocking(request)).WaitAsync(TimeSpan.FromSeconds(5)) is null, "real fatal HTTP rejected craft");
+                Equal(424, request.FailureStatusCode, "native request owns actual HTTP 424");
+                WithForgePresentationLanguages(locale => WithPlayer((player, owner) =>
+                {
+                    owner.Initialize();
+                    if (full) for (int i = 0; i < 58; i++) player.inventory[i] = new Item(ItemID.Wood, 9999);
+                    typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, request);
+                    typeof(InfiniCraftPlayer).GetField("_task", CraftFields)!.SetValue(owner, Task.FromResult<GeneratedItemData?>(null));
+                    owner.PostUpdate();
+                    var save = new TagCompound(); owner.SaveData(save);
+                    Equal(full ? 2 : 0, save.GetList<TagCompound>("infiniDeferredCraftRefundsV1").Count, "sole native refund owner retains exact remainders");
+                    Equal(full ? 0 : 2, player.inventory.Take(58).Count(i => i.type == ItemID.CopperShortsword || i.type == ItemID.WoodenSword), "actual ingredient delivery, not message inference");
+                    Equal(false, owner.GetCraftLaneOutcome(0).Message.Contains("Items were returned"), "generation detail cannot assert material delivery");
+                    Equal(true, owner.CraftLaneStatus(0).Contains(full ? (locale == "ru-RU" ? "Возврат ожидает свободного места" : "Return waiting for free space") : (locale == "ru-RU" ? "Материалы доставлены" : "Ingredients delivered")), "native terminal presentation distinguishes pending and delivered");
+                    if (full)
+                    {
+                        player.inventory[0].TurnToAir(); player.inventory[1].TurnToAir(); owner.PostUpdate();
+                        Equal(false, owner.HasPendingCraftRefunds, "real deferred consumer retires delivered claims");
+                        Equal(false, owner.CraftLaneStatus(0).Contains(locale == "ru-RU" ? "Возврат ожидает свободного места" : "Return waiting for free space"), "presentation never freezes a stale pending claim");
+                    }
+                    owner.PostUpdate();
+                    Equal(2, player.inventory.Take(58).Count(i => i.type == ItemID.CopperShortsword || i.type == ItemID.WoodenSword), "later presentation creates no refund copies");
+                }));
+            }
+        }
+        finally { Terraria.Main.netMode = mode; Terraria.Main.playerInventory = inventory; Terraria.Main.item = items; Terraria.Main.timeItemSlotCannotBeReusedFor = timers; Terraria.Main.combatText = combat; }
+    }
+
     private static void CraftQolPartialRefundRetainsOnlyRemainder()
     {
         using var serializer = WithPersistenceBoolSerializer();
@@ -192,6 +308,9 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, InfiniCrafterLocal.Common.Systems.GeneratedStationEscrowStateSystem.TryReplayCraft(client, requestId, out var outcome), "deadline failure durably replays");
                 Equal(false, outcome.Success, "deadline never commits output");
                 Equal("craft deadline exceeded", outcome.Message, "deadline keeps exact terminal reason");
+                WithForgePresentationLanguages(locale => Equal(true,
+                    owner.CraftLaneStatus(1).Contains(locale == "ru-RU" ? "Материалы остаются в кузне хозяина" : "Ingredients remain in the host forge"),
+                    "actual journal terminal path observes server retention"));
             });
         }
         finally { world.ClearWorld(); Terraria.Main.netMode = mode; Terraria.Main.player = players; }

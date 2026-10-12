@@ -87,6 +87,8 @@ StationUI: {
 	OutcomeFailed: "Forging failed"
 	OutcomeCancelled: "Forging cancelled"
 	OutcomeTimedOut: "Craft wait timed out"
+	IngredientsDelivered: "Ingredients delivered"
+	IngredientsServerRetained: "Ingredients remain in the host forge"
 	RefundPending: "Return waiting for free space"
 
 	Started: "Wonder Forge: forging started; collect as soon as ready"

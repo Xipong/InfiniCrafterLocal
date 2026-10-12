@@ -89,21 +89,22 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
 
 
 def _combine_failure_player_message(status: int, code: str, message: str, failure: dict[str, Any], *, retryable: bool) -> str:
+    # Generation facts only. The native player/world owner alone observes refunds.
     if code in {"llm_auth_failed", "llm_model_unavailable", "llm_profile_unavailable", "llm_endpoint_unavailable", "llm_quota_exhausted", "llm_rate_limited", "llm_admission_timeout", "llm_timeout", "llm_transport_unavailable", "llm_request_rejected"}:
-        return "Generation failed: " + message.rstrip(".") + ". Items were returned."
+        return "Generation failed: " + message.rstrip(".") + "."
     if code == "llm_output_invalid":
-        return "Generation failed: LLM item plan was invalid after repair. Items were returned; try crafting again."
+        return "Generation failed: LLM item plan was invalid after repair. Try crafting again."
     if code == "visual_dependency_failed":
-        return "Generation failed: required visual asset was not deliverable. Items were returned; try again."
+        return "Generation failed: required visual asset was not deliverable. Try again."
     if code == "planner_unavailable":
-        return "Generation failed: LLM planner did not return a usable item. Items were returned; try again."
+        return "Generation failed: LLM planner did not return a usable item. Try again."
     if code == "generator_busy":
-        return "Generator is busy. Items were returned; try again shortly."
+        return "Generator is busy. Try again shortly."
     if status == 428:
-        return "Generation failed: world id was missing. Items were returned."
+        return "Generation failed: world id was missing."
     if retryable:
-        return "Generation failed before a recipe was committed. Items were returned; try crafting again."
-    return "Generation failed. Items were returned."
+        return "Generation failed before a recipe was committed. Try crafting again."
+    return "Generation failed."
 
 
 def _combine_failure_payload(status: int, code: str, message: str, failure: dict[str, Any], *, retryable: bool) -> dict[str, Any]:

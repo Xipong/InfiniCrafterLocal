@@ -106,8 +106,13 @@ public sealed partial class InfiniCraftPlayer
         {
             string heading = ForgePresentationText("Outcome" + outcome.Kind);
             // Cancellation/deadline reasons are protocol strings, not authored UI prose.
-            return outcome.Kind is CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
+            string status = outcome.Kind is CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
                 || string.IsNullOrWhiteSpace(outcome.Message) ? heading : heading + " · " + outcome.Message;
+            if (outcome.Materials == CraftLaneMaterialDisposition.ServerRetained)
+                status += " · " + ForgePresentationText("IngredientsServerRetained");
+            else if (outcome.Materials == CraftLaneMaterialDisposition.LocalRefund)
+                status += " · " + ForgePresentationText(HasPendingCraftRefunds ? "RefundPending" : "IngredientsDelivered");
+            return status;
         }
         if (IsCraftLaneCancellationPending(laneIndex)) return ForgePresentationText("CancelPending");
         if (IsCraftLaneWaitingForDelivery(laneIndex)) return ForgePresentationText("DeliveryWait");
@@ -327,7 +332,8 @@ public sealed partial class InfiniCraftPlayer
                 if (Main.netMode != NetmodeID.Server)
                     CombatText.NewText(Player.Hitbox, Color.OrangeRed, ForgePresentationText("LaneFailed", job.LaneIndex + 1, reason));
                 job.Request.Cancel();
-                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason);
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason,
+                    Main.netMode != NetmodeID.Server && !_stationEscrowUsesRemoteAuthority ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
                 _multiDevJobs[slot] = null;
                 continue;
             }
@@ -347,7 +353,6 @@ public sealed partial class InfiniCraftPlayer
             else
             {
                 string reason = string.IsNullOrWhiteSpace(error) ? "server commit failed" : error;
-                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason);
                 if (Main.netMode == NetmodeID.Server && !string.IsNullOrWhiteSpace(job.RequestId))
                     CompleteExtraServerCraft(job, false, "", reason);
                 else
@@ -355,6 +360,8 @@ public sealed partial class InfiniCraftPlayer
                     RefundOne(job.Request.RefundA);
                     RefundOne(job.Request.RefundB);
                 }
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason,
+                    Main.netMode != NetmodeID.Server && !_stationEscrowUsesRemoteAuthority ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
             }
             job.Request.Cancel();
             _multiDevJobs[slot] = null;

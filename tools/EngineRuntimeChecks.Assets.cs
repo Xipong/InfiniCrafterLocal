@@ -29,10 +29,16 @@ internal static partial class EngineRuntimeChecks
         string? oldPublicUrl = Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL");
         var generator = new GeneratorClient { Endpoint = "http://127.0.0.1:5055/combine" };
         const string publicUrl = "http://192.0.2.42:5055";
-        typeof(GeneratorClient).GetField("_cachedGeneratorAssetPublicBaseUrl", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(generator, publicUrl);
-        typeof(GeneratorClient).GetField("_nextGeneratorAssetPublicBaseUrlProbeUtc", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(generator, DateTime.MaxValue); // No discovery HTTP in this routing witness.
+        var discovery = new CraftHttpFixture(0) { DiscoveryJson =
+            "{\"multiplayer\":{\"assetTransport\":\"http\",\"assetPublicBaseUrl\":\"" + publicUrl + "\"}}" };
+        try
+        {
+            generator.Endpoint = discovery.Endpoint;
+            generator.RefreshAssetTransportMetadata();
+            Equal(1, discovery.DiscoveryRequests, "sharing URL established by actual observation");
+        }
+        finally { discovery.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+        generator.Endpoint = "http://127.0.0.1:5055/combine";
         var select = typeof(GeneratedAssetSyncService).GetMethod("BestBaseUrl", BindingFlags.Instance | BindingFlags.NonPublic)!;
         using var service = new GeneratedAssetSyncService();
         try

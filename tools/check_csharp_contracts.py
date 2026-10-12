@@ -960,6 +960,11 @@ def check_escrow_session_fences() -> None:
     needs(code(journal, "CaptureOwnerState"), ("if (!IsBoundOwner(key, player)) return;",), "stale owner capture")
     for handler in ("HandleStationEscrowRequestPacket", "HandleRequestServerCraftPacket"):
         ordered(code(mp, handler), ("RestoreOwnerState", "modPlayer._stationEscrowClientId = clientId;"), handler)
+    station = read("Common/Players/InfiniCraftPlayer.Station.cs")
+    needs(code(station, "HasReusableWorldItemSlot"), (
+        "index < Main.maxItems", "Main.item[index] is { active: false } && Main.timeItemSlotCannotBeReusedFor[index] == 0",
+        "return true;", "return false;",
+    ), "native capacity preflight")
     spawn = code(mp, "SpawnGeneratedItemServerSide")
     ordered(spawn, ("CanCommitCraft", "Item.NewItem", "CompleteServerCraftTransaction", "committed = true", "NetMessage.SendData"), "output")
     needs(spawn, (

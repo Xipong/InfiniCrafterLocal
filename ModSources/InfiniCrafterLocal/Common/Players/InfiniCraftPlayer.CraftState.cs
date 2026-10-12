@@ -650,7 +650,7 @@ public sealed partial class InfiniCraftPlayer
                 return;
             }
 
-            FailCraft("InfiniCraft: генератор не завершил крафт — предметы возвращены", "генератор хоста не завершил крафт");
+            FailCraft("InfiniCraft: генератор не завершил крафт", "генератор хоста не завершил крафт");
             return;
         }
 
@@ -694,7 +694,7 @@ public sealed partial class InfiniCraftPlayer
                     detail += $": {_request.FailureMessage}";
                 string playerMessage = !string.IsNullOrWhiteSpace(_request.FailurePlayerMessage)
                     ? _request.FailurePlayerMessage
-                    : "InfiniCraft: рецепт не прошёл проверку — предметы возвращены; попробуй скрафтить заново";
+                    : "InfiniCraft: рецепт не прошёл проверку; попробуй скрафтить заново";
                 FailCraft(playerMessage, detail);
                 return;
             }
@@ -710,7 +710,7 @@ public sealed partial class InfiniCraftPlayer
                 return;
             }
 
-            FailCraft("InfiniCraft: генератор не отдал готовый рецепт — предметы возвращены", "генератор хоста не отдал готовый предмет");
+            FailCraft("InfiniCraft: генератор не отдал готовый рецепт", "генератор хоста не отдал готовый предмет");
             return;
         }
 
@@ -720,17 +720,19 @@ public sealed partial class InfiniCraftPlayer
 
     private void FailCraft(string localMessage, string remoteMessage)
     {
-        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Failed, IsServerAuthoritativeCraft ? remoteMessage : localMessage);
         if (IsServerAuthoritativeCraft)
         {
+            SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Failed, remoteMessage);
             SendServerAuthoritativeResultIfNeeded(false, "", remoteMessage);
             ClearCraft();
             return;
         }
 
         RefundIngredients();
-        CombatText.NewText(Player.Hitbox, Color.OrangeRed, localMessage);
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Failed, localMessage,
+            _request is not null && !_stationEscrowUsesRemoteAuthority ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
         ClearCraft();
+        CombatText.NewText(Player.Hitbox, Color.OrangeRed, CraftLaneStatus(0));
     }
 
 
@@ -741,7 +743,7 @@ public sealed partial class InfiniCraftPlayer
         // local-generation flow leaked back in, so fail closed and refund.
         if (Main.netMode == NetmodeID.MultiplayerClient)
         {
-            FailCraft("InfiniCraft: клиентский коммит отключён — предметы возвращены", "client-generated commit path is disabled");
+            FailCraft("InfiniCraft: клиентский коммит отключён", "client-generated commit path is disabled");
             return;
         }
 
@@ -755,7 +757,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
-        FailCraft("InfiniCraft: серверный коммит сорвался — предметы возвращены", string.IsNullOrWhiteSpace(error) ? "хост не создал предмет" : error);
+        FailCraft("InfiniCraft: серверный коммит сорвался", string.IsNullOrWhiteSpace(error) ? "хост не создал предмет" : error);
     }
 
 

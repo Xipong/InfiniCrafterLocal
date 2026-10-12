@@ -49,7 +49,7 @@ public sealed class GeneratorClient
         catch { return null; }
     });
     private sealed record AssetTransportSnapshot(string Transport, string BaseUrl);
-    private AssetTransportSnapshot _assetTransportSnapshot = new("native", "");
+    private AssetTransportSnapshot? _assetTransportSnapshot; // null means unobserved, not native
     private int _assetMetadataRefreshQueued;
     private readonly object _assetPublicBaseUrlLock = new();
     private string _cachedGeneratorAssetPublicBaseUrl = "";
@@ -81,7 +81,7 @@ public sealed class GeneratorClient
         string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
         if (!string.IsNullOrWhiteSpace(env)) return env;
         cancellationToken.ThrowIfCancellationRequested();
-        string advertised = Volatile.Read(ref _assetTransportSnapshot).BaseUrl;
+        string advertised = Volatile.Read(ref _assetTransportSnapshot)?.BaseUrl ?? "";
         if (!string.IsNullOrWhiteSpace(advertised)) return advertised;
         preferred = NormalizeAssetBaseUrl(preferred);
         if (!string.IsNullOrWhiteSpace(preferred)) return preferred;
@@ -91,7 +91,7 @@ public sealed class GeneratorClient
     public string AssetTransportForSharing(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Volatile.Read(ref _assetTransportSnapshot).Transport;
+        return Volatile.Read(ref _assetTransportSnapshot)?.Transport ?? "";
     }
 
     // Explicit blocking discovery belongs to generation workers, never update/commit.
@@ -111,9 +111,21 @@ public sealed class GeneratorClient
     public void StampAssetTransportMetadata(GeneratedItemData data, bool refreshBaseUrl = false, CancellationToken cancellationToken = default)
     {
         if (data is null) return;
-        data.RecipeMeta ??= new RecipeMetaSpec();
         cancellationToken.ThrowIfCancellationRequested();
-        AssetTransportSnapshot snapshot = Volatile.Read(ref _assetTransportSnapshot);
+        data.RecipeMeta ??= new RecipeMetaSpec();
+        AssetTransportSnapshot? snapshot = Volatile.Read(ref _assetTransportSnapshot);
+        if (snapshot is null)
+        {
+            // Preserve accepted routing until discovery actually observes host mode.
+            // Validation still applies to retained/foreign URLs; never issue HTTP here.
+            QueueAssetTransportMetadataRefresh();
+            string configured = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
+            if (string.Equals(data.RecipeMeta.AssetTransport, "http", StringComparison.Ordinal))
+                data.RecipeMeta.AssetBaseUrl = !string.IsNullOrWhiteSpace(configured) ? configured
+                    : NormalizeAssetBaseUrl(data.RecipeMeta.AssetBaseUrl);
+            else data.RecipeMeta.AssetBaseUrl = "";
+            return;
+        }
         data.RecipeMeta.AssetTransport = snapshot.Transport;
         if (!string.Equals(data.RecipeMeta.AssetTransport, "http", StringComparison.Ordinal))
         {
@@ -155,33 +167,25 @@ public sealed class GeneratorClient
                 cts.CancelAfter(TimeSpan.FromMilliseconds(1200));
                 using var response = Http.GetAsync(connectUri, cts.Token).GetAwaiter().GetResult();
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!response.IsSuccessStatusCode)
-                {
-                    _cachedGeneratorAssetTransport = "native";
-                    Volatile.Write(ref _assetTransportSnapshot, new("native", ""));
-                    return _cachedGeneratorAssetPublicBaseUrl = "";
-                }
+                if (!response.IsSuccessStatusCode) return _cachedGeneratorAssetPublicBaseUrl;
                 string json = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
                 using JsonDocument doc = JsonDocument.Parse(json);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (doc.RootElement.ValueKind == JsonValueKind.Object
                     && doc.RootElement.TryGetProperty("multiplayer", out JsonElement multiplayer)
-                    && multiplayer.ValueKind == JsonValueKind.Object)
+                    && multiplayer.ValueKind == JsonValueKind.Object
+                    && multiplayer.TryGetProperty("assetTransport", out JsonElement transport)
+                    && transport.ValueKind == JsonValueKind.String
+                    && (string.Equals(transport.GetString()?.Trim(), "native", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(transport.GetString()?.Trim(), "http", StringComparison.OrdinalIgnoreCase)))
                 {
                     _cachedGeneratorAssetPublicBaseUrl = multiplayer.TryGetProperty("assetPublicBaseUrl", out JsonElement url)
                         && url.ValueKind == JsonValueKind.String
                         ? NormalizeAssetBaseUrl(url.GetString() ?? "")
                         : "";
-                    _cachedGeneratorAssetTransport = multiplayer.TryGetProperty("assetTransport", out JsonElement transport)
-                        && transport.ValueKind == JsonValueKind.String
-                        ? NormalizeAssetTransport(transport.GetString() ?? "")
-                        : "native";
+                    _cachedGeneratorAssetTransport = NormalizeAssetTransport(transport.GetString() ?? "");
                 }
-                else
-                {
-                    _cachedGeneratorAssetPublicBaseUrl = "";
-                    _cachedGeneratorAssetTransport = "native";
-                }
+                else return _cachedGeneratorAssetPublicBaseUrl;
             }
             catch (Exception error) when (cancellationToken.IsCancellationRequested)
             {
@@ -192,8 +196,8 @@ public sealed class GeneratorClient
             }
             catch
             {
-                _cachedGeneratorAssetPublicBaseUrl = "";
-                _cachedGeneratorAssetTransport = "native";
+                // Unavailable/malformed discovery observes no transport mode.
+                return _cachedGeneratorAssetPublicBaseUrl;
             }
             Volatile.Write(ref _assetTransportSnapshot, new(_cachedGeneratorAssetTransport, _cachedGeneratorAssetPublicBaseUrl));
             return _cachedGeneratorAssetPublicBaseUrl;
@@ -486,13 +490,20 @@ public sealed class GeneratorClient
             using var doc = JsonDocument.Parse(json ?? "{}");
             var root = doc.RootElement;
             if (root.TryGetProperty("playerMessage", out var playerProp) && playerProp.ValueKind == JsonValueKind.String)
-                return playerProp.GetString() ?? "";
+                return GenerationFailureFacts(playerProp.GetString() ?? "");
         }
         catch
         {
         }
         return "";
     }
+
+    // Compatibility with older LocalGenerator responses: these exact legacy
+    // delivery clauses are not generation facts. Native refund ownership decides
+    // whether delivery is complete; retain the actionable failure/retry detail.
+    internal static string GenerationFailureFacts(string message)
+        => (message ?? "").Replace("Items were returned; ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Items were returned.", "", StringComparison.OrdinalIgnoreCase).Trim();
 
     private static bool IsFatalRecipeStatusCode(int statusCode)
     {
@@ -534,7 +545,7 @@ public sealed class GeneratorClient
                     FailureKind = GenerationFailureKind.FatalRecipe,
                     StatusCode = 200,
                     Message = "LocalGenerator returned a non-deliverable generated item payload",
-                    PlayerMessage = "Generation failed: LocalGenerator returned a broken item payload. Items were returned; try again."
+                    PlayerMessage = "Generation failed: LocalGenerator returned a broken item payload. Try again."
                 };
             }
             request.CancellationToken.ThrowIfCancellationRequested();

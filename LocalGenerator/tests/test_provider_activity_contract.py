@@ -98,7 +98,10 @@ def real_route():
         except HTTPError as error:
             response = error
         with response:
-            return response.code, json.loads(response.read())
+            body = json.loads(response.read())
+            if response.code >= 400:
+                assert "Items were returned" not in body.get("playerMessage", ""), "route has no native material authority"
+            return response.code, body
 
     try:
         yield post
@@ -230,6 +233,7 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
         )
     try:
         response_status, body = real_route(dict(PAYLOAD))
+        assert "Items were returned" not in body["playerMessage"], "HTTP diagnostics have no material delivery authority"
         assert body["error"] == expected
         assert body["retryable"] is retryable
         assert response_status in {424, 504}
@@ -251,6 +255,20 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
         provider.server_close()
         worker.join(3)
         assert not worker.is_alive()
+
+
+@pytest.mark.parametrize("status,code,retryable", [
+    (424, "llm_auth_failed", False), (422, "llm_output_invalid", True),
+    (424, "visual_dependency_failed", True), (424, "planner_unavailable", True),
+    (409, "generator_busy", True), (428, "world_scope_missing", False),
+    (500, "combine_failed", True), (500, "unknown_failure", False),
+])
+def test_failure_payload_does_not_claim_native_material_delivery(status, code, retryable):
+    body = helpers._combine_failure_payload(status, code, "check configured provider", {}, retryable=retryable)
+    assert "returned" not in body["playerMessage"].lower()
+    assert body["httpStatus"] == status and body["error"] == code
+    assert body["retryable"] is retryable and body["manualRegenerateAllowed"] is retryable
+    assert body["cacheRecoveryAllowed"] is False
 
 
 def test_disabled_profile_records_own_prelease_failure_on_real_route(monkeypatch, real_route):

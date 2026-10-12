@@ -648,6 +648,7 @@ internal static partial class EngineRuntimeChecks
     private static void MaterialElementAssetUsesNetworkRoster()
     {
         var data = ParseMaterialElement(MaterialElementWire());
+        InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
         data.VfxManifest.Assets![0].SpritePath = Path.Combine(Terraria.Program.SavePath, "recipe_vfx_Shard_A.png");
         byte[] png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGMUDJ76n4GBgYGJAQoAHTQB/GtRKAwAAAAASUVORK5CYII=");
         File.WriteAllBytes(data.VfxManifest.Assets[0].SpritePath, png);

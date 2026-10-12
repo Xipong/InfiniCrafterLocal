@@ -24,4 +24,6 @@ PNG генерируются во время работы, не являются
 
 Cache clear не удаляет disk PNG/JSON/recipes: [команды и paths](command.md#infinicache). MP asset mode теперь default **native**, HTTP требует доступного host endpoint: [настройка MP](QUICK_START_RU.md#multiplayer-и-диагностика), не обязательный HTTP для всех клиентов.
 
+HTTP failure messages описывают только generation failure и действия пользователя, не доставку материалов. Terminal lane status читает native owner: deferred return ждёт места, завершённый local return доставлен, remote failure сохраняет inputs в кузне хозяина; неизвестное состояние не обещает возврат. Cold asset metadata snapshot не равен наблюдению `native`: до успешного discovery сохраняется validated accepted route, HTTP discovery идёт только на worker; observed host mode/URL имеет приоритет.
+
 Commit/refund server-authoritative: клиенты не присылают готовый `GeneratedItemData`. Fatal craft failure проходит штатный refund path; transient transport/cache races имеют bounded recovery. При world unload pending inputs обрабатываются refund/save, presentation sync caches очищаются. Prompt/prose/script поля не исполняются как gameplay.

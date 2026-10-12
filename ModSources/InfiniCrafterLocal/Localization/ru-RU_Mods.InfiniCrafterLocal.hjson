@@ -87,6 +87,8 @@ StationUI: {
 	OutcomeFailed: "Ковка не удалась"
 	OutcomeCancelled: "Ковка отменена"
 	OutcomeTimedOut: "Время ожидания истекло"
+	IngredientsDelivered: "Материалы доставлены"
+	IngredientsServerRetained: "Материалы остаются в кузне хозяина"
 	RefundPending: "Возврат ожидает свободного места"
 
 	Started: "Кузня чудес: ковка началась; результат сразу по готовности"

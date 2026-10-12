@@ -10,7 +10,8 @@ namespace InfiniCrafterLocal.Common.Players;
 public sealed partial class InfiniCraftPlayer
 {
     public enum CraftLaneOutcomeKind { None, Succeeded, Failed, Cancelled, TimedOut }
-    public readonly record struct CraftLaneOutcome(CraftLaneOutcomeKind Kind, string Message);
+    public enum CraftLaneMaterialDisposition { Unobserved, LocalRefund, ServerRetained }
+    public readonly record struct CraftLaneOutcome(CraftLaneOutcomeKind Kind, string Message, CraftLaneMaterialDisposition Materials = CraftLaneMaterialDisposition.Unobserved);
     private readonly CraftLaneOutcome[] _craftLaneOutcomes = new CraftLaneOutcome[3];
     private readonly int[] _craftLaneOutcomeTicks = new int[3];
     private readonly bool[] _remoteCraftCancelRequested = new bool[3];
@@ -35,11 +36,15 @@ public sealed partial class InfiniCraftPlayer
     private static bool HasReadyCraftResult(Task<GeneratedItemData?>? task)
         => task?.Status == TaskStatus.RanToCompletion && task.Result is not null;
 
-    private void SetCraftLaneOutcome(int laneIndex, CraftLaneOutcomeKind kind, string message)
+    private void SetCraftLaneOutcome(int laneIndex, CraftLaneOutcomeKind kind, string message, CraftLaneMaterialDisposition materials = CraftLaneMaterialDisposition.Unobserved)
     {
         if (laneIndex is < 0 or > 2) return;
-        string bounded = (message ?? "").Replace('\r', ' ').Replace('\n', ' ');
-        _craftLaneOutcomes[laneIndex] = new(kind, bounded[..Math.Min(bounded.Length, 240)]);
+        string bounded = (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
+            ? Services.GeneratorClient.GenerationFailureFacts(message) : message ?? "").Replace('\r', ' ').Replace('\n', ' ');
+        if (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
+            && IsCraftLanePending(laneIndex) && (Main.netMode == NetmodeID.Server || _stationEscrowUsesRemoteAuthority))
+            materials = CraftLaneMaterialDisposition.ServerRetained;
+        _craftLaneOutcomes[laneIndex] = new(kind, bounded[..Math.Min(bounded.Length, 240)], materials);
         _craftLaneOutcomeTicks[laneIndex] = kind == CraftLaneOutcomeKind.None ? 0 : 30 * 60;
     }
 
@@ -72,7 +77,8 @@ public sealed partial class InfiniCraftPlayer
             _request?.Cancel();
             if (IsServerAuthoritativeCraft) SendServerAuthoritativeResultIfNeeded(false, "", reason);
             else if (!_stationEscrowUsesRemoteAuthority) RefundIngredients();
-            SetCraftLaneOutcome(0, kind, reason);
+            SetCraftLaneOutcome(0, kind, reason, !IsServerAuthoritativeCraft && !_stationEscrowUsesRemoteAuthority
+                ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
             ClearCraft();
             return true;
         }
@@ -90,7 +96,8 @@ public sealed partial class InfiniCraftPlayer
             RefundOne(job.Request.RefundA);
             RefundOne(job.Request.RefundB);
         }
-        SetCraftLaneOutcome(laneIndex, kind, reason);
+        SetCraftLaneOutcome(laneIndex, kind, reason, Main.netMode != NetmodeID.Server && !_stationEscrowUsesRemoteAuthority
+            ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
         _multiDevJobs[laneIndex - 1] = null;
         return true;
     }
