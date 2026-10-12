@@ -1288,8 +1288,7 @@ def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _prompt_cache_boundary(payload: dict[str, Any]) -> tuple[int, int] | None:
     segment = instruction_segment_index(payload)
     if segment is not None:
-        endpoint = payload[PROMPT_CACHE_METADATA_KEY].get("staticDataMessageIndex", segment)
-        return endpoint, len(payload["messages"][endpoint]["content"])
+        return segment, len(payload["messages"][segment]["content"])
     marker = payload.get(PROMPT_CACHE_METADATA_KEY)
     if not isinstance(marker, dict):
         return None
@@ -1338,11 +1337,12 @@ def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict
         }
     if instruction_segment_index(payload) is not None and (context is None or active_llm_provider(context) != "openai_codex"):
         stable["framing"] = "complete-builder-instructions-v1"
-    if "staticDataMessageIndex" in payload.get(PROMPT_CACHE_METADATA_KEY, {}):
-        stable["framing"] = "complete-builder-instructions-and-user-schema-v1"
+    segment = instruction_segment_index(payload)
+    if segment is not None and "schemaDefinitions" in json.loads(messages[segment]["content"]):
+        stable["framing"] = "complete-builder-instructions-and-grammar-v1"
         # The full schema is a case-dependent constraint, not routing affinity.
         # Mode/name/strictness remain identity; canonical definitions are already
-        # included in the declared USER endpoint. Author identity is untouched.
+        # included in the declared DEVELOPER endpoint. Author identity is untouched.
         if "wire" in stable:
             shape = stable["wire"].get("text", {}).get("format", {})
         else:

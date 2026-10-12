@@ -158,7 +158,7 @@ def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(mon
     from prompt_packet_helpers import request_dossier
     first, second = stage_packets(monkeypatch, stage)
     static = json.loads(first["messages"][1]["content"])
-    dynamic = json.loads(first["messages"][3]["content"])
+    dynamic = json.loads(first["messages"][2]["content"])
     assert "spritePresentationReadOnly" in static
     assert "bakeFillByProcessingRole" not in static["spritePresentationReadOnly"]
     assert "spritePresentationReadOnly" not in dynamic

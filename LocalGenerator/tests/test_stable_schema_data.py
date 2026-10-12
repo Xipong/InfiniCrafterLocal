@@ -1,4 +1,4 @@
-"""Canonical schemas remain USER data; no inference, including native adapters."""
+"""Canonical grammar is application instructions; case constraints stay USER."""
 import copy
 import json
 
@@ -50,7 +50,7 @@ def wire_text(row):
 @pytest.mark.parametrize("provider,base,api,model", PROVIDERS)
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 @pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
-def test_actual_senders_cache_schema_data_and_preserve_author(monkeypatch, provider, base, api, model, mode, stage):
+def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypatch, provider, base, api, model, mode, stage):
     # Fixture captures the actual builder, not a manually authored lookalike.
     first, second = stage_packets(monkeypatch, stage, format_mode=mode)
     context = {"provider": provider, "base_url": base, "api_mode": api, "model": model, "api_key": "offline"}
@@ -72,10 +72,10 @@ def test_actual_senders_cache_schema_data_and_preserve_author(monkeypatch, provi
         effective = format_value.get("json_schema", format_value)["schema"]
         assert effective == first["response_format"]["json_schema"]["schema"]
         assert '"$ref"' not in json.dumps(effective) or stage in {"author", "repair", "format"}
-    if "staticDataMessageIndex" not in first["_infini_prompt_cache"]:
+    if "schemaDefinitions" not in json.loads(first["messages"][1]["content"]):
         return  # Existing Author wire/key regression is tested separately.
     changed = copy.deepcopy(first)
-    dynamic = json.loads(changed["messages"][3]["content"])
+    dynamic = json.loads(changed["messages"][2]["content"])
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     # Change the accepted entity set's exact schema constraints along with facts.
     def rename(node):
@@ -90,14 +90,14 @@ def test_actual_senders_cache_schema_data_and_preserve_author(monkeypatch, provi
                 rename(value)
     rename(dynamic[schema_key])
     dynamic["novelCase"] = {"entityId": "unseen_body"}
-    changed["messages"][3]["content"] = json.dumps(dynamic, ensure_ascii=False, separators=(",", ":"))
+    changed["messages"][2]["content"] = json.dumps(dynamic, ensure_ascii=False, separators=(",", ":"))
     if mode == "json_schema":
         rename(changed["response_format"]["json_schema"]["schema"])
     tail_wire = capture_wire(monkeypatch, changed, context)
     assert tail_wire["prompt_cache_key"] == wires[0]["prompt_cache_key"]
-    definitions = json.loads(changed["messages"][2]["content"])
+    definitions = json.loads(changed["messages"][1]["content"])
     next(iter(definitions["schemaDefinitions"]["$defs"].values()))["description"] = "Canonical owner revision."
-    changed["messages"][2]["content"] = json.dumps(definitions, separators=(",", ":"))
+    changed["messages"][1]["content"] = json.dumps(definitions, separators=(",", ":"))
     revised = capture_wire(monkeypatch, changed, context)
     assert revised["prompt_cache_key"] != tail_wire["prompt_cache_key"]
 
@@ -106,29 +106,29 @@ def test_actual_senders_cache_schema_data_and_preserve_author(monkeypatch, provi
 def test_static_schema_declaration_refuses_malformed_objects_before_sender(monkeypatch, mutation):
     first = stage_packets(monkeypatch, "vfx")[0]
     if mutation == "nested_duplicate":
-        first["messages"][2]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"object","type":"string"}}}}'
+        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"object","type":"string"}}}}'
     elif mutation == "escaped_duplicate":
-        first["messages"][3]["content"] = r'{"x":1,"\u0078":2}'
+        first["messages"][2]["content"] = r'{"x":1,"\u0078":2}'
     elif mutation in {"nan", "infinity", "overflow_static", "overflow_dynamic"}:
         lexeme = "NaN" if mutation == "nan" else "Infinity" if mutation == "infinity" else "1e999"
-        index = 3 if mutation == "overflow_dynamic" else 2
+        index = 2 if mutation == "overflow_dynamic" else 1
         first["messages"][index]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"enum":[' + lexeme + ']}}}}'
     elif mutation == "overlap":
-        first["messages"][3]["content"] = first["messages"][2]["content"]
+        first["messages"][2]["content"] = first["messages"][1]["content"]
     elif mutation in {"boolean_endpoint", "null_endpoint", "out_of_bounds"}:
-        first["_infini_prompt_cache"]["staticDataMessageIndex"] = {"boolean_endpoint": True, "null_endpoint": None, "out_of_bounds": 99}[mutation]
+        first["_infini_prompt_cache"]["instructionMessageIndex"] = {"boolean_endpoint": True, "null_endpoint": None, "out_of_bounds": 99}[mutation]
     elif mutation == "wrongrole":
-        first["messages"][2]["role"] = "developer"
+        first["messages"][1]["role"] = "user"
     elif mutation == "unknown_key":
         first["_infini_prompt_cache"]["other"] = 2
     elif mutation == "missing_instruction":
-        del first["_infini_prompt_cache"]["instructionMessageIndex"]
+        first["_infini_prompt_cache"] = {"staticDataMessageIndex": 2}
     elif mutation == "not_object":
-        first["messages"][2]["content"] = '[]'
+        first["messages"][1]["content"] = '[]'
     elif mutation == "empty_defs":
-        first["messages"][2]["content"] = '{"schemaDefinitions":{"$defs":{}}}'
+        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{}}}'
     else:
-        first["messages"][2]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"string"}},"caseFact":1}}'
+        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"string"}},"caseFact":1}}'
     monkeypatch.setattr(transport, "http_json", lambda *a, **k: pytest.fail("malformed declaration reached HTTP"))
     with pytest.raises(ValueError):
         transport._llm_json_single_context(first, 3, {"provider": "openai_compat", "base_url": "https://api.openai.com/v1", "model": "gpt-6.1-sol"})
@@ -145,10 +145,10 @@ def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
     first = stage_packets(monkeypatch, stage, format_mode=mode)[0]
-    dynamic = json.loads(first["messages"][3]["content"])
+    dynamic = json.loads(first["messages"][2]["content"])
     key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     compact = copy.deepcopy(dynamic[key])
-    compact["$defs"] = json.loads(first["messages"][2]["content"])["schemaDefinitions"]["$defs"]
+    compact["$defs"] = json.loads(first["messages"][1]["content"])["schemaDefinitions"]["$defs"]
     inline = request_dossier(first)[key]
     if mode == "json_schema":
         assert inline == first["response_format"]["json_schema"]["schema"]
@@ -222,8 +222,8 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
         data = compile_runtime_program(build_runtime_fixture(fixture))
     monkeypatch.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
     other = stage_packets(monkeypatch, stage, format_mode=mode)[0]
-    assert ordinary["messages"][:3] == other["messages"][:3]
-    assert ordinary["messages"][3] != other["messages"][3] or fixture == "workbench_blade"
+    assert ordinary["messages"][:2] == other["messages"][:2]
+    assert ordinary["messages"][2] != other["messages"][2] or fixture == "workbench_blade"
     # Full provider schema remains exact and inline, regardless of affinity.
     from prompt_packet_helpers import request_dossier
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
@@ -244,22 +244,23 @@ def test_schema_owner_revision_invalidates_actual_sender_affinity(monkeypatch, s
         return schema
     monkeypatch.setattr(owner, name, revised)
     after = stage_packets(monkeypatch, stage)[0]
-    assert before["messages"][2] != after["messages"][2]
-    assert before["messages"][1] == after["messages"][1]
-    assert before["messages"][3] == after["messages"][3]
+    assert before["messages"][1] != after["messages"][1]
+    assert before["messages"][2] == after["messages"][2]
     context = dict(provider="openai_codex", base_url="https://chatgpt.com/backend-api/codex", api_mode="responses", model="gpt-6.1-sol")
     assert capture_wire(monkeypatch, before, context)["prompt_cache_key"] != capture_wire(monkeypatch, after, context)["prompt_cache_key"]
 
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-def test_canonical_schema_nodes_end_at_complete_stable_user_boundary(monkeypatch, stage):
+def test_canonical_grammar_nodes_share_complete_stable_developer_contract(monkeypatch, stage):
     first, second = stage_packets(monkeypatch, stage)
-    assert [row["role"] for row in first["messages"]] == ["system", "developer", "user", "user"]
-    assert first["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
-    assert first["messages"][:3] == second["messages"][:3]
-    static = json.loads(first["messages"][2]["content"])
-    dynamic = json.loads(first["messages"][3]["content"])
-    assert set(static) == {"schemaDefinitions"}
+    assert [row["role"] for row in first["messages"]] == ["system", "developer", "user"]
+    assert first["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+    assert first["messages"][:2] == second["messages"][:2]
+    static = json.loads(first["messages"][1]["content"])
+    dynamic = json.loads(first["messages"][2]["content"])
+    assert "schemaDefinitions" in static
+    assert "schemaDefinitions" not in dynamic
+    assert static["rules"][-1].startswith("The output schema's #/$defs/ references resolve against DEVELOPER schemaDefinitions.$defs;")
     assert set(static["schemaDefinitions"]) == {"$defs"}
     defs = static["schemaDefinitions"]["$defs"]
     if stage.startswith("vfx"):
@@ -274,5 +275,5 @@ def test_canonical_schema_nodes_end_at_complete_stable_user_boundary(monkeypatch
         item = dynamic["responseSchema"]["properties"][key]
         assert (item["anyOf"][0] if key == "itemPatch" else item) == {"$ref": "#/$defs/" + key}
     assert not static.keys() & dynamic.keys()
-    assert first["messages"][3] != second["messages"][3]
-    assert transport._prompt_cache_boundary(first) == (2, len(first["messages"][2]["content"]))
+    assert first["messages"][2] != second["messages"][2]
+    assert transport._prompt_cache_boundary(first) == (1, len(first["messages"][1]["content"]))

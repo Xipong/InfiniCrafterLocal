@@ -977,7 +977,7 @@ def test_physical_geometry_guidance_reaches_director_repair_and_vfx_without_sele
     responses.append({})
     visual._request_visual_kit(variant, {}, {}, {}, {})
     variant_request = requests[-1]
-    assert variant_request["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
+    assert variant_request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
     assert variant_request["messages"][1]["content"] == requests[0]["messages"][1]["content"]
     variant_packet = request_dossier(variant_request)
     variant_owner = next(r for r in variant_packet["runtimeEntities"] if r["id"] == entity["id"])

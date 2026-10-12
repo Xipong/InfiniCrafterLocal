@@ -185,5 +185,5 @@ def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, re
     other_static, other_prefix, other_full = _marked_prefix(requests[1])
     assert prefix == other_prefix and static == other_static
     assert full != other_full
-    assert set(static) == ({"task", "rules", "runtimeVocabularyReadOnly"} if repair else {"schema", "rules", "runtimeVocabulary"})
+    assert set(static) == ({"task", "rules", "runtimeVocabularyReadOnly", "schemaDefinitions"} if repair else {"schema", "rules", "runtimeVocabulary", "schemaDefinitions"})
     assert "outputSchema" not in static

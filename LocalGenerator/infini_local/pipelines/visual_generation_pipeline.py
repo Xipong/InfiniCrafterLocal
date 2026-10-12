@@ -16,7 +16,7 @@ from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
-from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_data_segment
+from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
@@ -1131,7 +1131,7 @@ def _request_visual_kit(
     request = with_instruction_segments(request, payload, _VISUAL_STATIC_PREFIX_KEYS)
     item_key = "itemPatch" if repair else "item"
     item_path = ("properties", item_key, "anyOf", 0) if repair else ("properties", item_key)
-    request = with_schema_data_segment(request, "responseSchema", {item_key: item_path})
+    request = with_schema_instruction_definitions(request, "responseSchema", {item_key: item_path})
     stage_name = "visual_repair" if repair else "visual_director"
     trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
     trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))

@@ -12,14 +12,15 @@ def dossier_text(request, *, declaration=None):
         index = instruction_segment_index(source)
         assert index is not None
         rows = request["messages"][index:index + 2]
-        if "staticDataMessageIndex" in marker:
-            static, definitions, dynamic = [json.loads(row["content"]) for row in request["messages"][index:index + 3]]
-            assert [row["role"] for row in request["messages"][index:index + 3]] == ["developer", "user", "user"]
-            assert static["rules"].pop().startswith("The output schema's #/$defs/ references resolve against the preceding USER schemaDefinitions.$defs;")
+        static, dynamic = [json.loads(row["content"]) for row in rows]
+        if "schemaDefinitions" in static:
+            definitions = static.pop("schemaDefinitions")
+            assert [row["role"] for row in rows] == ["developer", "user"]
+            assert static["rules"].pop().startswith("The output schema's #/$defs/ references resolve against DEVELOPER schemaDefinitions.$defs;")
             def inline(node):
                 if isinstance(node, dict):
                     if set(node) == {"$ref"} and node["$ref"].startswith("#/$defs/"):
-                        return inline(definitions["schemaDefinitions"]["$defs"][node["$ref"][len("#/$defs/"):]])
+                        return inline(definitions["$defs"][node["$ref"][len("#/$defs/"):]])
                     return {key: inline(value) for key, value in node.items()}
                 if isinstance(node, list):
                     return [inline(value) for value in node]

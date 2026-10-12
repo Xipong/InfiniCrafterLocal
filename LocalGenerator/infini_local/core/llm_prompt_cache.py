@@ -67,23 +67,16 @@ def static_instruction_prefix_parts(payload: Mapping[str, Any]) -> tuple[int, st
 def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
     """Validate complete builder-owned instructions, with disjoint USER data."""
     marker = payload.get(PROMPT_CACHE_METADATA_KEY)
-    if isinstance(marker, dict) and "staticDataMessageIndex" in marker and "instructionMessageIndex" not in marker:
-        raise ValueError("static schema data requires a complete instruction declaration")
+    if isinstance(marker, dict) and "staticDataMessageIndex" in marker:
+        raise ValueError("retired static schema data declaration is unsupported")
     if not isinstance(marker, dict) or "instructionMessageIndex" not in marker:
         return None
     index = marker["instructionMessageIndex"]
     messages = payload.get("messages")
-    allowed = {"instructionMessageIndex"}
-    if "staticDataMessageIndex" in marker:
-        allowed.add("staticDataMessageIndex")
-    if (set(marker) != allowed or type(index) is not int
+    if (set(marker) != {"instructionMessageIndex"} or type(index) is not int
             or not isinstance(messages, list) or not 0 <= index < len(messages) - 1):
         raise ValueError("instruction segments require an existing developer/user pair")
-    data_index = marker.get("staticDataMessageIndex")
-    if data_index is not None and (type(data_index) is not int or data_index != index + 1
-                                   or data_index + 1 >= len(messages)):
-        raise ValueError("static schema data requires adjacent complete user objects and a dynamic tail")
-    segment_rows = messages[index:(data_index + 2 if data_index is not None else index + 2)]
+    segment_rows = messages[index:index + 2]
     static, dynamic = segment_rows[:2]
     if (not isinstance(static, dict) or not isinstance(dynamic, dict)
             or any(not isinstance(row, dict) or row.get("role") not in {"system", "developer"} for row in messages[:index])
@@ -118,10 +111,8 @@ def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
         if not isinstance(obj, dict) or not obj or keys & obj.keys():
             raise ValueError("instruction segments require disjoint nonempty objects")
         keys.update(obj)
-    if "staticDataMessageIndex" in marker:
-        if data_index is None or set(objects[1]) != {"schemaDefinitions"}:
-            raise ValueError("static data must declare only schema definitions")
-        definitions = objects[1]["schemaDefinitions"]
+    if "schemaDefinitions" in objects[0]:
+        definitions = objects[0]["schemaDefinitions"]
         if (not isinstance(definitions, dict) or set(definitions) != {"$defs"}
                 or not isinstance(definitions["$defs"], dict) or not definitions["$defs"]
                 or any(not isinstance(value, dict) or not value for value in definitions["$defs"].values())):
@@ -135,7 +126,7 @@ def with_instruction_segments(
     """Builder declaration, not a cacheability-to-authority promotion.
 
     The caller owns every listed member as application instructions. Unlisted
-    facts and scoped output schemas remain USER data; the combined dossier is
+    facts and case-specific output schemas remain USER data; the combined dossier is
     only a derived compatibility view for traces and syntax Repair.
     """
     if not instruction_keys or isinstance(instruction_keys, (str, bytes)):
@@ -154,17 +145,18 @@ def with_instruction_segments(
     return out
 
 
-def with_schema_data_segment(
+def with_schema_instruction_definitions(
     payload: dict[str, Any], schema_key: str, definition_paths: Mapping[str, tuple[str | int, ...]],
 ) -> dict[str, Any]:
     """Extract explicit owner-selected nodes, not inferred invariant subtrees.
 
     The response_format keeps its complete provider-compatible schema. Only the
-    model-facing dossier uses root $defs references, with every definition in a
-    separate complete USER object. No case fact acquires instruction authority.
+    model-facing dossier uses root $defs references to canonical application-owned
+    output grammar in the existing DEVELOPER contract. The caller explicitly owns
+    these nodes; runtime enums, facts and Repair permissions stay in USER.
     """
     index = instruction_segment_index(payload)
-    if index is None or "staticDataMessageIndex" in payload[PROMPT_CACHE_METADATA_KEY]:
+    if index is None or "schemaDefinitions" in json.loads(payload["messages"][index]["content"]):
         raise ValueError("schema data requires an existing instruction/case pair")
     messages = copy.deepcopy(payload["messages"])
     dynamic = json.loads(messages[index + 1]["content"])
@@ -181,17 +173,13 @@ def with_schema_data_segment(
     encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     instructions = json.loads(messages[index]["content"])
     instructions["rules"].append(
-        "The output schema's #/$defs/ references resolve against the preceding USER schemaDefinitions.$defs; "
+        "The output schema's #/$defs/ references resolve against DEVELOPER schemaDefinitions.$defs; "
         "together they are the complete output contract, not additional output fields. Repair permissions remain unchanged."
     )
+    instructions["schemaDefinitions"] = {"$defs": definitions}
     messages[index]["content"] = encode(instructions)
-    messages[index + 1:index + 2] = [
-        {**messages[index + 1], "content": encode({"schemaDefinitions": {"$defs": definitions}})},
-        {**messages[index + 1], "content": encode(dynamic)},
-    ]
-    out = {**payload, "messages": messages, PROMPT_CACHE_METADATA_KEY: {
-        "instructionMessageIndex": index, "staticDataMessageIndex": index + 1,
-    }}
+    messages[index + 1]["content"] = encode(dynamic)
+    out = {**payload, "messages": messages}
     instruction_segment_index(out)
     return out
 

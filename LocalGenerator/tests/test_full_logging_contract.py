@@ -53,7 +53,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         result = author.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
         assert request_dossier(captured[0]) == before
-        assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
+        assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
     assert result == json.loads(raw)
     if enabled:
         artifacts = list((tmp_path / "stage_requests").glob("*.json"))
