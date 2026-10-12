@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping, Sequence
 import json
+import math
 
 PROMPT_CACHE_METADATA_KEY = "_infini_prompt_cache"
 
@@ -89,7 +90,14 @@ def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
     def reject_constant(value):
         raise ValueError("instruction segments require strict JSON values")
 
-    objects = [json.loads(message["content"], object_pairs_hook=unique_object, parse_constant=reject_constant)
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("instruction segments require finite JSON numbers")
+        return number
+
+    objects = [json.loads(message["content"], object_pairs_hook=unique_object,
+                          parse_constant=reject_constant, parse_float=finite_float)
                for message in (static, dynamic)]
     if any(not isinstance(obj, dict) or not obj for obj in objects) or objects[0].keys() & objects[1].keys():
         raise ValueError("instruction segments require disjoint nonempty objects")

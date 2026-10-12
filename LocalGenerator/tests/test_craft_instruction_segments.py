@@ -207,7 +207,7 @@ def test_generic_responses_preserves_explicit_developer_and_refuses_unknown_role
         transport._responses_payload_from_chat(source)
 
 
-@pytest.mark.parametrize("mutation", ["duplicate", "nan", "nonobject", "wrongrole", "late", "bool", "unknown"])
+@pytest.mark.parametrize("mutation", ["duplicate", "nan", "overflow_static", "overflow_dynamic", "nonobject", "wrongrole", "late", "bool", "unknown"])
 def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatch, mutation):
     from infini_local.core.llm_prompt_cache import instruction_segment_index
     packet, _, _ = author.build_initial_author_request({}, {}, {}, {}, "negative", model_name="test-model")
@@ -215,6 +215,9 @@ def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatc
         packet["messages"][1]["content"] = '{"x":1,"x":2}'
     elif mutation == "nan":
         packet["messages"][1]["content"] = '{"x":NaN}'
+    elif mutation in {"overflow_static", "overflow_dynamic"}:
+        index = 1 if mutation == "overflow_static" else 2
+        packet["messages"][index]["content"] = '{"x":{"nested":[1e999]}}'
     elif mutation == "nonobject":
         packet["messages"][1] = "developer"
     elif mutation == "wrongrole":
