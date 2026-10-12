@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from pathlib import Path
 import struct
 from types import FunctionType
@@ -11,7 +12,7 @@ import zlib
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 
 
-def write_no_image_fixture_png(path: Path, *, size: int = 32) -> Path:
+def write_no_image_fixture_png(path: Path, *, size: int = 32, ingredient: bool = False) -> Path:
     """Write a deterministic technical PNG without calling an image backend."""
 
     if size < 1 or size > 256:
@@ -30,7 +31,12 @@ def write_no_image_fixture_png(path: Path, *, size: int = 32) -> Path:
     for y in range(size):
         rows.append(0)
         for x in range(size):
-            if (x // 4 + y // 4) % 2:
+            if ingredient:
+                # Technical alpha control, not the authored artwork: no key
+                # colour, with a visible center and transparent outside pixels.
+                alpha = 255 if size // 4 <= x < size - size // 4 and size // 4 <= y < size - size // 4 else 0
+                rows.extend((24, 24, 24, alpha))
+            elif (x // 4 + y // 4) % 2:
                 rows.extend((255, 0, 255, 255))
             else:
                 rows.extend((24, 24, 24, 255))
@@ -127,6 +133,24 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
             "equipOverlayTechnicalScore": 1.0,
             "equipOverlayScore": 1.0,
         })
+    ingredient_fixtures = []
+    assets = {row["id"]: row for row in data.get("vfxManifest", {}).get("assets", [])}
+    for slot in asset_plan:
+        if not str(slot.get("role") or "").startswith("vfx:"):
+            continue
+        asset = assets[slot["vfxAssetId"]]
+        identity = [data.get("id"), asset["id"], asset["canvasSize"], asset["layout"]]
+        token = hashlib.sha256(json.dumps(identity, separators=(",", ":")).encode()).hexdigest()
+        path = write_no_image_fixture_png(
+            fixture_path.parent / ("qa-no-image-vfx-" + token + ".png"),
+            size=asset["canvasSize"], ingredient=True,
+        ).resolve()
+        asset.update(spritePath=str(path), spriteUrl="", spriteStatus="qa_no_image_fixture", spriteTechnicalScore=1.0)
+        ingredient_fixtures.append({
+            "assetId": asset["id"], "layout": asset["layout"], "canvasSize": asset["canvasSize"],
+            "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        })
+    data.setdefault("debug", {})["noImageQaIngredientFixtures"] = json.dumps(ingredient_fixtures, separators=(",", ":"))
     data.setdefault("debug", {})["noImageQaFixturePath"] = fixture
     return data
 
@@ -163,15 +187,15 @@ def observe_no_image_readiness(
     binding = control.get("debug", {}).get("noImageExecutionControl", {}).get("fixture")
     if binding is None:
         return control, readiness_check(control)
-    fixture = Path(binding["path"])
-    selected = Path(binding["selectedServingPath"])
-    _verify_no_image_fixture_identity(fixture, selected, binding["sha256"])
+    bindings = control["debug"]["noImageExecutionControl"].get("fixtures", [binding])
+    for row in bindings:
+        _verify_no_image_fixture_identity(Path(row["path"]), Path(row["selectedServingPath"]), row["sha256"])
     try:
         result = readiness_check(control)
     finally:
-        # A fresh canonical assessment can accept another complete PNG, or a
-        # cached/wrapped consumer can replace it after its own assessment.
-        _verify_no_image_fixture_identity(fixture, selected, binding["sha256"])
+        # Authenticate every selected QA ingredient through actual consumption.
+        for row in bindings:
+            _verify_no_image_fixture_identity(Path(row["path"]), Path(row["selectedServingPath"]), row["sha256"])
     return control, result
 
 
@@ -201,7 +225,13 @@ def synthetic_no_image_execution_control(
     # Keep every canonical owner/path/roster refusal. Only the explicitly QA
     # execution-status seam can be bridged, never other readiness failures.
     baseline = gate.visual_delivery_report(data, check_backend_config=False)
-    if any(row["code"] != "required_vfx_texture_not_ready" for row in baseline["problems"]):
+    for row in baseline["problems"]:
+        if row["code"] == "required_vfx_texture_not_ready":
+            continue
+        if row["code"] == "required_vfx_sprite_missing_or_invalid" and row.get("status") == "qa_no_image_fixture":
+            from infini_local.pipelines.sprite_postprocess import sprite_validation_fatal
+            if not sprite_validation_fatal(row.get("validation")):
+                continue
         return control
     fixture = fixture_path.resolve()
     selected_fixture = gate._resolved_asset_path(str(fixture))
@@ -219,6 +249,37 @@ def synthetic_no_image_execution_control(
     except OSError:
         return control
 
+    bindings = [{"path": str(fixture), "selectedServingPath": str(selected_fixture), "sha256": fixture_sha}]
+    ingredient_bindings = {}
+    assets = data.get("vfxManifest", {}).get("assets", [])
+    raw_provenance = data.get("debug", {}).get("noImageQaIngredientFixtures", "[]")
+    try:
+        provenance = json.loads(raw_provenance)
+    except (ValueError, TypeError):
+        return control
+    if not isinstance(provenance, list) or not all(isinstance(row, dict) for row in provenance):
+        return control
+    if len(provenance) != len(assets):
+        return control
+    for asset in assets:
+        matches = [row for row in provenance if row.get("assetId") == asset["id"]]
+        if len(matches) != 1:
+            return control
+        row = matches[0]
+        if (not isinstance(row.get("path"), str) or not row["path"]
+                or not isinstance(row.get("sha256"), str) or len(row["sha256"]) != 64):
+            return control
+        path = Path(row["path"])
+        selected = gate._resolved_asset_path(asset.get("spritePath"))
+        if (asset.get("spriteStatus") != "qa_no_image_fixture"
+                or asset.get("spritePath") != str(path)
+                or (row.get("layout"), row.get("canvasSize")) != (asset["layout"], asset["canvasSize"])
+                or selected is None or selected.resolve() != path.resolve()):
+            return control
+        binding = {"path": str(path), "selectedServingPath": str(selected.resolve()), "sha256": row["sha256"]}
+        _verify_no_image_fixture_identity(path, selected.resolve(), row["sha256"])
+        ingredient_bindings["vfx:" + asset["id"]] = binding
+        bindings.append(binding)
     entities = {row["id"]: row for row in data.get("runtimeProgram", {}).get("entities", [])}
     for dependency in vfx_png_dependencies(data)["dependencies"]:
         if dependency["spriteStatus"] != "qa_no_image_fixture":
@@ -226,17 +287,19 @@ def synthetic_no_image_execution_control(
             # let that projection erase a pending/non-QA selected producer.
             return control
         selected = gate._resolved_asset_path(dependency["spritePath"])
-        if selected is None or selected.resolve() != selected_fixture.resolve():
+        expected = ingredient_bindings.get(dependency["role"], bindings[0])
+        if selected is None or selected.resolve() != Path(expected["selectedServingPath"]):
             return control
 
     def execution_result(role: str, owner: dict[str, Any], prefix: str) -> tuple[str, str, float, str]:
         path = str(owner.get(prefix + "Path") or "")
         status = str(owner.get(prefix + "Status") or "")
         selected = gate._resolved_asset_path(path)
-        if status == "qa_no_image_fixture" and selected is not None and selected.resolve() == selected_fixture.resolve():
+        binding = ingredient_bindings.get(role, bindings[0])
+        if status == "qa_no_image_fixture" and selected is not None and selected.resolve() == Path(binding["selectedServingPath"]):
             evidence["owners"].append({
                 "role": role, "statusBefore": status,
-                "selectedServingPath": str(selected.resolve()), "sha256": fixture_sha,
+                "selectedServingPath": str(selected.resolve()), "sha256": binding["sha256"],
                 "completePng": True,
             })
             return path, "", 1.0, "generated"
@@ -257,7 +320,9 @@ def synthetic_no_image_execution_control(
             return execution_result(("impact:" if prefix == "impactSprite" else "entity:") + entity_id, owner, prefix)
         if role == "equip_overlay":
             return execution_result(role, data.get("visual", {}), "equipOverlay")
-        # Requested VFX ingredients are not supplied by this ordinary fixture.
+        if role in ingredient_bindings:
+            owner = next(row for row in assets if "vfx:" + row["id"] == role)
+            return execution_result(role, owner, "sprite")
         return "", "", 0.0, "pending"
 
     def forbidden(*_args: Any, **_kwargs: Any) -> Any:
@@ -276,9 +341,12 @@ def synthetic_no_image_execution_control(
     evidence["fixture"] = {
         "path": str(fixture), "selectedServingPath": str(selected_fixture), "sha256": fixture_sha,
     }
-    _verify_no_image_fixture_identity(fixture, selected_fixture, fixture_sha)
+    evidence["fixtures"] = bindings
+    for row in bindings:
+        _verify_no_image_fixture_identity(Path(row["path"]), Path(row["selectedServingPath"]), row["sha256"])
     projected = isolated_projector(control)
-    _verify_no_image_fixture_identity(fixture, selected_fixture, fixture_sha)
+    for row in bindings:
+        _verify_no_image_fixture_identity(Path(row["path"]), Path(row["selectedServingPath"]), row["sha256"])
     return projected
 
 
