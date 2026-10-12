@@ -252,19 +252,13 @@ internal static partial class EngineRuntimeChecks
             sprites.SetValue(null, Cache); assetSync.SetValue(null, Sync);
             Terraria.Main.graphics = (GraphicsDeviceManager)RuntimeHelpers.GetUninitializedObject(typeof(GraphicsDeviceManager));
             GC.SuppressFinalize(Terraria.Main.graphics);
-            Batch = (SpriteBatch)RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch)); GC.SuppressFinalize(Batch);
-            foreach (string name in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" }) {
-                var field = typeof(SpriteBatch).GetField(name, AssetOwnerInstance)!;
-                field.SetValue(Batch, Array.CreateInstance(field.FieldType.GetElementType()!, 128));
-            }
+            Batch = CpuSpriteBatch(128);
             Terraria.Main.spriteBatch = Batch;
             Func<GraphicsDevice, Stream, Texture2D> load = (_, stream) => {
                 Attempts++;
                 if (FailDecode) throw new InvalidOperationException("controlled decode boundary failure, no GPU");
                 using var memory = new MemoryStream(); stream.CopyTo(memory);
-                var texture = (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D)); GC.SuppressFinalize(texture);
-                typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 32);
-                typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 32);
+                var texture = CpuTexture(32, 32);
                 Loads.Add((Path.GetFullPath(((FileStream)stream).Name), memory.ToArray(), texture, Environment.CurrentManagedThreadId));
                 return texture;
             };
@@ -273,17 +267,7 @@ internal static partial class EngineRuntimeChecks
             Action<Texture2D, Color[]> upload = (_, _) => Uploads++;
             Action<GraphicsResource> dispose = resource => Disposals.Add(((Texture2D)resource, Environment.CurrentManagedThreadId));
             // Retain canonical selection/cache logic, replacing only GPU calls.
-            foreach (var method in typeof(RuntimeSpriteCache).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                hooks.Add(new MonoMod.RuntimeDetour.ILHook(method, il => {
-                    var cursor = new MonoMod.Cil.ILCursor(il);
-                    while (cursor.TryGotoNext(i => i.Operand is Mono.Cecil.MethodReference m &&
-                        ((m.DeclaringType.FullName == typeof(Texture2D).FullName && (m.Name == "GetData" || m.Name == "SetData") && m.Parameters.Count == 1)
-                        || (m.Name == "Dispose" && m.Parameters.Count == 0 && m.DeclaringType.FullName == typeof(GraphicsResource).FullName)))) {
-                        string name = ((Mono.Cecil.MethodReference)cursor.Next!.Operand).Name; cursor.Remove();
-                        if (name == "Dispose") cursor.EmitDelegate<Action<GraphicsResource>>(dispose);
-                        else cursor.EmitDelegate<Action<Texture2D, Color[]>>(name == "GetData" ? read : upload);
-                    }
-                }));
+            SpriteGpuBoundaries(hooks.Add, read, upload, dispose);
             Action<SpriteBatch> flush = batch => {
                 int n = (int)count.GetValue(batch)!;
                 var textures = (Texture2D[])textureInfo.GetValue(batch)!;

@@ -32,10 +32,7 @@ internal static partial class EngineRuntimeChecks
         int width = source.Length;
         Func<GraphicsDevice, Stream, Texture2D> load = (_, _) => {
             loads++;
-            var texture = (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-            GC.SuppressFinalize(texture);
-            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, width);
-            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 1);
+            var texture = CpuTexture(width, 1);
             pixels = (Color[])source.Clone();
             return texture;
         };
@@ -57,19 +54,7 @@ internal static partial class EngineRuntimeChecks
         var cache = new RuntimeSpriteCache();
         try
         {
-            foreach (var method in typeof(RuntimeSpriteCache).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                dataHooks.Add(new MonoMod.RuntimeDetour.ILHook(method, il => {
-                    var cursor = new MonoMod.Cil.ILCursor(il);
-                    while (cursor.TryGotoNext(i => i.Operand is Mono.Cecil.MethodReference m &&
-                        ((m.DeclaringType.FullName == typeof(Texture2D).FullName && (m.Name == "GetData" || m.Name == "SetData") && m.Parameters.Count == 1)
-                        || (m.Name == "Dispose" && m.Parameters.Count == 0 && m.DeclaringType.FullName == typeof(GraphicsResource).FullName))))
-                    {
-                        var name = ((Mono.Cecil.MethodReference)cursor.Next!.Operand).Name;
-                        cursor.Remove();
-                        if (name == "Dispose") cursor.EmitDelegate<Action<GraphicsResource>>(dispose);
-                        else cursor.EmitDelegate<Action<Texture2D, Color[]>>(name == "GetData" ? read : write);
-                    }
-                }));
+            SpriteGpuBoundaries(dataHooks.Add, read, write, dispose);
             Terraria.Main.dedServ = false;
             Terraria.Main.graphics = (GraphicsDeviceManager)RuntimeHelpers.GetUninitializedObject(typeof(GraphicsDeviceManager));
             GC.SuppressFinalize(Terraria.Main.graphics);

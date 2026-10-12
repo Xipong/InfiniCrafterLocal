@@ -88,8 +88,7 @@ internal static partial class EngineRuntimeChecks
         var data = GeneratedItemData.FromJson(System.IO.File.ReadAllText("tools/fixtures/current-world-1647275982-cursor.json"))
             ?? throw new InvalidOperationException("frozen current-world DTO rejected");
         var item = new Item(); item.SetDefaults(ItemID.WoodenSword);
-        var g = new GeneratedItem(); typeof(ModType<Item>).GetProperty("Entity", all)!.SetValue(g, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, g); typeof(GeneratedItem).GetProperty("Data")!.SetValue(g, data);
+        var g = new GeneratedItem(); AttachItem(g, item, data);
         // Fixture-local asset declaration only; exact original DTO was parsed first.
         data.Visual.SpritePath = path; data.ApplyToItem(item);
         var p = new Player { whoAmI = 0, active = true, selectedItem = 0, position = new Vector2(160, 160), itemAnimation = 8, itemAnimationMax = 20, heldProj = -1, direction = 1, gravDir = 1f };

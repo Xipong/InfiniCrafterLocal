@@ -19,6 +19,7 @@ internal static partial class EngineRuntimeChecks
     // Only FlushBatch is intercepted at the GPU boundary. No game or sockets.
     public static void ItemImpactSpriteUsesDetachedRenderer()
     {
+        using var actorState = new NativeActorState();
         WithLighting((config, _) =>
         {
             const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -29,30 +30,19 @@ internal static partial class EngineRuntimeChecks
             var wrapper = systemType.GetMethod("DrawProjectiles", statics)!;
             var clock = typeof(Terraria.Main).GetField("_gameUpdateCount", statics)!;
             object oldTick = clock.GetValue(null)!;
-            int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
-            bool oldDedicated = Terraria.Main.dedServ;
-            var oldPlayer = Terraria.Main.player[0];
+
             var oldBatch = Terraria.Main.spriteBatch;
             var oldView = Terraria.Main.GameViewMatrix;
             var oldScreen = Terraria.Main.screenPosition;
             var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? oldCache = sprites.GetValue(null);
-            var cache = new RuntimeSpriteCache();
-            var textures = (IDictionary)typeof(RuntimeSpriteCache).GetField("_textures", instance)!.GetValue(cache)!;
-            var recordType = typeof(RuntimeSpriteCache).GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var recordType = borrowedCache.Record;
             string path = Path.Combine(Terraria.Program.SavePath, "item_impact_cpu.png");
 
             // Constructor-bypassed CPU shells: no GraphicsDevice/resources allocated.
-            var batch = (SpriteBatch)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch));
-            var texture = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-            GC.SuppressFinalize(batch); GC.SuppressFinalize(texture);
-            foreach (string field in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" })
-            {
-                var info = typeof(SpriteBatch).GetField(field, instance)!;
-                info.SetValue(batch, Array.CreateInstance(info.FieldType.GetElementType()!, 16));
-            }
-            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 16);
-            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 24);
+            var batch = CpuSpriteBatch(16);
+            var texture = CpuTexture(16, 24);
             var begun = typeof(SpriteBatch).GetField("beginCalled", instance)!;
             var queued = typeof(SpriteBatch).GetField("numSprites", instance)!;
             var drains = new List<int>();
@@ -94,7 +84,7 @@ internal static partial class EngineRuntimeChecks
                 Terraria.Main.GameViewMatrix = new Terraria.Graphics.SpriteViewMatrix(null!);
                 Terraria.Main.GameViewMatrix.SetViewportOverride(new Viewport(0, 0, 800, 600));
                 Terraria.Main.screenPosition = new Vector2(40, 60);
-                sprites.SetValue(null, cache);
+
                 object cached = Activator.CreateInstance(recordType, texture, 0.25f, 0L)!;
                 textures.Add(path, cached);
                 config.DrawBudgetMultiplier = 1f;
@@ -123,9 +113,7 @@ internal static partial class EngineRuntimeChecks
                 data.VfxManifest.Budget.MaxParticlesTotal = 0;
                 var item = player.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1 };
                 var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity")!.SetValue(generated, item);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
+                AttachItem(generated, item, data);
                 void Emit() => InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entity.Id, slot.Event);
                 T Field<T>(string name) => (T)emissions[0]!.GetType().GetProperty(name)!.GetValue(emissions[0])!;
                 string Draw()
@@ -248,9 +236,9 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 system.OnWorldUnload();
-                Terraria.Main.netMode = oldMode; Terraria.Main.myPlayer = oldLocal; Terraria.Main.dedServ = oldDedicated;
-                Terraria.Main.player[0] = oldPlayer; clock.SetValue(null, oldTick);
-                sprites.SetValue(null, oldCache);
+
+                 clock.SetValue(null, oldTick);
+
                 Terraria.Main.spriteBatch = oldBatch; Terraria.Main.GameViewMatrix = oldView; Terraria.Main.screenPosition = oldScreen;
                 textures.Clear(); cache.Dispose(); // shells must not dispose nonexistent GPU resources
             }

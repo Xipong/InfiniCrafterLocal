@@ -14,10 +14,7 @@ internal static partial class EngineRuntimeChecks
         WithVfxGeometryQueue((batch, texture, count, positions, colors) =>
         {
             var oldPixel = Terraria.GameContent.TextureAssets.MagicPixel;
-            var asset = (ReLogic.Content.Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ReLogic.Content.Asset<Texture2D>));
-            foreach (var field in asset.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (field.FieldType == typeof(Texture2D)) field.SetValue(asset, texture);
-            asset.GetType().GetProperty("State")!.SetValue(asset, ReLogic.Content.AssetState.Loaded);
+            var asset = CpuTextureAsset(texture);
             try
             {
                 Terraria.GameContent.TextureAssets.MagicPixel = asset;
@@ -147,10 +144,9 @@ internal static partial class EngineRuntimeChecks
             var wrapper = typeof(InfiniDetachedVfxSystem).GetMethod("DrawProjectiles", flags)!;
             var vertices = typeof(SpriteBatch).GetField("vertexInfo", instance)!;
             var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? oldCache = sprites.GetValue(null);
-            var cache = new InfiniCrafterLocal.Common.Services.RuntimeSpriteCache();
-            var textures = (System.Collections.IDictionary)cache.GetType().GetField("_textures", instance)!.GetValue(cache)!;
-            var recordType = cache.GetType().GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var recordType = borrowedCache.Record;
             string path = System.IO.Path.Combine(Terraria.Program.SavePath, "authored_snapshot.png");
             var oldView = Terraria.Main.GameViewMatrix;
             object? observed = null;
@@ -166,7 +162,7 @@ internal static partial class EngineRuntimeChecks
             using var hook = new MonoMod.RuntimeDetour.Hook(typeof(SpriteBatch).GetMethod("FlushBatch", instance)!, flush);
             try
             {
-                sprites.SetValue(null, cache);
+
                 // Nonzero art-forward metadata must affect impact sprites, not captured body poses.
                 textures.Add(path, Activator.CreateInstance(recordType, texture, 0.37f, 0L)!);
                 Terraria.Main.GameViewMatrix = new Terraria.Graphics.SpriteViewMatrix(null!);
@@ -235,13 +231,12 @@ internal static partial class EngineRuntimeChecks
             }
             finally
             {
-                system.OnWorldUnload(); sprites.SetValue(null, oldCache); Terraria.Main.GameViewMatrix = oldView;
+                system.OnWorldUnload();  Terraria.Main.GameViewMatrix = oldView;
                 textures.Clear(); cache.Dispose(); // No GPU resources belong to the constructor-bypassed shell.
             }
         });
         ProjectileEventSnapshotRelayPreservesAnchors();
     }
-
     private static void EventShapesUseDetachedFnaQueue()
     {
         WithActiveShape((projectile, slot, manifest, batch, count, positions, colors) =>
@@ -365,78 +360,54 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void ActiveGhostArcQueuesRotatingOpenSweep()
+    private static void ActiveShapeGeometry(string kind)
     {
         WithActiveShape((projectile, slot, manifest, batch, count, positions, colors) =>
         {
-            slot.RendererKind = "ghostArc";
+            slot.RendererKind = kind;
             var state = new InfiniVfxState { Tick = 4 };
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(14, count(), "density selects an open segmented arc");
+            var data = new GeneratedItemData();
+            InfiniVfxRuntime.Draw(projectile, data, "probe", manifest, ref state, Color.White);
             Vector2 center = projectile.Center - Terraria.Main.screenPosition;
             Vector2 first = VfxVertexCenter(positions(0));
-            Vector2 mean = Vector2.Zero;
-            for (int i = 0; i < count(); i++) mean += VfxVertexCenter(positions(i));
-            Equal(true, Vector2.Distance(center, mean / count()) > 5f, "open arc is not a full ring");
-            Equal(true, colors(0)[0].A < colors(count() - 1)[0].A, "arc fades toward trailing end");
-            batch.End(); batch.Begin(); state.DrawCallsThisFrame = 0; state.Tick = 9;
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, Vector2.Distance(first, VfxVertexCenter(positions(0))) > 1f, "arc sweeps over time");
-        });
-    }
-
-    private static void ActiveOrbitingMotesQueueMovingPoints()
-    {
-        WithActiveShape((projectile, slot, manifest, batch, count, positions, colors) =>
-        {
-            slot.RendererKind = "orbitingMotes";
-            var state = new InfiniVfxState { Tick = 4 };
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(5, count(), "density 0.5 selects five orbiting quads, not a cross");
-            Vector2 center = projectile.Center - Terraria.Main.screenPosition;
-            Vector2 first = VfxVertexCenter(positions(0));
-            Equal(true, Math.Abs(Vector2.Distance(center, first) - 18f) < 0.001f, "mote lies on 18px orbit");
-            batch.End(); batch.Begin(); state.DrawCallsThisFrame = 0; state.Tick = 9;
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, Vector2.Distance(first, VfxVertexCenter(positions(0))) > 1f, "mote orbits with clock");
-        });
-    }
-
-    private static void ActiveFieldPulseQueuesExpandingRing()
-    {
-        WithActiveShape((projectile, slot, manifest, batch, count, positions, colors) =>
-        {
-            slot.RendererKind = "fieldPulse";
-            var state = new InfiniVfxState { Tick = 4 };
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, count() >= 12, "pulse is a closed segmented ring, not a cross");
-            Vector2 center = projectile.Center - Terraria.Main.screenPosition;
-            float radius = Vector2.Distance(center, VfxVertexCenter(positions(0)));
-            Vector2 mean = Vector2.Zero;
-            for (int i = 0; i < count(); i++) mean += VfxVertexCenter(positions(i));
-            AssertVfxNear(center, mean / count(), "ring surrounds anchor");
-            byte alpha = colors(0)[0].A;
-            batch.End(); batch.Begin(); state.DrawCallsThisFrame = 0; state.Tick = 16;
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, Vector2.Distance(center, VfxVertexCenter(positions(0))) > radius, "pulse expands");
-            Equal(true, colors(0)[0].A < alpha, "pulse fades with expansion");
-        });
-    }
-
-    private static void ActiveWavyStripQueuesAnimatedCurve()
-    {
-        WithActiveShape((projectile, slot, manifest, batch, count, positions, colors) =>
-        {
-            var state = new InfiniVfxState { Tick = 4 };
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, count() >= 8, "wavy strip is segmented, not a beam alias");
-            Vector2 first = VfxVertexCenter(positions(0));
-            bool curved = false;
-            for (int i = 0; i < count(); i++) curved |= Math.Abs(VfxVertexCenter(positions(i)).Y - (projectile.Center.Y - Terraria.Main.screenPosition.Y)) > 1f;
-            Equal(true, curved, "wavy strip has lateral displacement");
-            batch.End(); batch.Begin(); state.DrawCallsThisFrame = 0; state.Tick = 9;
-            InfiniVfxRuntime.Draw(projectile, new GeneratedItemData(), "probe", manifest, ref state, Color.White);
-            Equal(true, Vector2.Distance(first, VfxVertexCenter(positions(0))) > 0.1f, "wave moves with simulation ticks");
+            float radius = Vector2.Distance(center, first); byte alpha = colors(0)[0].A;
+            if (kind is "ghostArc" or "fieldPulse")
+            {
+                Vector2 mean = Vector2.Zero;
+                for (int i = 0; i < count(); i++) mean += VfxVertexCenter(positions(i));
+                if (kind == "ghostArc")
+                {
+                    Equal(14, count(), "density selects an open segmented arc");
+                    Equal(true, Vector2.Distance(center, mean / count()) > 5f, "open arc is not a full ring");
+                    Equal(true, colors(0)[0].A < colors(count() - 1)[0].A, "arc fades toward trailing end");
+                }
+                else
+                {
+                    Equal(true, count() >= 12, "pulse is a closed segmented ring, not a cross");
+                    AssertVfxNear(center, mean / count(), "ring surrounds anchor");
+                }
+            }
+            else if (kind == "orbitingMotes")
+            {
+                Equal(5, count(), "density 0.5 selects five orbiting quads, not a cross");
+                Equal(true, Math.Abs(radius - 18f) < 0.001f, "mote lies on 18px orbit");
+            }
+            else
+            {
+                Equal(true, count() >= 8, "wavy strip is segmented, not a beam alias");
+                bool curved = false;
+                for (int i = 0; i < count(); i++) curved |= Math.Abs(VfxVertexCenter(positions(i)).Y - center.Y) > 1f;
+                Equal(true, curved, "wavy strip has lateral displacement");
+            }
+            batch.End(); batch.Begin(); state.DrawCallsThisFrame = 0; state.Tick = kind == "fieldPulse" ? 16 : 9;
+            InfiniVfxRuntime.Draw(projectile, data, "probe", manifest, ref state, Color.White);
+            if (kind == "fieldPulse")
+            {
+                Equal(true, Vector2.Distance(center, VfxVertexCenter(positions(0))) > radius, "pulse expands");
+                Equal(true, colors(0)[0].A < alpha, "pulse fades with expansion");
+            }
+            else Equal(true, Vector2.Distance(first, VfxVertexCenter(positions(0))) > (kind == "wavyStrip" ? 0.1f : 1f), "shape animates with simulation ticks: " + kind);
+            Console.WriteLine($"CASE PASS: PresentationGeometry/shape[kind={kind}]");
         });
     }
 }

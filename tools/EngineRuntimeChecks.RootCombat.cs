@@ -23,9 +23,7 @@ internal static partial class EngineRuntimeChecks
         var item = new Item(); item.SetDefaults(ItemID.CopperShortsword); item.stack = 1;
         if (_rootCombatGlobalInstance is not null) typeof(Item).GetField("_globals",RootPrivate)!.SetValue(item,new GlobalItem[]{_rootCombatGlobalInstance});
         var generated = new RootCombatProbeItem();
-        typeof(ModType<Item>).GetProperty("Entity", RootPrivate)!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        AttachItem(generated, item, data);
         generated.SetDefaults();
         Equal(data.Id, generated.Data.Id, "native fixture projection retains the supplied definition");
         return generated;
@@ -263,7 +261,7 @@ internal static partial class EngineRuntimeChecks
         Equal((int)PrefixID.Broken,low.Item.prefix,"low-base accepted token retained");
     }
     private static Hook RootCombatSpawnObserver(Action<IEntitySource,int,float> observe)
-        => new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),new[]{typeof(IEntitySource),typeof(Vector2),typeof(Vector2),typeof(int),typeof(int),typeof(float),typeof(int),typeof(float),typeof(float),typeof(float)})!,
+        => new Hook(NativeProjectileEntry(),
             (Func<IEntitySource,Vector2,Vector2,int,int,float,int,float,float,float,Projectile>)((source,pos,velocity,type,damage,kb,owner,a,b,c)=> { observe(source,damage,kb); throw new RootCombatSpawnBoundary(); }));
     private sealed class RootCombatSpawnBoundary : Exception { }
     private static bool RootCombatBoundary(Exception error)=>error is RootCombatSpawnBoundary || error.InnerException is not null && RootCombatBoundary(error.InnerException);

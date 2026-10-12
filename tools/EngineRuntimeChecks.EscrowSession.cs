@@ -126,10 +126,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void EscrowCommitRejectsFullWorldPoolBeforeAllocation()
     {
+        using var itemPoolState = new NativeItemPoolState();
         using var peers = new ReviewPeers(); peers.Mode(NetmodeID.Server, 255);
         var world = new GeneratedStationEscrowStateSystem(); world.ClearWorld();
-        Item[] previousItems = Terraria.Main.item;
-        int[] previousReuseTimers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+
         try
         {
             Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item(ItemID.Wood, 3) { active = true }).ToArray();
@@ -160,6 +160,6 @@ internal static partial class EngineRuntimeChecks
                 Equal("server craft transaction no longer owns this session/lane", (string)args[2]!, "terminal journal refusal precedes allocation");
             });
         }
-        finally { Terraria.Main.item = previousItems; Terraria.Main.timeItemSlotCannotBeReusedFor = previousReuseTimers; world.ClearWorld(); }
+        finally {   world.ClearWorld(); }
     }
 }

@@ -168,9 +168,7 @@ internal static partial class EngineRuntimeChecks
         item.SetDefaults(ItemID.CopperShortsword); // Real defaults: avoid unrelated shell mount/fishing/hair fields.
         item.stack = 1;
         var host = new MobilityConsumptionProbeItem();
-        typeof(ModType<Item>).GetProperty("Entity", MobilityConsumptionFlags)!.SetValue(host, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, host);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(host, data);
+        AttachItem(host, item, data);
         host.SetDefaults();
         Equal(true, ReferenceEquals(data, host.Data), "fixture projection keeps supplied definition");
         return host;

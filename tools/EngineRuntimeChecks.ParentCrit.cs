@@ -66,10 +66,7 @@ internal static partial class EngineRuntimeChecks
         var generatedParent = new Item(); generatedParent.SetDefaults(ItemID.WoodenSword);
         int nativeBaseCrit = generatedParent.crit;
         var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
-            .SetValue(generated, generatedParent);
-        typeof(Item).GetProperty("ModItem")!.SetValue(generatedParent, generated);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        AttachItem(generated, generatedParent, data);
         data.ApplyToItem(generatedParent);
         generatedParent.crit = nativeBaseCrit + 43;
         generatedParent.prefix = PrefixID.Keen;

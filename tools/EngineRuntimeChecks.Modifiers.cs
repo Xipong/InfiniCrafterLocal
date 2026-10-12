@@ -58,70 +58,62 @@ internal static partial class EngineRuntimeChecks
 
     private static void ModifierNpcAttractionAuthorityFalloffAndBounds()
     {
-        NPC[] oldNpcs = Terraria.Main.npc;
-        int oldMode = Terraria.Main.netMode;
-        int oldPlayer = Terraria.Main.myPlayer;
-        try
+        using var actorState = new NativeActorState();
+
+        Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
+        var spec = Entity(); spec.Kind = "free_projectile";
+        spec.NpcAttraction = new() { RangeTiles = 10, StrengthPerUpdate = 2, Falloff = "linear", MaxTargets = 1, StartDelayTicks = 1, DurationTicks = 2 };
+        var projectile = new Projectile { active = true, owner = 0, damage = 20, Center = new Vector2(500, 500), velocity = new Vector2(3, 4) };
+        var generated = Attach(projectile); generated.Configure(new GeneratedItemData(), spec, 0, 8, Vector2.UnitX);
+        for (int i = 0; i < 3; i++)
+            Terraria.Main.npc[i] = new NPC { whoAmI = i, active = true, life = 100, lifeMax = 100, damage = 1,
+                friendly = false, dontTakeDamage = false, knockBackResist = .5f, width = 10, height = 10,
+                Center = projectile.Center + new Vector2(i == 2 ? 161f : 80f, 0) };
+        foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.Server, NetmodeID.MultiplayerClient })
         {
-            Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
-            var spec = Entity(); spec.Kind = "free_projectile";
-            spec.NpcAttraction = new() { RangeTiles = 10, StrengthPerUpdate = 2, Falloff = "linear", MaxTargets = 1, StartDelayTicks = 1, DurationTicks = 2 };
-            var projectile = new Projectile { active = true, owner = 0, damage = 20, Center = new Vector2(500, 500), velocity = new Vector2(3, 4) };
-            var generated = Attach(projectile); generated.Configure(new GeneratedItemData(), spec, 0, 8, Vector2.UnitX);
-            for (int i = 0; i < 3; i++)
-                Terraria.Main.npc[i] = new NPC { whoAmI = i, active = true, life = 100, lifeMax = 100, damage = 1,
-                    friendly = false, dontTakeDamage = false, knockBackResist = .5f, width = 10, height = 10,
-                    Center = projectile.Center + new Vector2(i == 2 ? 161f : 80f, 0) };
-            foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.Server, NetmodeID.MultiplayerClient })
-            {
-                Terraria.Main.netMode = mode; Terraria.Main.myPlayer = 0;
-                foreach (NPC npc in Terraria.Main.npc) { npc.velocity = Vector2.Zero; npc.netUpdate = false; }
-                ModifierAge(generated, 2); InvokeModifier(generated, "ApplyNpcAttraction");
-                ModifierNear(mode == NetmodeID.MultiplayerClient ? 0 : -.5f, Terraria.Main.npc[0].velocity.X, "server-only linear impulse with native resistance");
-                Equal(Vector2.Zero, Terraria.Main.npc[1].velocity, "maxTargets prevents second accepted target");
-                Equal(Vector2.Zero, Terraria.Main.npc[2].velocity, "hard range excludes outside target");
-                Equal(new Vector2(3, 4), projectile.velocity, "attraction never adds hidden projectile drag");
-            }
-            Terraria.Main.netMode = NetmodeID.Server;
-            spec.NpcAttraction.Falloff = "constant"; Terraria.Main.npc[0].velocity = Vector2.Zero;
+            Terraria.Main.netMode = mode; Terraria.Main.myPlayer = 0;
+            foreach (NPC npc in Terraria.Main.npc) { npc.velocity = Vector2.Zero; npc.netUpdate = false; }
             ModifierAge(generated, 2); InvokeModifier(generated, "ApplyNpcAttraction");
-            ModifierNear(-1f, Terraria.Main.npc[0].velocity.X, "constant falloff is a distinct explicit law");
-            foreach (int age in new[] { 1, 4 })
-            {
-                Terraria.Main.npc[0].velocity = Vector2.Zero; ModifierAge(generated, age);
-                InvokeModifier(generated, "ApplyNpcAttraction"); Equal(Vector2.Zero, Terraria.Main.npc[0].velocity, "outside phase has no impulse");
-            }
+            ModifierNear(mode == NetmodeID.MultiplayerClient ? 0 : -.5f, Terraria.Main.npc[0].velocity.X, "server-only linear impulse with native resistance");
+            Equal(Vector2.Zero, Terraria.Main.npc[1].velocity, "maxTargets prevents second accepted target");
+            Equal(Vector2.Zero, Terraria.Main.npc[2].velocity, "hard range excludes outside target");
+            Equal(new Vector2(3, 4), projectile.velocity, "attraction never adds hidden projectile drag");
         }
-        finally { Terraria.Main.npc = oldNpcs; Terraria.Main.netMode = oldMode; Terraria.Main.myPlayer = oldPlayer; }
+        Terraria.Main.netMode = NetmodeID.Server;
+        spec.NpcAttraction.Falloff = "constant"; Terraria.Main.npc[0].velocity = Vector2.Zero;
+        ModifierAge(generated, 2); InvokeModifier(generated, "ApplyNpcAttraction");
+        ModifierNear(-1f, Terraria.Main.npc[0].velocity.X, "constant falloff is a distinct explicit law");
+        foreach (int age in new[] { 1, 4 })
+        {
+            Terraria.Main.npc[0].velocity = Vector2.Zero; ModifierAge(generated, age);
+            InvokeModifier(generated, "ApplyNpcAttraction"); Equal(Vector2.Zero, Terraria.Main.npc[0].velocity, "outside phase has no impulse");
+        }
     }
 
     private static void ModifierHomingOwnerSelectionAndSpeedPreservation()
     {
-        NPC[] oldNpcs = Terraria.Main.npc; int oldMode = Terraria.Main.netMode, oldPlayer = Terraria.Main.myPlayer;
-        try
+        using var actorState = new NativeActorState();
+
+        Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
+        var spec = Entity(); spec.Kind = "free_projectile";
+        spec.HomingModifier = new() { RangeTiles = 10, MaxTurnRadiansPerUpdate = .1f, RequireLineOfSight = false, StartDelayTicks = 0, DurationTicks = 20 };
+        var projectile = new Projectile { active = true, owner = 0, damage = 10, Center = new Vector2(500, 500), velocity = Vector2.UnitX * 6f };
+        var generated = Attach(projectile); generated.Configure(new GeneratedItemData(), spec, 0, 8, Vector2.UnitX);
+        Terraria.Main.npc[0] = new NPC { active = true, whoAmI = 0, life = 100, lifeMax = 100, damage = 1, Center = projectile.Center + new Vector2(0, 80) };
+        Terraria.Main.npc[1] = new NPC { active = true, whoAmI = 1, life = 100, lifeMax = 100, damage = 1, Center = projectile.Center + new Vector2(0, -80) };
+        foreach ((int mode, int player, bool runs) in new[] { (0, 0, true), (1, 0, true), (1, 1, false), (2, 255, false) })
         {
-            Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
-            var spec = Entity(); spec.Kind = "free_projectile";
-            spec.HomingModifier = new() { RangeTiles = 10, MaxTurnRadiansPerUpdate = .1f, RequireLineOfSight = false, StartDelayTicks = 0, DurationTicks = 20 };
-            var projectile = new Projectile { active = true, owner = 0, damage = 10, Center = new Vector2(500, 500), velocity = Vector2.UnitX * 6f };
-            var generated = Attach(projectile); generated.Configure(new GeneratedItemData(), spec, 0, 8, Vector2.UnitX);
-            Terraria.Main.npc[0] = new NPC { active = true, whoAmI = 0, life = 100, lifeMax = 100, damage = 1, Center = projectile.Center + new Vector2(0, 80) };
-            Terraria.Main.npc[1] = new NPC { active = true, whoAmI = 1, life = 100, lifeMax = 100, damage = 1, Center = projectile.Center + new Vector2(0, -80) };
-            foreach ((int mode, int player, bool runs) in new[] { (0, 0, true), (1, 0, true), (1, 1, false), (2, 255, false) })
-            {
-                Terraria.Main.netMode = mode; Terraria.Main.myPlayer = player;
-                projectile.velocity = Vector2.UnitX * 6f; projectile.netUpdate = false; ModifierAge(generated, 1);
-                InvokeModifier(generated, "ApplyHomingModifier");
-                ModifierNear(6f, projectile.velocity.Length(), "homing preserves actual speed");
-                ModifierNear(runs ? .1f : 0f, projectile.velocity.ToRotation(), "owner-only nearest target, stable slot tie");
-                Equal(runs, projectile.netUpdate, "owner steered velocity is synchronized");
-            }
-            Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            Terraria.Main.npc[0].Center = projectile.Center + new Vector2(0, 161); Terraria.Main.npc[1].active = false;
-            projectile.velocity = Vector2.UnitX * 6f; InvokeModifier(generated, "ApplyHomingModifier");
-            Equal(Vector2.UnitX * 6f, projectile.velocity, "out-of-range candidate cannot steer");
+            Terraria.Main.netMode = mode; Terraria.Main.myPlayer = player;
+            projectile.velocity = Vector2.UnitX * 6f; projectile.netUpdate = false; ModifierAge(generated, 1);
+            InvokeModifier(generated, "ApplyHomingModifier");
+            ModifierNear(6f, projectile.velocity.Length(), "homing preserves actual speed");
+            ModifierNear(runs ? .1f : 0f, projectile.velocity.ToRotation(), "owner-only nearest target, stable slot tie");
+            Equal(runs, projectile.netUpdate, "owner steered velocity is synchronized");
         }
-        finally { Terraria.Main.npc = oldNpcs; Terraria.Main.netMode = oldMode; Terraria.Main.myPlayer = oldPlayer; }
+        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.npc[0].Center = projectile.Center + new Vector2(0, 161); Terraria.Main.npc[1].active = false;
+        projectile.velocity = Vector2.UnitX * 6f; InvokeModifier(generated, "ApplyHomingModifier");
+        Equal(Vector2.UnitX * 6f, projectile.velocity, "out-of-range candidate cannot steer");
     }
 
     private static void ModifierWhipGravityUsesTheSameCollisionPolyline()

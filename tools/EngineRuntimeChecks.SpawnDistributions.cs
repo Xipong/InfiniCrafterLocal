@@ -178,8 +178,7 @@ internal static partial class EngineRuntimeChecks
     }
 
     private static Hook LaunchSpawnObserver(Action<IEntitySource, Vector2, Vector2, int, float> observe)
-        => new(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect), new[] {
-            typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        => new(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
                 observe(source, position, velocity, damage, knockback);
                 throw new RootCombatSpawnBoundary();

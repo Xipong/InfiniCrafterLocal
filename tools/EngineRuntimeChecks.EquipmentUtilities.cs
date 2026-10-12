@@ -270,6 +270,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void NativeEquipmentWireVision()
     {
+        using var actorState = new NativeActorState();
         WithPlayer((player, _) => {
             var generated = NativeUtilityItem("\"wireVision\":true");
             Equal(true, generated.Data.Accessory.HasAnyEffect, "flag-only item is an effect");
@@ -280,26 +281,18 @@ internal static partial class EngineRuntimeChecks
                 generated.UpdateAccessory(player, hidden);
                 Equal(true, player.InfoAccMechShowWires, "exact native wire visibility flag, including hidden accessory");
                 Equal(rulerBefore, player.rulerLine, "wire vision does not synthesize rulers");
-                int oldLocal = Terraria.Main.myPlayer;
-                Player oldPlayer = Terraria.Main.player[0];
-                bool oldSecretWorld = Terraria.Main.getGoodWorld;
-                try {
-                    Terraria.Main.myPlayer = 0;
-                    Terraria.Main.player[0] = player;
-                    Terraria.Main.getGoodWorld = false;
-                    player.selectedItem = 0;
-                    player.inventory[0].mech = false;
-                    player.builderAccStatus[8] = 0;
-                    Equal(true, Terraria.GameContent.UI.WiresUI.Settings.DrawWires, "actual native draw eligibility consumes flag");
-                    player.builderAccStatus[8] = 1;
-                    Equal(false, Terraria.GameContent.UI.WiresUI.Settings.DrawWires, "native hide-all toggle retained");
-                    player.builderAccStatus[8] = 0;
-                }
-                finally {
-                    Terraria.Main.myPlayer = oldLocal;
-                    Terraria.Main.player[0] = oldPlayer;
-                    Terraria.Main.getGoodWorld = oldSecretWorld;
-                }
+
+                Terraria.Main.myPlayer = 0;
+                Terraria.Main.player[0] = player;
+                Terraria.Main.getGoodWorld = false;
+                player.selectedItem = 0;
+                player.inventory[0].mech = false;
+                player.builderAccStatus[8] = 0;
+                Equal(true, Terraria.GameContent.UI.WiresUI.Settings.DrawWires, "actual native draw eligibility consumes flag");
+                player.builderAccStatus[8] = 1;
+                Equal(false, Terraria.GameContent.UI.WiresUI.Settings.DrawWires, "native hide-all toggle retained");
+                player.builderAccStatus[8] = 0;
+
             }
             player.ResetEffects();
             var inactive = NativeUtilityItem("\"wireVision\":true");

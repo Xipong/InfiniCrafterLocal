@@ -32,9 +32,7 @@ internal static partial class EngineRuntimeChecks
         } };
         var item = new Item { type = ItemID.MusketBall, stack = 10 };
         var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        AttachItem(generated, item, data);
         data.ApplyToItem(item);
         return generated;
     }

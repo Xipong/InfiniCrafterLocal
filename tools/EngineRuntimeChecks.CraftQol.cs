@@ -114,10 +114,10 @@ internal static partial class EngineRuntimeChecks
 
     private static async Task CraftQolFatalHttpRefundPresentationTracksDeliveryAsync()
     {
+        using var itemPoolState = new NativeItemPoolState();
         using var serializer = WithPersistenceBoolSerializer();
-        int mode = Terraria.Main.netMode; bool inventory = Terraria.Main.playerInventory;
-        Item[] items = Terraria.Main.item; int[] timers = Terraria.Main.timeItemSlotCannotBeReusedFor;
-        CombatText[] combat = Terraria.Main.combatText;
+         bool inventory = Terraria.Main.playerInventory;
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.playerInventory = true;
@@ -155,14 +155,14 @@ internal static partial class EngineRuntimeChecks
                 }));
             }
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.playerInventory = inventory; Terraria.Main.item = items; Terraria.Main.timeItemSlotCannotBeReusedFor = timers; Terraria.Main.combatText = combat; }
+        finally {  Terraria.Main.playerInventory = inventory;    }
     }
 
     private static void CraftQolPartialRefundRetainsOnlyRemainder()
     {
+        using var itemPoolState = new NativeItemPoolState();
         using var serializer = WithPersistenceBoolSerializer();
-        int mode = Terraria.Main.netMode; Item[] items = Terraria.Main.item;
-        int[] timers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
@@ -183,7 +183,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(3, player.inventory[1].stack, "retry never recreates already delivered part");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.item = items; Terraria.Main.timeItemSlotCannotBeReusedFor = timers; }
+        finally {    }
     }
 
     private static void CraftQolCancelPacketReplaysCommittedOutcomeWithoutNewRefund()
@@ -287,15 +287,10 @@ internal static partial class EngineRuntimeChecks
                 owner.RestoreServerStationEscrowSlots(Enumerable.Range(0, 6).Select(_ => new Item(ItemID.Wood, 1)).ToArray());
                 InfiniCrafterLocal.Common.Systems.GeneratedStationEscrowStateSystem.CaptureOwnerState(client, owner);
                 Equal(true, InfiniCrafterLocal.Common.Systems.GeneratedStationEscrowStateSystem.TryBeginCraft(client, requestId, 1), "world journal starts exact lane");
-                Type type = typeof(InfiniCraftPlayer).GetNestedType("MultiDevCraftJob", BindingFlags.NonPublic)!;
-                object job = Activator.CreateInstance(type, true)!;
                 var request = new GeneratorClient.PreparedGenerationRequest { RefundA = new Item(ItemID.Wood, 1), RefundB = new Item(ItemID.Wood, 1) };
-                type.GetField("Request", CraftFields)!.SetValue(job, request);
-                type.GetField("RequestId", CraftFields)!.SetValue(job, requestId);
-                type.GetField("LaneIndex", CraftFields)!.SetValue(job, 1);
-                type.GetField("ElapsedTicks", CraftFields)!.SetValue(job, InfiniCraftPlayer.CraftRecoveryTimeoutTicks - 1);
-                type.GetField("Task", CraftFields)!.SetValue(job, new TaskCompletionSource<GeneratedItemData?>().Task);
-                ((Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", CraftFields)!.GetValue(owner)!).SetValue(job, 0);
+                CraftLane(owner, 1, ("_request", "Request", request), ("_serverRequestId", "RequestId", requestId),
+                    ("_totalCraftTicks", "ElapsedTicks", InfiniCraftPlayer.CraftRecoveryTimeoutTicks - 1),
+                    ("_task", "Task", new TaskCompletionSource<GeneratedItemData?>().Task));
                 var send = typeof(InfiniCraftPlayer).GetMethod("SendCraftCommitResult", BindingFlags.Static | BindingFlags.NonPublic)!;
                 using var observer = new MonoMod.RuntimeDetour.ILHook(send, il => new MonoMod.Cil.ILCursor(il).Emit(Mono.Cecil.Cil.OpCodes.Ret));
                 typeof(InfiniCraftPlayer).GetMethod("TickMultiDevCrafts", CraftFields)!.Invoke(owner, null);
@@ -318,8 +313,8 @@ internal static partial class EngineRuntimeChecks
 
     private static void CraftQolTerminalOutcomeSurvivesClear()
     {
-        CombatText[] combat = Terraria.Main.combatText;
-        int mode = Terraria.Main.netMode;
+        using var itemPoolState = new NativeItemPoolState();
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
@@ -338,7 +333,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(2, player.inventory.Take(58).Count(i => !i.IsAir), "presentation expiry does not refund again");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.combatText = combat; }
+        finally {   }
     }
 
     private static void CraftQolCancellationKeepsIndependentLane()
@@ -351,16 +346,11 @@ internal static partial class EngineRuntimeChecks
             {
                 owner.Initialize();
                 var request = new GeneratorClient.PreparedGenerationRequest { RefundA = new Item(ItemID.Wood, 1), RefundB = new Item(ItemID.StoneBlock, 1) };
-                Type type = typeof(InfiniCraftPlayer).GetNestedType("MultiDevCraftJob", BindingFlags.NonPublic)!;
                 var requests = new[] { request, new GeneratorClient.PreparedGenerationRequest() };
-                Array jobs = (Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", CraftFields)!.GetValue(owner)!;
                 for (int i = 0; i < 2; i++)
                 {
-                    object job = Activator.CreateInstance(type, true)!;
-                    type.GetField("Request", CraftFields)!.SetValue(job, requests[i]);
-                    type.GetField("LaneIndex", CraftFields)!.SetValue(job, i + 1);
-                    type.GetField("Task", CraftFields)!.SetValue(job, new TaskCompletionSource<GeneratedItemData?>().Task);
-                    jobs.SetValue(job, i);
+                    CraftLane(owner, i + 1, ("_request", "Request", requests[i]),
+                        ("_task", "Task", new TaskCompletionSource<GeneratedItemData?>().Task));
                 }
                 Equal(true, owner.TryCancelCraftLane(1), "native cancel accepts exact lane owner");
                 Equal(true, request.CancellationToken.IsCancellationRequested, "exact lane token cancelled");
@@ -375,8 +365,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void CraftQolIdleLaneReturnDoesNotDependOnLaneZero()
     {
-        int mode = Terraria.Main.netMode; bool inventory = Terraria.Main.playerInventory;
-        CombatText[] combat = Terraria.Main.combatText;
+        using var itemPoolState = new NativeItemPoolState();
+         bool inventory = Terraria.Main.playerInventory;
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.playerInventory = false;
@@ -393,13 +384,14 @@ internal static partial class EngineRuntimeChecks
                 Equal(2, player.inventory.Take(58).Count(i => !i.IsAir), "idle A/B returned once");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.playerInventory = inventory; Terraria.Main.combatText = combat; }
+        finally {  Terraria.Main.playerInventory = inventory;  }
     }
 
     private static void CraftQolDeadlineRetiresIncompleteWorkers()
     {
-        int mode = Terraria.Main.netMode; bool inventory = Terraria.Main.playerInventory;
-        CombatText[] combat = Terraria.Main.combatText;
+        using var itemPoolState = new NativeItemPoolState();
+         bool inventory = Terraria.Main.playerInventory;
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.playerInventory = true;
@@ -420,14 +412,14 @@ internal static partial class EngineRuntimeChecks
                 Equal(2, player.inventory.Take(58).Count(i => !i.IsAir), "late result cannot spend/refund inputs twice");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.playerInventory = inventory; Terraria.Main.combatText = combat; }
+        finally {  Terraria.Main.playerInventory = inventory;  }
     }
 
     private static void CraftQolDeliveryFullPoolRetainsReadyWorker()
     {
-        int mode = Terraria.Main.netMode; bool inventory = Terraria.Main.playerInventory;
-        CombatText[] combat = Terraria.Main.combatText;
-        Item[] items = Terraria.Main.item; int[] timers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+        using var itemPoolState = new NativeItemPoolState();
+         bool inventory = Terraria.Main.playerInventory;
+
         try
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.playerInventory = true;
@@ -476,14 +468,13 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, request.CancellationToken.IsCancellationRequested, "world exit retires ready consumer");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.playerInventory = inventory; Terraria.Main.combatText = combat; Terraria.Main.item = items; Terraria.Main.timeItemSlotCannotBeReusedFor = timers; }
+        finally {  Terraria.Main.playerInventory = inventory;    }
     }
 
     private static void CraftQolRefundFullPoolRetainsExactSavedClaim()
     {
-        int mode = Terraria.Main.netMode;
-        Item[] items = Terraria.Main.item;
-        int[] timers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+        using var itemPoolState = new NativeItemPoolState();
+
         using var serializer = WithPersistenceBoolSerializer();
         try
         {
@@ -545,6 +536,6 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, ReferenceEquals(before[7], Terraria.Main.item[7]), "free slot retry preserves older occupied drop");
             });
         }
-        finally { Terraria.Main.netMode = mode; Terraria.Main.item = items; Terraria.Main.timeItemSlotCannotBeReusedFor = timers; }
+        finally {    }
     }
 }

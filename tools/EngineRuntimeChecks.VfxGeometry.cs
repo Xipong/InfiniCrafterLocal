@@ -15,35 +15,16 @@ internal static partial class EngineRuntimeChecks
         WithLighting((config, _) =>
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            var batch = (SpriteBatch)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch));
-            var texture = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-            GC.SuppressFinalize(batch); GC.SuppressFinalize(texture);
-            foreach (string name in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" })
-            {
-                var field = typeof(SpriteBatch).GetField(name, flags)!;
-                field.SetValue(batch, Array.CreateInstance(field.FieldType.GetElementType()!, 128));
-            }
+            var batch = CpuSpriteBatch(128);
             // Deliberately not 1x1: scale must convert source texels to pixels.
-            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 2);
-            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 3);
+            var texture = CpuTexture(2, 3);
             var count = typeof(SpriteBatch).GetField("numSprites", flags)!;
             var vertices = typeof(SpriteBatch).GetField("vertexInfo", flags)!;
             var oldBatch = Terraria.Main.spriteBatch;
             var oldScreen = Terraria.Main.screenPosition;
             Action<SpriteBatch> flush = self => count.SetValue(self, 0);
             using var hook = new MonoMod.RuntimeDetour.Hook(typeof(SpriteBatch).GetMethod("FlushBatch", flags)!, flush);
-            T[] Values<T>(int index)
-            {
-                var result = new List<T>();
-                void Visit(object value)
-                {
-                    if (value is T typed) { result.Add(typed); return; }
-                    foreach (var f in value.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                        if (f.FieldType == typeof(T) || (f.FieldType.IsValueType && !f.FieldType.IsPrimitive && !f.FieldType.IsEnum)) Visit(f.GetValue(value)!);
-                }
-                Visit(((Array)vertices.GetValue(batch)!).GetValue(index)!);
-                return result.ToArray();
-            }
+            T[] Values<T>(int index) => CpuVertexValues<T>(((Array)vertices.GetValue(batch)!).GetValue(index)!);
             try
             {
                 config.DrawBudgetMultiplier = 1f;
@@ -109,10 +90,7 @@ internal static partial class EngineRuntimeChecks
         {
             // Inject only the CPU texture asset; use the real Draw dispatch and FNA queue.
             var oldPixel = Terraria.GameContent.TextureAssets.MagicPixel;
-            var asset = (ReLogic.Content.Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ReLogic.Content.Asset<Texture2D>));
-            foreach (var field in asset.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (field.FieldType == typeof(Texture2D)) field.SetValue(asset, texture);
-            asset.GetType().GetProperty("State")!.SetValue(asset, ReLogic.Content.AssetState.Loaded);
+            var asset = CpuTextureAsset(texture);
             try
             {
                 Terraria.GameContent.TextureAssets.MagicPixel = asset;
@@ -165,44 +143,7 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void RuntimeGeometryUsesWorldPixelsAndForwardAxis()
-    {
-        WithVfxGeometryQueue((batch, texture, count, positions, colors) =>
-        {
-            var oldPixel = Terraria.GameContent.TextureAssets.MagicPixel;
-            var asset = (ReLogic.Content.Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ReLogic.Content.Asset<Texture2D>));
-            foreach (var field in asset.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (field.FieldType == typeof(Texture2D)) field.SetValue(asset, texture);
-            asset.GetType().GetProperty("State")!.SetValue(asset, ReLogic.Content.AssetState.Loaded);
-            try
-            {
-                Terraria.GameContent.TextureAssets.MagicPixel = asset;
-                foreach (Vector2 direction in new[] { Vector2.UnitX, Vector2.UnitY, -Vector2.UnitX })
-                foreach (int movement in new[] { 0, 14, 16, 17 })
-                {
-                    var projectile = new Projectile { Center = new Vector2(100, 120), velocity = direction, rotation = direction.ToRotation() + MathHelper.PiOver2, scale = 1f };
-                    var generated = Attach(projectile);
-                    var entity = Entity(); entity.Visual.AssetMode = "runtime_geometry";
-                    entity.Movement.Code = movement;
-                    entity.Hitbox.WidthPx = 30; entity.Hitbox.HeightPx = 20;
-                    generated.Configure(new GeneratedItemData(), entity, 0, 8, direction);
-                    var draw = generated.GetType().GetMethod("DrawRuntimeGeometry", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                    int index = count();
-                    draw.Invoke(generated, new object[] { Color.White });
-                    Equal(index + 1, count(), "runtime body queues one quad");
-                    Vector3[] points = positions(index);
-                    AssertVfxNear(projectile.Center - Terraria.Main.screenPosition, VfxVertexCenter(points), "runtime body is centered, independent of source dimensions");
-                    Vector2 edge = new(points[1].X - points[0].X, points[1].Y - points[0].Y);
-                    // Whip's real control-point body (including empty state) is
-                    // exercised by RuntimeWhipBodyMatchesLiveCollisionPoints.
-                    // Only actual rotating motion 14/16/17 owns a distinct rotation.
-                    Vector2 expected = movement is 14 or 16 or 17 ? projectile.rotation.ToRotationVector2() : direction;
-                    AssertVfxNear(expected * 30f, edge, "primitive forward/spin axis for movement " + movement);
-                }
-            }
-            finally { Terraria.GameContent.TextureAssets.MagicPixel = oldPixel; }
-        });
-    }
+
 
     private static void ActiveVfxNoneParticleDoesNotEmitDust()
     {

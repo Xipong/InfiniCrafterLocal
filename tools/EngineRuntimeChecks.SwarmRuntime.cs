@@ -22,12 +22,7 @@ internal static partial class EngineRuntimeChecks
     // No fake projectile spawn, world loop, socket or graphics result is returned.
     private sealed class SwarmRuntimeScope : IDisposable
     {
-        private readonly Player[] players = Terraria.Main.player;
-        private readonly NPC[] npcs = Terraria.Main.npc;
-        private readonly Projectile[] projectiles = Terraria.Main.projectile;
-        private readonly int mode = Terraria.Main.netMode, local = Terraria.Main.myPlayer;
-        private readonly bool dedicated = Terraria.Main.dedServ;
-        private readonly uint tick = Terraria.Main.GameUpdateCount;
+        private readonly NativeActorState state = new();
         internal SwarmRuntimeScope(int netMode = NetmodeID.SinglePlayer, int myPlayer = 0, bool visuals = false)
         {
             RuntimeDelayedActionScheduler.Clear();
@@ -40,9 +35,7 @@ internal static partial class EngineRuntimeChecks
         public void Dispose()
         {
             RuntimeDelayedActionScheduler.Clear(); new InfiniDetachedVfxSystem().OnWorldUnload();
-            Terraria.Main.player = players; Terraria.Main.npc = npcs; Terraria.Main.projectile = projectiles;
-            Terraria.Main.netMode = mode; Terraria.Main.myPlayer = local; Terraria.Main.dedServ = dedicated;
-            MaterialClock(tick);
+            state.Dispose();
         }
     }
 

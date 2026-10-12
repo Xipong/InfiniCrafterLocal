@@ -14,10 +14,7 @@ internal static partial class EngineRuntimeChecks
         WithVfxGeometryQueue((batch, texture, count, positions, colors) =>
         {
             var oldPixel = Terraria.GameContent.TextureAssets.MagicPixel;
-            var asset = (ReLogic.Content.Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ReLogic.Content.Asset<Texture2D>));
-            foreach (var field in asset.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (field.FieldType == typeof(Texture2D)) field.SetValue(asset, texture);
-            asset.GetType().GetProperty("State")!.SetValue(asset, ReLogic.Content.AssetState.Loaded);
+            var asset = CpuTextureAsset(texture);
             try { Terraria.GameContent.TextureAssets.MagicPixel = asset; check(count, positions); }
             finally { Terraria.GameContent.TextureAssets.MagicPixel = oldPixel; }
         });
@@ -86,7 +83,7 @@ internal static partial class EngineRuntimeChecks
         }));
     }
 
-    private static void RuntimeOrdinaryBodyPreservesForwardAndSpinGeometry()
+    private static void OrdinaryBodyGeometry(string consumer)
     {
         WithBodyGeometryQueue((count, positions) =>
         {
@@ -99,11 +96,16 @@ internal static partial class EngineRuntimeChecks
                 var entity = Entity(); entity.Visual.AssetMode = "runtime_geometry";
                 entity.Movement.Code = movement; entity.Hitbox.WidthPx = 30; entity.Hitbox.HeightPx = 20;
                 generated.Configure(new GeneratedItemData(), entity, 0, 8, direction);
-                int index = count(); DrawBodyGeometry(generated);
+                int index = count();
+                typeof(GeneratedProjectile).GetMethod(consumer, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(generated, new object[] { Color.White });
                 Equal(index + 1, count(), "ordinary body retains one quad");
+                var points = positions(index);
                 Vector2 axis = movement is 14 or 16 or 17 ? projectile.rotation.ToRotationVector2() : direction;
-                AssertBodySegment(positions(index), projectile.Center - axis * 15f, projectile.Center + axis * 15f, 7f);
+                AssertVfxNear(projectile.Center - Terraria.Main.screenPosition, VfxVertexCenter(points), "runtime body is centered, independent of source dimensions");
+                AssertVfxNear(axis * 30f, new Vector2(points[1].X - points[0].X, points[1].Y - points[0].Y), "primitive forward/spin axis for movement " + movement);
+                AssertBodySegment(points, projectile.Center - axis * 15f, projectile.Center + axis * 15f, 7f);
                 Equal(true, generated.Colliding(default, BodyTarget(projectile.Center)) is null, "ordinary body retains vanilla collision return");
+                Console.WriteLine($"CASE PASS: PresentationGeometry/ordinary-body[consumer={consumer},movement={movement},axis={direction}]");
             }
         });
     }

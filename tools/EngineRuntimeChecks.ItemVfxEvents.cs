@@ -332,9 +332,7 @@ internal static partial class EngineRuntimeChecks
                         Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.UseItemBody, TargetId = entity } } } };
                 var item = player.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1, useTime = 20 };
                 var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity")!.SetValue(generated, item);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
+                AttachItem(generated, item, data);
                 var slot = new VfxSlotSpec { Id = "event", EntityId = entity, Event = RuntimeEventKind.OnHit,
                     Anchor = "hitPoint", RendererKind = "impactRing", ParticleSystemId = "dust", Density = 1f };
                 data.VfxManifest.Slots = new[] { slot };

@@ -26,20 +26,10 @@ internal static partial class EngineRuntimeChecks
         // traversal order. The legacy suite executes first and checks this ABI.
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         var vertices = (Array)typeof(SpriteBatch).GetField("vertexInfo", flags)!.GetValue(batch)!;
-        var positions = new List<Vector3>();
-        var uvs = new List<Vector2>();
-        void Visit(object value)
-        {
-            if (value is Vector3 position) { positions.Add(position); return; }
-            if (value is Vector2 uv) { uvs.Add(uv); return; }
-            foreach (var field in value.GetType().GetFields(flags))
-                if (field.FieldType == typeof(Vector3) || field.FieldType == typeof(Vector2) ||
-                    field.FieldType.IsValueType && !field.FieldType.IsPrimitive && !field.FieldType.IsEnum)
-                    Visit(field.GetValue(value)!);
-        }
-        Visit(vertices.GetValue(index)!);
-        Equal(4, positions.Count, "FNA observer ABI: four positions");
-        Equal(4, uvs.Count, "FNA observer ABI: four UVs");
+        var quad = vertices.GetValue(index)!;
+        var positions = CpuVertexValues<Vector3>(quad); var uvs = CpuVertexValues<Vector2>(quad);
+        Equal(4, positions.Length, "FNA observer ABI: four positions");
+        Equal(4, uvs.Length, "FNA observer ABI: four UVs");
         Vector2 Basis(bool vertical)
         {
             float min = float.MaxValue, max = float.MinValue;
@@ -61,24 +51,20 @@ internal static partial class EngineRuntimeChecks
 
     private static void SameBodyTextureAxisObligations(bool newPresentation)
     {
+        using var actorState = new NativeActorState();
         WithPlayer((owner, _) => WithVfxGeometryQueue((batch, texture, count, positions, colors) =>
         {
-            const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
             typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 64);
             typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 8);
-            var cacheProperty = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? savedCache = cacheProperty.GetValue(null);
-            Player savedOwner = Terraria.Main.player[0];
-            int savedLocal = Terraria.Main.myPlayer, savedMode = Terraria.Main.netMode;
-            var cache = new RuntimeSpriteCache();
-            var textures = (IDictionary)typeof(RuntimeSpriteCache).GetField("_textures", instance)!.GetValue(cache)!;
-            var record = typeof(RuntimeSpriteCache).GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string path = System.IO.Path.Combine(Terraria.Program.SavePath, "axis_texture_cpu.png");
             textures.Add(path, Activator.CreateInstance(record, texture, 0f, 0L)!);
             var failures = new List<string>(); int checkedCases = 0;
             try
             {
-                cacheProperty.SetValue(null, cache);
+
                 owner.active = true; owner.whoAmI = 0; owner.position = new Vector2(300, 300);
                 Terraria.Main.player[0] = owner; Terraria.Main.myPlayer = 1; // aim from real synced projectile velocity, not mouse
                 Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
@@ -149,9 +135,7 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 textures.Clear(); // constructor-bypassed texture: never dispose GPU resources
-                cacheProperty.SetValue(null, savedCache);
-                Terraria.Main.player[0] = savedOwner;
-                Terraria.Main.myPlayer = savedLocal; Terraria.Main.netMode = savedMode;
+
             }
             if (failures.Count != 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
         }));
@@ -163,11 +147,9 @@ internal static partial class EngineRuntimeChecks
             var texture = Terraria.GameContent.TextureAssets.MagicPixel.Value;
             const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
             const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
-            var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? oldCache = sprites.GetValue(null);
-            var cache = new InfiniCrafterLocal.Common.Services.RuntimeSpriteCache();
-            var textures = (System.Collections.IDictionary)cache.GetType().GetField("_textures", instance)!.GetValue(cache)!;
-            var record = cache.GetType().GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string rootPath = System.IO.Path.Combine(Terraria.Program.SavePath, "copy_root.png"), bodyPath = System.IO.Path.Combine(Terraria.Program.SavePath, "copy_body.png"), impactPath = System.IO.Path.Combine(Terraria.Program.SavePath, "copy_impact.png");
             var system = new InfiniDetachedVfxSystem();
             var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", statics)!.GetValue(null)!;
@@ -194,7 +176,7 @@ internal static partial class EngineRuntimeChecks
             }
             try
             {
-                sprites.SetValue(null, cache);
+
                 foreach (string path in new[] { rootPath, bodyPath, impactPath }) textures.Add(path, Activator.CreateInstance(record, texture, 0.37f, 0L)!);
                 Terraria.Main.GameViewMatrix = new Terraria.Graphics.SpriteViewMatrix(null!);
                 Terraria.Main.GameViewMatrix.SetViewportOverride(new Microsoft.Xna.Framework.Graphics.Viewport(0, 0, 800, 600));
@@ -264,10 +246,9 @@ internal static partial class EngineRuntimeChecks
                     batch.Begin();
                 }
             }
-            finally { textures.Clear(); sprites.SetValue(null, oldCache); Terraria.Main.GameViewMatrix = oldView; Terraria.Main.projectile = oldProjectiles; system.OnWorldUnload(); }
+            finally { textures.Clear();  Terraria.Main.GameViewMatrix = oldView; Terraria.Main.projectile = oldProjectiles; system.OnWorldUnload(); }
         });
     }
-
     private static void ItemBodyCopyUsesRootSizeAndDedicatedImpactStaysIndependent()
     {
         WithActiveShape((unused, slot, manifest, batch, count, positions, colors) =>
@@ -275,11 +256,9 @@ internal static partial class EngineRuntimeChecks
             var texture = Terraria.GameContent.TextureAssets.MagicPixel.Value;
             const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
             const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
-            var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? oldCache = sprites.GetValue(null);
-            var cache = new InfiniCrafterLocal.Common.Services.RuntimeSpriteCache();
-            var textures = (System.Collections.IDictionary)cache.GetType().GetField("_textures", instance)!.GetValue(cache)!;
-            var record = cache.GetType().GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string path = System.IO.Path.Combine(Terraria.Program.SavePath, "item_body_copy.png");
             var system = new InfiniDetachedVfxSystem();
             var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", statics)!.GetValue(null)!;
@@ -293,7 +272,7 @@ internal static partial class EngineRuntimeChecks
                 }));
             try
             {
-                sprites.SetValue(null, cache); textures.Add(path, Activator.CreateInstance(record, texture, 0.37f, 0L)!);
+                 textures.Add(path, Activator.CreateInstance(record, texture, 0.37f, 0L)!);
                 typeof(Microsoft.Xna.Framework.Graphics.Texture2D).GetProperty("Width")!.SetValue(texture, 128);
                 typeof(Microsoft.Xna.Framework.Graphics.Texture2D).GetProperty("Height")!.SetValue(texture, 16);
                 Terraria.Main.GameViewMatrix = new Terraria.Graphics.SpriteViewMatrix(null!);
@@ -316,10 +295,9 @@ internal static partial class EngineRuntimeChecks
                     batch.Begin();
                 }
             }
-            finally { textures.Clear(); sprites.SetValue(null, oldCache); Terraria.Main.GameViewMatrix = oldView; system.OnWorldUnload(); }
+            finally { textures.Clear();  Terraria.Main.GameViewMatrix = oldView; system.OnWorldUnload(); }
         });
     }
-
     private static ulong _probeVfxSequence;
     private static byte[] EncodeProjectileVfxForCheck(GeneratedItemData data, Projectile projectile, string eventName, Vector2 eventPoint)
     {
@@ -357,12 +335,12 @@ internal static partial class EngineRuntimeChecks
 
     private static void ProjectileEventSnapshotRelayPreservesAnchors()
     {
+        using var actorState = new NativeActorState();
         WithLighting((config, lights) =>
         {
             var system = new InfiniDetachedVfxSystem();
             var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-            var oldOwner = Terraria.Main.player[4];
-            var oldProjectiles = Terraria.Main.projectile;
+
             try
             {
                 var owner = Terraria.Main.player[4] = new Player { whoAmI = 4, active = true, Center = new Vector2(600, 700) };
@@ -443,7 +421,7 @@ internal static partial class EngineRuntimeChecks
                 slot.Anchor = "self"; ReceiveProjectileVfxForCheck(data, EncodeProjectileVfxForCheck(data, source, slot.Event, new Vector2(900,1000)));
                 Equal(1, queue.Count, "missing owner does not suppress independent self anchor");
             }
-            finally { system.OnWorldUnload(); Terraria.Main.player[4] = oldOwner; Terraria.Main.projectile = oldProjectiles; }
+            finally { system.OnWorldUnload();   }
         });
     }
 
@@ -601,9 +579,7 @@ internal static partial class EngineRuntimeChecks
                 data.VfxManifest = LightManifest(entity, RuntimeEventKind.OnHit);
                 var item = player.inventory[0] = new Item { type = ItemID.CopperShortsword, stack = 1 };
                 var generated = new InfiniCrafterLocal.Content.Items.GeneratedItem();
-                typeof(Terraria.ModLoader.ModType<Item>).GetProperty("Entity")!.SetValue(generated, item);
-                typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
+                AttachItem(generated, item, data);
                 void Receive(string eventName)
                 {
                     using var stream = new System.IO.MemoryStream();

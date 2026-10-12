@@ -43,9 +43,7 @@ internal static partial class EngineRuntimeChecks
         Player owner = Terraria.Main.player[0];
         var item = new Item(); data.ApplyToItem(item);
         var held = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(held, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, held);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(held, data);
+        AttachItem(held, item, data);
         owner.inventory[0] = item; owner.selectedItem = 0; owner.channel = true;
         owner.active = true; owner.dead = owner.noItems = false;
         owner.frozen = owner.webbed = owner.stoned = false;

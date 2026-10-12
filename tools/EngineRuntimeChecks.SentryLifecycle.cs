@@ -20,21 +20,17 @@ internal static partial class EngineRuntimeChecks
 
     private sealed class SentryLifeScope : IDisposable
     {
-        private readonly int mode = Terraria.Main.netMode, local = Terraria.Main.myPlayer;
-        private readonly Player owner = Terraria.Main.player[0];
-        private readonly Projectile[] projectiles = Terraria.Main.projectile;
+        private readonly NativeActorState state = new();
         internal readonly Player Owner;
         internal SentryLifeScope()
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
             Owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, direction = 1 };
-            Terraria.Main.projectile = Enumerable.Range(0, projectiles.Length).Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
+            Terraria.Main.projectile = Enumerable.Range(0, Terraria.Main.projectile.Length).Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
         }
         public void Dispose()
         {
-            RuntimeDelayedActionScheduler.Clear();
-            Terraria.Main.projectile = projectiles; Terraria.Main.player[0] = owner;
-            Terraria.Main.netMode = mode; Terraria.Main.myPlayer = local;
+            state.Dispose();
         }
     }
 
@@ -114,8 +110,7 @@ internal static partial class EngineRuntimeChecks
             Equal(true, ReferenceEquals(state.Owner, owner), "native cap uses exact owner");
             Equal(true, Terraria.Main.projectile[spawns - 1].sentry, "native cap sees hydrated sentry flag"); turretCalls++;
         })))
-        using (var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using (var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
                 Equal(new Vector2(1200, 2379), position, "native ground minus half authored height; pushYUp ignored");
@@ -236,8 +231,7 @@ internal static partial class EngineRuntimeChecks
         var action = new RuntimeEventActionSpec { Id = "event_only", Event = RuntimeEventKind.Periodic,
             ActionCode = RuntimeEventActionCode.SpawnEntity, EntityId = "root", Count = 1 };
         int starts = 0;
-        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
                 starts++;
@@ -278,8 +272,7 @@ internal static partial class EngineRuntimeChecks
         using var state = new SentryLifeScope();
         var data = RootSpawnFixture(32, 1); int attempts = 0;
         var pool = new RuntimeSpawnBudget(3, concurrent: true); Equal(3, pool.Reserve(3), "reserve native batch");
-        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
                 if (++attempts == 2) throw new SentrySpawnProbeFailure();

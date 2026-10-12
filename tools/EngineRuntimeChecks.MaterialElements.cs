@@ -62,15 +62,13 @@ internal static partial class EngineRuntimeChecks
     {
         WithVfxGeometryQueue((batch, texture, count, positions, colors) => {
             var system = new InfiniDetachedVfxSystem(); var tick = Terraria.Main.GameUpdateCount;
-            var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            var oldCache = sprites.GetValue(null);
-            using var cache = new InfiniCrafterLocal.Common.Services.RuntimeSpriteCache();
-            var textures = (System.Collections.IDictionary)cache.GetType().GetField("_textures", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(cache)!;
-            var record = cache.GetType().GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string path = Path.Combine(Terraria.Program.SavePath, "material.png");
             textures.Add(path, Activator.CreateInstance(record, texture, 2f, 0L)!); // a PCA angle must not rotate authored axes
             try {
-                system.OnWorldUnload(); sprites.SetValue(null, cache);
+                system.OnWorldUnload();
                 var data = ParseMaterialElement(MaterialElementWire());
                 var slot = data.VfxManifest.Slots[0]; slot.Event = "on_hit"; slot.RepeatEvery = 0;
                 data.VfxManifest.Assets![0].SpritePath = path;
@@ -96,15 +94,15 @@ internal static partial class EngineRuntimeChecks
                 int frozen=count(); draw.Invoke(null,new object[]{ "BeforeProjectiles",batch,(Action)(()=>{}) });
                 AssertVfxNear(VfxVertexCenter(positions(2)),VfxVertexCenter(positions(frozen)),"Draw does not integrate motion");
                 MaterialClock(tick+12);system.PostUpdateEverything();Equal(0,queue.Count,"client cleanup requires neither Draw nor new emission");
-            } finally {textures.Clear();sprites.SetValue(null,oldCache);system.OnWorldUnload();MaterialClock(tick);}
+            } finally {textures.Clear();system.OnWorldUnload();MaterialClock(tick);}
         });
     }
-
     private static void MaterialElementLiveSourcePeriodicUsesFinalPoseAndGeneration()
     {
+        using var actorState = new NativeActorState();
         WithLighting((config,_)=> {
             var system=new InfiniDetachedVfxSystem();var tick=Terraria.Main.GameUpdateCount;
-            var old=Terraria.Main.projectile[0]; var oldOwner=Terraria.Main.player[0];
+
             try {
                 system.OnWorldUnload(); config.ParticleSpawnMultiplier=1;
                 Terraria.Main.player[0]=new Player{whoAmI=0,active=true};
@@ -127,14 +125,15 @@ internal static partial class EngineRuntimeChecks
                 // Reconfigure the SAME host, slot, owner, type and identity: a new presentation generation must not inherit attachment.
                 generated.Configure(data,entity,0,0,Vector2.UnitX);
                 MaterialClock(tick+2);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"stale generation attachment retires without Draw");
-            }finally{system.OnWorldUnload();Terraria.Main.projectile[0]=old;Terraria.Main.player[0]=oldOwner;MaterialClock(tick);}
+            }finally{system.OnWorldUnload();MaterialClock(tick);}
         });
     }
 
     private static void MaterialElementDelayFreezesWorldButFencesSource()
     {
+        using var actorState = new NativeActorState();
         WithLighting((_,__)=> {
-            var system=new InfiniDetachedVfxSystem();var tick=Terraria.Main.GameUpdateCount;var old=Terraria.Main.projectile[0];var oldOwner=Terraria.Main.player[0];
+            var system=new InfiniDetachedVfxSystem();var tick=Terraria.Main.GameUpdateCount;
             try {
                 system.OnWorldUnload();Terraria.Main.player[0]=new Player{whoAmI=0,active=true};
                 var data=ParseMaterialElement(MaterialElementWire());var slot=data.VfxManifest.Slots[0];slot.Event="on_hit";slot.StartTick=3;slot.RepeatEvery=0;
@@ -153,7 +152,7 @@ internal static partial class EngineRuntimeChecks
                 generated.OnHitNPC(new NPC{active=true},new NPC.HitInfo(),1);Equal(1,OwnedMaterialQueue().Count,"live source delayed group pending");
                 generated.Configure(data,entity,0,0,Vector2.UnitX);
                 MaterialClock(tick+3);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"source delay requires exact live generation");
-            }finally{system.OnWorldUnload();Terraria.Main.projectile[0]=old;Terraria.Main.player[0]=oldOwner;MaterialClock(tick);}
+            }finally{system.OnWorldUnload();MaterialClock(tick);}
         });
     }
 
@@ -166,8 +165,7 @@ internal static partial class EngineRuntimeChecks
                 var data=ParseMaterialElement(MaterialElementWire("source"));
                 InfiniCrafterLocal.Content.Items.GeneratedItem Host() {
                     var gi=new InfiniCrafterLocal.Content.Items.GeneratedItem();var item=new Item{type=1,stack=1};
-                    typeof(Terraria.ModLoader.ModType<Item>).GetProperty("Entity")!.SetValue(gi,item);typeof(Item).GetProperty("ModItem")!.SetValue(item,gi);
-                    typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(gi,data);return gi;
+                    AttachItem(gi, item, data);return gi;
                 }
                 var a=Host();var b=Host();player.inventory[0]=a.Item;
                 a.HoldItem(player);system.PostUpdateEverything();Equal(1,OwnedMaterialQueue().Count,"real HoldItem emits attached element");
@@ -246,139 +244,118 @@ internal static partial class EngineRuntimeChecks
     private static void MaterialOwnerHitReachesValidatedServerRelayAndRemote()
     {
         WithLighting((_,__)=> {
-            var system=new InfiniDetachedVfxSystem();var tick=Terraria.Main.GameUpdateCount;
-            var modProperty=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Instance")!;var oldMod=modProperty.GetValue(null);
-            var registryProperty=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;var oldRegistry=registryProperty.GetValue(null);
-            var oldProjectiles=Terraria.Main.projectile;var oldOwner=Terraria.Main.player[0];var oldMode=Terraria.Main.netMode;var oldLocal=Terraria.Main.myPlayer;
-            using var registry=new InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService();
-            var outgoing=new System.Collections.Generic.List<byte[]>();var starts=new System.Collections.Generic.Dictionary<Terraria.ModLoader.ModPacket,int>();
-            var mod=new global::InfiniCrafterLocal.InfiniCrafterLocalMod();
-            var netMods=typeof(Terraria.ModLoader.Mod).Assembly.GetType("Terraria.ModLoader.ModNet")!.GetField("netMods",BindingFlags.Static|BindingFlags.NonPublic)!;
-            var priorNetMods=netMods.GetValue(null);netMods.SetValue(null,new Terraria.ModLoader.Mod[]{mod});
-            typeof(Terraria.ModLoader.Mod).GetField("netID",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(mod,(short)0);
-            VfxGetPacketHook packetHook=(orig,self,capacity)=>{var p=orig(self,capacity);starts[p]=(int)p.BaseStream.Position;return p;};
-            Action<Terraria.ModLoader.ModPacket,int,int> send=(p,to,ignore)=>{outgoing.Add(((MemoryStream)p.BaseStream).ToArray()[starts[p]..]);};
-            using var getHook=new MonoMod.RuntimeDetour.Hook(typeof(Terraria.ModLoader.Mod).GetMethod("GetPacket")!,packetHook);
-            using var sendHook=new MonoMod.RuntimeDetour.Hook(typeof(Terraria.ModLoader.ModPacket).GetMethod("Send")!,send);
-            try {
-                system.OnWorldUnload();InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();modProperty.SetValue(null,mod);registryProperty.SetValue(null,registry);
-                Terraria.Main.player[0]=new Player{whoAmI=0,active=true};Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
-                var data=ParseMaterialElement(MaterialElementWire());data.Id="network_material";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
-                var entity=Entity();entity.Id="probe";data.RuntimeProgram.Entities=new[]{entity};
-                var slot=data.VfxManifest.Slots[0];slot.EntityId="probe";slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
-                var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1};data.VfxManifest.Slots=new[]{slot,crit};
-                ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
-                Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
-                var source=Terraria.Main.projectile[3]=new Projectile{whoAmI=3,owner=0,identity=71,active=true,Center=new Vector2(200,300),velocity=Vector2.UnitX,timeLeft=90};
-                var generated=Attach(source);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(source,generated);generated.Configure(data,entity,0,0,Vector2.UnitX);
-                generated.OnHitNPC(new NPC{active=true,Center=new Vector2(10,20)},new NPC.HitInfo{Crit=true},1);
-                Equal(2,outgoing.Count,"actual owner-client OnHitNPC sends independent hit+crit packets even without NPC-pull gameplay");
-                source.extraUpdates=2;
-                generated.OnHitNPC(new NPC{active=true,Center=new Vector2(30,40)},new NPC.HitInfo(),1);
-                Equal(3,outgoing.Count,"second real same-name hit in same world tick is a new producer occurrence");
-                var claims=outgoing.ToArray();outgoing.Clear();
-                using var extra=new MemoryStream();generated.SendExtraAI(new BinaryWriter(extra));
-                system.OnWorldUnload();Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
-                source.active=false;
-                var serverHost=Terraria.Main.projectile[11]=new Projectile{whoAmI=11,owner=0,identity=71,active=true,Center=new Vector2(999,999),timeLeft=90};
-                var server=Attach(serverHost);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(serverHost,server);extra.Position=0;server.ReceiveExtraAI(new BinaryReader(extra));
-                foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);
-                Equal(3,outgoing.Count,"validated server relay resolves owner+identity across different local slots");
-                foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);Equal(3,outgoing.Count,"same technical occurrence replay suppressed");
-                foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),1);Equal(3,outgoing.Count,"wrong sender cannot relay owner claim");
-                var relays=outgoing.ToArray();outgoing.Clear();serverHost.active=false;Terraria.Main.projectile=Array.Empty<Projectile>();
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
-                foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
-                Equal(3,OwnedMaterialQueue().Count,"remote has all distinct delayed world emissions without surviving source");
-                MaterialClock(tick+2);system.PostUpdateEverything();Equal(3,OwnedMaterialQueue().Count,"remote emission uses captured world pose at due tick");
-                foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);Equal(3,OwnedMaterialQueue().Count,"remote same occurrence replay suppressed");
-                Vector2 EmittedVelocity(object emission) {var parts=(Array)emission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(emission)!;var part=parts.GetValue(0)!;return (Vector2)part.GetType().GetField("Velocity",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(part)!;}
-                AssertVfxNear(new Vector2(1+0.5f,0),EmittedVelocity(OwnedMaterialQueue()[0]!),"real owner/server/remote delayed chain inherits MaxUpdates=1");
-                AssertVfxNear(new Vector2(1+3*0.5f,0),EmittedVelocity(OwnedMaterialQueue()[2]!),"real owner/server/remote delayed chain copies MaxUpdates=3 before source removal");
-                // Reuse the real owner->server->remote chain with exact live attachment.
-                system.OnWorldUnload();MaterialClock(tick);outgoing.Clear();Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
-                Terraria.Main.projectile[3]=source;source.active=true;source.Center=new Vector2(200,300);slot.Element!.Attachment="source";
-                generated.Configure(data,entity,0,0,Vector2.UnitX);source.extraUpdates=2;slot.Element.Count=1;slot.Element.SpeedMinPxPerTick=slot.Element.SpeedMaxPxPerTick=0;slot.Element.InheritVelocity=1;slot.Element.Drag=1;slot.Element.AccelerationXPxPerTickSquared=slot.Element.AccelerationYPxPerTickSquared=0;
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
-                generated.OnHitNPC(new NPC{active=true,Center=new Vector2(40,50)},new NPC.HitInfo(),1);Equal(1,outgoing.Count,"live source hit producer packet");
-                var attachedClaim=outgoing[0];outgoing.Clear();using var attachedExtra=new MemoryStream();generated.SendExtraAI(new BinaryWriter(attachedExtra));source.active=false;
-                Terraria.Main.projectile[11]=serverHost;serverHost.active=true;attachedExtra.Position=0;server.ReceiveExtraAI(new BinaryReader(attachedExtra));
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;mod.HandlePacket(new BinaryReader(new MemoryStream(attachedClaim)),0);
-                Equal(1,outgoing.Count,"server validates exact source generation before attached relay");var attachedRelay=outgoing[0];outgoing.Clear();serverHost.active=false;
-                system.OnWorldUnload();var remoteHost=Terraria.Main.projectile[5]=new Projectile{whoAmI=5,owner=0,identity=71,active=true,Center=new Vector2(400,500),velocity=Vector2.UnitY,timeLeft=90};
-                var remote=Attach(remoteHost);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(remoteHost,remote);attachedExtra.Position=0;remote.ReceiveExtraAI(new BinaryReader(attachedExtra));
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;mod.HandlePacket(new BinaryReader(new MemoryStream(attachedRelay)),256);
-                Equal(1,OwnedMaterialQueue().Count,"remote source delay retains exact peer binding");MaterialClock(tick+2);system.PostUpdateEverything();
-                var attachedEmission=OwnedMaterialQueue()[0]!;var attachedFrame=(VfxSourceFrame)attachedEmission.GetType().GetField("Frame",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!;
-                Equal(remoteHost.Center,attachedFrame.Position,"attached source moves from live peer rather than event center");
-                Equal(1,((Array)attachedEmission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!).Length,"same live peer generation permits delayed source emission");
-                AssertVfxNear(new Vector2(3,0),EmittedVelocity(attachedEmission),"attached relay's initial local inheritance uses copied MaxUpdates=3 despite differently updated remote host");
-                remote.Configure(data,entity,0,0,Vector2.UnitX);MaterialClock(tick+3);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"reconfigured same peer host cannot inherit an old binding");
-                Console.WriteLine("DETAIL: projectile relay real same-tick hits=2 hit/crit packets=3 live-attachment-chain=1");
-            }finally{system.OnWorldUnload();netMods.SetValue(null,priorNetMods);registryProperty.SetValue(null,oldRegistry);modProperty.SetValue(null,oldMod);Terraria.Main.projectile=oldProjectiles;Terraria.Main.player[0]=oldOwner;Terraria.Main.netMode=oldMode;Terraria.Main.myPlayer=oldLocal;MaterialClock(tick);}
+            using var peers = new ReviewPeers();
+            var system = peers.System; var mod = peers.Mod; var registry = peers.Registry; var outgoing = peers.Sent;
+            var tick = Terraria.Main.GameUpdateCount;
+            InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
+            Terraria.Main.netMode = Terraria.ID.NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;
+            var data=ParseMaterialElement(MaterialElementWire());data.Id="network_material";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
+            var entity=Entity();entity.Id="probe";data.RuntimeProgram.Entities=new[]{entity};
+            var slot=data.VfxManifest.Slots[0];slot.EntityId="probe";slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
+            var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1};data.VfxManifest.Slots=new[]{slot,crit};
+            ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
+            Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
+            var source=Terraria.Main.projectile[3]=new Projectile{whoAmI=3,owner=0,identity=71,active=true,Center=new Vector2(200,300),velocity=Vector2.UnitX,timeLeft=90};
+            var generated=Attach(source);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(source,generated);generated.Configure(data,entity,0,0,Vector2.UnitX);
+            generated.OnHitNPC(new NPC{active=true,Center=new Vector2(10,20)},new NPC.HitInfo{Crit=true},1);
+            Equal(2,outgoing.Count,"actual owner-client OnHitNPC sends independent hit+crit packets even without NPC-pull gameplay");
+            source.extraUpdates=2;
+            generated.OnHitNPC(new NPC{active=true,Center=new Vector2(30,40)},new NPC.HitInfo(),1);
+            Equal(3,outgoing.Count,"second real same-name hit in same world tick is a new producer occurrence");
+            var claims=outgoing.ToArray();outgoing.Clear();
+            using var extra=new MemoryStream();generated.SendExtraAI(new BinaryWriter(extra));
+            system.OnWorldUnload();Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
+            source.active=false;
+            var serverHost=Terraria.Main.projectile[11]=new Projectile{whoAmI=11,owner=0,identity=71,active=true,Center=new Vector2(999,999),timeLeft=90};
+            var server=Attach(serverHost);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(serverHost,server);extra.Position=0;server.ReceiveExtraAI(new BinaryReader(extra));
+            foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);
+            Equal(3,outgoing.Count,"validated server relay resolves owner+identity across different local slots");
+            foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);Equal(3,outgoing.Count,"same technical occurrence replay suppressed");
+            foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),1);Equal(3,outgoing.Count,"wrong sender cannot relay owner claim");
+            var relays=outgoing.ToArray();outgoing.Clear();serverHost.active=false;Terraria.Main.projectile=Array.Empty<Projectile>();
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
+            foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
+            Equal(3,OwnedMaterialQueue().Count,"remote has all distinct delayed world emissions without surviving source");
+            MaterialClock(tick+2);system.PostUpdateEverything();Equal(3,OwnedMaterialQueue().Count,"remote emission uses captured world pose at due tick");
+            foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);Equal(3,OwnedMaterialQueue().Count,"remote same occurrence replay suppressed");
+            Vector2 EmittedVelocity(object emission) {var parts=(Array)emission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(emission)!;var part=parts.GetValue(0)!;return (Vector2)part.GetType().GetField("Velocity",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(part)!;}
+            AssertVfxNear(new Vector2(1+0.5f,0),EmittedVelocity(OwnedMaterialQueue()[0]!),"real owner/server/remote delayed chain inherits MaxUpdates=1");
+            AssertVfxNear(new Vector2(1+3*0.5f,0),EmittedVelocity(OwnedMaterialQueue()[2]!),"real owner/server/remote delayed chain copies MaxUpdates=3 before source removal");
+            // Reuse the real owner->server->remote chain with exact live attachment.
+            system.OnWorldUnload();MaterialClock(tick);outgoing.Clear();Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
+            Terraria.Main.projectile[3]=source;source.active=true;source.Center=new Vector2(200,300);slot.Element!.Attachment="source";
+            generated.Configure(data,entity,0,0,Vector2.UnitX);source.extraUpdates=2;slot.Element.Count=1;slot.Element.SpeedMinPxPerTick=slot.Element.SpeedMaxPxPerTick=0;slot.Element.InheritVelocity=1;slot.Element.Drag=1;slot.Element.AccelerationXPxPerTickSquared=slot.Element.AccelerationYPxPerTickSquared=0;
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
+            generated.OnHitNPC(new NPC{active=true,Center=new Vector2(40,50)},new NPC.HitInfo(),1);Equal(1,outgoing.Count,"live source hit producer packet");
+            var attachedClaim=outgoing[0];outgoing.Clear();using var attachedExtra=new MemoryStream();generated.SendExtraAI(new BinaryWriter(attachedExtra));source.active=false;
+            Terraria.Main.projectile[11]=serverHost;serverHost.active=true;attachedExtra.Position=0;server.ReceiveExtraAI(new BinaryReader(attachedExtra));
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;mod.HandlePacket(new BinaryReader(new MemoryStream(attachedClaim)),0);
+            Equal(1,outgoing.Count,"server validates exact source generation before attached relay");var attachedRelay=outgoing[0];outgoing.Clear();serverHost.active=false;
+            system.OnWorldUnload();var remoteHost=Terraria.Main.projectile[5]=new Projectile{whoAmI=5,owner=0,identity=71,active=true,Center=new Vector2(400,500),velocity=Vector2.UnitY,timeLeft=90};
+            var remote=Attach(remoteHost);typeof(Projectile).GetProperty("ModProjectile")!.SetValue(remoteHost,remote);attachedExtra.Position=0;remote.ReceiveExtraAI(new BinaryReader(attachedExtra));
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;mod.HandlePacket(new BinaryReader(new MemoryStream(attachedRelay)),256);
+            Equal(1,OwnedMaterialQueue().Count,"remote source delay retains exact peer binding");MaterialClock(tick+2);system.PostUpdateEverything();
+            var attachedEmission=OwnedMaterialQueue()[0]!;var attachedFrame=(VfxSourceFrame)attachedEmission.GetType().GetField("Frame",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!;
+            Equal(remoteHost.Center,attachedFrame.Position,"attached source moves from live peer rather than event center");
+            Equal(1,((Array)attachedEmission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!).Length,"same live peer generation permits delayed source emission");
+            AssertVfxNear(new Vector2(3,0),EmittedVelocity(attachedEmission),"attached relay's initial local inheritance uses copied MaxUpdates=3 despite differently updated remote host");
+            remote.Configure(data,entity,0,0,Vector2.UnitX);MaterialClock(tick+3);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"reconfigured same peer host cannot inherit an old binding");
+            Console.WriteLine("DETAIL: projectile relay real same-tick hits=2 hit/crit packets=3 live-attachment-chain=1");
+
         });
     }
 
     private static void MaterialItemSnapshotRelayPreservesPoseAndInstance()
     {
         WithLighting((_,__)=> {
-            var system=new InfiniDetachedVfxSystem();var oldOwner=Terraria.Main.player[0];var tick=Terraria.Main.GameUpdateCount;
-            var mp=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Instance")!;var oldMod=mp.GetValue(null);
-            var rp=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;var oldRegistry=rp.GetValue(null);
-            var mod=new global::InfiniCrafterLocal.InfiniCrafterLocalMod();typeof(Terraria.ModLoader.Mod).GetField("netID",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(mod,(short)0);
-            var netMods=typeof(Terraria.ModLoader.Mod).Assembly.GetType("Terraria.ModLoader.ModNet")!.GetField("netMods",BindingFlags.Static|BindingFlags.NonPublic)!;var priorNetMods=netMods.GetValue(null);
-            using var registry=new InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService();
-            var outgoing=new System.Collections.Generic.List<byte[]>();var starts=new System.Collections.Generic.Dictionary<Terraria.ModLoader.ModPacket,int>();
-            VfxGetPacketHook packet=(orig,self,capacity)=>{var p=orig(self,capacity);starts[p]=(int)p.BaseStream.Position;return p;};
-            Action<Terraria.ModLoader.ModPacket,int,int> send=(p,to,ignore)=>outgoing.Add(((MemoryStream)p.BaseStream).ToArray()[starts[p]..]);
-            using var gh=new MonoMod.RuntimeDetour.Hook(typeof(Terraria.ModLoader.Mod).GetMethod("GetPacket")!,packet);
-            using var sh=new MonoMod.RuntimeDetour.Hook(typeof(Terraria.ModLoader.ModPacket).GetMethod("Send")!,send);
-            var mode=Terraria.Main.netMode;var local=Terraria.Main.myPlayer;
-            try {
-                system.OnWorldUnload();InfiniItemVfxRuntime.ClearUseEventCaches();mp.SetValue(null,mod);rp.SetValue(null,registry);netMods.SetValue(null,new Terraria.ModLoader.Mod[]{mod});
-                var data=ParseMaterialElement(MaterialElementWire());data.Id="item_material_net";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
-                var entity=data.RuntimeProgram.Entities[0];var slot=data.VfxManifest.Slots[0];slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
-                data.RuntimeProgram.Bindings=new[]{new RuntimeBindingSpec{Id="primary",Role=RuntimeEntityRole.Primary,Input=RuntimeInputKind.PrimaryUse,UsePolicy=new RuntimeBindingUsePolicySpec{ContactDamage=true,Action=new RuntimeBindingActionSpec{Kind=RuntimeBindingAction.UseItemBody,TargetId=entity.Id}}}};
-                ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
-                InfiniCrafterLocal.Content.Items.GeneratedItem Host() {var gi=new InfiniCrafterLocal.Content.Items.GeneratedItem();var item=new Item{type=1,stack=1};typeof(Terraria.ModLoader.ModType<Item>).GetProperty("Entity")!.SetValue(gi,item);typeof(Item).GetProperty("ModItem")!.SetValue(item,gi);typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(gi,data);return gi;}
-                var player=Terraria.Main.player[0]=new Player{active=true,whoAmI=0,selectedItem=0,Center=new Vector2(300,400),itemRotation=1.1f,direction=-1,velocity=new Vector2(2,3),itemLocation=new Vector2(320,410)};
-                var owner=Host();player.inventory[0]=owner.Item;Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
-                owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(10,20)},new NPC.HitInfo(),1);Equal(1,outgoing.Count,"real owner item-contact producer sends snapshot");
-                Equal((byte)5,outgoing[0][1],"material item event uses immutable v5 ordered snapshot, not v3 live-player reconstruction");
-                var claim=outgoing[0];outgoing.Clear();data.RuntimeProgram.ItemUse.Configured=true;data.RuntimeProgram.ItemUse.DisableMeleeHitbox=false;data.Normalize();using var wire=new MemoryStream();owner.NetSend(new BinaryWriter(wire));
-                var server=Host();wire.Position=0;server.NetReceive(new BinaryReader(wire));player.inventory[0]=server.Item;
-                Equal(data.Id,server.Data.Id,"server item hydration identity; diagnostics="+(ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson",out var diag)?diag?.Message:"none"));
-                Equal(owner.PresentationToken,server.PresentationToken,"item peer technical generation round trip");
-                system.OnWorldUnload();Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
-                mod.HandlePacket(new BinaryReader(new MemoryStream(claim)),0);Equal(1,outgoing.Count,"server validates exact synchronized item generation");
-                var relay=outgoing[0];mod.HandlePacket(new BinaryReader(new MemoryStream(claim)),0);Equal(1,outgoing.Count,"item occurrence replay does not relay twice");
-                var remote=Host();wire.Position=0;remote.NetReceive(new BinaryReader(wire));player.inventory[0]=remote.Item;player.Center=new Vector2(999,999);player.itemRotation=-2;player.velocity=Vector2.Zero;
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
-                mod.HandlePacket(new BinaryReader(new MemoryStream(relay)),256);Equal(1,OwnedMaterialQueue().Count,"remote item world element admitted");
-                var emission=OwnedMaterialQueue()[0]!;var frame=(VfxSourceFrame)emission.GetType().GetField("Frame",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(emission)!;
-                Equal(new Vector2(300,400),frame.Position,"remote world position frozen at original hit");Equal(new Vector2(2,3),frame.Velocity,"remote inherited velocity frozen");
-                AssertVfxNear(1.1f.ToRotationVector2()*-1,frame.Forward,"remote facing frozen before source mutation");
-                player.inventory[0]=Host().Item;MaterialClock(tick+2);system.PostUpdateEverything();Equal(1,OwnedMaterialQueue().Count,"world item delay survives same-definition replacement");
-                system.OnWorldUnload();MaterialClock(tick);outgoing.Clear();slot.Element!.Attachment="source";slot.Anchor="hitPoint";
-                player.inventory[0]=owner.Item;player.Center=new Vector2(300,400);player.itemRotation=0;player.direction=1;player.velocity=Vector2.UnitX;
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
-                owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(40,50)},new NPC.HitInfo(),1);owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(60,70)},new NPC.HitInfo(),1);
-                Equal(2,outgoing.Count,"two real same-name item hits in one tick send two occurrences");var attachedClaims=outgoing.ToArray();outgoing.Clear();
-                player.inventory[0]=server.Item;Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
-                foreach(var bytes in attachedClaims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);
-                Equal(2,outgoing.Count,"server relays both distinct item occurrences");var attachedRelays=outgoing.ToArray();outgoing.Clear();
-                foreach(var bytes in attachedClaims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),1);Equal(0,outgoing.Count,"wrong sender cannot claim item material event");
-                system.OnWorldUnload();player.inventory[0]=remote.Item;player.Center=new Vector2(999,999);player.itemRotation=1;
-                Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
-                foreach(var bytes in attachedRelays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
-                Equal(2,OwnedMaterialQueue().Count,"remote attached item events retain exact net-synchronized instance");MaterialClock(tick+2);system.PostUpdateEverything();
-                var attachedEmission=OwnedMaterialQueue()[0]!;var particles=(Array)attachedEmission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!;
-                Equal(new Vector2(-257,-352),(Vector2)particles.GetValue(0)!.GetType().GetField("Position",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(particles.GetValue(0))!,"remote source hit offset uses immutable item source center and forward");
-                player.inventory[0]=Host().Item;MaterialClock(tick+3);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"same-definition remote item replacement retires attached emissions");
-                system.OnWorldUnload();foreach(var bytes in attachedRelays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
-                Equal(0,OwnedMaterialQueue().Count,"stale synchronized Item token cannot bind a replacement or convert to world");
-                Console.WriteLine("DETAIL: item relay immutable-world=1 real same-tick hits=2 live-attachment-chain=1 stale-token-rejected=1");
-            }finally{system.OnWorldUnload();InfiniItemVfxRuntime.ClearUseEventCaches();netMods.SetValue(null,priorNetMods);mp.SetValue(null,oldMod);rp.SetValue(null,oldRegistry);Terraria.Main.player[0]=oldOwner;Terraria.Main.netMode=mode;Terraria.Main.myPlayer=local;MaterialClock(tick);}
+            using var peers = new ReviewPeers();
+            var system = peers.System; var mod = peers.Mod; var registry = peers.Registry; var outgoing = peers.Sent;
+            var tick = Terraria.Main.GameUpdateCount;
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+            var data=ParseMaterialElement(MaterialElementWire());data.Id="item_material_net";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
+            var entity=data.RuntimeProgram.Entities[0];var slot=data.VfxManifest.Slots[0];slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
+            data.RuntimeProgram.Bindings=new[]{new RuntimeBindingSpec{Id="primary",Role=RuntimeEntityRole.Primary,Input=RuntimeInputKind.PrimaryUse,UsePolicy=new RuntimeBindingUsePolicySpec{ContactDamage=true,Action=new RuntimeBindingActionSpec{Kind=RuntimeBindingAction.UseItemBody,TargetId=entity.Id}}}};
+            ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
+            InfiniCrafterLocal.Content.Items.GeneratedItem Host() {var gi=new InfiniCrafterLocal.Content.Items.GeneratedItem();var item=new Item{type=1,stack=1};AttachItem(gi, item, data);return gi;}
+            var player=Terraria.Main.player[0]=new Player{active=true,whoAmI=0,selectedItem=0,Center=new Vector2(300,400),itemRotation=1.1f,direction=-1,velocity=new Vector2(2,3),itemLocation=new Vector2(320,410)};
+            var owner=Host();player.inventory[0]=owner.Item;Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
+            owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(10,20)},new NPC.HitInfo(),1);Equal(1,outgoing.Count,"real owner item-contact producer sends snapshot");
+            Equal((byte)5,outgoing[0][1],"material item event uses immutable v5 ordered snapshot, not v3 live-player reconstruction");
+            var claim=outgoing[0];outgoing.Clear();data.RuntimeProgram.ItemUse.Configured=true;data.RuntimeProgram.ItemUse.DisableMeleeHitbox=false;data.Normalize();using var wire=new MemoryStream();owner.NetSend(new BinaryWriter(wire));
+            var server=Host();wire.Position=0;server.NetReceive(new BinaryReader(wire));player.inventory[0]=server.Item;
+            Equal(data.Id,server.Data.Id,"server item hydration identity; diagnostics="+(ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson",out var diag)?diag?.Message:"none"));
+            Equal(owner.PresentationToken,server.PresentationToken,"item peer technical generation round trip");
+            system.OnWorldUnload();Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
+            mod.HandlePacket(new BinaryReader(new MemoryStream(claim)),0);Equal(1,outgoing.Count,"server validates exact synchronized item generation");
+            var relay=outgoing[0];mod.HandlePacket(new BinaryReader(new MemoryStream(claim)),0);Equal(1,outgoing.Count,"item occurrence replay does not relay twice");
+            var remote=Host();wire.Position=0;remote.NetReceive(new BinaryReader(wire));player.inventory[0]=remote.Item;player.Center=new Vector2(999,999);player.itemRotation=-2;player.velocity=Vector2.Zero;
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
+            mod.HandlePacket(new BinaryReader(new MemoryStream(relay)),256);Equal(1,OwnedMaterialQueue().Count,"remote item world element admitted");
+            var emission=OwnedMaterialQueue()[0]!;var frame=(VfxSourceFrame)emission.GetType().GetField("Frame",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(emission)!;
+            Equal(new Vector2(300,400),frame.Position,"remote world position frozen at original hit");Equal(new Vector2(2,3),frame.Velocity,"remote inherited velocity frozen");
+            AssertVfxNear(1.1f.ToRotationVector2()*-1,frame.Forward,"remote facing frozen before source mutation");
+            player.inventory[0]=Host().Item;MaterialClock(tick+2);system.PostUpdateEverything();Equal(1,OwnedMaterialQueue().Count,"world item delay survives same-definition replacement");
+            system.OnWorldUnload();MaterialClock(tick);outgoing.Clear();slot.Element!.Attachment="source";slot.Anchor="hitPoint";
+            player.inventory[0]=owner.Item;player.Center=new Vector2(300,400);player.itemRotation=0;player.direction=1;player.velocity=Vector2.UnitX;
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=0;
+            owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(40,50)},new NPC.HitInfo(),1);owner.OnHitNPC(player,new NPC{active=true,Center=new Vector2(60,70)},new NPC.HitInfo(),1);
+            Equal(2,outgoing.Count,"two real same-name item hits in one tick send two occurrences");var attachedClaims=outgoing.ToArray();outgoing.Clear();
+            player.inventory[0]=server.Item;Terraria.Main.netMode=Terraria.ID.NetmodeID.Server;Terraria.Main.myPlayer=255;
+            foreach(var bytes in attachedClaims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);
+            Equal(2,outgoing.Count,"server relays both distinct item occurrences");var attachedRelays=outgoing.ToArray();outgoing.Clear();
+            foreach(var bytes in attachedClaims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),1);Equal(0,outgoing.Count,"wrong sender cannot claim item material event");
+            system.OnWorldUnload();player.inventory[0]=remote.Item;player.Center=new Vector2(999,999);player.itemRotation=1;
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
+            foreach(var bytes in attachedRelays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
+            Equal(2,OwnedMaterialQueue().Count,"remote attached item events retain exact net-synchronized instance");MaterialClock(tick+2);system.PostUpdateEverything();
+            var attachedEmission=OwnedMaterialQueue()[0]!;var particles=(Array)attachedEmission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(attachedEmission)!;
+            Equal(new Vector2(-257,-352),(Vector2)particles.GetValue(0)!.GetType().GetField("Position",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(particles.GetValue(0))!,"remote source hit offset uses immutable item source center and forward");
+            player.inventory[0]=Host().Item;MaterialClock(tick+3);system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"same-definition remote item replacement retires attached emissions");
+            system.OnWorldUnload();foreach(var bytes in attachedRelays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
+            Equal(0,OwnedMaterialQueue().Count,"stale synchronized Item token cannot bind a replacement or convert to world");
+            Console.WriteLine("DETAIL: item relay immutable-world=1 real same-tick hits=2 live-attachment-chain=1 stale-token-rejected=1");
+
+            InfiniItemVfxRuntime.ClearUseEventCaches();
         });
     }
 
@@ -530,12 +507,12 @@ internal static partial class EngineRuntimeChecks
     private static void MaterialEmptyZeroMissingTextureControls()
     {
         WithVfxGeometryQueue((batch,texture,count,positions,colors)=>{
-            var system=new InfiniDetachedVfxSystem();var sp=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;var previous=sp.GetValue(null);
-            using var cache=new InfiniCrafterLocal.Common.Services.RuntimeSpriteCache();var textures=(System.Collections.IDictionary)cache.GetType().GetField("_textures",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(cache)!;
-            var cached=cache.GetType().GetNestedType("CachedTexture",BindingFlags.NonPublic)!;string key=Path.Combine(Terraria.Program.SavePath,"zero_controls.png");textures.Add(key,Activator.CreateInstance(cached,texture,0f,0L)!);
+            var system=new InfiniDetachedVfxSystem();
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var cached = borrowedCache.Record;string key=Path.Combine(Terraria.Program.SavePath,"zero_controls.png");textures.Add(key,Activator.CreateInstance(cached,texture,0f,0L)!);
             var draw=typeof(InfiniDetachedVfxSystem).GetMethod("DrawMaterialSprites",BindingFlags.Static|BindingFlags.NonPublic)!;
             try {
-                sp.SetValue(null,cache);int beginCalls=0;void Draw()=>draw.Invoke(null,new object[]{"BeforeProjectiles",batch,(Action)(()=>beginCalls++)});
+                int beginCalls=0;void Draw()=>draw.Invoke(null,new object[]{"BeforeProjectiles",batch,(Action)(()=>beginCalls++)});
                 system.OnWorldUnload();Draw();Equal(0,count(),"empty owned manifest draws nothing");
                 foreach(string control in new[]{"count","width","height","opacity","alpha","drawBudget","particleTickBudget","particleTotalBudget","missing"}) {
                     system.OnWorldUnload();var data=ParseMaterialElement(MaterialElementWire());var slot=data.VfxManifest.Slots[0];slot.Event="on_hit";slot.RepeatEvery=0;data.VfxManifest.Assets![0].SpritePath=control=="missing"?Path.Combine(Terraria.Program.SavePath,"absent_material.png"):key;
@@ -545,7 +522,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(0,count(),"no FNA submission for "+control);Equal(0,beginCalls,"silent control owns no Begin "+control);
                 }
                 Console.WriteLine("DETAIL: material empty/zero/missing sprite draw controls=10");
-            }finally{textures.Clear();sp.SetValue(null,previous);system.OnWorldUnload();}
+            }finally{textures.Clear();system.OnWorldUnload();}
         });
     }
     private static void MaterialMotionUsesDragAccelerationAndSpin()

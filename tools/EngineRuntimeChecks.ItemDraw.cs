@@ -22,22 +22,13 @@ internal static partial class EngineRuntimeChecks
     public static void GeneratedItemDrawPreservesEngineGeometryAndTint()
     {
         const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
-        var batch = (SpriteBatch)RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch));
-        var texture = (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-        GC.SuppressFinalize(batch);
-        GC.SuppressFinalize(texture);
-        foreach (string name in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" })
-        {
-            var field = typeof(SpriteBatch).GetField(name, hidden)!;
-            field.SetValue(batch, Array.CreateInstance(field.FieldType.GetElementType()!, 16));
-        }
+        var batch = CpuSpriteBatch(16);
+        var texture = CpuTexture(1, 1);
         var count = typeof(SpriteBatch).GetField("numSprites", hidden)!;
         var vertices = (Array)typeof(SpriteBatch).GetField("vertexInfo", hidden)!.GetValue(batch)!;
-        var cache = new RuntimeSpriteCache();
-        var textures = (IDictionary)typeof(RuntimeSpriteCache).GetField("_textures", hidden)!.GetValue(cache)!;
-        var record = typeof(RuntimeSpriteCache).GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
-        var cacheProperty = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-        object? oldCache = cacheProperty.GetValue(null);
+        using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
+
         bool oldServer = Terraria.Main.dedServ;
         Vector2 oldScreen = Terraria.Main.screenPosition;
         string path = System.IO.Path.Combine(Terraria.Program.SavePath, "item_draw_cpu.png");
@@ -74,7 +65,7 @@ internal static partial class EngineRuntimeChecks
         {
             Terraria.Main.dedServ = false;
             Terraria.Main.screenPosition = new Vector2(40, 60);
-            cacheProperty.SetValue(null, cache);
+
             textures.Add(path, Activator.CreateInstance(record, texture, 0f, 0L)!);
             batch.Begin();
             // Non-square, odd and small canvases: full UV/canvas retention is intentional.
@@ -141,7 +132,7 @@ internal static partial class EngineRuntimeChecks
         }
         finally
         {
-            cacheProperty.SetValue(null, oldCache);
+
             Terraria.Main.dedServ = oldServer;
             Terraria.Main.screenPosition = oldScreen;
             textures.Clear(); // CPU shell must not be disposed as a GPU texture.

@@ -19,54 +19,50 @@ internal static partial class EngineRuntimeChecks
 
     private static void NearestDamageRetainsTheSingleCenterNativeAction()
     {
-        var oldMetrics = Terraria.Main.SceneMetrics;
-        var oldRandom = Terraria.Main.rand;
-        try
+        using var actorState = new NativeActorState();
+
+        Terraria.Main.SceneMetrics = new SceneMetrics();
+        Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(11);
+        foreach (bool itemBody in new[] { false, true })
+        foreach (string eventName in new[] { "on_hit", "on_crit" })
+        foreach (int count in new[] { 1, 2, 3, 12 })
         {
-            Terraria.Main.SceneMetrics = new SceneMetrics();
-            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(11);
-            foreach (bool itemBody in new[] { false, true })
-            foreach (string eventName in new[] { "on_hit", "on_crit" })
-            foreach (int count in new[] { 1, 2, 3, 12 })
+            using var scope = new SwarmRuntimeScope();
+            Vector2 center = new(1600, 1600);
+            float[] distances = { 4, 100, 20, 175, -50, 128, 1 };
+            for (int i = 0; i < distances.Length; i++)
+                Terraria.Main.npc[i] = EventDomainNpc(i, center, distances[i]);
+            Terraria.Main.npc[6].friendly = true;
+            Equal(true, Terraria.Main.npc[5].CanBeChasedBy(), "boundary target is chaseable");
+            var data = SwarmGameplayFixture();
+            var entity = data.RuntimeProgram.TryGetEntity("root")!;
+            data.Gameplay.Damage = 100;
+            data.Gameplay.DamageClass = "generic";
+            if (itemBody) entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.ItemEntityId)!;
+            // Deserialize the old wire selected by the new Author alias.
+            var action = JsonSerializer.Deserialize<RuntimeEventActionSpec>(JsonSerializer.Serialize(new {
+                id = "nearest", action = "chain_damage_on_event", actionCode = 4,
+                @event = eventName, count, rangeTiles = 8, damageMultiplier = 0.5,
+            }), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!;
+            action.NormalizeAndValidate();
+            var owner = Terraria.Main.player[0];
+            var control = EventDomainNpc(20, center, 500);
+            owner.ApplyDamageToNPC(control, 50, 0f, 1, false, Terraria.ModLoader.DamageClass.Generic, false);
+            Equal(true, control.life < 1000, "real native damage positive control");
+            RuntimeProgramExecutor.ExecuteAction(data, entity, action, owner,
+                owner.GetSource_Misc("nearest_domain_probe"), center, Vector2.UnitX,
+                Terraria.Main.npc[0], 777, 0, new RuntimeSpawnBudget(8));
+            for (int i = 0; i < distances.Length; i++)
             {
-                using var scope = new SwarmRuntimeScope();
-                Vector2 center = new(1600, 1600);
-                float[] distances = { 4, 100, 20, 175, -50, 128, 1 };
-                for (int i = 0; i < distances.Length; i++)
-                    Terraria.Main.npc[i] = EventDomainNpc(i, center, distances[i]);
-                Terraria.Main.npc[6].friendly = true;
-                Equal(true, Terraria.Main.npc[5].CanBeChasedBy(), "boundary target is chaseable");
-                var data = SwarmGameplayFixture();
-                var entity = data.RuntimeProgram.TryGetEntity("root")!;
-                data.Gameplay.Damage = 100;
-                data.Gameplay.DamageClass = "generic";
-                if (itemBody) entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.ItemEntityId)!;
-                // Deserialize the old wire selected by the new Author alias.
-                var action = JsonSerializer.Deserialize<RuntimeEventActionSpec>(JsonSerializer.Serialize(new {
-                    id = "nearest", action = "chain_damage_on_event", actionCode = 4,
-                    @event = eventName, count, rangeTiles = 8, damageMultiplier = 0.5,
-                }), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!;
-                action.NormalizeAndValidate();
-                var owner = Terraria.Main.player[0];
-                var control = EventDomainNpc(20, center, 500);
-                owner.ApplyDamageToNPC(control, 50, 0f, 1, false, Terraria.ModLoader.DamageClass.Generic, false);
-                Equal(true, control.life < 1000, "real native damage positive control");
-                RuntimeProgramExecutor.ExecuteAction(data, entity, action, owner,
-                    owner.GetSource_Misc("nearest_domain_probe"), center, Vector2.UnitX,
-                    Terraria.Main.npc[0], 777, 0, new RuntimeSpawnBudget(8));
-                for (int i = 0; i < distances.Length; i++)
-                {
-                    bool hit = i == 2 || i == 4 && count >= 2 || i == 1 && count >= 3 || i == 5 && count >= 4;
-                    Equal(hit ? control.life : 1000, Terraria.Main.npc[i].life,
-                        $"{eventName} item={itemBody} count={count} NPC={i}: same-center sorted damage");
-                }
-                // NPC 3 is near the outer selected NPC but outside the original
-                // radius: even count=12 must not create a second hopping center.
-                Equal(1000, Terraria.Main.npc[3].life, "no radial-to-hopping semantic substitution");
-                Equal(1000, Terraria.Main.npc[0].life, "directly hit NPC is excluded");
+                bool hit = i == 2 || i == 4 && count >= 2 || i == 1 && count >= 3 || i == 5 && count >= 4;
+                Equal(hit ? control.life : 1000, Terraria.Main.npc[i].life,
+                    $"{eventName} item={itemBody} count={count} NPC={i}: same-center sorted damage");
             }
+            // NPC 3 is near the outer selected NPC but outside the original
+            // radius: even count=12 must not create a second hopping center.
+            Equal(1000, Terraria.Main.npc[3].life, "no radial-to-hopping semantic substitution");
+            Equal(1000, Terraria.Main.npc[0].life, "directly hit NPC is excluded");
         }
-        finally { Terraria.Main.SceneMetrics = oldMetrics; Terraria.Main.rand = oldRandom; }
     }
 
     private static void TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount()

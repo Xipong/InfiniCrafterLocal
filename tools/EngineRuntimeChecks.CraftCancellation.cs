@@ -32,18 +32,13 @@ internal static partial class EngineRuntimeChecks
             Equal(false, request.FailureIsFatal, "retirement is not a failed recipe");
             Equal(true, new GeneratorClient().GeneratePreparedBlocking(request) is null, "retired request cannot start HTTP");
 
-            Type jobType = typeof(InfiniCraftPlayer).GetNestedType("MultiDevCraftJob", BindingFlags.NonPublic)!;
-            Array jobs = (Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", CraftFields)!.GetValue(owner)!;
             foreach (string operation in new[] { "TryCancelExtraServerCraft", "AbortMultiDevCraftsForWorldExit", "InitializeMultiDevCraftState" })
             {
                 var requests = new[] { new GeneratorClient.PreparedGenerationRequest(), new GeneratorClient.PreparedGenerationRequest() };
                 for (int index = 0; index < 2; index++)
                 {
-                    object job = Activator.CreateInstance(jobType, nonPublic: true)!;
-                    jobType.GetField("Request", CraftFields)!.SetValue(job, requests[index]);
-                    jobType.GetField("RequestId", CraftFields)!.SetValue(job, "request-" + index);
-                    jobType.GetField("LaneIndex", CraftFields)!.SetValue(job, index + 1);
-                    jobs.SetValue(job, index);
+                    CraftLane(owner, index + 1, ("_request", "Request", requests[index]),
+                        ("_serverRequestId", "RequestId", "request-" + index));
                 }
                 object[]? args = operation == "TryCancelExtraServerCraft" ? new object[] { "request-0", "test cancel" }
                     : operation == "AbortMultiDevCraftsForWorldExit" ? new object[] { false } : null;

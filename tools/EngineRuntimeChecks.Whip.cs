@@ -69,11 +69,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void WhipImpactMarksOnlyItsOwnerForSummonSourceDamage()
     {
+        using var actorState = new NativeActorState();
         WithPlayer((owner, stats) =>
         {
-            Player oldOwner = Terraria.Main.player[0];
-            int oldMode = Terraria.Main.netMode;
-            int oldLocalPlayer = Terraria.Main.myPlayer;
+
             var singleton = typeof(ContentInstance<GeneratedWhipTagGlobalNPC>).GetProperty("Instance")!;
             object? oldSingleton = singleton.GetValue(null);
             var tag = new GeneratedWhipTagGlobalNPC();
@@ -146,9 +145,7 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 singleton.SetValue(null, oldSingleton);
-                Terraria.Main.player[0] = oldOwner;
-                Terraria.Main.netMode = oldMode;
-                Terraria.Main.myPlayer = oldLocalPlayer;
+
             }
         });
     }

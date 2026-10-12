@@ -59,9 +59,7 @@ internal static partial class EngineRuntimeChecks
     {
         var item = new Item(); item.SetDefaults(ItemID.CopperShortsword); item.stack = 1;
         var host = new WeaponAmmoProbeItem();
-        typeof(ModType<Item>).GetProperty("Entity", RootPrivate)!.SetValue(host, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, host);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(host, data);
+        AttachItem(host, item, data);
         host.SetDefaults();
         Equal(true, ReferenceEquals(data, host.Data), "weapon-ammo fixture retains explicit definition");
         return host;
@@ -95,9 +93,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, player.PickAmmo(oracle, out int expectedProjectile, out float expectedSpeed,
                     out int expectedDamage, out float expectedKnockback, out int expectedAmmo, dontConsume: true), "real native nonconsuming ammo oracle");
                 Equal(3, ammo.stack, "ammo oracle has no consumption side effects");
-                using var spawn = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect), new[] {
-                    typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float),
-                    typeof(int), typeof(float), typeof(float), typeof(float) })!,
+                using var spawn = new Hook(NativeProjectileEntry(),
                     (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
                     ((source, position, velocity, type, damage, knockback, owner, a, b, c) =>
                     {
@@ -154,9 +150,7 @@ internal static partial class EngineRuntimeChecks
                 Vector2 expected = aim == "none" ? Vector2.Zero : Vector2.UnitX * (basis == "native_shot" ? nativeSpeed : 8f);
                 // Isolate native allocation only. The real Shoot -> SpawnRuntimeEntity
                 // -> Configure -> AI/ExtraAI path executes; no world registration is claimed.
-                using (var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect), new[] {
-                    typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float),
-                    typeof(int), typeof(float), typeof(float), typeof(float) })!,
+                using (var native = new Hook(NativeProjectileEntry(),
                     (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
                     ((source, position, velocity, type, damage, knockback, ownerId, a, b, c) =>
                     {
@@ -250,9 +244,7 @@ internal static partial class EngineRuntimeChecks
         entity.Spawn.Aim = "velocity"; entity.Spawn.OverTarget.DelayTicks = 2; entity.Spawn.OverTarget.HeightTiles = 2;
         var item = WeaponAmmoHost(data); owner.inventory[0] = item.Item;
         var hosts = new System.Collections.Generic.List<GeneratedProjectile>();
-        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect), new[] {
-            typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float),
-            typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, ownerId, a, b, c) =>
             {

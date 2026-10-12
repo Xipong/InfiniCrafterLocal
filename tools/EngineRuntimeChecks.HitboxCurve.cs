@@ -73,19 +73,16 @@ internal static partial class EngineRuntimeChecks
     {
         WithVfxGeometryQueue((batch, texture, count, positions, _) =>
         {
-            const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
             typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 64);
             typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 16);
-            var cacheProperty = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? oldCache = cacheProperty.GetValue(null);
-            var cache = new RuntimeSpriteCache();
-            var textures = (IDictionary)typeof(RuntimeSpriteCache).GetField("_textures", hidden)!.GetValue(cache)!;
-            var record = typeof(RuntimeSpriteCache).GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string path = System.IO.Path.Combine(Terraria.Program.SavePath, "hitbox_curve_body_cpu.png");
             textures.Add(path, Activator.CreateInstance(record, texture, 0f, 0L)!);
             try
             {
-                cacheProperty.SetValue(null, cache);
+
                 foreach (string mode in new[] { "baked_sprite", "reuse_item_icon" })
                 foreach (bool declaredFrame in new[] { false, true })
                 foreach (string policy in new[] { "absent", "independent", "mirror", "visual" })
@@ -127,10 +124,9 @@ internal static partial class EngineRuntimeChecks
                     Equal(index + 1, count(), "mirror does not invent a visual for explicit no_asset");
                 }
             }
-            finally { cacheProperty.SetValue(null, oldCache); }
+            finally {  }
         });
     }
-
     private static void HitboxCurveExplicitMirrorReachesPrimitiveVertices()
     {
         WithBodyGeometryQueue((count, positions) =>

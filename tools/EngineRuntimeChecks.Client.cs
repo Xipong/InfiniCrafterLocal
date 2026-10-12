@@ -110,101 +110,98 @@ internal static partial class EngineRuntimeChecks
 
     private static void GeneratedParentPrefixIsRequestOnly()
     {
-        var oldRandom = Terraria.Main.rand;
-        int oldMode = Terraria.Main.netMode;
+        using var actorState = new NativeActorState();
+
         var failures = new System.Collections.Generic.List<string>();
-        try
+        Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(17);
+        Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+        var data = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+        data.Id = "parent_prefix_probe";
+        data.SourceMode = "test_fixture";
+        data.Name = "Authored parent";
+        data.Gameplay.Damage = 100;
+        data.Gameplay.DamageClass = "melee";
+        data.Gameplay.Knockback = 5f;
+        data.Gameplay.UseTime = data.Gameplay.UseAnimation = 30;
+        data.Gameplay.Value = 10000;
+        data.Normalize();
+        var baseItem = new Terraria.Item();
+        baseItem.SetDefaults(Terraria.ID.ItemID.WoodenSword);
+        // Isolate the real GeneratedItem clone/data hooks on a vanilla-allocated
+        // host type. This is not full ModLoader content registration.
+        var generated = new InfiniCrafterLocal.Content.Items.GeneratedItem();
+        typeof(Terraria.ModLoader.ModType<Terraria.Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .SetValue(generated, baseItem);
+        typeof(Terraria.Item).GetProperty("ModItem")!.SetValue(baseItem, generated);
+        typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        data.ApplyToItem(baseItem);
+        baseItem.stack = 3;
+        baseItem.favorited = true;
+        string definition = data.ToNetworkJson();
+        string Stats(Terraria.Item item) => JsonSerializer.Serialize(new {
+            item.type, item.prefix, item.damage, item.crit, item.knockBack, item.useTime,
+            item.useAnimation, item.scale, item.shootSpeed, item.mana, item.rare, item.value,
+            item.favorited, item.Name,
+        });
+        var client = new GeneratorClient();
+        var owner = new Terraria.Player { name = "headless_prefix_probe" };
+        using var baseline = JsonDocument.Parse(client.Prepare(baseItem.Clone(), baseItem.Clone(), owner).PayloadJson);
+        foreach (int prefix in new[] { 0, (int)Terraria.ID.PrefixID.Legendary, (int)Terraria.ID.PrefixID.Broken, (int)Terraria.ID.PrefixID.Zealous })
         {
-            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(17);
-            Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
-            var data = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
-            data.Id = "parent_prefix_probe";
-            data.SourceMode = "test_fixture";
-            data.Name = "Authored parent";
-            data.Gameplay.Damage = 100;
-            data.Gameplay.DamageClass = "melee";
-            data.Gameplay.Knockback = 5f;
-            data.Gameplay.UseTime = data.Gameplay.UseAnimation = 30;
-            data.Gameplay.Value = 10000;
-            data.Normalize();
-            var baseItem = new Terraria.Item();
-            baseItem.SetDefaults(Terraria.ID.ItemID.WoodenSword);
-            // Isolate the real GeneratedItem clone/data hooks on a vanilla-allocated
-            // host type. This is not full ModLoader content registration.
-            var generated = new InfiniCrafterLocal.Content.Items.GeneratedItem();
-            typeof(Terraria.ModLoader.ModType<Terraria.Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
-                .SetValue(generated, baseItem);
-            typeof(Terraria.Item).GetProperty("ModItem")!.SetValue(baseItem, generated);
-            typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-            data.ApplyToItem(baseItem);
-            baseItem.stack = 3;
-            baseItem.favorited = true;
-            string definition = data.ToNetworkJson();
-            string Stats(Terraria.Item item) => JsonSerializer.Serialize(new {
-                item.type, item.prefix, item.damage, item.crit, item.knockBack, item.useTime,
-                item.useAnimation, item.scale, item.shootSpeed, item.mana, item.rare, item.value,
-                item.favorited, item.Name,
-            });
-            var client = new GeneratorClient();
-            var owner = new Terraria.Player { name = "headless_prefix_probe" };
-            using var baseline = JsonDocument.Parse(client.Prepare(baseItem.Clone(), baseItem.Clone(), owner).PayloadJson);
-            foreach (int prefix in new[] { 0, (int)Terraria.ID.PrefixID.Legendary, (int)Terraria.ID.PrefixID.Broken, (int)Terraria.ID.PrefixID.Zealous })
+            try
             {
-                try
+                Terraria.Item source = baseItem.Clone();
+                if (prefix != 0) Equal(true, source.Prefix(prefix), "real prefix accepts " + prefix);
+                string before = Stats(source);
+                var sourceData = ((InfiniCrafterLocal.Content.Items.GeneratedItem)source.ModItem).Data;
+                string sourceDefinition = JsonSerializer.Serialize(sourceData);
+                var prepared = client.Prepare(source, source, owner);
+                Equal(before, Stats(source), "source retains prefix/stats " + prefix);
+                Equal(3, source.stack, "source stack untouched");
+                Equal(sourceDefinition, JsonSerializer.Serialize(sourceData), "source definition unchanged by Prepare");
+                foreach (Terraria.Item refund in new[] { prepared.RefundA, prepared.RefundB })
                 {
-                    Terraria.Item source = baseItem.Clone();
-                    if (prefix != 0) Equal(true, source.Prefix(prefix), "real prefix accepts " + prefix);
-                    string before = Stats(source);
-                    var sourceData = ((InfiniCrafterLocal.Content.Items.GeneratedItem)source.ModItem).Data;
-                    string sourceDefinition = JsonSerializer.Serialize(sourceData);
-                    var prepared = client.Prepare(source, source, owner);
-                    Equal(before, Stats(source), "source retains prefix/stats " + prefix);
-                    Equal(3, source.stack, "source stack untouched");
-                    Equal(sourceDefinition, JsonSerializer.Serialize(sourceData), "source definition unchanged by Prepare");
-                    foreach (Terraria.Item refund in new[] { prepared.RefundA, prepared.RefundB })
-                    {
-                        Equal(false, ReferenceEquals(source, refund), "refund is independent item");
-                        Equal(before, Stats(refund), "refund retains original prefix/stats " + prefix);
-                        Equal(1, refund.stack, "refund reserves one unit");
-                        Equal(sourceData.ToNetworkJson(), ((InfiniCrafterLocal.Content.Items.GeneratedItem)refund.ModItem).Data.ToNetworkJson(), "refund preserves generated definition");
-                    }
-                    using var payload = JsonDocument.Parse(prepared.PayloadJson);
-                    foreach (string side in new[] { "itemA", "itemB" })
-                    {
-                        var actual = payload.RootElement.GetProperty(side);
-                        var expected = baseline.RootElement.GetProperty(side);
-                        Equal(prefix, actual.GetProperty("originalPrefix").GetInt32(), "original prefix is diagnostic only");
-                        Equal(prefix != 0, actual.GetProperty("prefixIgnored").GetBoolean(), "ignored marker is truthful");
-                        foreach (string field in new[] { "prefix", "name", "damage", "useTime", "useAnimation", "knockback", "manaCost", "shootSpeed", "rare", "value", "damageClass", "autoFeatures", "nameTokens", "runtimeFacts", "generatedData" })
-                            Equal(expected.GetProperty(field).GetRawText(), actual.GetProperty(field).GetRawText(), "prefix " + prefix + " base payload " + field);
-                    }
-                    var identity = typeof(GeneratorClient).GetMethod("CraftIdentityItem", BindingFlags.Static | BindingFlags.NonPublic)!;
-                    var requestItem = (Terraria.Item)identity.Invoke(null, new object[] { source, data })!;
-                    Equal((byte)0, requestItem.prefix, "request identity actually unprefixed");
-                    Equal(baseItem.crit, requestItem.crit, "crit reset too, not only authored fields");
-                    Equal(baseItem.scale, requestItem.scale, "size reset");
-                    Equal(3, requestItem.stack, "request keeps source quantity");
-                    Equal(true, requestItem.ModItem is InfiniCrafterLocal.Content.Items.GeneratedItem, "generated type identity retained");
-                    Equal(definition, data.ToNetworkJson(), "canonical definition unchanged");
+                    Equal(false, ReferenceEquals(source, refund), "refund is independent item");
+                    Equal(before, Stats(refund), "refund retains original prefix/stats " + prefix);
+                    Equal(1, refund.stack, "refund reserves one unit");
+                    Equal(sourceData.ToNetworkJson(), ((InfiniCrafterLocal.Content.Items.GeneratedItem)refund.ModItem).Data.ToNetworkJson(), "refund preserves generated definition");
                 }
-                catch (Exception error) { failures.Add("prefix " + prefix + ": " + error); }
+                using var payload = JsonDocument.Parse(prepared.PayloadJson);
+                foreach (string side in new[] { "itemA", "itemB" })
+                {
+                    var actual = payload.RootElement.GetProperty(side);
+                    var expected = baseline.RootElement.GetProperty(side);
+                    Equal(prefix, actual.GetProperty("originalPrefix").GetInt32(), "original prefix is diagnostic only");
+                    Equal(prefix != 0, actual.GetProperty("prefixIgnored").GetBoolean(), "ignored marker is truthful");
+                    foreach (string field in new[] { "prefix", "name", "damage", "useTime", "useAnimation", "knockback", "manaCost", "shootSpeed", "rare", "value", "damageClass", "autoFeatures", "nameTokens", "runtimeFacts", "generatedData" })
+                        Equal(expected.GetProperty(field).GetRawText(), actual.GetProperty(field).GetRawText(), "prefix " + prefix + " base payload " + field);
+                }
+                var identity = typeof(GeneratorClient).GetMethod("CraftIdentityItem", BindingFlags.Static | BindingFlags.NonPublic)!;
+                var requestItem = (Terraria.Item)identity.Invoke(null, new object[] { source, data })!;
+                Equal((byte)0, requestItem.prefix, "request identity actually unprefixed");
+                Equal(baseItem.crit, requestItem.crit, "crit reset too, not only authored fields");
+                Equal(baseItem.scale, requestItem.scale, "size reset");
+                Equal(3, requestItem.stack, "request keeps source quantity");
+                Equal(true, requestItem.ModItem is InfiniCrafterLocal.Content.Items.GeneratedItem, "generated type identity retained");
+                Equal(definition, data.ToNetworkJson(), "canonical definition unchanged");
             }
-            // A caller may have resolved a save-only parent's canonical definition.
-            // Exercise that exact argument without pretending a registry/network match ran.
-            var referenceItem = baseItem.Clone();
-            var referenceMod = (InfiniCrafterLocal.Content.Items.GeneratedItem)referenceItem.ModItem;
-            var tag = new Terraria.ModLoader.IO.TagCompound { ["infiniJson"] = data.ToPlayerSaveJson() };
-            referenceMod.LoadData(tag);
-            Equal(true, InfiniCrafterLocal.Common.Models.GeneratedItemData.IsPlayerSaveReferenceOnly(referenceMod.Data), "fixture really is save-only");
-            Equal(0, referenceItem.damage, "save-only host is inert before resolution");
-            var identityMethod = typeof(GeneratorClient).GetMethod("CraftIdentityItem", BindingFlags.Static | BindingFlags.NonPublic)!;
-            var resolvedCopy = (Terraria.Item)identityMethod.Invoke(null, new object[] { referenceItem, data })!;
-            Equal(100, resolvedCopy.damage, "resolved canonical argument restores authored stats");
-            Equal(data.Name, resolvedCopy.Name, "resolved canonical name retained");
-            Equal(0, referenceItem.damage, "request does not hydrate/mutate original save-only host");
-            Equal(true, InfiniCrafterLocal.Common.Models.GeneratedItemData.IsPlayerSaveReferenceOnly(referenceMod.Data), "original remains save-only");
+            catch (Exception error) { failures.Add("prefix " + prefix + ": " + error); }
         }
-        finally { Terraria.Main.rand = oldRandom; Terraria.Main.netMode = oldMode; }
+        // A caller may have resolved a save-only parent's canonical definition.
+        // Exercise that exact argument without pretending a registry/network match ran.
+        var referenceItem = baseItem.Clone();
+        var referenceMod = (InfiniCrafterLocal.Content.Items.GeneratedItem)referenceItem.ModItem;
+        var tag = new Terraria.ModLoader.IO.TagCompound { ["infiniJson"] = data.ToPlayerSaveJson() };
+        referenceMod.LoadData(tag);
+        Equal(true, InfiniCrafterLocal.Common.Models.GeneratedItemData.IsPlayerSaveReferenceOnly(referenceMod.Data), "fixture really is save-only");
+        Equal(0, referenceItem.damage, "save-only host is inert before resolution");
+        var identityMethod = typeof(GeneratorClient).GetMethod("CraftIdentityItem", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var resolvedCopy = (Terraria.Item)identityMethod.Invoke(null, new object[] { referenceItem, data })!;
+        Equal(100, resolvedCopy.damage, "resolved canonical argument restores authored stats");
+        Equal(data.Name, resolvedCopy.Name, "resolved canonical name retained");
+        Equal(0, referenceItem.damage, "request does not hydrate/mutate original save-only host");
+        Equal(true, InfiniCrafterLocal.Common.Models.GeneratedItemData.IsPlayerSaveReferenceOnly(referenceMod.Data), "original remains save-only");
+
         if (failures.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
     }
 
@@ -263,10 +260,10 @@ internal static partial class EngineRuntimeChecks
     // Synthetic metadata on real installed FNA/Asset types, no GPU or native PNG measurement.
     private static void WithParentSpriteMetadata(Action<Terraria.Item, Texture2D, Asset<Texture2D>> check)
     {
+        using var actorState = new NativeActorState();
         var oldAssets = TextureAssets.Item;
         var oldAnimations = Terraria.Main.itemAnimations;
-        bool oldServer = Terraria.Main.dedServ;
-        int oldMode = Terraria.Main.netMode;
+
         var texture = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
         var asset = (Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Asset<Texture2D>));
         GC.SuppressFinalize(texture);
@@ -292,8 +289,7 @@ internal static partial class EngineRuntimeChecks
         {
             TextureAssets.Item = oldAssets;
             Terraria.Main.itemAnimations = oldAnimations;
-            Terraria.Main.dedServ = oldServer;
-            Terraria.Main.netMode = oldMode;
+
         }
     }
 

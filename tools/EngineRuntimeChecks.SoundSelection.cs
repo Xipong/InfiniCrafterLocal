@@ -206,9 +206,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void VfxSoundSelectorReachesItemAndProjectileNativeBoundary()
     {
+        using var actorState = new NativeActorState();
         WithLighting((config, lights) => {
-            var oldPlayer = Terraria.Main.player[0];
-            int oldLocal = Terraria.Main.myPlayer;
+
             var system = new InfiniDetachedVfxSystem();
             int calls = 0;
             SoundStyle observed = default;
@@ -289,7 +289,7 @@ internal static partial class EngineRuntimeChecks
             }
             finally {
                 system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
-                Terraria.Main.player[0] = oldPlayer; Terraria.Main.myPlayer = oldLocal;
+
             }
         });
     }

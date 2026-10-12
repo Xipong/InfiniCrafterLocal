@@ -14,11 +14,11 @@ internal static partial class EngineRuntimeChecks
 {
     private static void PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation()
     {
+        using var itemPoolState = new NativeItemPoolState();
         WithGeneratedPrefixScope(() => WithPersistenceTilemap((_, ledger) =>
         {
             using var serializer = WithPersistenceBoolSerializer();
-            Item[] oldItems = Terraria.Main.item;
-            int[] oldTimers = Terraria.Main.timeItemSlotCannotBeReusedFor;
+
             bool oldGen = WorldGen.gen;
             try
             {
@@ -96,7 +96,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(2, allocations, "single-player authority can retry same retained claim");
                 Pending("single-player boundary interruption");
             }
-            finally { Terraria.Main.item = oldItems; Terraria.Main.timeItemSlotCannotBeReusedFor = oldTimers; WorldGen.gen = oldGen; }
+            finally {   WorldGen.gen = oldGen; }
         }));
     }
 }

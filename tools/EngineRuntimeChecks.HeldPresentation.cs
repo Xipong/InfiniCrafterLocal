@@ -100,9 +100,7 @@ internal static partial class EngineRuntimeChecks
                 // noUseGraphic is deliberately true even when authored hide=false:
                 // static proxy suppression is NOT semantic root visibility.
                 var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                AttachItem(generated, item, data);
                 player.inventory[0] = item;
                 var layer = new GeneratedHeldItemDrawLayer();
                 var info = new PlayerDrawSet { drawPlayer = player, heldItem = item };
@@ -155,23 +153,13 @@ internal static partial class EngineRuntimeChecks
         {
             const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
             const BindingFlags statics = BindingFlags.Static | BindingFlags.NonPublic;
-            var texture = (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-            var batch = (SpriteBatch)RuntimeHelpers.GetUninitializedObject(typeof(SpriteBatch));
-            GC.SuppressFinalize(texture);
-            GC.SuppressFinalize(batch);
-            typeof(Texture2D).GetProperty("Width")!.SetValue(texture, 64);
-            typeof(Texture2D).GetProperty("Height")!.SetValue(texture, 40);
-            foreach (string name in new[] { "vertexInfo", "textureInfo", "spriteInfos", "sortedSpriteInfos" })
-            {
-                var field = typeof(SpriteBatch).GetField(name, instance)!;
-                field.SetValue(batch, Array.CreateInstance(field.FieldType.GetElementType()!, 16));
-            }
+            var texture = CpuTexture(64, 40);
+            var batch = CpuSpriteBatch(16);
             var queued = typeof(SpriteBatch).GetField("numSprites", instance)!;
             int submitted = 0;
             using var flush = new MonoMod.RuntimeDetour.Hook(typeof(SpriteBatch).GetMethod("FlushBatch", instance)!,
                 (Action<SpriteBatch>)(self => { submitted += (int)queued.GetValue(self)!; queued.SetValue(self, 0); }));
-            var sprites = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
-            object? previousCache = sprites.GetValue(null);
+
             var registries = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
             object? previousRegistry = registries.GetValue(null);
             using var registry = new GeneratedItemRegistryService();
@@ -180,9 +168,8 @@ internal static partial class EngineRuntimeChecks
             foreach (DictionaryEntry entry in remote) previousRemote.Add(entry);
             Vector2 previousScreen = Terraria.Main.screenPosition;
             int previousMyPlayer = Terraria.Main.myPlayer;
-            var cache = new RuntimeSpriteCache();
-            var textures = (IDictionary)typeof(RuntimeSpriteCache).GetField("_textures", instance)!.GetValue(cache)!;
-            var record = typeof(RuntimeSpriteCache).GetNestedType("CachedTexture", BindingFlags.NonPublic)!;
+            using var borrowedCache = new BorrowedSpriteCache();
+            var cache = borrowedCache.Cache; var textures = borrowedCache.Textures; var record = borrowedCache.Record;
             string path = System.IO.Path.Combine(Terraria.Program.SavePath, "held_geometry_cpu.png");
             textures.Add(path, Activator.CreateInstance(record, texture, 0f, 0L)!);
             var layer = new GeneratedHeldItemDrawLayer();
@@ -191,7 +178,7 @@ internal static partial class EngineRuntimeChecks
             int cases = 0;
             try
             {
-                sprites.SetValue(null, cache);
+
                 Terraria.Main.myPlayer = 0;
                 var player = new Player { whoAmI = 0, position = new Vector2(320, 480), itemAnimation = 12, itemAnimationMax = 20 };
                 var data = GeneratedItemData.Placeholder();
@@ -206,9 +193,7 @@ internal static partial class EngineRuntimeChecks
                 item.SetDefaults(Terraria.ID.ItemID.WoodenSword);
                 item.noUseGraphic = true;
                 var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+                AttachItem(generated, item, data);
                 player.inventory[0] = item;
                 DrawData Render(Vector2 location)
                 {
@@ -373,7 +358,7 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 textures.Clear(); // never Dispose constructor-bypassed GPU resources
-                sprites.SetValue(null, previousCache);
+
                 registries.SetValue(null, previousRegistry);
                 remote.Clear();
                 foreach (DictionaryEntry entry in previousRemote) remote.Add(entry.Key, entry.Value);

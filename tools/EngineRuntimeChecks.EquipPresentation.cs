@@ -35,10 +35,7 @@ internal static partial class EngineRuntimeChecks
             foreach (int direction in new[] { 1, -1 })
             foreach (int pixels in new[] { 8, 256, 1024 })
             {
-                var texture = (Texture2D)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
-                GC.SuppressFinalize(texture);
-                typeof(Texture2D).GetProperty("Width")!.SetValue(texture, pixels);
-                typeof(Texture2D).GetProperty("Height")!.SetValue(texture, pixels / 2);
+                var texture = CpuTexture(pixels, pixels / 2);
                 string path = System.IO.Path.Combine(Terraria.Program.SavePath, "equip_cpu.png");
                 textures[path] = Activator.CreateInstance(record, texture, 0f, 0L)!;
                 var player = new Player { active = true, position = new Vector2(200, 300), gravDir = grav, direction = direction,

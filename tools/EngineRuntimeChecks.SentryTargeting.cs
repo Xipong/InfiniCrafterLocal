@@ -123,8 +123,7 @@ internal static partial class EngineRuntimeChecks
         var observed = new List<Vector2>();
         // Observe real canonical spawn-loop arguments. Return an unregistered
         // projectile, so no successful game spawn is claimed by this CPU check.
-        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, ai0, ai1, ai2) => {
                 Equal(projectile.Center, position, "child item_use_origin uses firing center");

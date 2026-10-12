@@ -156,35 +156,21 @@ internal static partial class EngineRuntimeChecks
         {
             var data = PersistencePlacementData();
             var item = new Item(ItemID.WoodenSword, 1); var generated = new GeneratedItem();
-            typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-            typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-            typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
+            AttachItem(generated, item, data);
             Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is not null, "strict native placement fixture is valid");
             player.inventory[0] = item; player.selectedItem = 0;
-            void Packet(bool intent, ulong sequence, int x = 40, int y = 40)
-            {
-                using var stream = new MemoryStream();
-                using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                {
-                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence);
-                    writer.Write((byte)(intent ? 0 : 2)); writer.Write(x); writer.Write(y);
-                    if (intent) writer.Write(0UL);
-                }
-                stream.Position = 0; using var reader = new BinaryReader(stream);
-                if (intent) GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, 0);
-                else GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, 0);
-            }
+
             Tile cell = Terraria.Main.tile[40, 40]; cell.WallType = 0;
-            Packet(true, 1); cell.WallType = 1; Packet(false, 1);
+            ReceivePlacementPacket(true, 1); cell.WallType = 1; ReceivePlacementPacket(false, 1);
             Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "server-captured intent commits exact changed cell");
             var save = new TagCompound(); ledger.SaveWorldData(save);
             Equal(data.Id, save.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2")[0].GetString("generatedItemId"), "identity comes from server-held generated item");
-            Packet(false, 1); var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
+            ReceivePlacementPacket(false, 1); var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
             Equal(1, repeated.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2").Count, "notify replay does not create another material return");
             // A late notify may not create a new authorization from after-state.
-            Packet(false, 2, 41, 40);
+            ReceivePlacementPacket(false, 2, 41, 40);
             Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "late/unarmed notify cannot authorize");
-            Packet(true, 2, int.MinValue, int.MaxValue); Packet(false, 2, int.MaxValue, int.MinValue);
+            ReceivePlacementPacket(true, 2, int.MinValue, int.MaxValue); ReceivePlacementPacket(false, 2, int.MaxValue, int.MinValue);
             var wall = new GeneratedPlacementLedgerWall(); int dropType = 0;
             Equal(false, wall.Drop(40, 40, 1, ref dropType), "exact tracked wall suppresses vanilla fallback");
             var pending = new TagCompound(); ledger.SaveWorldData(pending);
@@ -198,33 +184,23 @@ internal static partial class EngineRuntimeChecks
         WithPersistenceTilemap((player, ledger) =>
         {
             var data = PersistencePlacementData(); player.inventory[0] = ReviewItem(data).Item;
-            void Packet(bool intent, ulong sequence, int x = 40, int y = 40, byte layer = 2)
-            {
-                using var stream = new MemoryStream();
-                using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence); writer.Write(intent ? (byte)0 : layer); writer.Write(x); writer.Write(y);
-                    if (intent) writer.Write(0UL);
-                }
-                stream.Position = 0; using var reader = new BinaryReader(stream);
-                if (intent) GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, 0);
-                else GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, 0);
-            }
+
             Tile cell = Terraria.Main.tile[40, 40];
             foreach (string scenario in new[] { "late", "notify_before_mutation", "unarmed", "already_placed", "expired", "rate_replay", "player_replaced", "bounds", "wrong_target" })
             {
                 ledger.ClearWorld(); MaterialClock(100); Terraria.Main.player[0] = player; cell.WallType = 0;
                 if (scenario is "unarmed" or "already_placed") cell.WallType = 1;
-                if (scenario != "unarmed") Packet(true, 1);
-                if (scenario == "notify_before_mutation") { Packet(false, 1); ledger.PostUpdateWorld(); }
+                if (scenario != "unarmed") ReceivePlacementPacket(true, 1);
+                if (scenario == "notify_before_mutation") { ReceivePlacementPacket(false, 1); ledger.PostUpdateWorld(); }
                 if (scenario == "late") MaterialClock(140);
                 if (scenario == "expired") { MaterialClock(221); ledger.PostUpdateWorld(); }
-                if (scenario == "rate_replay") { Packet(true, 2); Packet(true, 1); }
-                if (scenario == "bounds") { ledger.ClearWorld(); Packet(true, 1, int.MinValue, int.MaxValue); Packet(false, 1, int.MaxValue, int.MinValue); }
+                if (scenario == "rate_replay") { ReceivePlacementPacket(true, 2); ReceivePlacementPacket(true, 1); }
+                if (scenario == "bounds") { ledger.ClearWorld(); ReceivePlacementPacket(true, 1, int.MinValue, int.MaxValue); ReceivePlacementPacket(false, 1, int.MaxValue, int.MinValue); }
                 if (scenario == "player_replaced") Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, position = player.position };
                 cell.WallType = 1;
-                if (scenario == "wrong_target") { Packet(false, 1, 41); Packet(false, 1, layer: 1); }
-                if (scenario == "rate_replay") Packet(false, 2);
-                Packet(false, 1); ledger.PostUpdateWorld(); Packet(false, 1);
+                if (scenario == "wrong_target") { ReceivePlacementPacket(false, 1, 41); ReceivePlacementPacket(false, 1, layer: 1); }
+                if (scenario == "rate_replay") ReceivePlacementPacket(false, 2);
+                ReceivePlacementPacket(false, 1); ledger.PostUpdateWorld(); ReceivePlacementPacket(false, 1);
                 bool accepted = scenario is "late" or "notify_before_mutation" or "rate_replay" or "wrong_target";
                 Equal(accepted, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "bounded exact-before intent: " + scenario);
                 var save = new TagCompound(); ledger.SaveWorldData(save);
@@ -300,9 +276,7 @@ internal static partial class EngineRuntimeChecks
             {
                 Player.tileTargetX = Player.tileTargetY = 40;
                 var data = PersistencePlacementData(); var item = new Item(ItemID.WoodenSword, 1); var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-                typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-                typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
+                AttachItem(generated, item, data);
                 player.inventory[0] = item; player.selectedItem = 0;
                 Tile cell = Terraria.Main.tile[40, 40]; cell.WallType = 0;
                 Equal(true, generated.CanUseItem(player), "real local CanUseItem establishes before snapshot");
@@ -610,9 +584,7 @@ internal static partial class EngineRuntimeChecks
         // ItemCheck needs real non-fishing, non-mount, non-potion defaults too.
         var item = new Item(ItemID.WoodenSword, 1);
         var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
+        AttachItem(generated, item, data);
         data.ApplyToItem(item);
         return generated;
     }
@@ -711,14 +683,7 @@ internal static partial class EngineRuntimeChecks
     }
 
     private static byte[] PersistencePlacementNotify(ulong sequence, int x, int y, byte layer = 2)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-            writer.Write(InfiniCrafterLocal.Common.InfiniNetPacketIds.NotifyGeneratedPlacement); writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!);
-            writer.Write(sequence); writer.Write(layer); writer.Write(x); writer.Write(y);
-        }
-        return stream.ToArray();
-    }
+        => PlacementPacket(false, sequence, x, y, layer, includePacketId: true);
 
     private static void UnmutatedAbandonedPlacementDoesNotStallNewTarget()
     {
@@ -909,42 +874,39 @@ internal static partial class EngineRuntimeChecks
     {
         using var serializer = WithPersistenceBoolSerializer();
         WithPersistenceTilemap((_, ledger) => {
-            var variants = new List<(string, Action)>();
             foreach (string field in new[] { "valid", "claim", "cause", "requeued", "requeueDefinitionJson", "lastFailureCause" })
             foreach (int position in new[] { 0, 1, 2 })
             {
                 string f = field; int p = position;
-                variants.Add(($"quarantine envelope {f} at {p}", () => {
-                    var bad = PersistenceQuarantineEnvelope("q-bad");
-                    bad["unknownEnvelopeField"] = "literal-unrecognized-payload";
-                    if (f != "valid") bad[f] = f == "claim" ? "not a compound" : f == "requeued" ? "not a boolean" : 17;
-                    string literal = PersistenceRawBytes(bad);
-                    var head = PersistenceQuarantineEnvelope("q-head"); var tail = PersistenceQuarantineEnvelope("q-tail");
-                    var rows = new List<TagCompound> { head, tail }; rows.Insert(p, bad);
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
-                    for (int round = 0; round < 3; round++) {
-                        var save = new TagCompound(); ledger.SaveWorldData(save);
-                        var healthy = save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1");
-                        Equal(f == "valid" ? 3 : 2, healthy.Count, "canonical envelopes only; malformed row cannot become a fabricated claim");
-                        foreach (TagCompound original in new[] { head, tail })
-                            Equal(PersistenceRawBytes(original.GetCompound("claim")), PersistenceRawBytes(healthy.Single(r => r.GetCompound("claim").GetString("groupId") == original.GetCompound("claim").GetString("groupId")).GetCompound("claim")), "healthy sibling claim survives verbatim");
-                        var raw = save.GetList<TagCompound>("infiniGeneratedPlacementRawQuarantineEnvelopesV1");
-                        Equal(f == "valid" ? 0 : 1, raw.Count, "malformed full envelope is retained in separate versioned read-only bucket");
-                        if (f != "valid") Equal(literal, PersistenceRawBytes(raw[0]), "full malformed envelope/type/extension is literal after each reload");
-                        ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
-                    }
-                    var data = PersistencePlacementData("exact_return_id");
-                    InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
-                    string json = data.ToNetworkJson();
-                    if (f != "valid") Equal(false, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-bad", json), "raw malformed envelope cannot grant recovery authority");
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "valid healthy tail remains requeueable");
-                    var after = new TagCompound(); ledger.SaveWorldData(after); ledger.LoadWorldData(PersistenceNbtRoundtrip(after));
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "healthy requeue replay remains idempotent after reload");
-                    var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
-                    Equal(1, repeated.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "one exact healthy pending owner");
-                }));
+                var bad = PersistenceQuarantineEnvelope("q-bad");
+                bad["unknownEnvelopeField"] = "literal-unrecognized-payload";
+                if (f != "valid") bad[f] = f == "claim" ? "not a compound" : f == "requeued" ? "not a boolean" : 17;
+                string literal = PersistenceRawBytes(bad);
+                var head = PersistenceQuarantineEnvelope("q-head"); var tail = PersistenceQuarantineEnvelope("q-tail");
+                var rows = new List<TagCompound> { head, tail }; rows.Insert(p, bad);
+                ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
+                for (int round = 0; round < 3; round++) {
+                    var save = new TagCompound(); ledger.SaveWorldData(save);
+                    var healthy = save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1");
+                    Equal(f == "valid" ? 3 : 2, healthy.Count, "canonical envelopes only; malformed row cannot become a fabricated claim");
+                    foreach (TagCompound original in new[] { head, tail })
+                        Equal(PersistenceRawBytes(original.GetCompound("claim")), PersistenceRawBytes(healthy.Single(r => r.GetCompound("claim").GetString("groupId") == original.GetCompound("claim").GetString("groupId")).GetCompound("claim")), "healthy sibling claim survives verbatim");
+                    var raw = save.GetList<TagCompound>("infiniGeneratedPlacementRawQuarantineEnvelopesV1");
+                    Equal(f == "valid" ? 0 : 1, raw.Count, "malformed full envelope is retained in separate versioned read-only bucket");
+                    if (f != "valid") Equal(literal, PersistenceRawBytes(raw[0]), "full malformed envelope/type/extension is literal after each reload");
+                    ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
+                }
+                var data = PersistencePlacementData("exact_return_id");
+                InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
+                string json = data.ToNetworkJson();
+                if (f != "valid") Equal(false, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-bad", json), "raw malformed envelope cannot grant recovery authority");
+                Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "valid healthy tail remains requeueable");
+                var after = new TagCompound(); ledger.SaveWorldData(after); ledger.LoadWorldData(PersistenceNbtRoundtrip(after));
+                Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "healthy requeue replay remains idempotent after reload");
+                var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
+                Equal(1, repeated.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "one exact healthy pending owner");
+                Console.WriteLine($"PERSISTENCE-CASE PASS: quarantine envelope {f} at {p}");
             }
-            PersistenceMatrix(variants);
         });
     }
 

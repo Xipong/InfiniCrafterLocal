@@ -21,10 +21,7 @@ internal static partial class EngineRuntimeChecks
             var oldPixel = Terraria.GameContent.TextureAssets.MagicPixel;
             var clock = typeof(Terraria.Main).GetField("_gameUpdateCount", BindingFlags.Static | BindingFlags.NonPublic)!;
             object oldClock = clock.GetValue(null)!;
-            var asset = (ReLogic.Content.Asset<Texture2D>)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ReLogic.Content.Asset<Texture2D>));
-            foreach (var field in asset.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (field.FieldType == typeof(Texture2D)) field.SetValue(asset, texture);
-            asset.GetType().GetProperty("State")!.SetValue(asset, ReLogic.Content.AssetState.Loaded);
+            var asset = CpuTextureAsset(texture);
             try
             {
                 Terraria.GameContent.TextureAssets.MagicPixel = asset;

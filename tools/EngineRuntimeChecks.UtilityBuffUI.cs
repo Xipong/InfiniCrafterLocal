@@ -53,9 +53,7 @@ internal static partial class EngineRuntimeChecks
                 } };
                 var item = new Item { type = ItemID.Gel, stack = 1 };
                 var host = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(host, item);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, host);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(host, data);
+                AttachItem(host, item, data);
                 data.ApplyToItem(item);
                 // Names are not inputs to this mechanical presentation adapter.
                 item.SetNameOverride("accepted Item.Name differs from DTO");

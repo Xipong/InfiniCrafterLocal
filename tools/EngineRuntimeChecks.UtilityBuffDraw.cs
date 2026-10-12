@@ -17,6 +17,7 @@ internal static partial class EngineRuntimeChecks
     // No GPU, native icon pixels, full interface loop or font-resource claim.
     private static void GeneratedUtilityStatusDrawsNativeIconIntoFnaQueue()
     {
+        using var actorState = new NativeActorState();
         const BindingFlags instance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         const BindingFlags statics = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
         T Shell<T>() where T : class { var value = (T)RuntimeHelpers.GetUninitializedObject(typeof(T)); GC.SuppressFinalize(value); return value; }
@@ -35,11 +36,11 @@ internal static partial class EngineRuntimeChecks
         var count = typeof(SpriteBatch).GetField("numSprites", instance)!;
         var savedMain = Terraria.Main.instance; var savedBatch = Terraria.Main.spriteBatch;
         var savedLanguage = Terraria.Localization.LanguageManager.Instance;
-        var savedAssets = TextureAssets.Buff; var savedPlayer = Terraria.Main.player[0];
+        var savedAssets = TextureAssets.Buff;
         bool savedServer = Terraria.Main.dedServ, savedMenu = Terraria.Main.gameMenu;
         bool savedHide = Terraria.Main.hideUI, savedInventory = Terraria.Main.playerInventory;
         bool savedOptions = Terraria.Main.ingameOptionsWindow, savedFancy = Terraria.Main.inFancyUI, savedMap = Terraria.Main.mapFullscreen;
-        int savedLocal = Terraria.Main.myPlayer, savedMode = Terraria.Main.netMode;
+
         int savedMouseX = Terraria.Main.mouseX, savedMouseY = Terraria.Main.mouseY;
         int savedWidth = Terraria.Main.screenWidth, savedHeight = Terraria.Main.screenHeight;
         int savedEquip = Terraria.Main.EquipPage, savedMapStyle = Terraria.Main.mapStyle;
@@ -106,7 +107,7 @@ internal static partial class EngineRuntimeChecks
             Terraria.Localization.LanguageManager.Instance = savedLanguage;
             TextureAssets.Buff = savedAssets; Terraria.Main.spriteBatch = savedBatch;
             typeof(Terraria.Main).GetField("instance", statics)!.SetValue(null, savedMain);
-            Terraria.Main.player[0] = savedPlayer; Terraria.Main.myPlayer = savedLocal; Terraria.Main.netMode = savedMode;
+
             Terraria.Main.dedServ = savedServer; Terraria.Main.gameMenu = savedMenu; Terraria.Main.hideUI = savedHide;
             Terraria.Main.playerInventory = savedInventory; Terraria.Main.ingameOptionsWindow = savedOptions;
             Terraria.Main.inFancyUI = savedFancy; Terraria.Main.mapFullscreen = savedMap;
