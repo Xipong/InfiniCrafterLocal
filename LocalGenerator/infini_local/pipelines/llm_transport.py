@@ -1667,6 +1667,24 @@ def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
     wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model)
 
 
+def _ensure_json_input_marker(messages: list[dict[str, Any]]) -> None:
+    """Frame JSON mode without editing an authored dossier or its cache identity."""
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") not in {"user", "developer", "assistant"}:
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            texts = [content]
+        elif isinstance(content, list):
+            texts = [part.get("text") for part in content if isinstance(part, dict)
+                     and part.get("type") in {"text", "input_text", "output_text"}]
+        else:
+            texts = []
+        if any(isinstance(text, str) and re.search(r"\bjson\b", text, re.IGNORECASE) for text in texts):
+            return
+    messages.append({"role": "user", "content": "JSON response."})
+
+
 def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: str = "", *,
                                  cache_source: dict[str, Any] | None = None,
                                  context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1708,6 +1726,11 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
         out["reasoning"] = {"effort": "high" if effort == "xhigh" else effort}
     if cache_source is not None and context is not None:
         _cache_wire_options(out, cache_source, context, api_mode="responses")
+    if (context is not None and active_llm_provider(context) == "openai_compat"
+            and llm_responses_url(context) == "https://inference-api.nousresearch.com/v1/responses"
+            and str(out.get("model") or "").startswith("openai/")
+            and response_format == {"type": "json_object"}):
+        _ensure_json_input_marker(out["input"])
     return out
 
 
@@ -2016,6 +2039,13 @@ def _llm_chat_json_exact_context(
     candidate = _payload_for_context(payload, context)
     _cache_wire_options(candidate, payload, context, api_mode="chat")
     url = llm_chat_completions_url(context)
+    # This gateway maps OpenAI Chat JSON mode to Responses, whose input check
+    # excludes system instructions. Keep the logical packet/cache source intact.
+    if (active_llm_provider(context) == "openai_compat"
+            and url == "https://inference-api.nousresearch.com/v1/chat/completions"
+            and str(candidate.get("model") or "").startswith("openai/")
+            and candidate.get("response_format") == {"type": "json_object"}):
+        _ensure_json_input_marker(candidate["messages"])
     try:
         result = _perform_llm_http(url, candidate, timeout, context, api_mode="chat_completions")
         choices = result.get("choices") if isinstance(result, dict) else None
