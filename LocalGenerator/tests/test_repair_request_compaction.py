@@ -1,6 +1,6 @@
 """Request-local Repair grammar must preserve scope, inverses and exact sources."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 
 import copy
 import json
@@ -15,7 +15,7 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_gameplay_repair_readonly_context import _offline_builder
@@ -76,36 +76,19 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("report_value", ["absent", None])
+@pytest.mark.parametrize("report_value", [pytest.param("absent", id="missing"), pytest.param(None, id="null")])
 def test_real_repair_request_and_stage_reject_missing_report_without_mutating_source(monkeypatch, mode, report_value):
+    from repair_test_helpers import gameplay_repair
+
     item = build_runtime_fixture("workbench_blade")
     fixed = copy.deepcopy(_call(item, "configure_item_stats"))
     _call(item, "configure_item_stats")["params"]["damage"] = -1
     before = copy.deepcopy(item)
-    failure = validate_runtime_program(item)
-    patch = {"note": "Exact damage correction still needs its authored report", "callsUpsert": [fixed]}
+    patch = {"note": "exact correction still needs an authored report", "callsUpsert": [fixed]}
     if report_value != "absent":
         patch["realizationReplacement"] = report_value
-    requests = []
-
-    def respond(request, **_kwargs):
-        requests.append(copy.deepcopy(request))
-        payload = copy.deepcopy(patch)
-        if mode == "json_schema":
-            # Other sparse patch fields still use the existing nullable envelope.
-            # Neither null nor a missing report may be admitted by the real request.
-            payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
-            if report_value == "absent":
-                payload.pop("realizationReplacement")
-            provider = request["response_format"]["json_schema"]["schema"]
-            assert not Draft202012Validator(provider).is_valid(payload)
-        return {"choices": [{"message": {"content": json.dumps(payload)}}],
-                "_debug": {"responseFormatType": mode}}
-
-    _offline_builder(monkeypatch, mode, respond)
     with pytest.raises(PlannerUnavailable, match="non-null realizationReplacement"):
-        author.repair_author_item_after_failure(item, {}, {}, {}, {}, "required-report", failure_report=failure)
-    assert len(requests) == 1
+        gameplay_repair(monkeypatch, item, patch, mode, invalid_report=True)
     assert item == before
 
 
@@ -120,22 +103,23 @@ def test_single_function_schema_never_decodes_an_unknown_function_by_object_type
 
 
 @pytest.mark.parametrize("scope", [
-    {"identityChanges": {"callFnIds": ["move"]}},
-    {"fieldPermissions": {"calls": [{"id": "move", "paths": ["fn"]}]}},
-    {"fieldPermissions": {"calls": [{"id": "move", "paths": [""]}]}},
+    pytest.param({"identityChanges": {"callFnIds": ["move"]}}, id="function-identity"),
+    pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": ["fn"]}]}}, id="function-leaf"),
+    pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": [""]}]}}, id="whole-call"),
 ])
 def test_authorized_function_or_whole_call_edits_keep_every_registered_variant(scope):
     assert set(runtime_repair_schema_capabilities(scope)) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible}
 
 
-def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed():
+@pytest.mark.parametrize("rows,valid", [
+    pytest.param([], True, id="empty-list"), pytest.param([{"id": "illegal"}], False, id="forbidden-call"),
+])
+def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed(rows, valid):
     assert runtime_repair_schema_capabilities({}) == []
     local = _local({})
     assert local["properties"]["callsUpsert"]["maxItems"] == 0
     assert contract.author_item_repair_prompt_shape_card(capability_names=[])["callsUpsert"] == []
-    for rows, valid in [([], True), ([{"id": "illegal"}], False)]:
-        patch = {"note": "no call changes", "callsUpsert": rows}
-        assert Draft202012Validator(local).is_valid(patch) is valid
+    assert Draft202012Validator(local).is_valid({"note": "no call changes", "callsUpsert": rows}) is valid
     _wire_roundtrip({"note": "empty call list", "callsUpsert": []}, local)
     with pytest.raises(ValueError, match="non-public"):
         runtime_repair_schema_capabilities({"capabilitySubset": ["not_registered"]})
@@ -192,14 +176,13 @@ def test_format_repair_keeps_exact_dynamic_facts_and_rejects_gameplay_rewriting(
         return {"choices": [{"message": {"content": json.dumps(payload)}}], "_debug": {"responseFormatType": mode}}
 
     _offline_builder(monkeypatch, mode, respond)
-    call = lambda: author._repair_malformed_author_json(
-        malformed_raw_text=raw, parse_error=ValueError("trailing comma"),
-        original_recipe_context=json.dumps(original, ensure_ascii=False), model_name="offline-format")
-    if rewrite:
-        with pytest.raises(PlannerUnavailable, match="changed recoverable authored fields"):
-            call()
-    else:
-        repaired, _ = call()
+    from contextlib import nullcontext
+
+    refusal = pytest.raises(PlannerUnavailable, match="changed recoverable authored fields") if rewrite else nullcontext()
+    with refusal:
+        repaired, _ = author._repair_malformed_author_json(
+            malformed_raw_text=raw, parse_error=ValueError("trailing comma"),
+            original_recipe_context=json.dumps(original, ensure_ascii=False), model_name="offline-format")
         assert repaired == item
     assert len(requests) == 1
     packet = request_dossier(requests[0])

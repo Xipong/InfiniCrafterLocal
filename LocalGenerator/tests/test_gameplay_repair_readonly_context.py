@@ -2,13 +2,11 @@ from prompt_packet_helpers import request_dossier, dossier_text
 """Exact read-only Gameplay Repair facts must survive the real request builder."""
 import copy
 import json
-import socket
 
 import pytest
 
 from infini_local.core.runtime_authoring import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -16,21 +14,7 @@ class _CapturedBeforeTransport(BaseException):
     pass
 
 
-def _offline_builder(monkeypatch, format_mode, respond):
-    def no_network(*args, **kwargs):
-        raise AssertionError("network forbidden in read-only Gameplay Repair regression")
-
-    monkeypatch.setattr(socket, "create_connection", no_network)
-    monkeypatch.setattr(socket.socket, "connect", no_network)
-    monkeypatch.setattr(socket, "getaddrinfo", no_network)
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    for name, value in {
-        "USE_LLM": True, "resolve_llm_model": lambda: "offline-readonly-context",
-        "llm_chat_json": respond, "trace_event": lambda *a, **kw: None,
-        "trace_stage_request": lambda *a, **kw: None,
-        "llm_reasoning_system_suffix": lambda *a, **kw: "",
-    }.items():
-        monkeypatch.setattr(author, name, value)
+from repair_test_helpers import offline_builder as _offline_builder, repair_with_response as _repair_with_response
 
 
 def _capture_request(monkeypatch, item, format_mode):
@@ -189,44 +173,6 @@ def _hostile_patch(item):
         "metadataPatch": {"concept": concept, "name": "HOSTILE renamed item"},
         "realizationReplacement": replacement,
     }
-
-
-def _repair_with_response(monkeypatch, item, patch, format_mode, *, out_of_scope_response=False):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
-    requests = []
-
-    def respond(request, **kwargs):
-        requests.append(copy.deepcopy(request))
-        payload = copy.deepcopy(patch)
-        if format_mode == "json_schema":
-            payload = _encode_nullable_fixture(payload, author_item_repair_response_schema())
-            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
-            if out_of_scope_response:
-                # These deliberately foreign rows are literal hostile edits, not
-                # nullable scaffolding from the scoped provider grammar. Restore
-                # their original sparse shape instead of inventing null choices
-                # the actual request did not offer and cannot decode.
-                scope = request_dossier(request)["repairScope"]
-                mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
-                payload["callsUpsert"] = [
-                    encoded if original["id"] in mutable_ids else copy.deepcopy(original)
-                    for original, encoded in zip(patch["callsUpsert"], payload["callsUpsert"])
-                ]
-                # Even then, a useful allowed leaf survives frozen extra rewrites.
-                assert not validator.is_valid(payload)
-            else:
-                validator.validate(payload)
-        return {"choices": [{"message": {"content": json.dumps(payload)}}],
-                "_debug": {"responseFormatType": format_mode}}
-
-    _offline_builder(monkeypatch, format_mode, respond)
-    repaired = author.repair_author_item_after_failure(
-        item, {}, {}, {}, {}, "offline-readonly-context", failure_report=validate_runtime_program(item))
-    assert len(requests) == 1
-    return repaired, requests[0]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
