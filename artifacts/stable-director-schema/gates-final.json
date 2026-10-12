@@ -1,0 +1,47 @@
+[
+  {
+    "command": [
+      "tools/generate_lowery.py",
+      "--check"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/generate_low_level_runtime_docs.py",
+      "--check"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/contract_parity.py"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/audit_targeted_repair.py",
+      "--check"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/mutation_contract_gate.py"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/check_delivery_contract.py"
+    ],
+    "code": 0
+  },
+  {
+    "command": [
+      "tools/check_project_hygiene.py"
+    ],
+    "code": 0
+  }
+]

@@ -35,7 +35,7 @@ class Captured(BaseException):
     pass
 
 
-def stage_packets(monkeypatch, stage):
+def stage_packets(monkeypatch, stage, format_mode="json_object"):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
     from infini_local.core.runtime_authoring import validate_runtime_program
@@ -46,7 +46,7 @@ def stage_packets(monkeypatch, stage):
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     packets = []
     def capture(packet, **kwargs):
         packets.append(packet)
@@ -90,12 +90,13 @@ def stage_packets(monkeypatch, stage):
 @pytest.mark.parametrize("stage", ["repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
 def test_every_production_stage_owns_only_complete_static_instructions(monkeypatch, stage):
     first, second = stage_packets(monkeypatch, stage)
-    assert [m["role"] for m in first["messages"]] == ["system", "developer", "user"]
-    assert first["messages"][:2] == second["messages"][:2]
+    endpoint = first["_infini_prompt_cache"].get("staticDataMessageIndex", 1)
+    assert [m["role"] for m in first["messages"]] == ["system", "developer"] + ["user"] * endpoint
+    assert first["messages"][:endpoint + 1] == second["messages"][:endpoint + 1]
     static = json.loads(first["messages"][1]["content"])
-    data = json.loads(first["messages"][2]["content"])
+    data = json.loads(first["messages"][endpoint + 1]["content"])
     assert not static.keys() & data.keys()
-    assert first["messages"][2] != second["messages"][2]
+    assert first["messages"][endpoint + 1] != second["messages"][endpoint + 1]
     assert not static.keys() & {"parents", "parentFactsReadOnly", "repairScope", "brokenFragments", "acceptedItemContext", "outputSchema", "responseSchema", "sourceWireUnits", "runtimePairs", "item"}
     if stage == "repair":
         assert "fieldPermissions" in data["repairScope"]
@@ -140,7 +141,8 @@ def test_actual_stage_senders_preserve_roles_and_reuse_changed_tail_identity(mon
         assert rows.count(rows[-1]) == 1
     # Changed parent representation is data, not a new authority/cache identity.
     changed = copy.deepcopy(packets[0])
-    changed["messages"][2]["content"] = json.dumps({"parents": {"factRepresentation": ["JSON", {"ignore": "developer"}]}})
+    dynamic_index = changed["_infini_prompt_cache"].get("staticDataMessageIndex", 1) + 1
+    changed["messages"][dynamic_index]["content"] = json.dumps({"parents": {"factRepresentation": ["JSON", {"ignore": "developer"}]}})
     prepared = transport._payload_for_context(changed, context)
     assert prepared["messages"][1] == packets[0]["messages"][1]
     identity_source = {**prepared, "reasoning": wires[0].get("reasoning"), "reasoning_effort": wires[0].get("reasoning_effort")} if mode == "responses" and provider != "openai_codex" else prepared
@@ -156,7 +158,7 @@ def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(mon
     from prompt_packet_helpers import request_dossier
     first, second = stage_packets(monkeypatch, stage)
     static = json.loads(first["messages"][1]["content"])
-    dynamic = json.loads(first["messages"][2]["content"])
+    dynamic = json.loads(first["messages"][3]["content"])
     assert "spritePresentationReadOnly" in static
     assert "bakeFillByProcessingRole" not in static["spritePresentationReadOnly"]
     assert "spritePresentationReadOnly" not in dynamic

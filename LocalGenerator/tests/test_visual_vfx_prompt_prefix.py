@@ -166,8 +166,8 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
             request = sent[-1]
             payload = request_dossier(request)
             keys = ("task", "assetModeCatalog", "rules")
-            assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
-            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+            assert [row["role"] for row in request["messages"]] == ["system", "developer", "user", "user"]
+            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
             assert payload["assetModeCatalog"] == visual.visual_asset_mode_catalog()
             if repair:
                 assert set(payload) == {"task", "assetModeCatalog", "rules", "exactErrors", "malformedRawText", "repairScope", "brokenFragments", "validGeneratedContext", "parentFactsReadOnly", "runtimeEntitiesReadOnly", "itemReadOnly", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
@@ -222,7 +222,7 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
     assert "workbench_blade" not in prefixes[0] and "door_on_chain" not in prefixes[0]
     if stage == "visual":
         assert len(sent) == 2
-        assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+        assert sent[0]["messages"][3]["content"] != sent[1]["messages"][3]["content"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
@@ -272,7 +272,7 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         assert not (set(vocabulary) & set(surface))
         assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(canonical, sort_keys=True)
         assert len(prefix) > 7000
-        assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+        assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
         assert list(payload)[len(keys)] == "item"
         assert request["response_format"]["type"] == format_mode
         if format_mode == "json_schema":
@@ -295,7 +295,7 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         assert (data, parent_a, parent_b) == frozen
         prefixes.append(prefix)
         payloads.append(payload)
-        tails.append(request["messages"][2]["content"])
+        tails.append(request["messages"][3]["content"])
     assert len(set(prefixes)) == 1
     assert len(set(tails)) == len(payloads)
     # Stable prefixes must not hide accepted-recipe changes in a frozen tail.
@@ -570,7 +570,7 @@ def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transpo
     prefix = _static_json_prefix(payload, ("task", "assetModeCatalog", "rules"))
     assert '"textureWidthPx"' not in prefix and '"textureHeightPx"' not in prefix
     assert '"spriteReferenceRaw"' not in prefix
-    assert sent[-1]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+    assert sent[-1]["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
     if reference != "older-missing":
         changed = copy.deepcopy(parent_a)
         if reference.startswith("native"):

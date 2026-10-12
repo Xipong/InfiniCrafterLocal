@@ -130,7 +130,7 @@ def test_vfx_actual_packets_keep_independent_accepted_cadence_and_scale(offline_
         if index:
             assert first["repairScope"] == second["repairScope"] == {}
         a, b = captured[index], captured[index + 2]
-        assert a["_infini_prompt_cache"] == b["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+        assert a["_infini_prompt_cache"] == b["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
         assert a["messages"][1]["content"] == b["messages"][1]["content"]
     assert json.dumps(data, sort_keys=True) == before
 

@@ -5,6 +5,7 @@ from typing import Any
 from collections.abc import Mapping, Sequence
 import json
 import math
+import copy
 
 PROMPT_CACHE_METADATA_KEY = "_infini_prompt_cache"
 
@@ -66,14 +67,24 @@ def static_instruction_prefix_parts(payload: Mapping[str, Any]) -> tuple[int, st
 def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
     """Validate complete builder-owned instructions, with disjoint USER data."""
     marker = payload.get(PROMPT_CACHE_METADATA_KEY)
+    if isinstance(marker, dict) and "staticDataMessageIndex" in marker and "instructionMessageIndex" not in marker:
+        raise ValueError("static schema data requires a complete instruction declaration")
     if not isinstance(marker, dict) or "instructionMessageIndex" not in marker:
         return None
     index = marker["instructionMessageIndex"]
     messages = payload.get("messages")
-    if (set(marker) != {"instructionMessageIndex"} or type(index) is not int
+    allowed = {"instructionMessageIndex"}
+    if "staticDataMessageIndex" in marker:
+        allowed.add("staticDataMessageIndex")
+    if (set(marker) != allowed or type(index) is not int
             or not isinstance(messages, list) or not 0 <= index < len(messages) - 1):
         raise ValueError("instruction segments require an existing developer/user pair")
-    static, dynamic = messages[index:index + 2]
+    data_index = marker.get("staticDataMessageIndex")
+    if data_index is not None and (type(data_index) is not int or data_index != index + 1
+                                   or data_index + 1 >= len(messages)):
+        raise ValueError("static schema data requires adjacent complete user objects and a dynamic tail")
+    segment_rows = messages[index:(data_index + 2 if data_index is not None else index + 2)]
+    static, dynamic = segment_rows[:2]
     if (not isinstance(static, dict) or not isinstance(dynamic, dict)
             or any(not isinstance(row, dict) or row.get("role") not in {"system", "developer"} for row in messages[:index])
             or static.get("role") != "developer" or dynamic.get("role") != "user"
@@ -96,11 +107,25 @@ def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
             raise ValueError("instruction segments require finite JSON numbers")
         return number
 
+    if any(not isinstance(row, dict) or row.get("role") != "user"
+           or not isinstance(row.get("content"), str) for row in segment_rows[1:]):
+        raise ValueError("schema data and case facts must remain complete user text objects")
     objects = [json.loads(message["content"], object_pairs_hook=unique_object,
                           parse_constant=reject_constant, parse_float=finite_float)
-               for message in (static, dynamic)]
-    if any(not isinstance(obj, dict) or not obj for obj in objects) or objects[0].keys() & objects[1].keys():
-        raise ValueError("instruction segments require disjoint nonempty objects")
+               for message in segment_rows]
+    keys = set()
+    for obj in objects:
+        if not isinstance(obj, dict) or not obj or keys & obj.keys():
+            raise ValueError("instruction segments require disjoint nonempty objects")
+        keys.update(obj)
+    if "staticDataMessageIndex" in marker:
+        if data_index is None or set(objects[1]) != {"schemaDefinitions"}:
+            raise ValueError("static data must declare only schema definitions")
+        definitions = objects[1]["schemaDefinitions"]
+        if (not isinstance(definitions, dict) or set(definitions) != {"$defs"}
+                or not isinstance(definitions["$defs"], dict) or not definitions["$defs"]
+                or any(not isinstance(value, dict) or not value for value in definitions["$defs"].values())):
+            raise ValueError("static schema definitions must be a nonempty schema object")
     return index
 
 
@@ -125,6 +150,48 @@ def with_instruction_segments(
         {**source, "role": "user", "content": encode(dynamic)},
     ]
     out = {**payload, "messages": messages, PROMPT_CACHE_METADATA_KEY: {"instructionMessageIndex": message_index}}
+    instruction_segment_index(out)
+    return out
+
+
+def with_schema_data_segment(
+    payload: dict[str, Any], schema_key: str, definition_paths: Mapping[str, tuple[str | int, ...]],
+) -> dict[str, Any]:
+    """Extract explicit owner-selected nodes, not inferred invariant subtrees.
+
+    The response_format keeps its complete provider-compatible schema. Only the
+    model-facing dossier uses root $defs references, with every definition in a
+    separate complete USER object. No case fact acquires instruction authority.
+    """
+    index = instruction_segment_index(payload)
+    if index is None or "staticDataMessageIndex" in payload[PROMPT_CACHE_METADATA_KEY]:
+        raise ValueError("schema data requires an existing instruction/case pair")
+    messages = copy.deepcopy(payload["messages"])
+    dynamic = json.loads(messages[index + 1]["content"])
+    schema = dynamic[schema_key]
+    if "$defs" in schema or not definition_paths:
+        raise ValueError("schema data requires explicit inline canonical nodes")
+    definitions = {}
+    for name, path in definition_paths.items():
+        node = schema
+        for key in path[:-1]:
+            node = node[key]
+        definitions[name] = node[path[-1]]
+        node[path[-1]] = {"$ref": "#/$defs/" + name}
+    encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    instructions = json.loads(messages[index]["content"])
+    instructions["rules"].append(
+        "The output schema's #/$defs/ references resolve against the preceding USER schemaDefinitions.$defs; "
+        "together they are the complete output contract, not additional output fields. Repair permissions remain unchanged."
+    )
+    messages[index]["content"] = encode(instructions)
+    messages[index + 1:index + 2] = [
+        {**messages[index + 1], "content": encode({"schemaDefinitions": {"$defs": definitions}})},
+        {**messages[index + 1], "content": encode(dynamic)},
+    ]
+    out = {**payload, "messages": messages, PROMPT_CACHE_METADATA_KEY: {
+        "instructionMessageIndex": index, "staticDataMessageIndex": index + 1,
+    }}
     instruction_segment_index(out)
     return out
 

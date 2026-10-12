@@ -223,9 +223,11 @@ def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_froze
         sources = director["runtimeSurface"]["texturedPathSources"]
         assert any(("beam" if capability == "channel_beam" else "whip") in row["sources"] for row in sources)
         for packet, request, keys in ((director, sent[0], vfx.VFX_PROMPT_STATIC_KEYS), (repair, sent[1], vfx.VFX_REPAIR_PROMPT_STATIC_KEYS)):
-            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
             prefix = json.dumps({key: packet[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))
-            assert request["messages"][1]["content"] == prefix
+            static = json.loads(request["messages"][1]["content"])
+            assert "#/$defs/" in static["rules"].pop()
+            assert json.dumps(static, ensure_ascii=False, separators=(",", ":")) == prefix
         prefixes.append(tuple(request["messages"][1]["content"] for request in sent))
     assert prefixes[0] == prefixes[1]
 

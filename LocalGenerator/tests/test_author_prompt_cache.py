@@ -77,7 +77,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
 def _marked_prefix(request):
     marker = request.get("_infini_prompt_cache")
     assert marker is not None, "production request must declare the reusable instruction/catalog boundary"
-    assert marker == {"instructionMessageIndex": 1}
+    assert marker in ({"instructionMessageIndex": 1}, {"instructionMessageIndex": 1, "staticDataMessageIndex": 2})
     message = request["messages"][1]
     assert message["role"] == "developer"
     static = json.loads(message["content"])
