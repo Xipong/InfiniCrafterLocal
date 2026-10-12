@@ -49,13 +49,36 @@ public sealed partial class InfiniCraftPlayer
     public bool IsCraftLanePending(int laneIndex)
         => laneIndex == 0 ? HasPendingCraft : laneIndex is 1 or 2 && _multiDevJobs[laneIndex - 1] is not null;
 
-    public bool CanStartStationCraftLane(int laneIndex)
+    public enum StationCraftReadiness
     {
-        if (!CanMutateStationInputs() || !IsCraftLaneVisible(laneIndex) || IsCraftLanePending(laneIndex) || HasPendingStationEscrowOperation)
-            return false;
-        int first = laneIndex * 2;
-        return HasInputAt(first) && HasInputAt(first + 1);
+        Ready, StationUnavailable, LaneHidden, LaneBusy, TransferPending, NeedInputs,
     }
+
+    // Admission retains the existing authority refresh. Presentation must not
+    // restore/park claims, cancel workers or move materials just to show a tooltip.
+    public bool CanStartStationCraftLane(int laneIndex)
+        => CanMutateStationInputs() && GetStationCraftReadiness(laneIndex) == StationCraftReadiness.Ready;
+
+    public StationCraftReadiness GetStationCraftReadiness(int laneIndex)
+    {
+        if (!CanObserveStationInputAuthority()) return StationCraftReadiness.StationUnavailable;
+        if (!IsCraftLaneVisible(laneIndex)) return StationCraftReadiness.LaneHidden;
+        if (IsCraftLanePending(laneIndex)) return StationCraftReadiness.LaneBusy;
+        if (HasPendingStationEscrowOperation) return StationCraftReadiness.TransferPending;
+        int first = laneIndex * 2;
+        return HasInputAt(first) && HasInputAt(first + 1) ? StationCraftReadiness.Ready : StationCraftReadiness.NeedInputs;
+    }
+
+    public string StationCraftReadinessText(int laneIndex)
+        => ForgePresentationText(GetStationCraftReadiness(laneIndex) switch
+        {
+            StationCraftReadiness.Ready => "Ready",
+            StationCraftReadiness.StationUnavailable => "StationUnavailable",
+            StationCraftReadiness.LaneHidden => "LaneHidden",
+            StationCraftReadiness.LaneBusy => "LaneBusy",
+            StationCraftReadiness.TransferPending => "TransferPending",
+            _ => "NeedInputs",
+        });
 
     private static string ForgePresentationText(string key, params object[] args)
         => Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI." + key, args);
@@ -81,7 +104,7 @@ public sealed partial class InfiniCraftPlayer
         if (laneIndex == 0)
         {
             if (!HasPendingCraft)
-                return ForgePresentationText(CanStartStationCraftLane(0) ? "Ready" : "NeedInputs");
+                return StationCraftReadinessText(0);
             if (_awaitingServerCommit)
                 return ForgePresentationText("Host");
             if (IsWaitingForRetry)
@@ -92,7 +115,7 @@ public sealed partial class InfiniCraftPlayer
         }
         MultiDevCraftJob? job = laneIndex is 1 or 2 ? _multiDevJobs[laneIndex - 1] : null;
         if (job is null)
-            return ForgePresentationText(CanStartStationCraftLane(laneIndex) ? "Ready" : "NeedInputs");
+            return StationCraftReadinessText(laneIndex);
         if (job.AwaitingServerCommit)
             return ForgePresentationText("Host");
         if (job.Task is null || !job.Task.IsCompleted)
@@ -100,6 +123,18 @@ public sealed partial class InfiniCraftPlayer
                 ? ForgePresentationText("Waiting")
                 : ForgePresentationText("Countdown", Math.Ceiling(Math.Max(0, CraftDurationTicks - job.ElapsedTicks) / 60f));
         return ForgePresentationText("Committing");
+    }
+
+    public string CraftLaneDetails(int laneIndex)
+    {
+        string details = ForgePresentationText("Lane", laneIndex + 1) + "\n" + StationCraftReadinessText(laneIndex)
+            + "\n" + CraftLaneStatus(laneIndex);
+        if (!IsCraftLanePending(laneIndex)) return details;
+        int elapsed = laneIndex == 0 ? _totalCraftTicks : _multiDevJobs[laneIndex - 1]!.ElapsedTicks;
+        return details + "\n" + CraftLaneLabel(laneIndex)
+            + "\n" + ForgePresentationText("Elapsed", Math.Max(0, elapsed) / 60)
+            + "\n" + ForgePresentationText("TimerDetail", CraftDurationTicks / 60)
+            + "\n" + ForgePresentationText("TimerNotProgress");
     }
 
     public bool TrySetMultiDevWindowCount(int requested, bool syncServer = true)

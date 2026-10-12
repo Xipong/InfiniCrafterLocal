@@ -80,6 +80,20 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
+    private bool CanObserveStationInputAuthority()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            return Main.netMode == NetmodeID.Server || !_stationEscrowUsesRemoteAuthority;
+        string current = Common.Systems.GeneratedStationEscrowStateSystem.AuthorityScope;
+        if (!Common.Systems.GeneratedStationEscrowStateSystem.IsExactAuthorityScope(current)) return false;
+        if (_stationEscrowUsesRemoteAuthority)
+            return string.Equals(_stationEscrowOriginScope, current, StringComparison.Ordinal);
+        int matching = DormantRemoteStationClaims().Count(claim =>
+            claim.ContainsKey(StationOriginScopeSaveKey) && claim[StationOriginScopeSaveKey] is string scope
+            && string.Equals(scope, current, StringComparison.Ordinal));
+        return matching == 0 || matching == 1 && !HasAnyInput && !HasAnyCraftLanePending && !HasPendingStationEscrowOperation;
+    }
+
     private bool CanMutateStationInputs()
     {
         if (Main.netMode == NetmodeID.MultiplayerClient)
@@ -617,8 +631,8 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
-        // Give the item as soon as the background craft is ready. The 240s timer is a
-        // progress estimate/upper UI bar, not an artificial delay.
+        // Give the item as soon as the background craft is ready. The 240s UI
+        // timer is not model progress, a completion bound or an artificial delay.
         if (!_task.IsCompleted)
         {
             // CombatText is now only a low-noise fallback. The inventory station UI is the primary timer.
