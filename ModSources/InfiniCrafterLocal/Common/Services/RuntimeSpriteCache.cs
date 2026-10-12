@@ -17,6 +17,10 @@ namespace InfiniCrafterLocal.Common.Services;
 public sealed class RuntimeSpriteCacheDebugSnapshot
 {
     public int TextureCount { get; init; }
+    public int PendingRetirementCount { get; init; }
+    public int OwnedTextureCount { get; init; }
+    public long EstimatedOwnedTextureBytes { get; init; }
+    public long CapacityRefusalCount { get; init; }
     public int MissingOrBadCount { get; init; }
     public int MaxCachedTextures { get; init; }
     public int MaxTextureDimensionPixels { get; init; }
@@ -82,6 +86,7 @@ public sealed class RuntimeSpriteCache : IDisposable
     private long _rejectedFileSizeCount;
     private long _rejectedDimensionCount;
     private long _failedLoadCount;
+    private long _capacityRefusalCount;
 
     private readonly struct RuntimeSpriteLimits
     {
@@ -141,6 +146,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                 // remain available, and pressure is not a missing/bad-file failure.
                 if (_textures.Count + _retiredTextures.Count >= limits.MaxCachedTextures * 2)
                 {
+                    _capacityRefusalCount++;
                     _missCount++;
                     return null;
                 }
@@ -347,9 +353,19 @@ public sealed class RuntimeSpriteCache : IDisposable
                 try { estimatedBytes += (long)Math.Max(0, cached.Texture.Width) * Math.Max(0, cached.Texture.Height) * 4L; }
                 catch { }
             }
+            long ownedBytes = estimatedBytes;
+            foreach (var texture in _retiredTextures)
+            {
+                try { ownedBytes += (long)Math.Max(0, texture.Width) * Math.Max(0, texture.Height) * 4L; }
+                catch { }
+            }
             return new RuntimeSpriteCacheDebugSnapshot
             {
                 TextureCount = _textures.Count,
+                PendingRetirementCount = _retiredTextures.Count,
+                OwnedTextureCount = _textures.Count + _retiredTextures.Count,
+                EstimatedOwnedTextureBytes = ownedBytes,
+                CapacityRefusalCount = _capacityRefusalCount,
                 MissingOrBadCount = _missingOrBad.Count,
                 MaxCachedTextures = limits.MaxCachedTextures,
                 MaxTextureDimensionPixels = limits.MaxTextureDimensionPixels,
