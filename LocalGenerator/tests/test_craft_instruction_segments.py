@@ -231,4 +231,3 @@ def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatc
         packet["_infini_prompt_cache"]["extra"] = True
     with pytest.raises(ValueError):
         instruction_segment_index(packet)
-
