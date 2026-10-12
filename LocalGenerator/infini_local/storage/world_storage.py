@@ -124,12 +124,14 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
             pass
 
 
-def read_json_file(path: Path) -> dict[str, Any] | None:
+def read_json_file(path: Path, *, raise_io: bool = False) -> dict[str, Any] | None:
     try:
-        if not path.exists():
-            return None
         return strict_json.loads_object(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeError, ValueError, TypeError):
+    except OSError:
+        if raise_io:
+            raise
+        return None
+    except (UnicodeError, ValueError, TypeError):
         return None
 
 
@@ -463,14 +465,17 @@ def read_world_recipe_cache(
     """Read, assess and quarantine one version under the canonical path lock."""
     recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
     with _storage_lock(recipe_path):
-        data = read_json_file(recipe_path)
+        try:
+            data = read_json_file(recipe_path, raise_io=True)
+        except FileNotFoundError:
+            return None  # A missing file was not assessed and must not be quarantined.
         invalid_fields = [
             field for field in ("debug", "recipeMeta")
             if data and field in data and not isinstance(data[field], dict)
         ]
         if not data or invalid_fields:
-            # Unreadable JSON and malformed metadata must not poison every cache
-            # lookup. Preserve the original bytes for diagnosis, never repair them.
+            # Observed invalid JSON or metadata must not poison every lookup.
+            # I/O errors propagate above; unassessed bytes are never quarantined.
             if recipe_path.exists():
                 details: dict[str, Any] = {"sourcePath": str(recipe_path)}
                 if invalid_fields:

@@ -233,7 +233,7 @@ def build_handler(
 
         def _json_combine_failure(self, reason: str, error: BaseException) -> None:
             attached = getattr(error, "_infini_failure_snapshot", None)
-            failure = deepcopy(attached) if isinstance(attached, dict) else deepcopy(last_combine_failure_summary())
+            failure = deepcopy(attached) if isinstance(attached, dict) else {}
             status, code, retryable, friendly = combine_failure_http_response(error, failure)
             log_event("warn", f"craft failed: {reason}", {
                 "path": self.path,

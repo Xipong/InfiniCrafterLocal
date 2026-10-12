@@ -87,6 +87,10 @@ internal static partial class EngineRuntimeChecks
                 AssertForgeNoImplementationJargon(text, locale + "/" + key);
             }
             AssertForgeNoImplementationJargon(tooltip, locale + " core tooltip");
+            Equal(ru ? "Таймер ковки · 3 с" : "Craft timer · 3 s", Text("Countdown", 3), "countdown is explicitly timer not model ETA");
+            Equal(false, Text("Started").Contains(ru ? "до 240" : "up to 240"), "start notice cannot promise completion bound");
+            foreach (string key in new[] { "TransferPending", "StationUnavailable", "LaneHidden", "Elapsed", "TimerDetail", "TimerNotProgress", "StartFailed", "InputPair", "Empty" })
+                Equal(false, Text(key).StartsWith("Mods."), locale + " resolved QoL key " + key);
             var command = new MultiDevCraftCommand();
             Equal("multidevcraft", command.Command, "legacy command token preserved");
             Equal("/multidevcraft [2|3|off]", command.Usage, "legacy arguments preserved");
@@ -131,6 +135,171 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    public static void ForgeQolReadinessReportsEscrowNotMissingMaterials()
+    {
+        const BindingFlags fields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        int oldNetMode = Terraria.Main.netMode;
+        Terraria.Main.netMode = 0;
+        try
+        {
+            WithForgePresentationLanguages(locale =>
+            {
+                var player = new InfiniCraftPlayer();
+                player.TrySetMultiDevWindowCount(3, syncServer: false);
+                foreach (string name in new[] { "InputA", "InputB", "InputC", "InputD", "InputE", "InputF" })
+                    typeof(InfiniCraftPlayer).GetField(name, fields)!.SetValue(player, new Item { type = Terraria.ID.ItemID.Wood, stack = 1 });
+                typeof(InfiniCraftPlayer).GetField("_pendingStationEscrowOperationId", fields)!.SetValue(player, new string('a', 32));
+                for (int lane = 0; lane < 3; lane++)
+                {
+                    Equal(false, player.CanStartStationCraftLane(lane), "pending transfer still blocks admission");
+                    Equal(locale == "ru-RU" ? "Ждём подтверждения переноса" : "Awaiting item transfer confirmation",
+                        player.CraftLaneStatus(lane), locale + " full inputs cannot be mislabeled missing " + lane);
+                    Equal(1, player.StationInput(lane * 2).stack, "status preserves first material");
+                    Equal(1, player.StationInput(lane * 2 + 1).stack, "status preserves second material");
+                    Equal(false, player.TryStartCraftFromStation(lane), "blocked start keeps same admission");
+                }
+                typeof(InfiniCraftPlayer).GetField("_pendingStationEscrowOperationId", fields)!.SetValue(player, "");
+                Equal(true, player.CanStartStationCraftLane(0), "cleared transfer admits full pair");
+                player.InputB.TurnToAir();
+                Equal(false, player.CanStartStationCraftLane(0), "missing second unit still refuses");
+                Equal(locale == "ru-RU" ? "Нужны два предмета" : "Need two items", player.StationCraftReadinessText(0), "real missing inputs");
+                player.InputB = new Item { type = Terraria.ID.ItemID.Wood, stack = 1 };
+                typeof(InfiniCraftPlayer).GetField("_request", fields)!.SetValue(player, new GeneratorClient.PreparedGenerationRequest());
+                Equal(false, player.CanStartStationCraftLane(0), "pending lane still refuses");
+                Equal(true, player.CanStartStationCraftLane(1), "other full lane remains independent");
+                Equal(locale == "ru-RU" ? "Этот горн занят" : "This hearth is busy", player.StationCraftReadinessText(0), "busy canonical reason");
+                foreach (int invalid in new[] { -1, 3, int.MaxValue })
+                    Equal(false, player.CanStartStationCraftLane(invalid), "invalid lane remains refused without indexing inputs");
+                typeof(InfiniCraftPlayer).GetField("_stationEscrowUsesRemoteAuthority", fields)!.SetValue(player, true);
+                Equal(locale == "ru-RU" ? "Нет доступа к материалам станции" : "Station authority unavailable", player.StationCraftReadinessText(1), "unavailable is not missing inputs");
+                Equal(false, player.CanStartStationCraftLane(1), "remote material cannot admit locally");
+                Equal(1, player.InputC.stack, "unavailable material mirror unchanged");
+                for (int lane = 1; lane < 3; lane++)
+                {
+                    Equal(1, player.StationInput(lane * 2 + 1).stack, "other material unchanged");
+                }
+            });
+        }
+        finally { Terraria.Main.netMode = oldNetMode; }
+    }
+
+    public static void ForgeQolAuthorityObservationCannotParkOrRestoreClaims()
+    {
+        const BindingFlags fields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        FieldInfo scopeField = typeof(InfiniCrafterLocal.Common.Systems.GeneratedStationEscrowStateSystem).GetField("_authorityScope", BindingFlags.Static | BindingFlags.NonPublic)!;
+        string oldScope = (string)scopeField.GetValue(null)!;
+        int oldNetMode = Terraria.Main.netMode; Terraria.Main.netMode = Terraria.ID.NetmodeID.MultiplayerClient;
+        try
+        {
+            WithForgePresentationLanguages(_ =>
+            {
+                var player = new InfiniCraftPlayer();
+                void Set(string name, object? value) => typeof(InfiniCraftPlayer).GetField(name, fields)!.SetValue(player, value);
+                string scope = new string('a', 32);
+                scopeField.SetValue(null, "");
+                Equal(InfiniCraftPlayer.StationCraftReadiness.StationUnavailable, player.GetStationCraftReadiness(0), "missing host scope is unavailable");
+                scopeField.SetValue(null, scope);
+                player.InputA = new Item { type = Terraria.ID.ItemID.Wood, stack = 1 };
+                player.InputB = new Item { type = Terraria.ID.ItemID.StoneBlock, stack = 1 };
+                Equal(InfiniCraftPlayer.StationCraftReadiness.Ready, player.GetStationCraftReadiness(0), "fresh host scope admits existing pair");
+                Set("_stationEscrowUsesRemoteAuthority", true); Set("_stationEscrowOriginScope", new string('b', 32));
+                var request = new GeneratorClient.PreparedGenerationRequest(); Set("_request", request);
+                Item mirror = player.InputA;
+                _ = player.CraftLaneDetails(0);
+                Equal(InfiniCraftPlayer.StationCraftReadiness.StationUnavailable, player.GetStationCraftReadiness(0), "foreign active mirror cannot be current material");
+                Equal(true, ReferenceEquals(mirror, player.InputA), "observe foreign origin never parks material");
+                Equal(false, request.CancellationToken.IsCancellationRequested, "observe foreign origin never cancels worker");
+                Equal(new string('b', 32), (string)typeof(InfiniCraftPlayer).GetField("_stationEscrowOriginScope", fields)!.GetValue(player)!, "origin cannot be rewritten by status");
+                Set("_request", null); Set("_stationEscrowUsesRemoteAuthority", false);
+                var claim = new Terraria.ModLoader.IO.TagCompound { ["infiniStationEscrowOriginScopeV1"] = scope };
+                Set("_readOnlyRemoteStationClaim", claim);
+                Equal(InfiniCraftPlayer.StationCraftReadiness.StationUnavailable, player.GetStationCraftReadiness(0), "matching dormant claim and fresh material remain ambiguous");
+                Set("_readOnlyRemoteStationClaim", new Terraria.ModLoader.IO.TagCompound { ["infiniStationEscrowOriginScopeV1"] = new string('c', 32) });
+                Equal(InfiniCraftPlayer.StationCraftReadiness.Ready, player.GetStationCraftReadiness(0), "unrelated dormant claim does not block fresh material");
+                Equal(true, player.CanStartStationCraftLane(0), "canonical admission keeps foreign dormant positive control");
+            });
+        }
+        finally { Terraria.Main.netMode = oldNetMode; scopeField.SetValue(null, oldScope); }
+    }
+
+    public static void ForgeQolPanelFitsWhenViewportCanContainIt()
+    {
+        foreach (var viewport in new[] { (1280, 480), (800, 480), (400, 720), (430, 410), (454, 434), (1920, 1080) })
+        {
+            var bounds = InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationPanelBounds(viewport.Item1, viewport.Item2, 3);
+            Equal(true, bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= viewport.Item1 && bounds.Bottom <= viewport.Item2,
+                $"full three-lane panel fits {viewport}: actual {bounds}");
+            for (int lane = 0; lane < 3; lane++)
+            {
+                var layout = InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationLaneBounds(bounds, lane);
+                foreach (var control in new[] { layout.SlotA, layout.SlotB, layout.CraftButton, layout.Details, layout.Timer,
+                    InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationCancelBounds(bounds, lane) })
+                    Equal(true, bounds.Contains(control), "draw and hit-test control fits actual panel");
+                Equal(true, layout.CraftButton.Contains(layout.CraftButton.Center), "same rectangle accepts button center");
+                Equal(false, layout.SlotA.Intersects(layout.SlotB) || layout.SlotB.Intersects(layout.CraftButton), "input hit targets do not overlap");
+            }
+        }
+    }
+
+    public static void ForgeQolDetailsAreCompleteAndReadOnly()
+    {
+        const BindingFlags fields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        MethodInfo? details = typeof(InfiniCraftPlayer).GetMethod("CraftLaneDetails");
+        Equal(true, details is not null, "full read-only lane details are available");
+        int oldNetMode = Terraria.Main.netMode; Terraria.Main.netMode = 0;
+        try
+        {
+            WithForgePresentationLanguages(locale =>
+            {
+                bool ru = locale == "ru-RU";
+                var player = new InfiniCraftPlayer();
+                void Set(string name, object? value) => typeof(InfiniCraftPlayer).GetField(name, fields)!.SetValue(player, value);
+                string Detail(int lane) => (string)details!.Invoke(player, new object[] { lane })!;
+                string parents = "A very long saved parent name that exceeds thirty-one characters + Another full parent name";
+                var request = new GeneratorClient.PreparedGenerationRequest();
+                var work = new TaskCompletionSource<GeneratedItemData?>();
+                Set("_request", request); Set("_task", work.Task); Set("_label", parents);
+                Set("_elapsedTicks", InfiniCraftPlayer.CraftDurationTicks); Set("_totalCraftTicks", InfiniCraftPlayer.CraftDurationTicks + 121);
+                string text = Detail(0);
+                Equal(true, text.Contains(parents), "hover preserves complete accepted names");
+                Equal(true, text.Contains(player.CraftLaneStatus(0)), "hover contains real current stage");
+                Equal(true, text.Contains(ru ? "Прошло: 242 с" : "Elapsed: 242 s"), "elapsed is real total ticks, not capped bar");
+                Equal(true, text.Contains(ru ? "не прогресс генерации" : "not generation progress"), "timer completion does not claim model completion");
+                Equal(false, text.Contains("%"), "no fabricated model percent");
+                Equal(false, request.CancellationToken.IsCancellationRequested, "hover does not cancel captured worker");
+                Equal(false, work.Task.IsCompleted, "hover does not complete work");
+                Equal(InfiniCraftPlayer.CraftDurationTicks + 121, (int)typeof(InfiniCraftPlayer).GetField("_totalCraftTicks", fields)!.GetValue(player)!, "hover cannot tick clock");
+                Set("_awaitingServerCommit", true);
+                Equal(true, Detail(0).Contains(player.CraftLaneStatus(0)), "host stage comes from canonical lane status");
+                Set("_awaitingServerCommit", false); Set("_task", Task.FromResult<GeneratedItemData?>(null));
+                Equal(true, Detail(0).Contains(player.CraftLaneStatus(0)), "commit stage comes from canonical lane status");
+                // Existing admission refresh can park a remote mirror. Merely reading
+                // status/details in single player must leave it and the worker intact.
+                Set("_stationEscrowUsesRemoteAuthority", true);
+                Item material = new Item { type = Terraria.ID.ItemID.Wood, stack = 1 }; player.InputA = material;
+                _ = Detail(0); _ = player.CraftLaneStatus(0);
+                Equal(true, ReferenceEquals(material, player.InputA), "hover does not retire remote material mirror");
+                Equal(false, request.CancellationToken.IsCancellationRequested, "read-only unavailable status keeps cancellation owner");
+                Set("_stationEscrowUsesRemoteAuthority", false); player.TrySetMultiDevWindowCount(3, syncServer: false);
+                Type jobType = typeof(InfiniCraftPlayer).GetNestedType("MultiDevCraftJob", BindingFlags.NonPublic)!;
+                var jobs = (Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", fields)!.GetValue(player)!;
+                for (int lane = 1; lane < 3; lane++)
+                {
+                    object job = Activator.CreateInstance(jobType, nonPublic: true)!;
+                    var extraRequest = new GeneratorClient.PreparedGenerationRequest();
+                    foreach (var field in new[] { ("Label", (object)parents), ("ElapsedTicks", (object)(InfiniCraftPlayer.CraftDurationTicks + 121)), ("Request", (object)extraRequest) })
+                        jobType.GetField(field.Item1, fields)!.SetValue(job, field.Item2);
+                    jobs.SetValue(job, lane - 1);
+                    string extra = Detail(lane);
+                    Equal(true, extra.Contains(parents) && extra.Contains(ru ? "Прошло: 242 с" : "Elapsed: 242 s"), "extra hover full labels and actual elapsed");
+                    Equal(true, extra.Contains(player.CraftLaneStatus(lane)), "extra hover real waiting stage");
+                    Equal(false, extraRequest.CancellationToken.IsCancellationRequested, "extra hover cannot cancel independent worker");
+                }
+            });
+        }
+        finally { Terraria.Main.netMode = oldNetMode; }
+    }
+
     public static void ForgePresentationLaneStatusPreservesTimersAndHostFacts()
     {
         const BindingFlags fields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -146,10 +315,11 @@ internal static partial class EngineRuntimeChecks
                 string Waiting = ru ? "Сплав ещё зреет" : "Alloy still forming";
                 string Host = ru ? "Ждём хозяина мира" : "Awaiting world host";
                 string Commit = ru ? "Завершаем ковку" : "Finishing the forge";
-                string Countdown = ru ? "Ковка · 3 с" : "Forging · 3 s";
+                string Countdown = ru ? "Таймер ковки · 3 с" : "Craft timer · 3 s";
                 var player = new InfiniCraftPlayer();
                 void Set(string name, object? value) => typeof(InfiniCraftPlayer).GetField(name, fields)!.SetValue(player, value);
-                for (int lane = 0; lane < 3; lane++) Equal(Need, player.CraftLaneStatus(lane), locale + " empty lane " + lane);
+                Equal(Need, player.CraftLaneStatus(0), locale + " empty visible lane");
+                for (int lane = 1; lane < 3; lane++) Equal(ru ? "Этот горн закрыт" : "This hearth is closed", player.CraftLaneStatus(lane), locale + " closed lane " + lane);
                 Equal(ru ? "Горн 1" : "Hearth 1", player.CraftLaneLabel(0), locale + " first fallback label");
                 Equal(ru ? "Горн 2" : "Hearth 2", player.CraftLaneLabel(1), locale + " extra fallback label");
                 Equal(true, player.TrySetMultiDevWindowCount(3, syncServer: false), "open three local lanes without a socket");

@@ -262,7 +262,7 @@ def test_health_acknowledges_only_allowlisted_applied_config(tmp_path, monkeypat
         "openrouterProvider": "Exact/slug", "sdcppAutostart": False,
     }
     assert "SECRET" not in json.dumps(health["effectiveConfig"])
-    assert health["generationActivity"] == {"active": 0, "waiting": 0, "accepting": True}
+    assert health["generationActivity"] == {"active": 0, "waiting": 0, "accepting": True, "requests": [], "requestsOmitted": 0}
 
 
 @pytest.mark.parametrize("phase", ["active", "waiting", "failure"])
@@ -307,7 +307,8 @@ def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, mon
         assert shutdown.code == 409, "safe restart must not discard admitted work"
         assert shutdown.payload["status"] == "generator_busy"
         activity = shutdown.payload["generationActivity"]
-        assert activity == {"active": int(phase != "waiting"), "waiting": int(phase == "waiting"), "accepting": True}
+        assert {k: activity[k] for k in ("active", "waiting", "accepting")} == {"active": int(phase != "waiting"), "waiting": int(phase == "waiting"), "accepting": True}
+        assert len(activity["requests"]) == 1 and activity["requestsOmitted"] == 0
     finally:
         release.set()
         if phase == "waiting":
@@ -315,7 +316,7 @@ def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, mon
         worker.join(5)
     assert not worker.is_alive()
     assert len(failures) == int(phase == "failure"), failures
-    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": True}
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": True, "requests": [], "requestsOmitted": 0}
     assert semaphore.acquire(blocking=False)
     semaphore.release()
 
@@ -336,7 +337,7 @@ def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypat
         trace_event=lambda *_: None, json=generated.json, json_status=generated.json_status,
     )
     assert generated.code == 503 and generated.payload["status"] == "generator_shutting_down"
-    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False}
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False, "requests": [], "requestsOmitted": 0}
     assert stopped.wait(2)
 
 
@@ -419,13 +420,15 @@ def test_explicit_force_shutdown_does_not_start_waiting_generation(tmp_path, mon
         assert entered.wait(5)
         utility_routes(tmp_path).handle_get(shutdown, "/shutdown?force=1")
         assert shutdown.code == 200 and shutdown.payload["forced"] is True
-        assert shutdown.payload["generationActivity"] == {"active": 0, "waiting": 1, "accepting": False}
+        activity = shutdown.payload["generationActivity"]
+        assert {k: activity[k] for k in ("active", "waiting", "accepting")} == {"active": 0, "waiting": 1, "accepting": False}
+        assert len(activity["requests"]) == 1 and activity["requestsOmitted"] == 0
     finally:
         held.release()
         worker.join(5)
     assert not worker.is_alive() and not failures and not calls
     assert result.code == 503
-    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False}
+    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False, "requests": [], "requestsOmitted": 0}
     assert held.acquire(blocking=False)
     held.release()
     assert stopped.wait(2)

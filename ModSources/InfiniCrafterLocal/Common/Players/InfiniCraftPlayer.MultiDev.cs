@@ -49,13 +49,36 @@ public sealed partial class InfiniCraftPlayer
     public bool IsCraftLanePending(int laneIndex)
         => laneIndex == 0 ? HasPendingCraft : laneIndex is 1 or 2 && _multiDevJobs[laneIndex - 1] is not null;
 
-    public bool CanStartStationCraftLane(int laneIndex)
+    public enum StationCraftReadiness
     {
-        if (!CanMutateStationInputs() || !IsCraftLaneVisible(laneIndex) || IsCraftLanePending(laneIndex) || HasPendingStationEscrowOperation)
-            return false;
-        int first = laneIndex * 2;
-        return HasInputAt(first) && HasInputAt(first + 1);
+        Ready, StationUnavailable, LaneHidden, LaneBusy, TransferPending, NeedInputs,
     }
+
+    // Admission retains the existing authority refresh. Presentation must not
+    // restore/park claims, cancel workers or move materials just to show a tooltip.
+    public bool CanStartStationCraftLane(int laneIndex)
+        => CanMutateStationInputs() && GetStationCraftReadiness(laneIndex) == StationCraftReadiness.Ready;
+
+    public StationCraftReadiness GetStationCraftReadiness(int laneIndex)
+    {
+        if (!CanObserveStationInputAuthority()) return StationCraftReadiness.StationUnavailable;
+        if (!IsCraftLaneVisible(laneIndex)) return StationCraftReadiness.LaneHidden;
+        if (IsCraftLanePending(laneIndex)) return StationCraftReadiness.LaneBusy;
+        if (HasPendingStationEscrowOperation) return StationCraftReadiness.TransferPending;
+        int first = laneIndex * 2;
+        return HasInputAt(first) && HasInputAt(first + 1) ? StationCraftReadiness.Ready : StationCraftReadiness.NeedInputs;
+    }
+
+    public string StationCraftReadinessText(int laneIndex)
+        => ForgePresentationText(GetStationCraftReadiness(laneIndex) switch
+        {
+            StationCraftReadiness.Ready => "Ready",
+            StationCraftReadiness.StationUnavailable => "StationUnavailable",
+            StationCraftReadiness.LaneHidden => "LaneHidden",
+            StationCraftReadiness.LaneBusy => "LaneBusy",
+            StationCraftReadiness.TransferPending => "TransferPending",
+            _ => "NeedInputs",
+        });
 
     private static string ForgePresentationText(string key, params object[] args)
         => Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI." + key, args);
@@ -78,10 +101,25 @@ public sealed partial class InfiniCraftPlayer
 
     public string CraftLaneStatus(int laneIndex)
     {
+        CraftLaneOutcome outcome = GetCraftLaneOutcome(laneIndex);
+        if (!IsCraftLanePending(laneIndex) && outcome.Kind != CraftLaneOutcomeKind.None)
+        {
+            string heading = ForgePresentationText("Outcome" + outcome.Kind);
+            // Cancellation/deadline reasons are protocol strings, not authored UI prose.
+            string status = outcome.Kind is CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
+                || string.IsNullOrWhiteSpace(outcome.Message) ? heading : heading + " · " + outcome.Message;
+            if (outcome.Materials == CraftLaneMaterialDisposition.ServerRetained)
+                status += " · " + ForgePresentationText("IngredientsServerRetained");
+            else if (outcome.Materials == CraftLaneMaterialDisposition.LocalRefund)
+                status += " · " + ForgePresentationText(HasPendingCraftRefunds ? "RefundPending" : "IngredientsDelivered");
+            return status;
+        }
+        if (IsCraftLaneCancellationPending(laneIndex)) return ForgePresentationText("CancelPending");
+        if (IsCraftLaneWaitingForDelivery(laneIndex)) return ForgePresentationText("DeliveryWait");
         if (laneIndex == 0)
         {
             if (!HasPendingCraft)
-                return ForgePresentationText(CanStartStationCraftLane(0) ? "Ready" : "NeedInputs");
+                return StationCraftReadinessText(0);
             if (_awaitingServerCommit)
                 return ForgePresentationText("Host");
             if (IsWaitingForRetry)
@@ -92,7 +130,7 @@ public sealed partial class InfiniCraftPlayer
         }
         MultiDevCraftJob? job = laneIndex is 1 or 2 ? _multiDevJobs[laneIndex - 1] : null;
         if (job is null)
-            return ForgePresentationText(CanStartStationCraftLane(laneIndex) ? "Ready" : "NeedInputs");
+            return StationCraftReadinessText(laneIndex);
         if (job.AwaitingServerCommit)
             return ForgePresentationText("Host");
         if (job.Task is null || !job.Task.IsCompleted)
@@ -100,6 +138,18 @@ public sealed partial class InfiniCraftPlayer
                 ? ForgePresentationText("Waiting")
                 : ForgePresentationText("Countdown", Math.Ceiling(Math.Max(0, CraftDurationTicks - job.ElapsedTicks) / 60f));
         return ForgePresentationText("Committing");
+    }
+
+    public string CraftLaneDetails(int laneIndex)
+    {
+        string details = ForgePresentationText("Lane", laneIndex + 1) + "\n" + StationCraftReadinessText(laneIndex)
+            + "\n" + CraftLaneStatus(laneIndex);
+        if (!IsCraftLanePending(laneIndex)) return details;
+        int elapsed = laneIndex == 0 ? _totalCraftTicks : _multiDevJobs[laneIndex - 1]!.ElapsedTicks;
+        return details + "\n" + CraftLaneLabel(laneIndex)
+            + "\n" + ForgePresentationText("Elapsed", Math.Max(0, elapsed) / 60)
+            + "\n" + ForgePresentationText("TimerDetail", CraftDurationTicks / 60)
+            + "\n" + ForgePresentationText("TimerNotProgress");
     }
 
     public bool TrySetMultiDevWindowCount(int requested, bool syncServer = true)
@@ -170,6 +220,8 @@ public sealed partial class InfiniCraftPlayer
                 RequestId = requestId,
                 AwaitingServerCommit = true,
             };
+            SetCraftLaneOutcome(laneIndex, CraftLaneOutcomeKind.None, "");
+            _remoteCraftCancelRequested[laneIndex] = false;
             _multiDevJobs[laneIndex - 1] = job;
             if (!SendServerCraftRequest(requestId, laneIndex, a, b))
             {
@@ -219,6 +271,8 @@ public sealed partial class InfiniCraftPlayer
     {
         if (laneIndex is < 1 or > 2 || _multiDevJobs[laneIndex - 1] is not null)
             return false;
+        SetCraftLaneOutcome(laneIndex, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[laneIndex] = false;
         _multiDevJobs[laneIndex - 1] = new MultiDevCraftJob
         {
             LaneIndex = laneIndex,
@@ -243,10 +297,19 @@ public sealed partial class InfiniCraftPlayer
 
             if (job.AwaitingServerCommit)
             {
+                if (job.WaitTicks >= RemoteServerCraftTimeoutTicks) _remoteCraftCancelRequested[job.LaneIndex] = true;
                 if (job.WaitTicks % StationEscrowRetryIntervalTicks == 0)
-                    SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                {
+                    if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client deadline/cancel");
+                    else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                }
                 if (job.WaitTicks == RemoteServerCraftTimeoutTicks)
                     CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("LaneHost", job.LaneIndex + 1));
+                continue;
+            }
+            if (job.ElapsedTicks >= CraftRecoveryTimeoutTicks && !HasReadyCraftResult(job.Task))
+            {
+                RetireCraftLane(job.LaneIndex, "craft deadline exceeded", CraftLaneOutcomeKind.TimedOut);
                 continue;
             }
             if (job.Task is null || !job.Task.IsCompleted)
@@ -268,6 +331,9 @@ public sealed partial class InfiniCraftPlayer
                 }
                 if (Main.netMode != NetmodeID.Server)
                     CombatText.NewText(Player.Hitbox, Color.OrangeRed, ForgePresentationText("LaneFailed", job.LaneIndex + 1, reason));
+                job.Request.Cancel();
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason,
+                    Main.netMode != NetmodeID.Server && !_stationEscrowUsesRemoteAuthority ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
                 _multiDevJobs[slot] = null;
                 continue;
             }
@@ -277,9 +343,11 @@ public sealed partial class InfiniCraftPlayer
                 _multiDevJobs[slot] = null;
                 continue;
             }
+            if (!HasReusableWorldItemSlot()) continue;
             if (SpawnGeneratedItemServerSide(Player, data, out string error, job.RequestId, job.LaneIndex))
             {
                 CompleteExtraServerCraft(job, true, data.Name, "ok");
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Succeeded, data.Name);
                 RunLocalCraftReveal(Player, data);
             }
             else
@@ -292,7 +360,10 @@ public sealed partial class InfiniCraftPlayer
                     RefundOne(job.Request.RefundA);
                     RefundOne(job.Request.RefundB);
                 }
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason,
+                    Main.netMode != NetmodeID.Server && !_stationEscrowUsesRemoteAuthority ? CraftLaneMaterialDisposition.LocalRefund : CraftLaneMaterialDisposition.Unobserved);
             }
+            job.Request.Cancel();
             _multiDevJobs[slot] = null;
         }
     }
@@ -313,6 +384,11 @@ public sealed partial class InfiniCraftPlayer
             MultiDevCraftJob? job = _multiDevJobs[slot];
             if (job is null || !job.AwaitingServerCommit || !string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
                 continue;
+            SetCraftLaneOutcome(job.LaneIndex, success ? CraftLaneOutcomeKind.Succeeded
+                : _remoteCraftCancelRequested[job.LaneIndex] ? CraftLaneOutcomeKind.Cancelled : CraftLaneOutcomeKind.Failed,
+                success ? itemName : message);
+            _remoteCraftCancelRequested[job.LaneIndex] = false;
+            job.Request.Cancel();
             if (success)
             {
                 ClearRemoteCraftMirror(job.LaneIndex);
@@ -337,6 +413,7 @@ public sealed partial class InfiniCraftPlayer
             if (job is null || !string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
                 continue;
             job.Request.Cancel();
+            SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Cancelled, reason);
             CompleteExtraServerCraft(job, false, "", string.IsNullOrWhiteSpace(reason) ? "cancelled" : reason);
             _multiDevJobs[slot] = null;
             return true;

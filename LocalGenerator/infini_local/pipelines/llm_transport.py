@@ -54,6 +54,8 @@ from infini_local.core.llm_config import (
     OPENROUTER_PROVIDER,
 )
 from infini_local.storage.trace_runtime import log_event
+from infini_local.storage.failure_state import PROVIDER_ERROR_CODES, PROVIDER_ERROR_PARAMS
+from infini_local.services.combine_endpoint import update_generation_activity
 
 
 _CURRENT_LLM_DEADLINE: ContextVar[float | None] = ContextVar("infini_llm_deadline", default=None)
@@ -93,6 +95,7 @@ def _bounded_llm_call(call):
         except Exception as error:
             if state is not None:
                 summary = _llm_diagnostic_summary(state)
+                summary.update(_failure_metadata(error, state["lastAttempt"]))
                 setattr(error, "_infini_transport_debug", summary)
                 log_event("warn", "LLM logical call failed", {**summary, "outcome": "failure", "errorType": type(error).__name__})
             raise
@@ -173,6 +176,44 @@ def _public_provider_body(body: str, context: dict[str, Any]) -> str:
     return body.replace(secret, "[redacted]")[:600] if secret else body[:600]
 
 
+def _provider_error_metadata(body: str) -> dict[str, str | None]:
+    # Finite vocabulary, not arbitrary provider strings that may echo secrets.
+    try:
+        parsed = json.loads(body)
+        error = parsed.get("error") if isinstance(parsed, dict) else None
+    except (ValueError, TypeError):
+        error = None
+    if not isinstance(error, dict):
+        return {}
+    return {
+        "providerErrorCode": error.get("code") if error.get("code") in PROVIDER_ERROR_CODES else None,
+        "providerErrorParam": error.get("param") if error.get("param") in PROVIDER_ERROR_PARAMS else None,
+    } if all(type(error.get(k)) in {str, type(None)} for k in ("code", "param")) else {}
+
+
+def _failure_metadata(error: BaseException, last: dict[str, Any]) -> dict[str, Any]:
+    status = last.get("httpStatus")
+    code = last.get("providerErrorCode")
+    category = "provider_failure"
+    if isinstance(error, HttpDeadlineExceeded):
+        category = "admission_timeout" if last.get("networkStarted") is False and last.get("rateWaitReason", "none") != "none" else "logical_timeout"
+    elif code in {"model_not_found", "model_unavailable", "invalid_model"}:
+        category = "model_unavailable"
+    elif status in {401, 403}:
+        category = "auth_failed"
+    elif status == 402 or code in {"insufficient_quota", "quota_exceeded"}:
+        category = "quota_exhausted"
+    elif status == 429:
+        category = "rate_limited"
+    elif status == 404:
+        category = "endpoint_unavailable"
+    elif status in {400, 422}:
+        category = "request_rejected"
+    elif isinstance(error, (TimeoutError, urlerror.URLError, ConnectionError)):
+        category = "transport_unavailable"
+    return {"failureCategory": category, **{name: last[name] for name in ("httpStatus", "providerErrorCode", "providerErrorParam", "networkStarted") if name in last}}
+
+
 def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
     state = _CURRENT_LLM_DIAGNOSTICS.get()
     if state is None:
@@ -194,7 +235,7 @@ def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: d
         return http_json(url, wire, timeout=timeout, headers=llm_headers(context=context))
     except urlerror.HTTPError as error:
         row["httpStatus"] = error.code
-        _read_llm_http_error(error, timeout)
+        row.update(_provider_error_metadata(_read_llm_http_error(error, timeout)))
         row["errorType"] = type(error).__name__
         raise
     except Exception as error:
@@ -215,12 +256,17 @@ def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: d
             state["physicalAttemptsDropped"] += 1
         state["diagnosticEventCount"] += 1
         _CURRENT_LLM_ATTEMPT.reset(token)
+        update_generation_activity(wait_reason="none")
 
 
 def _llm_backoff(seconds: float) -> None:
     deadline = _CURRENT_LLM_DEADLINE.get()
     remaining = remaining_seconds(deadline) if deadline is not None else seconds
-    time.sleep(min(seconds, remaining))
+    update_generation_activity(wait_reason="retry_backoff", network_started=False)
+    try:
+        time.sleep(min(seconds, remaining))
+    finally:
+        update_generation_activity(wait_reason="none")
     if deadline is not None:
         remaining_seconds(deadline)
 
@@ -404,6 +450,7 @@ def _reserve_remote_rate_slot(
                     queue_timeout = None if deadline is None else deadline - now
                     if row is not None:
                         row["rateWaitReason"] = "rate_queue"
+                    update_generation_activity(wait_reason="rate_queue", network_started=False)
                 else:
                     events = [
                         (float(at), int(count))
@@ -430,7 +477,13 @@ def _reserve_remote_rate_slot(
                             "provider_cooldown" if blocked_wait >= wait_seconds else
                             "provider_quota" if quota_wait >= wait_seconds else
                             "token_window" if token_wait else "pacing")
+                    if wait_seconds > 0.0:
+                        update_generation_activity(wait_reason=(
+                            "provider_cooldown" if blocked_wait >= wait_seconds else
+                            "provider_quota" if quota_wait >= wait_seconds else
+                            "token_window" if token_wait else "pacing"), network_started=False)
                     if wait_seconds <= 0.0:
+                        update_generation_activity(wait_reason="none", network_started=False)
                         if uses_token_window:
                             events.append((now, tokens))
                         state["lastRequest"] = now
@@ -690,7 +743,10 @@ def begin_llm_item_lease(recipe_key: str, *, preferred_profile_id: str = "") -> 
                 -1,
             )
             if selected_index < 0:
-                raise RuntimeError(f"Configured LLM profile {preferred!r} is unavailable for multi-dev lane")
+                from infini_local.core.errors import PlannerUnavailable
+                error = PlannerUnavailable(f"Configured LLM profile {preferred!r} is unavailable for multi-dev lane")
+                setattr(error, "_infini_transport_debug", {"failureCategory": "profile_unavailable", "networkStarted": False})
+                raise error
         else:
             selected_index = _available_profile_index(profiles, _LLM_POOL_CURSOR % len(profiles))
             _LLM_POOL_CURSOR = (selected_index + 1) % len(profiles)
@@ -709,13 +765,20 @@ def begin_llm_item_lease(recipe_key: str, *, preferred_profile_id: str = "") -> 
         legacy_fallback_allowed=not preferred and len(profiles) == 1,
     )
     token = _CURRENT_LLM_ITEM_LEASE.set(lease)
-    log_event("info", "LLM item lease acquired", lease.snapshot())
+    try:
+        update_generation_activity(profile_id=profile_id)
+        log_event("info", "LLM item lease acquired", lease.snapshot())
+    except BaseException:
+        _CURRENT_LLM_ITEM_LEASE.reset(token)
+        raise
     return lease, token
 
 
 def end_llm_item_lease(lease: LlmItemLease, token: Any) -> None:
-    log_event("info", "LLM item lease released", lease.snapshot())
-    _CURRENT_LLM_ITEM_LEASE.reset(token)
+    try:
+        log_event("info", "LLM item lease released", lease.snapshot())
+    finally:
+        _CURRENT_LLM_ITEM_LEASE.reset(token)
 
 
 @contextmanager
@@ -1378,6 +1441,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
     row = _CURRENT_LLM_ATTEMPT.get()
     if row is not None:
         row["networkStarted"] = False
+    update_generation_activity(wait_reason="none", network_started=False)
     wait_started = time.monotonic()
     try:
         _reserve_remote_rate_slot(url, payload, data, max_wait_seconds=remaining_seconds(deadline))
@@ -1393,6 +1457,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
         open_started = time.monotonic()
         if row is not None:
             row["networkStarted"] = True
+        update_generation_activity(wait_reason="none", network_started=True)
         try:
             response = urlopen_no_redirect(req, deadline=deadline)
         finally:
@@ -2251,6 +2316,7 @@ def _switch_lease_profile(lease: LlmItemLease, context: dict[str, Any], error: E
     next_id = _profile_id(context)
     lease.context = context
     lease.profile_id = next_id
+    update_generation_activity(profile_id=next_id)
     lease.previous_response_id = ""
     lease.responses_disabled = False
     lease.failovers.append({

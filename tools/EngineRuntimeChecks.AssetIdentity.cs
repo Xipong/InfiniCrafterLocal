@@ -655,6 +655,9 @@ internal static partial class EngineRuntimeChecks
                                 sync.RegisterRemoteAssetDescriptors("asset_owner_review", new[] { descriptor });
                             } else {
                                 File.WriteAllBytes(local, scenario == "changed-certified-corrupt" ? new byte[] { 4, 3, 2, 1 } : otherColor);
+                                // Stat-based freshness is the declared boundary. Immediate
+                                // same-length writes can share Windows timestamp resolution.
+                                File.SetLastWriteTimeUtc(local, DateTime.UtcNow.AddMinutes(1));
                             }
                         } else if (scenario != "no-sync-local") {
                             if (scenario != "unverified-sync-local") sync.RegisterRemoteAssetDescriptors("asset_owner_review", new[] { descriptor });

@@ -12,6 +12,28 @@ LogEvent = Callable[[str, str, Any], None]
 
 SUMMARY_KEYS = ["ok", "version", "time", "stage", "error", "parents", "worldId", "pipelineLog"]
 
+# Finite client-owned vocabulary: unknown provider text must never echo into diagnostics.
+PROVIDER_ERROR_CODES = frozenset({
+    "model_not_found", "model_unavailable", "invalid_model", "invalid_api_key",
+    "authentication_error", "permission_denied", "insufficient_quota",
+    "quota_exceeded", "rate_limit_exceeded", "not_found", "invalid_request_error",
+    "unsupported_parameter", "invalid_json_schema", "context_length_exceeded",
+})
+PROVIDER_ERROR_PARAMS = frozenset({
+    "model", "response_format", "response_format.json_schema", "messages",
+    "max_tokens", "max_output_tokens", "reasoning", "temperature",
+})
+TRANSPORT_FAILURE_CATEGORIES = frozenset({
+    "model_unavailable", "auth_failed", "quota_exhausted", "rate_limited",
+    "endpoint_unavailable", "request_rejected", "admission_timeout", "logical_timeout",
+    "transport_unavailable", "provider_failure", "profile_unavailable",
+})
+_TRANSPORT_VOCABULARIES = {
+    "category": TRANSPORT_FAILURE_CATEGORIES,
+    "provider_code": PROVIDER_ERROR_CODES,
+    "provider_param": PROVIDER_ERROR_PARAMS,
+}
+
 # Client-owned transport metadata only; never body, headers, messages or provider extras.
 _TRANSPORT_COMMON_FIELDS = {
     **dict.fromkeys(("logicalCallId", "stage", "leaseId", "requestedApiMode", "requestedResponseFormat",
@@ -20,6 +42,8 @@ _TRANSPORT_COMMON_FIELDS = {
 }
 _TRANSPORT_SUMMARY_FIELDS = {
     **_TRANSPORT_COMMON_FIELDS, "physicalAttemptScope": "text", "physicalAttempts": "attempts",
+    "failureCategory": "category", "httpStatus": "number", "networkStarted": "bool",
+    "providerErrorCode": "provider_code", "providerErrorParam": "provider_param",
     **dict.fromkeys(("physicalAttemptCount", "physicalAttemptsDropped", "rateWaitMsTotal"), "number"),
 }
 _TRANSPORT_ATTEMPT_FIELDS = {
@@ -28,6 +52,7 @@ _TRANSPORT_ATTEMPT_FIELDS = {
     **dict.fromkeys(("httpStatus", "physicalAttemptIndex", "rateWaitMs", "connectMs", "openMs", "readMs",
                      "deadlineRemainingMs"), "number"),
     "networkStarted": "bool", "unsupportedReasoningFields": "reasoning_fields",
+    "providerErrorCode": "provider_code", "providerErrorParam": "provider_param",
 }
 _REASONING_FIELDS = {"effort": "text", "max_tokens": "tokens", "enabled": "bool", "exclude": "bool"}
 
@@ -43,6 +68,10 @@ def _project_transport_fields(value: Any, fields: dict[str, str]) -> dict[str, A
         item = value[name]
         if item is None:
             out[name] = None
+        elif kind in {"category", "provider_code", "provider_param"} and type(item) is str:
+            # Revalidate even persisted/operator-supplied supplements.
+            if item in _TRANSPORT_VOCABULARIES[kind]:
+                out[name] = item
         elif kind == "text" and type(item) is str:
             out[name] = item[:160]
         elif kind in {"number", "tokens"} and type(item) in {int, float}:

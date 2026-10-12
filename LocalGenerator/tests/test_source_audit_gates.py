@@ -371,7 +371,8 @@ def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_p
     ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "state.Pending && state.LaneIndex == laneIndex", "state.Pending"),
     ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)", "true"),
     ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "noBroadcast: true", "noBroadcast: false"),
-    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "Main.timeItemSlotCannotBeReusedFor[index] <= 0", "true"),
+    ("Common/Players/InfiniCraftPlayer.Station.cs", "Main.timeItemSlotCannotBeReusedFor[index] == 0", "true"),
+    ("Common/Players/InfiniCraftPlayer.Station.cs", "Main.timeItemSlotCannotBeReusedFor[index] == 0", "Main.timeItemSlotCannotBeReusedFor[index] <= 0"),
     ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "if (!committed && allocatedOutput is not null)", "if (false)"),
     ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "return committed;", "return false;"),
 ])

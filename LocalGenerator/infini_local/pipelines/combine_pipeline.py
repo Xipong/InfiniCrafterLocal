@@ -49,6 +49,7 @@ from infini_local.pipelines.visual_delivery_gate import assert_visual_delivery_r
 from infini_local.pipelines.visual_generation_pipeline import apply_visual_director, attach_visual
 from infini_local.pipelines.visual_sprite_generation import maybe_generate_visual_assets
 from infini_local.services import asset_sync_service
+from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
 from infini_local.storage.trace_runtime import trace_event
 from infini_local.storage.world_recipe_runtime import (
@@ -213,40 +214,38 @@ def compile_and_validate_authored_runtime(
 
 
 def combine(payload: dict[str, Any]) -> dict[str, Any]:
-    a = payload.get("itemA") or {}
-    b = payload.get("itemB") or {}
-    ca = canonicalize(a)
-    cb = canonicalize(b)
-    world_id = normalize_world_id_from_payload(payload)
-    world_name = str(payload.get("worldName") or "").strip()
-    identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
-    profile_id = _multi_dev_profile_id(payload)
-    key = recipe_key(a, b, world_id, identity_version, profile_id)
-
-    cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
-    if isinstance(cached, dict):
-        generation_debug.clear_combine_failure("cache_hit_delivered")
-        return sanitize_recipe_for_delivery(cached)
-
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None
     lease = token = None
-    if USE_LLM:
-        lease, token = begin_llm_item_lease(key, preferred_profile_id=profile_id)
 
     def step(label: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        started = time.time()
-        try:
-            result = fn(*args, **kwargs)
-            pipeline_log.append({"stage": label, "ok": True, "ms": int((time.time() - started) * 1000)})
-            return result
-        except Exception as exc:
-            pipeline_log.append({"stage": label, "ok": False, "ms": int((time.time() - started) * 1000), "error": repr(exc)})
-            generation_debug.record_combine_failure(label, exc, payload, args[0] if args and isinstance(args[0], dict) else data, pipeline_log)
-            raise
+        started = time.monotonic()
+        with generation_stage(label):
+            try:
+                result = fn(*args, **kwargs)
+                pipeline_log.append({"stage": label, "ok": True, "ms": int((time.monotonic() - started) * 1000)})
+                return result
+            except Exception as exc:
+                pipeline_log.append({"stage": label, "ok": False, "ms": int((time.monotonic() - started) * 1000), "error": repr(exc)})
+                generation_debug.record_combine_failure(label, exc, payload, args[0] if args and isinstance(args[0], dict) else data, pipeline_log)
+                raise
 
     try:
+        a = payload.get("itemA") or {}
+        b = payload.get("itemB") or {}
+        ca = canonicalize(a)
+        cb = canonicalize(b)
+        world_id = normalize_world_id_from_payload(payload)
+        world_name = str(payload.get("worldName") or "").strip()
+        identity_version = str(payload.get("recipeIdentityVersion") or payload.get("recipeKeyVersion") or RECIPE_IDENTITY_VERSION)
+        profile_id = _multi_dev_profile_id(payload)
+        key = recipe_key(a, b, world_id, identity_version, profile_id)
+        cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
+        if isinstance(cached, dict):
+            generation_debug.clear_combine_failure("cache_hit_delivered")
+            return sanitize_recipe_for_delivery(cached)
         if USE_LLM:
+            lease, token = step("00_llm_lease", begin_llm_item_lease, key, preferred_profile_id=profile_id)
             data = step("01_gameplay_author", try_llm_plan, a, b, ca, cb, key)
         if data is None:
             if not ALLOW_DETERMINISTIC_DEV_FALLBACK:

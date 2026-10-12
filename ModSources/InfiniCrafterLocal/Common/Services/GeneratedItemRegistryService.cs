@@ -111,6 +111,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
 
     public void ReloadLocalCacheForCurrentWorld()
     {
+        InfiniCrafterLocalMod.AssetSync?.ResetWorldDescriptors();
         lock (_lock)
         {
             _byId.Clear();
@@ -189,6 +190,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         // runtime record (and its sprite/VFX paths) to placeholder defaults.
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(data))
         {
+            if (!IsCurrentWorldData(data)) return;
             GeneratedItemData? canonical = null;
             lock (_lock)
             {
@@ -225,7 +227,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         RegisterLocal(data);
         if (Main.netMode != NetmodeID.Server)
             return;
-        InfiniCrafterLocalMod.Generator?.RefreshAssetTransportMetadata();
+        InfiniCrafterLocalMod.Generator?.QueueAssetTransportMetadataRefresh();
 
         if (toClient >= 0)
         {
@@ -479,7 +481,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         string transportHash = Convert.ToHexString(SHA256.HashData(raw)).ToLowerInvariant();
         string[] assetRoster = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
         GeneratedAssetWireDescriptor[] descriptors = InfiniCrafterLocalMod.AssetSync.BuildServerAssetDescriptors(data);
-        if (assetRoster.Length > 0 && descriptors.Length != assetRoster.Length)
+        if (!new HashSet<string>(assetRoster, StringComparer.OrdinalIgnoreCase).SetEquals(descriptors.Select(x => x.FileName)))
             return;
         int chunkCount = Math.Max(1, (compressed.Length + GeneratedAssetSyncService.ChunkPayloadBytes - 1) / GeneratedAssetSyncService.ChunkPayloadBytes);
         for (int index = 0; index < chunkCount; index++)
@@ -516,37 +518,63 @@ public sealed class GeneratedItemRegistryService : IDisposable
         }
     }
 
+    private static string ReadDefinitionString(BinaryReader reader, int maxChars)
+    {
+        int byteLength = reader.Read7BitEncodedInt();
+        if (byteLength < 0 || byteLength > maxChars * 4) throw new InvalidDataException("Oversized definition string");
+        byte[] bytes = reader.ReadBytes(byteLength);
+        if (bytes.Length != byteLength) throw new EndOfStreamException();
+        string text = new UTF8Encoding(false, true).GetString(bytes);
+        if (text.Length > maxChars) throw new InvalidDataException("Oversized definition string");
+        return text;
+    }
+
     private void HandleDefinitionChunk(BinaryReader reader)
     {
-        byte version = reader.ReadByte();
-        string itemId = reader.ReadString().Trim();
-        string hash = reader.ReadString().Trim().ToLowerInvariant();
-        int uncompressedLength = reader.ReadInt32();
-        int compressedLength = reader.ReadInt32();
-        ushort chunkIndex = reader.ReadUInt16();
-        ushort chunkCount = reader.ReadUInt16();
-        byte descriptorCount = reader.ReadByte();
-        if (descriptorCount > GeneratedAssetSyncService.MaxAssetFiles) return;
-        var descriptors = new List<GeneratedAssetWireDescriptor>(descriptorCount);
-        for (int i = 0; i < descriptorCount; i++)
+        string itemId, hash;
+        int uncompressedLength, compressedLength;
+        ushort chunkIndex, chunkCount;
+        byte[] chunk;
+        var descriptors = new List<GeneratedAssetWireDescriptor>();
+        // Parse only: malformed wire cannot escape the router or mutate transfers.
+        // Keep runtime/registration failures outside this narrow transport guard.
+        try
         {
-            string file = GeneratedAssetSyncService.FileNameFromPath(reader.ReadString());
-            int length = reader.ReadInt32();
-            string assetHash = reader.ReadString().Trim().ToLowerInvariant();
-            if (!string.IsNullOrWhiteSpace(file) && length > 0 && length <= GeneratedAssetSyncService.MaxAssetBytes && assetHash.Length == 64 && assetHash.All(Uri.IsHexDigit))
+            if (reader.ReadByte() != DefinitionTransportVersion || Main.netMode == NetmodeID.Server) return;
+            itemId = ReadDefinitionString(reader, 96).Trim();
+            hash = ReadDefinitionString(reader, 64).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(itemId) || hash.Length != 64 || !hash.All(Uri.IsHexDigit)) return;
+            uncompressedLength = reader.ReadInt32();
+            compressedLength = reader.ReadInt32();
+            if (uncompressedLength <= 0 || uncompressedLength > MaxDefinitionJsonBytes
+                || compressedLength <= 0 || compressedLength > MaxDefinitionJsonBytes) return;
+            chunkIndex = reader.ReadUInt16();
+            chunkCount = reader.ReadUInt16();
+            if (chunkCount <= 0 || chunkCount > 64 || chunkIndex >= chunkCount) return;
+            byte descriptorCount = reader.ReadByte();
+            if (descriptorCount > GeneratedAssetSyncService.MaxAssetFiles) return;
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            long totalAssetBytes = 0;
+            for (int i = 0; i < descriptorCount; i++)
+            {
+                string file = GeneratedAssetSyncService.FileNameFromPath(ReadDefinitionString(reader, 160));
+                int length = reader.ReadInt32();
+                string assetHash = ReadDefinitionString(reader, 64).Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(file) || !files.Add(file) || length <= 0
+                    || length > GeneratedAssetSyncService.MaxAssetBytes || assetHash.Length != 64 || !assetHash.All(Uri.IsHexDigit)) return;
+                totalAssetBytes += length;
+                if (totalAssetBytes > GeneratedAssetSyncService.MaxAssetBundleBytes) return;
                 descriptors.Add(new GeneratedAssetWireDescriptor { FileName = file, Length = length, Sha256 = assetHash });
+            }
+            ushort chunkLength = reader.ReadUInt16();
+            if (chunkLength <= 0 || chunkLength > GeneratedAssetSyncService.ChunkPayloadBytes || chunkLength > compressedLength) return;
+            chunk = reader.ReadBytes(chunkLength);
+            if (chunk.Length != chunkLength) return;
         }
-        ushort chunkLength = reader.ReadUInt16();
-        byte[] chunk = reader.ReadBytes(chunkLength);
-
-        if (version != DefinitionTransportVersion || Main.netMode == NetmodeID.Server)
-            return;
-        if (string.IsNullOrWhiteSpace(itemId) || itemId.Length > 96 || hash.Length != 64 || !hash.All(Uri.IsHexDigit))
-            return;
-        if (uncompressedLength <= 0 || uncompressedLength > MaxDefinitionJsonBytes || compressedLength <= 0 || compressedLength > MaxDefinitionJsonBytes)
-            return;
-        if (chunkCount <= 0 || chunkCount > 64 || chunkIndex >= chunkCount || chunkLength <= 0 || chunkLength > GeneratedAssetSyncService.ChunkPayloadBytes || chunk.Length != chunkLength)
-            return;
+        catch (InvalidDataException) { return; }
+        catch (IOException) { return; }
+        catch (FormatException) { return; }
+        catch (DecoderFallbackException) { return; }
 
         string key = itemId + "|" + hash;
         byte[]? complete = null;
@@ -697,7 +725,13 @@ public sealed class GeneratedItemRegistryService : IDisposable
         try
         {
             if (!Directory.Exists(StoreRoot)) return;
-            foreach (string file in Directory.EnumerateFiles(StoreRoot, "*.json"))
+            // Current scoped records take precedence; historical files remain read-only
+            // and still pass the exact schema/world ownership gate below.
+            string scopedRoot = WorldStoreRoot(CurrentWorldIdString());
+            var files = Directory.Exists(scopedRoot)
+                ? Directory.EnumerateFiles(scopedRoot, "*.json").Concat(Directory.EnumerateFiles(StoreRoot, "*.json"))
+                : Directory.EnumerateFiles(StoreRoot, "*.json");
+            foreach (string file in files)
             {
                 try
                 {
@@ -709,7 +743,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
                     if (!CacheJsonTargetsCurrentWorld(json))
                         continue;
                     var data = GeneratedItemData.FromJson(json);
-                    if (data is not null && !string.IsNullOrWhiteSpace(data.Id) && IsCurrentWorldData(data))
+                    if (data is not null && !string.IsNullOrWhiteSpace(data.Id) && IsCurrentWorldData(data) && !_byId.ContainsKey(data.Id))
                         _byId[data.Id] = data;
                 }
                 catch { }
@@ -748,11 +782,12 @@ public sealed class GeneratedItemRegistryService : IDisposable
         string tempPath = "";
         try
         {
-            Directory.CreateDirectory(StoreRoot);
-            string safe = SafeFileName(data.Id);
-            if (string.IsNullOrWhiteSpace(safe)) return;
-            string path = Path.Combine(StoreRoot, safe + ".json");
-            tempPath = Path.Combine(StoreRoot, $".{safe}.{Guid.NewGuid():N}.tmp");
+            if (!IsCurrentWorldData(data) || string.IsNullOrWhiteSpace(data.Id)) return;
+            string scopedRoot = WorldStoreRoot(data.RecipeMeta.WorldId.Trim());
+            Directory.CreateDirectory(scopedRoot);
+            string safe = StorageIdentity(data.Id);
+            string path = Path.Combine(scopedRoot, safe + ".json");
+            tempPath = Path.Combine(scopedRoot, $".{safe}.{Guid.NewGuid():N}.tmp");
             // Local disk cache is not a network packet: keep the full item/debug/prompt
             // contract so tooltips and /infinidumppicture remain useful after restart.
             using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -775,14 +810,9 @@ public sealed class GeneratedItemRegistryService : IDisposable
         }
     }
 
-    private static string SafeFileName(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return "";
-        raw = raw.Trim();
-        if (raw.Length > 80) raw = raw[..80];
-        foreach (char c in raw)
-            if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-'))
-                return "";
-        return raw;
-    }
+    private string WorldStoreRoot(string worldId) => Path.Combine(StoreRoot, StorageIdentity(worldId));
+
+    // Exact, bounded path components: no unsafe paths or lossy ID truncation.
+    private static string StorageIdentity(string identity)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
 }

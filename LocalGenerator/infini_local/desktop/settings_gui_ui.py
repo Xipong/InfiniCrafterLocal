@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import webbrowser
+from typing import Callable
 
 from infini_local.desktop.tk_compat import tk, ttk
 from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX
@@ -53,6 +54,9 @@ _BASIC_FIELDS = frozenset({
 
 class SettingsGuiUiMixin:
     secret_entries: list[tk.Widget]
+    activity_var: tk.StringVar
+
+    _delayed_health_check: Callable[[], None]
 
     @staticmethod
     def _set_packed_visible(widget, visible: bool):
@@ -549,6 +553,26 @@ class SettingsGuiUiMixin:
         self._build_multidev(self.multidev_tab.inner)
         self._build_image(self.image_tab.inner)
         self._build_visual(self.visual_tab.inner)
+        activity_box = ttk.LabelFrame(self.trace_tab, text="Backend request activity (last health snapshot)")
+        activity_box.pack(fill="x", padx=8, pady=6)
+        self._modern_button(activity_box, "Refresh activity", self._delayed_health_check, variant="ghost").pack(anchor="e")
+        activity_scroll = ttk.Scrollbar(activity_box, orient="vertical")
+        activity_scroll.pack(side="right", fill="y")
+        activity_horizontal = ttk.Scrollbar(activity_box, orient="horizontal")
+        activity_horizontal.pack(side="bottom", fill="x")
+        activity_text = tk.Text(activity_box, height=6, wrap="none", state="disabled", bg=CARD_BG, fg=TEXT_FG,
+                                xscrollcommand=activity_horizontal.set,
+                                yscrollcommand=activity_scroll.set, font=("Consolas", 9))
+        activity_text.pack(fill="x", expand=True)
+        activity_scroll.configure(command=activity_text.yview)
+        activity_horizontal.configure(command=activity_text.xview)
+        def render_activity(*_args):
+            activity_text.configure(state="normal")
+            activity_text.delete("1.0", "end")
+            activity_text.insert("end", self.activity_var.get())
+            activity_text.configure(state="disabled")
+        self.activity_var.trace_add("write", render_activity)
+        render_activity()
         self._build_trace(self.trace_tab)
 
     def check_row(self, parent, label, key, hint=None):

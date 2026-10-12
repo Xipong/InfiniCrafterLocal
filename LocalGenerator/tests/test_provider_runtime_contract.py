@@ -75,7 +75,9 @@ def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, 
         options["combine_cache_lookup"] = lambda _: (_ for _ in ()).throw(OSError("cache unavailable"))
     else:
         options["combine"] = lambda _: (_ for _ in ()).throw(craft_error)
-        options["last_failure_summary"] = (lambda: (_ for _ in ()).throw(ValueError("summary failed"))) if scenario == "summary-error" else lambda: dict(failure)
+        if scenario == "craft-error":
+            setattr(craft_error, "_infini_failure_snapshot", dict(failure))
+        options["last_failure_summary"] = lambda: pytest.fail("unjoined global summary must never be read")
     if scenario.endswith("error") and scenario != "cache-error":
         with pytest.raises(RuntimeError, match="craft failed") as caught:
             combine_endpoint.handle_combine_request({}, **options)
@@ -95,8 +97,9 @@ def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, 
             assert endpoint.cleared == ["endpoint_cache_hit_delivered"]
             assert endpoint.delivered == [{"id": "cached-item"}]
         else:
-            assert endpoint.delivered == [{"ok": True}]
-            assert any(event[:3] == ("warn", "HTTP:/combine", "world recipe cache lookup failed; continuing with fresh generation") for event in endpoint.events)
+            assert endpoint.delivered == []
+            assert endpoint.statuses[0][0] == 500
+            assert endpoint.statuses[0][1]["error"] == "cache_lookup_failed"
     assert endpoint.semaphore.acquire(blocking=False) is True
     endpoint.semaphore.release()
 

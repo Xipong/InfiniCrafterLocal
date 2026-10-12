@@ -163,7 +163,7 @@ public partial class GeneratedItem : ModItem
             RetainNativePrefixForHydration(version >= 7 ? reader.ReadInt32() : Item.prefix);
             GeneratedItemData resolved = reference;
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
-            if (!string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
+            if (GeneratedItemRegistryService.IsCurrentWorldData(reference) && !string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
                 resolved = canonical;
             SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
             ApplyPresentationToken(token);
@@ -174,6 +174,7 @@ public partial class GeneratedItem : ModItem
 
     private void EnsureRuntimeHydration(Player? player = null)
     {
+        if (!GeneratedItemRegistryService.IsCurrentWorldData(Data)) return;
         string id = (Data?.Id ?? "").Trim();
         if (id.Length == 0 || id == "placeholder") return;
         int now = (int)Main.GameUpdateCount;
@@ -200,7 +201,7 @@ public partial class GeneratedItem : ModItem
 
     private GeneratedItemData PresentationData()
     {
-        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data)) return Data;
+        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data) || !GeneratedItemRegistryService.IsCurrentWorldData(Data)) return Data;
         var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
         return registry is not null && registry.TryGet(Data.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical)
             ? canonical : Data;

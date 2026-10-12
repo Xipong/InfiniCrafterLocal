@@ -223,6 +223,23 @@ public sealed partial class InfiniCraftPlayer
         }
     }
 
+    private void ReturnIdleStationInputs()
+    {
+        for (int index = 0; index < 6; index++)
+        {
+            if (IsCraftLanePending(index / 2) || !HasInputAt(index)) continue;
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+            {
+                if (!HasPendingStationEscrowOperation && EnsureRemoteStationAuthority())
+                    SendStationEscrowRequest(StationEscrowAction.ReturnOne, index, InputSlot(index));
+                break; // One exact durable operation at a time.
+            }
+            if (_stationEscrowUsesRemoteAuthority) return;
+            RefundOne(InputSlot(index));
+            InputSlot(index).TurnToAir();
+        }
+    }
+
     private void RefundIngredients()
     {
         if (_request is null || (_stationEscrowUsesRemoteAuthority && Main.netMode != NetmodeID.Server))
@@ -238,8 +255,13 @@ public sealed partial class InfiniCraftPlayer
         if (original is null || original.IsAir || original.stack <= 0)
             return;
 
-        Item refund = original.Clone();
-        refund.stack = 1;
+        Item owned = original.Clone();
+        if (!TryDeliverRefund(owned))
+            _deferredExitRefunds.Add(owned);
+    }
+
+    private bool TryDeliverRefund(Item refund)
+    {
 
         // Prefer exact inventory return. First merge into compatible stacks, then use
         // an empty slot. Dropping into the world is last-resort only; during world exit
@@ -261,7 +283,7 @@ public sealed partial class InfiniCraftPlayer
             refund.stack -= move;
             SyncRefundedInventorySlot(i);
             if (refund.stack <= 0)
-                return;
+                return true;
         }
 
         for (int i = 0; i < 58; i++)
@@ -270,19 +292,32 @@ public sealed partial class InfiniCraftPlayer
             {
                 Player.inventory[i] = refund;
                 SyncRefundedInventorySlot(i);
-                return;
+                return true;
             }
         }
 
+        // Never let the native allocator replace an occupied drop (or use its dummy).
+        if (Main.netMode == NetmodeID.MultiplayerClient || !HasReusableWorldItemSlot())
+            return false;
         int index = Item.NewItem(Player.GetSource_Misc("InfiniCraftRefund"), Player.Hitbox, refund.type, refund.stack);
-        if (index >= 0)
+        if (index >= 0 && index < Main.maxItems)
         {
             Main.item[index] = refund;
             Main.item[index].position = Player.Center;
             Main.item[index].active = true;
             if (Main.netMode != NetmodeID.SinglePlayer)
                 NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index);
+            return true;
         }
+        return false;
+    }
+
+    private static bool HasReusableWorldItemSlot()
+    {
+        for (int index = 0; index < Main.maxItems; index++)
+            if (Main.item[index] is { active: false } && Main.timeItemSlotCannotBeReusedFor[index] == 0)
+                return true;
+        return false;
     }
 
     private void SyncRefundedInventorySlot(int slotIndex)

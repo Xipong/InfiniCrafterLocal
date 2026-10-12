@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using Terraria;
 using Terraria.Localization;
 using Terraria.GameContent;
+using Terraria.GameInput;
 using Terraria.ModLoader;
 using Terraria.UI;
 
@@ -15,7 +16,7 @@ namespace InfiniCrafterLocal.Common.UI;
 
 /// <summary>
 /// Client-side inventory station for InfiniCraft. This is intentionally small and vanilla-like:
-/// two explicit input slots, a start button, and a 30-second stabilization bar. No hidden
+/// two explicit input slots per lane, a start button, and a craft-timer bar. No hidden
 /// "first two inventory items" behavior.
 /// </summary>
 [Autoload(Side = ModSide.Client)]
@@ -45,6 +46,33 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         );
     }
 
+    internal static Rectangle StationPanelBounds(int viewportWidth, int viewportHeight, int laneCount)
+    {
+        int width = Math.Min(430, Math.Max(280, viewportWidth));
+        int height = 44 + laneCount * 112 + 30;
+        int availableX = Math.Max(0, viewportWidth - width);
+        int availableY = Math.Max(0, viewportHeight - height);
+        int minimumX = Math.Min(24, availableX);
+        int minimumY = Math.Min(80, availableY);
+        int x = Math.Clamp(viewportWidth - width - 28, minimumX, Math.Max(minimumX, availableX - 24));
+        int y = Math.Clamp(150, minimumY, Math.Max(minimumY, availableY - 24));
+        return new Rectangle(x, y, width, height);
+    }
+
+    internal static (Rectangle SlotA, Rectangle SlotB, Rectangle CraftButton, Rectangle Details, Rectangle Timer)
+        StationLaneBounds(Rectangle panel, int lane)
+    {
+        int rowY = panel.Y + 44 + lane * 112;
+        return (new Rectangle(panel.X + 16, rowY + 24, SlotSize, SlotSize),
+            new Rectangle(panel.X + 78, rowY + 24, SlotSize, SlotSize),
+            new Rectangle(panel.X + 144, rowY + 24, 78, 26),
+            new Rectangle(panel.X + 14, rowY, panel.Width - 28, 112),
+            new Rectangle(panel.X + 144, rowY + 78, panel.Width - 160, 12));
+    }
+
+    internal static Rectangle StationCancelBounds(Rectangle panel, int lane)
+        => new Rectangle(panel.X + 144, panel.Y + 44 + lane * 112 + 54, 78, 22);
+
     private static void DrawInventoryStation(SpriteBatch spriteBatch)
     {
         if (!Main.playerInventory || Main.LocalPlayer is null || !Main.LocalPlayer.active)
@@ -56,28 +84,25 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             return;
 
         int laneCount = craftPlayer.MultiDevWindowCount;
-        const int width = 430;
         const int headerHeight = 44;
         const int laneHeight = 112;
-        const int footerHeight = 30;
-        int height = headerHeight + laneCount * laneHeight + footerHeight;
-        int x = Math.Clamp(Main.screenWidth - width - 28, 24, Math.Max(24, Main.screenWidth - width - 24));
-        int y = Math.Clamp(150, 80, Math.Max(80, Main.screenHeight - height - 24));
-        var panel = new Rectangle(x, y, width, height);
+        var panel = StationPanelBounds(Main.screenWidth, Main.screenHeight, laneCount);
         var clearButton = new Rectangle(panel.Right - 116, panel.Y + 8, 98, 28);
 
         var slotA = new Rectangle[laneCount];
         var slotB = new Rectangle[laneCount];
         var craftButtons = new Rectangle[laneCount];
+        var cancelButtons = new Rectangle[laneCount];
         for (int lane = 0; lane < laneCount; lane++)
         {
-            int rowY = panel.Y + headerHeight + lane * laneHeight;
-            slotA[lane] = new Rectangle(panel.X + 16, rowY + 24, SlotSize, SlotSize);
-            slotB[lane] = new Rectangle(panel.X + 78, rowY + 24, SlotSize, SlotSize);
-            craftButtons[lane] = new Rectangle(panel.X + 144, rowY + 31, 78, 36);
+            var layout = StationLaneBounds(panel, lane);
+            slotA[lane] = layout.SlotA;
+            slotB[lane] = layout.SlotB;
+            craftButtons[lane] = layout.CraftButton;
+            cancelButtons[lane] = StationCancelBounds(panel, lane);
         }
 
-        HandleMouse(craftPlayer, slotA, slotB, craftButtons, clearButton);
+        HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
             clearButton.X - panel.X - 24, 0.92f);
@@ -99,20 +124,35 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             DrawInputName(spriteBatch, slotB[lane], second, Color.LightPink);
 
             bool pending = craftPlayer.IsCraftLanePending(lane);
-            DrawButton(spriteBatch, craftButtons[lane], craftPlayer.CanStartStationCraftLane(lane), pending ? ForgeText("Busy") : ForgeText("Craft"));
+            DrawButton(spriteBatch, craftButtons[lane], craftPlayer.GetStationCraftReadiness(lane) == InfiniCraftPlayer.StationCraftReadiness.Ready, pending ? ForgeText("Busy") : ForgeText("Craft"));
+            DrawButton(spriteBatch, cancelButtons[lane], pending && !craftPlayer.IsCraftLaneCancellationPending(lane), ForgeText("Cancel"));
             string label = pending ? Truncate(craftPlayer.CraftLaneLabel(lane), 31) : ForgeText("Idle");
             DrawFittedText(spriteBatch, label, new Vector2(panel.X + 235, rowY + 29), Color.Silver, panel.Width - 249, 0.60f);
             DrawFittedText(spriteBatch, craftPlayer.CraftLaneStatus(lane), new Vector2(panel.X + 235, rowY + 50),
                 pending ? Color.Orange : Color.LightGray, panel.Width - 249, 0.59f);
 
-            var bar = new Rectangle(panel.X + 144, rowY + 78, panel.Width - 160, 12);
+            var layout = StationLaneBounds(panel, lane);
+            var bar = layout.Timer;
             DrawRect(spriteBatch, bar, new Color(18, 20, 28, 230));
             int fill = (int)Math.Round(bar.Width * MathHelper.Clamp(craftPlayer.CraftLaneProgress(lane), 0f, 1f));
             if (fill > 0)
                 DrawGradient(spriteBatch, new Rectangle(bar.X, bar.Y, fill, bar.Height), new Color(40, 190, 220, 235), laneColor * 0.9f);
+            var detailsBounds = layout.Details;
+            if (!PlayerInput.IgnoreMouseInterface && detailsBounds.Contains(Main.mouseX, Main.mouseY))
+            {
+                Main.hoverItemName = "";
+                Main.HoverItem = new Item();
+                string details = craftPlayer.CraftLaneDetails(lane);
+                if (!pending)
+                    details += "\n" + ForgeText("InputPair",
+                        first.IsAir ? ForgeText("Empty") : DisplayItemName(first),
+                        second.IsAir ? ForgeText("Empty") : DisplayItemName(second));
+                Main.instance.MouseText(ForgeText("Lane", lane + 1), details);
+            }
         }
 
-        string footer = ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
+        string footer = craftPlayer.HasPendingCraftRefunds ? ForgeText("RefundPending")
+            : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
         DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
         if (panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
@@ -123,6 +163,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         Rectangle[] slotA,
         Rectangle[] slotB,
         Rectangle[] craftButtons,
+        Rectangle[] cancelButtons,
         Rectangle clearButton)
     {
         var mouse = new Point(Main.mouseX, Main.mouseY);
@@ -159,10 +200,19 @@ public sealed class InfiniCraftStationUISystem : ModSystem
                 Main.mouseLeftRelease = false;
                 return;
             }
+            if (cancelButtons[lane].Contains(mouse))
+            {
+                if (!craftPlayer.IsCraftLaneCancellationPending(lane)) craftPlayer.TryCancelCraftLane(lane);
+                Main.mouseLeftRelease = false;
+                return;
+            }
             if (craftButtons[lane].Contains(mouse))
             {
+                InfiniCraftPlayer.StationCraftReadiness readiness = craftPlayer.GetStationCraftReadiness(lane);
+                string disabledReason = craftPlayer.StationCraftReadinessText(lane);
                 if (!craftPlayer.TryStartCraftFromStation(lane))
-                    CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed, ForgeText(craftPlayer.IsCraftLanePending(lane) ? "LaneBusy" : "NeedInputs"));
+                    CombatText.NewText(Main.LocalPlayer.Hitbox, Color.OrangeRed,
+                        readiness == InfiniCraftPlayer.StationCraftReadiness.Ready ? ForgeText("StartFailed") : disabledReason);
                 Main.mouseLeftRelease = false;
                 return;
             }

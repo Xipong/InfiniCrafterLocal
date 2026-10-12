@@ -102,7 +102,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public bool HasInputB => InputB is not null && !InputB.IsAir;
     public bool HasAnyInput => HasInputA || HasInputB || HasInputAt(2) || HasInputAt(3) || HasInputAt(4) || HasInputAt(5);
     public bool HasPendingStationEscrowOperation => !string.IsNullOrWhiteSpace(_pendingStationEscrowOperationId);
-    public bool HasStationState => HasAnyCraftLanePending || HasPendingStationEscrowOperation || HasAnyInput;
+    public bool HasStationState => HasAnyCraftLanePending || HasPendingStationEscrowOperation || HasAnyInput || HasPendingCraftRefunds;
     public bool CanStartStationCraft => !HasPendingCraft && !HasPendingStationEscrowOperation && HasInputA && HasInputB;
     public int TicksLeft => Math.Max(0, _ticksLeft);
     public int ElapsedTicks => Math.Clamp(_elapsedTicks, 0, CraftDurationTicks);

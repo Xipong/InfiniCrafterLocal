@@ -38,6 +38,8 @@ internal sealed class GeneratedAssetWireDescriptor
     public int Length { get; init; }
     public string Sha256 { get; init; } = "";
     internal string SourcePath { get; set; } = "";
+    internal string SourceSelector { get; init; } = "";
+    internal (long Length, long WriteTicks)? SourceStat { get; init; }
     // Technical proof lives on its existing descriptor, not a second file-key cache.
     // It is never serialized as wire data.
     // Published only after full PNG/length/SHA validation at an asset lifecycle boundary.
@@ -176,6 +178,16 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
     }
 
+    internal void ResetWorldDescriptors()
+    {
+        lock (_lock)
+        {
+            _remoteDescriptorsByItem.Clear();
+            _serverDescriptorsByItem.Clear();
+            _certifiedDescriptorsByFile.Clear();
+        }
+    }
+
     public string? ResolveLocalPath(string? originalPath)
     {
         string file = FileNameFromPath(originalPath);
@@ -232,10 +244,11 @@ public sealed class GeneratedAssetSyncService : IDisposable
             if (map.TryGetValue(file, out var descriptor)) descriptor.CertifiedLocal = null;
     }
 
-    private void CertifyLocalAsset(string file, string local, int length, string sha256)
+    private void CertifyLocalAsset(string file, string local, int length, string sha256, (long Length, long WriteTicks)? assessedStat = null)
     {
         var info = new FileInfo(local);
-        if (!info.Exists || info.Length != length) return;
+        if (!info.Exists || info.Length != length
+            || (assessedStat is { } expected && expected != (info.Length, info.LastWriteTimeUtc.Ticks))) return;
         foreach (var map in _remoteDescriptorsByItem.Values)
             if (map.TryGetValue(file, out var descriptor) && descriptor.Length == length
                 && string.Equals(descriptor.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
@@ -263,12 +276,21 @@ public sealed class GeneratedAssetSyncService : IDisposable
             bool valid;
             lock (_lock)
             {
+                if (_disposed) return;
                 GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(itemId, file);
-                valid = IsValidCachedAsset(local, descriptor);
+                // Reuse only the descriptor's existing full-validation proof, and only
+                // while its exact file stat remains unchanged. Explicit retries bypass it.
+                var before = LocalAssetStat(local);
+                valid = !forceRetry && descriptor?.CertifiedLocal is { } proof
+                    && string.Equals(proof.Path, local, StringComparison.OrdinalIgnoreCase)
+                    && before == (proof.Length, proof.WriteTicks);
+                bool reusedProof = valid;
+                if (!valid)
+                    valid = IsValidCachedAsset(local, descriptor) && before == LocalAssetStat(local);
                 if (descriptor is not null)
                 {
-                    if (valid) CertifyLocalAsset(file, local, descriptor.Length, descriptor.Sha256);
-                    else InvalidateCertifiedLocalAsset(file);
+                    if (valid && !reusedProof) CertifyLocalAsset(file, local, descriptor.Length, descriptor.Sha256, before);
+                    else if (!valid) InvalidateCertifiedLocalAsset(file);
                 }
             }
             if (valid && !forceRetry)
@@ -377,18 +399,27 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     internal GeneratedAssetWireDescriptor[] BuildServerAssetDescriptors(GeneratedItemData data)
     {
+        if (!GeneratedItemRegistryService.IsCurrentWorldData(data)) return Array.Empty<GeneratedAssetWireDescriptor>();
         string itemId = (data.Id ?? "").Trim();
+        string cacheKey = data.RecipeMeta.WorldId.Trim() + "|" + itemId;
+        var paths = RuntimeAssetPaths(data).Where(p => !string.IsNullOrWhiteSpace(FileNameFromPath(p))).ToArray();
         if (!string.IsNullOrWhiteSpace(itemId))
         {
             lock (_lock)
             {
-                if (_serverDescriptorsByItem.TryGetValue(itemId, out Dictionary<string, GeneratedAssetWireDescriptor>? cached))
+                if (_disposed) return Array.Empty<GeneratedAssetWireDescriptor>();
+                if (_serverDescriptorsByItem.TryGetValue(cacheKey, out var cached)
+                    && cached.Count == paths.Select(FileNameFromPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() && paths.All(raw =>
+                        cached.TryGetValue(FileNameFromPath(raw), out var descriptor)
+                        && string.Equals(descriptor.SourceSelector, raw, StringComparison.Ordinal)
+                        && string.Equals(descriptor.SourcePath, ResolveServerSourcePath(raw, descriptor.FileName), StringComparison.Ordinal)
+                        && descriptor.SourceStat is not null && descriptor.SourceStat == LocalAssetStat(descriptor.SourcePath)))
                     return cached.Values.ToArray();
             }
         }
 
         var descriptors = new List<GeneratedAssetWireDescriptor>();
-        foreach (string rawPath in RuntimeAssetPaths(data))
+        foreach (string rawPath in paths)
         {
             string file = FileNameFromPath(rawPath);
             if (string.IsNullOrWhiteSpace(file)) continue;
@@ -398,13 +429,18 @@ public sealed class GeneratedAssetSyncService : IDisposable
             {
                 var info = new FileInfo(source);
                 if (!info.Exists || info.Length <= 0 || info.Length > MaxAssetBytes) continue;
+                var before = LocalAssetStat(source);
+                if (before is null || before.Value.Length <= 0 || before.Value.Length > MaxAssetBytes) continue;
                 string hash = ComputeFileSha256Hex(source);
+                if (before is null || before != LocalAssetStat(source)) continue;
                 descriptors.Add(new GeneratedAssetWireDescriptor
                 {
                     FileName = file,
-                    Length = checked((int)info.Length),
+                    Length = checked((int)before.Value.Length),
                     Sha256 = hash,
                     SourcePath = source,
+                    SourceSelector = rawPath,
+                    SourceStat = before,
                 });
             }
             catch { }
@@ -421,10 +457,11 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             lock (_lock)
             {
+                if (_disposed) return Array.Empty<GeneratedAssetWireDescriptor>();
                 if (result.Length > 0)
-                    _serverDescriptorsByItem[itemId] = result.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
+                    _serverDescriptorsByItem[cacheKey] = result.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
                 else
-                    _serverDescriptorsByItem.Remove(itemId);
+                    _serverDescriptorsByItem.Remove(cacheKey);
             }
         }
         return result;
@@ -436,7 +473,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         if (files.Length == 0)
             return true;
         GeneratedAssetWireDescriptor[] descriptors = BuildServerAssetDescriptors(data);
-        return descriptors.Length == files.Length
+        return new HashSet<string>(files, StringComparer.OrdinalIgnoreCase).SetEquals(descriptors.Select(x => x.FileName))
             && descriptors.Sum(x => (long)x.Length) <= MaxAssetBundleBytes;
     }
 
@@ -1143,6 +1180,17 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 if (map.TryGetValue(file, out GeneratedAssetWireDescriptor? descriptor)) return descriptor;
         }
         return null;
+    }
+
+    private static (long Length, long WriteTicks)? LocalAssetStat(string local)
+    {
+        try
+        {
+            var info = new FileInfo(local);
+            return info.Exists ? (info.Length, info.LastWriteTimeUtc.Ticks) : null;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     private static bool IsValidCachedAsset(string local, GeneratedAssetWireDescriptor? descriptor)
