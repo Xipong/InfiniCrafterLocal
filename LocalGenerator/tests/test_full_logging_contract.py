@@ -37,13 +37,23 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         result = visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
         assert data == before
     else:
-        keys = author.VFX_REPAIR_PROMPT_STATIC_KEYS if stage.endswith("repair") else author.VFX_PROMPT_STATIC_KEYS
-        user = {**{key: {} for key in keys}, "item": {"id": "g_exact"}, "source": "exact\r\n " + "ж" * 140000 + " INPUT_TAIL"}
+        from infini_local.core import vfx_manifest as vfx
+        from prompt_packet_helpers import request_dossier
+        data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+        data.update(id="g_exact", recipeKey="r_exact")
+        packet = vfx._prompt_packet(data, {}, {})
+        arguments = vfx._request(lambda *args, **kwargs: (args, kwargs), packet,
+                                 **({"repair_errors": [{"path": "$.slots", "message": "required"}],
+                                     "previous": {}, "repair_scope": {}} if stage.endswith("repair") else {}))
+        user = arguments[0][1]
+        user["source"] = "exact\r\n " + "ж" * 140000 + " INPUT_TAIL"
         before = copy.deepcopy(user)
         messages = [{"role": "system", "name": "vfx_repair_contract", "content": "exact contract"},
                     {"role": "user", "name": "vfx_repair_context", "content": json.dumps(user, ensure_ascii=False)}] if stage.endswith("repair") else None
         result = author.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
+        assert request_dossier(captured[0]) == before
+        assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1, "staticDataMessageIndex": 2}
     assert result == json.loads(raw)
     if enabled:
         artifacts = list((tmp_path / "stage_requests").glob("*.json"))
