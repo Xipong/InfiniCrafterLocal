@@ -20,6 +20,7 @@ Python base: [`LocalGenerator/infini_local/`](LocalGenerator/infini_local/FOLDER
 | Model prose/packet | `pipelines/author_item_contract.py`, `llm_authoring_prompt.py` |
 | Author/Repair/stage orchestration | `pipelines/llm_authoring_pipeline.py`, `combine_pipeline.py` |
 | Numeric parent corridor | `pipelines/combine_balance.py` |
+| `/combine` admission/live health activity и request-local failure response | `services/combine_endpoint.py`, `web/http_response_helpers.py`; stage enter/leave — `pipelines/combine_pipeline.py`, transport waits/network starts — `llm_transport.py`, bounded supplement projection — `storage/failure_state.py`; [диагностика](docs/LLM_PROVIDER_ADMISSION_RU.md#live-диагностика-craft-и-отказов) |
 | Profile lease/provider/Responses | `pipelines/llm_transport.py`, `core/llm_config.py`; complete instruction/data framing — `core/llm_prompt_cache.py`, explicit stage builders (не inference по cacheability) |
 | Visual + PNG delivery | `pipelines/visual_generation_pipeline.py`, `visual_delivery_gate.py`; [image owner](docs/IMAGE_ASSET_LIFECYCLE_RU.md) |
 | VFX slots/PNG dependencies | `core/vfx_manifest.py`, `vfx_material_contract.py`; [точные sound samples/controls](docs/VFX_SOUND_PALETTE_RU.md) |

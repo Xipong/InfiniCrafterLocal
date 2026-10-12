@@ -36,9 +36,26 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
     404 is reserved for cache-only misses. Provider request-schema rejections
     are non-retryable 424, not authored-output failures. Authored/LLM output
     failures are 422, visual delivery dependency failures are 424, and generic
-    planner availability remains 424. `retryable` means the user may manually craft
-    again; it does not mean C# should cache-poll the same failed attempt.
+    planner availability remains 424; logical/admission deadlines are 504.
+    `retryable` means the user may manually craft again; it does not mean C# should cache-poll the same failed attempt.
     """
+    from infini_local.storage.failure_state import _transport_debug, summarize_failure
+    transport = summarize_failure(failure or {}).get("transportDebug") or _transport_debug(error)
+    category = transport.get("failureCategory") if isinstance(transport, dict) else None
+    actions = {
+        "auth_failed": (424, "llm_auth_failed", False, "LLM authentication or permission failed; check credentials and access before retrying"),
+        "model_unavailable": (424, "llm_model_unavailable", False, "Configured LLM model is unavailable; select an accessible model before retrying"),
+        "profile_unavailable": (424, "llm_profile_unavailable", False, "Selected LLM profile is disabled or unavailable; enable it or select another lane"),
+        "endpoint_unavailable": (424, "llm_endpoint_unavailable", False, "LLM endpoint was not found; check the configured provider URL and API mode"),
+        "quota_exhausted": (424, "llm_quota_exhausted", False, "LLM quota is exhausted; check billing or quota before retrying"),
+        "rate_limited": (424, "llm_rate_limited", True, "LLM provider rate limited generation; wait before retrying"),
+        "admission_timeout": (504, "llm_admission_timeout", True, "Local LLM admission wait exhausted the logical-call deadline; no request was sent for this attempt; wait before retrying"),
+        "logical_timeout": (504, "llm_timeout", True, "LLM logical-call deadline was exhausted; this does not establish a provider outage"),
+        "transport_unavailable": (424, "llm_transport_unavailable", True, "LLM transport was unavailable; check connectivity before retrying"),
+        "request_rejected": (424, "llm_request_rejected", False, "LLM provider rejected the outgoing request; check provider settings or update the generator before retrying"),
+    }
+    if category in actions:
+        return actions[category]
     stage = str((failure or {}).get("stage") or "").lower()
     failure_error = str((failure or {}).get("error") or "")
     message = f"{error} {failure_error}".lower()
@@ -65,15 +82,15 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
     if schema_stage or llm_shape_error:
         return 422, "llm_output_invalid", True, "LLM returned an invalid/unsupported item plan after repair attempts"
 
-    if "01_author_llm_plan" in stage or "planner unavailable" in message or "llm planner unavailable" in message:
+    if stage in {"01_author_llm_plan", "01_gameplay_author"} or "planner unavailable" in message or "llm planner unavailable" in message:
         return 424, "planner_unavailable", True, "LLM planner did not return a usable item plan"
 
     return 424, "combine_failed", True, "combine pipeline failed before a deliverable recipe was committed"
 
 
 def _combine_failure_player_message(status: int, code: str, message: str, failure: dict[str, Any], *, retryable: bool) -> str:
-    if code == "llm_request_rejected":
-        return "Generation failed: provider rejected the request schema before creating an item. Items were returned; update the generator before retrying."
+    if code in {"llm_auth_failed", "llm_model_unavailable", "llm_profile_unavailable", "llm_endpoint_unavailable", "llm_quota_exhausted", "llm_rate_limited", "llm_admission_timeout", "llm_timeout", "llm_transport_unavailable", "llm_request_rejected"}:
+        return "Generation failed: " + message.rstrip(".") + ". Items were returned."
     if code == "llm_output_invalid":
         return "Generation failed: LLM item plan was invalid after repair. Items were returned; try crafting again."
     if code == "visual_dependency_failed":

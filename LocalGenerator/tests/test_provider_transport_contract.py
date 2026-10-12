@@ -348,7 +348,8 @@ def test_real_http_physical_attempt_timeline_is_bounded_safe_and_survives_failur
     serialized = json.dumps([events, debug])
     assert secret not in serialized and "PRIVATE_AUTHOR_PACKET" not in serialized
     assert r"\u0073ynthetic-loopback-key" not in serialized
-    assert "Authorization" not in serialized and "messages" not in json.dumps(attempts)
+    assert "Authorization" not in serialized
+    assert all("messages" not in row and "body" not in row and "headers" not in row for row in attempts)
 
 
 def test_real_http_429_timeline_distinguishes_one_send_from_unsent_cooldown(loopback_transport, monkeypatch):

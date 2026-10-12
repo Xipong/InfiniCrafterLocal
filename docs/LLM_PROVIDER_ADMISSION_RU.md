@@ -75,6 +75,48 @@ FIFO position, cancellation cleanup, независимость keys и logical 
 Diagnostics добавляют `rateAdmissionPolicy` к physical attempt / transport wait.
 Selected safe headers появляются на physical attempts, включая failures.
 
+## Live диагностика craft и отказов
+
+`/health.generationActivity` сохраняет `active`, `waiting`, `accepting` и добавляет
+bounded `requests` (до 32 наблюдаемых admitted requests) и `requestsOmitted`.
+Owner — `services/combine_endpoint.py`: тот же admission/finally, не новый job/queue.
+Каждая detached строка содержит только `requestId` (random UUID hex, не recipe/world/hash),
+`profileId` (`llm_1..3` или null), `active`, `stage`, `startedMonotonicSeconds`,
+`elapsedSeconds`, `stageElapsedSeconds`, `waitReason`, `networkStarted`.
+Elapsed — monotonic, не wall-clock и не прогноз remaining time. `stage` меняется на
+реальном `combine_pipeline.step` enter и очищается на leave; между стадиями — null,
+до первой стадии — `00_prepare`. Процент завершения отсутствует: скорость/ETA неизвестны.
+
+`waitReason`: `none`, `generation_slot`, `profile_slot`, `rate_queue`,
+`provider_cooldown`, `provider_quota`, `token_window`, `pacing`, `retry_backoff`.
+Transport обновляет его непосредственно у admission wait/network-start owner.
+`networkStarted=false` означает unsent текущую HTTP попытку; true — entered physical
+network owner; null — текущая transport boundary не наблюдается (включая native Codex
+SSE). Это не cumulative send count и не доказательство ответа provider.
+Logging OFF не отключает live snapshot. В нём нет parents/world/prompt/body/URL/auth.
+При exit/refusal/error удаляется request row, releases acquired permits и resets context.
+Cache-only/cache-hit не получают generation admission и не запускают inference.
+
+Existing `lastFailure.transportDebug` переносит finite `failureCategory`, bounded
+`httpStatus`, allowlisted `providerErrorCode`/`providerErrorParam`, `networkStarted`.
+Unknown provider strings не копируются. Supplement проходит existing bounded explicit
+cause traversal и persisted summary projection; отдельного failure store нет.
+HTTP 404 без model-specific code не означает неизвестную модель. Model/auth/profile/
+endpoint/quota failures возвращают non-retryable 424 с конкретным действием; provider
+rate limit — retryable 424 с советом ждать. Logical-call deadline — 504 `llm_timeout`,
+unsent local admission exhaustion — 504 `llm_admission_timeout`; это не свидетельство
+provider outage. Outgoing request rejection остаётся non-retryable 424, authored JSON/
+validation rejection — retryable 422. HTTP request responses используют только
+exception-owned snapshot, никогда process-wide latest failure чужой concurrent lane.
+
+World recipe I/O denial возвращает 500 `cache_lookup_failed` для cache-only и fresh
+request; active bytes остаются на месте и повторное чтение может восстановиться.
+Missing file — обычный miss; quarantine допустим только после observed invalid JSON/
+metadata/domain checks под существующим canonical path lock. Debug readers сохраняют
+best-effort режим. Regression owner: `test_provider_activity_contract.py` — real
+`/combine`, source-built Author transport, loopback providers, stage/thread gates,
+semaphore/rate queues, persisted supplements, privacy, cleanup и sibling isolation.
+
 ## Наблюдённая причина задержек — не новый speed benchmark
 
 Existing artifact: `pr-review-worktrees/craft-stage-prefix-cache/artifacts/`

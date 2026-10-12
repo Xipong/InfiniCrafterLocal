@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
+import math
 import threading
+import time
+import uuid
 from typing import Any, Callable
 
 from infini_local.core import strict_json
@@ -32,15 +37,74 @@ _GENERATION_STATE_LOCK = threading.RLock()
 _GENERATION_ACTIVE = 0
 _GENERATION_WAITING = 0
 _GENERATION_ACCEPTING = True
+_GENERATION_REQUESTS: dict[str, _GenerationAdmission] = {}
+_GENERATION_MAX_ROWS = 32
+_CURRENT_GENERATION: ContextVar["_GenerationAdmission | None"] = ContextVar("infini_generation_admission", default=None)
+_GENERATION_WAIT_REASONS = frozenset({"none", "generation_slot", "profile_slot", "rate_queue", "provider_cooldown", "provider_quota", "token_window", "pacing", "retry_backoff"})
+_GENERATION_STAGES = frozenset({
+    "admission", "00_prepare", "00_llm_lease", "01_gameplay_author", "01_dev_only_low_level_fixture",
+    "02_strict_runtime_program", "02_parent_power_context", "02_compile_runtime_program", "02_wire_boundary",
+    "02r_conditional_gameplay_repair", "02r_strict_runtime_program", "02r_parent_power_context", "02r_compile_runtime_program", "02r_wire_boundary",
+    "03_result_knowledge_card", "04_visual_technical_init", "05_visual_director", "06_vfx_director",
+    "07_visual_asset_runtime_gates", "08_visual_asset_generation", "09_visual_delivery_gate",
+    "10_generated_parent_summary", "11_final_normalize", "12_final_runtime_wire_gate", "13_stage_accounting",
+})
 
 
-def generation_activity_snapshot() -> dict[str, int | bool]:
+def _elapsed_seconds(now: float, started: float) -> float:
+    value = now - started
+    return round(max(0.0, min(value, 10**9)), 3) if math.isfinite(value) else 0.0
+
+
+def generation_activity_snapshot() -> dict[str, Any]:
+    """Detached bounded live projection; no payload, prompt, world or credential identity."""
     with _GENERATION_STATE_LOCK:
+        now = time.monotonic()
+        rows = [{"requestId": row.request_id, "profileId": row.profile_id,
+                 "stage": row.stage, "startedMonotonicSeconds": row.started,
+                 "elapsedSeconds": _elapsed_seconds(now, row.started),
+                 "stageElapsedSeconds": _elapsed_seconds(now, row.stage_started),
+                 "waitReason": row.wait_reason, "networkStarted": row.network_started,
+                 "active": row.active} for row in _GENERATION_REQUESTS.values()]
         return {"active": _GENERATION_ACTIVE, "waiting": _GENERATION_WAITING,
-                "accepting": _GENERATION_ACCEPTING}
+                "accepting": _GENERATION_ACCEPTING, "requests": rows,
+                "requestsOmitted": max(0, _GENERATION_ACTIVE + _GENERATION_WAITING - len(rows))}
 
 
-def request_shutdown(*, force: bool = False) -> tuple[bool, dict[str, int | bool]]:
+def update_generation_activity(*, profile_id: str | None = None, wait_reason: str | None = None,
+                               network_started: bool | None = None) -> None:
+    row = _CURRENT_GENERATION.get()
+    if row is None:
+        return
+    with _GENERATION_STATE_LOCK:
+        if profile_id is not None:
+            row.profile_id = profile_id if profile_id in {"llm_1", "llm_2", "llm_3"} else None
+        if wait_reason in _GENERATION_WAIT_REASONS:
+            row.wait_reason = wait_reason
+        row.network_started = network_started if type(network_started) is bool else None
+
+
+@contextmanager
+def generation_stage(stage: str | None):
+    row = _CURRENT_GENERATION.get()
+    if row is None:
+        yield
+        return
+    with _GENERATION_STATE_LOCK:
+        row.stage = stage if stage in _GENERATION_STAGES else None
+        row.stage_started = time.monotonic()
+        row.wait_reason, row.network_started = "none", None
+    try:
+        yield
+    finally:
+        with _GENERATION_STATE_LOCK:
+            # Flat pipeline stages are observations, not progress estimates.
+            # Between entered stages the current stage/network boundary is unknown.
+            row.stage, row.stage_started = None, time.monotonic()
+            row.wait_reason, row.network_started = "none", None
+
+
+def request_shutdown(*, force: bool = False) -> tuple[bool, dict[str, Any]]:
     """Atomically close new admission, or refuse while admitted work exists."""
     global _GENERATION_ACCEPTING
     with _GENERATION_STATE_LOCK:
@@ -53,9 +117,16 @@ def request_shutdown(*, force: bool = False) -> tuple[bool, dict[str, int | bool
 class _GenerationAdmission:
     """Request-scoped counter ownership, including waits and exceptional exits."""
 
-    def __init__(self) -> None:
+    def __init__(self, profile_id: str = "") -> None:
         self.admitted = False
         self.active = False
+        self.request_id = uuid.uuid4().hex
+        self.profile_id = profile_id if profile_id in {"llm_1", "llm_2", "llm_3"} else None
+        self.started = self.stage_started = time.monotonic()
+        self.stage: str | None = "admission"
+        self.wait_reason = "none"
+        self.network_started: bool | None = None
+        self.token = None
 
     def __enter__(self) -> _GenerationAdmission:
         global _GENERATION_WAITING
@@ -63,6 +134,9 @@ class _GenerationAdmission:
             self.admitted = _GENERATION_ACCEPTING
             if self.admitted:
                 _GENERATION_WAITING += 1
+                if len(_GENERATION_REQUESTS) < _GENERATION_MAX_ROWS:
+                    _GENERATION_REQUESTS[self.request_id] = self
+                self.token = _CURRENT_GENERATION.set(self)
         return self
 
     def activate(self) -> bool:
@@ -73,6 +147,8 @@ class _GenerationAdmission:
             _GENERATION_WAITING -= 1
             _GENERATION_ACTIVE += 1
             self.active = True
+            self.stage, self.stage_started = "00_prepare", time.monotonic()
+            self.wait_reason = "none"
             return True
 
     def __exit__(self, *_exc: Any) -> None:
@@ -83,6 +159,9 @@ class _GenerationAdmission:
                     _GENERATION_ACTIVE -= 1
                 else:
                     _GENERATION_WAITING -= 1
+                _GENERATION_REQUESTS.pop(self.request_id, None)
+        if self.token is not None:
+            _CURRENT_GENERATION.reset(self.token)
 
 
 def _shutdown_refusal(json_status: JsonStatusSender, app_version: str) -> None:
@@ -154,7 +233,9 @@ def handle_combine_request(
     except Exception as cache_error:
         if cache_lookup_passthrough_errors and isinstance(cache_error, cache_lookup_passthrough_errors):
             raise
-        if cache_only:
+        # An unavailable authoritative cache is not a miss. Never start a new
+        # generation that could replace bytes we could not assess.
+        if cache_only or isinstance(cache_error, OSError):
             json_status(500, {
                 "ok": False,
                 "status": "cache_lookup_failed",
@@ -205,7 +286,7 @@ def handle_combine_request(
             "recipeKey": cache_key,
         })
         return
-    with _GenerationAdmission() as admission:
+    with _GenerationAdmission(str(payload.get("llmProfileId") or "") if payload.get("multiDevCraft") else "") as admission, ExitStack() as permits:
         if not admission.admitted:
             _shutdown_refusal(json_status, app_version)
             return
@@ -232,6 +313,7 @@ def handle_combine_request(
                 return
             profile_acquired = profile_semaphore.acquire(blocking=False)
             if not profile_acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
+                update_generation_activity(wait_reason="profile_slot")
                 profile_acquired = profile_semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
             if not profile_acquired:
                 json_status(409, {
@@ -250,6 +332,8 @@ def handle_combine_request(
                     "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
                 })
                 return
+            permits.callback(profile_semaphore.release)
+        update_generation_activity(wait_reason="generation_slot")
         acquired = semaphore.acquire(blocking=False)
         if not acquired and COMBINE_BUSY_WAIT_SECONDS > 0:
             trace_event("step", "HTTP:/combine", "generator busy; waiting for active craft/cache", {
@@ -260,8 +344,6 @@ def handle_combine_request(
             })
             acquired = semaphore.acquire(timeout=COMBINE_BUSY_WAIT_SECONDS)
         if not acquired:
-            if profile_acquired and profile_semaphore is not None:
-                profile_semaphore.release()
             json_status(409, {
                 "ok": False,
                 "status": "generator_busy",
@@ -277,33 +359,23 @@ def handle_combine_request(
                 "busyWaitSeconds": COMBINE_BUSY_WAIT_SECONDS,
             })
             return
+        permits.callback(semaphore.release)
         try:
             if not admission.activate():
                 _shutdown_refusal(json_status, app_version)
                 return
             data = combine(payload)
         except Exception as error:
-            snapshot_error = ""
             attached = getattr(error, "_infini_failure_snapshot", None)
             snapshot: dict[str, Any] = deepcopy(attached) if isinstance(attached, dict) else {}
-            if not snapshot and last_failure_summary is not None:
-                try:
-                    candidate = last_failure_summary()
-                    if isinstance(candidate, dict):
-                        snapshot = deepcopy(candidate)
-                except Exception as diagnostic_error:
-                    snapshot_error = repr(diagnostic_error)
+            # The process-wide latest failure may belong to a concurrent sibling.
+            # Only the canonical recorder's exception-owned snapshot identifies us.
             try:
                 setattr(error, "_infini_failure_snapshot", snapshot)
-                if snapshot_error:
-                    setattr(error, "_infini_failure_snapshot_error", snapshot_error)
             except Exception:
                 pass
             raise
-        finally:
-            semaphore.release()
-            if profile_acquired and profile_semaphore is not None:
-                profile_semaphore.release()
+        permits.close()
         if _response_json_error(
             data,
             source="fresh",
