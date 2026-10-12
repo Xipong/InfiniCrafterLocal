@@ -10,11 +10,12 @@ import os
 import threading
 import time
 from contextlib import contextmanager
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlsplit
 
 import pytest
 
+from provider_test_support import OwnedProcess, loopback_server, write_json_response
 from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -45,7 +46,7 @@ class _BlockTkinter(importlib.abc.MetaPathFinder):
         return None
 
 
-def _check_settings_gui_imports_without_tkinter_installed() -> None:
+def test_settings_gui_imports_without_tkinter_installed() -> None:
     """Headless Python installs must import GUI helpers without tkinter/_tkinter."""
     module_path = GUI_PATH
     spec = importlib.util.spec_from_file_location("_infini_settings_gui_headless_probe", module_path)
@@ -75,24 +76,47 @@ def _check_settings_gui_imports_without_tkinter_installed() -> None:
     assert isinstance(module.ttk.Entry(), module.ttk.Widget)
 
 
-def _check_lora_folder_is_hidden_from_gui_rows_but_kept_for_hidden_env() -> None:
-    assert 'self.row(parent, "LoRA folder"' not in GUI_SOURCE
-    assert "LoRA folder скрыт" in GUI_SOURCE
-    assert "INFINI_SDCPP_LORA_DIR" in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS["INFINI_SDCPP_LORA_DIR"] == ""
+@pytest.mark.parametrize("name,present,absent", [
+    pytest.param("hidden-lora", ["LoRA folder скрыт"], ['self.row(parent, "LoRA folder"'], id="hidden-lora"),
+    pytest.param("trace-identity-timeout", ["_fetch_health_snapshot(timeout=8, base_url=base_url)", "timeout=18", "другая копия"], [], id="trace-identity-timeout"),
+    pytest.param("radmin-controls", ["Auto Radmin URL", "Copy friend guide", "Open MP connect page", "_detect_ipv4_candidates", "_friend_guide_text", "/mp_connect", "0.0.0.0"], [], id="radmin-controls"),
+    pytest.param("ready-item-guide", ["Тебе прилетают уже готовые предметы", "финальные PNG/JSON ассеты"], [], id="ready-item-guide"),
+
+    pytest.param('gui_health_identity_helpers_detect_other_copy_from_root', ['serverRoot', 'assetSync', 'Port still busy', 'generationActivity', '_health_looks_like_infini_helper', '/shutdown'], [], id='gui_health_identity_helpers_detect_other_copy_from_root'),
+    pytest.param('gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy', ['структурированный HTTP payload'], ['активная LoRA — через <lora:name:weight> в prompt'], id='gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy'),
+    pytest.param('start_server_has_guarded_http_restart_contract', ['server.py запущен', 'GUI не будет убивать чужой процесс', 'force_restart_server', '_shutdown_identity_is_safe', '_activity_restart_refusal'], ['self.proc.terminate(', 'self.proc.kill('], id='start_server_has_guarded_http_restart_contract'),
+])
+def test_gui_declared_copy_and_controls(name, present, absent):
+    for text in present:
+        assert text in GUI_SOURCE, name
+    for text in absent:
+        assert text not in GUI_SOURCE, name
 
 
-def _check_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
+@pytest.mark.parametrize("key,default", [
+    pytest.param("INFINI_SDCPP_LORA_DIR", "", id="hidden-lora-default"),
+    pytest.param("INFINI_TERRARIA_PORT", "7777", id="terraria-port"),
+    pytest.param("INFINI_COMBINE_BUSY_WAIT_SECONDS", "210", id="combine-wait"),
+    pytest.param("INFINI_VISUAL_REQUIRE_ITEM_SPRITE", "1", id="mandatory-sprite"),
+    pytest.param("INFINI_LLM_TEMPERATURE", "0.38", id="planner-temperature"),
+    pytest.param("INFINI_LLM_REAUTHOR_TEMPERATURE", "", id="repair-temperature"),
+    pytest.param("INFINI_VISUAL_DIRECTOR_TEMPERATURE", "0.42", id="visual-temperature"),
+    pytest.param("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", "0", id="debug-yield-disabled"),
+    pytest.param("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", "10", id="debug-yield-minimum"),
+])
+def test_gui_owned_field_defaults(key, default):
+    assert key in settings_schema.FIELD_ORDER
+    assert settings_schema.DEFAULTS[key] == default
+
+
+def test_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
     assert "Что делают пресеты и флаги sd.cpp" in GUI_SOURCE
-    labels = [name for name, _fragment, _help in settings_schema.SDCPP_EXTRA_FLAG_SPECS]
-    assert "LoRA runtime" in labels
-    assert "LoRA auto" in labels
-    assert "Cache DBCache" in labels
-    assert "Params disk" in labels
+    labels = {name for name, _fragment, _help in settings_schema.SDCPP_EXTRA_FLAG_SPECS}
+    assert {"LoRA runtime", "LoRA auto", "Cache DBCache", "Params disk"} <= labels
     assert len(labels) >= 12
 
 
-def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
+def test_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
     # Parsed from the module rather than regex-scraped: a call whose earlier
     # arguments contain a parenthesis (a label like "Label (advanced)", a nested
     # self._card(...), a bracketed hint) is invisible to a `[^)]*?` pattern, which
@@ -119,7 +143,7 @@ def _check_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
     assert all(profile in GUI_SOURCE for profile in settings_schema.SDCPP_EXTRA_PROFILES)
 
 
-def _check_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
+def test_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
     cur = settings_gui.SettingsGui._split_extra_for_gui("-v --rng cuda --flow-shift 3")
     frag = settings_gui.SettingsGui._split_extra_for_gui("--rng cpu")
     names = settings_gui.SettingsGui._extra_option_names(frag)
@@ -132,56 +156,40 @@ def _check_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
     assert settings_gui.SettingsGui._remove_extra_options is settings_sdcpp_args.remove_extra_options
 
 
-def _check_sdcpp_presets_use_measured_amd_placements_without_redundant_assignments() -> None:
-    safe = settings_schema.SDCPP_EXTRA_PROFILES["zimage_amd_safe"]
-    assert "--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0" in safe
-    assert "--params-backend te=cpu" in safe
-    assert "--diffusion-conv-direct" in safe
-    assert "--vae-conv-direct" in safe
-    assert "--eager-load" in safe
+@pytest.mark.parametrize("profile,params_backend,gpu_flags", [
+    pytest.param("zimage_amd_safe", True, True, id="safe-ram-text-parameters"),
+    pytest.param("zimage_amd_full_gpu", False, True, id="full-gpu"),
+    pytest.param("zimage_amd_low_vram", False, False, id="low-vram"),
+    pytest.param("zimage_cpu_compat", False, False, id="cpu-compatible"),
+])
+def test_sdcpp_measured_profile_placements(profile, params_backend, gpu_flags):
+    value = settings_schema.SDCPP_EXTRA_PROFILES[profile]
+    assert ("--params-backend" in value) is params_backend
+    if params_backend:
+        assert "--params-backend te=cpu" in value
+    if gpu_flags:
+        for flag in ("--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0",
+                     "--diffusion-conv-direct", "--vae-conv-direct", "--eager-load"):
+            assert flag in value
+
+
+def test_sdcpp_placement_help_explains_runtime_and_parameter_owners():
     assert "runtime diffusion/VAE/TE на Vulkan" in GUI_SOURCE
     assert "параметры Qwen/TE в RAM" in GUI_SOURCE
 
-    full_gpu = settings_schema.SDCPP_EXTRA_PROFILES["zimage_amd_full_gpu"]
-    assert "--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0" in full_gpu
-    assert "--params-backend" not in full_gpu
-    assert "--diffusion-conv-direct" in full_gpu
-    assert "--vae-conv-direct" in full_gpu
-    assert "--eager-load" in full_gpu
 
-    normal_profiles = [
-        "zimage_amd_low_vram",
-        "zimage_cpu_compat",
-    ]
-    for name in normal_profiles:
-        value = settings_schema.SDCPP_EXTRA_PROFILES[name]
-        assert "--params-backend" not in value
-
-
-def _check_flow_shift_help_explains_meaning_not_only_quality() -> None:
+def test_flow_shift_help_explains_meaning_not_only_quality() -> None:
     flow_help = " ".join(desc for name, _fragment, desc in settings_schema.SDCPP_EXTRA_FLAG_SPECS if name.startswith("Flow"))
     assert "timestep" in flow_help
     assert "Flow/DiT" in flow_help
     assert "мяг" in flow_help
 
 
-def _check_gui_health_identity_helpers_detect_other_copy_from_root() -> None:
+def test_gui_health_identity_helpers_detect_other_copy_from_root() -> None:
     assert settings_gui.SettingsGui._norm_path_for_compare(r"D:\\A\\LocalGenerator") == settings_gui.SettingsGui._norm_path_for_compare(r"d:/a/LocalGenerator/")
-    assert "serverRoot" in GUI_SOURCE
-    assert "assetSync" in GUI_SOURCE
-    assert "Port still busy" in GUI_SOURCE
-    assert "generationActivity" in GUI_SOURCE
-    assert "_health_looks_like_infini_helper" in GUI_SOURCE
-    assert "/shutdown" in GUI_SOURCE
 
 
-def _check_gui_trace_fetch_uses_health_identity_and_longer_timeout() -> None:
-    assert "_fetch_health_snapshot(timeout=8, base_url=base_url)" in GUI_SOURCE
-    assert "timeout=18" in GUI_SOURCE
-    assert "другая копия" in GUI_SOURCE
-
-
-def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
+def test_pipeline_preset_is_saved_and_restored_from_config() -> None:
     key = "INFINI_GUI_PIPELINE_PRESET"
     compat_flux = "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
     assert key in settings_schema.FIELD_ORDER
@@ -208,44 +216,14 @@ def _check_pipeline_preset_is_saved_and_restored_from_config() -> None:
     assert 'self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name' in GUI_SOURCE
 
 
-def _check_start_server_has_guarded_http_restart_contract() -> None:
-    assert "server.py запущен" in GUI_SOURCE
-    assert "GUI не будет убивать чужой процесс" in GUI_SOURCE
-    assert "force_restart_server" in GUI_SOURCE
-    assert "_shutdown_identity_is_safe" in GUI_SOURCE
-    assert "_activity_restart_refusal" in GUI_SOURCE
-    assert "self.proc.terminate(" not in GUI_SOURCE
-    assert "self.proc.kill(" not in GUI_SOURCE
+def test_start_server_has_guarded_http_restart_contract() -> None:
     assert settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "serverRoot": r"D:\X\LocalGenerator"})
     assert not settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "service": "unrelated"})
 
 
-def _check_radmin_gui_has_auto_url_and_friend_guide_controls() -> None:
-    assert "Auto Radmin URL" in GUI_SOURCE
-    assert "Copy friend guide" in GUI_SOURCE
-    assert "Open MP connect page" in GUI_SOURCE
-    assert "INFINI_TERRARIA_PORT" in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS["INFINI_TERRARIA_PORT"] == "7777"
-    assert "_detect_ipv4_candidates" in GUI_SOURCE
-    assert "_friend_guide_text" in GUI_SOURCE
-    assert "/mp_connect" in GUI_SOURCE
-    assert "0.0.0.0" in GUI_SOURCE
-
-
-def _check_radmin_gui_friend_guide_says_clients_do_not_need_localgenerator_for_ready_items() -> None:
-    assert "Тебе прилетают уже готовые предметы" in GUI_SOURCE
-    assert "финальные PNG/JSON ассеты" in GUI_SOURCE
-
-
-def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
-    assert "INFINI_LLM_TEMPERATURE" in settings_schema.FIELD_ORDER
+def test_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.FIELD_ORDER
-    assert "INFINI_LLM_REAUTHOR_TEMPERATURE" in settings_schema.FIELD_ORDER
-    assert "INFINI_VISUAL_DIRECTOR_TEMPERATURE" in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS["INFINI_LLM_TEMPERATURE"] == "0.38"
     assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.DEFAULTS
-    assert settings_schema.DEFAULTS["INFINI_LLM_REAUTHOR_TEMPERATURE"] == ""
-    assert settings_schema.DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"] == "0.42"
     fallback_heading = GUI_SOURCE.index('"04 · Fallback LLM"')
     fallback_last_row = GUI_SOURCE.index('"Fallback after transport fails"', fallback_heading)
     primary_heading = GUI_SOURCE.index('"05 · Генерация и reasoning"')
@@ -258,22 +236,17 @@ def _check_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
     assert "Это не sd.cpp temperature" in GUI_SOURCE
 
 
-def _check_gui_exposes_critical_delivery_and_busy_wait_controls() -> None:
-    assert "INFINI_COMBINE_BUSY_WAIT_SECONDS" in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS["INFINI_COMBINE_BUSY_WAIT_SECONDS"] == "210"
-    assert '"Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS"' in GUI_SOURCE
-    assert "INFINI_VISUAL_REQUIRE_ITEM_SPRITE" in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS["INFINI_VISUAL_REQUIRE_ITEM_SPRITE"] == "1"
-    assert '"Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE"' in GUI_SOURCE
+@pytest.mark.parametrize("label,key", [
+    pytest.param("Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", id="combine-wait-row"),
+    pytest.param("Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", id="mandatory-sprite-row"),
+])
+def test_gui_delivery_controls_are_visible(label, key):
+    assert f'"{label}", "{key}"' in GUI_SOURCE
 
 
-def _check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() -> None:
+def test_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() -> None:
     enabled = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED"
     minimum = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD"
-    assert enabled in settings_schema.FIELD_ORDER
-    assert minimum in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS[enabled] == "0"
-    assert settings_schema.DEFAULTS[minimum] == "10"
     assert f'self.check_row(debug_card, "Включить минимум для атакующих расходников", "{enabled}"' in GUI_SOURCE
     assert f'"Минимум за один крафт", "{minimum}"' in GUI_SOURCE
     assert 'onvalue="1"' in GUI_SOURCE and 'offvalue="0"' in GUI_SOURCE
@@ -287,7 +260,7 @@ def _check_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() 
     assert f"{minimum}=10" in example
 
 
-def _check_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
+def test_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
     import ast
     key = "INFINI_PROMPT_STYLE"
     assert settings_schema.DEFAULTS.get(key) == "Default"
@@ -324,14 +297,12 @@ def _check_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
     settings_trace_state.write_env(path, parsed)
     assert settings_gui.parse_env(path)[key] == "Default"
 
-def _check_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
+def test_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
     tag = settings_gui.SettingsGui._lora_tag_from_file(r"C:\\Models\\pixel_art.safetensors", "")
     assert tag == "<lora:pixel_art:0.25>"
-    assert "активная LoRA — через <lora:name:weight> в prompt" not in GUI_SOURCE
-    assert "структурированный HTTP payload" in GUI_SOURCE
 
 
-def _check_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> None:
+def test_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> None:
     root = GUI_PATH.parents[2]
     pipeline_config = (GUI_PATH.parents[1] / "pipelines" / "pipeline_visual_config.py").read_text(encoding="utf-8")
     image_gui = (GUI_PATH.parent / "settings_gui_ui.py").read_text(encoding="utf-8")
@@ -466,105 +437,97 @@ def test_offline_trace_cache_root_matches_gui_launch_environment(gui_workflow, m
     assert snapshot["events"] == [{"message": "selected"}]
 
 
-def test_trace_refresh_returns_while_worker_is_held_and_only_ui_renders(gui_workflow, monkeypatch):
+@pytest.fixture
+def held_gui_call(monkeypatch):
+    """Recording network hold; UI-thread invariants remain in each consumer test."""
+    from types import SimpleNamespace
+
+    holds = []
+
+    def install(gui, method, response, *, timeout=3, first_only=False):
+        entered, release, finished = (threading.Event() for _ in range(3))
+        calls = []
+        holds.append(release)
+
+        def fetch(*args, **kwargs):
+            calls.append((threading.get_ident(), args, kwargs))
+            if not first_only or len(calls) == 1:
+                entered.set()
+                assert release.wait(timeout), "test network hold expired"
+                finished.set()
+            return response(**kwargs) if callable(response) else response
+
+        monkeypatch.setattr(gui, method, fetch)
+        return SimpleNamespace(entered=entered, release=release, finished=finished, calls=calls)
+
+    yield install
+    for release in holds:
+        release.set()
+
+
+def test_trace_refresh_returns_while_worker_is_held_and_only_ui_renders(gui_workflow, monkeypatch, held_gui_call):
     gui, root, config = gui_workflow
     config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
-    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
-    calls = []
+    hold = held_gui_call(gui, "_fetch_trace_snapshot", {"serverRoot": str(root), "cacheDir": "held-server-cache", "events": [{"message": "from-worker"}]}, timeout=2, first_only=False)
 
-    def fetch(*args, **kwargs):
-        calls.append((threading.get_ident(), args, kwargs))
-        entered.set()
-        assert release.wait(2), "test network hold expired"
-        finished.set()
-        return {"serverRoot": str(root), "cacheDir": "held-server-cache", "events": [{"message": "from-worker"}]}
-
-    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
-    try:
-        before = time.monotonic()
-        gui.refresh_trace()
-        elapsed = time.monotonic() - before
-        assert elapsed < 0.2, "Refresh blocked the UI callback on network I/O"
-        assert entered.wait(1)
-        assert not gui.rendered, "trace rendered before the held worker returned"
-        assert calls[0][0] != gui.owner
-        release.set()
-        assert finished.wait(1)
-        gui.drain_until(lambda: "summary" in gui.rendered)
-        assert "from-worker" in gui.rendered["events"]
-    finally:
-        release.set()
+    before = time.monotonic()
+    gui.refresh_trace()
+    elapsed = time.monotonic() - before
+    assert elapsed < 0.2, "Refresh blocked the UI callback on network I/O"
+    assert hold.entered.wait(1)
+    assert not gui.rendered, "trace rendered before the held worker returned"
+    assert hold.calls[0][0] != gui.owner
+    hold.release.set()
+    assert hold.finished.wait(1)
+    gui.drain_until(lambda: "summary" in gui.rendered)
+    assert "from-worker" in gui.rendered["events"]
 
 
-def test_overlapping_trace_refresh_has_one_worker_and_only_latest_pending_request(gui_workflow, monkeypatch):
+def test_overlapping_trace_refresh_has_one_worker_and_only_latest_pending_request(gui_workflow, monkeypatch, held_gui_call):
     gui, root, _config = gui_workflow
     gui.vars["INFINI_PORT"] = _UiVar("5055")
-    entered, release = threading.Event(), threading.Event()
-    calls = []
+    hold = held_gui_call(gui, "_fetch_trace_snapshot", lambda **kw: {"serverRoot": str(root), "cacheDir": kw["base_url"], "events": [{"message": kw["base_url"]}]}, timeout=3, first_only=True)
 
-    def fetch(*args, **kwargs):
-        calls.append(kwargs["base_url"])
-        if len(calls) == 1:
-            entered.set()
-            assert release.wait(3)
-        return {"serverRoot": str(root), "cacheDir": calls[-1], "events": [{"message": calls[-1]}]}
-
-    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
-    try:
+    gui.refresh_trace()
+    assert hold.entered.wait(1)
+    for port in range(5100, 5125):
+        gui.vars["INFINI_PORT"].set(str(port))
         gui.refresh_trace()
-        assert entered.wait(1)
-        for port in range(5100, 5125):
-            gui.vars["INFINI_PORT"].set(str(port))
-            gui.refresh_trace()
-        assert calls == ["http://127.0.0.1:5055"], "overlapping refresh spawned unbounded I/O workers"
-        assert len(gui.jobs) == 1
-        release.set()
-        gui.drain_until(lambda: "5124" in gui.rendered.get("summary", ""))
-        assert calls == ["http://127.0.0.1:5055", "http://127.0.0.1:5124"]
-        assert not gui.jobs
-    finally:
-        release.set()
+    assert [call[2]["base_url"] for call in hold.calls] == ["http://127.0.0.1:5055"], "overlapping refresh spawned unbounded I/O workers"
+    assert len(gui.jobs) == 1
+    hold.release.set()
+    gui.drain_until(lambda: "5124" in gui.rendered.get("summary", ""))
+    assert [call[2]["base_url"] for call in hold.calls] == ["http://127.0.0.1:5055", "http://127.0.0.1:5124"]
+    assert not gui.jobs
 
 
 @pytest.mark.parametrize("action", ["cancel", "close"])
-def test_trace_cancel_or_close_retires_held_and_pending_results(gui_workflow, monkeypatch, action):
+def test_trace_cancel_or_close_retires_held_and_pending_results(gui_workflow, monkeypatch, held_gui_call, action):
     gui, root, _config = gui_workflow
-    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
-    calls = []
+    hold = held_gui_call(gui, "_fetch_trace_snapshot", {"serverRoot": str(root), "cacheDir": "stale", "events": [{"message": "stale"}]}, timeout=3, first_only=False)
 
-    def fetch(*args, **kwargs):
-        calls.append(kwargs["base_url"])
-        entered.set()
-        assert release.wait(3)
-        finished.set()
-        return {"serverRoot": str(root), "cacheDir": "stale", "events": [{"message": "stale"}]}
-
-    monkeypatch.setattr(gui, "_fetch_trace_snapshot", fetch)
-    try:
-        gui.refresh_trace()
-        assert entered.wait(1)
-        gui.refresh_trace()  # pending request must be retired as well
-        if action == "close":
-            gui.on_close()
-            assert gui.destroyed
-            assert not gui.jobs, "close retained a Tk after callback"
-        else:
-            cancel = getattr(gui, "cancel_trace_refresh", None)
-            assert callable(cancel), "trace refresh has no cancellation action"
-            cancel()
-            assert "cancel" in gui.trace_status_var.get().lower()
-        release.set()
-        assert finished.wait(1)
-        if action == "cancel":
-            gui.drain_until(lambda: not gui.jobs)
-        else:
-            for callback in list(gui.jobs.values()):
-                callback()
-        assert not gui.rendered
-        assert len(calls) == 1
-        assert not gui.__dict__.get("_gui_tasks", {})
-    finally:
-        release.set()
+    gui.refresh_trace()
+    assert hold.entered.wait(1)
+    gui.refresh_trace()  # pending request must be retired as well
+    if action == "close":
+        gui.on_close()
+        assert gui.destroyed
+        assert not gui.jobs, "close retained a Tk after callback"
+    else:
+        cancel = getattr(gui, "cancel_trace_refresh", None)
+        assert callable(cancel), "trace refresh has no cancellation action"
+        cancel()
+        assert "cancel" in gui.trace_status_var.get().lower()
+    hold.release.set()
+    assert hold.finished.wait(1)
+    if action == "cancel":
+        gui.drain_until(lambda: not gui.jobs)
+    else:
+        for callback in list(gui.jobs.values()):
+            callback()
+    assert not gui.rendered
+    assert len(hold.calls) == 1
+    assert not gui.__dict__.get("_gui_tasks", {})
 
 
 @pytest.mark.parametrize("online", [False, True])
@@ -624,26 +587,13 @@ def _gui_loopback_http(responses):
             if callable(response):
                 response = response(self.path)
             code, value = response
-            body = json.dumps(value).encode("utf-8")
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            write_json_response(self, value, status=code)
 
         def log_message(self, *_args):
             pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
-    worker.start()
-    try:
+    with loopback_server(Handler) as server:
         yield f"http://127.0.0.1:{server.server_port}", requests
-    finally:
-        server.shutdown()
-        server.server_close()
-        worker.join(timeout=2)
-        assert not worker.is_alive()
 
 
 @pytest.mark.parametrize("identity", ["foreign-health", "unknown-health", "foreign-trace", "changed-pid", "matching"])
@@ -677,21 +627,20 @@ def test_real_trace_http_checks_both_health_and_trace_identity_off_ui_thread(gui
     assert len(requests) == (1 if identity in {"foreign-health", "unknown-health"} else 2)
 
 
-def test_trace_clear_refuses_unknown_root_without_http_or_local_mutation(gui_workflow, monkeypatch):
-    gui, root, _config = gui_workflow
-    cache = root / "cache"
-    cache.mkdir()
-    trace_file = cache / "events.ndjson"
-    trace_file.write_bytes(b'{"preserve":true}\n')
-    monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
-    with _gui_loopback_http({"/health": (200, {"ok": True, "pid": os.getpid() + 1000}),
-                            "/trace_clear": (200, {"ok": True})}) as (base, requests):
-        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
-        gui.clear_trace_files()
-        gui.drain_until(lambda: "trace-clear" not in gui.__dict__.get("_gui_tasks", {}))
-    assert requests == ["/health"], "cleared an unverified server"
-    assert trace_file.read_bytes() == b'{"preserve":true}\n'
-    assert "refused" in gui.trace_status_var.get().lower()
+@pytest.fixture
+def guarded_restart(gui_workflow, monkeypatch):
+    """A saved launch with observable destructive actions, no real subprocess."""
+    from infini_local.desktop import settings_gui_server_controls as controls
+
+    gui, root, config = gui_workflow
+    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
+    actions = []
+    original = config.read_bytes()
+    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    monkeypatch.setattr(controls.messagebox, "showwarning", lambda *a, **k: None)
+    monkeypatch.setattr(gui, "_delayed_health_check", lambda *a, **k: None)
+    return gui, root, config, original, actions
 
 
 @pytest.mark.parametrize("activity", [
@@ -701,33 +650,17 @@ def test_trace_clear_refuses_unknown_root_without_http_or_local_mutation(gui_wor
     None,
     {"active": "0", "waiting": 0, "accepting": True},
 ])
-def test_safe_restart_does_not_save_shutdown_kill_or_spawn_busy_or_unknown_server(gui_workflow, monkeypatch, activity):
+def test_safe_restart_does_not_save_shutdown_kill_or_spawn_busy_or_unknown_server(guarded_restart, monkeypatch, activity):
     from infini_local.desktop import settings_gui_server_controls as controls
-    gui, root, config = gui_workflow
-    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
-    original = config.read_bytes()
-    actions = []
+    gui, root, config, original, actions = guarded_restart
 
-    class Owned:
-        pid = os.getpid() + 1000
-        def poll(self):
-            return None
-        def terminate(self):
-            actions.append("terminate")
-        def kill(self):
-            actions.append("kill")
-        def wait(self, **kwargs):
-            return 0
 
-    gui.proc = Owned()
+    gui.proc = OwnedProcess(actions)
     snap = {"ok": True, "serverRoot": str(root), "pid": gui.proc.pid}
     if activity is not None:
         snap["generationActivity"] = activity
     monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: snap)
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
     monkeypatch.setattr(gui, "_try_http_shutdown_current_server", lambda *a, **k: actions.append("shutdown") or True)
-    monkeypatch.setattr(gui, "_delayed_health_check", lambda *a, **k: None)
-    monkeypatch.setattr(controls.messagebox, "showwarning", lambda *a, **k: None)
     gui.start_server()
     gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
     assert not actions, "safe restart interrupted occupied or unverifiable generation"
@@ -744,19 +677,8 @@ def test_safe_restart_uses_atomic_shutdown_and_never_falls_through_to_process_ki
     actions = []
     pid = os.getpid() + 1000
 
-    class Owned:
-        def __init__(self):
-            self.pid = pid
-        def poll(self):
-            return None
-        def terminate(self):
-            actions.append("terminate")
-        def kill(self):
-            actions.append("kill")
-        def wait(self, **kwargs):
-            return 0
 
-    gui.proc = Owned()
+    gui.proc = OwnedProcess(actions, pid=pid)
     idle = {"ok": True, "serverRoot": str(root), "pid": pid,
             "effectiveConfig": gui._proposed_effective_config(),
             "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
@@ -779,7 +701,7 @@ def test_safe_restart_uses_atomic_shutdown_and_never_falls_through_to_process_ki
         # Never retain inherited credentials in pytest assertion diagnostics.
         safe_env = {key: kwargs["env"].get(key) for key in ("INFINI_CACHE_DIR", "INFINI_IMAGE_BACKEND")}
         actions.append((cmd, {"cwd": kwargs["cwd"], "env": safe_env}))
-        return Owned()
+        return OwnedProcess(actions, pid=pid)
 
     monkeypatch.setattr(controls.subprocess, "Popen", capture_launch)
     monkeypatch.setenv("INFINI_CACHE_DIR", "inherited-cache")
@@ -804,12 +726,19 @@ def test_safe_restart_uses_atomic_shutdown_and_never_falls_through_to_process_ki
         assert "запущен" in gui.status_var.get()
 
 
-@pytest.mark.parametrize("identity", ["foreign-root", "unknown-root", "caller-pid", "invalid-pid", "unrelated-service"])
-def test_safe_restart_refuses_unverified_identity_before_shutdown_or_save(gui_workflow, monkeypatch, identity):
+@pytest.mark.parametrize("identity,projection,force", [
+    *[pytest.param(identity, "identity-not-reached", False, id=identity) for identity in
+      ("foreign-root", "unknown-root", "caller-pid", "invalid-pid", "unrelated-service")],
+    *[pytest.param("matching", projection, force, id=f"projection-{label}-{'force' if force else 'safe'}")
+      for label, projection in (("absent", None), ("empty", {}), ("wrong-type", {"sdcppAutostart": "0"}))
+      for force in (False, True)],
+])
+def test_restart_refuses_unverified_identity_or_projection_before_shutdown_or_save(
+    guarded_restart, monkeypatch, identity, projection, force,
+):
     from infini_local.desktop import settings_gui_server_controls as controls
-    gui, root, config = gui_workflow
-    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
-    original = config.read_bytes()
+
+    gui, root, config, original, actions = guarded_restart
     snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
             "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
     if identity == "foreign-root":
@@ -820,26 +749,26 @@ def test_safe_restart_refuses_unverified_identity_before_shutdown_or_save(gui_wo
         snap["pid"] = os.getpid()
     elif identity == "invalid-pid":
         snap["pid"] = "123"
-    else:
+    elif identity == "unrelated-service":
         snap = {"ok": True, "service": "unrelated"}
-    actions = []
-    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
+    elif projection is not None:
+        snap["effectiveConfig"] = projection
+    monkeypatch.setattr(controls.messagebox, "askyesno", lambda *a, **k: True)
     with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
         gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
-        gui.start_server()
+        (gui.force_restart_server if force else gui.start_server)()
         gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
-    assert requests == ["/health"], "safe restart targeted an unverified/foreign/caller process"
+    assert requests == ["/health"], "unverified identity/projection admitted shutdown"
     assert not actions
     assert config.read_bytes() == original
+    if identity == "matching":
+        assert "projection" in gui.status_var.get().lower()
 
 
 @pytest.mark.parametrize("confirmed,identity", [(False, "matching"), (True, "matching"), (True, "foreign"), (True, "caller")])
-def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pid(gui_workflow, monkeypatch, confirmed, identity):
+def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pid(guarded_restart, monkeypatch, confirmed, identity):
     from infini_local.desktop import settings_gui_server_controls as controls
-    gui, root, config = gui_workflow
-    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
-    original = config.read_bytes()
+    gui, root, config, original, actions = guarded_restart
     snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
             "effectiveConfig": gui._proposed_effective_config(),
             "generationActivity": {"active": 1, "waiting": 1, "accepting": True}}
@@ -847,7 +776,7 @@ def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pi
         snap["serverRoot"] = str(root.parent / "foreign")
     if identity == "caller":
         snap["pid"] = os.getpid()
-    confirmations, actions = [], []
+    confirmations = []
 
     def ask(*args, **kwargs):
         assert threading.get_ident() == gui.owner
@@ -855,8 +784,6 @@ def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pi
         return confirmed
 
     monkeypatch.setattr(controls.messagebox, "askyesno", ask)
-    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
     with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
         gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
         force = getattr(gui, "force_restart_server", None)
@@ -873,21 +800,19 @@ def test_force_restart_requires_confirmation_and_still_checks_root_and_caller_pi
         assert config.read_bytes() == original
 
 
-def test_stop_server_is_also_busy_aware_without_direct_terminate(gui_workflow, monkeypatch):
+@pytest.mark.parametrize("action", [
+    pytest.param("start_server", id="restart-busy"),
+    pytest.param("stop_server", id="stop-busy"),
+])
+def test_server_actions_are_busy_aware_without_direct_terminate(gui_workflow, monkeypatch, action):
     gui, root, _config = gui_workflow
     actions = []
-    class Owned:
-        pid = os.getpid() + 1000
-        def poll(self):
-            return None
-        def terminate(self):
-            actions.append("terminate")
-    gui.proc = Owned()
+    gui.proc = OwnedProcess(actions)
     monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: {
         "ok": True, "serverRoot": str(root), "pid": gui.proc.pid,
         "generationActivity": {"active": 1, "waiting": 0, "accepting": True}})
     monkeypatch.setattr(gui, "_try_http_shutdown_current_server", lambda *a, **k: actions.append("shutdown") or (True, ""))
-    gui.stop_server()
+    getattr(gui, action)()
     gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
     assert not actions
     assert "busy" in gui.status_var.get().lower()
@@ -907,30 +832,30 @@ class _TrackedUiVar(_UiVar):
             callback()
 
 
-def test_closed_port_guard_allows_native_windows_refusal_latency(gui_workflow, monkeypatch):
+@pytest.mark.parametrize("consumer", [
+    pytest.param("start", id="start-guard"),
+    pytest.param("wait", id="shutdown-wait"),
+])
+def test_closed_port_consumers_allow_native_windows_refusal_latency(gui_workflow, monkeypatch, consumer):
     import urllib.error
+
     gui, _root, _config = gui_workflow
     launches = []
+
     def delayed_refusal(timeout, **kwargs):
         if timeout <= 2.05:
             raise urllib.error.URLError(TimeoutError())
         raise urllib.error.URLError(ConnectionRefusedError(10061, "closed port"))
+
     monkeypatch.setattr(gui, "_fetch_health_snapshot", delayed_refusal)
     monkeypatch.setattr(gui, "_start_server_after_guard", lambda: launches.append(True))
-    gui.start_server()
-    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
-    assert launches == [True]
-
-
-def test_shutdown_wait_allows_native_windows_refusal_latency(gui_workflow, monkeypatch):
-    import urllib.error
-    gui, _root, _config = gui_workflow
-    def delayed_refusal(timeout, **kwargs):
-        if timeout <= 2.05:
-            raise urllib.error.URLError(TimeoutError())
-        raise urllib.error.URLError(ConnectionRefusedError(10061, "closed port"))
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", delayed_refusal)
-    assert gui._wait_until_helper_stops(timeout=4, base_url="http://127.0.0.1:5055") is True
+    if consumer == "start":
+        gui.start_server()
+        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+        assert launches == [True]
+    else:
+        assert gui._wait_until_helper_stops(timeout=4, base_url="http://127.0.0.1:5055") is True
+        assert launches == []
 
 
 def test_setting_edits_create_custom_without_writing_saved_config(gui_workflow):
@@ -1052,12 +977,9 @@ def test_start_on_refused_port_only_launches_when_no_owned_process_is_running(gu
     import socket
     gui, root, _config = gui_workflow
     calls = []
-    class Owned:
-        pid = os.getpid() + 1000
-        def poll(self):
-            return None
-    gui.proc = Owned() if owned else None
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: calls.append("spawn") or Owned())
+
+    gui.proc = OwnedProcess() if owned else None
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: calls.append("spawn") or OwnedProcess())
     # Reserve then close one ephemeral loopback port; no application is started.
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -1068,43 +990,38 @@ def test_start_on_refused_port_only_launches_when_no_owned_process_is_running(gu
     assert calls == ([] if owned else ["spawn"])
 
 
-def test_overlapping_server_actions_do_not_queue_extra_shutdowns_or_block_ui(gui_workflow, monkeypatch):
+def test_overlapping_server_actions_do_not_queue_extra_shutdowns_or_block_ui(gui_workflow, monkeypatch, held_gui_call):
     gui, root, _config = gui_workflow
-    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
-    reads = []
-    def health(*args, **kwargs):
-        reads.append(kwargs["base_url"])
-        entered.set()
-        assert release.wait(3)
-        finished.set()
-        return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
-                "generationActivity": {"active": 1, "waiting": 0, "accepting": True}}
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
-    try:
-        before = time.monotonic()
+    hold = held_gui_call(gui, "_fetch_health_snapshot", {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "generationActivity": {"active": 1, "waiting": 0, "accepting": True}}, timeout=3, first_only=False)
+
+    before = time.monotonic()
+    gui.start_server()
+    assert time.monotonic() - before < 0.2
+    assert hold.entered.wait(1)
+    for _ in range(25):
         gui.start_server()
-        assert time.monotonic() - before < 0.2
-        assert entered.wait(1)
-        for _ in range(25):
-            gui.start_server()
-        release.set()
-        assert finished.wait(1)
-        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
-        assert len(reads) == 1, "repeated Start queued another restart after the initial guard"
-        assert not gui.jobs
-    finally:
-        release.set()
+    hold.release.set()
+    assert hold.finished.wait(1)
+    gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
+    assert len(hold.calls) == 1, "repeated Start queued another restart after the initial guard"
+    assert not gui.jobs
 
 
-def test_shutdown_wait_does_not_treat_http_error_or_timeout_as_port_free(gui_workflow, monkeypatch):
+@pytest.mark.parametrize("failure,expected", [
+    pytest.param("http", False, id="http-error-not-free"),
+    pytest.param("timeout", False, id="timeout-not-free"),
+    pytest.param("refused", True, id="refusal-is-free"),
+])
+def test_shutdown_wait_does_not_treat_http_error_or_timeout_as_port_free(gui_workflow, monkeypatch, failure, expected):
     gui, _root, _config = gui_workflow
-    with _gui_loopback_http({"/health": (503, {"ok": False})}) as (base, requests):
-        assert gui._wait_until_helper_stops(timeout=0.1, base_url=base) is False
-        assert requests == ["/health"]
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(TimeoutError()))
-    assert gui._wait_until_helper_stops(timeout=0.1, base_url="http://127.0.0.1:1") is False
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError()))
-    assert gui._wait_until_helper_stops(timeout=0.1, base_url="http://127.0.0.1:1") is True
+    if failure == "http":
+        with _gui_loopback_http({"/health": (503, {"ok": False})}) as (base, requests):
+            assert gui._wait_until_helper_stops(timeout=0.1, base_url=base) is expected
+            assert requests == ["/health"]
+    else:
+        error = TimeoutError if failure == "timeout" else ConnectionRefusedError
+        monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(error()))
+        assert gui._wait_until_helper_stops(timeout=0.1, base_url="http://127.0.0.1:1") is expected
 
 
 def _configure_applied_fixture(gui, root, config):
@@ -1120,35 +1037,30 @@ def _configure_applied_fixture(gui, root, config):
             "openrouterProvider": "Exact-Slug", "sdcppAutostart": False}
 
 
-def test_applied_config_health_is_async_partial_nonsecret_and_main_thread_only(gui_workflow, monkeypatch):
+@pytest.fixture
+def applied_gui(gui_workflow):
     gui, root, config = gui_workflow
     effective = _configure_applied_fixture(gui, root, config)
-    entered, release = threading.Event(), threading.Event()
-    calls = []
-    def health(*args, **kwargs):
-        calls.append(threading.get_ident())
-        entered.set()
-        assert release.wait(2)
-        return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
-                "effectiveConfig": {**effective, "unrelatedSecret": "FAKE-HEALTH-SECRET-CANARY"},
-                "llmAuth": {"secret": "FAKE-AUTH-SECRET-CANARY"}}
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
-    try:
-        before = time.monotonic()
-        gui._delayed_health_check()
-        assert time.monotonic() - before < 0.2, "health confirmation blocked the UI callback"
-        assert entered.wait(1)
-        release.set()
-        gui.drain_until(lambda: "matches" in gui.applied_config_var.get().lower())
-        assert calls == [calls[0]] and calls[0] != gui.owner
-        feedback = gui.applied_config_var.get()
-        assert "partial" in feedback.lower()
-        assert "secret" in feedback.lower()
-        assert "CANARY" not in feedback
-        assert "CANARY" not in gui.status_var.get()
-        assert "CANARY" not in repr(gui.__dict__.get("_applied_config_ack", {}))
-    finally:
-        release.set()
+    return gui, root, config, effective
+
+
+def test_applied_config_health_is_async_partial_nonsecret_and_main_thread_only(applied_gui, monkeypatch, held_gui_call):
+    gui, root, config, effective = applied_gui
+    hold = held_gui_call(gui, "_fetch_health_snapshot", {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "effectiveConfig": {**effective, "unrelatedSecret": "FAKE-HEALTH-SECRET-CANARY"}, "llmAuth": {"secret": "FAKE-AUTH-SECRET-CANARY"}}, timeout=2, first_only=False)
+
+    before = time.monotonic()
+    gui._delayed_health_check()
+    assert time.monotonic() - before < 0.2, "health confirmation blocked the UI callback"
+    assert hold.entered.wait(1)
+    hold.release.set()
+    gui.drain_until(lambda: "matches" in gui.applied_config_var.get().lower())
+    assert len(hold.calls) == 1 and hold.calls[0][0] != gui.owner
+    feedback = gui.applied_config_var.get()
+    assert "partial" in feedback.lower()
+    assert "secret" in feedback.lower()
+    assert "CANARY" not in feedback
+    assert "CANARY" not in gui.status_var.get()
+    assert "CANARY" not in repr(gui.__dict__.get("_applied_config_ack", {}))
 
 
 def test_gui_has_no_legacy_pid_kill_fallback_reachable_from_restart():
@@ -1161,9 +1073,8 @@ def test_gui_has_no_legacy_pid_kill_fallback_reachable_from_restart():
 
 
 @pytest.mark.parametrize("changed", ["pin-after-save", "pin-during-health", "missing-projection", "foreign-root"])
-def test_applied_feedback_never_confirms_unsaved_or_unacknowledged_launch_changes(gui_workflow, monkeypatch, changed):
-    gui, root, config = gui_workflow
-    effective = _configure_applied_fixture(gui, root, config)
+def test_applied_feedback_never_confirms_unsaved_or_unacknowledged_launch_changes(applied_gui, monkeypatch, changed):
+    gui, root, config, effective = applied_gui
     entered, release = threading.Event(), threading.Event()
     def health(*args, **kwargs):
         entered.set()
@@ -1223,16 +1134,11 @@ def test_offline_clear_refuses_symlinked_trace_or_lock_before_touching_any_cache
 
 
 @pytest.mark.parametrize("identity", ["missing-pid", "invalid-pid", "caller-pid", "different-owned-pid"])
-def test_applied_config_never_acknowledges_an_unverified_or_other_owned_process(gui_workflow, monkeypatch, identity):
-    gui, root, config = gui_workflow
-    effective = _configure_applied_fixture(gui, root, config)
+def test_applied_config_never_acknowledges_an_unverified_or_other_owned_process(applied_gui, monkeypatch, identity):
+    gui, root, config, effective = applied_gui
     pid = os.getpid() + 1000
-    class Owned:
-        def __init__(self):
-            self.pid = pid
-        def poll(self):
-            return None
-    gui.proc = Owned()
+
+    gui.proc = OwnedProcess(pid=pid)
     snap = {"ok": True, "serverRoot": str(root), "pid": pid, "effectiveConfig": effective}
     if identity == "missing-pid":
         snap.pop("pid")
@@ -1249,9 +1155,8 @@ def test_applied_config_never_acknowledges_an_unverified_or_other_owned_process(
     assert gui.__dict__.get("_applied_config_ack") is None
 
 
-def test_successful_safe_stop_retires_runtime_config_ack(gui_workflow, monkeypatch):
-    gui, root, config = gui_workflow
-    effective = _configure_applied_fixture(gui, root, config)
+def test_successful_safe_stop_retires_runtime_config_ack(applied_gui, monkeypatch):
+    gui, root, config, effective = applied_gui
     gui._applied_config_ack = {"baseUrl": gui._server_base_url(), "pid": os.getpid() + 1000, "effectiveConfig": effective}
     gui._update_applied_config_feedback()
     assert "matches" in gui.applied_config_var.get().lower()
@@ -1267,24 +1172,29 @@ def test_successful_safe_stop_retires_runtime_config_ack(gui_workflow, monkeypat
     assert "stopped" in gui.status_var.get().lower()
 
 
-@pytest.mark.parametrize("secret,model,expected", [("", "Provider/Model", "local"), ("FAKE-INFER-CANARY", "auto", "local"), ("FAKE-INFER-CANARY", "Provider/Model", "openrouter")])
-def test_gui_projection_handles_implicit_main_provider_without_retaining_secret(gui_workflow, monkeypatch, secret, model, expected):
+@pytest.mark.parametrize("provider,secret,model,expected", [
+    pytest.param("", "", "Provider/Model", "local", id="implicit-no-credential"),
+    pytest.param("", "FAKE-INFER-CANARY", "auto", "local", id="implicit-auto-model"),
+    pytest.param("", "FAKE-INFER-CANARY", "Provider/Model", "openrouter", id="implicit-configured-router"),
+    pytest.param("", "", None, "local", id="empty-alias"),
+    pytest.param("or", "", None, "openrouter", id="or-alias"),
+    pytest.param("openai-compat", "", None, "openai_compat", id="compat-alias"),
+    pytest.param("lm_studio", "", None, "local", id="lm-studio-alias"),
+])
+def test_gui_main_provider_projection_preserves_aliases_and_never_retains_secret(
+    gui_workflow, monkeypatch, provider, secret, model, expected,
+):
     gui, _root, config = gui_workflow
-    config.write_text(f"INFINI_LLM_PROVIDER=\nINFINI_OPENROUTER_API_KEY={secret}\nINFINI_OPENROUTER_MODEL={model}\n", encoding="utf-8")
+    values = {"INFINI_LLM_PROVIDER": provider}
+    if model is not None:
+        values.update(INFINI_OPENROUTER_API_KEY=secret, INFINI_OPENROUTER_MODEL=model)
+    config.write_text("".join(f"{key}={value}\n" for key, value in values.items()), encoding="utf-8")
+    # Do not import runtime/server or evaluate inherited credentials.
+    monkeypatch.delenv("INFINI_OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     projection = gui._proposed_effective_config()
     assert projection["llmProvider"] == expected
     assert "CANARY" not in repr(projection)
-
-
-@pytest.mark.parametrize("provider,expected", [("", "local"), ("or", "openrouter"), ("openai-compat", "openai_compat"), ("lm_studio", "local")])
-def test_gui_projection_preserves_declared_provider_aliases_without_false_restart_mismatch(gui_workflow, monkeypatch, provider, expected):
-    gui, _root, config = gui_workflow
-    config.write_text(f"INFINI_LLM_PROVIDER={provider}\n", encoding="utf-8")
-    # Avoid importing runtime config/server or evaluating inherited credentials.
-    monkeypatch.delenv("INFINI_OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    assert gui._proposed_effective_config()["llmProvider"] == expected
 
 
 def test_gui_projection_handles_all_canonical_backend_aliases_without_bootstrap_side_effects(gui_workflow):
@@ -1323,11 +1233,12 @@ def test_trace_clear_never_reports_partial_server_ack_as_success(gui_workflow, m
     assert not refreshes
 
 
-@pytest.mark.parametrize("health_kind", ["forbidden", "timeout", "foreign", "different-cache"])
+@pytest.mark.parametrize("health_kind", ["forbidden", "timeout", "foreign", "different-cache", "missing-root"])
 def test_trace_clear_refuses_unknown_or_different_live_target_instead_of_local_fallback(gui_workflow, monkeypatch, health_kind):
     gui, root, config = gui_workflow
-    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
-    cache = root / "selected-cache"
+    if health_kind != "missing-root":
+        config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    cache = root / ("cache" if health_kind == "missing-root" else "selected-cache")
     cache.mkdir()
     trace_file = cache / "events.ndjson"
     trace_file.write_bytes(b'{"preserve":true}\n')
@@ -1338,6 +1249,9 @@ def test_trace_clear_refuses_unknown_or_different_live_target_instead_of_local_f
               "cacheDir": str(root / "other-live-cache")}
     if health_kind == "foreign":
         health["serverRoot"] = str(root.parent / "foreign")
+    elif health_kind == "missing-root":
+        health.pop("serverRoot")
+        health.pop("cacheDir")
     with _gui_loopback_http({"/health": (403 if health_kind == "forbidden" else 200, health),
                             "/trace_clear": (200, {"ok": True})}) as (base, requests):
         gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
@@ -1346,21 +1260,19 @@ def test_trace_clear_refuses_unknown_or_different_live_target_instead_of_local_f
     assert requests == ([] if health_kind == "timeout" else ["/health"])
     assert trace_file.read_bytes() == b'{"preserve":true}\n', "health refusal/unverifiable liveness cleared local cache"
     assert any(word in gui.trace_status_var.get().lower() for word in ("refused", "unavailable"))
+    if health_kind == "missing-root":
+        assert "refused" in gui.trace_status_var.get().lower()
 
 
-def test_spawn_retires_old_applied_ack_and_schedules_main_loop_health_confirmation(gui_workflow, monkeypatch):
+def test_spawn_retires_old_applied_ack_and_schedules_main_loop_health_confirmation(applied_gui, monkeypatch):
     from infini_local.desktop import settings_gui_server_controls as controls
-    gui, root, config = gui_workflow
-    effective = _configure_applied_fixture(gui, root, config)
+    gui, root, config, effective = applied_gui
     gui._applied_config_ack = {"baseUrl": gui._server_base_url(), "pid": 987654, "effectiveConfig": effective}
     gui._update_applied_config_feedback()
     assert "matches" in gui.applied_config_var.get().lower()
-    class Owned:
-        pid = os.getpid() + 1000
-        def poll(self):
-            return None
+
     calls = []
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: Owned())
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: OwnedProcess())
     monkeypatch.setattr(gui, "_delayed_health_check", lambda: calls.append(threading.get_ident()))
     gui._start_server_after_guard()
     assert gui.__dict__.get("_applied_config_ack") is None, "new process retained old PID's config acknowledgement"
@@ -1373,11 +1285,8 @@ def test_spawn_retires_old_applied_ack_and_schedules_main_loop_health_confirmati
 def test_close_cancels_scheduled_post_launch_health_callback(gui_workflow, monkeypatch):
     from infini_local.desktop import settings_gui_server_controls as controls
     gui, _root, _config = gui_workflow
-    class Owned:
-        pid = os.getpid() + 1000
-        def poll(self):
-            return None
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: Owned())
+
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: OwnedProcess())
     gui._start_server_after_guard()
     assert gui.jobs, "native health callback was never scheduled"
     gui.on_close()
@@ -1400,31 +1309,6 @@ def test_applied_projection_matches_runtime_main_model_fallback_and_inactive_pin
     assert projected["llmProvider"] == provider
     assert projected["llmModel"] == expected_model
     assert projected["openrouterProvider"] == ("Exact-Slug" if provider == "openrouter" else "")
-
-
-@pytest.mark.parametrize("projection", [None, {}, {"sdcppAutostart": "0"}])
-@pytest.mark.parametrize("force", [False, True])
-def test_restart_refuses_unverifiable_applied_projection_without_any_destructive_fallback(gui_workflow, monkeypatch, projection, force):
-    from infini_local.desktop import settings_gui_server_controls as controls
-    gui, root, config = gui_workflow
-    config.write_bytes(b"INFINI_IMAGE_BACKEND=off\n")
-    original = config.read_bytes()
-    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
-            "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
-    if projection is not None:
-        snap["effectiveConfig"] = projection
-    actions = []
-    monkeypatch.setattr(controls.messagebox, "askyesno", lambda *a, **k: True)
-    monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
-    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **k: actions.append("spawn"))
-    with _gui_loopback_http({"/health": (200, snap), "/shutdown": (200, {"ok": True})}) as (base, requests):
-        gui.vars["INFINI_PORT"] = _UiVar(base.rsplit(":", 1)[1])
-        (gui.force_restart_server if force else gui.start_server)()
-        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
-    assert requests == ["/health"], "unverifiable projection was treated as shutdown admission"
-    assert not actions
-    assert config.read_bytes() == original
-    assert "projection" in gui.status_var.get().lower()
 
 
 @pytest.mark.parametrize("started,expected", [(None, "unknown"), (False, "not started"), (True, "started")])
@@ -1497,34 +1381,35 @@ def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, e
     gui, _root, _config = gui_workflow
     class Trickle(BaseHTTPRequestHandler):
         def do_GET(self):
-            body = b'{"ok":true}'
-            self.send_response(200)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            try:
-                for byte in body:
-                    self.wfile.write(bytes([byte]))
-                    self.wfile.flush()
-                    time.sleep(0.03)  # every gap is shorter than the socket timeout
-            except (BrokenPipeError, ConnectionResetError):
-                pass
+            # Every idle gap is shorter than the socket timeout.
+            write_json_response(self, {"ok": True}, raw_body='{"ok":true}', trickle=0.03)
+
         def log_message(self, *_args):
             pass
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Trickle)
-    worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
-    worker.start()
-    try:
+
+    with loopback_server(Trickle) as server:
         base_url = f"http://127.0.0.1:{server.server_port}"
         if endpoint == "health":
             with pytest.raises(TimeoutError):
                 gui._fetch_health_snapshot(timeout=0.1, base_url=base_url)
         else:
             assert gui._try_http_shutdown_current_server(timeout=0.1, base_url=base_url)[0] is False
-    finally:
-        server.shutdown()
-        server.server_close()
-        worker.join(timeout=2)
-        assert not worker.is_alive()
+
+
+GUI_BASE_RESIZE = {
+    "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
+    "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
+}
+
+
+def test_gui_base_resize_defaults_and_example_are_explicit():
+    example_path = GUI_PATH.parents[2] / "config.example.env"
+    example = settings_env.parse_env(example_path)
+    active_lines = example_path.read_text(encoding="utf-8").splitlines()
+    for key, value in GUI_BASE_RESIZE.items():
+        assert settings_schema.DEFAULTS[key] == value
+        assert example[key] == value
+        assert f"{key}={value}" in active_lines
 
 
 @pytest.mark.parametrize("preset_name", list(settings_schema.PRESETS))
@@ -1541,17 +1426,8 @@ def test_gui_base_and_pipeline_presets_make_box_resize_explicit(preset_name):
         gui.apply_preset()
         assert gui.vars[style_key].get() == style
         assert gui.field_state[style_key][0] is True
-    resize = {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-    }
-    for key, value in resize.items():
-        assert settings_schema.DEFAULTS[key] == value
+    for key, value in GUI_BASE_RESIZE.items():
         assert settings_schema.PRESETS[preset_name][key] == value
-    example_path = GUI_PATH.parents[2] / "config.example.env"
-    example = settings_env.parse_env(example_path)
-    active_lines = example_path.read_text(encoding="utf-8").splitlines()
-    assert all(example[key] == value and f"{key}={value}" in active_lines for key, value in resize.items())
 
 
 class _SpriteGuiHarness(settings_trace_state.SettingsGuiTraceStateMixin):
@@ -1630,12 +1506,3 @@ def test_gui_resize_reset_restores_box_without_changing_background():
     assert "alpha" in settings_schema.FIELD_HELP["INFINI_BG_COLOR"]
     assert "transparent" in settings_schema.FIELD_HELP["INFINI_REMOVE_BG"]
     assert "Модель запрашивается с alpha; локальный keyer не применяется" in settings_schema.OPTION_HELP["INFINI_BG_COLOR"]["transparent"]
-
-
-# One collected item per contract module: the checks above keep source order and
-# their own tracebacks. The shared runner discovers them by prefix, so a new check
-# cannot be silently left out of a hand-maintained dispatch list.
-def test_settings_gui_contract_coarse_contract(request):
-    from contract_checks import run_contract_checks
-
-    run_contract_checks(globals(), request, prefix="_check_")

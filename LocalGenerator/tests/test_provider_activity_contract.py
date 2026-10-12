@@ -6,12 +6,13 @@ import json
 import socket
 import threading
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from types import SimpleNamespace
 from urllib.request import build_opener, ProxyHandler, Request
 from urllib.error import HTTPError
 
 import pytest
+from provider_test_support import deliverable_recipe, loopback_server, write_json_response, endpoint_options
 from infini_local.pipelines import (
     combine_pipeline as pipeline,
     llm_transport as transport,
@@ -61,6 +62,41 @@ def isolation(monkeypatch):
 
 
 @pytest.fixture
+def route_worker():
+    """Explicit route worker ownership; releases all declared gates on failure."""
+    from types import SimpleNamespace
+
+    owned = []
+
+    def start(route, payload, *release):
+        results = []
+        worker = threading.Thread(target=lambda: results.append(route(payload)))
+        owned.append((worker, release))
+        worker.start()
+        return SimpleNamespace(thread=worker, results=results)
+
+    yield start
+    for worker, release in owned:
+        for event in release:
+            event.set()
+        worker.join(5)
+        assert not worker.is_alive(), "route request leaked a worker"
+
+
+@pytest.fixture
+def configured_profiles(monkeypatch):
+    """Patch only the declared profile keys; malformed/legacy omissions stay absent."""
+    def install(*profiles):
+        monkeypatch.setattr(transport, "configured_llm_pool", lambda: list(profiles))
+    return install
+
+
+def local_profile(**overrides):
+    return {"provider": "local", "base_url": "http://127.0.0.1:9", "model": "offline",
+            "profile_id": "llm_1", **overrides}
+
+
+@pytest.fixture
 def real_route():
     cls = build_handler(
         app_version="test",
@@ -82,65 +118,29 @@ def real_route():
         combine_failure_payload=helpers._combine_failure_payload,
         ascii_reason=helpers._ascii_reason,
     )
-    server = ThreadingHTTPServer(("127.0.0.1", 0), cls)
-    thread = threading.Thread(target=server.serve_forever)
-    thread.start()
+    with loopback_server(cls) as server:
+        def post(payload):
+            req = Request(
+                f"http://127.0.0.1:{server.server_port}/combine",
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                response = build_opener(ProxyHandler({})).open(req, timeout=15)
+            except HTTPError as error:
+                response = error
+            with response:
+                body = json.loads(response.read())
+                if response.code >= 400:
+                    assert "Items were returned" not in body.get("playerMessage", ""), "route has no native material authority"
+                return response.code, body
 
-    def post(payload):
-        req = Request(
-            f"http://127.0.0.1:{server.server_port}/combine",
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            response = build_opener(ProxyHandler({})).open(req, timeout=15)
-        except HTTPError as error:
-            response = error
-        with response:
-            body = json.loads(response.read())
-            if response.code >= 400:
-                assert "Items were returned" not in body.get("playerMessage", ""), "route has no native material authority"
-            return response.code, body
-
-    try:
         yield post
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(3)
-        assert not thread.is_alive()
 
 
 def valid_cached_recipe(tmp_path, monkeypatch):
-    from infini_local.pipelines import visual_delivery_gate as visual
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
-    from infini_local.web.vfx_debug_routes import _sample_data
-    from infini_local.core.vfx_manifest import _compile_manifest
-
-    monkeypatch.setattr(recipes, "WORLD_RECIPES_DIR", tmp_path / "worlds")
-    monkeypatch.setattr(visual, "WORLD_RECIPES_DIR", tmp_path / "worlds")
-    monkeypatch.setattr(visual, "SPRITE_DIR", tmp_path / "sprites")
-    good = _sample_data()
-    hydrate_no_image_fixture_assets(good, write_no_image_fixture_png(tmp_path / "sprites" / "test.png"))
-    good["vfxManifest"] = _compile_manifest(
-        good,
-        {
-            "effectMagnitude": 0.0,
-            "visualBudgetClass": "tiny",
-            "motif": {
-                "element": "neutral",
-                "shapeLanguage": "none",
-                "motionLanguage": "none",
-                "paletteRole": "primary",
-                "rhythm": 1.0,
-                "chaos": 0.0,
-            },
-            "slots": [],
-        },
-        "read-error-test",
-    )
-    assert pipeline._cached_payload_report(good)["ok"]
+    good = deliverable_recipe(tmp_path, monkeypatch, manifest_key="read-error-test")
     key, _ = pipeline.combine_cache_lookup(PAYLOAD)
     target = recipes.world_recipe_file(PAYLOAD["worldId"], key)
     world_storage.atomic_write_json(target, good)
@@ -198,40 +198,28 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
 
         def do_POST(self):
             sends.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-            body = json.dumps(
-                {
-                    "error": {
-                        "code": provider_code,
-                        "param": param,
-                        "message": "PRIVATE-PROMPT-OR-CREDENTIAL",
-                        "unknown": "PRIVATE-PROMPT-OR-CREDENTIAL",
-                    }
-                }
-            ).encode()
-            self.send_response(status)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            write_json_response(self, {"error": {
+                "code": provider_code, "param": param,
+                "message": "PRIVATE-PROMPT-OR-CREDENTIAL",
+                "unknown": "PRIVATE-PROMPT-OR-CREDENTIAL",
+            }}, status=status)
 
-    provider = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
-    worker = threading.Thread(target=provider.serve_forever)
-    worker.start()
-    context = {
-        "provider": "openai_compat",
-        "base_url": f"http://127.0.0.1:{provider.server_port}/v1",
-        "model": "owner/missing",
-        "api_key": "offline-synthetic",
-        "api_mode": "chat_completions",
-        "profile_id": "llm_1",
-    }
-    monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
-    if fault == "deadline":
-        from infini_local.core.http_io import HttpDeadlineExceeded
+    with loopback_server(Provider) as provider:
+        context = {
+            "provider": "openai_compat",
+            "base_url": f"http://127.0.0.1:{provider.server_port}/v1",
+            "model": "owner/missing",
+            "api_key": "offline-synthetic",
+            "api_mode": "chat_completions",
+            "profile_id": "llm_1",
+        }
+        monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
+        if fault == "deadline":
+            from infini_local.core.http_io import HttpDeadlineExceeded
 
-        monkeypatch.setattr(
-            transport, "http_json", lambda *_a, **_k: (_ for _ in ()).throw(HttpDeadlineExceeded("HTTP logical-call deadline exceeded"))
-        )
-    try:
+            monkeypatch.setattr(
+                transport, "http_json", lambda *_a, **_k: (_ for _ in ()).throw(HttpDeadlineExceeded("HTTP logical-call deadline exceeded"))
+            )
         response_status, body = real_route(dict(PAYLOAD))
         assert "Items were returned" not in body["playerMessage"], "HTTP diagnostics have no material delivery authority"
         assert body["error"] == expected
@@ -250,11 +238,6 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
         assert failure_state.read_failure_summary({}, generation_debug.LAST_COMBINE_FAILURE_FILE)["transportDebug"] == supplement
         assert "PRIVATE-PROMPT-OR-CREDENTIAL" not in json.dumps(persisted)
         assert expected not in {"llm_auth_failed", "llm_model_unavailable"} or "try crafting again" not in body["playerMessage"]
-    finally:
-        provider.shutdown()
-        provider.server_close()
-        worker.join(3)
-        assert not worker.is_alive()
 
 
 @pytest.mark.parametrize("status,code,retryable", [
@@ -301,20 +284,17 @@ def test_endpoint_never_attaches_unjoined_global_failure(monkeypatch):
     )
     with pytest.raises(PlannerUnavailable) as caught:
         endpoint.handle_combine_request(
-            dict(PAYLOAD),
-            app_version="test",
-            combine_cache_lookup=lambda _: ("key", None),
-            sanitize_recipe_for_delivery=lambda p: p,
-            combine=lambda _: (_ for _ in ()).throw(error),
-            trace_event=lambda *_: None,
-            json=lambda _: None,
-            json_status=lambda *_: None,
-            last_failure_summary=lambda: pytest.fail("global summary cannot identify this request"),
+            dict(PAYLOAD), **endpoint_options(
+                combine=lambda _: (_ for _ in ()).throw(error),
+                json=lambda _: None,
+                json_status=lambda *_: None,
+                last_failure_summary=lambda: pytest.fail('global summary cannot identify this request'),
+            ),
         )
     assert caught.value._infini_failure_snapshot == {}
 
 
-def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(monkeypatch, real_route):
+def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(monkeypatch, route_worker, real_route):
     from infini_local.web import server
     from infini_local.storage import trace_runtime
 
@@ -335,7 +315,6 @@ def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(
         ],
     )
     entered, resume = threading.Event(), threading.Event()
-    results = []
 
     def blocked(*_a, **_k):
         entered.set()
@@ -343,37 +322,30 @@ def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(
         raise PlannerUnavailable("controlled stage failure")
 
     monkeypatch.setattr(pipeline, "try_llm_plan", blocked)
-    worker = threading.Thread(
-        target=lambda: results.append(
-            real_route({**PAYLOAD, "worldName": "PRIVATE", "itemA": {**PAYLOAD["itemA"], "privateSummary": "PRIVATE"}})
-        )
-    )
-    worker.start()
-    try:
-        assert entered.wait(5)
-        activity = server._health_payload()["generationActivity"]
-        assert activity["active"] == 1 and activity["waiting"] == 0
-        rows = activity.get("requests", [])
-        assert len(rows) == 1, "parked real pipeline must expose the currently entered stage"
-        row = rows[0]
-        assert row["stage"] == "01_gameplay_author"
-        assert row["profileId"] == "llm_1"
-        assert row["waitReason"] == "none" and row["networkStarted"] is None
-        assert row["elapsedSeconds"] >= row["stageElapsedSeconds"] >= 0
-        assert isinstance(row["requestId"], str) and len(row["requestId"]) == 32
-        assert "PRIVATE" not in json.dumps(activity)
-        row["stage"] = "modified-detached-copy"
-        assert endpoint.generation_activity_snapshot()["requests"][0]["stage"] == "01_gameplay_author"
-    finally:
-        resume.set()
-        worker.join(5)
-        assert not worker.is_alive()
-    assert results[0][0] == 424
+    worker = route_worker(real_route, {**PAYLOAD, "worldName": "PRIVATE", "itemA": {**PAYLOAD["itemA"], "privateSummary": "PRIVATE"}}, resume)
+    assert entered.wait(5)
+    activity = server._health_payload()["generationActivity"]
+    assert activity["active"] == 1 and activity["waiting"] == 0
+    rows = activity.get("requests", [])
+    assert len(rows) == 1, "parked real pipeline must expose the currently entered stage"
+    row = rows[0]
+    assert row["stage"] == "01_gameplay_author"
+    assert row["profileId"] == "llm_1"
+    assert row["waitReason"] == "none" and row["networkStarted"] is None
+    assert row["elapsedSeconds"] >= row["stageElapsedSeconds"] >= 0
+    assert isinstance(row["requestId"], str) and len(row["requestId"]) == 32
+    assert "PRIVATE" not in json.dumps(activity)
+    row["stage"] = "modified-detached-copy"
+    assert endpoint.generation_activity_snapshot()["requests"][0]["stage"] == "01_gameplay_author"
+    resume.set()
+    worker.thread.join(5)
+    assert not worker.thread.is_alive()
+    assert worker.results[0][0] == 424
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 
 @pytest.mark.parametrize("multi_dev", [False, True])
-def test_live_semaphore_wait_reason_is_owned_by_request(monkeypatch, real_route, multi_dev):
+def test_live_semaphore_wait_reason_is_owned_by_request(monkeypatch, configured_profiles, real_route, multi_dev):
     waiting = threading.Event()
 
     class ObservedSemaphore(threading.BoundedSemaphore):
@@ -389,11 +361,7 @@ def test_live_semaphore_wait_reason_is_owned_by_request(monkeypatch, real_route,
         monkeypatch.setattr(endpoint, "MULTIDEV_PROFILE_SEMAPHORES", {"llm_2": held})
     else:
         monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", held)
-    monkeypatch.setattr(
-        transport,
-        "configured_llm_pool",
-        lambda: [{"provider": "local", "base_url": "http://127.0.0.1:9", "model": "offline", "profile_id": "llm_1"}],
-    )
+    configured_profiles(local_profile())
     monkeypatch.setattr(pipeline, "try_llm_plan", lambda *_: (_ for _ in ()).throw(PlannerUnavailable("controlled stop")))
     result = []
     worker = threading.Thread(target=lambda: result.append(real_route({**PAYLOAD, "multiDevCraft": multi_dev, "llmProfileId": "llm_2"})))
@@ -426,85 +394,76 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
             sends.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
             sending.set()
             assert finish.wait(5)
-            body = b'{"error":{"code":"invalid_api_key"}}'
-            self.send_response(401)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            write_json_response(self, {"error": {"code": "invalid_api_key"}}, status=401)
 
-    provider = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
-    pt = threading.Thread(target=provider.serve_forever)
-    pt.start()
-    contexts = [
-        {
-            "provider": "openai_compat",
-            "base_url": f"http://127.0.0.1:{provider.server_port}/v1",
-            "model": "offline",
-            "api_key": "PRIVATE",
-            "api_mode": "chat_completions",
-            "profile_id": f"llm_{i}",
-        }
-        for i in (1, 2)
-    ]
-    monkeypatch.setattr(transport, "configured_llm_pool", lambda: contexts)
-    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_: "fixture-rate-key")
-    monkeypatch.setattr(transport, "_remote_admission_policy", lambda *_: "nous_openai_feedback")
-    monkeypatch.setattr(transport, "_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS", 0.05)
-    transport._LLM_RATE_STATE["fixture-rate-key"] = {"events": [], "lastRequest": time.monotonic() + 1.0, "blockedUntil": 0.0}
-    sleep = time.sleep
+    with loopback_server(Provider) as provider:
+        contexts = [
+            {
+                "provider": "openai_compat",
+                "base_url": f"http://127.0.0.1:{provider.server_port}/v1",
+                "model": "offline",
+                "api_key": "PRIVATE",
+                "api_mode": "chat_completions",
+                "profile_id": f"llm_{i}",
+            }
+            for i in (1, 2)
+        ]
+        monkeypatch.setattr(transport, "configured_llm_pool", lambda: contexts)
+        monkeypatch.setattr(transport, "_remote_rate_key", lambda *_: "fixture-rate-key")
+        monkeypatch.setattr(transport, "_remote_admission_policy", lambda *_: "nous_openai_feedback")
+        monkeypatch.setattr(transport, "_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS", 0.05)
+        transport._LLM_RATE_STATE["fixture-rate-key"] = {"events": [], "lastRequest": time.monotonic() + 1.0, "blockedUntil": 0.0}
+        sleep = time.sleep
 
-    def gated_sleep(seconds):
-        if not resume.is_set() and transport._CURRENT_LLM_ATTEMPT.get() is not None:
-            parked.set()
-            assert resume.wait(5)
-        else:
-            sleep(seconds)
+        def gated_sleep(seconds):
+            if not resume.is_set() and transport._CURRENT_LLM_ATTEMPT.get() is not None:
+                parked.set()
+                assert resume.wait(5)
+            else:
+                sleep(seconds)
 
-    monkeypatch.setattr(transport.time, "sleep", gated_sleep)
-    event_wait = threading.Event.wait
+        monkeypatch.setattr(transport.time, "sleep", gated_sleep)
+        event_wait = threading.Event.wait
 
-    def observed_wait(self, timeout=None):
-        row = transport._CURRENT_LLM_ATTEMPT.get()
-        if row is not None and row.get("rateWaitReason") == "rate_queue":
-            queued.set()
-        return event_wait(self, timeout)
+        def observed_wait(self, timeout=None):
+            row = transport._CURRENT_LLM_ATTEMPT.get()
+            if row is not None and row.get("rateWaitReason") == "rate_queue":
+                queued.set()
+            return event_wait(self, timeout)
 
-    monkeypatch.setattr(threading.Event, "wait", observed_wait)
-    workers = [
-        threading.Thread(
-            target=lambda i=i: results.append(
-                (i, real_route({**PAYLOAD, "worldId": f"world-{i}", "multiDevCraft": True, "llmProfileId": f"llm_{i}"}))
+        monkeypatch.setattr(threading.Event, "wait", observed_wait)
+        workers = [
+            threading.Thread(
+                target=lambda i=i: results.append(
+                    (i, real_route({**PAYLOAD, "worldId": f"world-{i}", "multiDevCraft": True, "llmProfileId": f"llm_{i}"}))
+                )
             )
-        )
-        for i in (1, 2)
-    ]
-    try:
-        workers[0].start()
-        assert parked.wait(3)
-        workers[1].start()
-        assert queued.wait(3)
-        activity = endpoint.generation_activity_snapshot()
-        assert activity["active"] == 2
-        rows = {r["profileId"]: r for r in activity["requests"]}
-        assert rows["llm_1"]["stage"] == rows["llm_2"]["stage"] == "01_gameplay_author"
-        assert rows["llm_1"]["waitReason"] == "pacing"
-        assert rows["llm_2"]["waitReason"] == "rate_queue"
-        assert all(r["networkStarted"] is False for r in rows.values())
-        assert len({r["requestId"] for r in rows.values()}) == 2
-        assert not sends and "PRIVATE" not in json.dumps(activity)
-        resume.set()
-        assert sending.wait(3)
-        assert any(r["networkStarted"] is True and r["waitReason"] == "none" for r in endpoint.generation_activity_snapshot()["requests"])
-    finally:
-        resume.set()
-        finish.set()
-        for worker in workers:
-            if worker.ident is not None:
-                worker.join(15)
-        provider.shutdown()
-        provider.server_close()
-        pt.join(3)
-        assert not any(w.is_alive() for w in workers) and not pt.is_alive()
+            for i in (1, 2)
+        ]
+        try:
+            workers[0].start()
+            assert parked.wait(3)
+            workers[1].start()
+            assert queued.wait(3)
+            activity = endpoint.generation_activity_snapshot()
+            assert activity["active"] == 2
+            rows = {r["profileId"]: r for r in activity["requests"]}
+            assert rows["llm_1"]["stage"] == rows["llm_2"]["stage"] == "01_gameplay_author"
+            assert rows["llm_1"]["waitReason"] == "pacing"
+            assert rows["llm_2"]["waitReason"] == "rate_queue"
+            assert all(r["networkStarted"] is False for r in rows.values())
+            assert len({r["requestId"] for r in rows.values()}) == 2
+            assert not sends and "PRIVATE" not in json.dumps(activity)
+            resume.set()
+            assert sending.wait(3)
+            assert any(r["networkStarted"] is True and r["waitReason"] == "none" for r in endpoint.generation_activity_snapshot()["requests"])
+        finally:
+            resume.set()
+            finish.set()
+            for worker in workers:
+                if worker.ident is not None:
+                    worker.join(15)
+            assert not any(w.is_alive() for w in workers)
     assert len(sends) == 2 and len(results) == 2
     for i, (status, body) in results:
         assert status == 424 and body["error"] == "llm_auth_failed"
@@ -540,14 +499,9 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 
-def test_actual_stage_transition_preserves_request_identity(monkeypatch, real_route):
+def test_actual_stage_transition_preserves_request_identity(monkeypatch, route_worker, configured_profiles, real_route):
     first, second, resume_first, resume_second = (threading.Event() for _ in range(4))
-    results = []
-    monkeypatch.setattr(
-        transport,
-        "configured_llm_pool",
-        lambda: [{"provider": "local", "base_url": "http://127.0.0.1:9", "model": "offline", "profile_id": "llm_1"}],
-    )
+    configured_profiles(local_profile())
 
     def authored(*_):
         first.set()
@@ -562,37 +516,29 @@ def test_actual_stage_transition_preserves_request_identity(monkeypatch, real_ro
     monkeypatch.setattr(pipeline, "try_llm_plan", authored)
     monkeypatch.setattr(pipeline, "strict_validate_authored_item", validate)
     monkeypatch.setattr(pipeline, "_failure_report", lambda *_: (_ for _ in ()).throw(PlannerUnavailable("controlled final stop")))
-    worker = threading.Thread(target=lambda: results.append(real_route(dict(PAYLOAD))))
-    worker.start()
-    try:
-        assert first.wait(3)
-        one = endpoint.generation_activity_snapshot()["requests"][0]
-        assert one["stage"] == "01_gameplay_author"
-        resume_first.set()
-        assert second.wait(3)
-        two = endpoint.generation_activity_snapshot()["requests"][0]
-        assert two["stage"] == "02_strict_runtime_program"
-        assert two["requestId"] == one["requestId"]
-        assert two["elapsedSeconds"] >= one["elapsedSeconds"]
-        assert two["waitReason"] == "none" and two["networkStarted"] is None
-    finally:
-        resume_first.set()
-        resume_second.set()
-        worker.join(5)
-        assert not worker.is_alive()
-    assert results[0][0] == 424
+    worker = route_worker(real_route, dict(PAYLOAD), resume_first, resume_second)
+    assert first.wait(3)
+    one = endpoint.generation_activity_snapshot()["requests"][0]
+    assert one["stage"] == "01_gameplay_author"
+    resume_first.set()
+    assert second.wait(3)
+    two = endpoint.generation_activity_snapshot()["requests"][0]
+    assert two["stage"] == "02_strict_runtime_program"
+    assert two["requestId"] == one["requestId"]
+    assert two["elapsedSeconds"] >= one["elapsedSeconds"]
+    assert two["waitReason"] == "none" and two["networkStarted"] is None
+    resume_first.set()
+    resume_second.set()
+    worker.thread.join(5)
+    assert not worker.thread.is_alive()
+    assert worker.results[0][0] == 424
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 
-def test_healthy_cache_sibling_cannot_clear_disabled_lane_response(monkeypatch, real_route, tmp_path):
+def test_healthy_cache_sibling_cannot_clear_disabled_lane_response(monkeypatch, route_worker, configured_profiles, real_route, tmp_path):
     _, good = valid_cached_recipe(tmp_path, monkeypatch)
     entered, resume = threading.Event(), threading.Event()
-    results = []
-    monkeypatch.setattr(
-        transport,
-        "configured_llm_pool",
-        lambda: [{"provider": "local", "base_url": "http://127.0.0.1:9", "model": "offline", "profile_id": "llm_1"}],
-    )
+    configured_profiles(local_profile())
 
     def park(*_):
         entered.set()
@@ -600,25 +546,20 @@ def test_healthy_cache_sibling_cannot_clear_disabled_lane_response(monkeypatch, 
         raise PlannerUnavailable("active sibling stopped")
 
     monkeypatch.setattr(pipeline, "try_llm_plan", park)
-    worker = threading.Thread(
-        target=lambda: results.append(real_route({**PAYLOAD, "worldId": "active-world", "multiDevCraft": True, "llmProfileId": "llm_1"}))
-    )
-    worker.start()
-    try:
-        assert entered.wait(3)
-        status, failed = real_route({**PAYLOAD, "worldId": "disabled-world", "multiDevCraft": True, "llmProfileId": "llm_2"})
-        assert status == 424 and failed["error"] == "llm_profile_unavailable"
-        status, cached = real_route(dict(PAYLOAD))
-        assert status == 200 and cached["id"] == good["id"]
-        assert generation_debug.last_combine_failure_summary() == {}
-        assert failed["lastFailure"]["worldId"] == "disabled-world"
-        rows = endpoint.generation_activity_snapshot()["requests"]
-        assert len(rows) == 1 and rows[0]["profileId"] == "llm_1"
-    finally:
-        resume.set()
-        worker.join(5)
-        assert not worker.is_alive()
-    assert results[0][1]["lastFailure"]["worldId"] == "active-world"
+    worker = route_worker(real_route, {**PAYLOAD, "worldId": "active-world", "multiDevCraft": True, "llmProfileId": "llm_1"}, resume)
+    assert entered.wait(3)
+    status, failed = real_route({**PAYLOAD, "worldId": "disabled-world", "multiDevCraft": True, "llmProfileId": "llm_2"})
+    assert status == 424 and failed["error"] == "llm_profile_unavailable"
+    status, cached = real_route(dict(PAYLOAD))
+    assert status == 200 and cached["id"] == good["id"]
+    assert generation_debug.last_combine_failure_summary() == {}
+    assert failed["lastFailure"]["worldId"] == "disabled-world"
+    rows = endpoint.generation_activity_snapshot()["requests"]
+    assert len(rows) == 1 and rows[0]["profileId"] == "llm_1"
+    resume.set()
+    worker.thread.join(5)
+    assert not worker.thread.is_alive()
+    assert worker.results[0][1]["lastFailure"]["worldId"] == "active-world"
 
 
 def test_activity_projection_is_bounded_and_unknowns_are_not_private_values():
@@ -667,9 +608,8 @@ def test_deadline_during_http_error_body_is_deadline_not_stale_provider_status()
 
 
 @pytest.mark.parametrize("phase", ["begin", "end"])
-def test_lease_context_is_released_even_when_diagnostic_logging_fails(monkeypatch, phase):
-    context = {"provider": "local", "base_url": "http://127.0.0.1:9", "model": "offline", "profile_id": "llm_1"}
-    monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
+def test_lease_context_is_released_even_when_diagnostic_logging_fails(monkeypatch, configured_profiles, phase):
+    configured_profiles(local_profile())
 
     def broken_log(*_):
         raise OSError("diagnostic write failed")
@@ -698,14 +638,11 @@ def test_profile_permit_is_returned_if_generation_admission_raises(monkeypatch):
     monkeypatch.setattr(endpoint, "MULTIDEV_SEMAPHORE", BrokenSemaphore())
     with pytest.raises(OSError, match="controlled semaphore failure"):
         endpoint.handle_combine_request(
-            {**PAYLOAD, "multiDevCraft": True, "llmProfileId": "llm_2"},
-            app_version="test",
-            combine_cache_lookup=lambda _: ("key", None),
-            sanitize_recipe_for_delivery=lambda p: p,
-            combine=lambda _: pytest.fail("admission failed"),
-            trace_event=lambda *_: None,
-            json=lambda _: None,
-            json_status=lambda *_: None,
+            {**PAYLOAD, 'multiDevCraft': True, 'llmProfileId': 'llm_2'}, **endpoint_options(
+                combine=lambda _: pytest.fail('admission failed'),
+                json=lambda _: None,
+                json_status=lambda *_: None,
+            ),
         )
     assert profile.acquire(blocking=False), "already acquired lane permit leaked on admission exception"
     profile.release()

@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 
 import pytest
+from provider_test_support import endpoint_options
 
 from infini_local.pipelines import combine_pipeline, generation_debug
 from infini_local.services import combine_endpoint, sdcpp_backend, sdcpp_service
@@ -30,10 +31,9 @@ def endpoint(monkeypatch):
     monkeypatch.setattr(combine_endpoint, "COMBINE_BUSY_WAIT_SECONDS", 0)
     delivered, statuses, cleared, events = [], [], [], []
     return SimpleNamespace(semaphore=semaphore, delivered=delivered, statuses=statuses, cleared=cleared, events=events,
-        options=dict(app_version="test", combine_cache_lookup=lambda _: ("key", None),
-            sanitize_recipe_for_delivery=lambda value: value, combine=lambda _: {"ok": True},
-            trace_event=lambda *args: events.append(args), json=delivered.append,
-            json_status=lambda status, value: statuses.append((status, value)), clear_failure_state=cleared.append))
+        options=endpoint_options(combine=lambda _: {"ok": True}, json=delivered.append,
+            json_status=lambda status, value: statuses.append((status, value)),
+            trace_event=lambda *args: events.append(args), clear_failure_state=cleared.append))
 
 
 @pytest.mark.parametrize("source,invalid", [

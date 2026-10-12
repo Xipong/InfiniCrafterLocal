@@ -21,6 +21,7 @@ import pytest
 from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
 from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
 from test_provider_transport_contract import PIN, packet, wire
+from provider_test_support import HttpReply, RecordingOpener
 
 CODEX = "https://chatgpt.com/backend-api/codex"
 
@@ -515,6 +516,19 @@ def subscription(monkeypatch):
     return response, credentials
 
 
+@pytest.fixture
+def subscription_sends(subscription, monkeypatch):
+    response, credentials = subscription
+    calls = []
+
+    def post(url, body, **options):
+        calls.append((url, copy.deepcopy(body), options))
+        return copy.deepcopy(response)
+
+    monkeypatch.setattr(auth, "post_sse", post)
+    return response, credentials, calls
+
+
 @dataclass
 class StreamOpener:
     body: bytes
@@ -525,8 +539,7 @@ class StreamOpener:
         return io.BytesIO(self.body)
 
 
-@pytest.mark.parametrize("callback,valid", [("valid", True), ("wrong-state", False), ("duplicate-state", False), ("duplicate-code", False)])
-def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
+def test_pkce_authorization_url_has_native_challenge_redirect_and_scope():
     attempt = auth.LoginAttempt()
     params = parse_qs(urlsplit(attempt.authorization_url).query)
     expected = base64.urlsafe_b64encode(hashlib.sha256(attempt.verifier.encode()).digest()).decode().rstrip("=")
@@ -534,6 +547,11 @@ def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
     assert params["redirect_uri"] == ["http://localhost:1455/auth/callback"]
     assert params["scope"] == ["openid profile email offline_access"]
     assert attempt.verifier not in repr(attempt)
+
+
+@pytest.mark.parametrize("callback,valid", [("valid", True), ("wrong-state", False), ("duplicate-state", False), ("duplicate-code", False)])
+def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
+    attempt = auth.LoginAttempt()
     suffix = {"valid": f"state={attempt.state}&code=test-code", "wrong-state": "state=wrong&code=x",
         "duplicate-state": f"state={attempt.state}&state=wrong&code=x", "duplicate-code": f"state={attempt.state}&code=x&code=y"}[callback]
     if valid:
@@ -557,13 +575,8 @@ def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, 
     echoed = secret if encoding == "plain" else twice if encoding == "twice-unicode" else '{"token":"' + ''.join(r'\u%04x' % ord(char) for char in secret) + '"}'
     body = {"error": {"code": "unsupported_parameter", "param": "stream"}} if encoding == "diagnostic-code" else {"error": {"message": diagnostic + " " + echoed}}
     url = CODEX + ("/images/generations" if method == "post" else "/models")
-    class Opener:
-        def open(self, request, timeout):
-            assert request.full_url == url
-            if method == "post":
-                assert request.get_header("User-agent") == "infinicrafter/1.0"
-            raise HTTPError(request.full_url, status, "denied", {}, io.BytesIO(json.dumps(body).encode()))
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_: Opener())
+    opener = RecordingOpener(HTTPError(url, status, "denied", {}, HttpReply(json.dumps(body).encode())))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_: opener)
     with pytest.raises(auth.CodexError) as caught:
         if method == "post":
             auth.post_json(url, {}, headers={"Authorization": "Bearer " + secret})
@@ -573,41 +586,40 @@ def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, 
     assert f"HTTP {status}" in error and diagnostic in error
     assert secret not in error.replace('\\', '')
     assert "\\u" not in error
+    assert len(opener.requests) == 1
+    request, _timeout = opener.requests[0]
+    assert request.full_url == url
+    if method == "post":
+        assert request.get_header("User-agent") == "infinicrafter/1.0"
 
 
-@pytest.mark.parametrize("scenario,expected,error", [
-    pytest.param("commentary-and-final", '{"item":"Клинок"}', None, id="commentary-not-authored"),
-    pytest.param("commentary-only", None, "text output", id="commentary-only-refused"),
-    pytest.param("in_progress", None, "incomplete", id="unfinished-final"),
-    pytest.param("incomplete", None, "incomplete", id="incomplete-final"),
-    pytest.param("legacy-parts", '{"label":"Клинок"}', None, id="legacy-split-text"),
-    pytest.param("final-parts", '{"label":"Клинок"}', None, id="final-split-text"),
-    pytest.param("refusal", None, "refused", id="final-refusal-after-text"),
+@pytest.mark.parametrize("output,expected,error", [
+    pytest.param([message("I will validate the item first.\n", phase="commentary"),
+        {"type": "reasoning", "summary": []}, message('{"item":"Клинок"}', phase="final_answer")],
+        '{"item":"Клинок"}', None, id="commentary-not-authored"),
+    pytest.param([message('{"status":"working"}', phase="commentary")], None, "text output", id="commentary-only-refused"),
+    *[pytest.param([message('{"partial":', phase="final_answer", status=status)], None, "incomplete", id=label)
+      for status, label in (("in_progress", "unfinished-final"), ("incomplete", "incomplete-final"))],
+    *[pytest.param([{
+        "type": "message", "role": "assistant",
+        "content": [{"type": "output_text", "text": '{"label":'}, {"type": "output_text", "text": '"Клинок"}'}],
+        **({"phase": "final_answer"} if final else {}),
+    }], '{"label":"Клинок"}', None, id="final-split-text" if final else "legacy-split-text")
+      for final in (False, True)],
+    pytest.param([message('', phase="final_answer", content=[
+        {"type": "output_text", "text": '{"ok":true}'}, {"type": "refusal", "refusal": "test refusal"},
+    ])], None, "refused", id="final-refusal-after-text"),
 ])
-def test_subscription_output_selects_only_completed_final_authored_text(scenario, expected, error):
-    if scenario == "commentary-and-final":
-        output = [message("I will validate the item first.\n", phase="commentary"), {"type": "reasoning", "summary": []}, message(expected, phase="final_answer")]
-    elif scenario == "commentary-only":
-        output = [message('{"status":"working"}', phase="commentary")]
-    elif scenario in {"in_progress", "incomplete"}:
-        output = [message('{"partial":', phase="final_answer", status=scenario)]
-    elif scenario == "refusal":
-        item = message('{"ok":true}', phase="final_answer")
-        item["content"].append({"type": "refusal", "refusal": "test refusal"})
-        output = [item]
-    else:
-        item = message("", phase="final_answer" if scenario == "final-parts" else None)
-        item.pop("status")
-        item["content"] = [{"type": "output_text", "text": '{"label":'}, {"type": "output_text", "text": '"Клинок"}'}]
-        output = [item]
-    response = {"output": output}
+def test_subscription_output_selects_only_completed_final_authored_text(output, expected, error):
+    response = {"output": copy.deepcopy(output)}
     before = copy.deepcopy(response)
     if error:
         with pytest.raises(auth.CodexError, match=error):
             backend._output_text(response)
     else:
         text = backend._output_text(response)
-        assert text == expected and json.loads(text) == json.loads(expected)
+        assert text == expected
+        assert json.loads(text) == json.loads(expected)
     assert response == before
 
 
@@ -651,42 +663,44 @@ def test_subscription_cache_instruction_attribution_survives_usage_projection(su
     assert credentials.access_token not in repr(persisted) and credentials.refresh_token not in repr(persisted)
 
 
-@pytest.mark.parametrize("scenario,value", [
-    pytest.param("full", None, id="safe-usage-whitelist"),
-    pytest.param("metadata", None, id="provider-metadata-removed"),
-    *[pytest.param("counter", value, id=f"counter-{index}") for index, value in enumerate([0, 7, True, False, -1, 1.5, "20", None, {}, []])],
-    *[pytest.param("container", value, id=f"container-{index}") for index, value in enumerate([None, [], "metadata", 5])],
-    pytest.param("cache-write", None, id="cache-write-preserved"),
-    pytest.param("missing", None, id="missing-cache-is-not-zero"),
+@pytest.mark.parametrize("scenario,usage,expected", [
+    pytest.param("full", {
+        "input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+        "input_tokens_details": {"cached_tokens": 100, "metadata": "test-access-not-real"},
+        "output_tokens_details": {"reasoning_tokens": 20, "metadata": "test-refresh-not-real"},
+        "attribution": "test-account",
+    }, {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+        "input_tokens_details": {"cached_tokens": 100}, "output_tokens_details": {"reasoning_tokens": 20}},
+        id="safe-usage-whitelist"),
+    pytest.param("metadata", {"input_tokens": 3, "output_tokens": 5,
+        "attribution": {"secret": "test-access-not-real"}}, {"input_tokens": 3, "output_tokens": 5},
+        id="provider-metadata-removed"),
+    *[pytest.param("counter", {"input_tokens_details": {"cached_tokens": value},
+        "output_tokens_details": {"reasoning_tokens": value}},
+        {"input_tokens_details": {"cached_tokens": value}, "output_tokens_details": {"reasoning_tokens": value}}
+        if type(value) is int and value >= 0 else {}, id=f"counter-{label}")
+      for label, value in (("zero", 0), ("positive", 7), ("true", True), ("false", False),
+                           ("negative", -1), ("fraction", 1.5), ("string", "20"), ("null", None),
+                           ("object", {}), ("array", []))],
+    *[pytest.param("container", {"input_tokens": 2, "input_tokens_details": value,
+        "output_tokens_details": value}, {"input_tokens": 2}, id=f"container-{label}")
+      for label, value in (("null", None), ("array", []), ("string", "metadata"), ("number", 5))],
+    pytest.param("cache-write", {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30,
+        "not_a_counter": "private"}}, {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30}},
+        id="cache-write-preserved"),
+    pytest.param("missing", {"input_tokens": 7}, {"input_tokens": 7}, id="missing-cache-is-not-zero"),
 ])
-def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport(subscription, scenario, value):
+def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport(subscription, scenario, usage, expected):
     response, credentials = subscription
-    if scenario == "full":
-        response["usage"] = {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
-            "input_tokens_details": {"cached_tokens": 100, "metadata": credentials.access_token},
-            "output_tokens_details": {"reasoning_tokens": 20, "metadata": credentials.refresh_token}, "attribution": credentials.account_id}
-        expected = {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150, "input_tokens_details": {"cached_tokens": 100}, "output_tokens_details": {"reasoning_tokens": 20}}
-    elif scenario == "metadata":
+    response["usage"] = copy.deepcopy(usage)
+    if scenario == "metadata":
         response["id"] = credentials.access_token
-        response["usage"] = {"input_tokens": 3, "output_tokens": 5, "attribution": {"secret": credentials.access_token}}
-        expected = {"input_tokens": 3, "output_tokens": 5}
-    elif scenario == "counter":
-        response["usage"] = {"input_tokens_details": {"cached_tokens": value}, "output_tokens_details": {"reasoning_tokens": value}}
-        expected = response["usage"] if type(value) is int and value >= 0 else {}
-    elif scenario == "container":
-        response["usage"] = {"input_tokens": 2, "input_tokens_details": value, "output_tokens_details": value}
-        expected = {"input_tokens": 2}
-    elif scenario == "cache-write":
-        response["usage"] = {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30, "not_a_counter": "private"}}
-        expected = {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30}}
-    else:
-        response["usage"] = {"input_tokens": 7}
-        expected = {"input_tokens": 7}
     context = {"provider": "openai_codex", "base_url": CODEX, "model": "test-model", "api_mode": "responses", "api_key": ""}
     result = llm._llm_json_single_context(packet(), 3, context)
     assert result["usage"] == expected
     if scenario == "missing":
-        assert result["_debug"]["cachedInputTokens"] is None and result["_debug"]["cacheHit"] is None
+        assert result["_debug"]["cachedInputTokens"] is None
+        assert result["_debug"]["cacheHit"] is None
     for secret in (credentials.access_token, credentials.refresh_token, credentials.account_id):
         assert secret not in repr(result)
 
@@ -793,7 +807,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
 
 
 @pytest.mark.parametrize("scenario", ["literal-stage", "assistant-history", "untranslatable-budget"])
-def test_subscription_request_preserves_packet_and_only_supported_wire_options(monkeypatch, subscription, scenario):
+def test_subscription_request_preserves_packet_and_only_supported_wire_options(monkeypatch, subscription_sends, scenario):
     request = {"model": "test-codex-model", "messages": [{"role": "system", "content": "Literal system contract"},
         {"role": "user", "content": "Literal authored item"}], "max_tokens": 2048,
         "response_format": {"type": "json_object"}, "reasoning": {"effort": "low", "exclude": True}, "temperature": 0.38}
@@ -806,11 +820,9 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
         with pytest.raises(auth.CodexError, match="reasoning"):
             backend._request_payload(request)
         return
-    response, credentials = subscription
+    response, credentials, calls = subscription_sends
     response["output"] = [message('{"item":"ok"}')]
     response["usage"] = {"input_tokens": 10, "output_tokens": 4}
-    calls = []
-    monkeypatch.setattr(auth, "post_sse", lambda url, body, **options: calls.append((url, body, options)) or response)
     before = copy.deepcopy(request)
     result = backend.generate_chat(request, timeout=20)
     assert request == before and result["choices"][0]["message"]["content"] == '{"item":"ok"}'
@@ -957,16 +969,13 @@ def test_browser_login_exchanges_pkce_once_and_saves_only_after_callback(tmp_pat
 
 
 def test_authorization_code_exchange_uses_native_form_encoding(monkeypatch):
-    import io
-    class Response(io.BytesIO):
-        pass
-    class Opener:
-        def open(self, request, timeout):
-            assert request.get_header("Content-type") == "application/x-www-form-urlencoded"
-            assert parse_qs(request.data.decode()) == {"code": ["test+code"], "grant_type": ["authorization_code"]}
-            return Response(b'{"ok": true}')
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    opener = RecordingOpener(HttpReply(b'{"ok": true}'))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: opener)
     assert auth.post_json(auth.TOKEN_URL, {"code": "test+code", "grant_type": "authorization_code"}, form=True) == {"ok": True}
+    assert len(opener.requests) == 1
+    request, _timeout = opener.requests[0]
+    assert request.get_header("Content-type") == "application/x-www-form-urlencoded"
+    assert parse_qs(request.data.decode()) == {"code": ["test+code"], "grant_type": ["authorization_code"]}
 
 
 def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
@@ -1012,28 +1021,21 @@ def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
 
 
 def test_bounded_catalog_get_uses_only_codex_origin_and_redacts_errors(monkeypatch):
-    import io
-    from email.message import Message
-    from urllib.error import HTTPError
     key = "test-access-not-real"
-    requests = []
-    class Opener:
-        def open(self, request, timeout):
-            requests.append(request)
-            assert timeout == 3
-            if len(requests) == 1:
-                return io.BytesIO(b'{"models": []}')
-            raise HTTPError(request.full_url, 403, "denied", Message(), io.BytesIO(json.dumps({"error": {"message": "denied " + key}}).encode()))
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
     url = "https://chatgpt.com/backend-api/codex/models?client_version=0.4.241"
+    error_body = json.dumps({"error": {"message": "denied " + key}}).encode()
+    opener = RecordingOpener(HttpReply(b'{"models": []}'), HTTPError(url, 403, "denied", {}, HttpReply(error_body)))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: opener)
     headers = {"Authorization": "Bearer " + key}
     assert auth.get_json(url, headers=headers, timeout=3, limit=128) == {"models": []}
-    assert requests[0].get_method() == "GET"
+    assert opener.requests[0][0].get_method() == "GET"
     with pytest.raises(auth.CodexError, match="HTTP 403") as caught:
         auth.get_json(url, headers=headers, timeout=3, limit=128)
     assert key not in str(caught.value)
     with pytest.raises(auth.CodexError):
         auth.get_json("https://api.openai.com/v1/models", headers=headers)
+    assert len(opener.requests) == 2
+    assert all(timeout == 3 for _request, timeout in opener.requests)
 
 
 def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path):
@@ -1170,11 +1172,9 @@ def test_subscription_json_input_framing_preserves_all_authored_messages(mode, m
 
 
 @pytest.mark.parametrize("cache_key", [None, "infini-static-prefix", "unicode-кэш", "key\r\nextra: value"])
-def test_subscription_cache_affinity_reaches_native_session_header(subscription, monkeypatch, cache_key):
+def test_subscription_cache_affinity_reaches_native_session_header(subscription_sends, monkeypatch, cache_key):
     from urllib.parse import quote
-    response, credentials = subscription
-    sent = []
-    monkeypatch.setattr(auth, "post_sse", lambda url, body, **kw: sent.append((url, copy.deepcopy(body), kw)) or copy.deepcopy(response))
+    response, credentials, sent = subscription_sends
     packet = {"model": "test-model", "messages": [{"role": "user", "content": "recipe one"}]}
     if cache_key is not None:
         packet["prompt_cache_key"] = cache_key

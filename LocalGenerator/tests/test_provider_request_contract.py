@@ -28,6 +28,16 @@ def cache_packet(suffix='{"recipeKey":"one"}'):
         {"role": "user", "content": '{"catalog":[], ' + suffix}], "response_format": {"type": "json_object"}}
 
 
+@pytest.fixture
+def context_scalars(monkeypatch):
+    """Direct legacy scalar seams only; never broaden runtime/native imports."""
+    def configure(default):
+        monkeypatch.setattr(llm, "resolve_llm_model", lambda context=None: (context or default)["model"])
+        monkeypatch.setattr(llm, "active_llm_provider", lambda context=None: (context or default)["provider"])
+        monkeypatch.setattr(llm, "llm_base_url", lambda context=None: (context or default)["base_url"])
+    return configure
+
+
 @pytest.mark.parametrize("provider,base,model,mode,effort,source", [
     pytest.param("openai_compat", GOOGLE, "gemini-3.1-flash-lite", "auto", "medium", "options", id="google-auto"),
     pytest.param("openai_compat", GOOGLE, "gemini-3.1-flash-lite", "xhigh", "high", "options", id="google-xhigh"),
@@ -37,14 +47,12 @@ def cache_packet(suffix='{"recipeKey":"one"}'):
     pytest.param("openrouter", "https://openrouter.ai/api/v1", "google/gemini-3.1-flash-lite", "medium", "medium", "native", id="fallback-to-router"),
     pytest.param("openai_compat", GOOGLE, "gemini-3.1-flash-lite", "medium", "medium", "local-intent", id="local-to-remote-intent"),
 ])
-def test_reasoning_control_is_native_to_the_selected_context(monkeypatch, provider, base, model, mode, effort, source):
+def test_reasoning_control_is_native_to_the_selected_context(monkeypatch, context_scalars, provider, base, model, mode, effort, source):
     context = {"provider": provider, "base_url": base, "model": model}
     local = {"provider": "local", "base_url": "http://127.0.0.1:1234/v1", "model": "local-model"}
     default = local if source == "local-intent" else context
     monkeypatch.setattr(llm, "LLM_REASONING_MODE", mode)
-    monkeypatch.setattr(llm, "resolve_llm_model", lambda context=None: (context or default)["model"])
-    monkeypatch.setattr(llm, "active_llm_provider", lambda context=None: (context or default)["provider"])
-    monkeypatch.setattr(llm, "llm_base_url", lambda context=None: (context or default)["base_url"])
+    context_scalars(default)
     if source in {"options", "local-intent"}:
         request = llm.apply_llm_common_options({}, model_name=default["model"])
     else:
@@ -75,11 +83,9 @@ def test_reasoning_control_is_native_to_the_selected_context(monkeypatch, provid
         ("spoof-userinfo", "https://generativelanguage.googleapis.com@proxy.example/v1"),
         ("malformed-port", "https://generativelanguage.googleapis.com:badport/v1")]
 ])
-def test_reasoning_headroom_preserves_answer_budget_only_for_actual_google(monkeypatch, provider, base, budget, effort, expected, native):
+def test_reasoning_headroom_preserves_answer_budget_only_for_actual_google(monkeypatch, context_scalars, provider, base, budget, effort, expected, native):
     context = {"provider": provider, "base_url": base, "model": "gemini-3.5-flash-lite"}
-    monkeypatch.setattr(llm, "resolve_llm_model", lambda context=None: (context or {})["model"])
-    monkeypatch.setattr(llm, "active_llm_provider", lambda context=None: (context or {})["provider"])
-    monkeypatch.setattr(llm, "llm_base_url", lambda context=None: (context or {})["base_url"])
+    context_scalars({})
     request = {"max_tokens": budget, "reasoning_effort": effort}
     prepared = llm._payload_for_context(request, context)
     assert request == {"max_tokens": budget, "reasoning_effort": effort}

@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 import time
 import copy
 from email.message import Message
@@ -20,6 +20,8 @@ import urllib.error
 from types import SimpleNamespace
 
 import pytest
+
+from provider_test_support import HttpReply, HttpSender, physical_attempt, loopback_server, write_json_response
 
 from infini_local.core import llm_config
 from infini_local.pipelines import llm_transport as transport
@@ -144,45 +146,14 @@ def loopback_transport(monkeypatch):
                     default = {"id": "response-loopback", "output_text": "{}", "status": "completed"}
                 else:
                     default = {"choices": [{"finish_reason": "stop", "message": {"content": "{}"}}]}
-                encoded = reply["raw_body"].encode() if "raw_body" in reply else json.dumps(reply.get("body", default)).encode()
-                try:
-                    time.sleep(reply.get("before_headers", 0.0))
-                    self.send_response(reply.get("status", 200))
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(encoded)))
-                    for name, value in reply.get("headers", {}).items():
-                        self.send_header(name, value)
-                    if reply.get("header_trickle"):
-                        # Every idle gap is below timeout, while the complete header is not.
-                        buffered = b"".join(self._headers_buffer)
-                        self._headers_buffer = []
-                        for octet in buffered + b"\r\n":
-                            self.wfile.write(bytes([octet]))
-                            self.wfile.flush()
-                            time.sleep(reply["header_trickle"])
-                    else:
-                        self.end_headers()
-                    if reply.get("trickle"):
-                        for octet in encoded:
-                            self.wfile.write(bytes([octet]))
-                            self.wfile.flush()
-                            time.sleep(reply["trickle"])
-                    else:
-                        self.wfile.write(encoded)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
+                write_json_response(self, reply.get("body", default), **{
+                    key: value for key, value in reply.items() if key != "body"
+                })
 
             do_POST = do_GET = respond
 
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.01), daemon=True)
-        thread.start()
-        try:
+        with loopback_server(Handler) as server:
             yield f"http://127.0.0.1:{server.server_port}", observed
-        finally:
-            server.shutdown()
-            thread.join(timeout=3)
-            server.server_close()
 
     with ExitStack() as stack:
         def make_endpoint(replies=()):
@@ -457,6 +428,13 @@ def test_codex_stream_boundary_reports_only_owned_observations_without_generic_h
     assert debug["physicalAttempts"] == []
 
 
+def assert_responses_dossier(body, request):
+    assert body["instructions"] == request["messages"][0]["content"]
+    assert body["input"] == [request["messages"][1]]
+    assert body["text"] == {"format": request["response_format"]}
+    assert body["max_output_tokens"] == request["max_tokens"]
+
+
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("provider,pin", [
     pytest.param("openrouter", PIN, id="strict-pin"),
@@ -492,10 +470,7 @@ def test_profile_routing_wire(wire, provider, pin, mode):
             "provider": provider, "model": "other-model", "openrouter_provider": PIN})
         assert secondary is not None and secondary["openrouter_provider"] == ""
     if url.endswith("/responses"):
-        assert body["instructions"] == request["messages"][0]["content"]
-        assert body["input"] == [request["messages"][1]]
-        assert body["max_output_tokens"] == 321
-        assert body["text"] == {"format": request["response_format"]}
+        assert_responses_dossier(body, request)
     else:
         expected = {key: value for key, value in request.items() if key not in {transport.LLM_STAGE_KEY, "provider"}}
         expected["model"] = body["model"]
@@ -593,10 +568,7 @@ def test_responses_chain_keeps_full_authored_stage_dossier(wire, mode, provider)
             assert url.endswith("/responses")
             assert body.get("provider") == ({"only": [PIN], "allow_fallbacks": False} if provider == "openrouter" else None)
             assert body["model"] == f"override/{stage}"
-            assert body["instructions"] == request["messages"][0]["content"]
-            assert body["input"] == [request["messages"][1]]
-            assert body["text"] == {"format": request["response_format"]}
-            assert body["max_output_tokens"] == 321
+            assert_responses_dossier(body, request)
             assert transport.LLM_MODEL_OVERRIDE_KEY not in body and transport.LLM_STAGE_KEY not in body
             assert request == before
             assert result["choices"][0]["message"]["content"] == "{}"
@@ -1005,46 +977,57 @@ def rate_clock(monkeypatch):
     transport._reset_llm_pool_runtime_for_tests()
 
 
-@pytest.mark.parametrize("endpoint", ["chat/completions", "responses"])
-def test_nous_openai_http_admission_does_not_invent_a_token_window(rate_clock, monkeypatch, endpoint):
+@pytest.mark.parametrize("url,model,cached,policy,wait,second_sent", [
+    *[pytest.param(f"https://inference-api.nousresearch.com/v1/{endpoint}", "openai/gpt-6-luna", 19000,
+                  "nous_openai_feedback", "pacing", True, id=f"nous-{endpoint.replace('/', '-')}")
+      for endpoint in ("chat/completions", "responses")],
+    *[pytest.param(url, model, 19999, "unknown_conservative", "token_window", False, id=label)
+      for label, url, model in (
+        ("lookalike-host", "https://inference-api.nousresearch.com.evil.example/v1/chat/completions", "openai/gpt-6-luna"),
+        ("insecure-scheme", "http://inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna"),
+        ("explicit-port", "https://inference-api.nousresearch.com:443/v1/chat/completions", "openai/gpt-6-luna"),
+        ("userinfo", "https://user@inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna"),
+        ("other-endpoint", "https://inference-api.nousresearch.com/v1/other", "openai/gpt-6-luna"),
+        ("query", "https://inference-api.nousresearch.com/v1/responses?route=other", "openai/gpt-6-luna"),
+        ("other-family", "https://inference-api.nousresearch.com/v1/chat/completions", "google/gemini"),
+        ("platform-not-subscription", "https://api.openai.com/v1/chat/completions", "gpt-6-luna"),
+        ("generic-not-native-codex", "https://chatgpt.com/backend-api/codex/responses", "gpt-6-luna"),
+      )],
+])
+def test_http_admission_uses_feedback_only_for_exact_nous_route(
+    rate_clock, monkeypatch, url, model, cached, policy, wait, second_sent,
+):
     clock = rate_clock
-    url = f"https://inference-api.nousresearch.com/v1/{endpoint}"
-    payload = {"model": "openai/gpt-6-luna", "messages": [{"role": "user", "content": "x" * 80_000}]}
+    payload = {"model": model, "messages": [{"role": "user", "content": "x" * 80_000}]}
     before = copy.deepcopy(payload)
-    sends, observations = [], []
-
-    class Response(io.BytesIO):
-        status = 200
-        headers = Message()
-
-    def sender(request, *, deadline):
-        sends.append((json.loads(request.data), clock.now, deadline))
-        return Response(b'{"usage":{"input_tokens":20000,"input_tokens_details":{"cached_tokens":19000}}}')
-
-    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    sender = HttpSender(monkeypatch, transport, clock, default_body=json.dumps({
+        "usage": {"input_tokens": 20000, "input_tokens_details": {"cached_tokens": cached}},
+    }).encode())
+    observations = []
 
     def call():
-        row = {"rateWaitReason": "none"}
-        token = transport._CURRENT_LLM_ATTEMPT.set(row)
-        try:
+        with physical_attempt(transport, observations):
             return transport.http_json(url, payload, timeout=10)
-        finally:
-            observations.append(row)
-            transport._CURRENT_LLM_ATTEMPT.reset(token)
 
     assert clock.start("first", call) == "done"
     assert clock.start("second", call) == "waiting"
-    assert clock.parked["second"] == pytest.approx(5.1), "wire size invented a 60-second quota"
-    assert clock.step("second", 1005.1) == "done"
-    assert not isinstance(clock.results["second"], Exception)
-    assert [sent[1] for sent in sends] == [1000.0, 1005.1]
-    assert [sent[2] for sent in sends] == [1010.0, 1010.0]
-    assert all(sent[0] == before for sent in sends) and payload == before
-    assert [row["rateAdmissionPolicy"] for row in observations] == ["nous_openai_feedback"] * 2
-    assert observations[1]["rateWaitReason"] == "pacing"
-    assert observations[1]["rateWaitMs"] == 5100
-    assert transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]["events"] == []
+    if second_sent:
+        assert clock.parked["second"] == pytest.approx(5.1), "wire size invented a 60-second quota"
+        assert clock.step("second", 1005.1) == "done"
+        assert not isinstance(clock.results["second"], Exception)
+        assert [sent[1] for sent in sender.sends] == [1000.0, 1005.1]
+        assert [sent[2] for sent in sender.sends] == [1010.0, 1010.0]
+        assert observations[1]["rateWaitMs"] == 5100
+        assert transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]["events"] == []
+        assert [row["rateAdmissionPolicy"] for row in observations] == [policy] * 2
+    else:
+        assert clock.step("second", 1010.0) == "done"
+        assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
+        assert len(sender.sends) == 1
+        assert observations[1]["rateAdmissionPolicy"] == policy
+    assert all(sent[0] == before for sent in sender.sends)
+    assert payload == before
+    assert observations[1]["rateWaitReason"] == wait
 
 
 @pytest.mark.parametrize("resource", ["requests", "tokens", "project-tokens"])
@@ -1063,29 +1046,14 @@ def test_http_quota_headers_block_admission_without_retaining_other_headers(rate
     headers["X-RateLimit-Unknown"] = "synthetic-secret-key"
     sends, rows = [], []
 
-    class Response(io.BytesIO):
-        status = 200
-        headers = Message()
-
-    def sender(request, *, deadline):
-        sends.append((json.loads(request.data), clock.now, deadline))
-        if status == 429 and len(sends) == 1:
-            raise urllib.error.HTTPError(url, 429, "synthetic quota", headers, io.BytesIO(b'{}'))
-        response = Response(b'{}')
-        response.headers = headers if len(sends) == 1 else Message()
-        return response
-
-    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    reply = (urllib.error.HTTPError(url, 429, "synthetic quota", headers, io.BytesIO(b'{}'))
+             if status == 429 else HttpReply(headers=headers))
+    sender = HttpSender(monkeypatch, transport, clock, [reply])
+    sends = sender.sends
 
     def call(timeout):
-        row = {"rateWaitReason": "none"}
-        token = transport._CURRENT_LLM_ATTEMPT.set(row)
-        try:
+        with physical_attempt(transport, rows):
             return transport.http_json(url, payload, timeout=timeout)
-        finally:
-            rows.append(row)
-            transport._CURRENT_LLM_ATTEMPT.reset(token)
 
     assert clock.start("first", lambda: call(100)) == "done"
     if status == 429:
@@ -1130,51 +1098,6 @@ def test_retry_after_is_bounded_and_supports_http_date(rate_clock, retry_after, 
     assert "synthetic-" not in json.dumps(state)
 
 
-@pytest.mark.parametrize("url,model", [
-    pytest.param("https://inference-api.nousresearch.com.evil.example/v1/chat/completions", "openai/gpt-6-luna", id="lookalike-host"),
-    pytest.param("http://inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna", id="insecure-scheme"),
-    pytest.param("https://inference-api.nousresearch.com:443/v1/chat/completions", "openai/gpt-6-luna", id="explicit-port"),
-    pytest.param("https://user@inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna", id="userinfo"),
-    pytest.param("https://inference-api.nousresearch.com/v1/other", "openai/gpt-6-luna", id="other-endpoint"),
-    pytest.param("https://inference-api.nousresearch.com/v1/responses?route=other", "openai/gpt-6-luna", id="query"),
-    pytest.param("https://inference-api.nousresearch.com/v1/chat/completions", "google/gemini", id="other-family"),
-    pytest.param("https://api.openai.com/v1/chat/completions", "gpt-6-luna", id="platform-not-subscription"),
-    pytest.param("https://chatgpt.com/backend-api/codex/responses", "gpt-6-luna", id="generic-not-native-codex"),
-])
-def test_unknown_routes_keep_conservative_budget_even_with_cached_usage(rate_clock, monkeypatch, url, model):
-    clock = rate_clock
-    payload = {"model": model, "messages": [{"role": "user", "content": "x" * 80_000}]}
-    sends, rows = [], []
-
-    class Response(io.BytesIO):
-        status = 200
-        headers = Message()
-
-    def sender(request, *, deadline):
-        sends.append(json.loads(request.data))
-        return Response(b'{"usage":{"input_tokens":20000,"input_tokens_details":{"cached_tokens":19999}}}')
-
-    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
-
-    def call():
-        row = {"rateWaitReason": "none"}
-        token = transport._CURRENT_LLM_ATTEMPT.set(row)
-        try:
-            return transport.http_json(url, payload, timeout=10)
-        finally:
-            rows.append(row)
-            transport._CURRENT_LLM_ATTEMPT.reset(token)
-
-    assert clock.start("first", call) == "done"
-    assert clock.start("second", call) == "waiting"
-    assert clock.step("second", 1010.0) == "done"
-    assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
-    assert sends == [payload]
-    assert rows[1]["rateAdmissionPolicy"] == "unknown_conservative"
-    assert rows[1]["rateWaitReason"] == "token_window"
-
-
 @pytest.mark.parametrize("invalid", ["NaN", "inf", "-1", "6m-secret", "9" * 100, "duplicate"])
 def test_malformed_quota_headers_cannot_establish_or_clear_cooldown(rate_clock, monkeypatch, invalid):
     clock = rate_clock
@@ -1190,18 +1113,8 @@ def test_malformed_quota_headers_cannot_establish_or_clear_cooldown(rate_clock, 
     row = {"rateWaitReason": "none"}
     sends = []
 
-    class Response(io.BytesIO):
-        status = 200
-        headers = Message()
-
-    def sender(request, *, deadline):
-        sends.append(request)
-        response = Response(b'{}')
-        response.headers = headers
-        return response
-
-    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    sender = HttpSender(monkeypatch, transport, clock, [HttpReply(headers=headers)])
+    sends = sender.sends
     token = transport._CURRENT_LLM_ATTEMPT.set(row)
     try:
         assert transport.http_json(url, payload, timeout=10) == {}
@@ -1260,14 +1173,8 @@ def test_quota_feedback_precedes_failed_body_and_requires_explicit_exhaustion(ra
     if reset is not None:
         headers["X-RateLimit-Reset-Tokens"] = reset
 
-    class Response(io.BytesIO):
-        status = 200
-        headers = Message()
-
-    response = Response(b'{"unfinished":')
-    response.headers = headers
-    monkeypatch.setattr(transport, "urlopen_no_redirect", lambda request, **kw: response)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    response = HttpReply(b'{"unfinished":', headers=headers)
+    HttpSender(monkeypatch, transport, clock, [response])
     with pytest.raises(json.JSONDecodeError):
         transport.http_json(url, payload, timeout=10)
     state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
@@ -1396,14 +1303,8 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     transport._reserve_remote_rate_slot(url, {"model": model}, b"{}")
     sends, diagnostics = [], {}
 
-    class Response(io.BytesIO):
-        status = 200
-
-    def sender(request, *, deadline):
-        sends.append((json.loads(request.data), clock.now, deadline))
-        return Response(b'{}')
-    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
-    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    sender = HttpSender(monkeypatch, transport, clock)
+    sends = sender.sends
 
     def call(name, content):
         request = transport.with_llm_stage({"model": model, "messages": [
