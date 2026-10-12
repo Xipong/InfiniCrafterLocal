@@ -986,7 +986,7 @@ def rate_clock(monkeypatch):
     from infini_local.core import http_io
     clock = RateClock()
     transport._reset_llm_pool_runtime_for_tests()
-    fake_time = SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep)
+    fake_time = SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep, time=lambda: 1_700_000_020.0)
     monkeypatch.setattr(transport, "time", fake_time)
     monkeypatch.setattr(http_io, "time", fake_time)
     monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
@@ -1002,6 +1002,302 @@ def rate_clock(monkeypatch):
     yield clock
     clock.close()
     transport._reset_llm_pool_runtime_for_tests()
+
+
+@pytest.mark.parametrize("endpoint", ["chat/completions", "responses"])
+def test_nous_openai_http_admission_does_not_invent_a_token_window(rate_clock, monkeypatch, endpoint):
+    clock = rate_clock
+    url = f"https://inference-api.nousresearch.com/v1/{endpoint}"
+    payload = {"model": "openai/gpt-6-luna", "messages": [{"role": "user", "content": "x" * 80_000}]}
+    before = copy.deepcopy(payload)
+    sends, observations = [], []
+
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+
+    def sender(request, *, deadline):
+        sends.append((json.loads(request.data), clock.now, deadline))
+        return Response(b'{"usage":{"input_tokens":20000,"input_tokens_details":{"cached_tokens":19000}}}')
+
+    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+
+    def call():
+        row = {"rateWaitReason": "none"}
+        token = transport._CURRENT_LLM_ATTEMPT.set(row)
+        try:
+            return transport.http_json(url, payload, timeout=10)
+        finally:
+            observations.append(row)
+            transport._CURRENT_LLM_ATTEMPT.reset(token)
+
+    assert clock.start("first", call) == "done"
+    assert clock.start("second", call) == "waiting"
+    assert clock.parked["second"] == pytest.approx(5.1), "wire size invented a 60-second quota"
+    assert clock.step("second", 1005.1) == "done"
+    assert not isinstance(clock.results["second"], Exception)
+    assert [sent[1] for sent in sends] == [1000.0, 1005.1]
+    assert [sent[2] for sent in sends] == [1010.0, 1010.0]
+    assert all(sent[0] == before for sent in sends) and payload == before
+    assert [row["rateAdmissionPolicy"] for row in observations] == ["nous_openai_feedback"] * 2
+    assert observations[1]["rateWaitReason"] == "pacing"
+    assert observations[1]["rateWaitMs"] == 5100
+    assert transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]["events"] == []
+
+
+@pytest.mark.parametrize("resource", ["requests", "tokens", "project-tokens"])
+@pytest.mark.parametrize("status", [200, 429])
+def test_http_quota_headers_block_admission_without_retaining_other_headers(rate_clock, monkeypatch, resource, status):
+    clock = rate_clock
+    url = "https://inference-api.nousresearch.com/v1/chat/completions"
+    payload = {"model": "openai/gpt-6-luna", "messages": [{"role": "user", "content": "full authored context"}]}
+    headers = Message()
+    headers[f"X-RateLimit-Limit-{resource}"] = "100"
+    headers[f"X-RateLimit-Remaining-{resource}"] = "0"
+    headers[f"X-RateLimit-Reset-{resource}"] = "1m15s"
+    headers["Retry-After"] = "75"
+    headers["Set-Cookie"] = "session=synthetic-secret-cookie"
+    headers["ChatGPT-Account-Id"] = "synthetic-account-id"
+    headers["X-RateLimit-Unknown"] = "synthetic-secret-key"
+    sends, rows = [], []
+
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+
+    def sender(request, *, deadline):
+        sends.append((json.loads(request.data), clock.now, deadline))
+        if status == 429 and len(sends) == 1:
+            raise urllib.error.HTTPError(url, 429, "synthetic quota", headers, io.BytesIO(b'{}'))
+        response = Response(b'{}')
+        response.headers = headers if len(sends) == 1 else Message()
+        return response
+
+    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+
+    def call(timeout):
+        row = {"rateWaitReason": "none"}
+        token = transport._CURRENT_LLM_ATTEMPT.set(row)
+        try:
+            return transport.http_json(url, payload, timeout=timeout)
+        finally:
+            rows.append(row)
+            transport._CURRENT_LLM_ATTEMPT.reset(token)
+
+    assert clock.start("first", lambda: call(100)) == "done"
+    if status == 429:
+        assert isinstance(clock.results["first"], urllib.error.HTTPError)
+        clock.results["first"].close()
+    assert "rateLimitHeaders" in rows[0], "actual response quota metadata was discarded"
+    assert rows[0]["rateLimitHeaders"] == {
+        f"x-ratelimit-limit-{resource}": 100,
+        f"x-ratelimit-remaining-{resource}": 0,
+        f"x-ratelimit-reset-{resource}": 75.0,
+        "retry-after": 75.0,
+    }
+    assert "synthetic-" not in json.dumps(rows)
+    assert clock.start("second", lambda: call(10)) == "waiting"
+    assert clock.step("second", 1010.0) == "done"
+    assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
+    assert len(sends) == 1 and rows[1]["networkStarted"] is False
+    assert rows[1]["rateWaitReason"] == ("provider_cooldown" if status == 429 else "provider_quota")
+    assert clock.start("third", lambda: call(100)) == "waiting"
+    assert clock.step("third", 1075.0) == "done"
+    assert clock.results["third"] == {}
+    assert sends == [(payload, 1000.0, 1100.0), (payload, 1075.0, 1110.0)]
+
+
+@pytest.mark.parametrize("retry_after,expected", [
+    pytest.param("Tue, 14 Nov 2023 22:15:00 GMT", 80.0, id="http-date"),
+    pytest.param("75", 75.0, id="seconds"),
+    pytest.param("NaN", 60.0, id="nan"),
+    pytest.param("inf", 60.0, id="infinity"),
+    pytest.param("-50", 60.0, id="negative"),
+    pytest.param("synthetic-secret-key", 60.0, id="untrusted-text"),
+])
+def test_retry_after_is_bounded_and_supports_http_date(rate_clock, retry_after, expected):
+    clock = rate_clock
+    headers = Message()
+    headers["Retry-After"] = retry_after
+    url, payload = "https://inference-api.nousresearch.com/v1/responses", {"model": "openai/gpt-6-luna"}
+    error = urllib.error.HTTPError(url, 429, "synthetic quota", headers, None)
+    transport._mark_remote_rate_limited(url, payload, error)
+    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+    assert state["blockedUntil"] == clock.now + expected
+    assert "synthetic-" not in json.dumps(state)
+
+
+@pytest.mark.parametrize("url,model", [
+    pytest.param("https://inference-api.nousresearch.com.evil.example/v1/chat/completions", "openai/gpt-6-luna", id="lookalike-host"),
+    pytest.param("http://inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna", id="insecure-scheme"),
+    pytest.param("https://inference-api.nousresearch.com:443/v1/chat/completions", "openai/gpt-6-luna", id="explicit-port"),
+    pytest.param("https://user@inference-api.nousresearch.com/v1/chat/completions", "openai/gpt-6-luna", id="userinfo"),
+    pytest.param("https://inference-api.nousresearch.com/v1/other", "openai/gpt-6-luna", id="other-endpoint"),
+    pytest.param("https://inference-api.nousresearch.com/v1/responses?route=other", "openai/gpt-6-luna", id="query"),
+    pytest.param("https://inference-api.nousresearch.com/v1/chat/completions", "google/gemini", id="other-family"),
+    pytest.param("https://api.openai.com/v1/chat/completions", "gpt-6-luna", id="platform-not-subscription"),
+    pytest.param("https://chatgpt.com/backend-api/codex/responses", "gpt-6-luna", id="generic-not-native-codex"),
+])
+def test_unknown_routes_keep_conservative_budget_even_with_cached_usage(rate_clock, monkeypatch, url, model):
+    clock = rate_clock
+    payload = {"model": model, "messages": [{"role": "user", "content": "x" * 80_000}]}
+    sends, rows = [], []
+
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+
+    def sender(request, *, deadline):
+        sends.append(json.loads(request.data))
+        return Response(b'{"usage":{"input_tokens":20000,"input_tokens_details":{"cached_tokens":19999}}}')
+
+    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+
+    def call():
+        row = {"rateWaitReason": "none"}
+        token = transport._CURRENT_LLM_ATTEMPT.set(row)
+        try:
+            return transport.http_json(url, payload, timeout=10)
+        finally:
+            rows.append(row)
+            transport._CURRENT_LLM_ATTEMPT.reset(token)
+
+    assert clock.start("first", call) == "done"
+    assert clock.start("second", call) == "waiting"
+    assert clock.step("second", 1010.0) == "done"
+    assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
+    assert sends == [payload]
+    assert rows[1]["rateAdmissionPolicy"] == "unknown_conservative"
+    assert rows[1]["rateWaitReason"] == "token_window"
+
+
+@pytest.mark.parametrize("invalid", ["NaN", "inf", "-1", "6m-secret", "9" * 100, "duplicate"])
+def test_malformed_quota_headers_cannot_establish_or_clear_cooldown(rate_clock, monkeypatch, invalid):
+    clock = rate_clock
+    url = "https://inference-api.nousresearch.com/v1/responses"
+    payload = {"model": "openai/gpt-6-luna"}
+    headers = Message()
+    for field in ("limit", "remaining", "reset"):
+        name = f"X-RateLimit-{field}-Tokens"
+        headers[name] = invalid if invalid != "duplicate" else "0"
+        if invalid == "duplicate":
+            headers[name] = "999"
+    headers["Retry-After"] = invalid
+    row = {"rateWaitReason": "none"}
+    sends = []
+
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+
+    def sender(request, *, deadline):
+        sends.append(request)
+        response = Response(b'{}')
+        response.headers = headers
+        return response
+
+    monkeypatch.setattr(transport, "urlopen_no_redirect", sender)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    token = transport._CURRENT_LLM_ATTEMPT.set(row)
+    try:
+        assert transport.http_json(url, payload, timeout=10) == {}
+    finally:
+        transport._CURRENT_LLM_ATTEMPT.reset(token)
+    assert row["rateLimitHeaders"] == {}
+    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+    assert state.get("quotaUntil", 0) == 0
+    state["blockedUntil"] = 1090.0
+    transport._mark_remote_rate_limited(url, payload, urllib.error.HTTPError(url, 429, "synthetic", headers, None))
+    assert state["blockedUntil"] == 1090.0
+    assert len(sends) == 1 and clock.now == 1000.0
+
+
+@pytest.mark.parametrize("feedback", ["quota", "429"])
+def test_nous_feedback_waiters_preserve_fifo_at_reset(rate_clock, feedback):
+    clock = rate_clock
+    url, payload = "https://inference-api.nousresearch.com/v1/responses", {"model": "openai/gpt-6-luna"}
+    headers = Message()
+    headers["X-RateLimit-Remaining-Requests"] = "0"
+    headers["X-RateLimit-Reset-Requests"] = "75s"
+    transport._observe_remote_quota_headers(url, payload, headers)
+    if feedback == "429":
+        headers["Retry-After"] = "75"
+        transport._mark_remote_rate_limited(url, payload, urllib.error.HTTPError(url, 429, "synthetic", headers, None))
+    admitted = []
+
+    def reserve(name):
+        transport._reserve_remote_rate_slot(url, payload, b"x" * 80_000, max_wait_seconds=100)
+        admitted.append(name)
+
+    assert clock.start("older", lambda: reserve("older")) == "waiting"
+    assert clock.start("younger", lambda: reserve("younger")) == "waiting"
+    assert clock.step("younger", 1075.0) == "waiting"
+    assert clock.step("older", 1075.0) == "done"
+    assert clock.step("younger", 1075.0) == "waiting"
+    assert clock.step("younger", 1080.1) == "done"
+    assert admitted == ["older", "younger"]
+    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+    assert not state["waiters"] and not state["events"]
+
+
+@pytest.mark.parametrize("remaining,reset,expected", [
+    pytest.param("0", "250ms", .25, id="millisecond-reset"),
+    pytest.param("0", "1h2m3s", 3723.0, id="compound-reset"),
+    pytest.param("10", "75s", 0.0, id="positive-remaining"),
+    pytest.param("0", None, 0.0, id="missing-reset"),
+    pytest.param(None, "75s", 0.0, id="missing-remaining"),
+])
+def test_quota_feedback_precedes_failed_body_and_requires_explicit_exhaustion(rate_clock, monkeypatch, remaining, reset, expected):
+    clock = rate_clock
+    url, payload = "https://inference-api.nousresearch.com/v1/responses", {"model": "openai/gpt-6-luna"}
+    headers = Message()
+    if remaining is not None:
+        headers["X-RateLimit-Remaining-Tokens"] = remaining
+    if reset is not None:
+        headers["X-RateLimit-Reset-Tokens"] = reset
+
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+
+    response = Response(b'{"unfinished":')
+    response.headers = headers
+    monkeypatch.setattr(transport, "urlopen_no_redirect", lambda request, **kw: response)
+    monkeypatch.setattr(transport, "read_with_deadline", lambda response, **kw: response.read())
+    with pytest.raises(json.JSONDecodeError):
+        transport.http_json(url, payload, timeout=10)
+    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
+    assert state.get("quotaUntil", 0.0) == (clock.now + expected if expected else 0.0)
+    assert response.closed
+
+
+@pytest.mark.parametrize("status", [200, 429])
+def test_real_urllib_quota_headers_reach_logical_diagnostics(loopback_transport, monkeypatch, status):
+    endpoint, events = loopback_transport
+    headers = {"X-RateLimit-Limit-Requests": "10", "X-RateLimit-Remaining-Requests": "0",
+               "X-RateLimit-Reset-Requests": "6m0s", "Set-Cookie": "synthetic-secret-cookie",
+               "ChatGPT-Account-Id": "synthetic-account-id"}
+    base, observed = endpoint([{"status": status, "headers": headers}])
+    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(transport, "LLM_FALLBACK_NETWORK_FAILS", 1)
+    if status == 200:
+        debug = transport.llm_chat_json(packet(), timeout=1)["_debug"]
+    else:
+        with pytest.raises(urllib.error.HTTPError) as raised:
+            transport.llm_chat_json(packet(), timeout=1)
+        debug = raised.value._infini_transport_debug
+    assert len(observed) == 1
+    row = debug["physicalAttempts"][0]
+    assert row["rateAdmissionPolicy"] == "local_exempt"
+    assert row["rateLimitHeaders"] == {"x-ratelimit-limit-requests": 10,
+                                       "x-ratelimit-remaining-requests": 0,
+                                       "x-ratelimit-reset-requests": 360.0}
+    assert transport._LLM_RATE_STATE == {}
+    assert "synthetic-secret-cookie" not in json.dumps(debug)
+    assert "synthetic-account-id" not in json.dumps(events)
 
 
 @pytest.mark.parametrize("budget", [120, None], ids=["bounded", "unbounded"])
