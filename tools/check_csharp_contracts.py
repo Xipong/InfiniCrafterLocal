@@ -963,7 +963,7 @@ def check_escrow_session_fences() -> None:
     spawn = code(mp, "SpawnGeneratedItemServerSide")
     ordered(spawn, ("CanCommitCraft", "Item.NewItem", "CompleteServerCraftTransaction", "committed = true", "NetMessage.SendData"), "output")
     needs(spawn, (
-        "if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false } && Main.timeItemSlotCannotBeReusedFor[index] <= 0))",
+        "if (!HasReusableWorldItemSlot())",
         "noBroadcast: true", "return committed;",
         "if (!committed && allocatedOutput is not null) allocatedOutput.TurnToAir();",
     ), "allocation rollback")

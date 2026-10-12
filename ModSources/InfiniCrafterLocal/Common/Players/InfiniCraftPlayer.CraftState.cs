@@ -192,6 +192,9 @@ public sealed partial class InfiniCraftPlayer
 
     public override void Initialize()
     {
+        Array.Clear(_craftLaneOutcomes);
+        Array.Clear(_craftLaneOutcomeTicks);
+        Array.Clear(_remoteCraftCancelRequested);
         InputA = NewAirItem();
         InputB = NewAirItem();
         InitializeMultiDevCraftState();
@@ -271,6 +274,8 @@ public sealed partial class InfiniCraftPlayer
                 tag["infiniPendingRemoteCrafts"] = remoteCrafts;
                 _pendingRemoteCraftSavedForWorldExit = true;
             }
+            if (_deferredExitRefunds.Count > 0)
+                tag["infiniDeferredCraftRefundsV1"] = _deferredExitRefunds.Select(item => ItemIO.Save(item)).ToList();
             var refunds = PendingRefundTagsForSave();
             if (refunds.Count > 0)
             {
@@ -292,6 +297,11 @@ public sealed partial class InfiniCraftPlayer
         _deferredExitRefunds.Clear();
         try
         {
+            foreach (TagCompound row in tag.GetList<TagCompound>("infiniDeferredCraftRefundsV1"))
+            {
+                Item item = ItemIO.Load(row);
+                if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+            }
             string clientId = tag.ContainsKey("infiniStationEscrowClientId")
                 ? tag.GetString("infiniStationEscrowClientId")
                 : "";
@@ -351,7 +361,7 @@ public sealed partial class InfiniCraftPlayer
         return pending;
     }
 
-    private static void AddPendingRemoteCraftTag(
+    private void AddPendingRemoteCraftTag(
         List<TagCompound> pending,
         int laneIndex,
         string requestId,
@@ -367,6 +377,7 @@ public sealed partial class InfiniCraftPlayer
         b.stack = 1;
         pending.Add(new TagCompound
         {
+            ["cancelRequested"] = _remoteCraftCancelRequested[laneIndex],
             ["laneIndex"] = laneIndex,
             ["requestId"] = NormalizeCraftRequestId(requestId),
             ["parentA"] = request.ParentA ?? "",
@@ -428,6 +439,7 @@ public sealed partial class InfiniCraftPlayer
             {
                 RestoreMultiDevPendingRemoteCraft(laneIndex, requestId, request);
             }
+            _remoteCraftCancelRequested[laneIndex] = row.ContainsKey("cancelRequested") && row.GetBool("cancelRequested");
             _stationEscrowUsesRemoteAuthority = true;
         }
     }
@@ -468,17 +480,12 @@ public sealed partial class InfiniCraftPlayer
         if (_deferredExitRefunds.Count <= 0)
             return;
 
-        int count = 0;
-        foreach (Item item in _deferredExitRefunds)
+        for (int index = _deferredExitRefunds.Count - 1; index >= 0; index--)
         {
-            if (item is null || item.IsAir || item.stack <= 0)
-                continue;
-            RefundOne(item);
-            count++;
+            Item item = _deferredExitRefunds[index];
+            if (item is null || item.IsAir || item.stack <= 0 || TryDeliverRefund(item))
+                _deferredExitRefunds.RemoveAt(index);
         }
-        _deferredExitRefunds.Clear();
-        if (count > 0)
-            CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, $"InfiniCraft: возвращены предметы незавершённого крафта x{count}");
     }
 
     public bool BeginCraft(GeneratorClient.PreparedGenerationRequest request, string label)
@@ -488,6 +495,7 @@ public sealed partial class InfiniCraftPlayer
 
         CaptureAudioSettingsSnapshot();
 
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
         _request = request;
         _label = label;
         _ticksLeft = CraftDurationTicks;
@@ -568,16 +576,18 @@ public sealed partial class InfiniCraftPlayer
     public override void PostUpdate()
     {
         RefreshRemoteStationAuthority();
+        TickCraftLanePresentation();
         TickCraftAudioGuard();
         TickGeneratedUtilityBuff();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();
+        if (Main.netMode != NetmodeID.Server) RestoreDeferredExitRefunds();
         TickMultiDevCrafts();
         GeneratedHeldItemDrawLayer.MaybeBroadcastLocalHeldItem(Player, ref _heldItemPresentationSyncTick, ref _heldItemPresentationSyncKey);
 
-        if (Main.netMode != NetmodeID.Server && !Main.playerInventory && !HasPendingCraft && HasAnyInput)
-            ReturnStationInputs();
+        if (Main.netMode != NetmodeID.Server && !Main.playerInventory && HasAnyInput)
+            ReturnIdleStationInputs();
 
         if (_awaitingServerCommit)
         {
@@ -590,8 +600,13 @@ public sealed partial class InfiniCraftPlayer
             _ticksLeft = Math.Max(0, CraftDurationTicks - _elapsedTicks);
             if (_serverCraftWaitTicks == 2 * 60)
                 CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, ForgePresentationText("HostWorking"));
+            if (_serverCraftWaitTicks >= RemoteServerCraftTimeoutTicks)
+                _remoteCraftCancelRequested[0] = true;
             if (_serverCraftWaitTicks % StationEscrowRetryIntervalTicks == 0)
-                ResendPendingRemoteCrafts();
+            {
+                if (_remoteCraftCancelRequested[0]) SendRemoteServerCraftCancel("client deadline/cancel");
+                else ResendPendingRemoteCrafts();
+            }
             if (_serverCraftWaitTicks == RemoteServerCraftTimeoutTicks)
                 CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("HostDelayed"));
             return;
@@ -605,6 +620,14 @@ public sealed partial class InfiniCraftPlayer
             _elapsedTicks++;
         _ticksLeft = Math.Max(0, CraftDurationTicks - _elapsedTicks);
         _announceTick++;
+
+        // Deadline belongs to the craft, not an individual HTTP attempt. A ready
+        // result waits only for delivery capacity, without generation/retry work.
+        if (_totalCraftTicks >= CraftRecoveryTimeoutTicks && !HasReadyCraftResult(_task))
+        {
+            RetireCraftLane(0, "craft deadline exceeded", CraftLaneOutcomeKind.TimedOut);
+            return;
+        }
 
         if (_task is null)
         {
@@ -697,6 +720,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void FailCraft(string localMessage, string remoteMessage)
     {
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Failed, IsServerAuthoritativeCraft ? remoteMessage : localMessage);
         if (IsServerAuthoritativeCraft)
         {
             SendServerAuthoritativeResultIfNeeded(false, "", remoteMessage);
@@ -721,9 +745,11 @@ public sealed partial class InfiniCraftPlayer
             return;
         }
 
+        if (!HasReusableWorldItemSlot()) return;
         if (SpawnGeneratedItemServerSide(Player, data, out string error, _serverRequestId, 0))
         {
             SendServerAuthoritativeResultIfNeeded(true, data.Name, "ok");
+            SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Succeeded, data.Name);
             RunLocalCraftReveal(Player, data);
             ClearCraft();
             return;
@@ -911,6 +937,7 @@ public sealed partial class InfiniCraftPlayer
         RestoreSuspiciousAudioMute();
         _craftAudioGuardTicks = Math.Max(_craftAudioGuardTicks, PostCraftAudioGuardTicks);
 
+        _remoteCraftCancelRequested[0] = false;
         _request = null;
         _task = null;
         _ticksLeft = 0;

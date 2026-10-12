@@ -101,6 +101,9 @@ public sealed partial class InfiniCraftPlayer
 
     public string CraftLaneStatus(int laneIndex)
     {
+        CraftLaneOutcome outcome = GetCraftLaneOutcome(laneIndex);
+        if (!IsCraftLanePending(laneIndex) && outcome.Kind != CraftLaneOutcomeKind.None)
+            return outcome.Message;
         if (laneIndex == 0)
         {
             if (!HasPendingCraft)
@@ -205,6 +208,8 @@ public sealed partial class InfiniCraftPlayer
                 RequestId = requestId,
                 AwaitingServerCommit = true,
             };
+            SetCraftLaneOutcome(laneIndex, CraftLaneOutcomeKind.None, "");
+            _remoteCraftCancelRequested[laneIndex] = false;
             _multiDevJobs[laneIndex - 1] = job;
             if (!SendServerCraftRequest(requestId, laneIndex, a, b))
             {
@@ -254,6 +259,8 @@ public sealed partial class InfiniCraftPlayer
     {
         if (laneIndex is < 1 or > 2 || _multiDevJobs[laneIndex - 1] is not null)
             return false;
+        SetCraftLaneOutcome(laneIndex, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[laneIndex] = false;
         _multiDevJobs[laneIndex - 1] = new MultiDevCraftJob
         {
             LaneIndex = laneIndex,
@@ -278,10 +285,19 @@ public sealed partial class InfiniCraftPlayer
 
             if (job.AwaitingServerCommit)
             {
+                if (job.WaitTicks >= RemoteServerCraftTimeoutTicks) _remoteCraftCancelRequested[job.LaneIndex] = true;
                 if (job.WaitTicks % StationEscrowRetryIntervalTicks == 0)
-                    SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                {
+                    if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client deadline/cancel");
+                    else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                }
                 if (job.WaitTicks == RemoteServerCraftTimeoutTicks)
                     CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("LaneHost", job.LaneIndex + 1));
+                continue;
+            }
+            if (job.ElapsedTicks >= CraftRecoveryTimeoutTicks && !HasReadyCraftResult(job.Task))
+            {
+                RetireCraftLane(job.LaneIndex, "craft deadline exceeded", CraftLaneOutcomeKind.TimedOut);
                 continue;
             }
             if (job.Task is null || !job.Task.IsCompleted)
@@ -303,6 +319,8 @@ public sealed partial class InfiniCraftPlayer
                 }
                 if (Main.netMode != NetmodeID.Server)
                     CombatText.NewText(Player.Hitbox, Color.OrangeRed, ForgePresentationText("LaneFailed", job.LaneIndex + 1, reason));
+                job.Request.Cancel();
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason);
                 _multiDevJobs[slot] = null;
                 continue;
             }
@@ -312,14 +330,17 @@ public sealed partial class InfiniCraftPlayer
                 _multiDevJobs[slot] = null;
                 continue;
             }
+            if (!HasReusableWorldItemSlot()) continue;
             if (SpawnGeneratedItemServerSide(Player, data, out string error, job.RequestId, job.LaneIndex))
             {
                 CompleteExtraServerCraft(job, true, data.Name, "ok");
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Succeeded, data.Name);
                 RunLocalCraftReveal(Player, data);
             }
             else
             {
                 string reason = string.IsNullOrWhiteSpace(error) ? "server commit failed" : error;
+                SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Failed, reason);
                 if (Main.netMode == NetmodeID.Server && !string.IsNullOrWhiteSpace(job.RequestId))
                     CompleteExtraServerCraft(job, false, "", reason);
                 else
@@ -328,6 +349,7 @@ public sealed partial class InfiniCraftPlayer
                     RefundOne(job.Request.RefundB);
                 }
             }
+            job.Request.Cancel();
             _multiDevJobs[slot] = null;
         }
     }
@@ -348,6 +370,11 @@ public sealed partial class InfiniCraftPlayer
             MultiDevCraftJob? job = _multiDevJobs[slot];
             if (job is null || !job.AwaitingServerCommit || !string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
                 continue;
+            SetCraftLaneOutcome(job.LaneIndex, success ? CraftLaneOutcomeKind.Succeeded
+                : _remoteCraftCancelRequested[job.LaneIndex] ? CraftLaneOutcomeKind.Cancelled : CraftLaneOutcomeKind.Failed,
+                success ? itemName : message);
+            _remoteCraftCancelRequested[job.LaneIndex] = false;
+            job.Request.Cancel();
             if (success)
             {
                 ClearRemoteCraftMirror(job.LaneIndex);
@@ -372,6 +399,7 @@ public sealed partial class InfiniCraftPlayer
             if (job is null || !string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
                 continue;
             job.Request.Cancel();
+            SetCraftLaneOutcome(job.LaneIndex, CraftLaneOutcomeKind.Cancelled, reason);
             CompleteExtraServerCraft(job, false, "", string.IsNullOrWhiteSpace(reason) ? "cancelled" : reason);
             _multiDevJobs[slot] = null;
             return true;

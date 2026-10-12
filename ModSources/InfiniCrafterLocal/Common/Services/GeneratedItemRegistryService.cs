@@ -225,7 +225,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
         RegisterLocal(data);
         if (Main.netMode != NetmodeID.Server)
             return;
-        InfiniCrafterLocalMod.Generator?.RefreshAssetTransportMetadata();
+        InfiniCrafterLocalMod.Generator?.QueueAssetTransportMetadataRefresh();
 
         if (toClient >= 0)
         {

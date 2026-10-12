@@ -53,6 +53,8 @@ public sealed partial class InfiniCraftPlayer
             return false;
 
         CaptureAudioSettingsSnapshot();
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[0] = false;
 
         string requestId = Guid.NewGuid().ToString("N");
         string parentA = LocalParentName(a);
@@ -112,6 +114,8 @@ public sealed partial class InfiniCraftPlayer
         _retryWaitTicks = 0;
         _lastRetryNoticeTick = 0;
         _lastGeneratorOfflineNoticeTick = 0;
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[0] = false;
         _serverRequestId = requestId ?? "";
         _awaitingServerCommit = false;
         _serverCraftWaitTicks = 0;
@@ -126,11 +130,17 @@ public sealed partial class InfiniCraftPlayer
         if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority())
             return;
         if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
-            SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
+        {
+            if (_remoteCraftCancelRequested[0]) SendRemoteServerCraftCancel("client cancel");
+            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
+        }
         foreach (MultiDevCraftJob? job in _multiDevJobs)
         {
             if (job is not null && job.AwaitingServerCommit && HasCraftRequestId(job.RequestId))
-                SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+            {
+                if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client cancel");
+                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+            }
         }
     }
 
@@ -771,6 +781,9 @@ public sealed partial class InfiniCraftPlayer
         if (!_awaitingServerCommit || !string.Equals(_serverRequestId, requestId, StringComparison.Ordinal))
             return;
 
+        SetCraftLaneOutcome(0, success ? CraftLaneOutcomeKind.Succeeded
+            : _remoteCraftCancelRequested[0] ? CraftLaneOutcomeKind.Cancelled : CraftLaneOutcomeKind.Failed,
+            success ? itemName : message);
         if (success)
         {
             ClearRemoteCraftMirror(0);
@@ -953,10 +966,17 @@ public sealed partial class InfiniCraftPlayer
         if (player is null || !player.active)
             return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        if (!GeneratedStationEscrowStateSystem.IsBoundOwner(modPlayer._stationEscrowClientId, modPlayer)) return;
+        if (GeneratedStationEscrowStateSystem.TryReplayCraft(modPlayer._stationEscrowClientId, requestId, out var replay))
+        {
+            SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
+            return;
+        }
         if (modPlayer.IsServerAuthoritativeCraft && string.Equals(modPlayer._serverRequestId, requestId, StringComparison.Ordinal))
             modPlayer.CancelActiveServerAuthoritativeCraft("client cancelled/timeout");
-        else if (!modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout"))
-            SendCraftCommitResult(whoAmI, requestId, false, "", "запрос отменён");
+        else
+            modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout");
+        // Unknown or retired owners cannot manufacture a terminal/refund outcome.
     }
 
     private void SendRemoteServerCraftCancel(string reason)
@@ -979,6 +999,7 @@ public sealed partial class InfiniCraftPlayer
     {
         if (!IsServerAuthoritativeCraft)
             return;
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Cancelled, reason);
         SendServerAuthoritativeResultIfNeeded(false, "", string.IsNullOrWhiteSpace(reason) ? "server craft cancelled; inputs remain in station" : reason);
         ClearCraft();
     }
@@ -1339,8 +1360,7 @@ public sealed partial class InfiniCraftPlayer
             }
             // Native NewItem replaces an existing world drop when the pool is
             // full. Refuse before allocation so rollback cannot erase that drop.
-            if (!Enumerable.Range(0, Main.maxItems).Any(index => Main.item[index] is { active: false }
-                && Main.timeItemSlotCannotBeReusedFor[index] <= 0))
+            if (!HasReusableWorldItemSlot())
             {
                 error = "world item pool is full; inputs remain in station";
                 return false;

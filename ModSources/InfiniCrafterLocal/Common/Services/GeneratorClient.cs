@@ -48,6 +48,9 @@ public sealed class GeneratorClient
         }
         catch { return null; }
     });
+    private sealed record AssetTransportSnapshot(string Transport, string BaseUrl);
+    private AssetTransportSnapshot _assetTransportSnapshot = new("native", "");
+    private int _assetMetadataRefreshQueued;
     private readonly object _assetPublicBaseUrlLock = new();
     private string _cachedGeneratorAssetPublicBaseUrl = "";
     private string _cachedGeneratorAssetTransport = "native";
@@ -77,7 +80,8 @@ public sealed class GeneratorClient
     {
         string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
         if (!string.IsNullOrWhiteSpace(env)) return env;
-        string advertised = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        string advertised = Volatile.Read(ref _assetTransportSnapshot).BaseUrl;
         if (!string.IsNullOrWhiteSpace(advertised)) return advertised;
         preferred = NormalizeAssetBaseUrl(preferred);
         if (!string.IsNullOrWhiteSpace(preferred)) return preferred;
@@ -86,27 +90,43 @@ public sealed class GeneratorClient
 
     public string AssetTransportForSharing(CancellationToken cancellationToken = default)
     {
-        _ = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken);
-        EnterAssetPublicBaseUrlLock(cancellationToken);
-        try { return _cachedGeneratorAssetTransport; }
-        finally { Monitor.Exit(_assetPublicBaseUrlLock); }
+        cancellationToken.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _assetTransportSnapshot).Transport;
     }
 
+    // Explicit blocking discovery belongs to generation workers, never update/commit.
     public void RefreshAssetTransportMetadata(CancellationToken cancellationToken = default)
         => _ = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken, force: true);
+
+    public void QueueAssetTransportMetadataRefresh()
+    {
+        if (Interlocked.CompareExchange(ref _assetMetadataRefreshQueued, 1, 0) != 0) return;
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try { _ = ReadGeneratorAdvertisedAssetBaseUrl(); }
+            finally { Volatile.Write(ref _assetMetadataRefreshQueued, 0); }
+        });
+    }
 
     public void StampAssetTransportMetadata(GeneratedItemData data, bool refreshBaseUrl = false, CancellationToken cancellationToken = default)
     {
         if (data is null) return;
         data.RecipeMeta ??= new RecipeMetaSpec();
-        data.RecipeMeta.AssetTransport = AssetTransportForSharing(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        AssetTransportSnapshot snapshot = Volatile.Read(ref _assetTransportSnapshot);
+        data.RecipeMeta.AssetTransport = snapshot.Transport;
         if (!string.Equals(data.RecipeMeta.AssetTransport, "http", StringComparison.Ordinal))
         {
             data.RecipeMeta.AssetBaseUrl = "";
             return;
         }
         if (refreshBaseUrl || string.IsNullOrWhiteSpace(data.RecipeMeta.AssetBaseUrl))
-            data.RecipeMeta.AssetBaseUrl = AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl, cancellationToken);
+        {
+            string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
+            data.RecipeMeta.AssetBaseUrl = !string.IsNullOrWhiteSpace(env) ? env
+                : !string.IsNullOrWhiteSpace(snapshot.BaseUrl) ? snapshot.BaseUrl
+                : AssetBaseUrlForSharing(data.RecipeMeta.AssetBaseUrl, cancellationToken);
+        }
     }
 
     private void EnterAssetPublicBaseUrlLock(CancellationToken cancellationToken)
@@ -138,6 +158,7 @@ public sealed class GeneratorClient
                 if (!response.IsSuccessStatusCode)
                 {
                     _cachedGeneratorAssetTransport = "native";
+                    Volatile.Write(ref _assetTransportSnapshot, new("native", ""));
                     return _cachedGeneratorAssetPublicBaseUrl = "";
                 }
                 string json = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
@@ -174,6 +195,7 @@ public sealed class GeneratorClient
                 _cachedGeneratorAssetPublicBaseUrl = "";
                 _cachedGeneratorAssetTransport = "native";
             }
+            Volatile.Write(ref _assetTransportSnapshot, new(_cachedGeneratorAssetTransport, _cachedGeneratorAssetPublicBaseUrl));
             return _cachedGeneratorAssetPublicBaseUrl;
         }
         finally { Monitor.Exit(_assetPublicBaseUrlLock); }
