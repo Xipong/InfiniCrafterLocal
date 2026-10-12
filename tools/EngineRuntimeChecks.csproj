@@ -21,6 +21,7 @@
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.CraftCancellation.cs" />
     <Compile Include="EngineRuntimeChecks.CraftQol.cs" />
+    <Compile Include="EngineRuntimeChecks.IntegratedQol.cs" />
     <Compile Include="EngineRuntimeChecks.CraftWorldExit.cs" />
     <Compile Include="EngineRuntimeChecks.Contract.cs" />
     <Compile Include="EngineRuntimeChecks.BuffPrecision.cs" />

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -691,6 +693,51 @@ class SettingsGuiServerControlsMixin:
             text = "Runtime matches launch settings at last health check (partial non-secret projection; pools/secrets unverified)."
         self.applied_config_var.set(prefix + text)
 
+    @staticmethod
+    def _generation_activity_text(activity) -> str:
+        """Read only the bounded health projection; these IDs are not native jobs."""
+        if not isinstance(activity, dict):
+            return "Backend activity unknown (last health snapshot)."
+        active, waiting, accepting = (activity.get(key) for key in ("active", "waiting", "accepting"))
+        if type(active) is not int or active < 0 or type(waiting) is not int or waiting < 0 or type(accepting) is not bool:
+            return "Backend activity unknown (last health snapshot)."
+        lines = [f"Backend last health snapshot: active={active}, waiting={waiting}, accepting={accepting}"]
+        rows = activity.get("requests")
+        if not isinstance(rows, list):
+            return lines[0] + "\nRequest rows unknown."
+
+        def seconds(value):
+            return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= 10**9
+
+        def symbol(value):
+            return isinstance(value, str) and re.fullmatch(r"[a-z0-9_]{1,80}", value) is not None
+
+        for row in rows[:32]:
+            if not isinstance(row, dict):
+                lines.append("Request row unavailable.")
+                continue
+            request = row.get("requestId")
+            stage, wait = row.get("stage"), row.get("waitReason")
+            elapsed, stage_elapsed = row.get("elapsedSeconds"), row.get("stageElapsedSeconds")
+            network = row.get("networkStarted")
+            if (not isinstance(request, str) or re.fullmatch(r"[0-9a-f]{32}", request) is None
+                    or (stage is not None and not symbol(stage)) or not symbol(wait)
+                    or not all(seconds(value) for value in (elapsed, stage_elapsed))
+                    or (network is not None and type(network) is not bool)):
+                lines.append("Request row unavailable.")
+                continue
+            stage = stage if stage is not None else "unknown"
+            profile = row.get("profileId")
+            profile = profile if profile in ("llm_1", "llm_2", "llm_3") else "unknown"
+            network_text = "unknown" if network is None else "started" if network else "not started"
+            lines.append(f"{request} | profile={profile} | stage={stage} | elapsed={elapsed:g}s | stage elapsed={stage_elapsed:g}s | wait={wait} | network={network_text}")
+        omitted = activity.get("requestsOmitted")
+        omitted = omitted if type(omitted) is int and omitted >= 0 else 0
+        omitted += max(0, len(rows) - 32)
+        if omitted:
+            lines.append(f"{omitted} rows omitted")
+        return "\n".join(lines)
+
     def _delayed_health_check(self):
         # Called by the Tk loop, never a background thread. Capture plain launch
         # inputs here and return results through the same bounded queue pattern.
@@ -709,9 +756,15 @@ class SettingsGuiServerControlsMixin:
             safe = self._safe_effective_config(snap)
             if safe is None:
                 return None
-            return {"pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe}
+            return {"pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
+                    "activityText": self._generation_activity_text(snap.get("generationActivity"))}
 
         def apply(ok, ack):
+            if ack is not None and ack["baseUrl"] != self._server_base_url():
+                ack = None
+            activity_var = self.__dict__.get("activity_var")
+            if activity_var is not None:
+                activity_var.set(ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server).")
             if not ok or ack is None:
                 self._applied_config_ack = None
                 self.applied_config_var.set("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")

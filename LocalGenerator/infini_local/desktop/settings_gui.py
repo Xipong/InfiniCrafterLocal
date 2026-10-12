@@ -56,6 +56,7 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self._ui_sections = []
         self.radmin_enabled = tk.BooleanVar(value=(self.data.get("INFINI_HOST") == "0.0.0.0" or bool(self.data.get("INFINI_ASSET_PUBLIC_BASE_URL"))))
         self.status_var = tk.StringVar(value="Готово. Выбери профиль генерации, при необходимости включи Radmin/LAN, затем сохрани настройки и запусти сервер.")
+        self.activity_var = tk.StringVar(value="Backend activity not checked.")
         self.applied_config_var = tk.StringVar(value="Runtime config not checked (partial non-secret projection; pools/secrets unverified).")
         self.user_presets = {}
         preset_error = ""

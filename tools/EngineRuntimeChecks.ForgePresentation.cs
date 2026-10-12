@@ -232,7 +232,8 @@ internal static partial class EngineRuntimeChecks
             for (int lane = 0; lane < 3; lane++)
             {
                 var layout = InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationLaneBounds(bounds, lane);
-                foreach (var control in new[] { layout.SlotA, layout.SlotB, layout.CraftButton, layout.Details, layout.Timer })
+                foreach (var control in new[] { layout.SlotA, layout.SlotB, layout.CraftButton, layout.Details, layout.Timer,
+                    InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationCancelBounds(bounds, lane) })
                     Equal(true, bounds.Contains(control), "draw and hit-test control fits actual panel");
                 Equal(true, layout.CraftButton.Contains(layout.CraftButton.Center), "same rectangle accepts button center");
                 Equal(false, layout.SlotA.Intersects(layout.SlotB) || layout.SlotB.Intersects(layout.CraftButton), "input hit targets do not overlap");

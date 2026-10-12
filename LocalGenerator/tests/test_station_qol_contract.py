@@ -18,6 +18,15 @@ def test_station_hover_uses_full_read_only_details_and_canonical_feedback():
     assert "readiness == InfiniCraftPlayer.StationCraftReadiness.Ready" in start
 
 
+def test_station_cancel_and_player_refund_wiring_uses_native_owners():
+    ui = (CS / "Common/UI/InfiniCraftStationUISystem.cs").read_text()
+    assert "StationCancelBounds(panel, lane)" in ui
+    assert "TryCancelCraftLane(lane)" in ui
+    assert "IsCraftLaneCancellationPending(lane)" in ui
+    assert 'HasPendingCraftRefunds ? ForgeText("RefundPending")' in ui
+    assert "RefundIngredients" not in ui and "_deferredExitRefunds" not in ui
+
+
 def test_station_qol_native_regressions_are_compiled_and_invoked():
     project = (ROOT / "tools/EngineRuntimeChecks.csproj").read_text()
     runner = (ROOT / "tools/EngineRuntimeChecks.cs").read_text()

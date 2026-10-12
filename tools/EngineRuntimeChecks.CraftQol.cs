@@ -213,7 +213,7 @@ internal static partial class EngineRuntimeChecks
                 typeof(InfiniCraftPlayer).GetMethod("FailCraft", CraftFields)!.Invoke(owner, new object[] { "exact player-facing recipe failure", "technical detail" });
                 Equal(InfiniCraftPlayer.CraftLaneOutcomeKind.Failed, owner.GetCraftLaneOutcome(0).Kind, "failure survives transient clear");
                 Equal("exact player-facing recipe failure", owner.GetCraftLaneOutcome(0).Message, "outcome retains actual detail");
-                Equal("exact player-facing recipe failure", owner.CraftLaneStatus(0), "existing UI status writer sees retained terminal detail");
+                Equal(true, owner.CraftLaneStatus(0).Contains("exact player-facing recipe failure"), "existing UI status writer sees retained terminal detail");
                 for (int tick = 0; tick < 30 * 60; tick++) typeof(InfiniCraftPlayer).GetMethod("TickCraftLanePresentation", CraftFields)!.Invoke(owner, null);
                 Equal(InfiniCraftPlayer.CraftLaneOutcomeKind.None, owner.GetCraftLaneOutcome(0).Kind, "outcome presentation is bounded");
                 Equal(2, player.inventory.Take(58).Count(i => !i.IsAir), "presentation expiry does not refund again");

@@ -103,7 +103,14 @@ public sealed partial class InfiniCraftPlayer
     {
         CraftLaneOutcome outcome = GetCraftLaneOutcome(laneIndex);
         if (!IsCraftLanePending(laneIndex) && outcome.Kind != CraftLaneOutcomeKind.None)
-            return outcome.Message;
+        {
+            string heading = ForgePresentationText("Outcome" + outcome.Kind);
+            // Cancellation/deadline reasons are protocol strings, not authored UI prose.
+            return outcome.Kind is CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
+                || string.IsNullOrWhiteSpace(outcome.Message) ? heading : heading + " · " + outcome.Message;
+        }
+        if (IsCraftLaneCancellationPending(laneIndex)) return ForgePresentationText("CancelPending");
+        if (IsCraftLaneWaitingForDelivery(laneIndex)) return ForgePresentationText("DeliveryWait");
         if (laneIndex == 0)
         {
             if (!HasPendingCraft)

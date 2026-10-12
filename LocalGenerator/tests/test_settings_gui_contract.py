@@ -1427,6 +1427,71 @@ def test_restart_refuses_unverifiable_applied_projection_without_any_destructive
     assert "projection" in gui.status_var.get().lower()
 
 
+@pytest.mark.parametrize("started,expected", [(None, "unknown"), (False, "not started"), (True, "started")])
+def test_health_activity_rows_keep_backend_identity_and_network_tristate(gui_workflow, monkeypatch, started, expected):
+    gui, root, _config = gui_workflow
+    gui.activity_var = _UiVar()
+    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+            "effectiveConfig": {"cacheDir": "c", "worldRecipesDir": "w", "imageBackend": "off",
+                "llmProvider": "local", "llmModel": "auto", "openrouterProvider": "", "sdcppAutostart": False},
+            "generationActivity": {"active": 1, "waiting": 0, "accepting": True, "requestsOmitted": 2,
+                "requests": [{"requestId": "a" * 32, "profileId": "llm_2", "stage": "05_visual_director",
+                    "elapsedSeconds": 12.5, "stageElapsedSeconds": 3.25, "waitReason": "profile_slot",
+                    "networkStarted": started, "active": True, "secret": "DO_NOT_DISPLAY"}]}}
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda **kwargs: snap)
+    gui._delayed_health_check()
+    gui.drain_until(lambda: "health-config" not in gui.__dict__.get("_gui_tasks", {}))
+    text = gui.activity_var.get()
+    for value in ("a" * 32, "llm_2", "05_visual_director", "12.5", "3.25", "profile_slot", "network=" + expected, "2 rows omitted"):
+        assert value in text
+    assert "DO_NOT_DISPLAY" not in text and "Hearth" not in text and "lane" not in text.lower()
+    assert snap["generationActivity"]["requests"][0]["networkStarted"] is started
+
+
+def test_health_activity_result_cannot_cross_changed_endpoint(gui_workflow, monkeypatch):
+    gui, root, _config = gui_workflow
+    gui.activity_var = _UiVar("Original")
+    gui.vars["INFINI_PORT"] = _UiVar("5055")
+    snap = {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000,
+            "effectiveConfig": {"cacheDir": "c", "worldRecipesDir": "w", "imageBackend": "off",
+                "llmProvider": "local", "llmModel": "auto", "openrouterProvider": "", "sdcppAutostart": False},
+            "generationActivity": {"active": 3, "waiting": 0, "accepting": True, "requests": []}}
+    monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda **kwargs: snap)
+    gui._delayed_health_check()
+    gui.vars["INFINI_PORT"].set("5056")
+    gui.drain_until(lambda: "health-config" not in gui.__dict__.get("_gui_tasks", {}))
+    assert "active=3" not in gui.activity_var.get(), "old endpoint result presented on edited target"
+
+
+def test_health_activity_display_consumes_actual_backend_owner():
+    from infini_local.services import combine_endpoint as backend
+    from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin as controls
+    with backend._GenerationAdmission("llm_3") as owner:
+        assert owner.activate()
+        with backend.generation_stage("06_vfx_director"):
+            backend.update_generation_activity(wait_reason="provider_cooldown", network_started=False)
+            text = controls._generation_activity_text(backend.generation_activity_snapshot())
+            for value in (owner.request_id, "llm_3", "06_vfx_director", "provider_cooldown", "network=not started"):
+                assert value in text
+        between = controls._generation_activity_text(backend.generation_activity_snapshot())
+        assert owner.request_id in between and "stage=unknown" in between
+    assert owner.request_id not in controls._generation_activity_text(backend.generation_activity_snapshot())
+
+
+def test_health_activity_projection_bounds_rows_and_rejects_unknown_fields():
+    from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin as controls
+    project = getattr(controls, "_generation_activity_text", None)
+    assert project is not None, "no request-owned activity display projection"
+    row = {"requestId": "b" * 32, "profileId": None, "stage": "admission", "elapsedSeconds": 1,
+           "stageElapsedSeconds": 1, "waitReason": "generation_slot", "networkStarted": None, "active": False}
+    text = project({"active": 0, "waiting": 33, "accepting": True, "requests": [row] * 33, "requestsOmitted": 0})
+    assert text.count("b" * 32) == 32 and "1 rows omitted" in text
+    assert "unknown" in project({})
+    bad = dict(row, requestId="https://secret.invalid/token", stage="DO_NOT_DISPLAY", networkStarted="true")
+    text = project({"active": 1, "waiting": 0, "accepting": True, "requests": [bad], "requestsOmitted": 0})
+    assert "DO_NOT_DISPLAY" not in text and "secret.invalid" not in text
+
+
 @pytest.mark.parametrize("endpoint", ["health", "shutdown"])
 def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, endpoint):
     gui, _root, _config = gui_workflow

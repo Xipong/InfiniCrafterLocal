@@ -65,10 +65,13 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         int rowY = panel.Y + 44 + lane * 112;
         return (new Rectangle(panel.X + 16, rowY + 24, SlotSize, SlotSize),
             new Rectangle(panel.X + 78, rowY + 24, SlotSize, SlotSize),
-            new Rectangle(panel.X + 144, rowY + 31, 78, 36),
+            new Rectangle(panel.X + 144, rowY + 24, 78, 26),
             new Rectangle(panel.X + 14, rowY, panel.Width - 28, 112),
             new Rectangle(panel.X + 144, rowY + 78, panel.Width - 160, 12));
     }
+
+    internal static Rectangle StationCancelBounds(Rectangle panel, int lane)
+        => new Rectangle(panel.X + 144, panel.Y + 44 + lane * 112 + 54, 78, 22);
 
     private static void DrawInventoryStation(SpriteBatch spriteBatch)
     {
@@ -89,15 +92,17 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         var slotA = new Rectangle[laneCount];
         var slotB = new Rectangle[laneCount];
         var craftButtons = new Rectangle[laneCount];
+        var cancelButtons = new Rectangle[laneCount];
         for (int lane = 0; lane < laneCount; lane++)
         {
             var layout = StationLaneBounds(panel, lane);
             slotA[lane] = layout.SlotA;
             slotB[lane] = layout.SlotB;
             craftButtons[lane] = layout.CraftButton;
+            cancelButtons[lane] = StationCancelBounds(panel, lane);
         }
 
-        HandleMouse(craftPlayer, slotA, slotB, craftButtons, clearButton);
+        HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
             clearButton.X - panel.X - 24, 0.92f);
@@ -120,6 +125,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
 
             bool pending = craftPlayer.IsCraftLanePending(lane);
             DrawButton(spriteBatch, craftButtons[lane], craftPlayer.GetStationCraftReadiness(lane) == InfiniCraftPlayer.StationCraftReadiness.Ready, pending ? ForgeText("Busy") : ForgeText("Craft"));
+            DrawButton(spriteBatch, cancelButtons[lane], pending && !craftPlayer.IsCraftLaneCancellationPending(lane), ForgeText("Cancel"));
             string label = pending ? Truncate(craftPlayer.CraftLaneLabel(lane), 31) : ForgeText("Idle");
             DrawFittedText(spriteBatch, label, new Vector2(panel.X + 235, rowY + 29), Color.Silver, panel.Width - 249, 0.60f);
             DrawFittedText(spriteBatch, craftPlayer.CraftLaneStatus(lane), new Vector2(panel.X + 235, rowY + 50),
@@ -145,7 +151,8 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             }
         }
 
-        string footer = ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
+        string footer = craftPlayer.HasPendingCraftRefunds ? ForgeText("RefundPending")
+            : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
         DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
         if (panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
@@ -156,6 +163,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         Rectangle[] slotA,
         Rectangle[] slotB,
         Rectangle[] craftButtons,
+        Rectangle[] cancelButtons,
         Rectangle clearButton)
     {
         var mouse = new Point(Main.mouseX, Main.mouseY);
@@ -189,6 +197,12 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             if (slotB[lane].Contains(mouse))
             {
                 if (!craftPlayer.TryTakeInputToMouse(lane * 2 + 1)) craftPlayer.TryPutMouseItemIntoInput(lane * 2 + 1);
+                Main.mouseLeftRelease = false;
+                return;
+            }
+            if (cancelButtons[lane].Contains(mouse))
+            {
+                if (!craftPlayer.IsCraftLaneCancellationPending(lane)) craftPlayer.TryCancelCraftLane(lane);
                 Main.mouseLeftRelease = false;
                 return;
             }

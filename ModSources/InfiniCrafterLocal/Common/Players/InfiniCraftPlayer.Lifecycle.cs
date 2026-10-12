@@ -19,8 +19,16 @@ public sealed partial class InfiniCraftPlayer
     public CraftLaneOutcome GetCraftLaneOutcome(int laneIndex)
         => laneIndex is >= 0 and <= 2 ? _craftLaneOutcomes[laneIndex] : default;
 
+    public bool HasPendingCraftRefunds => _deferredExitRefunds.Count > 0;
+
+    public bool IsCraftLaneCancellationPending(int laneIndex)
+        => laneIndex is >= 0 and <= 2 && _remoteCraftCancelRequested[laneIndex]
+            && (laneIndex == 0 ? _awaitingServerCommit : _multiDevJobs[laneIndex - 1]?.AwaitingServerCommit == true);
+
     public bool IsCraftLaneWaitingForDelivery(int laneIndex)
-        => laneIndex is >= 0 and <= 2 && IsCraftLanePending(laneIndex)
+        => Main.netMode != NetmodeID.MultiplayerClient && !_stationEscrowUsesRemoteAuthority
+            && laneIndex is >= 0 and <= 2 && IsCraftLanePending(laneIndex)
+            && !(laneIndex == 0 ? _awaitingServerCommit : _multiDevJobs[laneIndex - 1]?.AwaitingServerCommit == true)
             && HasReadyCraftResult(laneIndex == 0 ? _task : _multiDevJobs[laneIndex - 1]?.Task)
             && !HasReusableWorldItemSlot();
 

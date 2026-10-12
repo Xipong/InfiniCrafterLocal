@@ -80,6 +80,15 @@ Mods: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	Cancel: "Cancel"
+	CancelPending: "Cancellation: awaiting host confirmation"
+	DeliveryWait: "Ready; waiting for world item space"
+	OutcomeSucceeded: "Completed"
+	OutcomeFailed: "Forging failed"
+	OutcomeCancelled: "Forging cancelled"
+	OutcomeTimedOut: "Craft wait timed out"
+	RefundPending: "Return waiting for free space"
+
 	Started: "Wonder Forge: forging started; collect as soon as ready"
 	Attempt: "Wonder Forge: forging attempt {0}"
 	Recovery: "Wonder Forge: another attempt in {0} s"

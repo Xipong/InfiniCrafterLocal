@@ -80,6 +80,15 @@ Mods: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	Cancel: "Отмена"
+	CancelPending: "Отмена: ждём подтверждения хозяина"
+	DeliveryWait: "Готово; ждём места в мире"
+	OutcomeSucceeded: "Готово"
+	OutcomeFailed: "Ковка не удалась"
+	OutcomeCancelled: "Ковка отменена"
+	OutcomeTimedOut: "Время ожидания истекло"
+	RefundPending: "Возврат ожидает свободного места"
+
 	Started: "Кузня чудес: ковка началась; результат сразу по готовности"
 	Attempt: "Кузня чудес: попытка ковки {0}"
 	Recovery: "Кузня чудес: новая попытка через {0} с"
