@@ -77,7 +77,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
 def _marked_prefix(request):
     marker = request.get("_infini_prompt_cache")
     assert marker is not None, "production request must declare the reusable instruction/catalog boundary"
-    assert marker == {"instructionMessageIndex": 1}
+    assert marker in ({"instructionMessageIndex": 1}, {"instructionMessageIndex": 1, "staticDataMessageIndex": 2})
     message = request["messages"][1]
     assert message["role"] == "developer"
     static = json.loads(message["content"])
@@ -185,5 +185,5 @@ def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, re
     other_static, other_prefix, other_full = _marked_prefix(requests[1])
     assert prefix == other_prefix and static == other_static
     assert full != other_full
-    assert set(static) == ({"task", "rules", "runtimeVocabularyReadOnly"} if repair else {"schema", "rules", "runtimeVocabulary"})
+    assert set(static) == ({"task", "rules", "runtimeVocabularyReadOnly", "schemaDefinitions"} if repair else {"schema", "rules", "runtimeVocabulary", "schemaDefinitions"})
     assert "outputSchema" not in static

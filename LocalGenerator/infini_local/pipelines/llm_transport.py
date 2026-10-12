@@ -1337,6 +1337,19 @@ def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict
         }
     if instruction_segment_index(payload) is not None and (context is None or active_llm_provider(context) != "openai_codex"):
         stable["framing"] = "complete-builder-instructions-v1"
+    segment = instruction_segment_index(payload)
+    if segment is not None and "schemaDefinitions" in json.loads(messages[segment]["content"]):
+        stable["framing"] = "complete-builder-instructions-and-grammar-v1"
+        # The full schema is a case-dependent constraint, not routing affinity.
+        # Mode/name/strictness remain identity; canonical definitions are already
+        # included in the declared DEVELOPER endpoint. Author identity is untouched.
+        if "wire" in stable:
+            shape = stable["wire"].get("text", {}).get("format", {})
+        else:
+            shape = copy.deepcopy(stable.get("response_format") or {})
+            stable["response_format"] = shape or None
+            shape = shape.get("json_schema", {})
+        shape.pop("schema", None)
     digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
     return "infini-" + digest[:32]

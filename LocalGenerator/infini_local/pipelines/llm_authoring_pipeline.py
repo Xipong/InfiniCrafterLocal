@@ -9,7 +9,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_prompt_cache import with_instruction_segments
+from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
@@ -644,6 +644,11 @@ def call_llm_vfx_director(
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
     static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
     request = with_instruction_segments(request, user, static_keys)
+    slot_key = "slotsUpsert" if stage_name == "vfx_repair" else "slots"
+    request = with_schema_instruction_definitions(request, "outputSchema", {
+        name: ("properties", slot_key, "items", "properties", name)
+        for name in ("element", "path", "screenShake", "particle", "sound")
+    })
     item = user.get("item") or {}
     recipe_id = item.get("id") if isinstance(item, Mapping) else None
     trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"])

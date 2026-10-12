@@ -225,7 +225,10 @@ def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_froze
         for packet, request, keys in ((director, sent[0], vfx.VFX_PROMPT_STATIC_KEYS), (repair, sent[1], vfx.VFX_REPAIR_PROMPT_STATIC_KEYS)):
             assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
             prefix = json.dumps({key: packet[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))
-            assert request["messages"][1]["content"] == prefix
+            static = json.loads(request["messages"][1]["content"])
+            assert "#/$defs/" in static["rules"].pop()
+            assert set(static.pop("schemaDefinitions")["$defs"]) == {"element", "path", "screenShake", "particle", "sound"}
+            assert json.dumps(static, ensure_ascii=False, separators=(",", ":")) == prefix
         prefixes.append(tuple(request["messages"][1]["content"] for request in sent))
     assert prefixes[0] == prefixes[1]
 
