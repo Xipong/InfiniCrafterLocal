@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Current Author notation: one source admission/compiler/Repair boundary."""
 from copy import deepcopy
 
@@ -544,7 +545,7 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
     prepared, _ = pipeline._repair_malformed_author_json(malformed_raw_text=content[:-1] + ",}",
         parse_error=ValueError("trailing comma"), original_recipe_context=user, model_name="offline")
     assert prepared == source
-    assert "usePolicy" not in json.dumps(json.loads(requests[0]["messages"][1]["content"])["requiredJsonShape"])
+    assert "usePolicy" not in json.dumps(request_dossier(requests[0])["requiredJsonShape"])
 
 
 def test_unresolved_body_is_declaration_repair_not_synthetic_target_authority():
@@ -653,7 +654,7 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
     request, _, _ = build_initial_author_request({}, {}, {}, {}, "current-call-grammar", model_name="offline")
-    packet = json.loads(request["messages"][1]["content"])
+    packet = request_dossier(request)
     calls = packet["requiredJsonShape"]["runtimeProgram"]["calls"]
     assert {frozenset(row) for row in calls} == {
         frozenset(variant["properties"]) for variant in capability_provider_union()

@@ -1,6 +1,7 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
@@ -46,8 +47,8 @@ def packet(monkeypatch):
     b = {"name": "Workbench", "createTile": 18, "useTime": 15}
     request, user, system = build_initial_author_request(a, b, a, b, "whip+bench", model_name="test-model")
     assert request["response_format"] == {"type": "json_object"}
-    assert [r["role"] for r in request["messages"]] == ["system", "user"]
-    assert request["messages"][0]["content"] == system and request["messages"][1]["content"] == user
+    assert [r["role"] for r in request["messages"]] == ["system", "developer", "user"]
+    assert request["messages"][0]["content"] == system and dossier_text(request) == user
     return request, json.loads(user), system
 
 
@@ -69,7 +70,7 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
     assert "on_use" in {r["event"] for r in catalog["events"]}
     assert "charge_then_release" in {r["fn"] for r in catalog["capabilities"]}
     assert "selfEvaluation" in payload["diagnosticReport"]
-    user = request["messages"][1]["content"]
+    user = dossier_text(request)
     for phrase in ("Before answering", "Check each", "Walk every", "draft-reject", "second design pass"):
         assert phrase.lower() not in user.lower()
     assert "concept" in user and "realization" in user
@@ -106,8 +107,8 @@ def test_serialized_author_coherence_advice_keeps_literal_parents_and_all_capabi
     parents_before = copy.deepcopy((a, b))
     request, user, _ = build_initial_author_request(a, b, a, b, "coherence", model_name="offline-test")
     assert request["response_format"]["type"] == mode
-    assert request["messages"][1]["content"] == user
-    payload = json.loads(request["messages"][1]["content"])
+    assert dossier_text(request) == user
+    payload = request_dossier(request)
     concept = payload["requiredJsonShape"]["concept"]
     for field, phrases in {
         "literalSynthesis": ("actual parents", "appearance/identity", "deliberately surreal", "illustrative examples are not additional parents", "every parent capability"),
@@ -149,7 +150,7 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     request, user, _ = build_initial_author_request(item, {}, item, {}, "preserve-design", model_name="offline-test")
     intent = json.loads(user)["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
     assert "placement and multiple purposeful actions remain legal" in intent
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     prepared = pipeline._prepare_parsed_author_item(item, response_format=request["response_format"])
     assert prepared == before and item == before
     assert validate_runtime_program(prepared)["ok"]
@@ -186,7 +187,7 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
         malformed_raw_text=content[:-1] + ",}", parse_error=ValueError("trailing comma"),
         original_recipe_context=recipe_context, model_name="offline-test",
     )
-    context = json.loads(requests[0]["messages"][1]["content"])
+    context = request_dossier(requests[0])
     intent = context["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
     assert "Repair" not in intent
     assert any("Do not redesign, add, drop" in rule for rule in context["rules"])
@@ -218,9 +219,9 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
     repaired = pipeline.repair_author_item_after_failure(
         item, {}, {}, {}, {}, "frozen-placement", failure_report=validate_runtime_program(item),
     )
-    context = json.loads(requests[0]["messages"][1]["content"])
+    context = request_dossier(requests[0])
     assert "concept" not in context["requiredJsonShape"]
-    assert "one clear core gameplay loop" not in requests[0]["messages"][1]["content"]
+    assert "one clear core gameplay loop" not in dossier_text(requests[0])
     assert validate_runtime_program(repaired)["ok"]
     assert repaired["runtimeProgram"] == before["runtimeProgram"]
     assert repaired["concept"] == before["concept"]

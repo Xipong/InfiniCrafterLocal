@@ -1,4 +1,5 @@
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 from contextlib import nullcontext
 
 import copy
@@ -207,7 +208,7 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
     expected_stages = ["planner", "visual_director"] + (["visual_repair"] if repair_needed else [])
     expected_stages += ["vfx_director"] + (["vfx_repair"] if repair_needed else [])
     assert [request["_infini_stage"] for request in requests] == expected_stages
-    packet = json.loads(next(request for request in requests if request["_infini_stage"] == "vfx_director")["messages"][1]["content"])
+    packet = request_dossier(next(request for request in requests if request["_infini_stage"] == "vfx_director"))
     assert packet["item"]["behaviorChecks"] == visual["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"]
     assert packet["acceptedVisualKit"] == visual["visualKit"]
     mechanics = copy.deepcopy(visual["runtimeProgram"])
@@ -296,7 +297,7 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
     names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]
     assert [request["_infini_stage"] for request in requests] == names
     assert not responses  # Any unbounded third request fails the recording transport too.
-    context = json.loads(requests[1]["messages"][1]["content"])
+    context = request_dossier(requests[1])
     assert context["malformedRawText"] == raw
     if stage == "gameplay":
         assert context["task"].startswith("Repair JSON syntax only")
@@ -369,7 +370,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     assert validate_runtime_program(repaired)["ok"]
     assert repaired["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
     assert repaired["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 0
-    assert len(requests[0]["messages"]) == 2
+    assert [row["role"] for row in requests[0]["messages"]] == ["system", "developer", "user"]
     assert requests[0]["messages"][-1]["name"] == "author_repair_context"
     context = json.loads(requests[0]["messages"][-1]["content"])
     assert list(context)[-1] == "requiredJsonShape"
@@ -385,7 +386,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     elif scenario == "name-only":
         assert repaired["name"] == "Workbench Blade"
     else:
-        prompt = requests[0]["messages"][1]["content"]
+        prompt = dossier_text(requests[0])
         assert '"currentItem"' not in prompt and '"item_use"' in prompt and '"item_stats"' in prompt
         assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
@@ -475,7 +476,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
     assert current == original
     assert [r["_infini_stage"] for r in requests] == ["planner", "author_repair"]
     assert all(r["response_format"]["type"] == mode for r in requests)
-    dossier = json.loads(requests[1]["messages"][1]["content"])
+    dossier = request_dossier(requests[1])
     assert dossier["exactValidationErrors"] == validate_runtime_program(current)["errors"]
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == expected_call_permissions
     assert dossier["readOnlySourceFragments"]["brokenFragmentsByIndex"]["calls"] == expected_broken_indices
@@ -511,7 +512,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
     assert [r["_infini_stage"] for r in requests] == ["planner", "author_repair"]
     assert all(r["response_format"]["type"] == mode for r in requests)
     assert result["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
-    dossier = json.loads(requests[1]["messages"][1]["content"])
+    dossier = request_dossier(requests[1])
     assert len(canonical_errors) == len(broken) * (len(fields) + 1)
     assert dossier["exactValidationErrors"] == canonical_errors
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == sorted(

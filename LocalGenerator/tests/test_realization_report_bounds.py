@@ -1,5 +1,6 @@
 """Finite report bounds preserve authored prose and never change gameplay."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -110,7 +111,7 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
     expected_format = {"type": "json_object"} if mode == "json_object" else None
     for request, root in ((author, "realization"), (repair, "realizationReplacement")):
         assert request.get("response_format") == expected_format
-        card = json.loads(request["messages"][1]["content"])["requiredJsonShape"][root]
+        card = request_dossier(request)["requiredJsonShape"][root]
         for field, schema in author_item_response_schema()["properties"]["realization"]["properties"].items():
             if field == "selfEvaluation":
                 continue

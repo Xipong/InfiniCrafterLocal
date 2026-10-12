@@ -1,5 +1,6 @@
 """Exact accepted parent facts at card and serialized offline stage boundaries."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 
@@ -35,7 +36,7 @@ def test_card_preserves_complete_accepted_mechanics(capability):
     import json
     request, user, _ = build_initial_author_request(parent, parent, {}, {}, "complete-parent", model_name="offline-test-model")
     packet = json.loads(user)
-    assert json.loads(request["messages"][1]["content"]) == packet
+    assert request_dossier(request) == packet
     assert packet["parents"]["A"]["packet"]["raw"]["generatedParent"] == card
     assert packet["parents"]["B"]["packet"]["raw"]["generatedParent"] == card
     assert parent == before
@@ -153,7 +154,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     result = visual.apply_visual_director(child, parent, parent, {}, {})
     assert len(requests) == 2 and not responses
     assert result["visualKit"] == chosen
-    director, repair = [json.loads(request["messages"][1]["content"]) for request in requests]
+    director, repair = [request_dossier(request) for request in requests]
     expected = raw_parent_card_for_llm(parent, include_visual_reference=True)
     assert director["parents"] == repair["parentFactsReadOnly"] == {
         "parentA": {"packet": expected}, "parentB": {"packet": expected},
@@ -191,7 +192,7 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
     before = copy.deepcopy(parent)
     request, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "exact-parent", model_name="offline-test-model")
     packet = json.loads(user)["parents"]["A"]["packet"]
-    assert json.loads(request["messages"][1]["content"])["parents"]["A"]["packet"] == packet
+    assert request_dossier(request)["parents"]["A"]["packet"] == packet
     assert packet == raw_parent_card_for_llm(parent)
     assert packet["raw"]["generatedParent"]["gameplay"] == data["gameplay"]
     assert packet["raw"]["generatedParent"]["id"] == "source-definition"
@@ -230,7 +231,7 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     before = copy.deepcopy(parent)
     request, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "literal-tooltip", model_name="offline-test-model")
     author_packet = json.loads(user)["parents"]["A"]["packet"]
-    assert json.loads(request["messages"][1]["content"])["parents"]["A"]["packet"] == author_packet
+    assert request_dossier(request)["parents"]["A"]["packet"] == author_packet
     captured = []
 
     def provider_stub(request, **kwargs):
@@ -242,8 +243,8 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     visual._request_visual_kit(data, parent, {}, {}, {})
     visual._request_visual_kit(data, parent, {}, {}, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [author_packet,
-               json.loads(captured[0]["messages"][1]["content"])["parents"]["parentA"]["packet"],
-               json.loads(captured[1]["messages"][1]["content"])["parentFactsReadOnly"]["parentA"]["packet"]]
+               request_dossier(captured[0])["parents"]["parentA"]["packet"],
+               request_dossier(captured[1])["parentFactsReadOnly"]["parentA"]["packet"]]
     for packet in packets:
         assert packet["raw"]["item"]["tooltipLines"] == lines
         assert packet["raw"]["item"]["tooltipSource"] == parent["tooltipSource"]
@@ -309,8 +310,8 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
     visual._request_visual_kit(child, parent, {}, {}, {})
     visual._request_visual_kit(child, parent, {}, {}, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [json.loads(user)["parents"]["A"]["packet"],
-               json.loads(requests[0]["messages"][1]["content"])["parents"]["parentA"]["packet"],
-               json.loads(requests[1]["messages"][1]["content"])["parentFactsReadOnly"]["parentA"]["packet"]]
+               request_dossier(requests[0])["parents"]["parentA"]["packet"],
+               request_dossier(requests[1])["parentFactsReadOnly"]["parentA"]["packet"]]
     key = "directProjectile" if surface == "directProjectileRaw" else "effectiveProjectile"
     for packet in packets:
         assert packet["raw"][key]["motionReference"] == observation

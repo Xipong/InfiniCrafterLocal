@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Actual Author packets keep registry mechanics without contradictory global prose."""
 from copy import deepcopy
 import json
@@ -38,7 +39,7 @@ def test_serialized_initial_packet_preserves_registry_and_source_without_repeate
                {"name": "Generated source", "generatedData": compile_runtime_program(build_capability_witness("configure_weapon_ammo"))})
     before = deepcopy(parents)
     request, user, system = author.build_initial_author_request(*parents, {}, {}, "consistency", model_name="offline")
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     assert (request["response_format"] or {}).get("type") == (None if mode == "off" else mode)
     packet = json.loads(user)
     assert parents == before

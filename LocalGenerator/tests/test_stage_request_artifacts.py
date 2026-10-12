@@ -1,4 +1,5 @@
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import hashlib
@@ -34,7 +35,7 @@ def test_exact_stage_artifact_keeps_clean_bytes_and_sanitizes_only_credentials(m
         if str(target).endswith('.json'):
             replacements.append((source, target))
             assert source != target
-            assert json.loads(source.read_bytes())['messages'][1]['content'] == clean
+            assert dossier_text(json.loads(source.read_bytes())) == clean
         return native_replace(source, target)
     monkeypatch.setattr(trace_tools.os, 'replace', replace)
     receipt = record('gameplay_author', 'r_exact', request, recipe_id='g_exact')
@@ -151,7 +152,7 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
     assert (parent, source) == before
     if stage.startswith('visual'):
         assert data == data_before
-        packet = json.loads(artifact['messages'][1]['content'])
+        packet = request_dossier(artifact, declaration=captured[0])
         parents = packet['parentFactsReadOnly' if stage == 'visual_repair' else 'parents']
         assert parents['parentA']['packet']['raw']['spriteReference'] == parent['spriteReferenceRaw']
         assert artifact['recipeId'] == 'g_capture'
@@ -189,7 +190,17 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
         else:
             dossier['recipeKey'] = context_join
         user = json.dumps(dossier, ensure_ascii=False, separators=(',', ':'))
-        request['messages'][1]['content'] = user
+        index = request['_infini_prompt_cache']['instructionMessageIndex'] + 1
+        dynamic = json.loads(request['messages'][index]['content'])
+        if context_join is None:
+            del dynamic['recipeKey']
+        else:
+            dynamic['recipeKey'] = context_join
+        static_before = copy.deepcopy(request['messages'][index - 1])
+        request['messages'][index]['content'] = json.dumps(dynamic, ensure_ascii=False, separators=(',', ':'))
+        assert request['messages'][index]['role'] == 'user'
+        assert request['messages'][index - 1] == static_before
+        assert dossier_text(request) == user
         return request, user, system
     monkeypatch.setattr(author, 'build_initial_author_request', build_without_owner_join)
     frozen = build_runtime_fixture('workbench_blade')
@@ -216,7 +227,7 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
     assert all(row['recipeKey'] == 'r_actual_owner' for row in artifacts)
     captured = next(row for row in artifacts if row['stage'] == 'gameplay_format_repair')
     assert captured['messages'] == requests[1]['messages']
-    dossier = json.loads(captured['messages'][1]['content'])
+    dossier = request_dossier(captured, declaration=requests[1])
     assert dossier['malformedRawText'] == malformed
     assert dossier['originalRecipeContext'].get('recipeKey') == context_join
     assert [request['_infini_stage'] for request in requests] == ['planner', 'author_repair']
@@ -227,8 +238,8 @@ def test_author_request_owns_optional_alternate_cost_and_source_motion_advisorie
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
     parent = {'name': 'opaque parent', 'useTime': 21, 'useAnimation': 25, 'shootSpeed': 6.1}
     request, user, _ = author.build_initial_author_request(parent, parent, {}, {}, 'r_advisory', model_name='offline-model')
-    packet = json.loads(request['messages'][1]['content'])
-    assert user == request['messages'][1]['content']
+    packet = request_dossier(request)
+    assert user == dossier_text(request)
     header = packet['priorityHeader']
     concept = packet['requiredJsonShape']['concept']
     assert 'include extra control modes only for meaningful utility' in concept['plannedPlayerActions'][0]['intent']
@@ -258,7 +269,9 @@ def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(mon
     data['recipeKey'] = 'r_unknown_texture'
     class CaptureComplete(BaseException):
         pass
-    def stop(*args, **kwargs):
+    requests = []
+    def stop(request, **kwargs):
+        requests.append(copy.deepcopy(request))
         raise CaptureComplete()
     monkeypatch.setattr(visual, 'llm_chat_json', stop)
     monkeypatch.setattr(visual, 'resolve_llm_model', lambda: 'offline-model')
@@ -270,7 +283,8 @@ def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(mon
     assert len(paths) == 2
     for path in paths:
         artifact = json.loads(path.read_bytes())
-        packet = json.loads(artifact['messages'][1]['content'])
+        declaration = next(request for request in requests if request["_infini_stage"] == artifact["stage"])
+        packet = request_dossier(artifact, declaration=declaration)
         parents = packet['parentFactsReadOnly' if artifact['stage'] == 'visual_repair' else 'parents']
         for row in parents.values():
             assert 'spriteReference' not in row['packet']['raw']

@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Creative freedom is prose-only; inspect actual Author/Repair messages offline."""
 from copy import deepcopy
 import json
@@ -11,7 +12,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'fusion', model_name='offline')
-    assert request['messages'][1]['content'] == user
+    assert dossier_text(request) == user
     header = ' '.join(json.loads(user)['priorityHeader'])
     assert 'Source provenance constrains factual claims about the parents, not the mechanics you may invent' in header
     assert 'new purposeful mechanics from catalog primitives inspired by both parent identities' in header
@@ -26,8 +27,9 @@ def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics
 def test_actual_author_does_not_turn_coherence_or_source_units_into_inheritance_rules(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = author.build_initial_author_request({'name': 'A', 'damage': 0}, {'name': 'B'}, {}, {}, 'coherence', model_name='offline')
-    packet = json.loads(request['messages'][1]['content'])
-    assert user == request['messages'][1]['content']
+    packet = request_dossier(request)
+    assert user == dossier_text(request)
+    assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
     concept = packet['requiredJsonShape']['concept']
     assert 'not a single-loop rule' in concept['coreMechanic']
     assert 'multiple complementary actions' in concept['coreMechanic']
@@ -69,7 +71,7 @@ def test_actual_shared_repair_report_is_an_account_not_a_design_rejection(monkey
     with pytest.raises(Captured):
         author.repair_author_item_after_failure(source, {}, {}, {}, {}, 'report', failure_report=validate_runtime_program(source))
     assert source == before and len(requests) == 1
-    packet = json.loads(requests[0]['messages'][1]['content'])
+    packet = request_dossier(requests[0])
     truth = packet['runtimeExecutionTruth']
     assert 'Account for the chosen inputs' in truth['authority']
     assert 'Walk every' not in truth['authority']
@@ -125,7 +127,7 @@ def test_actual_periodic_producer_guidance_discloses_exhaustion_without_forcing_
         monkeypatch.setattr(author, name, value)
     with pytest.raises(Captured):
         author.repair_author_item_after_failure(doc, {}, {}, {}, {}, 'producer', failure_report=validate_runtime_program(doc))
-    repair = json.loads(requests[0]['messages'][1]['content'])
+    repair = request_dossier(requests[0])
     assert repair['runtimeExecutionTruth']['units']['descendantSpawnBudget'] == budget
     assert repair['acceptedItemContext']['runtimeProgram'] == doc['runtimeProgram']
     assert 'set_descendant_concurrency' not in json.dumps(repair['repairScope'])

@@ -16,6 +16,7 @@
 | VFX packet/material/frozen/selected PNG producer | `test_vfx_*`; [dependency/delivery](../LocalGenerator/tests/test_vfx_dependency_delivery_contracts.py) |
 | Image attempts, adapters, ingredients, pixels/UV | `test_image_*`, [ingredients](../LocalGenerator/tests/test_vfx_ingredient_generation_contracts.py), [sprite render](../LocalGenerator/tests/test_sprite_render_contracts.py) |
 | Transfer byte authority и cache/quarantine | [asset transfer/cache](../LocalGenerator/tests/test_asset_transfer_cache_contracts.py) |
+| Complete builder-owned instruction/data segments, changed-tail identity и role-preserving provider wire | [craft instruction segments](../LocalGenerator/tests/test_craft_instruction_segments.py); `prompt_packet_helpers.py` — только derived dossier observer в semantic tests |
 | Profile pin, retry/failover, request semantics, HTTP и lifecycle | `test_provider_*`; [Codex subscription](../LocalGenerator/tests/test_codex_subscription_contract.py) отдельно защищает auth/SSE/privacy/no-paid-fallback |
 | Placement provenance, maxStack и use-policy | [placement](../LocalGenerator/tests/test_item_placement_contracts.py), [dual-use transactions](../LocalGenerator/tests/test_dual_use_placeable_contract.py) |
 | Source-language и структурные межъязыковые ограничения | Существующие [C# gate](../tools/check_csharp_contracts.py), [hygiene gate](../tools/check_project_hygiene.py); их positive/decoy/mutation controls — [source audits](../LocalGenerator/tests/test_source_audit_gates.py) |

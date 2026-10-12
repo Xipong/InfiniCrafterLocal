@@ -1,5 +1,6 @@
 """Offline canonical sprite render contracts; no live services."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import pytest
 from PIL import Image, ImageDraw
@@ -157,7 +158,7 @@ def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, colo
     monkeypatch.setattr(stage, "llm_chat_json", transport)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "test-model")
     stage._request_visual_kit({}, {}, {}, {}, {}, repair_errors=[] if repair else None)
-    rules = json.loads(captured["messages"][1]["content"])["rules"]
+    rules = request_dossier(captured)["rules"]
     rule = next((rule for rule in rules if "final PNG" in rule), "")
     assert "transparent background" in rule
     authored = "transparent glass vessel with magenta crystal and white tip"

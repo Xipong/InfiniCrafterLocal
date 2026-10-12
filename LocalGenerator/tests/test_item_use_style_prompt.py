@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Verify complete animation vocabulary reaches the production serialized Author request."""
 
 import copy
@@ -26,7 +27,7 @@ def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monk
     request, user_content, _ = build_initial_author_request(
         parent_a, parent_b, parent_a, parent_b, "blade+bench", model_name="gemini-2.5-flash",
     )
-    assert request["messages"][1]["content"] == user_content
+    assert dossier_text(request) == user_content
     assert request["response_format"] == {"type": "json_object"}
     assert len(user_content) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     payload = json.loads(user_content)
@@ -70,7 +71,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     hostile_use["params"].update(hideUseGraphic=not hidden, customHeldSprite="visible")
     responses.append({"callsUpsert": [hostile_use], "realizationReplacement": good["realization"], "note": "repair useStyle only"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "visibility", failure_report={"stage": "validation", "errors": report["errors"]})
-    repaired_packet = json.loads(requests[0]["messages"][1]["content"])
+    repaired_packet = request_dossier(requests[0])
     repair_card = next(c for c in repaired_packet["existingBrokenCapabilityCards"] if c["fn"] == "configure_item_use")
     assert repaired_packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": use["id"], "paths": ["params.useStyle"]}]
     assert compile_runtime_program(fixed)["runtimeProgram"] == baseline["runtimeProgram"]
@@ -81,7 +82,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     broken_kit["item"]["inventoryScale"] = 99
     responses.extend([broken_kit, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0}, "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "animationPlan": None, "note": "inventoryScale only"}])
     projected = visual.apply_visual_director(baseline, parent, parent, parent, parent)
-    visual_packets = [json.loads(r["messages"][1]["content"]) for r in requests[1:]]
+    visual_packets = [request_dossier(r) for r in requests[1:]]
     assert projected["visualKit"] == accepted_kit
     assert projected["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert visual_packets[1]["repairScope"]["fieldPermissions"]["itemPaths"] == ["inventoryScale"]
@@ -91,7 +92,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     broken_vfx["effectMagnitude"] = 2
     responses.extend([broken_vfx, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": accepted_vfx["effectMagnitude"], "note": "effectMagnitude only"}])
     final = vfx.attach_hybrid_vfx_manifest(projected, "visibility", llm_director=gameplay.call_llm_vfx_director)
-    vfx_packets = [json.loads(r["messages"][1]["content"]) for r in requests[3:]]
+    vfx_packets = [request_dossier(r) for r in requests[3:]]
     assert final["debug"]["vfxDirectorRaw"] == accepted_vfx
     assert final["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert vfx_packets[1]["repairScope"]["fieldPermissions"] == {"globals": {"effectMagnitude": [""]}, "slots": [], "assets": []}

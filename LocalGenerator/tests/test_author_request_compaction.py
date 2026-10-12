@@ -1,5 +1,6 @@
 """Lossless prompt metadata sharing and the real strict-provider inverse seam."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -48,7 +49,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     request, serialized, _ = author.build_initial_author_request(
         *parents, {}, {}, "lifetime-guidance", model_name="offline-readonly-context")
     assert request["response_format"]["type"] == mode
-    assert request["messages"][1]["content"] == serialized
+    assert dossier_text(request) == serialized
     packet = json.loads(serialized)
     spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"]
     assert (spec.minimum, spec.maximum) == (1, 36000)
@@ -105,7 +106,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert len(captured) == 1
     repair_request = captured[0]
     assert repair_request["response_format"]["type"] == mode
-    repair = json.loads(repair_request["messages"][1]["content"])
+    repair = request_dossier(repair_request)
     repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
                        if row["fn"] == "set_projectile_lifetime")
     assert (repair_card["params"]["lifetimeTicks"]["min"],
@@ -120,7 +121,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
         author._repair_malformed_author_json(
             malformed_raw_text=json.dumps(item)[:-1] + ",}", parse_error=ValueError("trailing comma"),
             original_recipe_context=serialized, model_name="offline-readonly-context")
-    format_packet = json.loads(captured[1]["messages"][1]["content"])
+    format_packet = request_dossier(captured[1])
     assert format_packet["originalRecipeContext"]["balanceCorridor"] == packet["balanceCorridor"]
 
     # A different declared maximum must reach the real packet, not a copied cap.
@@ -133,7 +134,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] == 21000
     variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] = spec.maximum
     assert variant_packet == packet
-    variant_request["messages"][1]["content"] = serialized
+    variant_request["messages"][2]["content"] = request["messages"][2]["content"]
     assert variant_request == request  # System, parents, other guidance and transport stay exact.
 
 

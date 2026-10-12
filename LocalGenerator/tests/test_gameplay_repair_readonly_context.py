@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Exact read-only Gameplay Repair facts must survive the real request builder."""
 import copy
 import json
@@ -49,7 +50,7 @@ def _capture_request(monkeypatch, item, format_mode):
     assert json.dumps(item, ensure_ascii=False) == before
     assert len(captured) == 1
     assert captured[0]["response_format"]["type"] == format_mode
-    return captured[0], json.loads(captured[0]["messages"][1]["content"])
+    return captured[0], request_dossier(captured[0])
 
 
 def _call(item, call_id):
@@ -85,7 +86,7 @@ def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypat
     assert baseline_dossier["repairScope"] == changed_dossier["repairScope"]
     assert baseline["response_format"] == changed["response_format"]
     assert baseline["messages"][0] == changed["messages"][0]
-    assert baseline["messages"][1]["content"] != changed["messages"][1]["content"], (
+    assert dossier_text(baseline) != dossier_text(changed), (
         "different source facts are invisible in the real serialized Repair request")
     for item, dossier in ((source, baseline_dossier), (variant, changed_dossier)):
         assert dossier["acceptedItemContext"]["concept"] == item["concept"]
@@ -208,7 +209,7 @@ def _repair_with_response(monkeypatch, item, patch, format_mode, *, out_of_scope
                 # nullable scaffolding from the scoped provider grammar. Restore
                 # their original sparse shape instead of inventing null choices
                 # the actual request did not offer and cannot decode.
-                scope = json.loads(request["messages"][1]["content"])["repairScope"]
+                scope = request_dossier(request)["repairScope"]
                 mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
                 payload["callsUpsert"] = [
                     encoded if original["id"] in mutable_ids else copy.deepcopy(original)
@@ -240,7 +241,7 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
         {"id": "held_lantern_pike_life", "paths": ["params.lifetimeTicks"]}]
     incoming = _hostile_patch(item)
     repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode, out_of_scope_response=True)
-    dossier = json.loads(request["messages"][1]["content"])
+    dossier = request_dossier(request)
     assert dossier["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert dossier["repairScope"] == scope
     assert repaired["debug"]["gameplayRepairScope"] == scope

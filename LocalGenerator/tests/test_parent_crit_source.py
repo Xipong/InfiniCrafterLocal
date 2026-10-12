@@ -1,5 +1,6 @@
 """Native base crit reaches Author without becoming a generated stat default."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import importlib.util
@@ -59,7 +60,7 @@ def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, 
         assert request["response_format"] is None
     else:
         assert request["response_format"]["type"] == mode
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     packet = json.loads(user)
     assert packet["parents"]["A"]["packet"]["raw"]["item"]["crit"] == crit
     assert "crit" not in packet["parents"]["B"]["packet"]["raw"]["item"]
@@ -74,7 +75,7 @@ def test_source_crit_is_not_confused_with_generated_equipment_bonus(monkeypatch,
     parent = {"name": "generated equipped bonus source", "crit": 0, "generatedData": data}
     before = copy.deepcopy(parent)
     request, _, _ = author.build_initial_author_request(parent, {}, {}, {}, "generated-crit-separation", model_name="offline-test-model")
-    raw = json.loads(request["messages"][1]["content"])["parents"]["A"]["packet"]["raw"]
+    raw = request_dossier(request)["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["crit"] == 0
     assert raw["generatedParent"]["accessory"]["genericCrit"] == 17.0
     assert raw["generatedParent"]["gameplay"] == data["gameplay"]

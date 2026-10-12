@@ -1,5 +1,6 @@
 """Source-preserving units at the actual offline serialized stage boundaries."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -64,7 +65,7 @@ def _source_packets(parent, captured):
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
             visual._request_visual_kit(data, parent, {}, {}, {}, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
-    a, r, vd, vr = [json.loads(row["messages"][1]["content"]) for row in captured]
+    a, r, vd, vr = [request_dossier(row) for row in captured]
     return [a["parents"]["A"]["packet"]["raw"], r["parents"]["a"]["packet"]["raw"],
             vd["parents"]["parentA"]["packet"]["raw"], vr["parentFactsReadOnly"]["parentA"]["packet"]["raw"]]
 
@@ -100,7 +101,7 @@ def _vfx_packets(data, captured):
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
             vfx._request(author.call_llm_vfx_director, packet, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
-    return [json.loads(row["messages"][1]["content"]) for row in captured[start:]]
+    return [request_dossier(row) for row in captured[start:]]
 
 
 @pytest.mark.parametrize("author_field,wire_field,value", [
@@ -129,9 +130,8 @@ def test_vfx_actual_packets_keep_independent_accepted_cadence_and_scale(offline_
         if index:
             assert first["repairScope"] == second["repairScope"] == {}
         a, b = captured[index], captured[index + 2]
-        prefix = a["_infini_prompt_cache"]["prefixChars"]
-        assert prefix == b["_infini_prompt_cache"]["prefixChars"]
-        assert a["messages"][1]["content"][:prefix] == b["messages"][1]["content"][:prefix]
+        assert a["_infini_prompt_cache"] == b["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+        assert a["messages"][1]["content"] == b["messages"][1]["content"]
     assert json.dumps(data, sort_keys=True) == before
 
 
@@ -189,7 +189,7 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
     monkeypatch.setattr(author, "llm_chat_json", respond)
     final = vfx.attach_hybrid_vfx_manifest(data, "units-frozen-repair", llm_director=author.call_llm_vfx_director)
     assert len(captured) == 2
-    director, repair = [json.loads(row["messages"][1]["content"]) for row in captured]
+    director, repair = [request_dossier(row) for row in captured]
     assert director["acceptedGameplayReadOnly"] == repair["acceptedGameplayReadOnly"] == before["gameplay"]
     assert repair["repairScope"]["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": accepted["slots"][0]["id"], "paths": ["alpha"]}], "assets": []}
     assert not repair["repairScope"]["allowCreateSlots"]

@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Exact redundant binding literals preserve mechanics and source presence."""
 from copy import deepcopy
 import json
@@ -342,7 +343,7 @@ def test_actual_author_packet_explains_uniform_binding_and_keeps_sparse_valid(mo
 
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "fixed-binding-proof", model_name="offline")
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     assert "Fixed binding literals may be explicit or omitted" in user
     cards = json.loads(user)["requiredJsonShape"]["runtimeProgram"]["bindings"]
     assert all({"id", "input", "action", "stackCost", "contactDamage"} <= set(card) for card in cards)

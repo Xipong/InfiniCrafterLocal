@@ -52,7 +52,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         assert artifact["stage"] == stage and artifact["messages"] == captured[0]["messages"]
         rows = trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10)
         assert any(row.get("response") == raw for row in rows), "no response tail may disappear"
-        assert any(row.get("prompt") == captured[0]["messages"][1]["content"] for row in rows)
+        assert any(json.loads(row["prompt"]) == captured[0]["messages"] for row in rows if row.get("prompt"))
     else:
         assert list(tmp_path.iterdir()) == []
 

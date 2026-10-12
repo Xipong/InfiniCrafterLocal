@@ -1,5 +1,6 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import hashlib
 import json
@@ -84,7 +85,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     responses.append(document)
     accepted = gameplay.try_llm_plan({"name":"A"}, {"name":"B"}, {}, {}, "placed-body-offline")
     assert accepted is not None
-    payload = json.loads(requests[-1]["messages"][1]["content"])
+    payload = request_dossier(requests[-1])
     cards = payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(c for c in cards if c["fn"] == FN)
     assert set(card["params"]) == {"placementCallId", *TRANSFORM}
@@ -99,7 +100,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     for repair in (False, True):
         responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA, "note":"offline no-op"})
         visual._request_visual_kit(wire, {}, {}, {}, {}, **({"repair_errors":[], "previous":kit, "repair_scope":{}} if repair else {}))
-        packet = json.loads(requests[-1]["messages"][1]["content"])
+        packet = request_dossier(requests[-1])
         assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == wire["runtimeProgram"]["bindings"]
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
         assert guidance["operation"] == FN
@@ -285,7 +286,7 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
     responses.append(patch)
     result = gameplay.repair_author_item_after_failure(document, {}, {}, {}, {}, "offline-placed-repair",
                                                       failure_report=validate_runtime_program(document))
-    dossier = json.loads(requests[-1]["messages"][1]["content"])
+    dossier = request_dossier(requests[-1])
     permission = next(p for p in dossier["repairScope"]["fieldPermissions"]["calls"] if p["id"] == "placed_body")
     assert permission["paths"] == ["params.placementCallId"]
     assert dossier["repairScope"]["create"]["calls"]["allowedFns"] == []

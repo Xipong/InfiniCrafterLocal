@@ -1,5 +1,6 @@
 """Explicit sound controls survive the real VFX boundary and frozen Repair."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -167,7 +168,7 @@ def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choic
         "$.slotsUpsert[0].sound" if missing_container else "$.slotsUpsert[0].sound.volume"]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == 2
-    director, repair = [json.loads(row["messages"][1]["content"]) for row in sent]
+    director, repair = [request_dossier(row) for row in sent]
     assert director["runtimeVocabulary"]["sound"] == repair["runtimeVocabularyReadOnly"]["sound"] == vfx._sound_schema()
 
 

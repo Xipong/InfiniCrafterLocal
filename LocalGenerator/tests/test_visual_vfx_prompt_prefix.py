@@ -1,5 +1,6 @@
 """Actual serialized director/Repair packets, numeric units and cache boundaries."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
 import pytest
@@ -29,7 +30,7 @@ def test_actual_visual_packets_keep_accepted_hitbox_curve_and_exact_body_scale(w
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
     visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
-    packet = json.loads(sent[-1]["messages"][1]["content"])
+    packet = request_dossier(sent[-1])
     rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
     for row, accepted in zip(rows, data["runtimeProgram"]["entities"]):
         assert ("hitboxCurve" in row) == ("hitboxCurve" in accepted)
@@ -50,7 +51,7 @@ def test_default_author_system_explicitly_targets_terraria(monkeypatch):
     request, user, system = author.build_initial_author_request({}, {}, {}, {}, "target-game", model_name="test-model")
     assert "Target game: Terraria (tModLoader)" in system
     assert request["messages"][0]["content"] == system
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     assert "Terraria Like art direction" not in system
 
 
@@ -163,10 +164,10 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
             visual._request_visual_kit(data, {"name": "A"}, {"name": "B"}, {}, {},
                 **({"repair_errors": errors, "previous": previous, "repair_scope": scope} if repair else {}))
             request = sent[-1]
-            payload = json.loads(request["messages"][1]["content"])
+            payload = request_dossier(request)
             keys = ("task", "assetModeCatalog", "rules")
-            assert len(request["messages"]) == 2
-            assert request["_infini_prompt_cache"] == {"messageIndex": 1, "prefixChars": len(_static_json_prefix(payload, keys))}
+            assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
+            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
             assert payload["assetModeCatalog"] == visual.visual_asset_mode_catalog()
             if repair:
                 assert set(payload) == {"task", "assetModeCatalog", "rules", "exactErrors", "malformedRawText", "repairScope", "brokenFragments", "validGeneratedContext", "parentFactsReadOnly", "runtimeEntitiesReadOnly", "itemReadOnly", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
@@ -221,7 +222,7 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
     assert "workbench_blade" not in prefixes[0] and "door_on_chain" not in prefixes[0]
     if stage == "visual":
         assert len(sent) == 2
-        assert sent[0]["messages"][1]["content"][len(prefixes[0]):] != sent[1]["messages"][1]["content"][len(prefixes[0]):]
+        assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
@@ -259,7 +260,7 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         responses.append({})
         vfx._request(stage.call_llm_vfx_director, packet, **kwargs)
         request = sent[-1]
-        payload = json.loads(request["messages"][1]["content"])
+        payload = request_dossier(request)
         keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS if repair else vfx.VFX_PROMPT_STATIC_KEYS
         prefix = _static_json_prefix(payload, keys)
         vocabulary_key = "runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"
@@ -271,7 +272,7 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         assert not (set(vocabulary) & set(surface))
         assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(canonical, sort_keys=True)
         assert len(prefix) > 7000
-        assert request["_infini_prompt_cache"] == {"messageIndex": 1, "prefixChars": len(prefix)}
+        assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
         assert list(payload)[len(keys)] == "item"
         assert request["response_format"]["type"] == format_mode
         if format_mode == "json_schema":
@@ -294,7 +295,7 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         assert (data, parent_a, parent_b) == frozen
         prefixes.append(prefix)
         payloads.append(payload)
-        tails.append(request["messages"][1]["content"][len(prefix):])
+        tails.append(request["messages"][2]["content"])
     assert len(set(prefixes)) == 1
     assert len(set(tails)) == len(payloads)
     # Stable prefixes must not hide accepted-recipe changes in a frozen tail.
@@ -331,7 +332,7 @@ def test_vfx_canonical_vocabulary_revision_reaches_actual_prefix_only(wire_trans
             monkeypatch.setitem(vfx._RENDERER_SEMANTICS, "impactSprite", original_semantics + " Canonical revision witness.")
         responses.append({})
         vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **kwargs)
-        packets.append(json.loads(sent[-1]["messages"][1]["content"]))
+        packets.append(request_dossier(sent[-1]))
     before, after = packets
     assert before[vocabulary_key]["rendererSemantics"]["impactSprite"] == original_semantics
     assert after[vocabulary_key]["rendererSemantics"]["impactSprite"] == vfx._RENDERER_SEMANTICS["impactSprite"]
@@ -342,7 +343,7 @@ def test_vfx_canonical_vocabulary_revision_reaches_actual_prefix_only(wire_trans
     monkeypatch.setattr(vfx, "vfx_director_surface", lambda source: {**canonical(source), "futureAcceptedFact": source["runtimeProgram"]["primaryEntityId"]})
     responses.append({})
     vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **kwargs)
-    extended = json.loads(sent[-1]["messages"][1]["content"])
+    extended = request_dossier(sent[-1])
     assert _static_json_prefix(extended, keys) == _static_json_prefix(after, keys)
     assert extended[surface_key] == {**after[surface_key], "futureAcceptedFact": data["runtimeProgram"]["primaryEntityId"]}
     assert data == frozen
@@ -353,11 +354,11 @@ def test_catalog_revision_changes_only_static_prefix(wire_transport, monkeypatch
     data = _craft("workbench_blade")
     responses.extend([{}, {}])
     visual._request_visual_kit(data, {}, {}, {}, {})
-    before = json.loads(sent[-1]["messages"][1]["content"])
+    before = request_dossier(sent[-1])
     catalog = copy.deepcopy(visual.visual_asset_mode_catalog())
     monkeypatch.setattr(visual, "visual_asset_mode_catalog", lambda: [*catalog, {"mode": "changed", "description": "catalog revision"}])
     visual._request_visual_kit(data, {}, {}, {}, {})
-    after = json.loads(sent[-1]["messages"][1]["content"])
+    after = request_dossier(sent[-1])
     keys = ("task", "assetModeCatalog", "rules")
     assert _static_json_prefix(before, keys) != _static_json_prefix(after, keys)
     assert {k: v for k, v in before.items() if k != "assetModeCatalog"} == {k: v for k, v in after.items() if k != "assetModeCatalog"}
@@ -380,7 +381,7 @@ def test_visual_schema_and_numeric_rules_reach_real_transport(wire_transport, mo
     responses.append({})
     assert visual._request_visual_kit(data, parent, parent, canonical, canonical, **kwargs) == {}
     request = sent[0]
-    payload = json.loads(request["messages"][1]["content"])
+    payload = request_dossier(request)
     schema = payload["responseSchema"]
     assert request["response_format"]["type"] == "json_schema"
     assert request["response_format"]["json_schema"]["strict"] is True
@@ -446,7 +447,7 @@ def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_t
     kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
     visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
     request = sent[-1]
-    packet = json.loads(request["messages"][1]["content"])
+    packet = request_dossier(request)
     context = packet["acceptedPresentationMechanicsReadOnly"]
     runtime = data["runtimeProgram"]
     assert context["gameplay"] == {k: data["gameplay"][k] for k in ("itemScale", "width", "height", "useTime", "useAnimation", "reuseDelay") if k in data["gameplay"]}
@@ -544,7 +545,7 @@ def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transpo
     }
     responses.append({})
     assert visual._request_visual_kit(data, parent_a, parent_b, {}, {}, **kwargs) == {}
-    payload = json.loads(sent[-1]["messages"][1]["content"])
+    payload = request_dossier(sent[-1])
     packet_root = payload["parents"] if kind == "director" else payload["parentFactsReadOnly"]
     for name, parent in (("parentA", parent_a), ("parentB", parent_b)):
         actual = packet_root[name]["packet"]
@@ -569,7 +570,7 @@ def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transpo
     prefix = _static_json_prefix(payload, ("task", "assetModeCatalog", "rules"))
     assert '"textureWidthPx"' not in prefix and '"textureHeightPx"' not in prefix
     assert '"spriteReferenceRaw"' not in prefix
-    assert sent[-1]["_infini_prompt_cache"] == {"messageIndex": 1, "prefixChars": len(prefix)}
+    assert sent[-1]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
     if reference != "older-missing":
         changed = copy.deepcopy(parent_a)
         if reference.startswith("native"):
@@ -579,7 +580,7 @@ def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transpo
             changed["generatedData"]["visual"]["renderSizePx"] = 48
         responses.append({})
         visual._request_visual_kit(data, changed, parent_b, {}, {}, **kwargs)
-        after = json.loads(sent[-1]["messages"][1]["content"])
+        after = request_dossier(sent[-1])
         assert _static_json_prefix(after, ("task", "assetModeCatalog", "rules")) == prefix
         after_root = after["parents"] if kind == "director" else after["parentFactsReadOnly"]
         assert after_root["parentA"]["packet"] == raw_parent_card_for_llm(changed, include_visual_reference=True)
@@ -598,7 +599,7 @@ def test_parent_visual_reference_does_not_enter_actual_gameplay_author_packet(wi
                  "runtimeProgram": {"entities": [], "bindings": []}}}
     responses.append(build_runtime_fixture("workbench_blade"))
     assert gameplay_stage.try_llm_plan(native, generated, {}, {}, "parent-reference-gameplay-control") is not None
-    payload = json.loads(sent[-1]["messages"][1]["content"])
+    payload = request_dossier(sent[-1])
     assert payload["parents"]["A"]["packet"] == raw_parent_card_for_llm(native)
     assert payload["parents"]["B"]["packet"] == raw_parent_card_for_llm(generated)
     encoded = json.dumps(payload["parents"])

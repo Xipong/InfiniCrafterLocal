@@ -16,7 +16,7 @@ from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
-from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
+from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
@@ -1110,7 +1110,6 @@ def _request_visual_kit(
         **{key: value for key, value in payload.items() if key not in _VISUAL_STATIC_PREFIX_KEYS},
     }
     system += provider_nullable_transport_rule(response_format)
-    prefix_chars = json_prefix_chars(payload, _VISUAL_STATIC_PREFIX_KEYS)
     model = resolve_llm_model()
     request = {
         "model": model,
@@ -1127,9 +1126,9 @@ def _request_visual_kit(
         "response_format": response_format,
     }
     request = apply_llm_common_options(request, model_name=model, default_max_tokens=visual_director_max_tokens())
-    request = with_prompt_cache_prefix(request, message_index=1, prefix_chars=prefix_chars)
+    request = with_instruction_segments(request, payload, _VISUAL_STATIC_PREFIX_KEYS)
     stage_name = "visual_repair" if repair else "visual_director"
-    trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"][1]["content"])
+    trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
     trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
     content = raw["choices"][0]["message"]["content"]

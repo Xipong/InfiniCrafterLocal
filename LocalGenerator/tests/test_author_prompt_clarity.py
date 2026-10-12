@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Model-visible ownership and actual field paths, without runtime design policy."""
 import json
 import pytest
@@ -8,7 +9,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 def test_author_packet_names_real_fields_without_harness_instructions(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
     req, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'clarity', model_name='test-model')
-    assert req['messages'][1]['content'] == user
+    assert dossier_text(req) == user
     payload = json.loads(user)
     priority = ' '.join(payload['priorityHeader'])
     assert 'runtimeCapabilityContract.catalog.capabilities' in priority
@@ -26,14 +27,13 @@ def test_author_packet_names_real_fields_without_harness_instructions(monkeypatc
 
 
 def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypatch):
-    from infini_local.core.llm_prompt_cache import static_instruction_prefix_parts
+    from infini_local.core.llm_prompt_cache import instruction_segment_index
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     req, user, _ = author.build_initial_author_request({'name': 'user-owned-parent'}, {}, {}, {}, 'recipe', model_name='test-model')
-    assert req['_infini_prompt_cache'].get('staticInstructionPrefix') is True
-    parts = static_instruction_prefix_parts(req)
-    assert parts is not None
-    index, static, dynamic = parts
-    assert index == 1
+    assert req['_infini_prompt_cache'] == {'instructionMessageIndex': 1}
+    assert instruction_segment_index(req) == 1
+    assert [row['role'] for row in req['messages']] == ['system', 'developer', 'user']
+    static, dynamic = [row['content'] for row in req['messages'][1:]]
     assert set(json.loads(dynamic)) == {'recipeKey', 'parents', 'balanceCorridor', 'sourceWireUnits'}
     assert 'user-owned-parent' not in static
     assert {**json.loads(static), **json.loads(dynamic)} == json.loads(user)

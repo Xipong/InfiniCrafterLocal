@@ -25,4 +25,12 @@ Gameplay rejection открывает только Gameplay Repair; Visual contr
 
 `llmStageAccounting`: `gameplayAuthorCalls`, `gameplayRepairCalls`, `visualDirectorCalls`, `visualRepairCalls`, `vfxDirectorCalls`, `vfxRepairCalls`. Fresh happy path — `1/0/1/0/1/0`; каждый repair count не более одного. [Topology gate](../LocalGenerator/infini_local/pipelines/combine_pipeline.py#L66) проверяет это перед commit. Это logical stage calls, не обещание ровно трёх HTTP attempts: transport compatibility retries считают отдельно.
 
+## Статические инструкции и provider cache
+
+Каждый production builder (Author/Visual/VFX, их scoped Repair и Gameplay Format Repair) создаёт complete JSON DEVELOPER с явно выбранными application-owned rules/catalog и complete JSON USER с оставшимися данными. `core/llm_prompt_cache.py:with_instruction_segments` не угадывает authority по повторяемости: только builder перечисляет instruction members. Parents/tooltips, accepted runtime, errors, invalid fragments, fieldPermissions/create-policy и item-specific output schema остаются USER. Состав объединённого dossier и frozen merge не меняются; trace сохраняет все сообщения.
+
+`llm_transport.py` вычисляет content identity до dynamic USER. Native Codex сохраняет прежние effective typed DEVELOPER/USER, JSON marker, key и `session-id` affinity. Generic Responses сохраняет explicit developer, неизвестные roles отвергает вместо demotion. Только точный Nous Chat endpoint + OpenAI model получает измеренный `prompt_cache_key` и invariant final USER `JSON response.` (один раз); ни retention, ни Platform breakpoints, ни новые affinity headers ему не приписываются. Остальные optional controls остаются endpoint-allowlisted. Marker/key — не доказательство cache hit: это только raw provider cached-token counters на разных fresh tails.
+
+Offline contract: `test_craft_instruction_segments.py` проходит все семь builders через реальные senders с остановкой до auth/network, проверяет roles, static/key invariance, parent-representation negative controls, static invalidation и malformed declaration refusal. Semantic tests читают derived dossier через `prompt_packet_helpers.py`, не подменяя production packets. Live/game/GPU acceptance отдельно.
+
 Transport retries/continuation — [отдельная boundary](../PROJECT_ARCHITECTURE_RU.md#pipeline), не новые authoring stages. Offline tests: `test_low_level_three_stage_pipeline.py`, `test_pipeline_repair_contract.py` из [test owners](TEST_CONTRACT_OWNERS_RU.md); green не означает live/game/MP прогон.
