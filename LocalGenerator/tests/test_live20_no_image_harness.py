@@ -456,6 +456,155 @@ def isolated_serving_roots(monkeypatch, tmp_path):
     monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
 
 
+@pytest.mark.parametrize("layout,canvas", [("strip", 16), ("strip", 32), ("cutout", 64), ("cutout", 128)])
+def test_campaign_declared_vfx_canvas_alpha_and_private_projection(tmp_path, layout, canvas):
+    import hashlib
+    import json
+    from tests.vfx_image_fixtures import _data, _request
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa.png")
+    data = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(
+        _data([_request("ingredient", layout=layout, canvas=canvas)]), fixture,
+    ))
+    before = copy.deepcopy(data)
+    asset = data["vfxManifest"]["assets"][0]
+    assert asset["spriteStatus"] == "qa_no_image_fixture"
+    assert asset["spritePath"] != data["visual"]["spritePath"]
+    with Image.open(asset["spritePath"]) as image:
+        assert image.size == (canvas, canvas)
+        assert image.getchannel("A").getextrema() == (0, 255)
+    observer = _campaign_observers(fixture)
+    report = observer._cached_payload_report(data)
+    assert report["ok"], report
+    assert observer.assert_visual_delivery_ready(data) is data
+    control = synthetic_no_image_execution_control(data, fixture)
+    assert control["vfxManifest"]["assets"][0]["spriteStatus"] == "generated"
+    execution_keys = {"spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore"}
+    assert {k: v for k, v in control["vfxManifest"]["assets"][0].items() if k not in execution_keys} == {
+        k: v for k, v in asset.items() if k not in execution_keys
+    }
+    witness = next(row for row in report["noImageExecutionControl"]["owners"] if row["role"] == "vfx:ingredient")
+    binding = json.loads(data["debug"]["noImageQaIngredientFixtures"])[0]
+    assert witness["sha256"] == binding["sha256"] == hashlib.sha256(Path(asset["spritePath"]).read_bytes()).hexdigest()
+    assert not visual_delivery_report(data, check_backend_config=False)["ok"]
+    assert data == before
+
+
+@pytest.mark.parametrize("mutation", ["wrong_canvas", "opaque", "rgb", "empty", "pending", "wrong_owner", "missing", "corrupt", "no_provenance"])
+def test_campaign_vfx_ingredient_controls_refuse(tmp_path, mutation):
+    from tests.vfx_image_fixtures import _data, _request
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa.png")
+    data = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(_data([_request()]), fixture))
+    observer = _campaign_observers(fixture)
+    assert observer._cached_payload_report(data)["ok"]
+    asset = data["vfxManifest"]["assets"][0]
+    path = Path(asset["spritePath"])
+    if mutation == "wrong_canvas":
+        write_no_image_fixture_png(path, size=64, ingredient=True)
+    elif mutation == "opaque":
+        Image.new("RGBA", (32, 32), (24, 24, 24, 255)).save(path)
+    elif mutation == "rgb":
+        Image.new("RGB", (32, 32), (24, 24, 24)).save(path)
+    elif mutation == "empty":
+        Image.new("RGBA", (32, 32), (0, 0, 0, 0)).save(path)
+    elif mutation == "pending":
+        asset["spriteStatus"] = "pending"
+    elif mutation == "wrong_owner":
+        asset["spritePath"] = str(fixture)
+    elif mutation == "missing":
+        path.unlink()
+    elif mutation == "corrupt":
+        path.write_bytes(path.read_bytes()[:-1])
+    elif mutation == "no_provenance":
+        data["debug"].pop("noImageQaIngredientFixtures")
+    if mutation in {"wrong_canvas", "opaque", "rgb", "empty", "corrupt"}:
+        # Authenticate the malformed bytes too, so this negative proves the
+        # canonical PNG contract, not merely a mismatch against the old hash.
+        import hashlib
+        import json
+        binding = json.loads(data["debug"]["noImageQaIngredientFixtures"])
+        binding[0]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        data["debug"]["noImageQaIngredientFixtures"] = json.dumps(binding)
+    before = copy.deepcopy(data)
+    report = observer._cached_payload_report(data)
+    assert not report["ok"]
+    reasons = {reason for row in report["visual"]["problems"] for reason in row.get("validation", {}).get("reasons", [])}
+    if mutation == "wrong_canvas":
+        assert "final_canvas_mismatch" in reasons
+    elif mutation == "rgb":
+        assert "png_alpha_channel_missing" in reasons
+    elif mutation == "opaque":
+        assert "almost_no_transparency_after_bg_removal" in reasons
+    elif mutation == "empty":
+        assert "empty_alpha_bbox" in reasons
+    with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked):
+        observer.assert_visual_delivery_ready(data)
+    assert data == before
+
+
+@pytest.mark.parametrize("swap_at", ["projection", "before_gate", "after_gate", "serving_selection"])
+def test_campaign_vfx_ingredient_hash_binds_actual_consumption(tmp_path, monkeypatch, swap_at):
+    from tests.vfx_image_fixtures import _data, _request
+    from infini_local.qa import live_no_image_fixture as qa
+    from infini_local.pipelines import combine_pipeline
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa.png")
+    data = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(_data([_request()]), fixture))
+    path = Path(data["vfxManifest"]["assets"][0]["spritePath"])
+    before = copy.deepcopy(data)
+    if swap_at == "projection":
+        original = qa.FunctionType
+        def projector_wrapper(code, globals_, *args):
+            projector = original(code, globals_, *args)
+            def replaced(control):
+                with Image.open(path) as image:
+                    image.putpixel((9, 9), (1, 2, 3, 255))
+                    image.save(path)
+                return projector(control)
+            return replaced
+        monkeypatch.setattr(qa, "FunctionType", projector_wrapper)
+    else:
+        original = combine_pipeline._cached_payload_report
+        def gate_wrapper(control):
+            if swap_at in {"before_gate", "serving_selection"}:
+                if swap_at == "serving_selection":
+                    shadow = tmp_path / "shadow"
+                    shadow.mkdir()
+                    for file in (fixture, path):
+                        (shadow / file.name).write_bytes(file.read_bytes())
+                    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", shadow)
+                else:
+                    with Image.open(path) as image:
+                        image.putpixel((9, 9), (1, 2, 3, 255))
+                        image.save(path)
+            result = original(control)
+            if swap_at == "after_gate":
+                with Image.open(path) as image:
+                    image.putpixel((9, 9), (1, 2, 3, 255))
+                    image.save(path)
+            return result
+        monkeypatch.setattr(combine_pipeline, "_cached_payload_report", gate_wrapper)
+    report = _campaign_observers(fixture)._cached_payload_report(data)
+    assert not report["ok"]
+    assert "qa_fixture_identity_changed" in {row["code"] for row in report["visual"]["problems"]}
+    assert data == before
+
+
+@pytest.mark.parametrize("entry", [{}, {"assetId": "grain", "path": None}, {"assetId": "grain", "path": "qa.png", "sha256": []}])
+def test_campaign_malformed_ingredient_provenance_refuses(tmp_path, entry):
+    import json
+    from tests.vfx_image_fixtures import _data, _request
+
+    fixture = write_no_image_fixture_png(tmp_path / "qa.png")
+    data = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(_data([_request()]), fixture))
+    entry = {**entry, "assetId": "grain"}
+    data["debug"]["noImageQaIngredientFixtures"] = json.dumps([entry])
+    report = _campaign_observers(fixture)._cached_payload_report(data)
+    assert not report["ok"]
+
+
 def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path) -> None:
     fixture_path = write_no_image_fixture_png(tmp_path / "qa-fixture.png")
     # Exercise the decoder used by delivery consumers, not a parallel partial PNG parser.
