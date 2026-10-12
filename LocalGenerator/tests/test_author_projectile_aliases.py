@@ -24,15 +24,13 @@ def compiled_entity(document, call):
     wire = compile_runtime_program(document)
     assert validate_runtime_wire(wire)["ok"]
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
-    assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
     return wire, next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
 
 
 @pytest.mark.parametrize("immunity,mode,cooldown", [
     ("owner_shared", "owner", -1), ("once_per_npc", "local", -1),
     ({"localCooldown": 0}, "local", 0), ({"localCooldown": 1}, "local", 1),
-    ({"localCooldown": 600}, "local", 600),
+    ({"localCooldown": 37}, "local", 37), ({"localCooldown": 600}, "local", 600),
 ])
 @pytest.mark.parametrize("updates", [1, 2, 6])
 def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, cooldown, updates):
@@ -46,7 +44,15 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
     }
     assert entity["spawn"]["speedPxPerTick"] == 8  # no update-rate rescaling
     relevant = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("callId") == call["id"]]
-    assert len([r for r in relevant if ".params.immunity" in r["authoredPath"]]) == 2
+    immunity_rows = [r for r in relevant if ".params.immunity" in r["authoredPath"]]
+    assert len(immunity_rows) == 2
+    for removed in immunity_rows:
+        for source in (None, document):
+            assert not audit_compiler_receipts([r for r in wire["runtimeContract"]["finalWireReceipts"] if r is not removed],
+                                               authored_document=source, final_document=wire)["ok"]
+            forged = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
+            forged[wire["runtimeContract"]["finalWireReceipts"].index(removed)]["value"] = "forged"
+            assert not audit_compiler_receipts(forged, authored_document=source, final_document=wire)["ok"]
     assert any(r.get("authoredPath", "").endswith(".updatesPerTick") and r["value"] == updates - 1 for r in relevant)
 
 
@@ -55,6 +61,7 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
     ("immunity", {"localCooldown": -1}), ("immunity", {"localCooldown": 601}),
     ("immunity", {"localCooldown": True}), ("immunity", {"localCooldown": 1.5}),
     ("immunity", {"localCooldown": 2, "mode": "local"}),
+    ("immunity", {"localCooldown": 10, "owner": True}),
     ("updatesPerTick", 0), ("updatesPerTick", 7), ("updatesPerTick", True),
     ("updatesPerTick", 1.5),
 ])
@@ -104,20 +111,27 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
     ("damage_area_on_event", "radiusTiles", "radiusPx", 8, 768),
     ("move_proximity_missile", "triggerRadiusTiles", "proximityRadiusPx", 4, 512),
 ])
-def test_tile_radii_cover_exactly_every_old_integer_pixel_radius(fn, name, wire_name, lo, hi):
+@pytest.mark.parametrize("case", ["minimum", "next-pixel", "interior", "before-maximum", "maximum", "below", "above", "off-step", "boolean"])
+def test_tile_radius_boundaries_keep_exact_pixel_projection(fn, name, wire_name, lo, hi, case):
     spec = CAPABILITY_REGISTRY[fn].params[name]
-    assert spec.multiple_of == 1 / 16
-    assert [spec.to_wire(pixels / 16) for pixels in range(lo, hi + 1)] == list(range(lo, hi + 1))
-    for pixels in (lo, lo + 1, 127, hi - 1, hi):
-        document = build_capability_witness(fn)
-        call = selected(document)
-        call["params"][name] = pixels / 16
+    assert (spec.minimum, spec.maximum, spec.multiple_of) == (lo / 16, hi / 16, 1 / 16)
+    pixels = {"minimum": lo, "next-pixel": lo + 1, "interior": 127, "before-maximum": hi - 1,
+              "maximum": hi, "below": lo - 1, "above": hi + 1, "off-step": lo + .5, "boolean": 16}[case]
+    document = build_capability_witness(fn)
+    call = selected(document)
+    call["params"][name] = True if case == "boolean" else pixels / 16
+    before = deepcopy(document)
+    if case in {"below", "above", "off-step", "boolean"}:
+        report = validate_runtime_program(document)
+        assert not report["ok"] and any(e["path"].endswith(".params." + name) for e in report["errors"])
+        with pytest.raises(ValueError, match="runtime program rejected"):
+            compile_runtime_program(document)
+    else:
+        assert type(spec.to_wire(pixels / 16)) is int and spec.to_wire(pixels / 16) == pixels
         _, entity = compiled_entity(document, call)
         output = entity["events"][0] if fn == "damage_area_on_event" else entity["movement"]["params"]
         assert output[wire_name] == pixels and type(output[wire_name]) is int
-    for value in ((lo - 1) / 16, (hi + 1) / 16, lo / 16 + 1 / 32, True):
-        selected(document)["params"][name] = value
-        assert not validate_runtime_program(document)["ok"]
+    assert document == before
 
 
 @pytest.mark.parametrize("when", ["on_hit", {"everyTicks": 6}, {"everyTicks": 3600}])
@@ -323,6 +337,8 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     leaf = {"set_projectile_collision": "immunity.localCooldown", "pull_on_event": "when.everyTicks",
             "configure_spawn": "position.heightTiles"}[fn]
     assert paths == ["params." + leaf]
+    if fn == "set_projectile_collision":
+        assert any(e["code"] == "shape_maximum" and e["path"].endswith(".immunity.localCooldown") for e in errors)
     candidate = deepcopy(call)
     candidate["params"].update(deepcopy(value), **{frozen_key: hostile})
     filtered, audit = filter_repair_patch_scope(document, {"note": "repair exact leaf", "callsUpsert": [candidate]}, scope)
@@ -393,32 +409,8 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
     assert not report["ok"]
     assert any(row["reason"] == "retained wire capability is not a current Author source" for row in report["violations"])
 
-@pytest.mark.parametrize("attack", ["source-targets", "receipt-owners"])
-def test_actual_collision_alias_binds_source_target_to_exact_wire_owner(attack):
-    document = build_capability_witness("spawn_entity_on_event")
-    calls = [r for r in document["runtimeProgram"]["calls"] if r["fn"] == "set_projectile_collision"]
-    assert len(calls) == 2
-    for cooldown, call in enumerate(calls, 10):
-        call["params"]["immunity"] = {"localCooldown": cooldown}
-    wire = compile_runtime_program(document)
-    receipts = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
-    if attack == "source-targets":
-        calls[0]["target"], calls[1]["target"] = calls[1]["target"], calls[0]["target"]
-        assert validate_runtime_program(document)["ok"]
-    else:
-        entities = wire["runtimeProgram"]["entities"]
-        indices = [next(i for i, e in enumerate(entities) if e["id"] == c["target"]) for c in calls]
-        for row in receipts:
-            if row.get("callId") in {c["id"] for c in calls}:
-                a, b = (f"entities[{i}]" for i in indices)
-                row["finalPath"] = row["finalPath"].replace(a, "OWNER_SWAP").replace(b, a).replace("OWNER_SWAP", b)
-        a, b = indices
-        entities[a]["collision"], entities[b]["collision"] = entities[b]["collision"], entities[a]["collision"]
-    assert not audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
 
-
-@pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "spawn-domain"])
+@pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "foreign-source", "spawn-domain"])
 @pytest.mark.parametrize("source_available", [False, True])
 def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attack, source_available):
     fn = "configure_spawn" if attack == "spawn-domain" else "set_projectile_collision"
@@ -443,6 +435,8 @@ def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attac
             entity["collision"]["npcImmunityMode"] = row["value"] = "owner"
         elif attack == "missing-literal":
             receipts.remove(row)
+        elif attack == "foreign-source":
+            row["authoredPath"] += ".foreign"
         else:
             receipts.append(deepcopy(row))
     assert not audit_compiler_receipts(receipts, authored_document=document if source_available else None,

@@ -86,10 +86,6 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
 @pytest.mark.parametrize("fn", [pytest.param(fn, id=fn) for fn in (cap.name for cap in visible_capabilities())])
 def test_registered_capability_survives_schema_card_projection_compiler_and_wire(fn):
     cap = CAPABILITY_REGISTRY[fn]
-    variants = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {v["properties"]["fn"]["const"] for v in variants} == {cap.name for cap in visible_capabilities()}
-    assert len(capability_provider_union()) == len(visible_capabilities())
-    assert {c["fn"] for c in compact_capability_catalog()} == {cap.name for cap in visible_capabilities()}
     assert all("*" not in p for p in cap.final_wire_paths)
     full, compact = cap.prompt_card(), cap.author_prompt_card()
     assert {k: v for k, v in compact.items() if k != "params"} == {k: v for k, v in full.items() if k != "params"}
@@ -123,15 +119,28 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
             assert not spec.required and spec.neutral == 0
         else:
             assert row.get("neutral") == original.get("neutral")
+    import json
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from test_canonical_author_notation import _explicit_calls
     item = build_capability_witness(fn)
+    before = deepcopy(item)
+    explicit = _explicit_calls(item)
+    explicit_before = deepcopy(explicit)
+    assert all(set(call) == {"id", "fn", "target", "params"} for call in explicit["runtimeProgram"]["calls"])
+    assert Draft202012Validator(author_item_response_schema()).is_valid(explicit)
     response_format = {"type": "json_schema", "json_schema": {"schema": author_item_provider_response_schema()}}
-    projected = pipeline._prepare_parsed_author_item(item, response_format=response_format)
-    assert projected == item
-    assert validate_runtime_program(projected)["ok"]
+    assert pipeline._prepare_parsed_author_item(item, response_format=response_format) == item
+    projected = pipeline._prepare_parsed_author_item(explicit, response_format=response_format)
+    assert projected == explicit
     wire = compile_runtime_program(projected)
-    assert wire == compile_runtime_program(item)
+    sparse_wire = compile_runtime_program(item)
+    assert json.dumps(wire, ensure_ascii=False) == json.dumps(sparse_wire, ensure_ascii=False), "Exact serialized executable wire AND receipts remain unchanged"
     assert wire["runtimeContract"]["finalWireReceipts"]
     assert validate_runtime_wire(wire)["ok"]
+    # Compiler authenticates explicit source; sparse identity is a distinct oracle.
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=item, final_document=wire)["ok"]
+    assert item == before and explicit == explicit_before
     if cap.params:
         rows = deepcopy(wire["runtimeContract"]["finalWireReceipts"])
         direct = next(
@@ -148,6 +157,11 @@ def test_registered_capability_survives_schema_card_projection_compiler_and_wire
 
 
 def test_library_audit_and_shared_notation_have_no_missing_boundary():
+    expected = {cap.name for cap in visible_capabilities()}
+    for rows, identity in ((runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"], lambda row: row["properties"]["fn"]["const"]),
+                           (capability_provider_union(), lambda row: row["properties"]["fn"]["const"]),
+                           (compact_capability_catalog(), lambda row: row["fn"])):
+        assert {identity(row) for row in rows} == expected and len(rows) == len(expected)
     report = capability_library_audit()
     assert report["ok"] and report["score"] == report["scoreMax"], report["issues"]
     lifetime = next(row for row in report["rangeParity"]

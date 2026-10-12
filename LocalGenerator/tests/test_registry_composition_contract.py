@@ -331,25 +331,6 @@ def test_hidden_item_body_without_contact_requires_exact_spawn_target_ownership(
     assert validate_runtime_program(hidden_projectile_form)["ok"]
 
 
-@pytest.mark.parametrize("name", [pytest.param(n, id=n) for n in NON_ARCHETYPAL_FIXTURES])
-def test_non_archetypal_fixture_compiles_to_strict_wire(name):
-    authored = build_runtime_fixture(name)
-    assert "runtimeContract" not in authored and "backedByClaims" not in authored["realization"]
-    compiled = compile_runtime_program(authored)
-    assert set(compiled["runtimeContract"]) == {
-        "compiledSchema",
-        "runtimeApiVersion",
-        "finalWireReceipts",
-        "validation",
-        "technicalLoweringAudit",
-    }
-    wire = validate_runtime_wire(compiled)
-    assert wire["ok"] and "promiseParityWarnings" not in wire
-    encoded = json.dumps(compiled)
-    assert "runtimeFamily" not in encoded and "weaponFamily" not in encoded
-    assert compiled["runtimeProgram"]["schema"] == "infini.runtime-program.wire.v3" and "calls" not in compiled["runtimeProgram"]
-
-
 @pytest.mark.parametrize(
     "mutation,code",
     [

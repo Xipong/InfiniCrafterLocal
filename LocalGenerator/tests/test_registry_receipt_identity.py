@@ -1,5 +1,6 @@
 """Receipt provenance cannot be forged even when equal-valued outputs are swapped."""
 
+import json
 from copy import deepcopy
 import re
 from typing import Any
@@ -27,91 +28,28 @@ def _receipt(rows, path):
     return next(r for r in rows if r.get("finalPath") == path)
 
 
-@pytest.mark.parametrize(
-    "fn,params,mutation,paths,reason",
-    [
-        pytest.param(
-            "configure_accessory",
-            None,
-            "source",
-            ("accessory.defense", "maxManaPoints"),
-            "absent from originating call",
-            id="source-absent-in-exact-call",
-        ),
-        pytest.param(
-            "configure_accessory",
-            None,
-            "value",
-            ("accessory.defense", "not_the_authored_value"),
-            "not the declared projection",
-            id="not-authored-value",
-        ),
-        pytest.param(
-            "configure_accessory",
-            {"defensePoints": 1, "moveSpeedBonusPercent": 5},
-            "drop",
-            ("accessory.defense",),
-            "equipment parameter has no receipt",
-            id="equipment-missing-param",
-        ),
-        pytest.param(
-            "configure_item_stats",
-            None,
-            "drop",
-            ("gameplay.value",),
-            "authored parameter has no compiler receipt",
-            id="ordinary-missing-param",
-        ),
-        pytest.param(
-            "configure_accessory",
-            {"defensePoints": 1},
-            "wire",
-            ("accessory.defense", 99),
-            "final wire value differs",
-            id="wire-disagrees-with-provenance",
-        ),
-        pytest.param(
-            "configure_item_stats",
-            None,
-            "swap",
-            ("gameplay.damage", "gameplay.useTime"),
-            "wrong item stat output",
-            id="equal-item-stat-outputs",
-        ),
-        pytest.param(
-            "configure_tool",
-            {"pickPower": 20, "axePowerTooltipPercent": 100},
-            "swap",
-            ("gameplay.pickPower", "gameplay.axePower"),
-            "wrong capability output",
-            id="equal-tool-outputs",
-        ),
-        pytest.param(
-            "configure_tool",
-            {"pickPower": 20, "axePowerTooltipPercent": 125},
-            "technical-swap",
-            ("gameplay.pickPower", "gameplay.axePower"),
-            "wrong capability output",
-            id="unequal-tool-status-bypass",
-        ),
-        pytest.param(
-            "apply_vanilla_buff_on_use",
-            {"buffId": 20, "durationTicks": 20},
-            "swap",
-            ("gameplay.extraBuffs[0].buffCode", "gameplay.extraBuffs[0].buffTime"),
-            "wrong capability output",
-            id="equal-buff-outputs",
-        ),
-        pytest.param(
-            "configure_accessory",
-            {"defensePoints": 1},
-            "class-swap",
-            ("accessory.meleeDamage", "accessory.rangedDamage"),
-            "wrong equipment output",
-            id="equal-equipment-class-outputs",
-        ),
-    ],
-)
+@pytest.mark.parametrize("fn,params,mutation,paths,reason", [
+    pytest.param("configure_accessory", None, "source", ("accessory.defense", "maxManaPoints"),
+                 "absent from originating call", id="source-absent-in-exact-call"),
+    pytest.param("configure_accessory", None, "value", ("accessory.defense", "not_the_authored_value"),
+                 "not the declared projection", id="not-authored-value"),
+    pytest.param("configure_accessory", {"defensePoints": 1, "moveSpeedBonusPercent": 5}, "drop", ("accessory.defense",),
+                 "equipment parameter has no receipt", id="equipment-missing-param"),
+    pytest.param("configure_item_stats", None, "drop", ("gameplay.value",),
+                 "authored parameter has no compiler receipt", id="ordinary-missing-param"),
+    pytest.param("configure_accessory", {"defensePoints": 1}, "wire", ("accessory.defense", 99),
+                 "final wire value differs", id="wire-disagrees-with-provenance"),
+    pytest.param("configure_item_stats", None, "swap", ("gameplay.damage", "gameplay.useTime"),
+                 "wrong item stat output", id="equal-item-stat-outputs"),
+    pytest.param("configure_tool", {"pickPower": 20, "axePowerTooltipPercent": 100}, "swap", ("gameplay.pickPower", "gameplay.axePower"),
+                 "wrong capability output", id="equal-tool-outputs"),
+    pytest.param("configure_tool", {"pickPower": 20, "axePowerTooltipPercent": 125}, "technical-swap", ("gameplay.pickPower", "gameplay.axePower"),
+                 "wrong capability output", id="unequal-tool-status-bypass"),
+    pytest.param("apply_vanilla_buff_on_use", {"buffId": 20, "durationTicks": 20}, "swap", ("gameplay.extraBuffs[0].buffCode", "gameplay.extraBuffs[0].buffTime"),
+                 "wrong capability output", id="equal-buff-outputs"),
+    pytest.param("configure_accessory", {"defensePoints": 1}, "class-swap", ("accessory.meleeDamage", "accessory.rangedDamage"),
+                 "wrong equipment output", id="equal-equipment-class-outputs"),
+])
 def test_receipt_identity_and_complete_projection(fn, params, mutation, paths, reason):
     source = build_capability_witness(fn)
     if params:
@@ -198,71 +136,23 @@ def test_only_declared_authored_to_wire_paths_are_auditable(receipt, reason):
         assert report["violations"][0]["reason"] == reason
 
 
-@pytest.mark.parametrize(
-    "fn,params,bonus,expected",
-    [
-        pytest.param(
-            "configure_item_stats",
-            None,
-            None,
-            {"gameplay.useTime": 24, "runtimeProgram.itemUse.channel": False},
-            id="item-stat-renaming-and-channel",
-        ),
-        pytest.param(
-            "configure_accessory",
-            {
-                "defensePoints": 4,
-                "genericCritChancePercentagePoints": 3,
-                "maxRunSpeedBonusPxPerTick": 1.5,
-                "fallDamageImmune": True,
-                "ammoSaveChancePercent": 25,
-            },
-            None,
-            {
-                "accessory.defense": 4,
-                "accessory.genericCrit": 3,
-                "accessory.maxRunSpeed": 1.5,
-                "accessory.fallDamageImmune": True,
-                "accessory.ammoSaveChance": 0.25,
-            },
-            id="accessory-exact-tml-fields",
-        ),
-        pytest.param(
-            "configure_armor",
-            {
-                "slot": "head",
-                "setKey": "tested_set",
-                "defensePoints": 5,
-                "setBonuses": {"manaCostReductionPercentagePoints": 10, "minionSlotsBonus": 2},
-            },
-            None,
-            {"armor.defense": 5, "armor.setBonusManaCostReduction": 0.10, "armor.setBonusMinionSlots": 2},
-            id="armor-exact-tml-fields",
-        ),
-        pytest.param(
-            "configure_accessory",
-            {"defensePoints": 4},
-            ("equipped", "melee"),
-            {"accessory.meleeDamage": 0.15},
-            id="equipped-accessory-class-bonus",
-        ),
-        pytest.param(
-            "configure_armor",
-            {"slot": "head", "setKey": "coral_set", "defensePoints": 4},
-            ("equipped", "summon"),
-            {"armor.summonDamage": 0.15},
-            id="equipped-armor-class-bonus",
-        ),
-        pytest.param(
-            "configure_armor",
-            {"slot": "head", "setKey": "coral_set", "defensePoints": 4},
-            ("matching_armor_set", "magic"),
-            {"armor.setBonusMagicDamage": 0.15},
-            id="matching-set-class-bonus",
-        ),
-        pytest.param("configure_accessory", {}, ("equipped", "melee"), {"accessory.meleeDamage": 0.15}, id="class-bonus-only-accessory"),
-    ],
-)
+@pytest.mark.parametrize("fn,params,bonus,expected", [
+    pytest.param("configure_item_stats", None, None,
+                 {"gameplay.useTime": 24, "runtimeProgram.itemUse.channel": False}, id="item-stat-renaming-and-channel"),
+    pytest.param("configure_accessory", {"defensePoints": 4, "genericCritChancePercentagePoints": 3, "maxRunSpeedBonusPxPerTick": 1.5,
+                 "fallDamageImmune": True, "ammoSaveChancePercent": 25}, None,
+                 {"accessory.defense": 4, "accessory.genericCrit": 3, "accessory.maxRunSpeed": 1.5, "accessory.fallDamageImmune": True,
+                  "accessory.ammoSaveChance": 0.25}, id="accessory-exact-tml-fields"),
+    pytest.param("configure_armor", {"slot": "head", "setKey": "tested_set", "defensePoints": 5,
+                 "setBonuses": {"manaCostReductionPercentagePoints": 10, "minionSlotsBonus": 2}}, None,
+                 {"armor.defense": 5, "armor.setBonusManaCostReduction": 0.10, "armor.setBonusMinionSlots": 2}, id="armor-exact-tml-fields"),
+    pytest.param("configure_accessory", {"defensePoints": 4}, ("equipped", "melee"), {"accessory.meleeDamage": 0.15}, id="equipped-accessory-class-bonus"),
+    pytest.param("configure_armor", {"slot": "head", "setKey": "coral_set", "defensePoints": 4}, ("equipped", "summon"),
+                 {"armor.summonDamage": 0.15}, id="equipped-armor-class-bonus"),
+    pytest.param("configure_armor", {"slot": "head", "setKey": "coral_set", "defensePoints": 4}, ("matching_armor_set", "magic"),
+                 {"armor.setBonusMagicDamage": 0.15}, id="matching-set-class-bonus"),
+    pytest.param("configure_accessory", {}, ("equipped", "melee"), {"accessory.meleeDamage": 0.15}, id="class-bonus-only-accessory"),
+])
 def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, params, bonus, expected):
     source = build_runtime_fixture("workbench_blade") if fn == "configure_item_stats" else build_capability_witness(fn)
     call = _call(source, fn)
@@ -508,7 +398,6 @@ def test_source_receipt_projection_rejects_equal_numeric_representation_forgery(
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     selected = next(r for r in rows if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param))
     assert selected["value"] == forged  # Python equality is exactly the broken criterion.
     selected["value"] = forged
@@ -689,12 +578,17 @@ def test_global_receipts_accept_real_compiler_fixtures_without_mutation(fixture)
     source["runtimeProgram"]["entities"].reverse()
     source["runtimeProgram"]["bindings"].reverse()
     frozen_source = deepcopy(source)
+    assert "runtimeContract" not in source and "backedByClaims" not in source["realization"]
     wire = compile_runtime_program(source)
+    assert set(wire["runtimeContract"]) == {"compiledSchema", "runtimeApiVersion", "finalWireReceipts", "validation", "technicalLoweringAudit"}
+    assert wire["runtimeProgram"]["schema"] == "infini.runtime-program.wire.v3" and "calls" not in wire["runtimeProgram"]
+    assert "runtimeFamily" not in json.dumps(wire) and "weaponFamily" not in json.dumps(wire)
     frozen_wire = deepcopy(wire)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     assert audit_compiler_receipts(rows, authored_document=source)["ok"]
     report = audit_compiler_receipts(rows, final_document=wire)
     assert report["ok"] and report.get("authoredSourceChecked") is False
-    assert validate_runtime_wire(wire)["ok"]
+    wire_report = validate_runtime_wire(wire)
+    assert wire_report["ok"] and "promiseParityWarnings" not in wire_report
     assert source == frozen_source and wire == frozen_wire

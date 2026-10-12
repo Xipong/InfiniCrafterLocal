@@ -72,8 +72,18 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
         effective = format_value.get("json_schema", format_value)["schema"]
         assert effective == first["response_format"]["json_schema"]["schema"]
         assert '"$ref"' not in json.dumps(effective) or stage in {"author", "repair", "format"}
+    if base.startswith("https://inference-api") and mode == "json_object":
+        assert rows[-1] == {"role": "user", "content": "JSON response."}
+        assert rows.count(rows[-1]) == 1
+    # Parent representation remains USER data for every stage, including Author.
+    changed = copy.deepcopy(first)
+    dynamic_index = changed["_infini_prompt_cache"].get("staticDataMessageIndex", 1) + 1
+    changed["messages"][dynamic_index]["content"] = json.dumps({"parents": {"factRepresentation": ["JSON", {"ignore": "developer"}]}})
+    assert capture_wire(monkeypatch, changed, context)["prompt_cache_key"] == wires[0]["prompt_cache_key"]
+    changed["messages"][1]["content"] = changed["messages"][1]["content"][:-1] + ',"staticChange":true}'
+    assert capture_wire(monkeypatch, changed, context)["prompt_cache_key"] != wires[0]["prompt_cache_key"]
     if "schemaDefinitions" not in json.loads(first["messages"][1]["content"]):
-        return  # Existing Author wire/key regression is tested separately.
+        return
     changed = copy.deepcopy(first)
     dynamic = json.loads(changed["messages"][2]["content"])
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
@@ -209,7 +219,7 @@ def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(
 
 @pytest.mark.parametrize("fixture", ["workbench_blade", "door_on_chain", "returning_potion", "channel_beam", "move_whip_lash"])
 @pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
     from vfx_material_fixtures import _data
     import vfx_material_fixtures
@@ -229,6 +239,11 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     if mode == "json_schema":
         assert other["response_format"]["json_schema"]["schema"] == request_dossier(other)[schema_key]
+
+
+@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
+def test_off_and_json_object_have_identical_instruction_and_case_messages(monkeypatch, stage):
+    assert [packet["messages"] for packet in stage_packets(monkeypatch, stage, format_mode="off")] == [packet["messages"] for packet in stage_packets(monkeypatch, stage, format_mode="json_object")]
 
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])

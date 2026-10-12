@@ -10,11 +10,12 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
+from test_registry_receipt_identity import _call
 
 
 def _source(fn):
     document = build_capability_witness(fn)
-    call = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == fn)
+    call = _call(document, fn)
     return document, call
 
 
@@ -223,7 +224,7 @@ def test_unrelated_repair_cannot_change_a_valid_condition_or_threshold():
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == call["params"]
     assert audit["ignoredChanges"] and validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
-@pytest.mark.parametrize("bad", [True, 1.0, None])
+@pytest.mark.parametrize("bad", [True, 1001, 1.0, None])
 @pytest.mark.parametrize("source_available", [False, True])
 def test_grouped_armor_receipts_refuse_coherent_wrong_json_types(bad, source_available):
     source, call = _source("configure_armor")
@@ -232,6 +233,7 @@ def test_grouped_armor_receipts_refuse_coherent_wrong_json_types(bad, source_ava
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     row = next(r for r in receipts if r.get("authoredPath", "").endswith(".setBonuses.aggroPoints"))
     call["params"]["setBonuses"]["aggroPoints"] = bad
+    assert not validate_runtime_program(source)["ok"]
     wire["armor"]["setBonusAggro"] = row["value"] = bad
     assert not audit_compiler_receipts(receipts, authored_document=source if source_available else None,
                                        final_document=wire)["ok"]
