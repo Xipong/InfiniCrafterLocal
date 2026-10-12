@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Opt-in live concurrency is independent of per-activation spawn count."""
 
 import copy
@@ -82,7 +83,7 @@ def test_registry_concurrency_choice_reaches_actual_model_packet(monkeypatch, fo
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
     request, content, _ = build_initial_author_request(parent, parent, parent, parent, "concurrency", model_name="test-model")
-    assert request["messages"][1]["content"] == content
+    assert dossier_text(request) == content
     cards = json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(row for row in cards if row["fn"] == CAPABILITY)
     assert card == CAPABILITY_REGISTRY[CAPABILITY].author_prompt_card()
@@ -340,7 +341,7 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
         responses, requests = wire_transport
         responses.append({"callsUpsert": [response], "realizationReplacement": good["realization"], "note": "Exact movement leaf"})
         fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": validate_runtime_program(broken)["errors"]})
-        packet = json.loads(requests[-1]["messages"][1]["content"])
+        packet = request_dossier(requests[-1])
         repair_card = next(row for row in packet["existingBrokenCapabilityCards"] if row["fn"] == driver)
         assert all(term in repair_card["does"] for term in phrases)
         assert compile_runtime_program(fixed)["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
@@ -351,7 +352,7 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
     response = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_collision"))
     responses.append({"callsUpsert": [response], "realizationReplacement": good["realization"], "note": "Exact pierce"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": validate_runtime_program(broken)["errors"]})
-    packet = json.loads(requests[-1]["messages"][1]["content"])
+    packet = request_dossier(requests[-1])
     repair_card = next(row for row in packet["existingBrokenCapabilityCards"] if row["fn"] == "set_projectile_collision")
     _assert_contact_facts(repair_card)
     assert packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": collision["id"], "paths": ["params.pierce"]}]
@@ -360,7 +361,7 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
     broken["runtimeProgram"]["calls"][-1]["params"]["maxActive"] = 0
     responses.append({"callsUpsert": [good["runtimeProgram"]["calls"][-1]], "realizationReplacement": good["realization"], "note": "Exact maxActive"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": validate_runtime_program(broken)["errors"]})
-    packet = json.loads(requests[-1]["messages"][1]["content"])
+    packet = request_dossier(requests[-1])
     assert packet["existingBrokenCapabilityCards"] == [CAPABILITY_REGISTRY[CAPABILITY].prompt_card()]
     assert packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": "tonic_concurrency", "paths": ["params.maxActive"]}]
     assert compile_runtime_program(fixed)["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]

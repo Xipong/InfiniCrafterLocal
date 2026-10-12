@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Independent explicit placed-light vertical slice; offline, no inference."""
 import copy
 import json
@@ -142,7 +143,7 @@ def test_real_serialized_author_repair_carries_independent_placed_light(wire_tra
     document = lit(); responses.append(document)
     accepted = gameplay.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "offline-placed-light")
     assert accepted is not None
-    payload = json.loads(requests[-1]["messages"][1]["content"])
+    payload = request_dossier(requests[-1])
     card = next(c for c in payload["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
     assert set(card["params"]) == {"placementCallId", *LIGHT}
     assert "footprint" in card["does"]
@@ -153,7 +154,7 @@ def test_real_serialized_author_repair_carries_independent_placed_light(wire_tra
     incoming["params"].update(placementCallId="install_tile", strength=1.5, color="red")
     responses.append({"note": "exact reference", "realizationReplacement": copy.deepcopy(document["realization"]), "callsUpsert": [incoming]})
     repaired = gameplay.repair_author_item_after_failure(document, {}, {}, {}, {}, "offline-placed-light-repair", failure_report=validate_runtime_program(document))
-    dossier = json.loads(requests[-1]["messages"][1]["content"])
+    dossier = request_dossier(requests[-1])
     permission = next(p for p in dossier["repairScope"]["fieldPermissions"]["calls"] if p["id"] == "station_light")
     assert permission["paths"] == ["params.placementCallId"]
     assert dossier["repairScope"]["create"]["calls"]["allowedFns"] == []

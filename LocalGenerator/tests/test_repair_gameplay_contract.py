@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Canonical Gameplay Repair: diagnostics -> exact scope -> filter -> apply -> compiler."""
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
@@ -39,7 +40,7 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_
             if out_of_scope_response:
                 # Foreign hostile rows are not nullable choices offered by the
                 # scoped grammar. Keep their literal sparse bytes after encoding.
-                scope = json.loads(request["messages"][1]["content"])["repairScope"]
+                scope = request_dossier(request)["repairScope"]
                 mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
                 payload["callsUpsert"] = [
                     encoded if original["id"] in mutable_ids else copy.deepcopy(original)
@@ -65,7 +66,7 @@ def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_
     result = author.repair_author_item_after_failure(
         doc, {}, {}, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
     assert len(requests) == 1
-    return result, json.loads(requests[0]["messages"][1]["content"])
+    return result, request_dossier(requests[0])
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

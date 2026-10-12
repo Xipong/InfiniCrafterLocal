@@ -347,10 +347,8 @@ def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic
             model_name=CONTEXT["model"],
         )
         before = copy.deepcopy(source)
-        marker = source[PROMPT_CACHE_METADATA_KEY]
-        # Parent owns enabling this at the production builder after prose settles.
-        explicit = with_prompt_cache_prefix(source, message_index=marker["messageIndex"],
-                                            prefix_chars=marker["prefixChars"], static_instruction_prefix=True)
+        assert source[PROMPT_CACHE_METADATA_KEY] == {"instructionMessageIndex": 1}
+        explicit = source
         prepared = llm._payload_for_context(explicit, CONTEXT)
         llm._llm_json_single_context(explicit, 3, CONTEXT)
         body = native_wire[-1][1]

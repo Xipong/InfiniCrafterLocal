@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
 import json
@@ -55,7 +56,7 @@ def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_tra
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
     visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
-    packet = json.loads(sent[-1]["messages"][1]["content"])
+    packet = request_dossier(sent[-1])
     rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
     members = (*PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity")
     for row, accepted in zip(rows, data["runtimeProgram"]["entities"]):

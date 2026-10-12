@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Cold-reader gaps and concise prose without reducing the executable language."""
 import copy
 import json
@@ -9,7 +10,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 def packet(monkeypatch, a=None, b=None):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     request, user, _ = author.build_initial_author_request(a or {}, b or {}, {}, {}, 'cold-clarity', model_name='test-model')
-    assert request['messages'][1]['content'] == user
+    assert dossier_text(request) == user
     return json.loads(user)
 
 

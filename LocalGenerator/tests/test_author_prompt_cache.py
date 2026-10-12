@@ -1,5 +1,6 @@
 """Author cache boundaries and local request-build work, without provider calls."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import json
 
@@ -59,7 +60,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
     request, user, _ = author.build_initial_author_request(
         source_a, source_b, {}, {}, "no-damage-advice", model_name="test-model",
     )
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     payload = json.loads(user)
     corridor = payload["balanceCorridor"]
     assert "suggestedDamage" not in corridor
@@ -76,12 +77,11 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
 def _marked_prefix(request):
     marker = request.get("_infini_prompt_cache")
     assert marker is not None, "production request must declare the reusable instruction/catalog boundary"
-    message = request["messages"][marker["messageIndex"]]
-    assert message["role"] == "user"
-    content = message["content"]
-    prefix = content[:marker["prefixChars"]]
-    assert prefix.endswith(",")
-    return json.loads(prefix[:-1] + "}"), prefix, json.loads(content)
+    assert marker == {"instructionMessageIndex": 1}
+    message = request["messages"][1]
+    assert message["role"] == "developer"
+    static = json.loads(message["content"])
+    return static, message["content"], request_dossier(request)
 
 
 def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
@@ -104,8 +104,8 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert len(capabilities) == sum(cap.prompt_visible and cap.decision == "expose" for cap in author.CAPABILITY_REGISTRY.values())
     assert {card["fn"] for card in capabilities} == {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
     assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
-    assert first["messages"][1]["content"] == first_user
-    assert second["messages"][1]["content"] == second_user
+    assert dossier_text(first) == first_user
+    assert dossier_text(second) == second_user
 
 
 class _RequestCaptured(BaseException):

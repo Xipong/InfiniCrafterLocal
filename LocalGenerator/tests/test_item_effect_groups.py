@@ -551,7 +551,9 @@ def test_combined_provider_preparation_preserves_presence_and_exact_compilation(
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     request, user, system = author.build_initial_author_request({}, {}, {}, {}, "combined-offline", model_name="offline-no-model")
-    assert [(row["role"], row["content"]) for row in request["messages"]] == [("system", system), ("user", user)]
+    from prompt_packet_helpers import dossier_text
+    assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
+    assert request["messages"][0]["content"] == system and dossier_text(request) == user
     local = contract.author_item_response_schema()
     payload = _encode_nullable_fixture(doc, local) if format_mode == "json_schema" else deepcopy(doc)
     if format_mode == "json_schema":

@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Explicit bounded target links emit authored physical children; no radial alias."""
 from copy import deepcopy
 import hashlib
@@ -98,7 +99,7 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
     assert request["response_format"]["type"] == mode
     if mode == "json_schema":
         Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
-    cards = json.loads(request["messages"][1]["content"])["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    cards = request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     assert next(row for row in cards if row["fn"] == FN) == CAP.author_prompt_card()
     assert _call(result) == _call(doc)
     assert compile_runtime_program(result)["runtimeProgram"] == compile_runtime_program(doc)["runtimeProgram"]

@@ -1,5 +1,6 @@
 """Offline canonical vfx packet contracts; no live services."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -156,7 +157,7 @@ def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choice
     sent = _offline_transport(monkeypatch, "audio_ownership_" + str(sound_only), [raw, patch])
     final = vfx.attach_hybrid_vfx_manifest(data, "audio-ownership", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2
-    director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+    director, repair = [request_dossier(request) for request in sent]
     semantics = director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
     assert semantics == repair["runtimeVocabularyReadOnly"]["rendererSemantics"]["soundCue"]
     for clause in (
@@ -212,7 +213,7 @@ def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_froze
         assert raw == raw_before
         assert final["runtimeProgram"]["entities"][0]["visual"]["impactPrompt"] == impact["spritePrompt"]
         assert final["gameplay"] == before["gameplay"]
-        director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+        director, repair = [request_dossier(request) for request in sent]
         assert repair["exactErrors"] == report["errors"][:24]
         assert repair["repairScope"] == scope
         assert repair["brokenFragments"]["slots"] == [raw["slots"][0]]
@@ -222,10 +223,10 @@ def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_froze
         sources = director["runtimeSurface"]["texturedPathSources"]
         assert any(("beam" if capability == "channel_beam" else "whip") in row["sources"] for row in sources)
         for packet, request, keys in ((director, sent[0], vfx.VFX_PROMPT_STATIC_KEYS), (repair, sent[1], vfx.VFX_REPAIR_PROMPT_STATIC_KEYS)):
-            length = request["_infini_prompt_cache"]["prefixChars"]
-            prefix = json.dumps({key: packet[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))[:-1] + ","
-            assert request["messages"][1]["content"][:length] == prefix
-        prefixes.append(tuple(request["messages"][1]["content"][:request["_infini_prompt_cache"]["prefixChars"]] for request in sent))
+            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+            prefix = json.dumps({key: packet[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))
+            assert request["messages"][1]["content"] == prefix
+        prefixes.append(tuple(request["messages"][1]["content"] for request in sent))
     assert prefixes[0] == prefixes[1]
 
 
@@ -239,7 +240,7 @@ def test_serialized_director_and_repair_explain_legacy_png_dependencies(monkeypa
     sent = _offline_transport(monkeypatch, "legacy_png_packet", [raw, patch])
     vfx.attach_hybrid_vfx_manifest(data, "legacy_png_guide", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2
-    packet = json.loads(sent[int(repair)]["messages"][1]["content"])
+    packet = request_dossier(sent[int(repair)])
     surface = packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]
     slot_schema = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
     description = slot_schema["properties"]["textureRole"]["description"]

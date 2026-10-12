@@ -1,5 +1,6 @@
 """Request-local Repair grammar must preserve scope, inverses and exact sources."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -201,7 +202,7 @@ def test_format_repair_keeps_exact_dynamic_facts_and_rejects_gameplay_rewriting(
         repaired, _ = call()
         assert repaired == item
     assert len(requests) == 1
-    packet = json.loads(requests[0]["messages"][1]["content"])
+    packet = request_dossier(requests[0])
     assert packet["originalRecipeContext"] == expected_context
     assert packet["malformedRawText"] == raw
     assert packet["requiredJsonShape"] == contract.author_item_prompt_shape_card()

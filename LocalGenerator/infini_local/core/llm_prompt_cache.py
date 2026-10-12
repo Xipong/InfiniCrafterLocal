@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping, Sequence
 import json
+import math
 
 PROMPT_CACHE_METADATA_KEY = "_infini_prompt_cache"
 
@@ -19,6 +20,9 @@ def static_instruction_prefix_parts(payload: Mapping[str, Any]) -> tuple[int, st
     marker = payload[PROMPT_CACHE_METADATA_KEY]
     if not isinstance(marker, dict):
         raise ValueError("static instruction prefix requires an object marker")
+    if "instructionMessageIndex" in marker:
+        instruction_segment_index(payload)
+        return None
     if "staticInstructionPrefix" not in marker:
         return None
     if set(marker) != {"messageIndex", "prefixChars", "staticInstructionPrefix"}:
@@ -57,6 +61,72 @@ def static_instruction_prefix_parts(payload: Mapping[str, Any]) -> tuple[int, st
             or not dynamic or static.keys() & dynamic.keys()):
         raise ValueError("static instruction prefix requires two disjoint nonempty JSON objects")
     return index, static_text, dynamic_text
+
+
+def instruction_segment_index(payload: Mapping[str, Any]) -> int | None:
+    """Validate complete builder-owned instructions, with disjoint USER data."""
+    marker = payload.get(PROMPT_CACHE_METADATA_KEY)
+    if not isinstance(marker, dict) or "instructionMessageIndex" not in marker:
+        return None
+    index = marker["instructionMessageIndex"]
+    messages = payload.get("messages")
+    if (set(marker) != {"instructionMessageIndex"} or type(index) is not int
+            or not isinstance(messages, list) or not 0 <= index < len(messages) - 1):
+        raise ValueError("instruction segments require an existing developer/user pair")
+    static, dynamic = messages[index:index + 2]
+    if (not isinstance(static, dict) or not isinstance(dynamic, dict)
+            or any(not isinstance(row, dict) or row.get("role") not in {"system", "developer"} for row in messages[:index])
+            or static.get("role") != "developer" or dynamic.get("role") != "user"
+            or not isinstance(static.get("content"), str) or not isinstance(dynamic.get("content"), str)):
+        raise ValueError("instruction segments require complete developer/user text objects")
+    def unique_object(pairs):
+        obj = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError("instruction segments contain duplicate JSON members")
+            obj[key] = value
+        return obj
+
+    def reject_constant(value):
+        raise ValueError("instruction segments require strict JSON values")
+
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("instruction segments require finite JSON numbers")
+        return number
+
+    objects = [json.loads(message["content"], object_pairs_hook=unique_object,
+                          parse_constant=reject_constant, parse_float=finite_float)
+               for message in (static, dynamic)]
+    if any(not isinstance(obj, dict) or not obj for obj in objects) or objects[0].keys() & objects[1].keys():
+        raise ValueError("instruction segments require disjoint nonempty objects")
+    return index
+
+
+def with_instruction_segments(
+    payload: dict[str, Any], dossier: Mapping[str, Any], instruction_keys: Sequence[str], *, message_index: int = 1,
+) -> dict[str, Any]:
+    """Builder declaration, not a cacheability-to-authority promotion.
+
+    The caller owns every listed member as application instructions. Unlisted
+    facts and scoped output schemas remain USER data; the combined dossier is
+    only a derived compatibility view for traces and syntax Repair.
+    """
+    if not instruction_keys or isinstance(instruction_keys, (str, bytes)):
+        raise ValueError("instruction keys must be explicit")
+    static = {key: dossier[key] for key in instruction_keys}
+    dynamic = {key: value for key, value in dossier.items() if key not in static}
+    messages = list(payload["messages"])
+    source = messages[message_index]
+    encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    messages[message_index:message_index + 1] = [
+        {**source, "role": "developer", "content": encode(static)},
+        {**source, "role": "user", "content": encode(dynamic)},
+    ]
+    out = {**payload, "messages": messages, PROMPT_CACHE_METADATA_KEY: {"instructionMessageIndex": message_index}}
+    instruction_segment_index(out)
+    return out
 
 
 def json_prefix_chars(payload: Mapping[str, Any], static_keys: Sequence[str]) -> int:

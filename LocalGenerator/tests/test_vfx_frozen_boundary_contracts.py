@@ -1,5 +1,6 @@
 """Offline canonical vfx frozen boundary contracts; no live services."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 from pathlib import Path
 from tests.vfx_image_fixtures import apply_edits
@@ -93,7 +94,7 @@ def test_unknown_entity_pair_repairs_without_thawing_valid_texture_selector(
     sent = _offline_transport(monkeypatch, "unknown_entity_" + renderer + "_" + selector, [raw, patch])
     final = vfx.attach_hybrid_vfx_manifest(data, "unknown_pair", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and calls == []
-    director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+    director, repair = [request_dossier(request) for request in sent]
     scope = repair["repairScope"]
     assert scope["fieldPermissions"] == {
         "globals": {}, "slots": [{"slotId": "selected", "paths": ["entityId", "event"]}], "assets": [],
@@ -131,7 +132,7 @@ def test_unknown_entity_pairs_keep_shared_ingredient_request_frozen(offline_back
     sent = _offline_transport(monkeypatch, "unknown_pairs_shared_ingredient", [raw, patch])
     final = vfx.attach_hybrid_vfx_manifest(data, "unknown_pairs_shared_ingredient", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and calls == []
-    repair = json.loads(sent[1]["messages"][1]["content"])
+    repair = request_dossier(sent[1])
     scope = repair["repairScope"]
     assert scope["fieldPermissions"] == {
         "globals": {}, "slots": [
@@ -164,7 +165,7 @@ def test_bad_legacy_selector_repairs_only_exact_leaf_before_image_jobs(
     assert len(sent) == 2 and calls == [], "real VFX stage failed to invoke the required bounded Repair"
     assert not report["ok"], "legacy PNG consumer admitted a producer that cannot resolve"
     assert {error["path"] for error in report["errors"]} == {"$.slots[0].textureRole"}
-    director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+    director, repair = [request_dossier(request) for request in sent]
     assert [request["model"] for request in sent] == ["explicit-offline-fixture-model"] * 2
     assert repair["repairScope"]["fieldPermissions"] == {
         "globals": {}, "slots": [{"slotId": "selected", "paths": ["textureRole"]}], "assets": [],
@@ -221,7 +222,7 @@ def test_frozen_material_boundary(case):
     packets = []
     def reply(_system, _user, *_args, **kwargs):
         if kwargs.get("messages"):
-            packets.append(json.loads(kwargs["messages"][1]["content"]))
+            packets.append(request_dossier(kwargs))
         return next(responses)
     if case["validMerged"]:
         final = vfx.attach_hybrid_vfx_manifest(data, "frozen_material", llm_director=reply)

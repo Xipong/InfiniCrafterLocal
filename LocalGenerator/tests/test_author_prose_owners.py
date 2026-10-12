@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Serialized Author/Repair keep each construction rule at its owning guide."""
 from copy import deepcopy
 import json
@@ -14,7 +15,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def test_serialized_author_keeps_spelling_once_and_preserves_mechanical_guides(monkeypatch, mode):
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, system = author.build_initial_author_request({}, {}, {}, {}, "owners", model_name="offline")
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     packet = json.loads(user)
     catalog = packet["runtimeCapabilityContract"]["catalog"]
     guide = catalog["fieldGuide"]
@@ -98,7 +99,7 @@ def test_actual_repair_request_keeps_shape_guidance_without_duplicate_mechanical
     assert source == before and len(requests) == 1
     request = requests[0]
     assert (request["response_format"] or {}).get("type") == (None if mode == "off" else mode)
-    dossier = json.loads(request["messages"][1]["content"])
+    dossier = request_dossier(request)
     assert dossier["rules"].count(RUNTIME_ROW_SHAPE_RULE) == 1
     assert "may be explicit or omitted" not in dossier["runtimeExecutionTruth"]["units"]["bindingTarget"]
     assert "write fixed stackCost" not in " ".join(dossier["rules"]).casefold()

@@ -1,5 +1,6 @@
 """Presentation admission, frozen metadata and runtime/asset/VFX closure."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
 from pathlib import Path
@@ -383,7 +384,7 @@ def test_real_director_dispatch_projects_metadata_with_conditional_repair(monkey
     assert len(requests) == (2 if repair_needed else 1)
     assert result["debug"]["llmStageAccounting"]["visualRepairCalls"] == int(repair_needed)
     if repair_needed:
-        scope = json.loads(requests[1]["messages"][1]["content"])["repairScope"]
+        scope = request_dossier(requests[1])["repairScope"]
         assert scope["fieldPermissions"]["itemPaths"] == ["grip.normalizedY"]
         assert not scope["equipOverlayMutable"]
 
@@ -416,7 +417,7 @@ def test_actual_provider_transport_optional_nulls(monkeypatch, mode, debug, omit
     assert ("grip" not in result[item_key]) is omitted
     assert ("effectColor" not in result[item_key]) is omitted
     assert ("accessoryMount" not in result[overlay_key]) is omitted
-    packet = json.loads(requests[-1]["messages"][1]["content"])
+    packet = request_dossier(requests[-1])
     if mode == "json_schema":
         assert packet["responseSchema"] == requests[-1]["response_format"]["json_schema"]["schema"]
         assert "nullable transport" in requests[-1]["messages"][0]["content"]
@@ -731,7 +732,7 @@ def test_serialized_presentation_repair_closes_only_exact_choices(wire_transport
     assert data["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
     assert data["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
     assert all(request["response_format"]["type"] == format_mode for request in requests)
-    packet = json.loads(requests[1]["messages"][1]["content"])
+    packet = request_dossier(requests[1])
     assert packet["repairScope"] == scope
     if transition:
         assert all(error["path"] != f"$.entities[{index}].entityId" for error in packet["exactErrors"])
@@ -940,7 +941,7 @@ def test_physical_geometry_guidance_reaches_director_repair_and_vfx_without_sele
     responses.extend([raw_vfx, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": authored_vfx["effectMagnitude"], "slotsUpsert": [], "note": "effectMagnitude only"}])
     final = vfx.attach_hybrid_vfx_manifest(projected, "physical-geometry", llm_director=gameplay.call_llm_vfx_director)
     assert not responses and len(requests) == 4
-    packets = [json.loads(r["messages"][1]["content"]) for r in requests]
+    packets = [request_dossier(r) for r in requests]
     assert packets[1]["repairScope"]["fieldPermissions"] == {"itemPaths": ["inventoryScale"], "equipOverlayPaths": [], "entities": []}
     assert packets[3]["repairScope"]["fieldPermissions"] == {"globals": {"effectMagnitude": [""]}, "slots": [], "assets": []}
     assert final["visualKit"] == accepted
@@ -976,9 +977,9 @@ def test_physical_geometry_guidance_reaches_director_repair_and_vfx_without_sele
     responses.append({})
     visual._request_visual_kit(variant, {}, {}, {}, {})
     variant_request = requests[-1]
-    prefix_chars = requests[0]["_infini_prompt_cache"]["prefixChars"]
-    assert variant_request["messages"][1]["content"][:prefix_chars] == requests[0]["messages"][1]["content"][:prefix_chars]
-    variant_packet = json.loads(variant_request["messages"][1]["content"])
+    assert variant_request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+    assert variant_request["messages"][1]["content"] == requests[0]["messages"][1]["content"]
+    variant_packet = request_dossier(variant_request)
     variant_owner = next(r for r in variant_packet["runtimeEntities"] if r["id"] == entity["id"])
     assert variant_owner[slot]["params"]["rangeTiles"] == 3.0
     assert variant_owner[slot] != entity[slot]

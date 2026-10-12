@@ -1,5 +1,6 @@
 """Native Codex account ownership, auth, subscription text/SSE/catalog/image contracts."""
 from __future__ import annotations
+from prompt_packet_helpers import dossier_text
 
 import base64
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
@@ -147,7 +148,7 @@ def test_subscription_author_schema_types_every_const_without_changing_literal_c
         assert [item["role"] for item in wire["input"]] == ["developer", "user"]
         static, dynamic = [item["content"][0]["text"] for item in wire["input"]]
         # Only object member framing changed; restore the exact logical text.
-        assert static[:-1] + "," + dynamic[1:] == request["messages"][1]["content"]
+        assert static[:-1] + "," + dynamic[1:] == dossier_text(request)
         assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     else:
         assert [item["content"][0]["text"] for item in wire["input"]] == [

@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Canonical VFX Repair contracts; actual serialized stage, exact merge and final wire.
 
 Responses are explicit offline choices, never live model or image calls. Director,
@@ -122,7 +123,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     assert [request["response_format"] for request in sent] == [{"type": "json_object"}] * len(sent)
     if outcome != "valid":
         assert len(sent) == 2
-        director, repair = [json.loads(request["messages"][1]["content"]) for request in sent]
+        director, repair = [request_dossier(request) for request in sent]
         assert repair["acceptedRuntimeProgramReadOnly"] == director["acceptedRuntimeProgramReadOnly"]
         assert repair["acceptedVisualKitReadOnly"] == director["acceptedVisualKit"]
         assert repair["exactErrors"] == vfx.validate_vfx_director_output(raw, final)["errors"]
@@ -211,7 +212,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == (1 if case == "scale-type-frozen" else 2)
     if case != "scale-type-frozen":
-        request = json.loads(sent[1]["messages"][1]["content"])
+        request = request_dossier(sent[1])
         assert request["repairScope"] == scope
         if case == "asset-canvas":
             assert request["brokenFragments"]["assets"] == before["assets"]

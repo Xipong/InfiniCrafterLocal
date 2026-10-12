@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Real builder admission, no provider calls or synthetic responses."""
 import copy
 import json
@@ -24,7 +25,7 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
     payload = json.loads(user)
     for label in ("A", "B"):
         assert payload["parents"][label]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
-    assert json.loads(request["messages"][1]["content"]) == payload
+    assert request_dossier(request) == payload
     assert len(json.dumps(payload, ensure_ascii=False, separators=(",", ":"))) < PLANNER_PROMPT_LIMIT_CHARS
     assert source == before
 

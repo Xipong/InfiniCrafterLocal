@@ -9,7 +9,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
+from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
@@ -172,10 +172,7 @@ def build_initial_author_request(
     system += provider_nullable_transport_rule(request.get("response_format"))
     request["messages"][0]["content"] = system
     request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
-    request = with_prompt_cache_prefix(
-        request, message_index=1, prefix_chars=json_prefix_chars(payload, _AUTHOR_CACHE_PREFIX_KEYS),
-        static_instruction_prefix=True,
-    )
+    request = with_instruction_segments(request, payload, _AUTHOR_CACHE_PREFIX_KEYS)
     return request, user_content, system
 
 
@@ -238,13 +235,11 @@ def _repair_malformed_author_json(
     }, model_name=model_name)
     messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
     request = apply_minimum_reasoning_effort(request, model_name=model_name, minimum="medium")
-    request = with_prompt_cache_prefix(
-        request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _FORMAT_REPAIR_CACHE_PREFIX_KEYS),
-    )
+    request = with_instruction_segments(request, repair_context, _FORMAT_REPAIR_CACHE_PREFIX_KEYS)
     trace_event(
         "prompt", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair request",
         {"provider": active_llm_provider(), "model": model_name, "malformedChars": len(malformed_raw_text)},
-        prompt=messages,
+        prompt=request["messages"],
     )
     try:
         # The Author caller owns the join; standalone syntax replays may lack it.
@@ -553,9 +548,7 @@ def repair_author_item_after_failure(
         ),
     }, model_name=model_name)
     messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
-    request = with_prompt_cache_prefix(
-        request, message_index=1, prefix_chars=json_prefix_chars(repair_context, _REPAIR_CACHE_PREFIX_KEYS),
-    )
+    request = with_instruction_segments(request, repair_context, _REPAIR_CACHE_PREFIX_KEYS)
     trace_event(
         "prompt",
         "LLM:gameplay_repair",
@@ -566,7 +559,7 @@ def repair_author_item_after_failure(
             "errorCount": len(exact_errors),
             "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()},
         },
-        prompt=messages,
+        prompt=request["messages"],
     )
     try:
         trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"))
@@ -650,12 +643,10 @@ def call_llm_vfx_director(
     }
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
     static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
-    request = with_prompt_cache_prefix(
-        request, message_index=1, prefix_chars=json_prefix_chars(user, static_keys),
-    )
+    request = with_instruction_segments(request, user, static_keys)
     item = user.get("item") or {}
     recipe_id = item.get("id") if isinstance(item, Mapping) else None
-    trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"][1]["content"])
+    trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"])
     trace_stage_request(stage_name, user.get("recipeKey"), request, recipe_id=recipe_id)
     raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
     content = raw["choices"][0]["message"]["content"]

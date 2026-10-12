@@ -1,5 +1,6 @@
 """Registry-owned unit explanations at real Author/Repair request boundaries."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -49,7 +50,7 @@ def _author_request(monkeypatch, mode, source):
         source, {}, {}, {}, "offline-unit-source", model_name="offline-unit-guidance")
     assert request["response_format"]["type"] == mode
     assert request["messages"][0]["content"] == system
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     assert json.dumps(source, ensure_ascii=False) == before
     return request, json.loads(user)
 
@@ -85,7 +86,7 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     assert raw["item"]["tooltipLines"] == source["tooltipLines"]
     for section in ("gameplay", "accessory", "armor", "runtimeProgram"):
         assert json.dumps(raw["generatedParent"][section]) == json.dumps(source["generatedData"][section])
-    assert [message["role"] for message in request["messages"]] == ["system", "user"]
+    assert [message["role"] for message in request["messages"]] == ["system", "developer", "user"]
     assert source["name"] not in request["messages"][0]["content"]
     assert "not a bit-exact inverse" in glossary["readingRule"]
     assert "do not rewrite source" in glossary["readingRule"]
@@ -159,7 +160,7 @@ def _repair_request(monkeypatch, mode, source, item):
     assert len(requests) == 1
     request = requests[0]
     assert request["response_format"]["type"] == mode
-    return request, json.loads(request["messages"][1]["content"])
+    return request, request_dossier(request)
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -230,17 +231,17 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     assert "runtimeCapabilityContract" not in packet
     assert "capabilities" not in units and "catalog" not in units
     assert list(packet)[-1] == "requiredJsonShape"
-    assert [message["role"] for message in request["messages"]] == ["system", "user"]
+    assert [message["role"] for message in request["messages"]] == ["system", "developer", "user"]
     assert source["name"] not in request["messages"][0]["content"]
     assert author_request["messages"][0]["role"] == "system"
 
 
 def _prefix(request):
     marker = request["_infini_prompt_cache"]
-    assert marker["messageIndex"] == 1
-    text = request["messages"][1]["content"]
-    static, dynamic = text[:marker["prefixChars"]], text[marker["prefixChars"]:]
-    return static, dynamic, json.loads(static[:-1] + "}")
+    assert marker == {"instructionMessageIndex": 1}
+    static = request["messages"][1]["content"]
+    dynamic = request["messages"][2]["content"]
+    return static, dynamic, json.loads(static)
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -281,9 +282,8 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
             changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
         assert changed == packet
         if root == "A":
-            parts = static_instruction_prefix_parts(second)
-            assert parts is not None
-            _, static_text, dynamic_text = parts
+            assert second["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+            static_text, dynamic_text = [row["content"] for row in second["messages"][1:]]
             assert "UNTRUSTED" not in static_text
             assert set(json.loads(dynamic_text)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
             assert json.loads(dynamic_text)["parents"]["A"]["packet"]["raw"] == raw
@@ -372,7 +372,7 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     before = json.dumps(item)
     patch = _hostile_patch(item)  # Explicitly synthetic offline response, not model evidence.
     repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
-    packet = json.loads(request["messages"][1]["content"])
+    packet = request_dossier(request)
     units = packet["runtimeExecutionTruth"]["units"]
     # Keep pre-existing unit/contact headroom separately; bound only the new
     # owned producer explanation. No production prompt guard is widened.
@@ -384,9 +384,9 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
                            if key != "descendantSpawnBudget"}, separators=(",", ":"))) < 14_000
     assert len(units["descendantSpawnBudget"]) < 1_200
     assert len(json.dumps(units, separators=(",", ":"))) < 15_200
-    assert len(request["messages"][1]["content"]) < 60_000
+    assert len(dossier_text(request)) < 60_000
     authored_request, _ = _author_request(monkeypatch, mode, _source())
-    assert len(authored_request["messages"][1]["content"]) < PLANNER_PROMPT_LIMIT_CHARS
+    assert len(dossier_text(authored_request)) < PLANNER_PROMPT_LIMIT_CHARS
     expected = copy.deepcopy(item)
     next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
     expected["realization"] = patch["realizationReplacement"]

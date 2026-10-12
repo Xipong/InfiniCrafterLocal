@@ -1,3 +1,4 @@
+from prompt_packet_helpers import request_dossier, dossier_text
 """Targeting guidance must use the same spawn syntax accepted by Author v5."""
 import copy
 import json
@@ -14,7 +15,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def test_targeting_card_uses_current_spawn_position_in_author_and_repair(monkeypatch, mode):
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "targeting-position", model_name="test-model")
-    assert request["messages"][1]["content"] == user
+    assert dossier_text(request) == user
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(row for row in cards if row["fn"] == "target_and_fire")
     assert "position={at:activation_origin} consumes the firing entity origin" in card["does"]

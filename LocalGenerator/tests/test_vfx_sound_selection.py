@@ -1,5 +1,6 @@
 """Explicit offline sound choices through the real VFX stage, never a provider call."""
 from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 import json
@@ -50,7 +51,7 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
     sent = _offline_transport(monkeypatch, f"sound_{projectile}_{sound_id}", [raw])
     final = vfx.attach_hybrid_vfx_manifest(data, "exact-sound", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1
-    packet = json.loads(sent[0]["messages"][1]["content"])
+    packet = request_dossier(sent[0])
     assert packet["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
     assert packet["outputSchema"]["properties"]["slots"]["items"]["properties"]["soundId"]["enum"] == list(SOUND_IDS)
     assert final["vfxManifest"]["slots"][0]["soundId"] == sound_id
@@ -135,7 +136,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].soundId"]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == 2
-    director, repair = [json.loads(r["messages"][1]["content"]) for r in sent]
+    director, repair = [request_dossier(r) for r in sent]
     assert repair["runtimeVocabularyReadOnly"]["soundId"] == director["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
     assert "fresh soundCue requires an explicit soundId" in director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
     assert repair["repairScope"] == scope
@@ -183,7 +184,7 @@ def test_real_transport_never_strips_present_null_to_legacy_absence(monkeypatch,
         vfx.attach_hybrid_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and "vfxManifest" not in data
     assert raw["slots"][0]["soundId"] is None
-    assert json.loads(sent[1]["messages"][1]["content"])["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": ["soundId"]}]
+    assert request_dossier(sent[1])["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": ["soundId"]}]
 
 
 def test_foreign_sound_leaf_can_be_deleted_without_thawing_valid_renderer(monkeypatch):

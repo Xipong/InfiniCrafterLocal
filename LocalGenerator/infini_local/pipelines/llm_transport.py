@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 from infini_local.core.env_utils import env_str
 from infini_local.core.http_io import HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds, read_with_deadline, urlopen_no_redirect
-from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, static_instruction_prefix_parts
+from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, static_instruction_prefix_parts, instruction_segment_index
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_config import (
     CODEX_LLM_MODEL,
@@ -1197,6 +1197,9 @@ def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 def _prompt_cache_boundary(payload: dict[str, Any]) -> tuple[int, int] | None:
+    segment = instruction_segment_index(payload)
+    if segment is not None:
+        return segment, len(payload["messages"][segment]["content"])
     marker = payload.get(PROMPT_CACHE_METADATA_KEY)
     if not isinstance(marker, dict):
         return None
@@ -1233,7 +1236,7 @@ def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict
         if static_prefix is not None:
             prefix_packet["messages"][index] = {"role": "developer", "content": static_prefix[1]}
         stable = {"provider": "openai_codex", "wire": _request_payload(prefix_packet)}
-        if static_prefix is not None:
+        if static_prefix is not None or instruction_segment_index(payload) is not None:
             stable["framing"] = {"version": 1, "authority": "builder-declared-static-instructions"}
     else:
         stable = {
@@ -1243,6 +1246,8 @@ def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict
             "reasoning": payload.get("reasoning"),
             "reasoning_effort": payload.get("reasoning_effort"),
         }
+    if instruction_segment_index(payload) is not None and (context is None or active_llm_provider(context) != "openai_codex"):
+        stable["framing"] = "complete-builder-instructions-v1"
     digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
     return "infini-" + digest[:32]
@@ -1252,6 +1257,8 @@ def _cache_route(context: dict[str, Any], model: str) -> str:
     parsed = urlsplit(str(context.get("base_url") or "").rstrip("/"))
     base = (parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.path.rstrip("/"))
     provider = active_llm_provider(context)
+    if provider == "openai_compat" and base == ("https", "inference-api.nousresearch.com", "/v1") and not parsed.port and model.startswith("openai/"):
+        return "key"  # Measured Chat subscription field; no Platform breakpoints/retention.
     if provider == "openai_compat" and base == ("https", "api.openai.com", "/v1") and not parsed.port:
         slug = model
     elif provider == "openrouter" and base == ("https", "openrouter.ai", "/api/v1") and not parsed.port and model.startswith("openai/"):
@@ -1534,12 +1541,12 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
     ))
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    if active_llm_provider(context) == "openai_codex":
+    if active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None:
         # Validate the original typed envelope before JSON copying can coerce an
         # invalid declared boundary (e.g. tuple messages) into an admitted shape.
         static_instruction_prefix_parts(payload)
     out = _clean_llm_payload(payload)
-    if active_llm_provider(context) == "openai_codex" and PROMPT_CACHE_METADATA_KEY in payload:
+    if (active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None) and PROMPT_CACHE_METADATA_KEY in payload:
         # Native adapter-only metadata; retain even invalid explicit declarations
         # so the authority validator refuses them instead of silently downgrading.
         out[PROMPT_CACHE_METADATA_KEY] = copy.deepcopy(payload[PROMPT_CACHE_METADATA_KEY])
@@ -1631,10 +1638,13 @@ def _response_format_for_responses(value: Any) -> dict[str, Any] | None:
 def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
                         context: dict[str, Any], *, api_mode: str) -> None:
     boundary = _prompt_cache_boundary(source)
+    wire.pop(PROMPT_CACHE_METADATA_KEY, None)
     if boundary is None:
         return
     model = str(wire.get("model") or "")
     route = _cache_route(context, model)
+    if api_mode == "responses" and llm_responses_url(context) == "https://inference-api.nousresearch.com/v1/responses":
+        route = ""  # Chat-only measured subscription cache hint; do not guess Responses support.
     if not route:
         return
     index, chars = boundary
@@ -1664,7 +1674,7 @@ def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
     # reasoning settings, not superseded pre-adapter aliases.
     identity_source = {**source, "reasoning": wire.get("reasoning"),
                        "reasoning_effort": wire.get("reasoning_effort")}
-    wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model)
+    wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model, context=context)
 
 
 def _ensure_json_input_marker(messages: list[dict[str, Any]]) -> None:
@@ -1699,8 +1709,8 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
             if content:
                 instructions.append(content)
             continue
-        if role not in {"user", "assistant"}:
-            role = "user"
+        if role not in {"developer", "user", "assistant"}:
+            raise ValueError(f"Responses cannot preserve unsupported message role: {role}")
         input_messages.append({"role": role, "content": content})
     out: dict[str, Any] = {
         "model": payload.get("model"),
@@ -2045,7 +2055,12 @@ def _llm_chat_json_exact_context(
             and url == "https://inference-api.nousresearch.com/v1/chat/completions"
             and str(candidate.get("model") or "").startswith("openai/")
             and candidate.get("response_format") == {"type": "json_object"}):
-        _ensure_json_input_marker(candidate["messages"])
+        if instruction_segment_index(payload) is not None:
+            marker = {"role": "user", "content": "JSON response."}
+            if candidate["messages"][-1] != marker:
+                candidate["messages"].append(marker)
+        else:
+            _ensure_json_input_marker(candidate["messages"])
     try:
         result = _perform_llm_http(url, candidate, timeout, context, api_mode="chat_completions")
         choices = result.get("choices") if isinstance(result, dict) else None
