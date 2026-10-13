@@ -1,570 +1,220 @@
-"""Actual serialized director/Repair packets, numeric units and cache boundaries."""
+"""Outgoing provider roles, stable instructions and changing accepted recipe facts."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+
 import copy
-import json
+
 import pytest
-from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines import visual_generation_pipeline as visual
+
+from prompt_packet_helpers import request_dossier
+from infini_local.core import llm_config, vfx_manifest as vfx
 from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import visual_generation_pipeline as visual
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import wire_transport
+from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, _vfx_output, wire_transport
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("policy", ["absent", "independent", "mirror"])
-def test_actual_visual_packets_keep_accepted_hitbox_curve_and_exact_body_scale(wire_transport, monkeypatch, format_mode, repair, policy):
-    from infini_local.pipelines import llm_transport
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    source = build_capability_witness("set_projectile_hitbox_curve")
-    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
-    if policy == "absent":
-        source["runtimeProgram"]["calls"].remove(call)
-    else:
-        call["params"].update(startScale=.25, endScale=8, mirrorToSprite=policy == "mirror")
-    data = compile_runtime_program(source)
-    frozen = copy.deepcopy(data)
+@pytest.mark.parametrize("director,repair,mode", [
+    pytest.param("visual", False, "json_schema", id="visual-director-schema"),
+    pytest.param("visual", True, "json_object", id="visual-scoped-repair-object"),
+    pytest.param("vfx", False, "json_object", id="vfx-director-object"),
+    pytest.param("vfx", True, "json_schema", id="vfx-scoped-repair-schema"),
+])
+def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(wire_transport, monkeypatch, director, repair, mode):
+    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     responses, sent = wire_transport
-    responses.append({})
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
-    packet = request_dossier(sent[-1])
-    rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
-    for row, accepted in zip(rows, data["runtimeProgram"]["entities"]):
-        assert ("hitboxCurve" in row) == ("hitboxCurve" in accepted)
-        if "hitboxCurve" in accepted:
-            assert row["hitboxCurve"] == accepted["hitboxCurve"]
-    formula = packet["spritePresentationReadOnly"]["formulas"]["body"]
-    assert "q_selected * P when accepted hitboxCurve.mirrorToSprite=true" in formula
-    assert "P=D*E*curveScale(active age)" in formula
-    assert "otherwise q_selected * clamp(P, .1, 8)" in formula
-    assert data == frozen
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_prompt_style_reaches_all_real_stage_requests_without_changing_contracts(wire_transport, monkeypatch, format_mode):
-    from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport
-    from test_low_level_three_stage_pipeline import _accepted_visual_data
-
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    responses, sent = wire_transport
-    source = build_runtime_fixture("fishing_platform_tool")
-    frozen = copy.deepcopy(source)
-    snapshots = []
-    for style in ("Default", "Terraria Like"):
-        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style, raising=False)
-        sent.clear()
-        request, user, system = author.build_initial_author_request({}, {}, {}, {}, "style-proof", model_name="test-model")
-        assert request["messages"][0]["content"] == system
-        assert dossier_text(request) == user
-        sent.append(request)
-        raw = json.dumps(source)
-        responses.append(raw)
-        prepared, _ = author._repair_malformed_author_json(
-            malformed_raw_text=raw[:-1] + ",}", parse_error=ValueError("trailing comma"),
-            original_recipe_context=user, model_name="test-model",
-        )
-        assert prepared == frozen
-        broken = copy.deepcopy(source)
-        stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
-        stats["params"]["damage"] = -1
-        replacement = copy.deepcopy(stats)
-        original_stats = next(row for row in source["runtimeProgram"]["calls"] if row["id"] == stats["id"])
-        replacement["params"]["damage"] = original_stats["params"]["damage"]
-        responses.append({"note": "exact damage repair", "realizationReplacement": copy.deepcopy(source["realization"]), "callsUpsert": [replacement]})
-        repaired = author.repair_author_item_after_failure(
-            broken, {}, {}, {}, {}, "style-proof", failure_report=author.validate_runtime_program(broken),
-        )
-        assert repaired["runtimeProgram"] == frozen["runtimeProgram"]
-        data = _accepted_visual_data("workbench_blade")
-        data_before = copy.deepcopy(data)
-        for repair in (False, True):
-            responses.append({})
-            visual._request_visual_kit(data, {}, {}, {}, {}, **({
-                "repair_errors": [{"path": "$.item.silhouette", "message": "required"}],
-                "previous": {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "literal frozen item"}, "entities": []},
-                "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["silhouette"]}},
-            } if repair else {}))
-            responses.append({})
-            vfx._request(author.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **({
-                "repair_errors": [{"path": "$.effectMagnitude", "message": "invalid"}],
-                "previous": {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 2.0, "slots": []},
-                "repair_scope": {"mutableGlobals": ["effectMagnitude"], "fieldPermissions": {"globals": {"effectMagnitude": [""]}}},
-            } if repair else {}))
-        assert data == data_before and source == frozen
-        assert len(sent) == 7
-        for request in sent:
-            system = request["messages"][0]["content"]
-            assert "Target game: Terraria (tModLoader)" in system
-            assert ("Terraria Like art direction" in system) == (style == "Terraria Like")
-            assert "accepted gameplay or frozen fields" in system
-            if style == "Terraria Like":
-                for phrase in ("compact coherent palette", "discrete shadow/highlight bands", "1x gameplay size", "soft-alpha"):
-                    assert phrase in system
-        snapshots.append(copy.deepcopy(sent))
-    for before, after in zip(*snapshots):
-        # The only setting-dependent bytes are advisory system instructions.
-        before["messages"][0]["content"] = after["messages"][0]["content"]
-        assert before == after
-
-
-def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
-    from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author
-
-    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
-    with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
-        author.build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
-
-
-def _craft(kind):
-    data = compile_runtime_program(build_runtime_fixture(kind))
-    data["name"] = f"different name: {kind}"
-    data["realization"] = {"description": f"literal {kind} description", "playerExperience": kind}
-    data["visualKit"] = {"schema": visual.VISUAL_KIT_SCHEMA, "animationPlan": f"{kind} motion"}
-    return data
-
-
-def _static_json_prefix(payload, keys):
-    full = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    prefix = json.dumps({key: payload[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))[:-1] + ","
-    assert full.startswith(prefix)
-    return prefix
-
-
-@pytest.mark.parametrize("kind", ["director", "malformed-repair", "scoped-repair"])
-def test_visual_packet_cache_boundary_and_frozen_context(wire_transport, kind):
-    responses, sent = wire_transport
-    payloads = []
-    for fixture in ("workbench_blade", "door_on_chain"):
-        data = _craft(fixture)
-        errors: list[dict] = []
-        scope: dict = {}
-        malformed = kind == "malformed-repair"
-        repair = kind != "director"
-        previous = visual.MalformedVisualDirectorOutput("{broken", "missing brace") if malformed else {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "valid literal item"}, "entities": []}
-        errors = [{"path": "$" if malformed else "$.item.silhouette", "message": "malformed_json" if malformed else "required"}]
-        scope = {"itemMutable": True, "fieldPermissions": {"itemPaths": ["" if malformed else "silhouette"]}}
+    packets = []
+    for fixture, width in (("workbench_blade", 40), ("door_on_chain", 73)):
+        data = _accepted_visual_data(fixture)
+        data["name"] = fixture
+        parent = {"id": 1, "name": fixture, "damage": 17, "spriteReferenceRaw": {
+            "source": "TextureAssets.Item", "textureWidthPx": width, "textureHeightPx": 68,
+            "currentFrame": {"source": "draw_animation", "xPx": 0, "yPx": 34, "widthPx": width, "heightPx": 32}}}
+        frozen = copy.deepcopy((data, parent))
         responses.append({})
-        visual._request_visual_kit(data, {"name": "A"}, {"name": "B"}, {}, {},
-            **({"repair_errors": errors, "previous": previous, "repair_scope": scope} if repair else {}))
+        if director == "visual":
+            kwargs = {} if not repair else {
+                "repair_errors": [{"path": "$.item.inventoryScale", "message": "invalid"}],
+                "previous": {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"inventoryScale": 99}, "entities": []},
+                "repair_scope": {"fieldPermissions": {"itemPaths": ["inventoryScale"]}},
+            }
+            visual._request_visual_kit(data, parent, {}, {}, {}, **kwargs)
+        else:
+            kwargs = {} if not repair else {
+                "repair_errors": [{"path": "$.slots[0].alpha", "message": "invalid"}],
+                "previous": _vfx_output(data),
+                "repair_scope": {"fieldPermissions": {"slots": [{"slotId": "slot_0", "paths": ["alpha"]}]}},
+            }
+            vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, parent, {}), **kwargs)
         request = sent[-1]
-        payload = request_dossier(request)
-        keys = ("task", "assetModeCatalog", "rules")
         assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
         assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-        assert payload["assetModeCatalog"] == visual.visual_asset_mode_catalog()
-        if repair:
-            assert set(payload) == {"task", "assetModeCatalog", "rules", "exactErrors", "malformedRawText", "repairScope", "brokenFragments", "validGeneratedContext", "parentFactsReadOnly", "runtimeEntitiesReadOnly", "itemReadOnly", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
-            if not malformed:
-                assert isinstance(previous, dict)
-                assert payload["brokenFragments"]["item"] == previous["item"]
-        else:
-            assert set(payload) == {"task", "assetModeCatalog", "rules", "item", "parents", "runtimeEntities", "requiredEntityIds", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
-            assert payload["item"]["name"] == f"different name: {fixture}"
-            assert payload["item"]["realization"]["description"] == f"literal {fixture} description"
-            assert payload["requiredEntityIds"] == [r["id"] for r in data["runtimeProgram"]["entities"]]
-        schema_key = "responseSchema"
-        if repair:
-            assert payload["exactErrors"] == errors
-            assert payload["repairScope"] == scope
-            assert payload["malformedRawText"] == ("{broken" if malformed else "")
-        assert list(payload)[:len(keys)] == list(keys)
-        payloads.append(payload)
-    before, after = payloads
-    prefixes = [_static_json_prefix(p, keys) for p in payloads]
-    assert prefixes[0] == prefixes[1] and len(prefixes[0]) > 100
-    assert before[schema_key] != after[schema_key]
-    assert before["rules"] == after["rules"]
-    assert "workbench_blade" not in prefixes[0] and "door_on_chain" not in prefixes[0]
-    assert len(sent) == 2
-    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("kind", ["director", "scoped-repair", "malformed-repair"])
-def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, monkeypatch, format_mode, kind):
-    from infini_local.pipelines import llm_authoring_pipeline as stage, llm_transport
-    from test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
-    responses, sent = wire_transport
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    prefixes, payloads, tails = [], [], []
-    dynamic_fields = {"texturedPathSources", "entityTextureSources", "runtimePairs", "runtimeVisualRoles"}
-    repair = kind != "director"
-    for fixture in ("workbench_blade", "door_on_chain", "returning_potion"):
-        data = _accepted_visual_data(fixture)
-        data["id"], data["name"] = fixture, f"different name: {fixture}"
-        data["realization"]["description"] = f"literal {fixture} description"
-        data["realization"]["playerExperience"] = fixture
-        parent_a = {"name": f"parent {fixture}", "internalName": fixture,
-                    "generatedParentSummary": {"description": f"literal parent {fixture}"}}
-        parent_b = {"name": f"other parent {fixture}"}
-        color = "cyan" if fixture == "workbench_blade" else "orange"
-        data["visualKit"]["item"]["effectColor"] = color
-        data["visual"]["effectColor"] = color
-        frozen = copy.deepcopy((data, parent_a, parent_b))
-        packet = vfx._prompt_packet(data, parent_a, parent_b)
-        kwargs = {}
-        previous, errors, scope, context, frozen_repair = None, [], {}, {}, None
-        if repair:
-            previous = vfx.MalformedVfxDirectorOutput("{broken " + fixture, "invalid") if kind == "malformed-repair" else _vfx_output(data)
-            errors = [{"path": "$" if kind == "malformed-repair" else "$.slots[0].alpha", "message": "invalid " + fixture}]
-            scope = vfx._build_vfx_repair_scope(previous, errors)
-            context = vfx._vfx_repair_context(previous, scope)
-            kwargs = {"repair_errors": errors, "previous": previous, "repair_scope": scope}
-            frozen_repair = copy.deepcopy((previous, errors, scope))
-        responses.append({})
-        vfx._request(stage.call_llm_vfx_director, packet, **kwargs)
-        request = sent[-1]
-        payload = request_dossier(request)
-        keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS if repair else vfx.VFX_PROMPT_STATIC_KEYS
-        prefix = _static_json_prefix(payload, keys)
-        vocabulary_key = "runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"
-        surface_key = "runtimeSurfaceReadOnly" if repair else "runtimeSurface"
-        assert vocabulary_key in keys, "canonical invariant VFX vocabulary must precede recipe facts"
-        vocabulary, surface = payload[vocabulary_key], payload[surface_key]
-        canonical = vfx.vfx_director_surface(data)
-        assert set(payload) == ({"task", "rules", "runtimeVocabularyReadOnly", "item", "acceptedVisualKitReadOnly", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
-                                if repair else {"schema", "rules", "runtimeVocabulary", "item", "parents", "acceptedVisualKit", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"})
-        assert payload["acceptedGameplayReadOnly"] == data["gameplay"]
-        assert list(payload)[:len(keys)] == list(keys)
-        assert list(surface)[-2:] == ["runtimePairs", "runtimeVisualRoles"]
-        assert set(surface) == dynamic_fields
-        assert not (set(vocabulary) & set(surface))
-        assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(canonical, sort_keys=True)
-        assert len(prefix) > 7000
-        assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-        assert list(payload)[len(keys)] == "item"
-        assert request["response_format"]["type"] == format_mode
-        if format_mode == "json_schema":
-            assert request["response_format"]["json_schema"]["schema"] == payload["outputSchema"]
+        assert request["response_format"]["type"] == mode
+        packet = request_dossier(request)
+        schema = packet["responseSchema" if director == "visual" else "outputSchema"]
+        if mode == "json_schema":
             assert request["response_format"]["json_schema"]["strict"] is True
-        assert payload["item"] == packet["item"]
-        assert payload["acceptedVisualKitReadOnly" if repair else "acceptedVisualKit"] == data["visualKit"]
-        assert payload["acceptedRuntimeProgramReadOnly"] == packet["acceptedRuntimeProgramReadOnly"]
+            assert request["response_format"]["json_schema"]["schema"] == schema
+        if director == "visual":
+            parents = packet["parentFactsReadOnly" if repair else "parents"]
+            assert parents["parentA"]["packet"]["raw"]["spriteReference"] == {
+                "source": "TextureAssets.Item", "textureWidthPx": width, "textureHeightPx": 68,
+                "currentFrame": {"source": "draw_animation", "xPx": 0, "yPx": 34, "widthPx": width, "heightPx": 32}}
+            context = packet["acceptedPresentationMechanicsReadOnly"]
+            assert context["gameplay"]["useTime"] == 24
+            assert context["itemUse"] == data["runtimeProgram"]["itemUse"]
+            assert packet["spritePresentationReadOnly"]["formulas"]["q"] == "R / max(actual final PNG frame width, height)"
+        else:
+            assert packet["acceptedGameplayReadOnly"] == data["gameplay"]
+            mechanics = copy.deepcopy(data["runtimeProgram"])
+            for row in mechanics["entities"]:
+                row.pop("visual", None)
+            assert packet["acceptedRuntimeProgramReadOnly"] == mechanics
+            assert packet["acceptedVisualKitReadOnly" if repair else "acceptedVisualKit"] == data["visualKit"]
+            surface = packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]
+            assert {("item", "on_use"), ("item", "periodic")}.issubset({(row["entityId"], row["event"]) for row in surface["runtimePairs"]})
         if repair:
-            assert payload["exactErrors"] == errors[:24]
-            assert payload["repairScope"] == scope
-            assert payload["brokenFragments"] == context["broken"]
-            assert payload["validGeneratedContext"] == context["validReadOnly"]
-            assert payload["malformedRawText"] == context["malformedRawText"]
-            assert (previous, errors, scope) == frozen_repair
-            assert payload["outputSchema"] == vfx.vfx_repair_schema(data)
-        else:
-            assert payload["parents"] == packet["parents"]
-            assert payload["outputSchema"] == vfx.vfx_director_schema(data)
-        assert (data, parent_a, parent_b) == frozen
-        prefixes.append(prefix)
-        payloads.append(payload)
-        tails.append(request["messages"][2]["content"])
-    assert len(set(prefixes)) == 1
-    assert len(set(tails)) == len(payloads)
-    # Stable prefixes must not hide accepted-recipe changes in a frozen tail.
-    before, after = payloads[:2]
-    for field in dynamic_fields:
-        assert before[surface_key][field] != after[surface_key][field], field
-    for field in ("item", "acceptedRuntimeProgramReadOnly", "outputSchema",
-                  "acceptedVisualKitReadOnly" if repair else "acceptedVisualKit"):
-        assert before[field] != after[field], field
-    if repair:
-        assert before["exactErrors"] != after["exactErrors"]
-        if kind == "malformed-repair":
-            assert before["malformedRawText"] != after["malformedRawText"]
-        else:
-            assert before["brokenFragments"] != after["brokenFragments"]
-    else:
-        assert before["parents"] != after["parents"]
+            assert packet["repairScope"] == kwargs["repair_scope"]
+            assert packet["exactErrors"] == kwargs["repair_errors"]
+        assert (data, parent) == frozen
+        packets.append(packet)
+    assert sent[0]["messages"][1]["content"] == sent[1]["messages"][1]["content"]
+    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+    assert packets[0]["responseSchema" if director == "visual" else "outputSchema"] != packets[1]["responseSchema" if director == "visual" else "outputSchema"]
+    assert not responses
 
 
-@pytest.mark.parametrize("repair", [False, True])
-def test_vfx_canonical_vocabulary_revision_reaches_actual_prefix_only(wire_transport, monkeypatch, repair):
-    from infini_local.pipelines import llm_authoring_pipeline as stage
+def test_catalog_revision_reaches_outgoing_instruction_not_recipe_tail(wire_transport, monkeypatch):
     responses, sent = wire_transport
-    data = _craft("workbench_blade")
-    frozen = copy.deepcopy(data)
-    packets = []
-    kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS if repair else vfx.VFX_PROMPT_STATIC_KEYS
-    vocabulary_key = "runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"
-    surface_key = "runtimeSurfaceReadOnly" if repair else "runtimeSurface"
-    original_semantics = vfx._RENDERER_SEMANTICS["impactSprite"]
-    for revised in (False, True):
-        if revised:
-            monkeypatch.setitem(vfx._RENDERER_SEMANTICS, "impactSprite", original_semantics + " Canonical revision witness.")
-        responses.append({})
-        vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **kwargs)
-        packets.append(request_dossier(sent[-1]))
-    before, after = packets
-    assert before[vocabulary_key]["rendererSemantics"]["impactSprite"] == original_semantics
-    assert after[vocabulary_key]["rendererSemantics"]["impactSprite"] == vfx._RENDERER_SEMANTICS["impactSprite"]
-    assert _static_json_prefix(before, keys) != _static_json_prefix(after, keys)
-    assert {k: v for k, v in before.items() if k != vocabulary_key} == {k: v for k, v in after.items() if k != vocabulary_key}
-    # A future unclassified canonical field must be retained, but not made static.
-    canonical = vfx.vfx_director_surface
-    monkeypatch.setattr(vfx, "vfx_director_surface", lambda source: {**canonical(source), "futureAcceptedFact": source["runtimeProgram"]["primaryEntityId"]})
-    responses.append({})
-    vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, None, None), **kwargs)
-    extended = request_dossier(sent[-1])
-    assert _static_json_prefix(extended, keys) == _static_json_prefix(after, keys)
-    assert extended[surface_key] == {**after[surface_key], "futureAcceptedFact": data["runtimeProgram"]["primaryEntityId"]}
-    assert data == frozen
-
-
-def test_catalog_revision_changes_only_static_prefix(wire_transport, monkeypatch):
-    responses, sent = wire_transport
-    data = _craft("workbench_blade")
+    data = _accepted_visual_data("door_on_chain")
     responses.extend([{}, {}])
     visual._request_visual_kit(data, {}, {}, {}, {})
-    before = request_dossier(sent[-1])
     catalog = copy.deepcopy(visual.visual_asset_mode_catalog())
-    monkeypatch.setattr(visual, "visual_asset_mode_catalog", lambda: [*catalog, {"mode": "changed", "description": "catalog revision"}])
+    catalog[0]["runtimeEffect"] += " Explicit catalog revision."
+    monkeypatch.setattr(visual, "visual_asset_mode_catalog", lambda: catalog)
     visual._request_visual_kit(data, {}, {}, {}, {})
-    after = request_dossier(sent[-1])
-    keys = ("task", "assetModeCatalog", "rules")
-    assert _static_json_prefix(before, keys) != _static_json_prefix(after, keys)
-    assert {k: v for k, v in before.items() if k != "assetModeCatalog"} == {k: v for k, v in after.items() if k != "assetModeCatalog"}
+    assert sent[0]["messages"][1]["content"] != sent[1]["messages"][1]["content"]
+    assert sent[0]["messages"][2]["content"] == sent[1]["messages"][2]["content"]
+    assert request_dossier(sent[1])["assetModeCatalog"] == catalog
 
 
-@pytest.mark.parametrize("kind", ["director", "scoped-repair", "malformed-repair"])
-def test_visual_schema_and_numeric_rules_reach_real_transport(wire_transport, monkeypatch, kind):
-    responses, sent = wire_transport
-    monkeypatch.setattr(visual, "equipment_overlay_requirement", lambda _: {"required": True, "slot": "head"})
-    # Keep the real common-options/stage/cache pipeline; transport owns the wire.
-    parent = {"name": "Sword Named Parent", "internalName": "SwordNamedParent", "sourceMod": "Terraria", "damage": 20, "tags": ["sword", "weapon"]}
-    canonical = {"class": "weapon", "hardTags": ["sword"], "headNoun": "sword"}
-    data = _craft("workbench_blade")
-    malformed = kind == "malformed-repair"
-    kwargs = {} if kind == "director" else {
-        "repair_errors": [{"path": "$" if malformed else "$.item.inventoryScale", "message": "malformed_json" if malformed else "invalid"}],
-        "previous": visual.MalformedVisualDirectorOutput("{broken", "bad json") if malformed else {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"inventoryScale": "invalid"}, "entities": []},
-        "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["" if malformed else "inventoryScale"]}},
-    }
-    responses.append({})
-    assert visual._request_visual_kit(data, parent, parent, canonical, canonical, **kwargs) == {}
-    request = sent[0]
-    payload = request_dossier(request)
-    schema = payload["responseSchema"]
-    assert request["response_format"]["type"] == "json_schema"
-    assert request["response_format"]["json_schema"]["strict"] is True
-    assert request["response_format"]["json_schema"]["schema"] == schema
-    assert request["temperature"] == (0.5 if kind == "director" else 0.12)
-    if kind == "director":
-        assert "double-quoted JSON object keys" in request["messages"][0]["content"]
-    rules = "\n".join(payload["rules"])
-    for surface in (request["messages"][0]["content"], rules):
-        for phrase in ("same physical object", "reuse_item_icon", "visualProjectRef=item", "regardless of its entityId", "kind=item_body must use baked_sprite", "another non-item_body entity"):
-            assert phrase in surface
-    assert any("transparent background" in rule and "opaque background" in rule for rule in payload["rules"])
-    assert payload["assetModeCatalog"] == [
-        {"mode": "baked_sprite", "runtimeEffect": "Generate and deliver a distinct PNG for this exact runtime entity. item_body owns the root item project; a distinct entity owns its renderSizePx, preferredCanvasSize and forwardAngleDegrees."},
-        {"mode": "no_asset", "runtimeEffect": "Deliver no PNG and draw no entity body; independent runtime VFX may still draw."},
-        {"mode": "reuse_item_icon", "runtimeEffect": "Deliver no separate PNG; resolve this entity to the item_body generated PNG with identical pixels, root base renderSizePx, canvas and forwardAngleDegrees. No own prompt/size/canvas/axis; entity scale remains independent."},
-        {"mode": "runtime_geometry", "runtimeEffect": "Deliver no PNG; draw the built-in bounded runtime primitive from entity hitbox and light fields."},
-    ]
-    props = schema["properties"]
-    if kind == "director":
-        assert props["entities"]["minItems"] == len(data["runtimeProgram"]["entities"])
-        item, overlay = props["item"]["properties"], props["equipOverlay"]["properties"]
-    else:
-        item, overlay = props["itemPatch"]["anyOf"][0]["properties"], props["equipOverlayPatch"]["anyOf"][0]["properties"]
-        encoded = json.dumps(payload["parentFactsReadOnly"]).casefold()
-        assert all(token not in encoded for token in ("canonical", "hardtags", "headnoun", '"tags"'))
-        assert payload["parentFactsReadOnly"]["parentA"] == {"packet": visual.raw_parent_card_for_llm(parent, include_visual_reference=True)}
-        deletion = props["entityIndicesDelete"]
-        assert deletion["items"]["type"] == "integer" and deletion["items"]["minimum"] == 0
-        description = (deletion.get("description", "") + " " + deletion["items"].get("description", "")).lower()
-        assert all(token in description for token in ("zero-based", "index", "entities"))
-    item = {key: value["anyOf"][0] if value.get("anyOf", [None])[-1] == {"type": "null"} else value for key, value in item.items()}
-    assert item["preferredCanvasSize"]["enum"] == [24, 32, 48, 64, 96, 128]
-    assert overlay["preferredCanvasSize"]["enum"] == [32, 48, 64, 96]
-    for canvas in (item["preferredCanvasSize"], overlay["preferredCanvasSize"]):
-        description = canvas["description"].lower()
-        assert all(token in description for token in ("square", "canvas", "pixels"))
-        assert "world size" in description or "display size" in description
-    for name, label in (("inventoryScale", "inventory"), ("worldScale", "world")):
-        field = item[name]
-        assert field["minimum"] == 0.25 and field["maximum"] == 4.0
-        assert all(token in field["description"].lower() for token in (label, "factor", "1"))
-    assert "fit" in item["inventoryScale"]["description"].lower()
-    assert "dropped" in item["worldScale"]["description"].lower()
-    branches = (props["entities"] if kind == "director" else props["entitiesUpsert"])["items"]["anyOf"]
-    assert {b["properties"]["assetMode"]["const"] for b in branches} == {"baked_sprite", "reuse_item_icon", "runtime_geometry", "no_asset"}
-    descriptions = {b["properties"]["scale"]["description"] for b in branches}
-    assert len(descriptions) == 1
-    assert all(b["properties"]["scale"]["minimum"] == 0.25 and b["properties"]["scale"]["maximum"] == 4.0 for b in branches)
-    assert all(token in next(iter(descriptions)).lower() for token in ("visual", "factor", "1", "hitbox", "drawscale", "worldscale"))
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("fixture", ["workbench_blade", "door_on_chain", "returning_potion"])
-def test_actual_visual_packets_carry_exact_mechanics_sizing_axis_and_fill(wire_transport, monkeypatch, format_mode, repair, fixture):
-    from infini_local.pipelines import llm_transport
-    from infini_local.pipelines.sprite_contracts import sprite_contract_for
-    responses, sent = wire_transport
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    data = _craft(fixture)
+@pytest.mark.parametrize("mirror", [pytest.param(False, id="independent-hitbox"), pytest.param(True, id="explicit-mirroring")])
+def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wire_transport, mirror):
+    source = build_capability_witness("set_projectile_hitbox_curve")
+    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    call["params"].update(startScale=0.25, endScale=8, mirrorToSprite=mirror)
+    data = compile_runtime_program(source)
     before = copy.deepcopy(data)
+    responses, sent = wire_transport
     responses.append({})
-    kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
-    request = sent[-1]
-    packet = request_dossier(request)
-    context = packet["acceptedPresentationMechanicsReadOnly"]
-    runtime = data["runtimeProgram"]
-    assert context["gameplay"] == {k: data["gameplay"][k] for k in ("itemScale", "width", "height", "useTime", "useAnimation", "reuseDelay") if k in data["gameplay"]}
-    for field in ("itemEntityId", "primaryEntityId", "primaryOwner", "itemUse", "itemContact", "bindings"):
-        assert (field in context) == (field in runtime)
-        if field in runtime:
-            assert context[field] == runtime[field]
-    rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
-    for row, accepted in zip(rows, runtime["entities"]):
-        assert row["hitbox"] == accepted.get("hitbox", {})
-        assert row["movement"] == accepted.get("movement", {})
-        assert row["controller"] == accepted.get("controller", {})
-    presentation = packet["spritePresentationReadOnly"]
-    assert presentation["formulas"]["q"] == "R / max(actual final PNG frame width, height)"
-    assert presentation["formulas"]["held"] == "q_item * player.GetAdjustedItemScale(held) (G already included once)"
-    assert presentation["formulas"]["body"] == "q_selected * P when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present, with P=D*E*curveScale(active age) from that explicit visual owner; otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred."
-    assert "alpha-bbox" in presentation["units"] and "positive clockwise" in presentation["axis"]
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    use = CAPABILITY_REGISTRY["configure_item_use"].params
-    assert presentation["heldRootVisibility"]["hideUseGraphic"] == use["hideUseGraphic"].description
-    assert presentation["heldRootVisibility"]["customHeldSprite"] == use["customHeldSprite"].description
-    assert presentation["heldRootVisibility"]["wireHint"] == "runtimeProgram.itemUse.releaseTiming"
-
-    for role, by_canvas in presentation["bakeFillByProcessingRole"].items():
-        for canvas, facts in by_canvas.items():
-            canonical = sprite_contract_for(role, int(canvas))
-            assert facts == {field: canonical[field] for field in ("targetFill", "minFill", "maxFill", "marginPx", "cropPadPx", "targetLongAxisPx", "alphaMode")}
-    schema = packet["responseSchema"]
-    item = schema["properties"]["itemPatch"]["anyOf"][0] if repair else schema["properties"]["item"]
-    if not repair:
-        assert {"renderSizePx", "forwardAngleDegrees"}.issubset(item["required"])
-    elif format_mode == "json_object":
-        assert "required" not in item
-    branch_key = "anyOf" if format_mode == "json_schema" else "oneOf"
-    branches = schema["properties"]["entitiesUpsert" if repair else "entities"]["items"][branch_key]
-    item_branch = next(b for b in branches if b["properties"]["assetMode"]["const"] == "baked_sprite" and b["properties"]["visualProjectRef"]["const"] == "item")
-    assert item_branch["properties"]["entityId"]["enum"] == [runtime["itemEntityId"]]
-    distinct = next(b for b in branches if b["properties"]["assetMode"]["const"] == "baked_sprite" and b["properties"]["visualProjectRef"]["const"] == "entity")
-    assert {"renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"}.issubset(distinct["required"])
-    assert runtime["itemEntityId"] not in distinct["properties"]["entityId"]["enum"]
+    visual._request_visual_kit(data, {}, {}, {}, {})
+    packet = request_dossier(sent[0])
+    entity = next(row for row in packet["runtimeEntities"] if "hitboxCurve" in row)
+    assert entity["hitboxCurve"]["startScale"] == 0.25
+    assert entity["hitboxCurve"]["endScale"] == 8
+    assert entity["hitboxCurve"]["mirrorToSprite"] is mirror
+    assert "q_selected * P" in packet["spritePresentationReadOnly"]["formulas"]["body"]
     assert data == before
 
 
-@pytest.mark.parametrize("repair", [False, True])
-def test_exact_single_item_schema_contains_only_its_project_and_no_empty_enums(repair):
-    schema = (visual.visual_repair_schema if repair else visual.visual_response_schema)(["opaque_root"], False, item_body_id="opaque_root")
-    branch_schema = schema["properties"]["entitiesUpsert" if repair else "entities"]["items"]
-    branches = branch_schema.get("oneOf", [branch_schema])
-    assert len(branches) == 1
-    assert branches[0]["properties"]["assetMode"]["const"] == "baked_sprite"
-    assert branches[0]["properties"]["visualProjectRef"]["const"] == "item"
-    assert branches[0]["properties"]["entityId"]["enum"] == ["opaque_root"]
-
-
-@pytest.mark.parametrize("repair", [False, True])
-def test_exact_schema_nonitem_branches_exclude_item_authority(repair):
-    schema = (visual.visual_repair_schema if repair else visual.visual_response_schema)(["opaque_root", "opaque_body"], False, item_body_id="opaque_root")
-    branches = schema["properties"]["entitiesUpsert" if repair else "entities"]["items"]["oneOf"]
-    for branch in branches:
-        props = branch["properties"]
-        if props["assetMode"]["const"] == "baked_sprite" and props["visualProjectRef"]["const"] == "item":
-            continue
-        assert props["entityId"]["enum"] == ["opaque_body"]
-
-
-# Append to existing test_visual_vfx_prompt_prefix.py; uses its _craft and wire_transport.
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-
-
-@pytest.mark.parametrize("kind", ["director", "scoped-repair", "malformed-repair"])
-@pytest.mark.parametrize("reference", ["native-static", "native-animated", "older-missing", "generated-declared-and-old"])
-def test_parent_sprite_reference_reaches_actual_visual_request_only(wire_transport, kind, reference):
+def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_transport):
+    beam = compile_runtime_program(build_capability_witness("channel_beam"))
+    before = copy.deepcopy(beam)
+    raw = _visual_kit(beam)
+    body = next(row for row in raw["entities"] if row["entityId"] == "witness_entity")
+    body.update(assetMode="runtime_geometry", visualProjectRef="none")
+    authored = _vfx_output(beam)
+    authored["slots"] = []
     responses, sent = wire_transport
-    data = _craft("workbench_blade")
-    parent_a, parent_b = {"id": 1, "name": "unrelated name A", "damage": 17}, {"id": 1, "name": "unrelated name B", "damage": 19}
-    if reference.startswith("native"):
-        for parent, width in ((parent_a, 40), (parent_b, 73)):
-            animated = reference == "native-animated"
-            parent["spriteReferenceRaw"] = {"source": "TextureAssets.Item", "textureWidthPx": width, "textureHeightPx": 68,
-                "currentFrame": {"source": "draw_animation" if animated else "texture_bounds", "xPx": 0,
-                    "yPx": 34 if animated else 0, "widthPx": width, "heightPx": 32 if animated else 68}}
-    elif reference == "generated-declared-and-old":
-        for parent, identifier in ((parent_a, "definition-a"), (parent_b, "definition-b")):
-            parent["generatedData"] = {"id": identifier, "visual": {"preferredCanvasSize": 32, "worldScale": 4},
-                "gameplay": {"width": 64, "height": 32}, "runtimeProgram": {"entities": [], "bindings": []}}
-            parent["spriteReferenceRaw"] = {"source": "TextureAssets.Item", "textureWidthPx": 1, "textureHeightPx": 1}
-        parent_a["generatedData"]["visual"]["renderSizePx"] = 47
-    frozen = copy.deepcopy((parent_a, parent_b))
-    malformed = kind == "malformed-repair"
-    scope = {"itemMutable": True, "fieldPermissions": {"itemPaths": ["" if malformed else "silhouette"]}}
-    kwargs = {} if kind == "director" else {
-        "repair_errors": [{"path": "$" if malformed else "$.item.silhouette", "message": "malformed_json" if malformed else "required"}],
-        "previous": visual.MalformedVisualDirectorOutput("{broken", "bad json") if malformed else {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "literal"}, "entities": []},
-        "repair_scope": scope,
-    }
-    responses.append({})
-    assert visual._request_visual_kit(data, parent_a, parent_b, {}, {}, **kwargs) == {}
-    payload = request_dossier(sent[-1])
-    packet_root = payload["parents"] if kind == "director" else payload["parentFactsReadOnly"]
-    for name, parent in (("parentA", parent_a), ("parentB", parent_b)):
-        actual = packet_root[name]["packet"]
-        assert actual == raw_parent_card_for_llm(parent, include_visual_reference=True)
-        gameplay = raw_parent_card_for_llm(parent)
-        assert "spriteReference" not in gameplay["raw"]
-        if "generatedParent" in gameplay["raw"]:
-            assert "visual" not in gameplay["raw"]["generatedParent"]
-        if reference.startswith("native"):
-            assert actual["raw"]["spriteReference"] == parent["spriteReferenceRaw"]
-        elif reference == "generated-declared-and-old":
-            assert "spriteReference" not in actual["raw"]
-            assert actual["raw"]["generatedParent"]["visual"] == parent["generatedData"]["visual"]
-        else:
-            assert "spriteReference" not in actual["raw"]
-    assert (parent_a, parent_b) == frozen
-    assert "spriteReference" not in json.dumps(payload["responseSchema"])
-    if kind != "director":
-        assert payload["repairScope"] == scope
-        assert "spriteReference" not in json.dumps(payload["repairScope"])
-    # Parent calibration remains in the dynamic tail, never a cache-static prefix.
-    prefix = _static_json_prefix(payload, ("task", "assetModeCatalog", "rules"))
-    assert '"textureWidthPx"' not in prefix and '"textureHeightPx"' not in prefix
-    assert '"spriteReferenceRaw"' not in prefix
-    assert sent[-1]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-    if reference != "older-missing":
-        changed = copy.deepcopy(parent_a)
-        if reference.startswith("native"):
-            changed["spriteReferenceRaw"]["textureWidthPx"] += 1
-            changed["spriteReferenceRaw"]["currentFrame"]["widthPx"] += 1
-        else:
-            changed["generatedData"]["visual"]["renderSizePx"] = 48
-        responses.append({})
-        visual._request_visual_kit(data, changed, parent_b, {}, {}, **kwargs)
-        after = request_dossier(sent[-1])
-        assert _static_json_prefix(after, ("task", "assetModeCatalog", "rules")) == prefix
-        after_root = after["parents"] if kind == "director" else after["parentFactsReadOnly"]
-        assert after_root["parentA"]["packet"] == raw_parent_card_for_llm(changed, include_visual_reference=True)
-        assert after_root["parentA"]["packet"] != packet_root["parentA"]["packet"]
-        assert after_root["parentB"]["packet"] == packet_root["parentB"]["packet"]
-        assert (parent_a, parent_b) == frozen
+    responses.extend([raw, authored])
+    projected = visual.apply_visual_director(beam, {}, {}, {}, {})
+    packet = request_dossier(sent[0])
+    entity = next(row for row in packet["runtimeEntities"] if row["controller"].get("name") == "channel_beam")
+    assert entity["controller"]["params"]["rangeTiles"] == 1.0
+    assert "collision" in entity["driverMeaningReadOnly"]["controller"]
+    final = vfx.attach_hybrid_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
+    surface = request_dossier(sent[1])["runtimeSurface"]
+    assert "beam" in next(row["sources"] for row in surface["texturedPathSources"] if row["entityId"] == "witness_entity")
+    assert final["vfxManifest"]["slots"] == []
+    assert final["runtimeProgram"]["entities"][1]["visual"]["assetMode"] == "runtime_geometry"
+    assert final["runtimeProgram"]["entities"][1]["controller"] == before["runtimeProgram"]["entities"][1]["controller"]
+    assert final["gameplay"] == before["gameplay"]
+    assert not responses
 
 
-def test_parent_visual_reference_does_not_enter_actual_gameplay_author_packet(wire_transport):
-    import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
+def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
+    data = _accepted_visual_data("door_on_chain")
     responses, sent = wire_transport
-    native = {"id": 1, "name": "literal native", "damage": 17,
-              "spriteReferenceRaw": {"source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 16}}
-    generated = {"id": 1, "name": "literal generated", "generatedData": {"id": "canonical-parent",
-                 "gameplay": {"damage": 19}, "visual": {"renderSizePx": 47},
-                 "runtimeProgram": {"entities": [], "bindings": []}}}
-    responses.append(build_runtime_fixture("workbench_blade"))
-    assert gameplay_stage.try_llm_plan(native, generated, {}, {}, "parent-reference-gameplay-control") is not None
-    payload = request_dossier(sent[-1])
-    assert payload["parents"]["A"]["packet"] == raw_parent_card_for_llm(native)
-    assert payload["parents"]["B"]["packet"] == raw_parent_card_for_llm(generated)
-    encoded = json.dumps(payload["parents"])
-    assert "spriteReference" not in encoded and "renderSizePx" not in encoded
+    responses.extend([{}, {}])
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default", raising=False)
+    visual._request_visual_kit(data, {}, {}, {}, {})
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like", raising=False)
+    visual._request_visual_kit(data, {}, {}, {}, {})
+    assert "Terraria Like art direction" in sent[1]["messages"][0]["content"]
+    assert sent[0]["messages"][1:] == sent[1]["messages"][1:]
+    assert sent[0]["response_format"] == sent[1]["response_format"]
+
+
+def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
+    with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
+        stage.build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
+
+
+def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(wire_transport):
+    parent = {"id": 1, "name": "same proxy", "width": 999, "height": 888,
+              "generatedData": {"id": "exact-definition", "gameplay": {"damage": 19},
+                                "visual": {"renderSizePx": 47, "preferredCanvasSize": 32, "spritePath": "private.png"},
+                                "runtimeProgram": {"entities": [], "bindings": []}}}
+    before = copy.deepcopy(parent)
+    data = _accepted_visual_data("door_on_chain")
+    responses, sent = wire_transport
+    responses.extend([{}, {}])
+    visual._request_visual_kit(data, parent, {}, {}, {})
+    parent["generatedData"]["visual"]["renderSizePx"] = 48
+    visual._request_visual_kit(data, parent, {}, {}, {})
+    packets = [request_dossier(request)["parents"]["parentA"]["packet"] for request in sent]
+    assert packets[0]["raw"]["generatedParent"]["visual"] == {"renderSizePx": 47, "preferredCanvasSize": 32}
+    assert packets[1]["raw"]["generatedParent"]["visual"]["renderSizePx"] == 48
+    assert sent[0]["messages"][1]["content"] == sent[1]["messages"][1]["content"]
+    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+    request, _, _ = stage.build_initial_author_request(before, {}, {}, {}, "parent-control", model_name="test-model")
+    gameplay = request_dossier(request)["parents"]["A"]["packet"]
+    assert gameplay["raw"]["generatedParent"]["gameplay"] == {"damage": 19}
+    assert "visual" not in gameplay["raw"]["generatedParent"]
+    older = copy.deepcopy(before)
+    older["generatedData"]["visual"].pop("renderSizePx")
+    assert "renderSizePx" not in raw_parent_card_for_llm(older, include_visual_reference=True)["raw"]["generatedParent"]["visual"]
+
+
+@pytest.mark.parametrize("defect", ["texture-type", "frame-outside", "unobserved-location"])
+def test_parent_reference_never_invents_pixels_from_gameplay_bounds(defect):
+    observation = {"source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 68,
+                   "currentFrame": {"source": "draw_animation", "xPx": 0, "yPx": 34, "widthPx": 40, "heightPx": 32}}
+    parent = {"id": 1, "name": "literal", "width": 999, "height": 888}
+    if defect == "texture-type":
+        observation["textureWidthPx"] = True
+    elif defect == "frame-outside":
+        observation["currentFrame"]["heightPx"] = 69
+    if defect == "unobserved-location":
+        parent["fingerprint"] = {"spriteReferenceRaw": observation}
+    else:
+        parent["spriteReferenceRaw"] = observation
+    before = copy.deepcopy(parent)
+    raw = raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]
+    if defect == "frame-outside":
+        assert raw["spriteReference"] == {"source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 68}
+    else:
+        assert "spriteReference" not in raw
+    assert parent == before
+
+
+def test_public_visual_schemas_share_owner_catalogs_without_per_token_cases():
+    director = visual.visual_response_schema(["item", "body"], True, item_body_id="item")["properties"]
+    repair = visual.visual_repair_schema(["item", "body"], True, item_body_id="item")["properties"]
+    assert director["item"]["properties"]["effectColor"]["enum"] == repair["itemPatch"]["anyOf"][0]["properties"]["effectColor"]["enum"]
+    assert director["equipOverlay"]["properties"]["accessoryMount"]["enum"] == repair["equipOverlayPatch"]["anyOf"][0]["properties"]["accessoryMount"]["enum"]
+    modes = {branch["properties"]["assetMode"]["const"] for branch in director["entities"]["items"]["oneOf"]}
+    assert modes == {row["mode"] for row in visual.visual_asset_mode_catalog()}

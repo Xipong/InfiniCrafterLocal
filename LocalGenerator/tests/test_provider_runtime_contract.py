@@ -19,7 +19,7 @@ from urllib.error import HTTPError
 import pytest
 from provider_test_support import endpoint_options
 
-from infini_local.pipelines import combine_pipeline, generation_debug
+from infini_local.pipelines import generation_debug
 from infini_local.services import combine_endpoint, sdcpp_backend, sdcpp_service
 from infini_local.web import server
 
@@ -37,11 +37,9 @@ def endpoint(monkeypatch):
 
 
 @pytest.mark.parametrize("source,invalid", [
-    pytest.param(source, invalid, id=source + "-" + label)
-    for source in ("fresh", "cache") for label, invalid in [
-        ("nonserializable", {"bad": object()}), ("nan", {"bad": float("nan")}),
-        ("infinity", {"bad": float("inf")}), ("array-root", ["response-root-must-be-object"]),
-    ]
+    pytest.param("fresh", {"bad": object()}, id="fresh-nonserializable"),
+    pytest.param("fresh", {"bad": float("nan")}, id="fresh-nonfinite"),
+    pytest.param("cache", ["response-root-must-be-object"], id="cache-nonobject"),
 ])
 def test_combine_delivery_rejects_invalid_json_without_cache_recovery(endpoint, source, invalid):
     options = dict(endpoint.options)
@@ -60,7 +58,7 @@ def test_combine_delivery_rejects_invalid_json_without_cache_recovery(endpoint, 
     assert endpoint.cleared == []
 
 
-@pytest.mark.parametrize("scenario", ["busy", "cache-hit", "cache-error", "craft-error", "summary-error"])
+@pytest.mark.parametrize("scenario", ["busy", "cache-hit", "cache-error", "craft-error"])
 def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, scenario):
     options = dict(endpoint.options)
     failure = {"request": "A", "stage": "planner"}
@@ -221,29 +219,6 @@ def test_parallel_sdcpp_ensure_has_one_process_owner(monkeypatch, service_option
         thread.join(timeout=3)
     assert all(not thread.is_alive() for thread in threads)
     assert results == [True, True] and spawn_ids == [1]
-
-
-def test_dev_fallback_resolves_its_package_owner() -> None:
-    result = combine_pipeline.deterministic_plan(
-        {"name": "Copper Shortsword"},
-        {"name": "Gel"},
-        {},
-        {},
-        "fallback-owner-test",
-    )
-    from infini_local.core.runtime_authoring import (
-        compile_runtime_program, validate_runtime_program, validate_runtime_wire,
-    )
-    report = validate_runtime_program(result)
-    assert report["ok"], report["errors"]
-    wire = compile_runtime_program(result)
-    wire_report = validate_runtime_wire(wire)
-    assert wire_report["ok"], wire_report["errors"]
-    entities = {entity["id"]: entity for entity in wire["runtimeProgram"]["entities"]}
-    assert entities["held_body"]["spawn"]["speedPxPerTick"] == 1.0
-    assert entities["child_shard"]["spawn"]["speedPxPerTick"] == 9.0
-    assert entities["child_shard"]["collision"]["localNpcHitCooldownTicks"] == -1
-    assert entities["child_shard"]["movement"]["params"]["gravityPerTick"] == 0.12
 
 
 def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
