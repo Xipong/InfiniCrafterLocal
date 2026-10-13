@@ -44,6 +44,13 @@ internal static class RuntimeProgramExecutor
             _ => false,
         };
 
+    // Only target_to_entity pulls use the event-owning projectile center. Other
+    // hit actions retain the struck NPC center (spawn, blast, teleport, etc.).
+    // Select before scheduling so delayed pulls retain the admission-time center.
+    internal static Vector2 ProjectileEventPosition(RuntimeEventActionSpec action, Vector2 projectileCenter, NPC? target)
+        => action.ActionCode == RuntimeEventActionCode.Pull && action.Mode == "target_to_entity"
+            ? projectileCenter : target?.Center ?? projectileCenter;
+
     public static void ExecuteAction(
         GeneratedItemData data,
         RuntimeEntitySpec sourceEntity,

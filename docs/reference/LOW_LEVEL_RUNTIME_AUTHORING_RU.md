@@ -72,6 +72,8 @@ Event producer alternatives берутся только из `EVENT_KIND_REGISTR
 
 `spawn_entity_on_event` и `target_and_fire` явно выбирают независимые `damageBasis`/`knockbackBasis` (`authored_child` либо `live_parent`) и `damageMultiplier`. Live parent означает actual projectile fields в момент event/fire; delayed action сохраняет их при enqueue, charge уже включён, повторного применения player/class modifiers нет. Для item-body events допустим только `authored_child`. Missing fresh choices — RED. [Полный child combat contract](CHILD_COMBAT_INHERITANCE_RU.md) описывает snapshots, старый wire, strict provenance и runtime refusal.
 
+Для projectile `pull_on_event(mode=target_to_entity)` направляет NPC к центру испускающего projectile, включая `on_hit`. При `delayTicks > 0` этот центр фиксируется при постановке события в очередь; другие hit-actions сохраняют центр поражённого NPC. В MP receipt использует центр проверенного server-side projectile, не координаты клиента.
+
 Terminal meaning: `on_hit` требует collision; proximity detonation не hit. `on_expire` испускается при natural expiry и proximity detonation, не при любом early kill. `on_kill` покрывает terminal paths, включая collision/penetration/natural expiry/detonation; `on_tile_collision` — каждую collision. Bounce + только on_expire не обещает эффект на последнем ударе. [Runtime truth](../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py#L229) и consumer остаются источниками этих различий.
 
 Числовые units/точные conversions и отсутствующие wire aliases — [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#units), не semantic repair. [Frozen-first Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) не расширяет accepted design.
