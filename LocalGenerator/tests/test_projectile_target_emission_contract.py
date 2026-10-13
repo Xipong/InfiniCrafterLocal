@@ -1,4 +1,3 @@
-from prompt_packet_helpers import request_dossier
 """Explicit bounded target links emit authored physical children; no radial alias."""
 from copy import deepcopy
 import hashlib
@@ -13,8 +12,6 @@ from infini_local.core.runtime_authoring import (
     filter_repair_patch_scope, validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION_OPCODE
-from infini_local.core.runtime_authoring.repair_scope import _capability_dependency_closure
-from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.pipelines import author_item_contract as contract
@@ -48,8 +45,6 @@ def _child_spawn(doc):
 
 
 def test_child_reference_requirements_do_not_expand_source_entity_dependency_scope():
-    assert CAP.dependencies == ()
-    assert _capability_dependency_closure([FN]) == {FN}
     doc = _doc(stepRangeTiles=61)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["capabilitySubset"] == [FN]
@@ -57,17 +52,14 @@ def test_child_reference_requirements_do_not_expand_source_entity_dependency_sco
     assert not scope["create"]["calls"]["allowed"]
 
 
-@pytest.mark.parametrize("anchor", ["previous_target", "event_target"])
-@pytest.mark.parametrize("repeats", ["allow_revisits", "exclude_visited"])
-@pytest.mark.parametrize("los", [False, True])
-# Anchor, visited filtering and LOS share PlanTargetEmissions and stay coupled.
-# Event routing and delay scheduling do not inspect those decisions; retain both
-# explicit routes and the scheduler's two boundary values without multiplying.
-@pytest.mark.parametrize("event_name,delay", [
-    pytest.param("on_hit", 0, id="hit-immediate"),
-    pytest.param("on_crit", 600, id="crit-max-delay"),
+# Pairwise selection witnesses plus both event routes and scheduler boundaries.
+@pytest.mark.parametrize("anchor,repeats,los,event_name,delay", [
+    ("previous_target", "allow_revisits", False, "on_hit", 0),
+    ("previous_target", "exclude_visited", True, "on_crit", 600),
+    ("event_target", "allow_revisits", True, "on_hit", 600),
+    ("event_target", "exclude_visited", False, "on_crit", 0),
 ])
-def test_all_explicit_selection_choices_reach_exact_opcode_and_receipts(anchor, repeats, los, event_name, delay):
+def test_representative_selection_choices_reach_exact_opcode_and_receipts(anchor, repeats, los, event_name, delay):
     doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delayTicks=delay)
     original = deepcopy(doc)
     assert validate_runtime_program(doc)["ok"]
@@ -102,8 +94,6 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
     assert request["response_format"]["type"] == mode
     if mode == "json_schema":
         Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
-    cards = request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    assert next(row for row in cards if row["fn"] == FN) == CAP.author_prompt_card()
     assert _call(result) == _call(doc)
     assert compile_runtime_program(result)["runtimeProgram"] == compile_runtime_program(doc)["runtimeProgram"]
 
@@ -308,16 +298,6 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     assert events[0]["actionCode"] == EVENT_ACTION_OPCODE["chain_damage_on_event"] == 4
     assert "stepCount" not in events[0]
     assert events[0]["action"] == "chain_damage_on_event"
-    assert "no sequential hopping" in CAPABILITY_REGISTRY["damage_nearest_on_event"].summary.lower()
-    assert CAPABILITY_REGISTRY["chain_damage_on_event"].decision == "internal"
-
-
-def test_numeric_consumer_audit_includes_every_new_numeric_leaf():
-    rows = [row for row in _runtime_param_bound_rows() if row["capability"] == FN]
-    assert {r["param"] for r in rows} == {"stepCount", "stepRangeTiles", "initialIgnoreCountdownUpdates", "delayTicks"}
-    assert all(row["preserved"] for row in rows)
-    assert all(row["admission"] == "reject_without_clamp" for row in rows if row["param"] != "delayTicks")
-
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

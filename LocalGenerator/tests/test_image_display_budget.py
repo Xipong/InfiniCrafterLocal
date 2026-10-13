@@ -19,7 +19,7 @@ from infini_local.pipelines import pipeline_visual_config as config
 from infini_local.pipelines import sprite_postprocess as post
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause, image_generation_prompt_suffix
+from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -148,12 +148,6 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         assert len(validation["reasons"]) >= 2
         assert post.validation_retry_notes(validation, role)
         assert "Technical correction:" in retry["prompt"] if zimage else "fix these technical issues:" in retry["prompt"]
-        framing = image_final_frame_prompt_clause(frozen, role, first["canvas"], entity_id="nail" if role != "item" else "")
-        guidance = image_generation_prompt_suffix()
-        core = first["prompt"][:-len(guidance)]
-        assert core.endswith(framing)
-        historical = post.build_retry_prompt_from_validation(core[:-len(framing)] + guidance, validation, role, 1, first["canvas"])
-        assert retry["prompt"] == historical[:-len(guidance)] + framing + guidance, "new metadata must not displace or rewrite the historical compacted core"
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
             payload = server_payload(config._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)

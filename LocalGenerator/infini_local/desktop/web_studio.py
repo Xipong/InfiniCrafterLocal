@@ -167,6 +167,7 @@ class StudioController:
         self.fields = self._fields()
         self.last_action: dict = {}
         self.revision = 0
+        self._saved_values: dict | None = None
 
     def _fields(self):
         from infini_local.desktop.settings_gui_fields import _BASIC_FIELDS
@@ -208,9 +209,22 @@ class StudioController:
 
     def snapshot(self):
         from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
+        from infini_local.desktop.settings_env import parse_env
         from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
         values = self.app._current_profile_settings()
         values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
+        # Controller values include unsaved edits from non-saving actions. A fresh
+        # browser must compare them to disk, never adopt them as a saved baseline.
+        saved_error = ''
+        try:
+            saved_values = parse_env(CONFIG_PATH)
+            self._saved_values = dict(saved_values)
+        except OSError as exc:
+            # A transient read failure must not kill polling or certify a draft.
+            saved_values = dict(self._saved_values or DEFAULTS)
+            saved_error = f'Не удалось проверить сохранённую конфигурацию: {exc}'
+        saved_values['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(saved_values, self.app.user_presets)
+        saved_lan = saved_values.get('INFINI_HOST') == '0.0.0.0' or bool(saved_values.get('INFINI_ASSET_PUBLIC_BASE_URL'))
         fields = [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], '')) for field in self.fields]
         for field in fields:
             if field['key'] == 'INFINI_CODEX_LLM_MODEL':
@@ -220,8 +234,9 @@ class StudioController:
             elif field['key'] == 'INFINI_CODEX_VISUAL_REASONING':
                 field['options'] = list(self.app.codex_visual_reasoning_combo.cget('values'))
         return {
-            'values': values, 'defaults': DEFAULTS, 'fields': fields, 'presets': PRESETS,
-            'userPresets': self.app.user_presets, 'status': self.app.status_var.get(),
+            'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan,
+            'defaults': DEFAULTS, 'fields': fields, 'presets': PRESETS,
+            'userPresets': self.app.user_presets, 'status': saved_error or self.app.status_var.get(),
             'activity': self.app.activity_var.get(), 'appliedConfig': self.app.applied_config_var.get(),
             'home': {'state': self.app.home_state_var.get(), 'detail': self.app.home_detail_var.get(),
                      'config': self.app.home_config_var.get()},

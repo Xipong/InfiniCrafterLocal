@@ -37,7 +37,8 @@
   <symbol id="i-exit" viewBox="0 0 24 24"><path d="M10 4H4v16h6m-1-8h12m-5-5 5 5-5 5"/></symbol>
 </defs></svg>
 <div class="app-shell">
-  <aside class="rail" aria-label="Навигация мастерской">
+  <aside class="rail" id="navigation-panel" aria-label="Навигация мастерской">
+    <button class="icon-button drawer-close" data-ui="close-menu" aria-label="Закрыть навигацию"><svg><use href="#i-close"/></svg></button>
     <a href="#operate" class="brand" aria-label="Infinicraft — рабочий стол"><svg class="brand-mark"><use href="#i-mark"/></svg><span>infinicraft<span class="brand-caption">МАСТЕРСКАЯ ПРЕДМЕТОВ</span></span></a>
     <div class="rail-location"><span class="local-dot"></span> Локальная студия <span class="rail-edition">/ α</span></div>
     <nav id="navigation">
@@ -54,12 +55,13 @@
     </nav>
     <div class="rail-bottom">
       <button class="rail-help" data-ui="help"><svg><use href="#i-help"/></svg>Как устроен крафт<svg class="small"><use href="#i-arrow"/></svg></button>
+      <button class="rail-help mobile-exit" data-ui="exit"><svg><use href="#i-exit"/></svg>Закрыть студию</button>
       <div class="rail-colophon"><span>СОЗДАВАЙ НЕВОЗМОЖНОЕ.</span><span id="version">INFINICRAFT / LOCAL</span></div>
     </div>
   </aside>
   <div class="main-shell">
     <header class="topbar">
-      <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-expanded="false"><svg><use href="#i-sliders"/></svg></button>
+      <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-controls="navigation-panel" aria-expanded="false"><svg><use href="#i-sliders"/></svg></button>
       <div class="breadcrumb"><span>Студия</span><span class="slash">/</span><span id="crumb">Рабочий стол</span></div>
       <div class="top-actions"><button class="search-trigger" data-ui="search"><svg><use href="#i-search"/></svg><span>Найти настройку</span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span>Подключение…</span></span><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
     </header>
@@ -68,6 +70,7 @@
     <footer class="workspace-footer"><span>Идея → механика → изображение → предмет</span><span>Крафт происходит в Terraria<span class="footer-square"></span></span></footer>
   </div>
 </div>
+<button id="navigation-backdrop" class="navigation-backdrop" data-ui="close-menu" tabindex="-1" aria-label="Закрыть навигацию" hidden></button>
 <div class="save-tray" id="save-tray" hidden><span class="tray-dot"></span><div><strong id="dirty-label">Есть изменения</strong><small>Сначала сохранить. Затем безопасно перезапустить.</small></div><button class="text-button" data-ui="discard">Отменить</button><button class="button button-primary" data-action="save"><svg><use href="#i-save"/></svg>Сохранить</button></div>
 <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="dialog-top"><h2 id="search-title">Найти в мастерской</h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть поиск"><svg><use href="#i-close"/></svg></button></div><div class="command-input"><svg><use href="#i-search"/></svg><input id="global-search" placeholder="Модель, прозрачность, порт…" autocomplete="off" aria-label="Поиск настроек"><kbd>Esc</kbd></div><div id="search-results" class="search-results"></div><div class="search-footer">Поиск по всем параметрам, включая неактивные<span>↑ ↓ выбрать · Enter открыть</span></div></dialog>
 <dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"><div class="dialog-top"><h2 id="utility-title"></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть"><svg><use href="#i-close"/></svg></button></div><div id="utility-body"></div></dialog>

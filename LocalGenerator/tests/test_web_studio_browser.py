@@ -121,3 +121,84 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
         worker.join(timeout=3)
     assert done.is_set(), 'Browser integration exceeded its bounded deadline'
     assert not errors, '\n'.join(errors)
+
+
+def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
+    """Real frontend/HTTP with explicit snapshot fixture, independent of native Tk.
+
+    This verifies browser interactions, not native controller or model readiness.
+    Set INFINI_TEST_BROWSER_EXECUTABLE to an installed Chromium when needed.
+    """
+    import os
+    from pathlib import Path
+    from infini_local.desktop.web_studio import StudioServer
+    browser_api = pytest.importorskip('playwright.sync_api')
+    values = {'INFINI_LLM_MAX_TOKENS': '6000', 'INFINI_EXTENSION_SECRET': 'secret-fixture',
+              'INFINI_EXTENSION_CREDENTIAL': 'credential-fixture', 'INFINI_LLM_PROVIDER': 'local'}
+    fields = [{'key': key, 'options': [], 'page': 'configure', 'advanced': False} for key in values]
+    assets = Path(__file__).parents[1] / 'infini_local' / 'desktop' / 'webui'
+    server = StudioServer(assets)
+    snapshot = {'values': values, 'defaults': values, 'savedValues': values,
+                'savedLanEnabled': False, 'fields': fields, 'presets': {},
+                'userPresets': {}, 'home': {}, 'busy': [], 'trace': {}, 'activity': ''}
+    server.publish(snapshot)
+    with browser_api.sync_playwright() as playwright:
+        executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE') or playwright.chromium.executable_path
+        if not Path(executable).is_file():
+            server.close()
+            pytest.skip('Frontend integration needs installed Playwright Chromium')
+        server.start()
+        browser = None
+        try:
+            browser = playwright.chromium.launch(headless=True, executable_path=executable)
+            page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.goto(server.url + '#configure')
+            page.wait_for_selector('#preset-select')
+            page.locator('details[data-details="all-settings"]').evaluate('(element)=>element.open=true')
+            assert page.locator('#field-INFINI_LLM_MAX_TOKENS').get_attribute('type') == 'text'
+            assert page.locator('#field-INFINI_EXTENSION_SECRET').get_attribute('type') == 'password'
+            assert page.locator('#field-INFINI_EXTENSION_CREDENTIAL').get_attribute('type') == 'password'
+            page.locator('[data-ui="search"]').click()
+            close = page.locator('#search-dialog [data-ui="close-dialog"]')
+            close.focus()
+            page.keyboard.press('Enter')
+            assert not page.locator('#search-dialog').is_visible()
+            assert page.url.endswith('#configure'), 'Enter on Close navigated to an unrelated result'
+            page.locator('[data-route="operate"]').click()
+            health = page.locator('[data-action="health"]')
+            health.focus()
+            snapshot['home'] = {'state': 'Сервер отвечает'}
+            server.publish(snapshot)
+            page.wait_for_function('document.querySelector("#generator-title").textContent === "Сервер отвечает"')
+            assert health.evaluate('(element)=>element===document.activeElement'), 'Polling lost action focus'
+            page.set_viewport_size({'width': 390, 'height': 844})
+            menu = page.locator('.mobile-menu')
+            menu.click()
+            assert page.locator('.main-shell').evaluate('(element)=>element.inert')
+            assert page.locator('.rail').get_attribute('aria-modal') == 'true'
+            snapshot['home'] = {'state': 'Идёт генерация'}
+            server.publish(snapshot)
+            page.wait_for_function('document.querySelector("#generator-title").textContent === "Идёт генерация"')
+            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), 'Polling stole drawer focus'
+            assert page.locator('.main-shell').evaluate('(element)=>element.inert')
+            page.locator('.mobile-exit').focus()
+            page.keyboard.press('Tab')
+            assert page.locator('.drawer-close').evaluate('(element)=>element===document.activeElement')
+            page.keyboard.press('Escape')
+            assert not page.locator('.main-shell').evaluate('(element)=>element.inert')
+            assert menu.evaluate('(element)=>element===document.activeElement')
+            menu.click()
+            page.locator('.nav-link.active').click()
+            assert not page.locator('.main-shell').evaluate('(element)=>element.inert')
+            assert page.locator('#workspace').evaluate('(element)=>element===document.activeElement')
+            menu.click()
+            page.set_viewport_size({'width': 1440, 'height': 1000})
+            page.wait_for_function('!document.querySelector(".main-shell").inert')
+            assert not page.locator('#navigation-backdrop').is_visible()
+            assert not errors
+        finally:
+            if browser:
+                browser.close()
+            server.close()

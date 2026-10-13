@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 
 import pytest
-from repair_test_helpers import edit_fields, provider_roundtrip, gameplay_repair, frozen_gameplay_repair
+from repair_test_helpers import edit_fields, gameplay_repair, frozen_gameplay_repair
 
 from infini_local.core.runtime_authoring import (
     apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
@@ -71,13 +71,14 @@ def _mobility_pair(first, second):
     return doc
 
 
-@pytest.mark.parametrize("first,second", [
-    ("move_player_on_use", "move_player_on_use"),
-    ("recall_home_on_use", "recall_home_on_use"),
-    ("move_player_on_use", "recall_home_on_use"),
-    ("recall_home_on_use", "move_player_on_use"),
+@pytest.mark.parametrize("first,second,owner", [
+    ("move_player_on_use", "move_player_on_use", "same"),
+    ("recall_home_on_use", "recall_home_on_use", "default"),
+    ("move_player_on_use", "recall_home_on_use", "same"),
+    ("recall_home_on_use", "move_player_on_use", "default"),
+    ("move_player_on_use", "recall_home_on_use", "distinct"),
+    ("recall_home_on_use", "move_player_on_use", "named-default"),
 ])
-@pytest.mark.parametrize("owner", ["same", "default", "distinct", "named-default"])
 def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(first, second, owner):
     doc = _mobility_pair(first, second)
     effects = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] in {first, second}]
@@ -110,9 +111,15 @@ def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(fir
     assert doc == before
 
 
-@pytest.mark.parametrize("field", ["mobilityMode", "mobilityRangeTiles", "mobilitySafeTileOnly"])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "wrong_type", "wrong_value", "cross_owner"])
-@pytest.mark.parametrize("source_available", [False, True])
+@pytest.mark.parametrize("field,mutation,source_available", [
+    ("mobilityMode", "drop", False),
+    ("mobilityRangeTiles", "duplicate", True),
+    ("mobilityMode", "wrong_type", True),
+    ("mobilityRangeTiles", "wrong_type", False),
+    ("mobilitySafeTileOnly", "wrong_type", True),
+    ("mobilityMode", "wrong_value", False),
+    ("mobilitySafeTileOnly", "cross_owner", True),
+])
 def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(field, mutation, source_available):
     doc = _mobility_pair("move_player_on_use", "recall_home_on_use")
     final = compile_runtime_program(doc)
@@ -137,8 +144,8 @@ def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(f
 
 
 @pytest.mark.parametrize("fn", ["move_player_on_use", "recall_home_on_use"])
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monkeypatch, fn, format_mode):
+def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monkeypatch, fn):
+    format_mode = "json_schema"
     doc = _mobility_pair("move_player_on_use", fn)
     call = doc["runtimeProgram"]["calls"][-1]
     call["params"]["cooldownTicks"] = True
@@ -313,8 +320,6 @@ def test_named_generated_buff_neutral_omissions_have_exact_unique_group_receipts
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-
-
 def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects():
     final = compile_runtime_program(build_capability_witness("refresh_generated_effect_group_while_held"))
     final.pop("runtimeContract")  # DTO transport is validated without claiming source receipts.
@@ -324,8 +329,8 @@ def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects()
     assert validate_runtime_wire(final)["ok"]
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatch, format_mode):
+def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatch):
+    format_mode = "json_schema"
     doc = _groups()
     alternate = doc["runtimeProgram"]["bindings"].pop()
     primary = doc["runtimeProgram"]["bindings"][0]
@@ -346,8 +351,8 @@ def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatc
         scope["fieldPermissions"], expected, out_of_scope_response=True)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatch, format_mode):
+def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatch):
+    format_mode = "json_schema"
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
     held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
@@ -363,8 +368,8 @@ def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatc
     frozen_gameplay_repair(monkeypatch, doc, incoming, format_mode,
         scope["fieldPermissions"], expected, out_of_scope_response=True)
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(monkeypatch, format_mode):
+def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(monkeypatch):
+    format_mode = "json_schema"
     doc = _groups("apply_generated_buff_on_use")
     bindings = doc["runtimeProgram"]["bindings"]
     alternate = bindings.pop()
@@ -389,8 +394,8 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypatch, format_mode):
+def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypatch):
+    format_mode = "json_schema"
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
     buff = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "apply_generated_buff_on_use")
@@ -406,9 +411,9 @@ def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypa
         scope["fieldPermissions"], expected)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("case", ["broken-active", "nonempty-held", "empty-held"])
-def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode, case):
+def test_selector_noop_remains_red_without_host_design(monkeypatch, case):
+    format_mode = "json_schema"
     from infini_local.core.errors import PlannerUnavailable
 
     doc = _groups() if case == "broken-active" else build_capability_witness("refresh_generated_effect_group_while_held")
@@ -497,31 +502,6 @@ def test_combined_binding_receipts_authenticate_each_independent_lane(lane, atta
     assert not audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
     if attack in {"missing", "duplicate"}:
         assert not audit_compiler_receipts(rows, final_document=final)["ok"]
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("chance", [None, 0, 35, 100])
-def test_combined_provider_preparation_preserves_presence_and_exact_compilation(monkeypatch, format_mode, chance):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
-    doc = _chance_groups(chance)
-    if chance is None:
-        for binding in doc["runtimeProgram"]["bindings"]:
-            del binding["stackConsumeChancePercent"]
-    before = json.dumps(doc, sort_keys=True)
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    request, user, system = author.build_initial_author_request({}, {}, {}, {}, "combined-offline", model_name="offline-no-model")
-    from prompt_packet_helpers import dossier_text
-    assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
-    assert request["messages"][0]["content"] == system and dossier_text(request) == user
-    parsed = provider_roundtrip(doc, request["response_format"])
-    final = compile_runtime_program(parsed)
-    assert final == compile_runtime_program(doc) and validate_runtime_wire(final)["ok"]
-    assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

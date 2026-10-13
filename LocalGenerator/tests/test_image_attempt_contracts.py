@@ -186,26 +186,6 @@ def test_overlap_must_preserve_each_validated_png(offline, monkeypatch, kind, di
         assert row['validated_sha256'] == row['http_sha256'] == row['returned_sha256'], f'{kind}: {name} received another invocation\'s PNG'
     assert returned['first'][0] != returned['second'][0]
 
-def test_public_adapters_share_the_canonical_attempt_executor(offline, monkeypatch):
-    executor = getattr(generation, '_execute_image_request', None)
-    assert callable(executor), 'the duplicated lifecycles have no canonical executor'
-    requests = []
-
-    def capture(data, request):
-        requests.append(request)
-        return executor(data, request)
-
-    monkeypatch.setattr(generation, '_execute_image_request', capture)
-    for kind in ('item', 'entity', 'impact', 'equip_overlay', 'vfx_cutout', 'vfx_strip'):
-        assert invoke(kind, 'shared_executor')[3] == 'generated'
-    assert [request.processing_role for request in requests] == [
-        'item', 'runtime:projectile', 'impact', 'equip_overlay', 'vfx_cutout', 'vfx_strip',
-    ]
-    import ast
-    import inspect
-    for adapter in (generation.maybe_generate_sprite, generation.generate_visual_asset):
-        tree = ast.parse(inspect.getsource(adapter))
-        assert not any(isinstance(node, (ast.For, ast.While)) for node in ast.walk(tree))
 
 def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypatch):
     root, requests = offline

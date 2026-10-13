@@ -213,9 +213,22 @@ def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotation
         {"optional": None}, local, response_format=response_format) == {"optional": None}
 
 
-@pytest.mark.parametrize("fn", [name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"])
-def test_compact_provider_roundtrips_every_complete_capability_witness(fn):
+# Capability execution belongs to registry_vertical_contract. This adapter is
+# recursive over schema shapes, so exercise those shapes instead of every fn.
+@pytest.mark.parametrize("fn,params,omitted", [
+    pytest.param("configure_item_stats", {}, "manaCost", id="optional-item-leaf"),
+    pytest.param("move_straight", {}, None, id="omitted-noarg-params"),
+    pytest.param("set_projectile_collision", {"immunity": {"localCooldown": 37}}, None, id="typed-union"),
+    pytest.param("configure_armor", {"setBonuses": {"minionSlotsBonus": 2}}, None, id="nested-optional-object"),
+    pytest.param("spawn_entity_on_event", {"when": {"everyTicks": 30}}, None, id="event-object-branch"),
+])
+def test_compact_provider_roundtrips_structural_witnesses(fn, params, omitted):
     item = build_capability_witness(fn)
+    call = next(row for row in item["runtimeProgram"]["calls"] if row["id"] == "witness_call")
+    if params:
+        call["params"].update(params)
+    if omitted:
+        call["params"].pop(omitted)
     assert validate_runtime_program(item)["ok"]
     local = contract.author_item_response_schema()
     provider = contract.author_item_provider_response_schema()

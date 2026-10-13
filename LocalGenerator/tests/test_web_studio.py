@@ -129,3 +129,48 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
     finally:
         server.close()
         app.destroy()
+
+
+def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_path, monkeypatch):
+    """No Tk/display needed: use the actual bridge and settings file owner."""
+    from types import SimpleNamespace
+    from infini_local.desktop import settings_gui_trace_state
+    from infini_local.desktop.settings_env import write_env, parse_env
+    from infini_local.desktop.settings_gui import SettingsGui
+    module = bridge_module()
+    config = tmp_path / 'config.env'
+    write_env(config, {'INFINI_PROMPT_STYLE': 'Default', 'INFINI_OPENAI_COMPAT_API_KEY': 'dummy-old'})
+    monkeypatch.setattr(settings_gui_trace_state, 'CONFIG_PATH', config)
+    value = lambda text='': SimpleNamespace(get=lambda: text)
+    current = parse_env(config)
+    app = SimpleNamespace(
+        field_widgets={}, pages={}, field_disabled_reasons={}, user_presets={},
+        _current_profile_settings=lambda: dict(current), preset_var=value('Custom'),
+        status_var=value('Ready'), activity_var=value(), applied_config_var=value(),
+        home_state_var=value(), home_detail_var=value(), home_config_var=value(),
+        trace_texts={}, _gui_tasks={}, radmin_enabled=value(False),
+        codex_catalog_var=value(), codex_image_account_var=value(),
+        _pipeline_preset_from_config=SettingsGui._pipeline_preset_from_config,
+    )
+    controller = module.StudioController(app, None)
+    current.update(INFINI_PROMPT_STYLE='Terraria Like', INFINI_OPENAI_COMPAT_API_KEY='dummy-new')
+    unsaved = controller.snapshot()
+    assert unsaved['values']['INFINI_PROMPT_STYLE'] == 'Terraria Like'
+    assert unsaved['savedValues']['INFINI_PROMPT_STYLE'] == 'Default'
+    assert unsaved['savedValues']['INFINI_OPENAI_COMPAT_API_KEY'] == 'dummy-old'
+    # A fresh browser/controller snapshot still distinguishes a prepared profile
+    # or non-saving action from a real write; no localStorage carries credentials.
+    assert module.StudioController(app, None).snapshot()['savedValues'] == unsaved['savedValues']
+    write_env(config, current)
+    saved = controller.snapshot()
+    assert saved['savedValues']['INFINI_PROMPT_STYLE'] == 'Terraria Like'
+    assert saved['savedValues']['INFINI_OPENAI_COMPAT_API_KEY'] == 'dummy-new'
+    current['INFINI_PROMPT_STYLE'] = 'Default'
+    assert controller.snapshot()['savedValues']['INFINI_PROMPT_STYLE'] == 'Terraria Like'
+    from infini_local.desktop import settings_env
+    def unreadable(_path):
+        raise PermissionError('test config is temporarily unreadable')
+    monkeypatch.setattr(settings_env, 'parse_env', unreadable)
+    failed_read = controller.snapshot()
+    assert failed_read['savedValues'] == saved['savedValues']
+    assert 'temporarily unreadable' in failed_read['status']

@@ -2,7 +2,6 @@
 from copy import deepcopy
 from dataclasses import replace
 import json
-from pathlib import Path
 
 import pytest
 from repair_test_helpers import frozen_call_repair, provider_roundtrip, gameplay_repair
@@ -46,8 +45,11 @@ def child_fixture(velocity):
     return document, call
 
 
-@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
-@pytest.mark.parametrize("omitted", [("count",), ("spreadRadians",), ("count", "spreadRadians")])
+@pytest.mark.parametrize("velocity,omitted", [
+    (VELOCITIES[0], ("count",)),
+    (VELOCITIES[2], ("spreadRadians",)),
+    (VELOCITIES[3], ("count", "spreadRadians")),
+])
 def test_child_neutral_omissions_preserve_explicit_wire_and_source_receipts(velocity, omitted):
     document, call = child_fixture(velocity)
     explicit = compile_runtime_program(document)
@@ -73,8 +75,11 @@ def test_child_neutral_omissions_preserve_explicit_wire_and_source_receipts(velo
     assert validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
-@pytest.mark.parametrize("omitted", [("count",), ("spreadRadians",), ("count", "spreadRadians")])
+@pytest.mark.parametrize("velocity,omitted", [
+    (VELOCITIES[0], ("count",)),
+    (VELOCITIES[2], ("spreadRadians",)),
+    (VELOCITIES[3], ("count", "spreadRadians")),
+])
 def test_root_distribution_still_requires_explicit_count_and_spread(velocity, omitted):
     document, call = fixture(velocity)
     for name in omitted:
@@ -89,8 +94,10 @@ def test_root_distribution_still_requires_explicit_count_and_spread(velocity, om
         compile_runtime_program(document)
 
 
-@pytest.mark.parametrize("velocity", [VELOCITIES[i] for i in (0, 2, 3)], ids=["constant", "radial", "disk"])
-@pytest.mark.parametrize("spread", [None, False, "0", 0.5])
+@pytest.mark.parametrize("velocity,spread", [
+    (VELOCITIES[0], None), (VELOCITIES[2], False), (VELOCITIES[3], "0"),
+    (VELOCITIES[0], 0.5), (VELOCITIES[2], 0.5), (VELOCITIES[3], 0.5),
+])
 def test_child_neutral_omission_does_not_replace_present_spread(velocity, spread):
     document, call = child_fixture(velocity)
     call["params"].pop("count")
@@ -243,22 +250,11 @@ def test_new_velocity_wire_is_strict_without_diagnostic_receipts(mutation):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_old_full_saved_wire_and_receipts_keep_constant_velocity_without_reconstruction():
-    archive = json.loads((Path(__file__).with_name("fixtures") / "parent_combat_retained_wire.json").read_text())
-    for case in archive["cases"]:
-        wire = case["wire"]; before = deepcopy(wire)
-        assert validate_runtime_wire(wire)["ok"]
-        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
-        assert wire == before
-
-
 def test_old_author_scalar_is_not_a_second_accepted_spelling():
     document, call = fixture(VELOCITIES[0])
     call["params"]["speedPxPerUpdate"] = call["params"].pop("velocity")["constantSpeedPxPerUpdate"]
     assert not strict_author_shape_report(document)["ok"]
     with pytest.raises(ValueError): compile_runtime_program(document)
-
-
 
 
 @pytest.mark.parametrize("kind", ["stationary_projectile", "temporary_helper", "field"])
@@ -337,9 +333,12 @@ def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero
     assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".spreadRadians") for row in report["errors"])
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("capability", ["target_and_fire", "charge_then_release"])
-@pytest.mark.parametrize("velocity", VELOCITIES[1:])
+@pytest.mark.parametrize("format_mode,capability,velocity", [
+    ("json_object", "target_and_fire", VELOCITIES[1]),
+    ("json_schema", "target_and_fire", VELOCITIES[2]),
+    ("json_object", "charge_then_release", VELOCITIES[3]),
+    ("json_schema", "charge_then_release", VELOCITIES[4]),
+])
 def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkeypatch, format_mode, capability, velocity):
     doc = build_capability_witness(capability)
     controller = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == capability)

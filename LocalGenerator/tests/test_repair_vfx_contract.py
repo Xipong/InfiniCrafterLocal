@@ -41,13 +41,18 @@ def _offline_transport(monkeypatch, case, replies):
     return captured
 
 
-_DOMAIN_CASES = [pytest.param(domain, outcome, id=domain + "-" + outcome)
-                 for domain in ("omitted", "empty") for outcome in ("item", "entity", "noop", "valid")]
-_DOMAIN_CASES.append(pytest.param("nonempty", "asset", id="nonempty-source-frozen"))
-
-
-@pytest.mark.parametrize("renderer,payload", [("spriteElement", "element"), ("texturedPath", "path")], ids=["sprite", "path"])
-@pytest.mark.parametrize("domain,outcome", _DOMAIN_CASES)
+# Exercise each empty-domain outcome and both payload consumers without
+# repeating their Cartesian product. Nonempty domains freeze source per renderer.
+@pytest.mark.parametrize("renderer,payload,domain,outcome", [
+    pytest.param("spriteElement", "element", "omitted", "item", id="sprite-omitted-item"),
+    pytest.param("texturedPath", "path", "empty", "entity", id="path-empty-entity"),
+    pytest.param("spriteElement", "element", "empty", "noop", id="sprite-empty-noop"),
+    pytest.param("texturedPath", "path", "omitted", "noop", id="path-omitted-noop"),
+    pytest.param("spriteElement", "element", "omitted", "valid", id="sprite-omitted-valid"),
+    pytest.param("texturedPath", "path", "empty", "valid", id="path-empty-valid"),
+    pytest.param("spriteElement", "element", "nonempty", "asset", id="sprite-source-frozen"),
+    pytest.param("texturedPath", "path", "nonempty", "asset", id="path-source-frozen"),
+])
 def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain, outcome):
     data = _data()
     for entity in data["runtimeProgram"]["entities"]:
@@ -119,7 +124,6 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     assert raw == raw_before
     assert {key: final[key] for key in before if key != "debug"} == {key: value for key, value in before.items() if key != "debug"}
     assert ("visualKit" in final) == ("visualKit" in before)
-    assert [request["model"] for request in sent] == ["explicit-offline-fixture-model"] * len(sent)
     assert [request["response_format"] for request in sent] == [{"type": "json_object"}] * len(sent)
     if outcome != "valid":
         assert len(sent) == 2

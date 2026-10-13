@@ -1,4 +1,4 @@
-/* Infinicraft Studio. Same-origin local bridge; no cloud services or persisted credentials. */
+/* Infinicraft Studio. Same-origin bridge; drafts stay in memory, Save writes local config. */
 'use strict';
 (() => {
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -22,7 +22,7 @@
     INFINI_HOST:'Интерфейс генератора', INFINI_PORT:'Порт генератора', INFINI_MP_ASSET_TRANSPORT:'Доставка спрайтов друзьям', INFINI_ASSET_PUBLIC_BASE_URL:'Публичный адрес ассетов', INFINI_TERRARIA_PORT:'Порт Terraria', INFINI_CRAFT_HTTP_TIMEOUT_SECONDS:'Ожидание крафта, секунды', INFINI_CRAFT_HTTP_ATTEMPTS:'Попытки соединения', INFINI_COMBINE_BUSY_WAIT_SECONDS:'Ожидание очереди, секунды', INFINI_MULTIDEV_CONCURRENCY:'Параллельные окна разработчика', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED:'Отладочная выдача расходников', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD:'Минимальная выдача расходников', INFINI_TRACE_PROMPTS:'Записывать промпты и этапы', INFINI_TRACE_MAX_PROMPT_CHARS:'Лимит предпросмотра, символы', INFINI_TRACE_EVENTS_TAIL:'Событий в журнале', INFINI_CONSOLE_EVENT_LEVEL:'Подробность консоли'
   };
   const shortHelp = {
-    INFINI_LLM_PROVIDER:'Кто придумывает свойства и пишет механику предмета.', INFINI_LMSTUDIO_URL:'Локальный OpenAI-compatible сервер. Обычно порт 1234.', INFINI_LMSTUDIO_MODEL:'Точное имя модели или auto — выбор на стороне сервера.', INFINI_OPENROUTER_API_KEY:'Ключ остаётся в этой локальной сессии. В профили не копируется.', INFINI_OPENAI_COMPAT_API_KEY:'Не API-ключ Codex. Только для выбранного совместимого сервиса.', INFINI_PROMPT_STYLE:'Меняет художественное направление, а не модель или механику.', INFINI_LLM_REASONING_MODE:'Дополнительная самопроверка. Доступность зависит от модели.', INFINI_IMAGE_BACKEND:'Локальный движок, подписка или внешний API.', INFINI_SDCPP_SERVER_URL:'Адрес локального сервера изображений, не этой студии.', INFINI_SDCPP_SERVER_AUTOSTART:'Внешний — только URL. Управляемый — программа и файлы моделей на этом ПК.', INFINI_SDCPP_SERVER_EXE:'Путь к sd-server.exe на этом компьютере.', INFINI_SDCPP_MODEL:'Файл основной FLUX / Z-Image модели, обычно GGUF.', INFINI_SDCPP_LLM:'Текстовый энкодер, совместимый с основной моделью.', INFINI_SDCPP_VAE:'Декодер, совместимый с основной моделью.', INFINI_SDCPP_LORA_FILE:'Выбери существующий файл художественного адаптера.', INFINI_SDCPP_LORA_WEIGHT:'Для pixel-art адаптера начни с 0.20–0.30.', INFINI_BG_COLOR:'Прозрачный — native alpha. Другие цвета — chroma-key.', INFINI_SPRITE_DOWNSCALE_FILTER:'BOX — базовый фильтр. Сброс также включит premultiplied resize.', INFINI_HOST:'127.0.0.1 — этот ПК; 0.0.0.0 — принимать подключения из сети.', INFINI_MP_ASSET_TRANSPORT:'Внутри Terraria — без отдельного публичного HTTP-адреса.', INFINI_TRACE_PROMPTS:'Полный локальный журнал растёт до ручной очистки.'
+    INFINI_LLM_PROVIDER:'Кто придумывает свойства и пишет механику предмета.', INFINI_LMSTUDIO_URL:'Локальный OpenAI-compatible сервер. Обычно порт 1234.', INFINI_LMSTUDIO_MODEL:'Точное имя модели или auto — выбор на стороне сервера.', INFINI_OPENROUTER_API_KEY:'При сохранении ключ записывается в локальный config.env. В профили не копируется.', INFINI_OPENAI_COMPAT_API_KEY:'Не API-ключ Codex. Только для выбранного совместимого сервиса.', INFINI_PROMPT_STYLE:'Меняет художественное направление, а не модель или механику.', INFINI_LLM_REASONING_MODE:'Дополнительная самопроверка. Доступность зависит от модели.', INFINI_IMAGE_BACKEND:'Локальный движок, подписка или внешний API.', INFINI_SDCPP_SERVER_URL:'Адрес локального сервера изображений, не этой студии.', INFINI_SDCPP_SERVER_AUTOSTART:'Внешний — только URL. Управляемый — программа и файлы моделей на этом ПК.', INFINI_SDCPP_SERVER_EXE:'Путь к sd-server.exe на этом компьютере.', INFINI_SDCPP_MODEL:'Файл основной FLUX / Z-Image модели, обычно GGUF.', INFINI_SDCPP_LLM:'Текстовый энкодер, совместимый с основной моделью.', INFINI_SDCPP_VAE:'Декодер, совместимый с основной моделью.', INFINI_SDCPP_LORA_FILE:'Выбери существующий файл художественного адаптера.', INFINI_SDCPP_LORA_WEIGHT:'Для pixel-art адаптера начни с 0.20–0.30.', INFINI_BG_COLOR:'Прозрачный — native alpha. Другие цвета — chroma-key.', INFINI_SPRITE_DOWNSCALE_FILTER:'BOX — базовый фильтр. Сброс также включит premultiplied resize.', INFINI_HOST:'127.0.0.1 — этот ПК; 0.0.0.0 — принимать подключения из сети.', INFINI_MP_ASSET_TRANSPORT:'Внутри Terraria — без отдельного публичного HTTP-адреса.', INFINI_TRACE_PROMPTS:'Полный локальный журнал растёт до ручной очистки.'
   };
   const optionNames = {
     INFINI_LLM_PROVIDER:{local:'LM Studio · локально',openrouter:'OpenRouter',openai_compat:'Совместимый API',openai_codex:'ChatGPT / Codex'},
@@ -57,12 +57,14 @@
     if (/^INFINI_(VISUAL_|VFX_|SPRITE_|REMOVE_BG|BG_|CHROMA_|ALPHA_|SAVE_SPRITE|PIXEL_|MAX_COLORS)/.test(key)) return 'sprites';
     return ({trace:'diagnostics',diagnostics:'diagnostics',network:'multiplayer',sdcpp:'images'}[suggested]) || (routes[suggested] ? suggested : 'configure');
   }
+  // Match credential words, not numeric budgets such as MAX_TOKENS.
+  const isCredentialKey = key => /(?:^|_)(?:API_KEY|TOKEN|PASSWORD|SECRET|CREDENTIALS?)(?:_|$)/i.test(key);
   function makeFields(remote) {
     const map = new Map((remote.fields || []).map(field => [field.key,{...field}]));
     Object.keys({...remote.defaults,...remote.values}).filter(key => key.startsWith('INFINI_')).forEach(key => {
-      if (!map.has(key)) map.set(key,{key,label:names[key],help:'',options:[],secret:/API_KEY|TOKEN|PASSWORD/.test(key),advanced:!basicKeys.has(key),synthetic:true});
+      if (!map.has(key)) map.set(key,{key,label:names[key],help:'',options:[],secret:isCredentialKey(key),advanced:!basicKeys.has(key),synthetic:true});
     });
-    return [...map.values()].map(field => ({...field,secret:field.secret || /API_KEY|TOKEN|PASSWORD/.test(field.key),route:pageFor(field.key,field.page)}));
+    return [...map.values()].map(field => ({...field,secret:field.secret || isCredentialKey(field.key),route:pageFor(field.key,field.page)}));
   }
   function value(key, fallback='') { return state.draft[key] ?? fallback; }
   function recomputeDirty() {
@@ -115,16 +117,20 @@
     const previousFields = JSON.stringify(state.fields.map(f => [f.key,f.options]));
     const previousPresets = JSON.stringify([state.remote?.presets,state.remote?.userPresets]);
     state.fields = makeFields(remote);
+    const saved = {...remote.defaults,...(remote.savedValues || remote.values)};
     if (first) {
-      state.draft = {...remote.defaults,...remote.values}; state.baseline = {...state.draft}; state.lan = !!remote.lanEnabled; state.baselineLan = state.lan;
+      state.draft = {...remote.defaults,...remote.values}; state.lan = !!remote.lanEnabled;
     } else {
       Object.entries({...remote.defaults,...remote.values}).forEach(([key,val]) => {
         if (!state.dirty.has(key) && !((state.pending || state.submission)?.sent && Object.hasOwn((state.pending || state.submission).sent,key))) {
-          state.draft[key] = val; state.baseline[key] = val;
+          // A local discard must survive repeated snapshots of the same unsaved
+          // controller state. Only import a newly changed remote value.
+          if (state.remote.values[key] !== val) state.draft[key] = val;
         }
       });
-      if (state.lan === state.baselineLan && !state.pending && !state.submission) { state.lan = !!remote.lanEnabled; state.baselineLan = state.lan; }
+      if (state.lan === state.baselineLan && !state.pending && !state.submission && state.remote.lanEnabled !== remote.lanEnabled) state.lan = !!remote.lanEnabled;
     }
+    state.baseline = saved; state.baselineLan = !!remote.savedLanEnabled;
     state.remote = remote;
     const pending = state.pending;
     if (pending && remote.lastAction?.id === pending.id) {
@@ -138,10 +144,9 @@
         if (pending.action === 'start') state.startSubmission = pending;
         if (pending.action === 'save' && /^saved:/i.test(remote.status || '')) {
           Object.entries(pending.sent).forEach(([key,val]) => {
-            state.baseline[key] = remote.values[key] ?? val;
-            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = remote.values[key] ?? val;
+            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = saved[key] ?? val;
           });
-          state.baselineLan = pending.lan;
+          if ((state.lanEdit || 0) <= pending.clock) state.lan = state.baselineLan;
           toast('Настройки записаны в config.env.');
         } else if (transforming) toast('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.');
         else if (pending.action === 'savePreset') toast('Профиль сохранён отдельно. config.env не изменён.');
@@ -154,10 +159,9 @@
       // The guarded start saves only after its activity/identity check succeeds.
       if (/server\.py запущен|^saved:/i.test(remote.status || '')) {
         Object.entries(state.startSubmission.sent).forEach(([key,val]) => {
-          state.baseline[key] = remote.values[key] ?? val;
-          if ((state.edits[key] || 0) <= state.startSubmission.clock) state.draft[key] = remote.values[key] ?? val;
+          if ((state.edits[key] || 0) <= state.startSubmission.clock) state.draft[key] = saved[key] ?? val;
         });
-        state.baselineLan = state.startSubmission.lan;
+        if ((state.lanEdit || 0) <= state.startSubmission.clock) state.lan = state.baselineLan;
       }
       state.startSubmission = null;
     }
@@ -255,7 +259,7 @@
     if (backend === 'sdcpp' && value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' && (!value('INFINI_SDCPP_MODEL') || !value('INFINI_SDCPP_SERVER_EXE'))) return {n:'02',title:'Выбери материал.',description:'Для локальных изображений нужны программа sd.cpp и файл модели на этом компьютере.',route:'models',link:'Выбрать модель'};
     if (state.dirty.size || state.lan !== state.baselineLan) return {n:'→',title:'Зафиксируй изменения.',description:'В мастерской есть несохранённые настройки. Запиши конфигурацию перед запуском.',route:'configure',link:'Открыть конфигурацию'};
     if (/Сервер отвечает|Идёт генерация/.test(state.remote?.home?.state || '')) return {n:'→',title:'Дальше — в Terraria.',description:'Открой игру с модом InfiniCrafterLocal. Новые предметы создаются в игре, не в этой студии.',route:'help',link:'Как начать крафт'};
-    return {n:'→',title:'Проверь перед запуском.',description:'Модели выбраны. Проверь соединение или запусти генератор — готовность ещё нужно подтвердить.',route:'diagnostics',link:'Проверить настройку'};
+    return {n:'→',title:'Проверь перед запуском.',description:'Проверь соединение или запусти генератор. Выбранные настройки ещё не подтверждают готовность моделей.',route:'diagnostics',link:'Проверить настройку'};
   }
   function homeActivity() {
     const raw = state.remote.activity || '';
@@ -278,7 +282,8 @@
     const signature = JSON.stringify([home,provider,image,next,config,busy,running,state.dirty.size,state.remote.activity,value('INFINI_HOST'),value('INFINI_PORT')]);
     if (state.operateSignature === signature && $('.station')) {updateActionButtons();return;}
     state.operateSignature = signature;
-    const focusedAction = document.activeElement?.dataset.action;
+    const focused = document.activeElement;
+    const focusIdentity = focused?.closest('#workspace') ? ['data-action','data-ui','href'].map(name => [name,focused.getAttribute(name)]).find(([,val]) => val) : null;
     $('#workspace').innerHTML = `${heading('operate')}
       <div class="operate-grid"><section class="station" aria-labelledby="generator-title"><div class="station-top"><span class="serial">STATION / LOCAL GENERATOR</span><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>${esc(value('INFINI_HOST','127.0.0.1'))}:${esc(value('INFINI_PORT','5055'))}</span><span class="serial">/ ГЕНЕРАТОР</span></div><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить соединение с генератором">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки.<br>Активный крафт защищён от случайного перезапуска.</p></section>
       <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Твоя сборка</h2><span class="meta">${state.dirty.size ? 'ЧЕРНОВИК':'КОНФИГУРАЦИЯ'}</span></div><ol class="pipeline-list">${[
@@ -289,7 +294,7 @@
       <div class="operate-lower"><section><div class="activity-header"><h2>Активность мастерской</h2><a class="text-button" href="#diagnostics">Открыть журнал ${icon('arrow')}</a></div><div class="activity-sheet">${homeActivity()}</div></section><section class="next-step"><div><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>${esc(next.title)}</h2><p>${esc(next.description)}</p></div><span class="step-token">${next.n}</span>${next.route === 'help' ? `<a href="#operate" data-ui="help">${next.link}${icon('arrow')}</a>` : `<a href="#${next.route}">${next.link}${icon('arrow')}</a>`}</section></div>
       <div class="config-strip">${icon('sliders')}<p>${esc(config)}</p></div>`;
     updateActionButtons();
-    if (focusedAction) $(`[data-action="${focusedAction}"]`)?.focus({preventScroll:true});
+    if (focusIdentity) $$('[data-action],[data-ui],a', $('#workspace')).find(element => element.getAttribute(focusIdentity[0]) === focusIdentity[1])?.focus({preventScroll:true});
   }
   function browseType(field) {
     if (field.key === 'INFINI_SDCPP_LORA_FILE') return 'lora';
@@ -303,7 +308,8 @@
     const isBool = options.length === 2 && options.includes('1') && options.includes('0') && ['0','1'].includes(val);
     const browse = browseType(field), help = forceDetails || state.helpFields.has(key), title = label(field);
     let control;
-    if (key === 'INFINI_SDCPP_SERVER_AUTOSTART') control = `<select id="${id}" data-field="${key}" aria-describedby="help-${key}"><option value="0" ${val === '0' ? 'selected':''}>Внешний · уже запущен</option><option value="1" ${val === '1' ? 'selected':''}>Управляемый · запускать здесь</option>${!['0','1'].includes(val) ? `<option selected value="${esc(val)}">${esc(val)}</option>`:''}</select>`;
+    if (field.secret) control = `<input id="${id}" data-field="${key}" type="password" value="${esc(val)}" autocomplete="off" spellcheck="false" data-secret="true" aria-describedby="help-${key}"><button class="reveal" data-reveal="${key}" type="button" aria-label="Показать ключ" aria-pressed="false">${icon('eye')}</button>`;
+    else if (key === 'INFINI_SDCPP_SERVER_AUTOSTART') control = `<select id="${id}" data-field="${key}" aria-describedby="help-${key}"><option value="0" ${val === '0' ? 'selected':''}>Внешний · уже запущен</option><option value="1" ${val === '1' ? 'selected':''}>Управляемый · запускать здесь</option>${!['0','1'].includes(val) ? `<option selected value="${esc(val)}">${esc(val)}</option>`:''}</select>`;
     else if (isBool) control = `<label class="toggle-control"><input id="${id}" type="checkbox" data-field="${esc(key)}" ${val === '1' ? 'checked':''} aria-describedby="help-${key}"><span class="toggle-track"></span><span class="toggle-label">${val === '1' ? 'Включено':'Выключено'}</span></label>`;
     else if (field.multiline || /COMMAND_TEMPLATE|EXTRA_ARGS/.test(key)) control = `<textarea id="${id}" data-field="${key}" spellcheck="false" aria-describedby="help-${key}">${esc(val)}</textarea>`;
     else if (options.length && !/_MODEL$/.test(key)) {
@@ -390,19 +396,37 @@
       if (input.type === 'checkbox' && input.parentElement.querySelector('.toggle-label')) input.parentElement.querySelector('.toggle-label').textContent = input.checked ? 'Включено':'Выключено';
     });
   }
+  function setMenu(open, restoreFocus=true) {
+    const rail = $('.rail'), menu = $('.mobile-menu');
+    open = !!open && innerWidth <= 720;
+    rail.classList.toggle('is-open',open);
+    menu.setAttribute('aria-expanded',String(open));
+    $('#navigation-backdrop').hidden = !open;
+    $('.main-shell').inert = open;
+    $('#save-tray').inert = open;
+    document.body.classList.toggle('menu-open',open);
+    if (open) {
+      rail.setAttribute('role','dialog'); rail.setAttribute('aria-modal','true');
+      $('.nav-link.active',rail)?.focus({preventScroll:true});
+    } else {
+      rail.removeAttribute('role'); rail.removeAttribute('aria-modal');
+      if (restoreFocus && rail.contains(document.activeElement)) menu.focus({preventScroll:true});
+    }
+  }
   function navigate() {
     const target = location.hash.slice(1).split('?')[0];
     state.page = routes[target] ? target : 'operate'; state.filter = '';
     $$('.nav-link').forEach(link => {link.classList.toggle('active',link.dataset.route === state.page); if (link.dataset.route === state.page) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');});
     $('#crumb').textContent = routes[state.page][0];document.title = `${routes[state.page][0]} — Infinicraft`;
-    $('.rail').classList.remove('is-open');$('.mobile-menu').setAttribute('aria-expanded','false');
-    render();window.scrollTo({top:0,behavior:'instant'});
+    const fromMenu = $('.rail').classList.contains('is-open');
+    setMenu(false,false);
+    render();if (fromMenu) $('#workspace').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
   }
   function matches(field,query) {
     const haystack = `${label(field)} ${field.key} ${field.help || ''} ${routes[field.route][0]}`.toLocaleLowerCase();
     return query.toLocaleLowerCase().trim().split(/\s+/).every(part => haystack.includes(part));
   }
-  function showSearch() {$('#search-dialog').showModal();$('#global-search').value='';state.searchIndex=0;renderSearch();$('#global-search').focus();}
+  function showSearch() {setMenu(false);$('#search-dialog').showModal();$('#global-search').value='';state.searchIndex=0;renderSearch();$('#global-search').focus();}
   function renderSearch() {
     const query = $('#global-search').value;
     state.searchMatches = state.fields.filter(field => matches(field,query));
@@ -424,7 +448,7 @@
       window.scrollTo({top:Math.max(0,top),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant':'smooth'});
     });
   }
-  function utility(title,body) {$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
+  function utility(title,body) {setMenu(false);$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
   function confirm(title,description,actionName,extra={},labelText='Подтвердить') {
     utility(title,`<p class="dialog-copy">${esc(description)}</p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Отмена</button><button class="button ${actionName === 'stop' || actionName === 'clearTrace' ? 'button-danger':'button-primary'}" id="confirm-submit" data-submit-action>${esc(labelText)}</button></div>`);
     $('#confirm-submit').onclick=() => {$('#utility-dialog').close();action(actionName,extra);};
@@ -440,7 +464,7 @@
     const source = name.startsWith('Мой: ') ? state.remote.userPresets[name.slice(5)] : state.remote.presets[name];
     const preset = source?.settings || source?.values || source;
     if (!preset || typeof preset !== 'object') {toast('Профиль не найден в локальной конфигурации.',true);return;}
-    const changes = Object.entries(preset).filter(([key,val]) => key.startsWith('INFINI_') && !/API_KEY|PASSWORD|TOKEN/.test(key) && String(val) !== value(key));
+    const changes = Object.entries(preset).filter(([key,val]) => key.startsWith('INFINI_') && !isCredentialKey(key) && String(val) !== value(key));
     utility('Применить сборку?',`<p class="dialog-copy">${esc(name)}<br>Текущие ключи остаются. Изменения будут подготовлены, но ещё не записаны в config.env.</p><div class="confirm-list">${changes.length ? changes.map(([key,val]) => `<div><span>${esc(names[key] || key)}</span><span>${esc(val)}</span></div>`).join(''):'Значения профиля уже совпадают с текущими.'}</div><div class="dialog-actions"><button class="button" data-ui="close-dialog">Отмена</button><button class="button button-primary" id="confirm-submit" data-submit-action>Применить ${icon('arrow')}</button></div>`);
     $('#confirm-submit').onclick=() => {$('#utility-dialog').close();action('applyPreset',{name});};
   }
@@ -471,8 +495,12 @@
     if(target.id === 'page-search') {const start=target.selectionStart;state.filter=target.value;render();$('#page-search').focus({preventScroll:true});$('#page-search').setSelectionRange(start,start);}
   });
   document.addEventListener('click',event => {
-    if (innerWidth <= 720 && !event.target.closest('.rail,.mobile-menu')) {$('.rail').classList.remove('is-open');$('.mobile-menu').setAttribute('aria-expanded','false');}
-    const button=event.target.closest('button,[data-search-key]');if(!button) return;
+    const navigation = event.target.closest('.rail a[href^="#"]');
+    if (navigation && $('.rail').classList.contains('is-open') && navigation.hash === location.hash) {
+      setMenu(false,false); $('#workspace').focus({preventScroll:true});
+    }
+    const button=event.target.closest('button,[data-ui],[data-search-key]');if(!button) return;
+    if (button.tagName === 'A' && button.dataset.ui) event.preventDefault();
     if(button.dataset.action) {action(button.dataset.action);return;}
     if(button.dataset.browse) {action('browse',{key:button.dataset.browse,type:button.dataset.browseType});return;}
     if(button.dataset.reveal) {const input=$(`[data-field="${button.dataset.reveal}"]`);input.type=input.type === 'password'?'text':'password';button.setAttribute('aria-pressed',String(input.type === 'text'));button.setAttribute('aria-label',input.type === 'text'?'Скрыть ключ':'Показать ключ');return;}
@@ -483,7 +511,8 @@
       case 'search':showSearch();break;
       case 'retry':poll();break;
       case 'close-dialog':button.closest('dialog')?.close();break;
-      case 'menu':{const open=$('.rail').classList.toggle('is-open');$('.mobile-menu').setAttribute('aria-expanded',String(open));break;}
+      case 'menu':setMenu(!$('.rail').classList.contains('is-open'));break;
+      case 'close-menu':setMenu(false);break;
       case 'help':showHelp();break;
       case 'force-restart':confirm('Прервать крафт и перезапустить?','Активный и ожидающий крафт будет прерван. Это не подтверждает возврат материалов в игре. Используй только если безопасный перезапуск недоступен.','forceRestart',{confirm:true},'Прервать и перезапустить');break;
       case 'stop':confirm('Остановить генератор?','Проверим активный крафт перед остановкой. Чужие процессы не изменяются.','stop',{},'Остановить безопасно');break;
@@ -502,7 +531,7 @@
   document.addEventListener('keydown',event => {
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {event.preventDefault();if(!$('#utility-dialog').open) showSearch();}
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {event.preventDefault();if(state.remote && !state.shutdown) action('save');}
-    if($('#search-dialog').open && ['ArrowDown','ArrowUp','Enter'].includes(event.key)) {
+    if($('#search-dialog').open && event.target.id === 'global-search' && ['ArrowDown','ArrowUp','Enter'].includes(event.key)) {
       event.preventDefault();
       if(event.key === 'Enter') {if(state.searchMatches[state.searchIndex]) focusField(state.searchMatches[state.searchIndex].key);}
       else {state.searchIndex=Math.max(0,Math.min(state.searchMatches.length-1,state.searchIndex+(event.key === 'ArrowDown'?1:-1)));$$('.search-result').forEach((result,index)=>result.classList.toggle('selected',index === state.searchIndex));const result=$(`#search-hit-${state.searchIndex}`);if(result) {const panel=$('#search-results');if(result.offsetTop < panel.scrollTop) panel.scrollTop=result.offsetTop;else if(result.offsetTop+result.offsetHeight>panel.scrollTop+panel.clientHeight) panel.scrollTop=result.offsetTop+result.offsetHeight-panel.clientHeight;}}
@@ -510,10 +539,16 @@
     if(event.target.matches('[data-trace-tab]') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
       event.preventDefault();const tabs=$$('[data-trace-tab]'),index=tabs.indexOf(event.target);const next=event.key === 'Home'?0:event.key === 'End'?tabs.length-1:(index+(event.key === 'ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();
     }
-    if(event.key === 'Escape') {$('.rail').classList.remove('is-open');$('.mobile-menu').setAttribute('aria-expanded','false');}
+    if(event.key === 'Escape') setMenu(false);
+    if(event.key === 'Tab' && $('.rail').classList.contains('is-open') && !document.querySelector('dialog[open]')) {
+      const items = $$('a[href],button:not(:disabled)', $('.rail')), first=items[0], last=items.at(-1);
+      if(event.shiftKey && document.activeElement === first) {event.preventDefault();last.focus();}
+      else if(!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
+    }
   });
   $$('dialog').forEach(dialog => dialog.addEventListener('click',event => {if(event.target === dialog) {const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) dialog.close();}}));
   window.addEventListener('hashchange',navigate);
+  window.addEventListener('resize',() => {if(innerWidth > 720) setMenu(false,false);});
   document.addEventListener('visibilitychange',() => {if(!document.hidden) poll();});
   window.addEventListener('beforeunload',event => {if(!state.shutdown && (state.dirty.size || state.lan !== state.baselineLan)) {event.preventDefault();event.returnValue='';}});
   navigate();poll();

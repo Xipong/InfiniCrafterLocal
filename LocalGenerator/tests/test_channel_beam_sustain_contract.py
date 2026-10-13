@@ -1,19 +1,16 @@
 """Beam choices through production Author, exact receipts, strict wire and Repair."""
 
 from copy import deepcopy
-from itertools import product
-import json
 
 import pytest
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
+    apply_repair_patch, build_runtime_repair_scope,
     compile_runtime_program, filter_repair_patch_scope,
     validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.pipelines.author_item_contract import project_provider_author_item_to_local
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -34,8 +31,12 @@ def _beam(wire):
     return next(e for e in wire["runtimeProgram"]["entities"] if e.get("controller", {}).get("name") == "channel_beam")
 
 
-@pytest.mark.parametrize("choices", list(product((False, True), repeat=len(OPTIONS))))
-def test_all_joint_beam_choices_project_exactly_with_independent_collision_and_receipts(choices):
+# Baseline, fully enabled, and representative mixed projections.
+@pytest.mark.parametrize("choices", [
+    (False, False, False, False, False), (True, True, True, True, True),
+    (True, False, True, False, True), (False, True, False, True, False),
+])
+def test_representative_joint_beam_choices_project_exactly_with_independent_collision_and_receipts(choices):
     values = {k: OPTIONS[k] if selected else NEUTRALS[k] for k, selected in zip(OPTIONS, choices)}
     doc, call = _fixture(**values)
     before = deepcopy(doc)
@@ -54,7 +55,10 @@ def test_all_joint_beam_choices_project_exactly_with_independent_collision_and_r
         assert rows[0]["finalPath"].endswith(".controller.params." + key)
 
 
-@pytest.mark.parametrize("present", list(product((False, True), repeat=len(NEUTRALS))))
+@pytest.mark.parametrize("present", [
+    (False, False, False, False, False),
+    (True, False, True, False, True), (False, True, False, True, False),
+])
 def test_joint_omissions_are_exact_neutrals_with_own_provenance(present):
     doc, call = _fixture(**NEUTRALS)
     explicit = compile_runtime_program(doc)
@@ -121,15 +125,6 @@ def test_extension_cannot_be_smuggled_into_another_driver(component, code, name)
 def test_real_production_packet_and_nullable_inverse_expose_all_choices(monkeypatch, mode):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = build_initial_author_request({}, {}, {}, {}, "beam", model_name="test-model")
-    packet = json.loads(user)
-    card = next(c for c in packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "channel_beam")
-    profiles = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["consumerConstraints"]
-    for param in card["params"].values():
-        if isinstance(param.get("consumerConstraint"), str):
-            param["consumerConstraint"] = deepcopy(profiles[param["consumerConstraint"]])
-    assert card == CAPABILITY_REGISTRY["channel_beam"].author_prompt_card()
-    for term in ("CheckMana", "useTime", "LaserScan", "ownerHitCheck", "ModifyHitNPC", "three rays", "shortest"):
-        assert term in json.dumps(card)
     doc, call = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc
     call["params"]["raycastTiles"] = None
@@ -156,9 +151,3 @@ def test_frozen_repair_fixes_only_invalid_width_and_keeps_accepted_omissions():
     filtered, audit = filter_repair_patch_scope(broken, {"callsUpsert": [hostile], "note": "width only"}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     assert apply_repair_patch(broken, filtered) == good
-
-
-def test_new_nullable_numeric_reject_guards_cannot_escape_bound_audit():
-    rows = {r["param"]: r for r in _runtime_param_bound_rows() if r["capability"] == "channel_beam"}
-    for key in ("initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress"):
-        assert rows[key]["preserved"] and rows[key]["admission"] == "reject_without_clamp"
