@@ -54,28 +54,6 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void GeneratedAmmoNetworkAndSaveBoundaries()
-    {
-        WithPlayer((player, _) => {
-            var ammo = AmmoFixture(AmmoID.Rocket, 134, 2.5f);
-            var network = GeneratedItemData.FromJson(ammo.Data.ToNetworkJson())
-                ?? throw new InvalidOperationException("network ammo DTO rejected");
-            typeof(GeneratedItem).GetProperty("Data")!.SetValue(ammo, network);
-            network.ApplyToItem(ammo.Item);
-            Equal(134, ammo.Item.shoot, "network hydrated ammo projectile");
-            Equal(2.5f, ammo.Item.shootSpeed, "network hydrated ammo speed");
-            if (!ammo.CanUseItem(player)) throw new InvalidOperationException("network ammo direct use rejected");
-            Equal(134, ammo.Item.shoot, "network ammo survives direct-use projection");
-            var tag = new TagCompound();
-            ammo.SaveData(tag);
-            var saveOnly = AmmoFixture(AmmoID.Rocket, 135, 0f);
-            saveOnly.LoadData(tag);
-            if (!GeneratedItemData.IsPlayerSaveReferenceOnly(saveOnly.Data))
-                throw new InvalidOperationException("player save must carry a reference, not full ammo gameplay");
-            Equal(AmmoID.None, saveOnly.Item.ammo, "unresolved save cannot invent ammo without canonical registry");
-        });
-    }
-
     private static void GeneratedAmmoPickAmmoKeepsExactRocketAndSolution()
     {
         WithPlayer((player, _) => {

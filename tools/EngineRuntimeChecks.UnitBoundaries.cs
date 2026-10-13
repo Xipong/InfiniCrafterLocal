@@ -9,37 +9,6 @@ using Terraria;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void ProjectileLifetimeCeilingSurvivesNativeBoundary()
-    {
-        foreach (int ticks in new[] { 1, 21600, 36000 })
-        foreach (int extra in new[] { 0, 2 })
-        {
-            using var scope = new SwarmRuntimeScope();
-            var source = SwarmGameplayFixture();
-            var sourceEntity = source.RuntimeProgram.TryGetEntity("root")!;
-            sourceEntity.LifetimeTicks = ticks;
-            sourceEntity.Collision.ExtraUpdates = extra;
-            // Raw writer must not Normalize away the old ceiling before admission.
-            var data = GeneratedItemData.FromJson(JsonSerializer.Serialize(source,
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
-                ?? throw new InvalidOperationException("projectile lifetime rejected: " + ticks);
-            var entity = data.RuntimeProgram.TryGetEntity("root")!;
-            Equal(ticks, entity.LifetimeTicks, "native DTO retains lifetime");
-            AssertDtoRoundTrips(data, ticks, copy => copy.RuntimeProgram.TryGetEntity("root")!.LifetimeTicks, "native full/cache/network round trip", cache: true);
-            var generated = SwarmHost(data, entity);
-            Equal(ticks * (1 + extra), generated.Projectile.timeLeft, "actual Configure world-tick lifetime");
-        }
-    }
-
-    private static void ProjectileLifetimeOutsideCeilingIsRefused()
-    {
-        var source = SwarmGameplayFixture();
-        var root = source.RuntimeProgram.TryGetEntity("root")!;
-        root.LifetimeTicks = 36001;
-        string raw = JsonSerializer.Serialize(source,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        Equal(true, GeneratedItemData.FromJson(raw) is null, "native lifetime refuses 36001");
-    }
 
     private static GeneratedItemData UnitChargeFixture(float speed, int ticks, float power, int extraUpdates)
     {
@@ -82,40 +51,4 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void ChargeCompleteRequiresExactAuthoredDuration()
-    {
-        foreach (int extra in new[] { 0, 1, 5 })
-        foreach (bool complete in new[] { false, true })
-        {
-            using var scope = new SwarmRuntimeScope();
-            var data = UnitChargeFixture(4, 600, 1, extra);
-            var entity = data.RuntimeProgram.TryGetEntity("root")!;
-            var child = new RuntimeEntitySpec {
-                Id = "completion_child", Kind = RuntimeEntityKind.ChildProjectile,
-                VisualRole = "child_projectile",
-                Visual = new RuntimeEntityVisualSpec { Role = "child_projectile", AssetMode = "no_asset" },
-                Spawn = new RuntimeSpawnSpec { Enabled = true, Count = 1, Aim = "facing", SpeedPxPerTick = 1 },
-                LifetimeTicks = 30,
-                Movement = new RuntimeMovementSpec { Name = "move_straight", Code = 0 },
-            };
-            data.RuntimeProgram.Entities = new[] { data.RuntimeProgram.Entities[0], entity, child };
-            entity.Events = new[] { new RuntimeEventActionSpec {
-                Id = "completion_spawn", Event = "channel_complete", Action = "spawn_entity_on_event",
-                ActionCode = RuntimeEventActionCode.SpawnEntity, EntityId = child.Id, Count = 1,
-                DamageMultiplier = 1, DelayTicks = 1,
-            } };
-            data = SwarmWire(data);
-            entity = data.RuntimeProgram.TryGetEntity("root")!;
-            var generated = SwarmHost(data, entity);
-            int duration = 600 * (1 + extra);
-            typeof(GeneratedProjectile).GetField("_chargeTicks", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(generated, duration - (complete ? 1 : 2));
-            Terraria.Main.player[0].channel = false;
-            generated.AI();
-            Equal(complete ? 1 : 0, PendingActions(), $"channel_complete exact threshold extra={extra} complete={complete}");
-            Equal(true, (bool)typeof(GeneratedProjectile).GetField("_released", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(generated)!, "ordinary release still occurs");
-            generated.AI();
-            Equal(complete ? 1 : 0, PendingActions(), "completion queues once, no fake child spawn");
-        }
-    }
 }

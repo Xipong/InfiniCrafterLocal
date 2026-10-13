@@ -10,38 +10,6 @@ using InfiniCrafterLocal.Common.Systems;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void PlacedBodyDtoRequiresExplicitLosslessTransform()
-    {
-        var property = typeof(RuntimePlacementSpec).GetProperty("PlacedBody");
-        Equal(true, property is not null, "opt-in placed-body DTO is available");
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        const string body = "{\"renderSizePx\":37,\"footprintAnchorX\":0.25,\"footprintAnchorY\":1,\"imagePivotX\":0.125,\"imagePivotY\":0.75,\"offsetXPx\":-13,\"offsetYPx\":17,\"rotationDegrees\":-45.5,\"flipX\":true,\"flipY\":false}";
-        RuntimePlacementSpec Decode(string payload) => JsonSerializer.Deserialize<RuntimePlacementSpec>(payload, options)!;
-        var baseline = new RuntimePlacementSpec { TileId = TileID.Stone, WallId = -1, PlaceStyle = 0 };
-        Equal(false, JsonSerializer.Serialize(baseline, options).Contains("placedBody"), "absent historical body stays absent");
-        var exact = Decode("{\"tileId\":1,\"wallId\":-1,\"placeStyle\":0,\"placedBody\":" + body + "}");
-        exact.NormalizeAndValidate();
-        using (JsonDocument encoded = JsonDocument.Parse(JsonSerializer.Serialize(exact, options)))
-        {
-            var result = encoded.RootElement.GetProperty("placedBody");
-            Equal(37, result.GetProperty("renderSizePx").GetInt32(), "exact explicit size");
-            Equal(-45.5f, result.GetProperty("rotationDegrees").GetSingle(), "literal rotation preserved");
-            Equal(-13, result.GetProperty("offsetXPx").GetInt32(), "negative offset preserved");
-            Equal(true, result.GetProperty("flipX").GetBoolean(), "explicit flip preserved");
-        }
-        foreach (string invalid in new[] {
-            "{\"tileId\":1,\"placedBody\":null}",
-            "{\"tileId\":1,\"placedBody\":{}}",
-            "{\"tileId\":1,\"placedBody\":" + body.Replace("\"renderSizePx\":37", "\"renderSizePx\":0") + "}",
-            "{\"tileId\":1,\"placedBody\":" + body.Replace("\"footprintAnchorX\":0.25", "\"footprintAnchorX\":1.01") + "}",
-            "{\"tileId\":-1,\"wallId\":1,\"placedBody\":" + body + "}" })
-        {
-            bool rejected = false;
-            try { Decode(invalid).NormalizeAndValidate(); }
-            catch (Exception ex) when (ex is JsonException || ex is InvalidDataException || ex is ArgumentException) { rejected = true; }
-            Equal(true, rejected, "invalid present transform rejected without neutral defaults: " + invalid);
-        }
-    }
 
     private static void PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork()
     {

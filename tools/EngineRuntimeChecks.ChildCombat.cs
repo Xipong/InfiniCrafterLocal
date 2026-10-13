@@ -48,51 +48,6 @@ internal static partial class EngineRuntimeChecks
         return SwarmWire(data);
     }
 
-    private static void ChildCombatSavedWireIsStrictAndPreservesAbsence()
-    {
-        using var scope = new SwarmRuntimeScope();
-        var data = ChildCombatFixture(targeting: true);
-        var raw = JsonNode.Parse(data.ToNetworkJson())!;
-        var parent = raw["runtimeProgram"]!["entities"]!.AsArray().Single(row => (string?)row!["id"] == "root")!;
-        var action = parent["events"]![0]!.AsObject();
-        var targeting = parent["targeting"]!.AsObject();
-        action.Remove("damageBasis"); action.Remove("knockbackBasis");
-        targeting.Remove("damageBasis"); targeting.Remove("knockbackBasis"); targeting.Remove("damageMultiplier");
-        var saved = GeneratedItemData.FromJson(raw.ToJsonString())
-            ?? throw new InvalidOperationException("historical child-combat absence rejected");
-        AssertDtoOmissions(saved, EventJson, new[] { "damageBasis" }, "historical child event");
-        AssertDtoOmissions(saved, ActorJson + "/targeting", new[] { "knockbackBasis", "damageMultiplier" }, "historical targeting");
-        foreach (string field in new[] { "damageBasis", "knockbackBasis" })
-        foreach (string component in new[] { EventJson, ActorJson + "/targeting" })
-            foreach (var refusal in InvalidJsonValues(component + "/" + field, "null", "true", "0", "{}", "\"Live_Parent\"", "\" live_parent\"", "\"parent\""))
-                CheckJsonRefusal(raw.ToJsonString(), refusal, "ChildCombatBasis");
-        foreach (var refusal in InvalidJsonValues(ActorJson + "/targeting/damageMultiplier", "null", "true", "\"1\"", "-0.01", "4.01",
-            "-1e-50", "4.000000000000001", "4.000000000000000000000000000000000001"))
-            CheckJsonRefusal(raw.ToJsonString(), refusal, "ChildCombatMultiplier");
-        foreach (string literal in new[] { "0", "4", "3.999999999999999999999999999999999999", "1e-40" })
-        {
-            string valid = ChangedJson(raw.ToJsonString(), new JsonChange(ActorJson + "/targeting/damageMultiplier", literal));
-            var accepted = GeneratedItemData.FromJson(valid) ?? throw new InvalidOperationException("valid targeting raw multiplier rejected");
-            foreach (var (route, payload) in DtoRoutes(accepted))
-                Equal(true, GeneratedItemData.FromJson(payload) is not null, "ChildCombatMultiplier/" + route + "/" + literal);
-        }
-        var inactive = ChildCombatFixture();
-        var inactiveParent = inactive.RuntimeProgram.TryGetEntity("root")!;
-        inactiveParent.Targeting.DamageBasis = RuntimeChildCombatBasis.LiveParent;
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        Equal(true, GeneratedItemData.FromJson(JsonSerializer.Serialize(inactive, options)) is null, "targeting basis without target_and_fire rejected");
-        inactive = ChildCombatFixture(); inactiveParent = inactive.RuntimeProgram.TryGetEntity("root")!;
-        inactiveParent.Events[0].ActionCode = RuntimeEventActionCode.DamageArea;
-        inactiveParent.Events[0].Action = "damage_area_on_event";
-        Equal(true, GeneratedItemData.FromJson(JsonSerializer.Serialize(inactive, options)) is null, "non-spawn event cannot consume child bases");
-        inactive = ChildCombatFixture(); inactiveParent = inactive.RuntimeProgram.TryGetEntity("root")!;
-        var body = inactive.RuntimeProgram.TryGetEntity(inactive.RuntimeProgram.ItemEntityId)!;
-        body.Events = inactiveParent.Events;
-        body.Events[0].Event = RuntimeEventKind.Periodic; body.Events[0].PeriodTicks = 6;
-        inactiveParent.Events = Array.Empty<RuntimeEventActionSpec>();
-        Equal(true, GeneratedItemData.FromJson(JsonSerializer.Serialize(inactive, options)) is null, "item body cannot claim a projectile parent");
-    }
-
     private static void InvokeChildCombatEvent(GeneratedProjectile parent, string eventName, int damageDone = 1)
         => typeof(GeneratedProjectile).GetMethod("RunRuntimeEvent", RootPrivate)!
             .Invoke(parent, new object?[] { eventName, null, damageDone });

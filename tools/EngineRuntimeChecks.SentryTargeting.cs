@@ -147,5 +147,4 @@ internal static partial class EngineRuntimeChecks
         Equal(12, budget.Remaining, "remote peer preserves owner ledger");
     }
 
-
 }

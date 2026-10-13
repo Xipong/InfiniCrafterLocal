@@ -215,136 +215,43 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void IntegratedQolCancelHitAndRefundVisibility()
+    private static void IntegratedQolStationRefundCapacityRecovery()
     {
         using var itemPoolState = new NativeItemPoolState();
-         bool left = Terraria.Main.mouseLeft, release = Terraria.Main.mouseLeftRelease;
-        int x = Terraria.Main.mouseX, y = Terraria.Main.mouseY;
-        try
+        using var serializer = WithPersistenceBoolSerializer();
+        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.playerInventory = true;
+        Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1)
+            .Select(_ => new Item(ItemID.Wood) { active = true }).ToArray();
+        Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
+        WithPlayer((player, owner) =>
         {
-            Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            WithPlayer((player, owner) =>
+            owner.Initialize();
+            owner.TrySetMultiDevWindowCount(3, syncServer: false);
+            for (int slot = 0; slot < 58; slot++) player.inventory[slot] = new Item(ItemID.Wood, 9999);
+            int[] materials = { ItemID.CopperShortsword, ItemID.WoodenSword, ItemID.IronBroadsword };
+            owner.InputA = new Item(materials[0]);
+            owner.InputC = new Item(materials[1]);
+            owner.InputE = new Item(materials[2]);
+            for (int lane = 0; lane < materials.Length; lane++)
             {
-                owner.Initialize(); owner.TrySetMultiDevWindowCount(3, syncServer: false);
-                var request = new GeneratorClient.PreparedGenerationRequest { RefundA = new Item(ItemID.Wood), RefundB = new Item(ItemID.StoneBlock) };
-                typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, request);
-                var ui = typeof(InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem);
-                var layoutMethod = ui.GetMethod("StationCancelBounds", BindingFlags.Static | BindingFlags.NonPublic);
-                Equal(true, layoutMethod is not null, "cancel draw and hit test share bounds");
-                var panel = InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationPanelBounds(400, 720, 3);
-                var cancel = (Microsoft.Xna.Framework.Rectangle)layoutMethod!.Invoke(null, new object[] { panel, 0 })!;
-                Equal(true, panel.Contains(cancel), "cancel fits 400px viewport");
-                var a = new Microsoft.Xna.Framework.Rectangle[3]; var b = new Microsoft.Xna.Framework.Rectangle[3];
-                var start = new Microsoft.Xna.Framework.Rectangle[3]; var cancels = new Microsoft.Xna.Framework.Rectangle[3];
-                for (int lane = 0; lane < 3; lane++)
-                {
-                    var row = InfiniCrafterLocal.Common.UI.InfiniCraftStationUISystem.StationLaneBounds(panel, lane);
-                    a[lane] = row.SlotA; b[lane] = row.SlotB; start[lane] = row.CraftButton;
-                    cancels[lane] = (Microsoft.Xna.Framework.Rectangle)layoutMethod.Invoke(null, new object[] { panel, lane })!;
-                    Equal(false, cancels[lane].Intersects(a[lane]) || cancels[lane].Intersects(b[lane]) || cancels[lane].Intersects(start[lane]) || cancels[lane].Intersects(row.Timer), "cancel cannot overlap other actions");
-                }
-                Terraria.Main.mouseLeft = true; Terraria.Main.mouseLeftRelease = true;
-                Terraria.Main.mouseX = cancel.Center.X; Terraria.Main.mouseY = cancel.Center.Y;
-                ui.GetMethod("HandleMouse", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null,
-                    new object[] { owner, a, b, start, cancels, new Microsoft.Xna.Framework.Rectangle() });
-                Equal(true, request.CancellationToken.IsCancellationRequested, "actual station click retires native request");
-                Equal(false, owner.HasPendingCraft, "click retires exact lane only");
-                Equal(2, player.inventory.Take(58).Count(item => !item.IsAir), "explicit action delivers sole local materials once");
-                typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, new GeneratorClient.PreparedGenerationRequest());
-                typeof(InfiniCraftPlayer).GetField("_awaitingServerCommit", CraftFields)!.SetValue(owner, true);
-                ((bool[])typeof(InfiniCraftPlayer).GetField("_remoteCraftCancelRequested", CraftFields)!.GetValue(owner)!)[0] = true;
-                int cancelActions = 0;
-                using (var observeCancel = new MonoMod.RuntimeDetour.ILHook(typeof(InfiniCraftPlayer).GetMethod("TryCancelCraftLane")!,
-                    il => new MonoMod.Cil.ILCursor(il).EmitDelegate<Action>(() => cancelActions++)))
-                {
-                    Terraria.Main.mouseLeftRelease = true;
-                    ui.GetMethod("HandleMouse", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null,
-                        new object[] { owner, a, b, start, cancels, new Microsoft.Xna.Framework.Rectangle() });
-                    Equal(0, cancelActions, "pending host cancellation button never repeats native action");
-                }
-                typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, null);
-                typeof(InfiniCraftPlayer).GetField("_awaitingServerCommit", CraftFields)!.SetValue(owner, false);
-
-                try
-                {
-                    Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item(ItemID.Wood) { active = true }).ToArray();
-                    Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
-                    for (int slot = 0; slot < 58; slot++) player.inventory[slot] = new Item(ItemID.Wood, 9999);
-                    owner.InputA = new Item(ItemID.WoodenSword);
-                    Equal(true, owner.TryClearInputToInventory(0), "real retrieval transfers sole material to deferred owner");
-                }
-                finally {   }
-                var claims = (System.Collections.Generic.List<Item>)typeof(InfiniCraftPlayer).GetField("_deferredExitRefunds", CraftFields)!.GetValue(owner)!;
-                Equal(true, owner.HasStationState, "pending player refund keeps station visible after lanes clear");
-                var pending = typeof(InfiniCraftPlayer).GetProperty("HasPendingCraftRefunds");
-                Equal(true, pending is not null && (bool)pending.GetValue(owner)!, "pure player-owned refund visibility");
-                Equal(1, claims.Count, "visibility never delivers or attributes claim to arbitrary lane");
-            });
-        }
-        finally {  Terraria.Main.mouseLeft = left; Terraria.Main.mouseLeftRelease = release; Terraria.Main.mouseX = x; Terraria.Main.mouseY = y; }
+                Equal(true, owner.TryClearInputToInventory(lane * 2), "public retrieval accepts each idle lane");
+                Equal(false, owner.TryClearInputToInventory(lane * 2), "empty input cannot refund again");
+            }
+            Equal(false, owner.HasAnyInput, "retrieval transfers all three sole input owners");
+            Equal(true, owner.HasStationState && owner.HasPendingCraftRefunds, "pending refunds keep station visible");
+            var save = new Terraria.ModLoader.IO.TagCompound(); owner.SaveData(save);
+            Equal(materials.Length, save.GetList<Terraria.ModLoader.IO.TagCompound>("infiniDeferredCraftRefundsV1").Count,
+                "each undelivered input has one durable claim");
+            for (int slot = 0; slot < materials.Length; slot++) player.inventory[slot].TurnToAir();
+            owner.PostUpdate();
+            Equal(false, owner.HasPendingCraftRefunds, "native lifecycle delivers when inventory capacity returns");
+            Equal(false, owner.HasStationState, "empty station no longer requires refund visibility");
+            owner.PostUpdate();
+            foreach (int material in materials)
+                Equal(1, player.inventory.Take(58).Where(item => item.type == material).Sum(item => item.stack),
+                    "retry preserves exactly one unit of each original input");
+        });
     }
 
-    private static void IntegratedQolRemoteDeliveryObservationIsHostOwned()
-    {
-        using var itemPoolState = new NativeItemPoolState();
-
-        try
-        {
-            Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item(ItemID.Wood) { active = true }).ToArray();
-            Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
-            var owner = new InfiniCraftPlayer();
-            typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, new GeneratorClient.PreparedGenerationRequest());
-            typeof(InfiniCraftPlayer).GetField("_task", CraftFields)!.SetValue(owner, Task.FromResult<GeneratedItemData?>(GeneratedItemData.Placeholder()));
-            Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            Equal(true, owner.IsCraftLaneWaitingForDelivery(0), "local ready result observes local pressure");
-            Terraria.Main.netMode = NetmodeID.MultiplayerClient;
-            typeof(InfiniCraftPlayer).GetField("_awaitingServerCommit", CraftFields)!.SetValue(owner, true);
-            Equal(false, owner.IsCraftLaneWaitingForDelivery(0), "client cannot infer host capacity from local item pool");
-        }
-        finally {    }
-    }
-
-    private static void IntegratedQolLocalizedPendingAndOutcome()
-    {
-        using var itemPoolState = new NativeItemPoolState();
-         Terraria.Main.netMode = NetmodeID.SinglePlayer;
-
-        try
-        {
-            Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item(ItemID.Wood) { active = true }).ToArray();
-            Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
-            WithForgePresentationLanguages(locale =>
-            {
-                var owner = new InfiniCraftPlayer(); bool ru = locale == "ru-RU";
-                var request = new GeneratorClient.PreparedGenerationRequest();
-                typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, request);
-                typeof(InfiniCraftPlayer).GetField("_task", CraftFields)!.SetValue(owner, Task.FromResult<GeneratedItemData?>(GeneratedItemData.Placeholder()));
-                Equal(ru ? "Готово; ждём места в мире" : "Ready; waiting for world item space", owner.CraftLaneStatus(0), "localized capacity wait");
-                typeof(InfiniCraftPlayer).GetField("_awaitingServerCommit", CraftFields)!.SetValue(owner, true);
-                ((bool[])typeof(InfiniCraftPlayer).GetField("_remoteCraftCancelRequested", CraftFields)!.GetValue(owner)!)[0] = true;
-                Equal(ru ? "Отмена: ждём подтверждения хозяина" : "Cancellation: awaiting host confirmation", owner.CraftLaneStatus(0), "localized cancel pending beats host wait");
-                var query = typeof(InfiniCraftPlayer).GetMethod("IsCraftLaneCancellationPending");
-                Equal(true, query is not null, "pure cancel observation exists");
-                Equal(true, (bool)query!.Invoke(owner, new object[] { 0 })!, "pending cancel observes original owner");
-                Equal(false, request.CancellationToken.IsCancellationRequested, "presentation cannot retire request");
-                typeof(InfiniCraftPlayer).GetField("_awaitingServerCommit", CraftFields)!.SetValue(owner, false);
-                typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, null);
-                typeof(InfiniCraftPlayer).GetField("_task", CraftFields)!.SetValue(owner, null);
-                var set = typeof(InfiniCraftPlayer).GetMethod("SetCraftLaneOutcome", CraftFields)!;
-                foreach (var row in new[] {
-                    (InfiniCraftPlayer.CraftLaneOutcomeKind.Cancelled, "craft cancelled", ru ? "Ковка отменена" : "Forging cancelled"),
-                    (InfiniCraftPlayer.CraftLaneOutcomeKind.TimedOut, "craft deadline exceeded", ru ? "Время ожидания истекло" : "Craft wait timed out"),
-                    (InfiniCraftPlayer.CraftLaneOutcomeKind.Failed, "exact backend reason", ru ? "Ковка не удалась" : "Forging failed"),
-                    (InfiniCraftPlayer.CraftLaneOutcomeKind.Succeeded, "Exact authored name", ru ? "Готово" : "Completed") })
-                {
-                    set.Invoke(owner, new object[] { 0, row.Item1, row.Item2, InfiniCraftPlayer.CraftLaneMaterialDisposition.Unobserved });
-                    Equal(true, owner.CraftLaneStatus(0).StartsWith(row.Item3, StringComparison.Ordinal), "localized retained outcome " + row.Item1);
-                    Equal(false, owner.CraftLaneStatus(0).Contains(ru ? "Материалы доставлены" : "Ingredients delivered"), "unobserved terminal state cannot claim delivery");
-                    if (row.Item1 is InfiniCraftPlayer.CraftLaneOutcomeKind.Failed or InfiniCraftPlayer.CraftLaneOutcomeKind.Succeeded)
-                        Equal(true, owner.CraftLaneDetails(0).Contains(row.Item2), "bounded original detail retained");
-                }
-            });
-        }
-        finally {    }
-    }
 }

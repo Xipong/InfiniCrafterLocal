@@ -163,7 +163,6 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-
     private sealed record EquipmentCase(string Group, string Field, float[] Values,
         Func<Player, float>? Observe = null, DamageClass? DamageClass = null);
 

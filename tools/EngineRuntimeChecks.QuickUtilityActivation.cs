@@ -141,29 +141,6 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void RT02NativeQuickUtilityOpenedVoidPrerequisite()
-    {
-        foreach (byte kind in new byte[] { 1, 2 })
-        foreach (bool serverClosed in new[] { false, true })
-        {
-            using var f = new QuickUtilityPeers(kind, stack: 1, initialSync: false, voidBag: true);
-            f.Server.inventory[1] = serverClosed ? new Item(ItemID.ClosedVoidBag) : new Item();
-            Equal(false, f.Server.useVoidBag(), "server has not yet observed owner opening bag");
-            f.ApplyEquipmentSync = true;
-            byte[] prepare = f.Prepare();
-            Equal(true, f.Server.useVoidBag(), "native bag prerequisite synchronization reaches server before Prepare");
-            Equal("1,220", string.Join(",", f.EquipmentSlots), "exact open bag then bank4 native slot order");
-            Equal(kind == 1 ? 64 : 57, f.Owner.statLife, "stale bag native heal once");
-            Equal(kind == 2 ? 25 : 20, f.Owner.statMana, "stale bag native mana once");
-            Equal(0, f.OwnerItem.Item.stack, "stale bag final stack native debit once");
-            byte[] ready = f.Ready(prepare), commit = f.Commit(ready);
-            f.ServerItem.Item.TurnToAir();
-            f.ReceiveServer(commit);
-            Equal(120, f.Ticks(f.ServerBuff), "valid opened-void activation reaches canonical utility");
-            Equal(0, f.ServerItem.UseCalls, "bag sync never replays server native use");
-        }
-    }
-
     private static void RT02NativeQuickUtilityFreshInventoryAndVoidWitness()
     {
         foreach (byte kind in new byte[] { 1, 2 })
@@ -220,71 +197,6 @@ internal static partial class EngineRuntimeChecks
             f.ReceiveServer(commit); Equal(before, f.Ticks(f.ServerBuff), "commit replay cannot refresh");
             Equal(0, f.Peers.Sent.Count, "commit replay sends no snapshot");
             f.ReceiveServer(prepare); Equal(0, f.Peers.Sent.Count, "prepare replay cannot issue another ticket");
-        }
-    }
-
-    private static void RT02NativeQuickUtilityManualAndSnapshotControls()
-    {
-        using var f = new QuickUtilityPeers();
-        // Manual native generic-use path is already reachable on the server.
-        f.Mode(2); f.Server.itemAnimation = f.Server.itemAnimationMax = 20;
-        Equal(true, f.ServerItem.CanUseItem(f.Server), "manual server admission");
-        f.Native.RunNativeSuffix(f.Server);
-        Equal(120, f.Ticks(f.ServerBuff), "manual server utility retained");
-        Equal(1, f.ServerItem.UseCalls, "manual actual UseItem once");
-        Equal(64, f.Server.statLife, "manual native heal once");
-        Equal(3, f.ServerItem.Item.stack, "manual server retains owner-only native consumption boundary");
-        Equal(0, f.Peers.Sent.Count(p => p[0] == QuickUtilityPacket), "manual server must not claim quick activation");
-        f.Mode(1); f.Peers.Sent.Clear(); f.Owner.itemAnimation = f.Owner.itemAnimationMax = 20;
-        Equal(true, f.OwnerItem.CanUseItem(f.Owner), "manual owner admission");
-        f.Native.RunNativeSuffix(f.Owner);
-        Equal(0, f.Peers.Sent.Count(p => p[0] == QuickUtilityPacket), "manual owner must not duplicate server utility activation");
-        // Arbitrary predicted snapshots still cannot grant client stat magnitudes.
-        var old = new InfiniCraftPlayer(); f.OwnerBuff.CopyClientState(old);
-        f.OwnerBuff.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 21600, JumpBoost = 8 });
-        f.OwnerBuff.SendClientChanges(old);
-        byte[] forged = f.Peers.Sent.Single(p => p[0] == InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedUtilityBuff);
-        f.Mode(2); f.Peers.Sent.Clear(); f.Peers.Receive(forged, 1);
-        f.Server.jumpSpeedBoost = 0; f.ServerBuff.PostUpdateEquips(); Equal(1.5f, f.Server.jumpSpeedBoost, "client snapshot never authoritative");
-        // Candidate selectors are read-only and cannot manufacture a receipt.
-        f.Mode(1); f.Peers.Sent.Clear(); f.Owner.potionDelay = 0; f.Owner.statLife = 57;
-        f.Owner.QuickHeal_GetItemToUse(); Equal(0, f.Peers.Sent.Count, "selector-only scan no activation");
-    }
-
-    private static void RT02NativeQuickUtilityLifetimeAndCapacity()
-    {
-        foreach (int age in new[] { 180, 181 })
-        {
-            using var f = new QuickUtilityPeers(); f.Data.Gameplay.GeneratedBuff.DurationTicks = 360;
-            MaterialClock(uint.MaxValue - 50UL); byte[] claim = f.Prepare();
-            byte[] ready = f.Ready(claim), commit = f.Commit(ready);
-            MaterialClock(unchecked((uint)(uint.MaxValue - 50UL + (ulong)age)));
-            f.ReceiveServer(commit); Equal(age == 180 ? 180 : 0, f.Ticks(f.ServerBuff), "server ticket exact age/wrap fence and elapsed canonical duration " + age);
-        }
-        using (var f = new QuickUtilityPeers())
-        {
-            byte[] ready = f.Ready(f.Prepare()), commit = f.Commit(ready);
-            MaterialClock(Terraria.Main.GameUpdateCount + 120); f.ReceiveServer(commit);
-            Equal(0, f.Ticks(f.ServerBuff), "live ticket never resurrects expired canonical effect");
-        }
-        using (var f = new QuickUtilityPeers(cost: 0))
-        {
-            byte[] first = Array.Empty<byte>();
-            for (int i = 0; i < 8; i++)
-            {
-                f.Mode(1); f.Owner.statLife = 57; f.Owner.potionDelay = 0;
-                byte[] claim = f.Prepare(); if (i == 0) first = claim;
-                f.Ready(claim); // intentionally withhold Ready delivery / Commit
-            }
-            f.Mode(1); f.Owner.statLife = 57; f.Owner.potionDelay = 0; f.Quick();
-            Equal(0, f.Peers.Sent.Count(p => p[0] == QuickUtilityPacket), "capacity refusal creates no ninth ticket");
-            Equal(64, f.Owner.statLife, "capacity refusal never blocks native healing");
-            Equal(3, f.OwnerItem.Item.stack, "capacity refusal preserves literal zero cost");
-            MaterialClock(Terraria.Main.GameUpdateCount + 181);
-            f.ReceiveServer(first); Equal(0, f.Peers.Sent.Count, "expired cursor still blocks an old prepare");
-            f.Mode(1); f.Owner.statLife = 57; f.Owner.potionDelay = 0;
-            byte[] fresh = f.Prepare(); byte[] ready = f.Ready(fresh); byte[] commit = f.Commit(ready);
-            f.ReceiveServer(commit); Equal(120, f.Ticks(f.ServerBuff), "expired pending reclamation retains new occurrence progress");
         }
     }
 

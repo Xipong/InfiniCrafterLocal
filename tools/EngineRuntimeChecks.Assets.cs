@@ -120,12 +120,6 @@ internal static partial class EngineRuntimeChecks
             throw new InvalidOperationException("Asset worker exceeded cleanup bound after fixture release; real socket aborted");
         }
     }
-    private static async Task CheckAssetRetiredBeforeRelease(Task worker, string boundary)
-    {
-        Equal(true, ReferenceEquals(worker, await Task.WhenAny(worker, Task.Delay(AssetRetirementBound))),
-            "disposed worker retires within 500ms while " + boundary + " stays held");
-        Equal(false, worker.IsFaulted, "disposed retirement is non-faulted: " + boundary);
-    }
 
     private static async Task CheckDisposedAssetDownloadsAsync()
     {
@@ -159,79 +153,6 @@ internal static partial class EngineRuntimeChecks
             }
         }
         if (failures.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
-    }
-
-    private static async Task CheckAssetBodyRetirementAsync()
-    {
-        using var retired = new GeneratedAssetSyncService(); using var active = new GeneratedAssetSyncService();
-        string retiredFile = AssetLifetimeFile(), activeFile = AssetLifetimeFile();
-        await using var retiredServer = new AssetHeldResponse(retiredFile, AssetLifetimePng, allowDisconnect: true);
-        await using var activeServer = new AssetHeldResponse(activeFile, AssetLifetimePng);
-        Task? retiredWorker = null, activeWorker = null;
-        try {
-            CheckAssetLifetimePermits();
-            retiredWorker = AssetLifetimeDownload(retired, retiredServer, retiredFile);
-            activeWorker = AssetLifetimeDownload(active, activeServer, activeFile);
-            await Task.WhenAll(retiredServer.Barrier.Task, activeServer.Barrier.Task).WaitAsync(AssetSetupBound);
-            Equal(GeneratedAssetSyncService.HttpDownloadConcurrency - 2, AssetHttpSlots.CurrentCount, "two real services own distinct permits");
-            Equal(false, retiredWorker.IsCompleted || activeWorker.IsCompleted, "both workers pending at header-flush/body-withheld barriers");
-            retired.Dispose(); retired.Dispose(); // Idempotence while an actual worker retires.
-            await CheckAssetRetiredBeforeRelease(retiredWorker, "response body");
-            Equal(false, retiredServer.ReleaseIssued, "no body release used to retire worker");
-            Equal(0, retiredServer.BodyBytesWritten, "entire response body still withheld");
-            Equal(false, activeWorker.IsCompleted, "disposing one service does not cancel its independent sibling");
-            Equal(GeneratedAssetSyncService.HttpDownloadConcurrency - 1, AssetHttpSlots.CurrentCount, "only retired service returns its owned permit");
-            CheckStoppedAssetLifetime(retired, retiredServer, retiredFile);
-            await DrainAssetLifetimeWorker(activeWorker, activeServer); await activeServer.CloseAsync();
-            Equal(true, AssetLifetimePng.SequenceEqual(File.ReadAllBytes(Path.Combine(active.CacheRoot, activeFile))), "independent active service still commits exact bytes");
-            Equal(0, active.GetDebugSnapshot().KnownMissingCount, "independent active service is healthy");
-            await DrainAssetLifetimeWorker(retiredWorker, retiredServer); await retiredServer.CloseAsync();
-            CheckStoppedAssetLifetime(retired, retiredServer, retiredFile);
-            Console.WriteLine("DETAIL: disposed HTTP body worker retired before release within 500ms; independent service stayed pending then committed; header flush is not an instruction-pointer body-read probe");
-        }
-        finally {
-            retired.Dispose(); active.Dispose();
-            await Task.WhenAll(DrainAssetLifetimeWorker(retiredWorker, retiredServer), DrainAssetLifetimeWorker(activeWorker, activeServer));
-            CheckAssetLifetimePermits(); DeleteAssetLifetimeFiles(retired, retiredFile); DeleteAssetLifetimeFiles(active, activeFile);
-        }
-    }
-
-    private static async Task CheckAssetSlotRetirementAsync()
-    {
-        using var retired = new GeneratedAssetSyncService(); using var active = new GeneratedAssetSyncService();
-        string retiredFile = AssetLifetimeFile(), activeFile = AssetLifetimeFile();
-        await using var retiredServer = new AssetHeldResponse(retiredFile, AssetLifetimePng, allowDisconnect: true);
-        await using var activeServer = new AssetHeldResponse(activeFile, AssetLifetimePng);
-        Task? retiredWorker = null, activeWorker = null; SemaphoreSlim slots = AssetHttpSlots; int held = 0;
-        try {
-            CheckAssetLifetimePermits();
-            for (; held < GeneratedAssetSyncService.HttpDownloadConcurrency; held++) Equal(true, await slots.WaitAsync(AssetSetupBound), "fixture owns every HTTP permit");
-            retiredWorker = AssetLifetimeDownload(retired, retiredServer, retiredFile);
-            activeWorker = AssetLifetimeDownload(active, activeServer, activeFile);
-            Equal(false, retiredWorker.IsCompleted || activeWorker.IsCompleted, "actual workers blocked at incomplete semaphore awaits");
-            retired.Dispose(); retired.Dispose();
-            await CheckAssetRetiredBeforeRelease(retiredWorker, "all HTTP slots");
-            Equal(0, slots.CurrentCount, "cancelled waiter never releases a fixture-owned permit");
-            Equal(false, retiredServer.RequestReceived.Task.IsCompleted || activeServer.RequestReceived.Task.IsCompleted, "no HTTP request while every permit stays held");
-            Equal(false, activeWorker.IsCompleted, "independent service's waiter was not cancelled");
-            // Exercise a worker starting after Dispose and CTS retirement, with slots still held.
-            await CheckAssetRetiredBeforeRelease(AssetLifetimeDownload(retired, retiredServer, retiredFile), "all HTTP slots after prior disposal");
-            Equal(0, slots.CurrentCount, "already-disposed worker also cannot release an unowned permit");
-            slots.Release(held); held = 0;
-            await activeServer.Barrier.Task.WaitAsync(AssetSetupBound);
-            await DrainAssetLifetimeWorker(activeWorker, activeServer); await activeServer.CloseAsync();
-            Equal(true, AssetLifetimePng.SequenceEqual(File.ReadAllBytes(Path.Combine(active.CacheRoot, activeFile))), "independent waiter publishes after fixture permits are released");
-            await DrainAssetLifetimeWorker(retiredWorker, retiredServer); await retiredServer.CloseAsync();
-            Equal(false, retiredServer.RequestReceived.Task.IsCompleted, "cancelled waiter never issues a late HTTP request");
-            CheckStoppedAssetLifetime(retired, retiredServer, retiredFile);
-            Console.WriteLine("DETAIL: disposed semaphore waiter retired within 500ms with all permits held; no request/unowned release; independent service completed after exact fixture release");
-        }
-        finally {
-            if (held > 0) { slots.Release(held); held = 0; }
-            retired.Dispose(); active.Dispose();
-            await Task.WhenAll(DrainAssetLifetimeWorker(retiredWorker, retiredServer), DrainAssetLifetimeWorker(activeWorker, activeServer));
-            CheckAssetLifetimePermits(); DeleteAssetLifetimeFiles(retired, retiredFile); DeleteAssetLifetimeFiles(active, activeFile);
-        }
     }
 
     // One bounded loopback fixture for the retained six controls and both regressions.

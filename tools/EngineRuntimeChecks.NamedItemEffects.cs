@@ -15,6 +15,20 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void CheckNamedEffectsDto()
+    {
+        var source = NamedItemEffectsFixture();
+        var copy = GeneratedItemData.FromJson(source.ToNetworkJson())
+            ?? throw new InvalidOperationException("named effects rejected by public deserializer");
+        Equal("alternate_effects", copy.RuntimeProgram.Bindings[1].UsePolicy.Action.EffectGroupId,
+            "binding retains authored effect group");
+        Equal(35, copy.RuntimeProgram.EffectGroups![1].HealMana, "authored effect survives serialization");
+        var missing = System.Text.Json.Nodes.JsonNode.Parse(source.ToNetworkJson())!;
+        missing["runtimeProgram"]!["bindings"]![0]!["usePolicy"]!["action"]!["effectGroupId"] = "missing";
+        Equal(true, GeneratedItemData.FromJson(missing.ToJsonString()) is null, "dangling effect group refuses");
+    }
+
+
     private static GeneratedItemData NamedItemEffectsFixture()
     {
         var data = MobilityConsumptionFixture("", 1);
@@ -169,6 +183,5 @@ internal static partial class EngineRuntimeChecks
             Equal(0, (int)ticks.GetValue(generated)!, "effect expires by authored duration after release");
         });
     }
-
 
 }
