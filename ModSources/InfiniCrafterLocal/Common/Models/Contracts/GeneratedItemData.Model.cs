@@ -196,7 +196,12 @@ public sealed class GeneratedParentSummarySpec
         Identity = Bounded(Identity, 180);
         Description = BoundedReport(Description, 4000);
         PlayerExperience = BoundedReport(PlayerExperience, 3000);
-        NotableEffects = BoundedArray(NotableEffects, 12, 280);
+        // These are copied Author behavior reports with the same code-point bound.
+        NotableEffects = (NotableEffects ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => BoundedReport(x, 280))
+            .Take(12)
+            .ToArray();
         RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
         RuntimeEntityIds = BoundedArray(RuntimeEntityIds, 24, 48);
     }

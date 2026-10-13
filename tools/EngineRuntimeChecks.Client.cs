@@ -13,6 +13,49 @@ using InfiniCrafterLocal.Common.Services;
 internal static partial class EngineRuntimeChecks
 {
 
+    private static void ParentSummaryUnicodeRoundtrip()
+    {
+        using var actorState = new NativeActorState();
+        // Author behaviorChecks allow 280 Unicode code points, not UTF-16 units.
+        string boundary = new string('ж', 279) + "🌟";
+        string supplementary = string.Concat(Enumerable.Repeat("🌟", 280));
+        var original = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+        original.Id = "parent_unicode_probe";
+        original.Name = "Unicode parent";
+        original.SourceMode = "test_fixture";
+        original.GeneratedParentSummary.NotableEffects = new[] {
+            boundary, supplementary, "  ASCII control  ", "   ", boundary + "overflow",
+        }.Concat(Enumerable.Repeat("Remaining effect", 12)).ToArray();
+        // Serialize without pre-normalization: exercise actual incoming JSON admission.
+        string input = JsonSerializer.Serialize(original, new JsonSerializerOptions {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        });
+        var data = InfiniCrafterLocal.Common.Models.GeneratedItemData.FromJson(input)
+            ?? throw new InvalidOperationException("unicode parent fixture rejected");
+        var item = new Terraria.Item();
+        item.SetDefaults(Terraria.ID.ItemID.WoodenSword);
+        // Real GeneratedItem hooks on a vanilla-allocated host; no content registration.
+        var host = new InfiniCrafterLocal.Content.Items.GeneratedItem();
+        typeof(Terraria.ModLoader.ModType<Terraria.Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(host, item);
+        typeof(Terraria.Item).GetProperty("ModItem")!.SetValue(item, host);
+        typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetProperty("Data")!.SetValue(host, data);
+        data.ApplyToItem(item);
+        string payload = new GeneratorClient().Prepare(item, item,
+            new Terraria.Player { name = "unicode_parent_probe" }).PayloadJson;
+        using var next = JsonDocument.Parse(payload);
+        foreach (string side in new[] { "itemA", "itemB" })
+        {
+            var effects = next.RootElement.GetProperty(side).GetProperty("generatedData")
+                .GetProperty("generatedParentSummary").GetProperty("notableEffects");
+            Equal(12, effects.GetArrayLength(), "summary item count remains bounded");
+            Equal(boundary, effects[0].GetString(), "accepted boundary never splits a surrogate");
+            Equal(supplementary, effects[1].GetString(), "accepted supplementary prose is retained");
+            Equal("ASCII control", effects[2].GetString(), "existing whitespace normalization retained");
+            Equal(boundary, effects[3].GetString(), "overbound prose clips at 280 code points");
+        }
+        Equal(boundary, original.GeneratedParentSummary.NotableEffects[0], "incoming source unchanged");
+    }
+
     private static void GeneratedParentPrefixIsRequestOnly()
     {
         using var actorState = new NativeActorState();
