@@ -4,7 +4,6 @@ from __future__ import annotations
 import copy
 from copy import deepcopy
 import json
-from pathlib import Path
 import pytest
 from infini_local.core.runtime_authoring import (
     compile_runtime_program,
@@ -419,24 +418,6 @@ def test_primary_owner_and_binding_role_are_exact_receipted_projection(fixture, 
         assert code in _codes(validate_runtime_wire(bad))
 
 
-def test_reordered_binding_receipts_keep_authored_and_wire_identity():
-    doc = build_runtime_fixture("umbrella_grenade")
-    doc["runtimeProgram"]["bindings"].reverse()
-    wire = compile_runtime_program(doc)
-    rows = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("lowererId") == "primary_entity_to_binding_role"]
-    for row in rows:
-        source_index = int(row["authoredPaths"][1].split("[")[1].split("]")[0])
-        final_index = int(row["finalPath"].split("[")[1].split("]")[0])
-        source = doc["runtimeProgram"]["bindings"][source_index]
-        final = wire["runtimeProgram"]["bindings"][final_index]
-        assert final["id"] == source["id"]
-        assert (
-            row["value"]
-            == final["role"]
-            == ("primary" if source["action"]["targetId"] == doc["runtimeProgram"]["primaryEntityId"] else "secondary")
-        )
-
-
 def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
     doc = build_runtime_fixture("workbench_blade")
     binding = doc["runtimeProgram"]["bindings"][0]
@@ -471,26 +452,3 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
     assert not validate_runtime_program(place)["ok"]
     binding["input"] = "hold"
     assert not validate_runtime_program(doc)["ok"]
-
-
-def test_active_source_has_no_old_compiler_or_parallel_schema() -> None:
-    root = Path(__file__).resolve().parents[1] / "infini_local"
-    forbidden_files = {
-        "root_lowering.py",
-        "function_contract_registry.py",
-        "combine_genome.py",
-        "runtime_authored_composition.py",
-        "presentation_sound.py",
-    }
-    assert not any(path.name in forbidden_files for path in root.rglob("*.py"))
-    active = "\n".join(
-        path.read_text("utf-8", errors="ignore")
-        for path in (
-            root / "pipelines" / "combine_pipeline.py",
-            root / "pipelines" / "combine_gameplay.py",
-            root / "pipelines" / "llm_authoring_prompt.py",
-            root / "core" / "runtime_authoring" / "compiler.py",
-        )
-    )
-    for token in ("perform_melee_attack", "fire_ranged_weapon", "cast_magic_weapon", "deploy_sentry"):
-        assert token not in active

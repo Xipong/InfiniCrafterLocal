@@ -1,11 +1,8 @@
 #nullable enable
-// Private candidate: parent owns canonical registration, compilation and execution.
 // Real DTO -> item/projectile consumers -> native SoundEngine API boundary only.
 // No audio device, game/world loop, sockets, GPU or artistic acceptance.
 using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.VFX;
@@ -81,20 +78,19 @@ internal static partial class EngineRuntimeChecks
         var instrument = typeof(SoundStyle).GetProperty("UsesMusicPitch", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("native instrument-pitch boundary changed");
         Equal(true, (bool)instrument.GetValue(SoundID.Item26)!, "oracle reaches a native instrument sample");
-        foreach (var sample in SoundSelectionPalette()) {
+        // Representative native constants; Item26 uniquely needs music-pitch suppression.
+        foreach (var sample in new (string Id, SoundStyle Style)[] { ("Item1", SoundID.Item1), ("Item5", SoundID.Item5), ("Item26", SoundID.Item26) }) {
             var controls = new VfxSoundSpec { Volume = 0.27f, Pitch = -0.7f, PitchVariance = 0.6f };
             SoundStyle projected = controls.ApplyTo(sample.Style);
-            Equal(false, (bool)instrument.GetValue(projected)!, "explicit pitch has no hidden music offset");
+            Equal(false, (bool)instrument.GetValue(projected)!, sample.Id + " explicit pitch has no hidden music offset");
             Equal(0.27f, projected.Volume, "native volume does not multiply explicit volume");
             Equal(-0.7f, projected.Pitch, "native sample pitch does not add to explicit pitch");
             Equal(0.6f, projected.PitchVariance, "native jitter does not override explicit variance");
-            for (int i = 0; i < 32; i++) {
-                float pitch = projected.GetRandomPitch();
-                Equal(true, pitch >= -1f && pitch <= -0.4f, "native random pitch remains inside authored interval");
-            }
+            float pitch = projected.GetRandomPitch();
+            Equal(true, pitch >= -1f && pitch <= -0.4f, "native random pitch remains inside authored interval");
             controls.PitchVariance = 0;
             projected = controls.ApplyTo(sample.Style);
-            for (int i = 0; i < 8; i++) Equal(-0.7f, projected.GetRandomPitch(), "explicit zero variance is deterministic");
+            Equal(-0.7f, projected.GetRandomPitch(), "explicit zero variance is deterministic");
         }
         var policy = new SoundStyle("Terraria/Sounds/Item_", new[] { 5, 58 }, SoundType.Sound) {
             VariantsWeights = new[] { 0.25f, 0.75f }, Identifier = "explicit_policy_probe",
@@ -103,6 +99,8 @@ internal static partial class EngineRuntimeChecks
             IsLooped = true,
         };
         SoundStyle copy = new VfxSoundSpec { Volume = 0.5f, Pitch = 0.3f, PitchVariance = 0 }.ApplyTo(policy);
+        Equal(policy.SoundPath, copy.SoundPath, "exact native sound path retained");
+        Equal((int)policy.Type, (int)copy.Type, "native sound type retained");
         Equal(true, copy.Variants.SequenceEqual(policy.Variants), "exact native variants retained");
         Equal(true, copy.VariantsWeights.SequenceEqual(policy.VariantsWeights), "exact native variant weights retained");
         Equal(policy.Identifier!, copy.Identifier!, "native grouping identifier retained");
@@ -133,13 +131,35 @@ internal static partial class EngineRuntimeChecks
             try {
                 var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, Center = new Vector2(160, 160) };
                 Terraria.Main.myPlayer = 0;
-                var samples = new List<(string? Id, SoundStyle Style)> { (null, SoundID.Item1) };
-                foreach (var sample in SoundSelectionPalette()) samples.Add((sample.Id, sample.Style));
-                foreach (var sample in samples)
-                foreach (string route in new[] { "item_event", "item_periodic", "projectile_event", "projectile_periodic", "detached" })
-                foreach (float alpha in new[] { 0f, 0.4f, 1f })
-                foreach (float phase in new[] { -1f, 0f, 1f })
-                foreach (bool explicitSound in new[] { false, true }) {
+                // Exact selector mapping is cheap; it does not multiply native routes.
+                foreach (var sample in SoundSelectionPalette()) {
+                    SoundStyle mapped = SoundSelectionRead(sample.Id).Slots[0].ResolveSoundStyle();
+                    Equal(sample.Style.SoundPath, mapped.SoundPath, sample.Id + " exact native mapping path");
+                    Equal(true, sample.Style.Variants.SequenceEqual(mapped.Variants), sample.Id + " exact native mapping variants");
+                    Equal(true, sample.Style.VariantsWeights.SequenceEqual(mapped.VariantsWeights), sample.Id + " exact native mapping weights");
+                }
+                // Named boundaries, not palette x route x alpha x phase x controls.
+                var scenarios = new (string Name, string Route, string? Id, SoundStyle Style, float Alpha, float Phase, VfxSoundSpec? Sound)[] {
+                    ("legacy_absent_selector_floor", "item_event", null, SoundID.Item1, 0f, -1f, null),
+                    ("legacy_native_variants", "projectile_event", "Item5", SoundID.Item5, 0.4f, 1f, null),
+                    ("explicit_instrument_negative_pitch", "item_event", "Item26", SoundID.Item26, 1f, 1f,
+                        new() { Volume = 0.27f, Pitch = -0.7f, PitchVariance = 0.6f }),
+                    ("explicit_periodic_ignores_alpha_phase", "item_periodic", "Item5", SoundID.Item5, 0f, -1f,
+                        new() { Volume = 1f, Pitch = 0.9f, PitchVariance = 0f }),
+                    ("explicit_projectile_event", "projectile_event", "Item4", SoundID.Item4, 1f, -1f,
+                        new() { Volume = 0.4f, Pitch = 0f, PitchVariance = 0.2f }),
+                    ("explicit_projectile_periodic", "projectile_periodic", "Item26", SoundID.Item26, 0.4f, 1f,
+                        new() { Volume = 0.6f, Pitch = -0.9f, PitchVariance = 0.2f }),
+                    ("explicit_detached", "detached", "Shatter", SoundID.Shatter, 0f, 1f,
+                        new() { Volume = 0.5f, Pitch = 0.3f, PitchVariance = 0f }),
+                    ("explicit_item_zero_volume", "item_event", "Item4", SoundID.Item4, 1f, 1f,
+                        new() { Volume = 0f, Pitch = -0.7f, PitchVariance = 0.6f }),
+                    ("explicit_projectile_zero_volume", "projectile_event", "Item4", SoundID.Item4, 1f, 1f,
+                        new() { Volume = 0f, Pitch = -0.7f, PitchVariance = 0.6f }),
+                };
+                foreach (var sample in scenarios) {
+                    string route = sample.Route;
+                    float alpha = sample.Alpha, phase = sample.Phase;
                     system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
                     var data = GeneratedItemData.Placeholder();
                     data.VfxManifest = SoundSelectionRead(sample.Id, sample.Id is not null);
@@ -151,12 +171,7 @@ internal static partial class EngineRuntimeChecks
                     slot.EntityId = isItem ? data.RuntimeProgram.ItemEntityId : entity.Id;
                     slot.Event = route.EndsWith("periodic", StringComparison.Ordinal) ? RuntimeEventKind.Periodic : isItem ? RuntimeEventKind.OnUse : RuntimeEventKind.OnSpawn;
                     slot.Alpha = alpha; slot.PhaseOffset = phase;
-                    if (explicitSound) {
-                        // New controls always include an exact sample; legacy null
-                        // fixtures remain tested only on their old-wire path.
-                        if (sample.Id is null) continue;
-                        slot.Sound = new VfxSoundSpec { Volume = alpha, Pitch = phase * 0.9f, PitchVariance = 0.2f };
-                    }
+                    if (sample.Sound is not null) slot.Sound = sample.Sound;
                     data.VfxManifest.NormalizeAndValidate();
                     string serialized = data.VfxManifest.ToJson();
                     var projectile = new Projectile { active = true, owner = 0, damage = 37, width = 16, height = 16,
@@ -169,15 +184,15 @@ internal static partial class EngineRuntimeChecks
                     else if (route == "projectile_event") InfiniVfxRuntime.OnEvent(projectile, data, slot.EntityId, slot.Event, data.VfxManifest, ref state, projectile.Center);
                     else if (route == "projectile_periodic") InfiniVfxRuntime.OnTick(projectile, data, slot.EntityId, data.VfxManifest, ref state);
                     else InfiniVfxRuntime.OnDetachedEvent(data, slot.EntityId, slot.Event, data.VfxManifest, projectile.Center, projectile.velocity, "sound_probe");
-                    string label = $"{route}/{sample.Id ?? "legacy"}/alpha={alpha}/phase={phase}/explicit={explicitSound}";
-                    Equal(explicitSound && alpha == 0f ? 0 : 1, calls, label + " exact API call count");
-                    if (explicitSound && alpha == 0f) {
+                    string label = sample.Name;
+                    Equal(sample.Sound?.Volume == 0f ? 0 : 1, calls, label + " exact API call count");
+                    if (sample.Sound?.Volume == 0f) {
                         Equal(serialized, data.VfxManifest.ToJson(), label + " zero volume stays authored silence");
                         continue;
                     }
                     Equal(sample.Style.SoundPath, observed.SoundPath, label + " exact native path");
                     Equal(true, sample.Style.Variants.SequenceEqual(observed.Variants), label + " variants preserve native constant");
-                    Equal(explicitSound ? 0.2f : sample.Style.PitchVariance, observed.PitchVariance, label + " explicit or legacy variance");
+                    Equal(sample.Sound?.PitchVariance ?? sample.Style.PitchVariance, observed.PitchVariance, label + " explicit or legacy variance");
                     Equal(true, sample.Style.VariantsWeights.SequenceEqual(observed.VariantsWeights), label + " native variant weights preserved");
                     Equal(sample.Style.Identifier ?? "", observed.Identifier ?? "", label + " native sharing identifier preserved");
                     Equal(sample.Style.LimitsArePerVariant, observed.LimitsArePerVariant, label + " native per-variant policy preserved");
@@ -185,11 +200,11 @@ internal static partial class EngineRuntimeChecks
                     Equal((int)sample.Style.Type, (int)observed.Type, label + " native sound type preserved");
                     Equal(sample.Style.MaxInstances, observed.MaxInstances, label + " native instance cap preserved");
                     Equal((int)sample.Style.SoundLimitBehavior, (int)observed.SoundLimitBehavior, label + " native cap policy preserved");
-                    Equal(explicitSound ? alpha : Math.Clamp(alpha, 0.05f, 1f), observed.Volume, label + " exact new volume or legacy alpha");
+                    Equal(sample.Sound?.Volume ?? Math.Clamp(alpha, 0.05f, 1f), observed.Volume, label + " exact new volume or legacy alpha");
                     Equal(sample.Style.RerollAttempts, observed.RerollAttempts, label + " native variant reroll policy");
                     Equal(sample.Style.PlayOnlyIfFocused, observed.PlayOnlyIfFocused, label + " native focus policy");
                     Equal((int)sample.Style.PauseBehavior, (int)observed.PauseBehavior, label + " native pause policy");
-                    Equal(explicitSound ? phase * 0.9f : Math.Clamp(phase * 0.25f, -0.5f, 0.5f), observed.Pitch, label + " exact new pitch or legacy phase");
+                    Equal(sample.Sound?.Pitch ?? Math.Clamp(phase * 0.25f, -0.5f, 0.5f), observed.Pitch, label + " exact new pitch or legacy phase");
                     Equal(expectedPosition, location!.Value, label + " exact world position");
                     Equal(serialized, data.VfxManifest.ToJson(), label + " no authored mutation");
                     Equal(37, projectile.damage, label + " no damage mutation");

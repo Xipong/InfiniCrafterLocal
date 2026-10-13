@@ -13,6 +13,11 @@ and source authentication, malformed-output refusal, exact frozen Repair closure
 GUI nonblocking/latest-result behavior, and settings/cache preservation scenarios.
 Archived response fixtures are unchanged. This is a pragmatic portfolio change,
 not a claim that every historical microassertion has an equivalent replacement.
+The unused GUI source scraper and its self-test, image-executor name/AST guards,
+old compiler filename/token checks and duplicate binding-reordering check are
+retired. HTTP routing/shutdown, auth health, real PNG publication and source-aware
+receipt checks remain. Ordinary image tests no longer export historical evidence
+files outside their temporary roots; existing archived evidence is unchanged.
 
 The GUI portfolio uses real callbacks with one UI-thread scheduler/held-worker
 seam and recording processes. It keeps save/reload and named-profile preservation,
@@ -32,3 +37,7 @@ the canonical mod consumers; they are not replaced by source-string assertions.
 A compact six-scenario textured-body check retains declared forward-axis,
 horizontal-flip, native-spin and root-texture selection behavior through public
 PreDraw and actual FNA CPU vertices; the old 1,080-case product stays retired.
+Sound tests use nine named playback scenarios across five native routes, a cheap
+exact-selector palette check and representative pitch/policy checks, rather than
+palette × route × alpha × phase × controls products or repeated random sampling.
+The unused native draw probe is removed; the live placed-body bridge remains.
