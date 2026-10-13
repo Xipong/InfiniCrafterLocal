@@ -6,6 +6,9 @@
 - Настоящий native world-item slot должен быть неактивен и иметь **ровно нулевой** reuse timer. Full pool, cooling slots, отрицательный/ненулевой timer и dummy slot не дают capacity. Inventory/world delivery списывают один claim один раз; давление пула не заменяет прежний занятый drop.
 - Remote inputs остаются в world escrow journal. Клиентская отмена использует существующий scoped cancel packet и сохраняет request/mirror до ответа host. `cancelRequested` хранится в прежней pending remote craft row, включая reconnect к тому же origin. Нового packet или клиентской refund authority нет.
 - Cancel, встретивший уже committed craft, воспроизводит реальный journal outcome. Unknown/stale owners не создают failure acknowledgement, способный воскресить потраченные inputs.
+- Station wire v2 добавляет stable client token в cancel packet для main и extra lanes. После reconnect отмена восстанавливает только известную journal transaction с тем же world scope и session pinning; orphan pending request завершается failure с сохранением exact escrow, без нового generation. Unknown request не создаёт owner/transaction/outcome; живой чужой owner и token rotation отклоняются. Client и host должны использовать v2: v1 отвергается до чтения изменённых полей. Saved escrow/journal format не меняется.
+
+Regression `cancelled craft reconnect resolves only owned journal` проверяет actual cancel handler: новый server player получает terminal outcome без повторного craft request; pending orphan сохраняет inputs, committed success сохраняет identity. Дополнительно проверяются live-worker cancellation, same-token foreign-live-session refusal, wrong scope/v1 refusal, unknown-ID no-op и повторный replay. Это CPU/intercepted-socket проверка, не реальный multiplayer reconnect.
 
 ## Worker и доставка
 

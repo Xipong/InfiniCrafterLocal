@@ -174,7 +174,7 @@ internal static partial class EngineRuntimeChecks
                 {
                     writer.Write((int)typeof(InfiniCraftPlayer).GetField("RemoteStationProtocolVersion", BindingFlags.Static | BindingFlags.NonPublic)!.GetRawConstantValue()!);
                     writer.Write(InfiniCrafterLocal.Common.Systems.GeneratedStationEscrowStateSystem.AuthorityScope);
-                    writer.Write(request); writer.Write("cancel");
+                    writer.Write(client); writer.Write(request); writer.Write("cancel");
                 }
                 bytes.Position = 0;
                 try { InfiniCraftPlayer.HandleCancelServerCraftPacket(new System.IO.BinaryReader(bytes), 3); }
