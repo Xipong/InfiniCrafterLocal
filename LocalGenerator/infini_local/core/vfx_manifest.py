@@ -131,6 +131,13 @@ _BUDGET_CLASSES = ("tiny", "small", "normal", "large", "signature")
 
 # These are annotations on the existing wire fields, not a conversion or an
 # alternative semantic contract. Repair reuses the ordinary field schemas.
+_MOTIF_TEXT_LIMITS = {
+    "element": 256,
+    "shapeLanguage": 512,
+    "motionLanguage": 512,
+    "paletteRole": 256,
+}
+
 _VFX_NUMERIC_DESCRIPTIONS = {
     "effectMagnitude": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
     "rhythm": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
@@ -445,10 +452,10 @@ def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool =
             "motif": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
-                    "element": {"type": "string", "minLength": 1, "maxLength": 48},
-                    "shapeLanguage": {"type": "string", "minLength": 1, "maxLength": 96},
-                    "motionLanguage": {"type": "string", "minLength": 1, "maxLength": 96},
-                    "paletteRole": {"type": "string", "minLength": 1, "maxLength": 48},
+                    "element": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["element"]},
+                    "shapeLanguage": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["shapeLanguage"]},
+                    "motionLanguage": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["motionLanguage"]},
+                    "paletteRole": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["paletteRole"]},
                     "rhythm": {"type": "number", "minimum": 0.2, "maximum": 3.0},
                     "chaos": {"type": "number", "minimum": 0.0, "maximum": 1.0},
                 },
@@ -656,12 +663,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
     if not isinstance(raw_motif, Mapping):
         errors.append({"path": "$.motif", "message": "object required"})
     motif_text: dict[str, str] = {}
-    for field, maximum in {
-        "element": 48,
-        "shapeLanguage": 96,
-        "motionLanguage": 96,
-        "paletteRole": 48,
-    }.items():
+    for field, maximum in _MOTIF_TEXT_LIMITS.items():
         value = motif.get(field)
         if not isinstance(value, str) or not value.strip() or len(value) > maximum:
             errors.append({"path": f"$.motif.{field}", "message": f"exact non-empty string of at most {maximum} chars required"})
@@ -913,6 +915,32 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         **{key: packet[key] for key in VFX_PROMPT_STATIC_KEYS},
         **{key: value for key, value in packet.items() if key not in VFX_PROMPT_STATIC_KEYS},
     }
+
+
+def vfx_schema_instruction_paths(*, repair: bool) -> dict[str, tuple[str | int, ...]]:
+    """Owner-declared invariant grammar; runtime compatibility clauses stay USER.
+
+    Only the initial rendererRequirements clauses have fixed positions: the
+    subsequent material/event/texture clauses depend on the accepted roster.
+    No recursive field matching or inferred invariant subtrees are used.
+    """
+    slot = ("properties", "slotsUpsert" if repair else "slots", "items")
+    fields = (
+        "id", "rendererKind", "backend", "textureRole", "particleRole", "anchor",
+        "channel", "lane", "emissionMode", "blend", "layer", "particleSystemId",
+        "scale", "density", "duration", "alpha", "spread", "jitter", "fadeIn",
+        "fadeOut", "budgetWeight", "signatureWeight", "visualCost", "startTick",
+        "repeatEvery", "spritePrompt", "spriteNegativePrompt", "soundId",
+    )
+    paths: dict[str, tuple[str | int, ...]] = {"slot_" + field: slot + ("properties", field) for field in fields}
+    paths.update({field: slot + ("properties", field)
+                  for field in ("element", "path", "screenShake", "particle", "sound")})
+    paths.update({"rendererRule_" + renderer: slot + ("allOf", index)
+                  for index, renderer in enumerate(_RENDERER_REQUIREMENTS)})
+    paths["asset"] = ("properties", "assetsUpsert" if repair else "assets", "items")
+    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
+        paths[field] = ("properties", field, "anyOf", 0) if repair else ("properties", field)
+    return paths
 
 
 def _vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:

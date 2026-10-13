@@ -37,8 +37,8 @@ public sealed class VfxAssetSpec
         if (!VfxMaterialValidation.AssetId(Id)) throw new InvalidDataException("invalid VFX asset id");
         // Transport strips captions but never asset/render identity. Empty captions
         // are admitted only for a hydrated runtime asset, not a new request.
-        if (Prompt is null || Prompt.Length > 1400 || (string.IsNullOrWhiteSpace(Prompt) && (Prompt != "" || NegativePrompt != "" || string.IsNullOrEmpty(SpritePath)))
-            || NegativePrompt is null || NegativePrompt.Length > 700) throw new InvalidDataException("invalid VFX asset prompt");
+        if (Prompt is null || !RuntimeText.ProseFits(Prompt, 1400) || (string.IsNullOrWhiteSpace(Prompt) && (Prompt != "" || NegativePrompt != "" || string.IsNullOrEmpty(SpritePath)))
+            || NegativePrompt is null || !RuntimeText.ProseFits(NegativePrompt, 700)) throw new InvalidDataException("invalid VFX asset prompt");
         if (CanvasSize is not (16 or 24 or 32 or 48 or 64 or 96 or 128)) throw new InvalidDataException("invalid VFX asset canvas");
         VfxMaterialValidation.Choice(Layout, "asset layout", "cutout", "strip");
         if (SpritePath is null || SpritePath.Length > 500 || SpriteUrl is null || SpriteUrl.Length > 500

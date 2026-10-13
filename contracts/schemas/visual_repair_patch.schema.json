@@ -382,7 +382,7 @@
             },
             "palette": {
               "items": {
-                "maxLength": 48,
+                "maxLength": 256,
                 "minLength": 1,
                 "type": "string"
               },

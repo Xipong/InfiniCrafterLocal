@@ -62,6 +62,21 @@ Legacy common controls имеют renderer-specific units и inert metadata: [un
 
 Eligible periodic item slot исполняется один раз на owner/item/entity/slot/world tick даже при пересечении held/equipment/visibility hooks; projectile VFX cadence не дублируется gameplay periodic producer. Разные events и snapshot ticks самостоятельны; соседние use/hit/crit не гасят друг друга одним per-player cooldown. Transport rate/dedup защита остаётся. Поздний inactive-player relay не создаёт effects. Legacy queues/budgets очищает клиентский `PostUpdateEverything`, не SP/server-only `PostUpdateWorld`; dedicated server не исполняет presentation.
 
+## Текстовые поля и границы длины
+
+Имя результата принадлежит Gameplay Author, `visual.palette` — Visual Director, а `vfxManifest.motif` — VFX Director. Motif описывает художественную подачу, но не создаёт исполняемые эффекты: ими управляют explicit `slots`. В частности, пустой `slots=[]` не превращается в частицы из prose. Exact legacy `motif.element` может давать исторический цвет, но явный `effectColor` приоритетнее.
+
+| Текст | Fresh предел, Unicode code points | Смысл / сохранение |
+|---|---:|---|
+| Author `name` | 80 | Единый schema/Repair/manual/final gate и native definitions/player-save references, без нового обрезания старых имён. |
+| VFX `motif.element`, `paletteRole` | 256 каждый | Краткий мотив и роль палитры; schema/manual/native используют одну длину, не UTF-16 units. |
+| VFX `motif.shapeLanguage`, `motionLanguage` | 512 каждый | Формы и характер движения эффектов; не gameplay/executor. |
+| Visual `palette[]` | 256 на запись, до 8 записей | Свободные описания цвета/материала; не расширение enum `effectColor`. |
+| Author contribution, planned action intent и action/behavior comparison prose | 1000 на поле | Intent/report, не routing; copied behavior text сохраняется в recursive `generatedParentSummary.notableEffects`. |
+| Visual body/impact/VFX asset prompts | Прежние 1400 / negative 700 | Native считает Unicode scalars, чтобы admitted supplementary text не обрезался по UTF-16 и не отвергался только из-за surrogate pairs. |
+
+Существующие description4000/playerExperience3000 не урезаются. Legacy Visual ObjectType/Style/RequiredAnchors остаются необязательными сохранёнными метаданными с большим текстовым запасом, не новыми вопросами модели. IDs/enums/schema/status/path/hash и численные resource bounds не увеличиваются вместе с human prose. MaxLength — потолок, не требуемый объём ответа.
+
 <a id="verification"></a>
 ## Проверка и scope доказательства
 

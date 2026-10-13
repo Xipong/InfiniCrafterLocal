@@ -8043,12 +8043,12 @@
               "type": "string"
             },
             "parentAContribution": {
-              "maxLength": 280,
+              "maxLength": 1000,
               "minLength": 1,
               "type": "string"
             },
             "parentBContribution": {
-              "maxLength": 280,
+              "maxLength": 1000,
               "minLength": 1,
               "type": "string"
             },
@@ -8068,7 +8068,7 @@
                     "type": "string"
                   },
                   "intent": {
-                    "maxLength": 280,
+                    "maxLength": 1000,
                     "minLength": 1,
                     "type": "string"
                   }
@@ -8148,7 +8148,7 @@
                     "additionalProperties": false,
                     "properties": {
                       "implementedBehavior": {
-                        "maxLength": 280,
+                        "maxLength": 1000,
                         "minLength": 1,
                         "type": "string"
                       },
@@ -8161,7 +8161,7 @@
                         "type": "string"
                       },
                       "plannedIntent": {
-                        "maxLength": 280,
+                        "maxLength": 1000,
                         "minLength": 1,
                         "type": "string"
                       },
@@ -8235,7 +8235,7 @@
                     "additionalProperties": false,
                     "properties": {
                       "programBehavior": {
-                        "maxLength": 280,
+                        "maxLength": 1000,
                         "minLength": 1,
                         "type": "string"
                       },
@@ -8245,7 +8245,7 @@
                         "type": "string"
                       },
                       "reportedBehavior": {
-                        "maxLength": 280,
+                        "maxLength": 1000,
                         "minLength": 1,
                         "type": "string"
                       },

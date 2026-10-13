@@ -41,6 +41,42 @@ def _offline_transport(monkeypatch, case, replies):
     return captured
 
 
+def test_descriptive_vfx_motif_survives_director_without_metadata_repair(monkeypatch):
+    data = _data()
+    raw = _legacy(data)
+    raw["slots"] = []
+    raw["motif"].update(
+        element="Frostspark Boots with Obsidian Shield shin plates",
+        shapeLanguage="Connected shield-armored frost footwear; " + "readable physical details " * 8,
+        motionLanguage="Static wearable badge; " + "no extra gameplay motion " * 8,
+        paletteRole="Icy cyan footwear and charcoal-purple shield plates with " + "restrained highlights " * 4,
+    )
+    expected = copy.deepcopy(raw)
+    sent = _offline_transport(monkeypatch, "descriptive_motif", [raw])
+    final = vfx.attach_hybrid_vfx_manifest(data, "descriptive_motif", llm_director=stage.call_llm_vfx_director)
+    assert final["vfxManifest"]["motif"] == expected["motif"]
+    assert final["debug"]["vfxDirectorRaw"] == expected
+    assert final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
+    assert len(sent) == 1 and raw == expected
+    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+
+
+@pytest.mark.parametrize("field,maximum", [("element", 256), ("shapeLanguage", 512), ("motionLanguage", 512), ("paletteRole", 256)])
+def test_vfx_motif_bounds_preserve_unicode_and_reject_only_overflow(field, maximum):
+    data = _data()
+    raw = _legacy(data)
+    raw["slots"] = []
+    raw["motif"][field] = "🌟" * maximum
+    original = copy.deepcopy(raw)
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert report["ok"], report["errors"]
+    assert report["normalized"]["motif"][field] == original["motif"][field]
+    raw["motif"][field] += "🌟"
+    report = vfx.validate_vfx_director_output(raw, data)
+    assert not report["ok"] and any(row["path"] == f"$.motif.{field}" for row in report["errors"])
+    assert len(raw["motif"][field]) == maximum + 1
+
+
 # Exercise each empty-domain outcome and both payload consumers without
 # repeating their Cartesian product. Nonempty domains freeze source per renderer.
 @pytest.mark.parametrize("renderer,payload,domain,outcome", [

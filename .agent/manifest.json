@@ -1,7 +1,7 @@
 {
   "schema": "infini.agent-manifest.v2",
   "project": "InfiniCrafterLocal",
-  "projectVersion": "0.5.02",
+  "projectVersion": "0.5.03",
   "runtimeApiVersion": "infini.runtime-program.v5",
   "testSuiteVersion": "low-level-v5",
   "testSuitePolicy": "Run bounded focused gates during edits; final acceptance requires full pytest, schema/prompt/delivery/parity/mutation/hygiene/static C# gates, and a real tModLoader build when the SDK and mod references are available.",

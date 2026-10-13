@@ -13,12 +13,109 @@ using InfiniCrafterLocal.Common.Services;
 internal static partial class EngineRuntimeChecks
 {
 
+    private static void VfxDescriptiveTextRoundtrip()
+    {
+        string element = new string('ж', 180) + "🌟";
+        string shape = string.Concat(Enumerable.Repeat("🌟", 512));
+        var motif = new InfiniCrafterLocal.Common.Models.VfxMotifSpec {
+            Element = element, ShapeLanguage = shape, MotionLanguage = new string('m', 512),
+            PaletteRole = new string('p', 256), Rhythm = 1, Chaos = 0,
+        };
+        motif.Normalize();
+        Equal(element, motif.Element, "descriptive motif is not clipped");
+        Equal(shape, motif.ShapeLanguage, "Unicode motif counts scalar characters");
+        Equal(512, motif.MotionLanguage.Length, "long motion description retained");
+        Equal(256, motif.PaletteRole.Length, "long palette description retained");
+        motif.Element = new string('e', 257);
+        bool rejected = false;
+        try { motif.Normalize(); } catch (System.IO.InvalidDataException) { rejected = true; }
+        Equal(true, rejected, "outside declared bound refuses rather than truncating");
+    }
+
+    private static void VisualDescriptivePaletteRoundtrip()
+    {
+        var source = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+        string palette = string.Concat(Enumerable.Repeat("🌟", 256));
+        source.Visual.Palette = new[] { palette };
+        source.Normalize();
+        Equal(palette, source.Visual.Palette.Single(), "descriptive palette is not clipped");
+        var roundtrip = InfiniCrafterLocal.Common.Models.GeneratedItemData.FromJson(source.ToJson())
+            ?? throw new InvalidOperationException("descriptive palette definition refused");
+        Equal(palette, roundtrip.Visual.Palette.Single(), "palette survives definition roundtrip");
+    }
+
+    private static void DescriptiveParentBehaviorRoundtrip()
+    {
+        var source = new InfiniCrafterLocal.Common.Models.GeneratedParentSummarySpec {
+            Name = "Report context", NotableEffects = new[] { string.Concat(Enumerable.Repeat("🌟", 1000)) },
+        };
+        string expected = source.NotableEffects.Single();
+        source.Normalize();
+        Equal(expected, source.NotableEffects.Single(), "admitted behavior report survives recursive context");
+    }
+
+    private static void AuthoredNameUnicodePersistenceRoundtrip()
+    {
+        var source = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+        string name = string.Concat(Enumerable.Repeat("🌟", 80));
+        source.Name = name;
+        source.GeneratedParentSummary.Name = name;
+        source.Normalize();
+        Equal(name, source.Name, "80 authored Unicode characters are retained");
+        Equal(name, source.GeneratedParentSummary.Name, "recursive parent name is retained");
+        var definition = InfiniCrafterLocal.Common.Models.GeneratedItemData.FromJson(source.ToJson())
+            ?? throw new InvalidOperationException("named definition refused");
+        Equal(name, definition.Name, "definition roundtrip preserves name");
+        var saved = InfiniCrafterLocal.Common.Models.GeneratedItemData.FromPlayerSaveJson(source.ToPlayerSaveJson())
+            ?? throw new InvalidOperationException("named player-save reference refused");
+        Equal(name, saved.Name, "player-save reference preserves name");
+        source.Name = new string('ж', 80);
+        source.Normalize();
+        Equal(80, source.Name.Length, "previously admitted saved names are not shortened to fresh cap");
+    }
+
+    private static void DescriptiveArtCaptionsUnicodeRoundtrip()
+    {
+        string art = string.Concat(Enumerable.Repeat("🌟", 1400));
+        string details = new string('ж', 699) + "🌟";
+        var entity = new InfiniCrafterLocal.Common.Models.RuntimeEntityVisualSpec {
+            AssetMode = "no_asset", Prompt = art, Silhouette = details, VisualIdentity = details,
+            ImpactPrompt = art, ImpactNegativePrompt = details,
+        };
+        entity.Normalize();
+        Equal(art, entity.Prompt, "admitted body caption retained");
+        Equal(details, entity.Silhouette, "surrogate is not split");
+        Equal(details, entity.VisualIdentity, "identity caption retained");
+        Equal(art, entity.ImpactPrompt, "impact caption retained");
+        Equal(details, entity.ImpactNegativePrompt, "negative caption retained");
+        var asset = new InfiniCrafterLocal.Common.Models.VfxAssetSpec {
+            Id = "unicode_art", Prompt = art, NegativePrompt = details, CanvasSize = 32, Layout = "cutout",
+        };
+        asset.Validate();
+        Equal(art, asset.Prompt, "independent VFX caption admitted");
+        asset.Prompt += "🌟";
+        bool refused = false;
+        try { asset.Validate(); } catch (System.IO.InvalidDataException) { refused = true; }
+        Equal(true, refused, "independent VFX caption overflow refused");
+        var source = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+        string metadata = new string('ж', 160);
+        source.Visual.ObjectType = source.Visual.Style = metadata;
+        source.Visual.RequiredAnchors = new[] { metadata };
+        source.Visual.ImagePrompt = art; source.Visual.NegativePrompt = details;
+        source.Normalize();
+        Equal(metadata, source.Visual.Style, "retained style text has room");
+        Equal(metadata, source.Visual.ObjectType, "retained object description has room");
+        Equal(metadata, source.Visual.RequiredAnchors.Single(), "retained visual anchor has room");
+        Equal(art, source.Visual.ImagePrompt, "root caption retained");
+        Equal(details, source.Visual.NegativePrompt, "root negative caption retained");
+    }
+
     private static void ParentSummaryUnicodeRoundtrip()
     {
         using var actorState = new NativeActorState();
-        // Author behaviorChecks allow 280 Unicode code points, not UTF-16 units.
-        string boundary = new string('ж', 279) + "🌟";
-        string supplementary = string.Concat(Enumerable.Repeat("🌟", 280));
+        // Author behaviorChecks allow 1000 Unicode code points, not UTF-16 units.
+        string boundary = new string('ж', 999) + "🌟";
+        string supplementary = string.Concat(Enumerable.Repeat("🌟", 1000));
         var original = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
         original.Id = "parent_unicode_probe";
         original.Name = "Unicode parent";
@@ -51,7 +148,7 @@ internal static partial class EngineRuntimeChecks
             Equal(boundary, effects[0].GetString(), "accepted boundary never splits a surrogate");
             Equal(supplementary, effects[1].GetString(), "accepted supplementary prose is retained");
             Equal("ASCII control", effects[2].GetString(), "existing whitespace normalization retained");
-            Equal(boundary, effects[3].GetString(), "overbound prose clips at 280 code points");
+            Equal(boundary, effects[3].GetString(), "overbound prose clips at 1000 code points");
         }
         Equal(boundary, original.GeneratedParentSummary.NotableEffects[0], "incoming source unchanged");
     }

@@ -62,6 +62,20 @@ def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire
     assert projected["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
 
 
+def test_descriptive_palette_survives_director_and_delivery_without_repair(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    description = "Oxidized copper with blue-green recesses and pale silver highlights; " + "restrained readable facets " * 3
+    raw["item"]["palette"] = [description]
+    responses, requests = wire_transport
+    responses.append(raw)
+    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    assert projected["visual"]["palette"] == [description]
+    assert sanitize_recipe_for_delivery(projected)["visual"]["palette"] == [description]
+    assert len(requests) == 1 and not responses
+    assert projected["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
+
+
 def test_equipment_overlay_keeps_authored_mount_and_single_badge_plan(wire_transport):
     data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat"))
     before = copy.deepcopy(data)

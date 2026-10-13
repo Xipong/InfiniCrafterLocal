@@ -44,6 +44,11 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("VFX descriptive text bound and Unicode roundtrip", VfxDescriptiveTextRoundtrip),
+            ("Visual descriptive palette Unicode roundtrip", VisualDescriptivePaletteRoundtrip),
+            ("descriptive parent behavior Unicode roundtrip", DescriptiveParentBehaviorRoundtrip),
+            ("descriptive authored name Unicode persistence roundtrip", AuthoredNameUnicodePersistenceRoundtrip),
+            ("descriptive art captions Unicode roundtrip", DescriptiveArtCaptionsUnicodeRoundtrip),
             ("NPC hit pull preserves projectile origin", NpcHitPullPreservesProjectileOrigin),
             ("nearest event damage retains radial native selection and direct-target exclusion", NearestDamageRetainsTheSingleCenterNativeAction),
             ("target bias saved DTO range and native distance-score discount", TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount),

@@ -1,7 +1,7 @@
 """Internal prompt-prefix boundary marker. Never forwarded to a model as-is."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from collections.abc import Mapping, Sequence
 import json
 import math
@@ -146,14 +146,17 @@ def with_instruction_segments(
 
 
 def with_schema_instruction_definitions(
-    payload: dict[str, Any], schema_key: str, definition_paths: Mapping[str, tuple[str | int, ...]],
+    payload: dict[str, Any], schema_key: str,
+    definition_paths: Mapping[str, tuple[str | int, ...] | tuple[tuple[str | int, ...], ...]],
 ) -> dict[str, Any]:
     """Extract explicit owner-selected nodes, not inferred invariant subtrees.
 
     The response_format keeps its complete provider-compatible schema. Only the
     model-facing dossier uses root $defs references to canonical application-owned
     output grammar in the existing DEVELOPER contract. The caller explicitly owns
-    these nodes; runtime enums, facts and Repair permissions stay in USER.
+    these nodes; runtime enums, facts and Repair permissions stay in USER. A
+    definition may name multiple explicit paths only when their compact JSON
+    bytes are identical; overlapping paths are rejected rather than reauthored.
     """
     index = instruction_segment_index(payload)
     if index is None or "schemaDefinitions" in json.loads(payload["messages"][index]["content"]):
@@ -163,14 +166,26 @@ def with_schema_instruction_definitions(
     schema = dynamic[schema_key]
     if "$defs" in schema or not definition_paths:
         raise ValueError("schema data requires explicit inline canonical nodes")
-    definitions = {}
-    for name, path in definition_paths.items():
-        node = schema
-        for key in path[:-1]:
-            node = node[key]
-        definitions[name] = node[path[-1]]
-        node[path[-1]] = {"$ref": "#/$defs/" + name}
     encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    definitions = {}
+    extracted_paths: list[tuple[str | int, ...]] = []
+    for name, selected in definition_paths.items():
+        if not selected:
+            raise ValueError("schema definitions require nonempty owner paths")
+        paths = cast(tuple[tuple[str | int, ...], ...],
+                     (selected,) if isinstance(selected[0], (str, int)) else selected)
+        for path in paths:
+            if not path or any(path[:len(old)] == old or old[:len(path)] == path for old in extracted_paths):
+                raise ValueError("schema definition paths must be nonempty and disjoint")
+            node = schema
+            for key in path[:-1]:
+                node = node[key]
+            value = node[path[-1]]
+            if name in definitions and encode(definitions[name]) != encode(value):
+                raise ValueError("shared schema definition requires literally identical owner nodes")
+            definitions[name] = value
+            node[path[-1]] = {"$ref": "#/$defs/" + name}
+            extracted_paths.append(path)
     instructions = json.loads(messages[index]["content"])
     instructions["rules"].append(
         "The output schema's #/$defs/ references resolve against DEVELOPER schemaDefinitions.$defs; "

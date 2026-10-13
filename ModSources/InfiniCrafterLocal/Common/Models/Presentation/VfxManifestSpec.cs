@@ -152,19 +152,19 @@ public sealed class VfxMotifSpec
     [JsonRequired] public float Chaos { get; set; }
     public void Normalize()
     {
-        Element = NormalizeRequiredText(Element, 48, "element");
-        ShapeLanguage = NormalizeRequiredText(ShapeLanguage, 96, "shapeLanguage");
-        MotionLanguage = NormalizeRequiredText(MotionLanguage, 96, "motionLanguage");
-        PaletteRole = NormalizeRequiredText(PaletteRole, 48, "paletteRole");
+        Element = NormalizeRequiredText(Element, 256, "element");
+        ShapeLanguage = NormalizeRequiredText(ShapeLanguage, 512, "shapeLanguage");
+        MotionLanguage = NormalizeRequiredText(MotionLanguage, 512, "motionLanguage");
+        PaletteRole = NormalizeRequiredText(PaletteRole, 256, "paletteRole");
         Rhythm = Math.Clamp(Rhythm, 0.2f, 3f);
         Chaos = Math.Clamp(Chaos, 0f, 1f);
     }
     private static string NormalizeRequiredText(string? value, int max, string label)
     {
         string text = (value ?? "").Trim();
-        if (text.Length == 0)
-            throw new InvalidDataException($"invalid VFX motif {label}");
-        return text.Length <= max ? text : text[..max];
+        if (text.Length == 0 || !RuntimeText.ProseFits(text, max))
+            throw new InvalidDataException($"invalid VFX motif {label}: expected 1..{max} characters");
+        return text;
     }
 }
 

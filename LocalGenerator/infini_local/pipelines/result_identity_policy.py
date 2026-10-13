@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from infini_local.core.category_policy import ALLOWED_CATEGORIES
+from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH
 
 from infini_local.pipelines.pipeline_runtime_constants import BAD_NAME_PATTERNS
 
@@ -30,7 +31,7 @@ def _ordered_known_tags(tags: set[str], canonical: dict[str, Any]) -> list[str]:
 
 def bad_result_name(name: Any, a: dict[str, Any] | None = None, b: dict[str, Any] | None = None) -> bool:
     n = str(name or "").strip()
-    if len(n) < 3 or len(n) > 48:
+    if len(n) < 3 or len(n) > ITEM_NAME_MAX_LENGTH:
         return True
     if any(p.search(n) for p in BAD_NAME_PATTERNS):
         return True

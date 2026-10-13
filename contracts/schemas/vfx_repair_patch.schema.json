@@ -108,17 +108,17 @@
               "type": "number"
             },
             "element": {
-              "maxLength": 48,
+              "maxLength": 256,
               "minLength": 1,
               "type": "string"
             },
             "motionLanguage": {
-              "maxLength": 96,
+              "maxLength": 512,
               "minLength": 1,
               "type": "string"
             },
             "paletteRole": {
-              "maxLength": 48,
+              "maxLength": 256,
               "minLength": 1,
               "type": "string"
             },
@@ -129,7 +129,7 @@
               "type": "number"
             },
             "shapeLanguage": {
-              "maxLength": 96,
+              "maxLength": 512,
               "minLength": 1,
               "type": "string"
             }

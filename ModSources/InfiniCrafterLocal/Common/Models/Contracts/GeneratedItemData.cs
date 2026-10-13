@@ -76,10 +76,10 @@ public sealed partial class GeneratedItemData
             RuntimeApiVersion = RuntimeProgramSpec.CurrentApiVersion,
             WorldScoped = RecipeMeta?.WorldScoped ?? true,
             WorldId = SafeText(RecipeMeta?.WorldId ?? "", 32),
-            Name = SafeText(Name, 80),
+            Name = SafeName(Name),
             Category = SafeText(Category, 32),
-            ParentA = SafeText(ParentA, 80),
-            ParentB = SafeText(ParentB, 80),
+            ParentA = SafeName(ParentA),
+            ParentB = SafeName(ParentB),
         };
         string json = JsonSerializer.Serialize(payload, Options);
         if (Utf8ByteCount(json) <= MaxPlayerSaveTagStringPayloadBytes)
@@ -150,9 +150,9 @@ public sealed partial class GeneratedItemData
             string.IsNullOrWhiteSpace(payload.Id) ? "missing_reference" : SafeText(payload.Id, 64),
             "player_save_ref");
         data.RecipeKey = SafeText(payload.RecipeKey, 120);
-        data.Name = string.IsNullOrWhiteSpace(payload.Name) ? "Generated Item" : SafeText(payload.Name, 80);
-        data.ParentA = SafeText(payload.ParentA, 80);
-        data.ParentB = SafeText(payload.ParentB, 80);
+        data.Name = string.IsNullOrWhiteSpace(payload.Name) ? "Generated Item" : SafeName(payload.Name);
+        data.ParentA = SafeName(payload.ParentA);
+        data.ParentB = SafeName(payload.ParentB);
         data.Category = SafeText(payload.Category, 32).ToLowerInvariant();
         data.RecipeMeta.WorldScoped = payload.WorldScoped;
         data.RecipeMeta.WorldId = SafeText(payload.WorldId, 32);
