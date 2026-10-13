@@ -31,6 +31,40 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.storage.world_storage import atomic_write_json, sanitize_recipe_for_delivery
 
 
+@pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
+def test_fresh_item_name_has_80_unicode_character_boundary(length, accepted):
+    from infini_local.pipelines.combine_validation import authored_item_validation_report
+
+    item = build_runtime_fixture("workbench_blade")
+    item["name"] = "🌟" * length
+    before = copy.deepcopy(item)
+    assert strict_author_shape_report(item)["ok"] is accepted
+    assert authored_item_validation_report(item)["ok"] is accepted
+    if accepted:
+        from infini_local.pipelines.final_normalize import final_normalize
+        assert final_normalize(compile_runtime_program(copy.deepcopy(item)))["name"] == before["name"]
+    assert item == before
+
+
+def test_descriptive_contribution_and_behavior_reports_survive_recursive_handoff():
+    item = build_runtime_fixture("workbench_blade")
+    item["id"] = "descriptive_report_fixture"
+    prose = "🌟" * 600
+    item["concept"]["parentAContribution"] = prose
+    item["concept"]["parentBContribution"] = prose
+    report_row = item["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"][0]
+    report_row["programBehavior"] = report_row["reportedBehavior"] = prose
+    before = copy.deepcopy(item)
+    assert strict_author_shape_report(item)["ok"]
+    compiled = compile_runtime_program(item)
+    compiled["generatedParentSummary"] = generated_parent_summary_from_data(compiled)
+    delivered = sanitize_recipe_for_delivery(compiled)
+    assert delivered["generatedParentSummary"]["notableEffects"][0] == prose
+    assert delivered["realization"] == before["realization"]
+    assert delivered["concept"] == before["concept"]
+    assert item == before
+
+
 @pytest.mark.parametrize("field,maximum", [("description", 4000), ("playerExperience", 3000)])
 def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp_path, field, maximum):
     item = build_runtime_fixture("workbench_blade")

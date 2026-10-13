@@ -13,6 +13,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     capability_provider_union,
 )
 _ID_PATTERN = r"^[a-z][a-z0-9_]{0,47}$"
+ITEM_NAME_MAX_LENGTH = 80
 PRIMARY_ENTITY_FIELD = "primaryEntityId"
 PRIMARY_ENTITY_AUTHOR_PATH = f"runtimeProgram.{PRIMARY_ENTITY_FIELD}"
 PRIMARY_ENTITY_JSON_PATH = f"$.{PRIMARY_ENTITY_AUTHOR_PATH}"
@@ -163,8 +164,8 @@ def realization_schema() -> dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "plannedIntent": _strict_string(min_len=1, max_len=280),
-            "implementedBehavior": _strict_string(min_len=1, max_len=280),
+            "plannedIntent": _strict_string(min_len=1, max_len=1000),
+            "implementedBehavior": _strict_string(min_len=1, max_len=1000),
             "runtimeRefs": copy.deepcopy(runtime_refs),
             "result": {"type": "string", "enum": ["aligned", "changed", "dropped", "added", "uncertain"]},
             "intentionality": {"type": "string", "enum": ["intentional", "accidental", "uncertain"]},
@@ -177,8 +178,8 @@ def realization_schema() -> dict[str, Any]:
         "additionalProperties": False,
         "properties": {
             "runtimeRefs": copy.deepcopy(runtime_refs),
-            "programBehavior": _strict_string(min_len=1, max_len=280),
-            "reportedBehavior": _strict_string(min_len=1, max_len=280),
+            "programBehavior": _strict_string(min_len=1, max_len=1000),
+            "reportedBehavior": _strict_string(min_len=1, max_len=1000),
             "result": {"type": "string", "enum": ["aligned", "mismatch", "omitted", "uncertain"]},
             "reason": _strict_string(min_len=1, max_len=400),
         },
@@ -232,7 +233,7 @@ def author_item_response_schema() -> dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "name": _strict_string(min_len=1, max_len=80),
+            "name": _strict_string(min_len=1, max_len=ITEM_NAME_MAX_LENGTH),
             "category": {
                 "type": "string",
                 "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"],
@@ -244,8 +245,8 @@ def author_item_response_schema() -> dict[str, Any]:
                 "properties": {
                     "literalSynthesis": _strict_string(min_len=1, max_len=500),
                     "coreMechanic": _strict_string(min_len=1, max_len=500),
-                    "parentAContribution": _strict_string(min_len=1, max_len=280),
-                    "parentBContribution": _strict_string(min_len=1, max_len=280),
+                    "parentAContribution": _strict_string(min_len=1, max_len=1000),
+                    "parentBContribution": _strict_string(min_len=1, max_len=1000),
                     "playerExperience": _strict_string(min_len=1, max_len=500),
                     "plannedPlayerActions": {
                         "type": "array",
@@ -260,7 +261,7 @@ def author_item_response_schema() -> dict[str, Any]:
                                     "type": "string",
                                     "enum": ["primary_use", "alternate_use", "hold", "equipped", "passive_or_event"],
                                 },
-                                "intent": _strict_string(min_len=1, max_len=280),
+                                "intent": _strict_string(min_len=1, max_len=1000),
                             },
                             "required": ["input", "intent"],
                         },
@@ -364,7 +365,7 @@ def author_item_repair_schema(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "name": _strict_string(min_len=1, max_len=80),
+                    "name": _strict_string(min_len=1, max_len=ITEM_NAME_MAX_LENGTH),
                     "category": {"type": "string", "enum": ["combat", "tool", "equipment", "placeable", "consumable", "material", "hybrid", "generic"]},
                     "concept": author_item_response_schema()["properties"]["concept"],
                 },

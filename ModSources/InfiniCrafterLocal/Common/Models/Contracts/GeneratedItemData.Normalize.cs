@@ -25,6 +25,17 @@ public sealed partial class GeneratedItemData
         return text.Length <= maxLen ? text : text[..maxLen];
     }
 
+    // Names use 80 Unicode scalars on every definition/save/load path.
+    private static string SafeName(string? value) => RuntimeText.Prose(value, 80);
+
+    private static string DescriptiveText(string value, int maxScalars)
+    {
+        string text = value.Trim();
+        if (!RuntimeText.ProseFits(text, maxScalars))
+            throw new InvalidDataException($"Descriptive text exceeds {maxScalars} characters");
+        return text;
+    }
+
     private static string[] SafeTextArray(string[]? values, int maxItems = 32, int maxLen = 64)
         => (values ?? Array.Empty<string>())
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -51,11 +62,11 @@ public sealed partial class GeneratedItemData
 
         Id = SafeText(Id, 64);
         RecipeKey = SafeText(RecipeKey, 120);
-        Name = SafeText(Name, 80);
+        Name = SafeName(Name);
         if (string.IsNullOrWhiteSpace(Name))
             throw new InvalidDataException("name must be non-blank");
-        ParentA = SafeText(ParentA, 80);
-        ParentB = SafeText(ParentB, 80);
+        ParentA = SafeName(ParentA);
+        ParentB = SafeName(ParentB);
         MergeMode = SafeText(MergeMode, 32);
         Category = SafeText(Category, 32).ToLowerInvariant();
         SourceMode = SafeText(SourceMode, 32).ToLowerInvariant();
@@ -221,12 +232,18 @@ public sealed partial class GeneratedItemData
     private void NormalizeVisual()
     {
         Visual.Grip?.Validate();
-        Visual.ObjectType = SafeText(Visual.ObjectType, 64);
-        Visual.Style = SafeText(Visual.Style, 64);
-        Visual.RequiredAnchors = SafeTextArray(Visual.RequiredAnchors, 16, 80);
-        Visual.Palette = SafeTextArray(Visual.Palette, 8, 48);
-        Visual.ImagePrompt = SafeText(Visual.ImagePrompt, 1600);
-        Visual.NegativePrompt = SafeText(Visual.NegativePrompt, 700);
+        Visual.ObjectType = RuntimeText.Prose(Visual.ObjectType, 256);
+        Visual.Style = RuntimeText.Prose(Visual.Style, 256);
+        Visual.RequiredAnchors = (Visual.RequiredAnchors ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RuntimeText.Prose(x, 280))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToArray();
+        Visual.Palette = (Visual.Palette ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => DescriptiveText(x, 256))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8).ToArray();
+        Visual.ImagePrompt = RuntimeText.Prose(Visual.ImagePrompt, 1600);
+        Visual.NegativePrompt = RuntimeText.Prose(Visual.NegativePrompt, 700);
         Visual.SpriteStatus = SafeText(Visual.SpriteStatus, 48).ToLowerInvariant();
         Visual.SpritePath = SafeText(Visual.SpritePath, 260);
         Visual.SpriteRawPath = SafeText(Visual.SpriteRawPath, 260);

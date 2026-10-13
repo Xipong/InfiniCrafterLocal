@@ -844,11 +844,11 @@ public sealed class RuntimeEntityVisualSpec
     {
         Role = RuntimeText.Safe(Role, 64);
         AssetMode = RuntimeText.Safe(AssetMode, 32).ToLowerInvariant();
-        Prompt = RuntimeText.Safe(Prompt, 1400);
-        Silhouette = RuntimeText.Safe(Silhouette, 700);
-        VisualIdentity = RuntimeText.Safe(VisualIdentity, 700);
-        ImpactPrompt = RuntimeText.Safe(ImpactPrompt, 1400);
-        ImpactNegativePrompt = RuntimeText.Safe(ImpactNegativePrompt, 700);
+        Prompt = RuntimeText.Prose(Prompt, 1400);
+        Silhouette = RuntimeText.Prose(Silhouette, 700);
+        VisualIdentity = RuntimeText.Prose(VisualIdentity, 700);
+        ImpactPrompt = RuntimeText.Prose(ImpactPrompt, 1400);
+        ImpactNegativePrompt = RuntimeText.Prose(ImpactNegativePrompt, 700);
         Scale = Math.Clamp(Scale <= 0f ? 1f : Scale, 0.25f, 4f);
         SpritePath = RuntimeText.Safe(SpritePath, 260);
         SpriteUrl = RuntimeText.Safe(SpriteUrl, 500);
@@ -1925,6 +1925,19 @@ internal static class RuntimeText
         string text = (value ?? "").Trim();
         return text.Length <= maxLength ? text : text[..maxLength];
     }
+    public static string Prose(string? value, int maxScalars)
+    {
+        string text = (value ?? "").Trim();
+        int scalars = 0, end = 0;
+        foreach (var rune in text.EnumerateRunes())
+        {
+            if (scalars++ == maxScalars) break;
+            end += rune.Utf16SequenceLength;
+        }
+        return end == text.Length ? text : text[..end];
+    }
+    public static bool ProseFits(string value, int maxScalars)
+        => value.EnumerateRunes().Count() <= maxScalars;
     public static string Id(string? value)
     {
         string text = Safe(value, 48);

@@ -39,12 +39,12 @@
         "parentAContribution": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 280
+          "maxLength": 1000
         },
         "parentBContribution": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 280
+          "maxLength": 1000
         },
         "playerExperience": {
           "type": "string",
@@ -73,7 +73,7 @@
               "intent": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 280
+                "maxLength": 1000
               }
             },
             "required": [
@@ -8053,12 +8053,12 @@
                       "plannedIntent": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 280
+                        "maxLength": 1000
                       },
                       "implementedBehavior": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 280
+                        "maxLength": 1000
                       },
                       "runtimeRefs": {
                         "type": "array",
@@ -8151,12 +8151,12 @@
                       "programBehavior": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 280
+                        "maxLength": 1000
                       },
                       "reportedBehavior": {
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 280
+                        "maxLength": 1000
                       },
                       "result": {
                         "type": "string",

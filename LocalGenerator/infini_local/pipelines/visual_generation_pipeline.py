@@ -142,7 +142,7 @@ def _visual_item_schema() -> dict[str, Any]:
             "negativePrompt": {"type": "string", "maxLength": 700},
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
-            "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 48}, "minItems": 1, "maxItems": 8},
+            "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 256}, "minItems": 1, "maxItems": 8},
             "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
             **_sprite_presentation_properties(),
             "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
@@ -1132,7 +1132,23 @@ def _request_visual_kit(
     request = with_instruction_segments(request, payload, _VISUAL_STATIC_PREFIX_KEYS)
     item_key = "itemPatch" if repair else "item"
     item_path = ("properties", item_key, "anyOf", 0) if repair else ("properties", item_key)
-    request = with_schema_instruction_definitions(request, "responseSchema", {item_key: item_path})
+    definition_paths: dict[str, tuple[str | int, ...] | tuple[tuple[str | int, ...], ...]] = {
+        item_key: item_path, "animationPlan": ("properties", "animationPlan"),
+    }
+    # Explicit canonical entity leaves; ownership/ID enums and roster bounds stay
+    # inline USER constraints. Both local oneOf and provider anyOf are supported.
+    entity_path = ("properties", "entitiesUpsert" if repair else "entities", "items")
+    entity_schema = sent_schema["properties"][entity_path[1]]["items"]
+    union = "anyOf" if "anyOf" in entity_schema else "oneOf"
+    branches = entity_schema.get(union, [entity_schema])
+    branch_paths = [entity_path + (union, index) for index in range(len(branches))] if union in entity_schema else [entity_path]
+    definition_paths["entityScale"] = tuple(path + ("properties", "scale") for path in branch_paths)
+    for field in ("prompt", "silhouette", "visualIdentity"):
+        definition_paths["entity_" + field] = tuple(
+            path + ("properties", field) for path, branch in zip(branch_paths, branches)
+            if field in branch["properties"]
+        )
+    request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
     stage_name = "visual_repair" if repair else "visual_director"
     trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
     trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
@@ -1169,7 +1185,7 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
         "negativePrompt": str(item.get("negativePrompt") or "")[:700],
         "silhouette": str(item.get("silhouette") or "")[:700],
         "visualIdentity": str(item.get("visualIdentity") or "")[:700],
-        "palette": [str(x)[:48] for x in item.get("palette") or []][:8],
+        "palette": list(item.get("palette") or []),
         "preferredCanvasSize": int(item.get("preferredCanvasSize") or 32),
         "inventoryScale": float(item.get("inventoryScale") or 1.0),
         "worldScale": float(item.get("worldScale") or 1.0),

@@ -41,6 +41,7 @@ from infini_local.core.runtime_authoring.capability_registry import STACK_COST_R
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
+    vfx_schema_instruction_paths,
 )
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_REPAIR_SYSTEM_RULE,
@@ -662,11 +663,9 @@ def call_llm_vfx_director(
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
     static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
     request = with_instruction_segments(request, user, static_keys)
-    slot_key = "slotsUpsert" if stage_name == "vfx_repair" else "slots"
-    request = with_schema_instruction_definitions(request, "outputSchema", {
-        name: ("properties", slot_key, "items", "properties", name)
-        for name in ("element", "path", "screenShake", "particle", "sound")
-    })
+    request = with_schema_instruction_definitions(
+        request, "outputSchema", vfx_schema_instruction_paths(repair=stage_name == "vfx_repair"),
+    )
     item = user.get("item") or {}
     recipe_id = item.get("id") if isinstance(item, Mapping) else None
     trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"])

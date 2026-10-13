@@ -10,6 +10,7 @@ import copy
 from typing import Any, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH
 from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
@@ -29,8 +30,8 @@ def _identity_errors(data: Mapping[str, Any], a: Mapping[str, Any] | None, b: Ma
     name = str(data.get("name") or "").strip()
     if not name:
         errors.append({"path": "$.name", "code": "required_nonempty_string", "message": "Result name is required."})
-    elif len(name) > 120:
-        errors.append({"path": "$.name", "code": "string_too_long", "message": "Result name must be at most 120 characters."})
+    elif len(name) > ITEM_NAME_MAX_LENGTH:
+        errors.append({"path": "$.name", "code": "string_too_long", "message": f"Result name must be at most {ITEM_NAME_MAX_LENGTH} characters."})
     parent_names = {value.casefold() for value in (_name_of(a), _name_of(b)) if value}
     if len(parent_names) == 2 and name.casefold() in parent_names:
         errors.append({

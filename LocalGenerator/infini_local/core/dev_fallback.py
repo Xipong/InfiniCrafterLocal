@@ -9,6 +9,8 @@ without reviving the removed weapon-root architecture.
 
 from typing import Any
 
+from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH
+
 from infini_local.core.runtime_authoring import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
@@ -30,7 +32,7 @@ def deterministic_low_level_plan(
     parent_a = _parent_name(a, "Parent A")
     parent_b = _parent_name(b, "Parent B")
     return {
-        "name": f"{parent_a}–{parent_b} Runtime Fixture"[:80],
+        "name": f"{parent_a}–{parent_b} Runtime Fixture"[:ITEM_NAME_MAX_LENGTH],
         "category": "hybrid",
         "concept": {
             "literalSynthesis": f"The physical bodies of {parent_a} and {parent_b} remain visibly combined.",

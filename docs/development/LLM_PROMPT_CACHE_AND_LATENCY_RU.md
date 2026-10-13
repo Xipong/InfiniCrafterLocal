@@ -4,7 +4,7 @@
 
 Cache — provider KV-prefix reuse, **не** рецепт/инструкции на диске. Author → Visual → VFX/условные scoped frozen Repairs и local validation не меняются.
 
-Rules/catalog перед parents/IDs/visual kit/errors/exact schemas. Internal `_infini_prompt_cache={messageIndex,prefixChars}` маркирует static user boundary, не попадает в wire. Сам cache marker **не** разрешает повышать роль данных. Только initial Author builder дополнительно объявляет `staticInstructionPrefix=true`: его пять статических полей — собственные инструкции/каталог приложения. Codex adapter передаёт их отдельным developer JSON, а `recipeKey/parents/balanceCorridor` — отдельным user JSON. Исходные logical messages сохранены; точные срезы текста меняют только разделительные скобки/запятую, обратная сборка восстанавливает исходный user text. Это намеренное изменение wire framing/роли статического контракта, не побайтовая идентичность прежнего HTTP body. Для прочих providers и необъявленных prefix границ прежний формат сохранён; full Author catalog не добавляется в Repair/следующие стадии ради hit.
+Rules/catalog перед parents/IDs/visual kit/errors/exact schemas. Internal `_infini_prompt_cache` маркирует объявленную builder границу и не попадает в wire; сам marker **не** разрешает повышать роль данных. Initial Author сохраняет отдельную явно объявленную `staticInstructionPrefix=true` проекцию собственного каталога в developer JSON. Director/Repair builders формируют полные app-owned DEVELOPER instruction/schemaDefinitions и отдельный USER контекст. Parents, accepted mechanics, exact entity/event selectors и Repair permissions остаются USER; полный Author catalog не добавляется downstream ради hit. Обратная сборка Director/Repair dossier восстанавливает inline grammar и все исходные факты; provider `json_schema` остаётся полным. Framing — явный контракт builder/adapter, не побайтовая идентичность прежнего HTTP body и не доказательство fresh cache hit.
 
 Identity: SHA-256 предшествующих/system messages + exact static prefix + model/response format/effective reasoning; без recipe suffix/UUID/time/credentials/account IDs. Codex использует фактическую adapter projection; новая developer-граница дополнительно отделена versioned framing identity. Одинаковые bytes дают стабильный key между процессами; catalog/instructions/model/exact schema меняют его. Exact entity IDs не скрываются ради hit.
 
@@ -20,6 +20,31 @@ Marked Responses dossiers не используют/не сохраняют `pre
 | Другие compatible/local | Прежние messages; `cache_prompt`, slot save/restore, durable KV-file здесь не реализованы |
 
 Split: Chat `text`, Responses `input_text`; concatenation byte-equivalent, variable suffix не cache-write marker. Это serializer behavior, **не live acceptance** всех моделей. Provider хранит KV; restart сохраняет key, не lifetime cache. Eviction/endpoint/account/model change дают miss. Код не покупает/продлевает TTL; прежний upstream OpenAI 5.6+ default 30 минут не локальная гарантия. Threshold/TTL/pricing проверяй у provider.
+
+## Каноническая грамматика Visual/VFX
+
+Production builders отделяют полный `system` + builder-owned `developer` contract от
+case-specific `user` dossier. `schemaDefinitions.$defs` в DEVELOPER содержит только
+явно выбранные owner paths из канонической схемы; USER schema ссылается на них через
+`#/$defs/`. Раскрытие ссылок буквально восстанавливает исходную inline schema.
+`response_format=json_schema` по-прежнему передаёт полную inline provider schema,
+без cache refs и без ослабления constraints.
+
+- Visual Director и scoped Visual Repair: item/itemPatch, animationPlan и точные
+  повторяющиеся entity scale/prompt/silhouette/visualIdentity nodes. Ссылки на одну
+  definition разрешены лишь при идентичных compact JSON bytes выбранных узлов.
+- VFX Director и scoped VFX Repair: invariant slot properties, rendererRequirements
+  clauses, material/sound payloads, asset и global presentation schemas. Exact
+  entity/event enums и все последующие runtime-dependent compatibility clauses
+  остаются inline USER constraints; поля Repair scope/permissions не переносятся.
+- Нет recursive common-field heuristic, смены provider grammar, demotion ролей или
+  изменений Author. Static packet/affinity стабильность проверяется offline через
+  настоящий native serializer на трёх разных runtime rosters; это не новый live
+  cache hit или измерение ускорения.
+
+Регрессии: `LocalGenerator/tests/test_director_schema_cache_extraction.py` — literal
+reconstruction, native wire/affinity, changed-tail/static-revision и valid/invalid
+parity; frozen merge проверяется существующими Repair contract tests.
 
 ## Наблюдаемость
 

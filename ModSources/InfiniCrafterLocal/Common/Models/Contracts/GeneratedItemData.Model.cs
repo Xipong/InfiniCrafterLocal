@@ -192,14 +192,14 @@ public sealed class GeneratedParentSummarySpec
         Schema = Bounded(Schema, 64);
         if (!string.Equals(Schema, CurrentSchema, StringComparison.Ordinal))
             throw new InvalidDataException($"Unsupported generated parent summary schema '{Schema}'");
-        Name = Bounded(Name, 80);
+        Name = BoundedReport(Name, 80);
         Identity = Bounded(Identity, 180);
         Description = BoundedReport(Description, 4000);
         PlayerExperience = BoundedReport(PlayerExperience, 3000);
         // These are copied Author behavior reports with the same code-point bound.
         NotableEffects = (NotableEffects ?? Array.Empty<string>())
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => BoundedReport(x, 280))
+            .Select(x => BoundedReport(x, 1000))
             .Take(12)
             .ToArray();
         RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
