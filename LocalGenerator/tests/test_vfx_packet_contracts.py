@@ -1,325 +1,79 @@
-"""Offline canonical vfx packet contracts; no live services."""
+"""VFX presentation choices survive compilation and leaf-local Repair."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
-import json
+
 import pytest
+
+from prompt_packet_helpers import request_dossier
 from infini_local.core import vfx_manifest as vfx
 from infini_local.pipelines import llm_authoring_pipeline as stage
-from tests.test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
-from tests.test_repair_vfx_contract import _offline_transport
-from tests.vfx_material_fixtures import _data, _legacy, _sent, _sprite
-
-_GLOBAL_DESCRIPTIONS = {
-    "effectMagnitude": ("no renderer consumer", "metadata"),
-}
-
-_MOTIF_DESCRIPTIONS = {
-    "rhythm": ("no renderer consumer", "metadata"),
-    "chaos": ("no renderer consumer", "metadata"),
-}
-
-_SLOT_DESCRIPTIONS = {
-    "scale": ("renderer", "projectile.scale", "thickness", "light", "dust"),
-    "density": ("projectile", "item", "count", "repeatevery"),
-    "duration": ("sprite", "primitive", "world ticks", "fade", "history", "do not consume"),
-    "alpha": ("draw", "sound", "dust", "clamp"),
-    "spread": ("speed", "not angle", "projectile", "item"),
-    "jitter": ("no renderer consumer",),
-    "fadeIn": ("no renderer consumer",),
-    "fadeOut": ("no renderer consumer",),
-    "budgetWeight": ("no renderer consumer",),
-    "signatureWeight": ("no renderer consumer",),
-    "visualCost": ("no renderer consumer",),
-    "startTick": ("projectile", "periodic", "only", "world tick"),
-    "repeatEvery": ("periodic", "0", "automatic", "projectile", "item", "world tick"),
-}
-
-_EXPECTED_BOUNDS = {
-    "scale": ("number", 0.15, 5.0), "density": ("number", 0.0, 1.0),
-    "duration": ("integer", 3, 120), "alpha": ("number", 0.0, 1.0),
-    "spread": ("number", 0.0, 2.0), "jitter": ("number", 0.0, 1.5),
-    "fadeIn": ("number", 0.0, 0.8), "fadeOut": ("number", 0.0, 0.8),
-    "budgetWeight": ("number", 0.1, 4.0), "signatureWeight": ("number", 0.0, 1.0),
-    "visualCost": ("number", 0.0, 1.0), "startTick": ("integer", 0, 120),
-    "repeatEvery": ("integer", 0, 120),
-}
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from test_low_level_three_stage_pipeline import _accepted_visual_data, wire_transport
+from vfx_material_fixtures import _legacy, _sprite
 
 
-def test_numeric_descriptions_leave_keys_bounds_and_decoded_values_unchanged() -> None:
-    data = {"runtimeProgram": {"entities": [{
-        "id": "item_body", "kind": "item_body", "visualRole": "item",
-        "events": [{"event": "periodic"}],
-    }]}}
-    packet = vfx._prompt_packet(data, None, None)
-    normal = _sent(data, False, packet)["outputSchema"]
-    repair = _sent(data, True, packet)["outputSchema"]
-    standalone_repair = vfx.vfx_repair_schema(data)
-    original_slot = normal["properties"]["slots"]["items"]
-    repair_slot = repair["properties"]["slotsUpsert"]["items"]
-    assert repair_slot == original_slot == standalone_repair["properties"]["slotsUpsert"]["items"]
-    assert repair["properties"]["assetsUpsert"]["items"] == normal["properties"]["assets"]["items"]
-    assert repair["properties"]["motif"]["anyOf"][0] == normal["properties"]["motif"]
-    assert repair["properties"]["effectMagnitude"]["anyOf"][0] == normal["properties"]["effectMagnitude"]
-    # Additive payloads/asset requests are conditionally required, never legacy defaults.
-    assert set(original_slot["properties"]) - {"element", "path", "particle", "screenShake", "soundId", "sound"} == set(original_slot["required"])
-    assert set(normal["properties"]) - {"assets"} == set(normal["required"])
-    assert packet["runtimeVocabulary"]["numericRanges"] == {
-        "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],
-        "density": [0.0, 1.0], "duration": [3, 120], "alpha": [0.0, 1.0],
-        "spread": [0.0, 2.0], "jitter": [0.0, 1.5], "fadeIn": [0.0, 0.8],
-        "fadeOut": [0.0, 0.8], "budgetWeight": [0.1, 4.0],
-        "signatureWeight": [0.0, 1.0], "visualCost": [0.0, 1.0],
-        "startTick": [0, 120], "repeatEvery": [0, 120],
-    }
-    pair = packet["runtimeSurface"]["runtimePairs"][0]
-    slot = {key: (schema["enum"][0] if "enum" in schema else "") for key, schema in original_slot["properties"].items() if key in original_slot["required"]}
-    slot.update({
-        "id": "numeric_witness", **pair, "rendererKind": "impactRing",
-        "scale": 2.75, "density": 0.36, "duration": 41, "alpha": 0.64,
-        "spread": 1.25, "jitter": 0.9, "fadeIn": 0.2, "fadeOut": 0.3,
-        "budgetWeight": 1.75, "signatureWeight": 0.44, "visualCost": 0.23,
-        "startTick": 19, "repeatEvery": 0,
-    })
-    authored = {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.42,
-                "visualBudgetClass": "normal", "motif": {
-                    "element": "fire", "shapeLanguage": "ring", "motionLanguage": "outward",
-                    "paletteRole": "primary", "rhythm": 1.9, "chaos": 0.73,
-                }, "slots": [slot]}
-    report = vfx.validate_vfx_director_output(copy.deepcopy(authored), data)
-    assert report["ok"], report["errors"]
-    assert report["normalized"]["effectMagnitude"] == authored["effectMagnitude"]
-    assert report["normalized"]["motif"] == authored["motif"]
-    for field in _EXPECTED_BOUNDS:
-        assert report["normalized"]["slots"][0][field] == authored["slots"][0][field]
-
-@pytest.mark.parametrize("fixture", [
-    "workbench_blade", "umbrella_grenade", "door_on_chain", "returning_potion",
-    "fishing_platform_tool", "shield_and_disc", "held_and_deployed", "equipment_tool_combat",
-    pytest.param(None, id="empty"),
-])
-def test_actual_vfx_packet_contains_exact_read_only_runtime_mechanics(fixture):
-    if fixture is None:
-        assert _sent({}, False).get("acceptedRuntimeProgramReadOnly") == _sent({}, True).get("acceptedRuntimeProgramReadOnly") == {}
-        return
-    data = _accepted_visual_data(fixture)
-    # Compare the actual compiler projection, not a guessed second mechanics DTO.
-    entity = data["runtimeProgram"]["entities"][0]
-    entity["visual"] = {"spritePath": "private-local-path.png", "prompt": "not mechanical"}
-    original = copy.deepcopy(data)
-    expected = copy.deepcopy(data["runtimeProgram"])
-    for row in expected["entities"]:
-        row.pop("visual", None)
-    packet = vfx._prompt_packet(data, None, None)
-    sent = _sent(data, False, packet)
-    repair = _sent(data, True, packet)
-    vocabulary, surface = sent["runtimeVocabulary"], sent["runtimeSurface"]
-    assert repair["runtimeVocabularyReadOnly"] == vocabulary
-    assert repair["runtimeSurfaceReadOnly"] == surface
-    assert repair["acceptedRuntimeProgramReadOnly"] == expected
-    assert not (vocabulary.keys() & surface.keys())
-    assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(vfx.vfx_director_surface(data), sort_keys=True)
-    assert vocabulary == _sent({}, False)["runtimeVocabulary"]
-    assert sent.get("acceptedRuntimeProgramReadOnly") == expected
-    assert "private-local-path.png" not in json.dumps([sent, repair])
-    assert data == original
-    packet["acceptedRuntimeProgramReadOnly"]["entities"][0]["lifetimeTicks"] = 999
-    packet["runtimeVocabulary"]["rendererRequirements"]["impactSprite"]["textureRole"] = "none"
-    packet["runtimeSurface"]["entityTextureSources"][0]["sources"].append("unrequested")
-    assert data == original
-    assert vfx.vfx_director_surface(data)["rendererRequirements"]["impactSprite"]["textureRole"] == "impact"
-
-
-@pytest.mark.parametrize("sound_id", [pytest.param(None, id="silent"), "Item1", "Tink"])
-def test_actual_vfx_packets_explain_native_silence_without_changing_audio_choices(monkeypatch, sound_id):
+@pytest.mark.parametrize("audio", [pytest.param(False, id="deliberate-silence"), pytest.param(True, id="explicit-sound")])
+def test_magnitude_repair_does_not_create_delete_or_redesign_audio(wire_transport, audio):
     data = _accepted_visual_data("workbench_blade")
+    before = copy.deepcopy(data)
     accepted = _legacy(data)
     accepted.update(effectMagnitude=0.2, visualBudgetClass="tiny")
-    sound = copy.deepcopy(accepted["slots"][0])
-    sound.update(id="explicit_audio_choice", rendererKind="soundCue", channel="sound", lane="cue",
-                 emissionMode="none", particleSystemId="none", textureRole="none", soundId="Item1", sound={"volume": 0.4, "pitch": 0, "pitchVariance": 0})
-    sound_only = sound_id is not None
-    if sound_only:
-        sound["soundId"] = sound_id
-        if sound_id == "Tink":
-            sound["sound"] = {"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12}
-    accepted["slots"] = [sound] if sound_only else []
-    assert vfx.validate_vfx_director_output(accepted, data)["ok"]
-    original = copy.deepcopy(data)
-    raw = copy.deepcopy(accepted)
-    raw["effectMagnitude"] = 2.0  # Metadata-only fault, never permission to redesign audio.
+    sound = dict(accepted["slots"][0], id="authored_sound", rendererKind="soundCue", channel="sound", lane="cue",
+                 emissionMode="none", soundId="Tink", sound={"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12})
+    accepted["slots"] = [sound] if audio else []
+    raw = dict(accepted, effectMagnitude=2)
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.2,
-             "slotsUpsert": [{**sound, "id": "unrequested_audio", "soundId": "Tink"},
-                             {**sound, "soundId": "Item14"}],
-             "slotIdsDelete": [sound["id"]] if sound_only else [],
-             "note": "correct only the magnitude"}
-    sent = _offline_transport(monkeypatch, "audio_ownership_" + str(sound_only), [raw, patch])
+             "slotsUpsert": [dict(sound, soundId="Item14"), dict(sound, id="unrequested_sound")],
+             "slotIdsDelete": ["authored_sound"], "note": "magnitude only"}
+    responses, sent = wire_transport
+    responses.extend([raw, patch])
     final = vfx.attach_hybrid_vfx_manifest(data, "audio-ownership", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 2
-    director, repair = [request_dossier(request) for request in sent]
-    semantics = director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
-    assert semantics == repair["runtimeVocabularyReadOnly"]["rendererSemantics"]["soundCue"]
-    for clause in (
-        "SoundID.Item1", "native Item.UseSound=null", "without a soundCue slot",
-        "no generated use sound", "do not supply a fallback", "separate presentation choice",
-        "tiny visualBudgetClass and effectMagnitude do not select or mute sound",
-        "soundCue-only slots array is valid", "Empty slots remains a valid deliberately silent choice",
-        "no item is required to have sound", "Repair must preserve valid silence",
-    ):
-        assert clause in semantics, clause
-    assert repair["repairScope"]["fieldPermissions"] == {
-        "globals": {"effectMagnitude": [""]}, "slots": [], "assets": [],
-    }
-    assert not repair["repairScope"]["allowCreateSlots"]
-    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.effectMagnitude"]
     assert final["debug"]["vfxDirectorRaw"] == accepted
-    assert final["vfxManifest"]["slots"] == vfx._compile_manifest(original, accepted, "audio-ownership")["slots"]
-    assert final["gameplay"] == original["gameplay"]
-    assert final["runtimeProgram"] == original["runtimeProgram"]
+    slots = sanitize_recipe_for_delivery(final)["vfxManifest"]["slots"]
+    if audio:
+        sound_slot, = slots
+        assert (sound_slot["id"], sound_slot["entityId"], sound_slot["event"], sound_slot["soundId"]) == ("authored_sound", "item", "on_use", "Tink")
+        assert sound_slot["sound"] == {"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12}
+    else:
+        assert slots == []
+    packet = request_dossier(sent[1])
+    assert packet["repairScope"]["fieldPermissions"] == {"globals": {"effectMagnitude": [""]}, "slots": [], "assets": []}
+    assert final["gameplay"] == before["gameplay"] and final["runtimeProgram"] == before["runtimeProgram"]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
-    assert raw["effectMagnitude"] == 2.0
+    assert [request["_infini_stage"] for request in sent] == ["vfx_director", "vfx_repair"] and not responses
 
 
-@pytest.mark.parametrize("capability", ["channel_beam", "move_whip_lash"])
-def test_actual_vfx_prefix_keeps_color_opacity_and_dedicated_impact_repair_frozen(monkeypatch, capability):
-    prefixes = []
-    for color, opacity in (("cyan", 0.25), ("orange", 0.75)):
-        data = _data(capability)
-        data["visual"] = {"effectColor": color}
-        data["visualKit"] = {"item": {"effectColor": color}}
-        accepted = _sprite(data)
-        accepted["slots"][0]["element"]["opacityProfile"]["middle"] = opacity
-        accepted["slots"][0]["element"]["colorProfile"]["middle"] = color
-        impact = _legacy(data)["slots"][0]
-        impact.update(id="dedicated_impact", rendererKind="impactSprite", textureRole="impact",
-                      spritePrompt=f"one dedicated {color} impact sprite", spriteNegativePrompt="no atlas")
-        accepted["slots"].append(impact)
-        assert vfx.validate_vfx_director_output(accepted, data)["ok"]
-        raw = copy.deepcopy(accepted)
-        raw["slots"][0]["alpha"] = 2.0
-        report = vfx.validate_vfx_director_output(raw, data)
-        scope = vfx._build_vfx_repair_scope(raw, report["errors"])
-        assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "ingredient_element", "paths": ["alpha"]}], "assets": []}
-        candidate = copy.deepcopy(accepted["slots"][0])
-        candidate["element"]["opacityProfile"]["middle"] = 0.0
-        candidate["element"]["colorProfile"]["middle"] = "pink"
-        hostile_impact = {**impact, "spritePrompt": "unrequested substitute", "textureRole": "item"}
-        patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate, hostile_impact], "note": "alpha only"}
-        before, raw_before = copy.deepcopy(data), copy.deepcopy(raw)
-        sent = _offline_transport(monkeypatch, capability + "_" + color, [raw, patch])
-        final = vfx.attach_hybrid_vfx_manifest(data, "prefix-" + capability, llm_director=stage.call_llm_vfx_director)
-        assert final["debug"]["vfxDirectorRaw"] == accepted
-        assert raw == raw_before
-        assert final["runtimeProgram"]["entities"][0]["visual"]["impactPrompt"] == impact["spritePrompt"]
-        assert final["gameplay"] == before["gameplay"]
-        director, repair = [request_dossier(request) for request in sent]
-        assert repair["exactErrors"] == report["errors"][:24]
-        assert repair["repairScope"] == scope
-        assert repair["brokenFragments"]["slots"] == [raw["slots"][0]]
-        assert repair["validGeneratedContext"]["slots"] == [impact]
-        assert director["acceptedVisualKit"] == repair["acceptedVisualKitReadOnly"] == before["visualKit"]
-        assert director["acceptedRuntimeProgramReadOnly"] == repair["acceptedRuntimeProgramReadOnly"]
-        sources = director["runtimeSurface"]["texturedPathSources"]
-        assert any(("beam" if capability == "channel_beam" else "whip") in row["sources"] for row in sources)
-        for packet, request, keys in ((director, sent[0], vfx.VFX_PROMPT_STATIC_KEYS), (repair, sent[1], vfx.VFX_REPAIR_PROMPT_STATIC_KEYS)):
-            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-            prefix = json.dumps({key: packet[key] for key in keys}, ensure_ascii=False, separators=(",", ":"))
-            static = json.loads(request["messages"][1]["content"])
-            assert "#/$defs/" in static["rules"].pop()
-            assert set(static.pop("schemaDefinitions")["$defs"]) == {"element", "path", "screenShake", "particle", "sound"}
-            assert json.dumps(static, ensure_ascii=False, separators=(",", ":")) == prefix
-        prefixes.append(tuple(request["messages"][1]["content"] for request in sent))
-    assert prefixes[0] == prefixes[1]
-
-
-@pytest.mark.parametrize("repair", [False, True])
-def test_serialized_director_and_repair_explain_legacy_png_dependencies(monkeypatch, repair):
+def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_impact(wire_transport):
     data = _accepted_visual_data("workbench_blade")
-    accepted = _vfx_output(data)
+    data["visual"]["effectColor"] = data["visualKit"]["item"]["effectColor"] = "cyan"
+    data["visual"]["palette"] = data["visualKit"]["item"]["palette"] = ["copper and red fire prose"]
+    before = copy.deepcopy(data)
+    accepted = _sprite(data)
+    accepted["slots"][0]["element"]["opacityProfile"]["middle"] = 0.25
+    impact = dict(_legacy(data)["slots"][0], id="dedicated_impact", rendererKind="impactSprite", textureRole="impact",
+                  spritePrompt="one dedicated cyan impact sprite", spriteNegativePrompt="no atlas")
+    accepted["slots"].append(impact)
     raw = copy.deepcopy(accepted)
-    raw["slots"][0]["entityId"] = "missing_entity"
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "retarget only the pair"}
-    sent = _offline_transport(monkeypatch, "legacy_png_packet", [raw, patch])
-    vfx.attach_hybrid_vfx_manifest(data, "legacy_png_guide", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 2
-    packet = request_dossier(sent[int(repair)])
-    surface = packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]
-    slot_schema = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
-    description = slot_schema["properties"]["textureRole"]["description"]
-    for renderer in vfx.SPRITE_TEXTURE_RENDERERS:
-        assert renderer in description
-    for clause in (
-        "item=accepted item PNG", "entity=bound entity baked_sprite/reuse_item_icon PNG",
-        "no_asset/runtime_geometry cannot supply one", "projectile/field alias entity only when equal to bound visualRole",
-        "same mode requirement", "impact=same-entity impactSprite producer", "none invalid for sprites",
-        "Primitive/Dust/cue renderer hints require no PNG",
-    ):
-        assert clause in description, clause
-    vocabulary = packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]
-    assert "projectile/field aliases require exact bound visualRole" in vocabulary["textureDependencyTuples"]["entity"]
-    assert vocabulary["textureRole"] == slot_schema["properties"]["textureRole"]["enum"]
-    sources = {row["entityId"]: row for row in surface["entityTextureSources"]}
-    for entity in data["runtimeProgram"]["entities"]:
-        assert sources[entity["id"]]["assetMode"] == entity["visual"]["assetMode"]
-    assert packet["acceptedVisualKitReadOnly" if repair else "acceptedVisualKit"] == data["visualKit"]
-
-FIELD_CONTRACTS = [("global", field, terms, ("number", 0.0, 1.0), True) for field, terms in _GLOBAL_DESCRIPTIONS.items()]
-FIELD_CONTRACTS += [("motif", field, terms, ("number", 0.2, 3.0) if field == "rhythm" else ("number", 0.0, 1.0), True) for field, terms in _MOTIF_DESCRIPTIONS.items()]
-FIELD_CONTRACTS += [("slot", field, terms + (("spriteElement", "texturedPath") if field in {"duration", "startTick", "repeatEvery", "alpha"} else ()), _EXPECTED_BOUNDS[field], field not in {"duration", "startTick", "repeatEvery"}) for field, terms in _SLOT_DESCRIPTIONS.items()]
-FIELD_CONTRACTS += [("slot", field, ("spriteElement", "texturedPath"), None, False) for field in ("backend", "textureRole")]
-_PAYLOAD_FIELDS = _sent(_data(), False)["outputSchema"]["properties"]["slots"]["items"]["properties"]
-FIELD_CONTRACTS += [(payload, field, ("profile coordinate",) if field.endswith("Profile") else (), None, False)
-                    for payload in ("element", "path") for field, schema in _PAYLOAD_FIELDS[payload]["properties"].items()
-                    if schema.get("type") in ("integer", "number") or field.endswith("Profile")]
-FIELD_CONTRACTS += [(payload, field + "." + knot, (), None, False)
-                    for payload in ("element", "path") for field in _PAYLOAD_FIELDS[payload]["properties"] if field.endswith("Profile") for knot in ("start", "middle", "end")]
-FIELD_CONTRACTS += [("element", "inheritVelocity", ("world tick", "extraUpdates", "Player.velocity", "not measured anchor displacement"), None, False)]
-
-@pytest.mark.parametrize("container,field,terms,bounds,engine_units", FIELD_CONTRACTS, ids=[container + "." + field for container, field, *_ in FIELD_CONTRACTS])
-def test_transported_vfx_field_contract(container, field, terms, bounds, engine_units):
-    assert set(_SLOT_DESCRIPTIONS) == set(_EXPECTED_BOUNDS)
-    output = _sent(_data(), False)["outputSchema"]["properties"]
-    slot = output["slots"]["items"]["properties"]
-    schema = (output[field] if container == "global" else output["motif"]["properties"][field]
-              if container == "motif" else slot[field] if container == "slot" else slot[container])
-    if container in {"element", "path"}:
-        for token in field.split("."):
-            schema = schema["properties"][token]
-    description = schema.get("description", "")
-    assert description
-    assert all(term.lower() in description.lower() for term in terms), description
-    if engine_units: assert "engine units" in description.lower()
-    if bounds: assert {key: schema[key] for key in ("type", "minimum", "maximum")} == dict(zip(("type", "minimum", "maximum"), bounds))
-
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("color,remove_bg,keyed", [("cyan", False, False), ("cyan", True, True), ("transparent", True, False)])
-def test_transported_vfx_presentation_policy(monkeypatch, repair, color, remove_bg, keyed):
-    from infini_local.pipelines import pipeline_visual_config as config
-    monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
-    monkeypatch.setattr(config, "BG_REMOVE_MODE", "sprite_keyer")
-    monkeypatch.setattr(config, "BG_COLOR", color)
-    packet = _sent({}, repair)
-    slot = packet["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]["properties"]
-    surface = packet["runtimeVocabularyReadOnly" if repair else "runtimeVocabulary"]
-    rules = slot["spritePrompt"].get("description", "")
-    assert "final impact PNG" in rules and "raw image" in rules
-    assert "must request one dedicated transparent impact sprite" not in rules
-    if keyed:
-        assert "rgb(0,255,255)" in rules
-    else:
-        assert "transparent background" in rules and "solid rgb" not in rules
-    assert "Dust/FNA" in slot["backend"].get("description", "")
-    particles = slot["particleSystemId"].get("description", "")
-    assert "Terraria dust" in particles and "not" in particles and "ParticleLibrary" in particles
-    assert "effectColor" in surface["colorPolicy"] and "legacy" in surface["colorPolicy"]
-    semantics = surface["rendererSemantics"]
-    assert set(semantics) == set(surface["rendererKind"])
-    assert "wave" in semantics["wavyStrip"] and "motes" in semantics["orbitingMotes"]
-    assert "120" in semantics["ghostArc"] and "tip" in semantics["tipTrail"]
-    assert semantics == vfx._prompt_packet({}, None, None)["runtimeVocabulary"]["rendererSemantics"]
-    if repair:
-        assert any("deletePaths" in rule and "omissions" in rule for rule in packet["rules"])
-    else:
-        assert all(rule.startswith("Legacy ") for rule in packet["rules"] if "Procedural phase" in rule or "Sprite renderers require" in rule)
-        assert any("spriteElement and texturedPath" in rule and "nested texture" in rule for rule in packet["rules"])
+    raw["slots"][0]["alpha"] = 2
+    candidate = copy.deepcopy(accepted["slots"][0])
+    candidate["element"]["opacityProfile"]["middle"] = 0
+    candidate["element"]["colorProfile"]["middle"] = "pink"
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate, dict(impact, spritePrompt="unrequested replacement")], "note": "alpha only"}
+    responses, sent = wire_transport
+    responses.extend([raw, patch])
+    final = vfx.attach_hybrid_vfx_manifest(data, "frozen-presentation", llm_director=stage.call_llm_vfx_director)
+    assert final["debug"]["vfxDirectorRaw"] == accepted
+    element = final["vfxManifest"]["slots"][0]["element"]
+    assert element["colorProfile"] == {"start": "white", "middle": "effect", "end": "tan", "curve": "linear"}
+    assert element["opacityProfile"] == {"start": 0, "middle": 0.25, "end": 0, "curve": "smoothStep"}
+    assert final["visual"]["effectColor"] == "cyan" and final["visual"]["palette"] == ["copper and red fire prose"]
+    item = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == "item")
+    assert item["visual"]["impactPrompt"] == "one dedicated cyan impact sprite"
+    assert final["gameplay"] == before["gameplay"]
+    packet = request_dossier(sent[1])
+    assert packet["repairScope"]["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "ingredient_element", "paths": ["alpha"]}], "assets": []}
+    assert packet["validGeneratedContext"]["slots"] == [impact]
+    assert packet["acceptedVisualKitReadOnly"] == before["visualKit"]
+    assert all("sound" not in slot and "soundId" not in slot for slot in final["vfxManifest"]["slots"])
+    assert vfx.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"] and not responses

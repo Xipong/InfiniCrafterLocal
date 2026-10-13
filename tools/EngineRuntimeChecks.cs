@@ -247,6 +247,7 @@ internal static partial class EngineRuntimeChecks
             ("pb02 same ID restoration conflict refusal", Pb02RestoreRefusesSameIdContentConflicts),
             ("native quick use never selects a non-effect binding", NativeQuickUseNeverSelectsNonEffectBinding),
             ("held proxy replaced only by ready instance PNG", HeldProxyIsReplacedOnlyByReadyInstanceSprite),
+            ("textured body uses declared axis and preserves native spin", TexturedBodyUsesDeclaredAxisAndPreservesNativeSpin),
             ("item VFX preserves world-clock cadence", ItemVfxPeriodicUsesWorldClockAndIgnoresProjectileStartTick),
             ("item VFX hit positions relay and event budgets", ItemVfxEventPositionsRelayAndBudgets),
             ("beam live damage and shared body warmup ramps", BeamRampsConsumeLiveDamageAndSharedBodyGeometry),
