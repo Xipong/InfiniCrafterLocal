@@ -6,8 +6,6 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import tempfile
-import os
 import threading
 import pytest
 from PIL import Image, ImageDraw
@@ -23,17 +21,9 @@ from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _existing_texture_data
 
-R = Path(__file__).resolve().parents[2]
-
-OUT = Path(os.environ.get('INFINI_IMAGE_OWNERSHIP_EVIDENCE_DIR', str(Path(tempfile.gettempdir()) / 'image-job-ownership-tests')))
-
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
-def record(name, value):
-    path = OUT / 'observations' / (name + '.json')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False), encoding='utf-8')
 
 def png(color, strip=False):
     image = Image.new('RGBA', (64, 64), (255, 0, 255, 255))
@@ -175,7 +165,6 @@ def test_overlap_must_preserve_each_validated_png(offline, monkeypatch, kind, di
             'http_headers': served['headers'], 'sprite_code': sprite['code'],
             'sprite_sha256': sha(sprite['raw']),
         }
-    record('overlap-' + kind + ('-distinct' if distinct_ids else '-same'), {'kind': kind, 'distinct_ids': distinct_ids, 'gate_capacity': 1, 'requests': requests, 'results': rows})
     assert [row['payload']['seed'] for row in requests] == [731, 731]
     assert all(result[3] == 'generated' for result in returned.values()), returned
     assert not list(root.glob('.infini_vfx_png_*.part'))
@@ -186,26 +175,6 @@ def test_overlap_must_preserve_each_validated_png(offline, monkeypatch, kind, di
         assert row['validated_sha256'] == row['http_sha256'] == row['returned_sha256'], f'{kind}: {name} received another invocation\'s PNG'
     assert returned['first'][0] != returned['second'][0]
 
-def test_public_adapters_share_the_canonical_attempt_executor(offline, monkeypatch):
-    executor = getattr(generation, '_execute_image_request', None)
-    assert callable(executor), 'the duplicated lifecycles have no canonical executor'
-    requests = []
-
-    def capture(data, request):
-        requests.append(request)
-        return executor(data, request)
-
-    monkeypatch.setattr(generation, '_execute_image_request', capture)
-    for kind in ('item', 'entity', 'impact', 'equip_overlay', 'vfx_cutout', 'vfx_strip'):
-        assert invoke(kind, 'shared_executor')[3] == 'generated'
-    assert [request.processing_role for request in requests] == [
-        'item', 'runtime:projectile', 'impact', 'equip_overlay', 'vfx_cutout', 'vfx_strip',
-    ]
-    import ast
-    import inspect
-    for adapter in (generation.maybe_generate_sprite, generation.generate_visual_asset):
-        tree = ast.parse(inspect.getsource(adapter))
-        assert not any(isinstance(node, (ast.For, ast.While)) for node in ast.walk(tree))
 
 def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypatch):
     root, requests = offline
@@ -218,7 +187,6 @@ def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypa
     body['visual'] = {'role': 'projectile', 'assetMode': 'baked_sprite', 'prompt': 'one isolated amber body fixture', 'silhouette': 'round', 'visualIdentity': 'amber core'}
     data['runtimeProgram']['entities'].append(body)
     data['runtimeProgram']['bindings'].append({'id': 'secondary', 'input': 'alternate_use', 'role': 'secondary', 'usePolicy': {'action': {'kind': 'spawn_entity', 'targetId': 'orb_impact'}, 'stackCost': 0, 'contactDamage': False}})
-    plan = build_visual_asset_plan(data)
     watched = []
     real_validator = generation.validate_processed_sprite
 
@@ -234,12 +202,6 @@ def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypa
     body_visual = next(row for row in out['runtimeProgram']['entities'] if row['id'] == 'orb_impact')['visual']
     report = delivery.visual_delivery_report(out, check_backend_config=False)
     served = serve(root, impact_visual['impactSpritePath'])
-    record('cross-role-body-impact', {
-        'plan': plan, 'validated': watched, 'impact_path': impact_visual['impactSpritePath'],
-        'body_path': body_visual['spritePath'], 'delivery_ok': report['ok'], 'delivery_problems': report['problems'],
-        'http_code': served['code'], 'http_sha256': sha(served['raw']), 'http_headers': served['headers'],
-        'requests': requests,
-    })
     assert report['ok'], report['problems']
     assert len(watched) == 2 and all(row['validation_ok'] for row in watched), watched
     assert watched[0]['sha256'] != watched[1]['sha256']

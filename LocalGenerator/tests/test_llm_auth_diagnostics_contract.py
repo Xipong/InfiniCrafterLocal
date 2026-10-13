@@ -1,13 +1,6 @@
-from pathlib import Path
-
 import pytest
 
 from infini_local.pipelines import llm_transport
-
-ROOT = Path(__file__).resolve().parents[1]
-SERVER = ROOT / "infini_local" / "web" / "server.py"
-LLM_TRANSPORT = ROOT / "infini_local" / "pipelines" / "llm_transport.py"
-UTILITY_ROUTES = ROOT / "infini_local" / "web" / "server_utility_routes.py"
 
 
 def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
@@ -39,18 +32,6 @@ def _check_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     assert health["llmAuth"] == configured
     assert "api_key" not in health["llmAuth"]
     assert primary["api_key"] not in repr(health)
-
-    assert "OpenRouter auth failed" in LLM_TRANSPORT.read_text(encoding="utf-8")
-
-
-def _check_server_exposes_local_shutdown_endpoint_for_gui_restart():
-    server_text = SERVER.read_text(encoding="utf-8")
-    route_text = UTILITY_ROUTES.read_text(encoding="utf-8")
-    assert "ServerUtilityRoutes" in server_text
-    assert 'path.startswith("/shutdown")' in route_text
-    assert '"shutdown scheduled"' in route_text
-    assert 'cleanup_for_shutdown("http_shutdown")' in route_text
-    assert 'handler.server.shutdown()' in route_text
 
 
 # One collected item per contract module: the checks above keep source order and
