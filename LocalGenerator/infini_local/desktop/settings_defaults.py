@@ -57,7 +57,8 @@ def defaults_offer(path: Path) -> dict:
     recommendations = {key: DEFAULTS[key] for key in UPDATED_DEFAULTS}
     revision = _revision(raw)
     changes = []
-    # Absent keys already inherit new defaults; do not materialize or write them.
+    # Absent keys and blank numeric controls inherit new defaults. A present
+    # blank reasoning mode is explicit off, not inheritance; include that diff.
     explicit = {}
     for line in raw.decode('utf-8-sig').splitlines():
         stripped = line.strip()
@@ -65,7 +66,7 @@ def defaults_offer(path: Path) -> dict:
             key, value = stripped.split('=', 1)
             explicit.setdefault(key.strip(), value.strip().strip('"').strip("'"))
     for key, recommended in recommendations.items():
-        if explicit.get(key, '').strip() and explicit[key] != recommended:
+        if key in explicit and (explicit[key].strip() or key == 'INFINI_LLM_REASONING_MODE') and explicit[key] != recommended:
             changes.append({'key': key, 'current': explicit[key], 'recommended': recommended, 'reason': UPDATED_DEFAULTS[key]})
     try:
         decision = json.loads(_decision_path(path).read_text(encoding='utf-8'))

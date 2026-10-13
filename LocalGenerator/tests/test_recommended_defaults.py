@@ -198,3 +198,15 @@ def test_accept_is_acknowledged_without_a_second_sidecar_write(tmp_path, monkeyp
     assert owner.decide_defaults(config, offer['revision'], accept=True) == {'INFINI_LLM_MAX_TOKENS': '18000'}
     assert config.read_bytes() == b'INFINI_LLM_MAX_TOKENS=18000\n'
     assert owner.defaults_offer(config)['changes'] == []
+
+
+def test_blank_reasoning_is_explicit_off_not_numeric_inheritance(tmp_path):
+    from infini_local.desktop.settings_defaults import defaults_offer, decide_defaults
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_MAX_TOKENS=\nINFINI_LLM_REASONING_MODE=\n'
+    config.write_bytes(original)
+    offer = defaults_offer(config)
+    assert [(row['key'], row['current'], row['recommended']) for row in offer['changes']] == [
+        ('INFINI_LLM_REASONING_MODE', '', 'medium')]
+    decide_defaults(config, offer['revision'], accept=True)
+    assert config.read_bytes() == original.replace(b'INFINI_LLM_REASONING_MODE=\n', b'INFINI_LLM_REASONING_MODE=medium\n')
