@@ -29,3 +29,6 @@ ownership/invalidation and representative malformed-input scenarios. Exhaustive
 DTO/shape products, creative pixel/curve details, private UI/storage observers
 and duplicate stress runs are intentionally retired. Native checks run through
 the canonical mod consumers; they are not replaced by source-string assertions.
+A compact six-scenario textured-body check retains declared forward-axis,
+horizontal-flip, native-spin and root-texture selection behavior through public
+PreDraw and actual FNA CPU vertices; the old 1,080-case product stays retired.
