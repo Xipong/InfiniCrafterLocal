@@ -1,6 +1,6 @@
 # Исторический runtime audit — 10 октября 2026 — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md](archive/HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md](archive/HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="исторический-runtime-audit--10-октября-2026"></a>
 - [Исторический runtime audit — 10 октября 2026](archive/HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md#исторический-runtime-audit--10-октября-2026)

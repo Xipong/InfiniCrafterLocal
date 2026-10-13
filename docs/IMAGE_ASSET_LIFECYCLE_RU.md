@@ -1,6 +1,6 @@
 # Image/VFX asset lifecycle — активный контракт 0.4.248 — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [IMAGE_ASSET_LIFECYCLE_RU.md](development/IMAGE_ASSET_LIFECYCLE_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [IMAGE_ASSET_LIFECYCLE_RU.md](development/IMAGE_ASSET_LIFECYCLE_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="owners"></a>
 - [owners](development/IMAGE_ASSET_LIFECYCLE_RU.md#owners)

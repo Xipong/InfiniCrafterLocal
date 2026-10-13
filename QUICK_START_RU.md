@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.254 — начать
+# InfiniCrafterLocal v0.5.00 — начать
 
 **Основной Windows-вход: `OPEN_INFINICRAFT.bat`.** Он готовит проектное `LocalGenerator/.venv` и открывает GUI, но не скачивает модели и не устанавливает мод. Это дерево подготовки к альфе, не опубликованный альфа-релиз.
 

@@ -1,6 +1,6 @@
 # Границы engine runtime — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [ENGINE_RUNTIME_BOUNDARIES_RU.md](development/ENGINE_RUNTIME_BOUNDARIES_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [ENGINE_RUNTIME_BOUNDARIES_RU.md](development/ENGINE_RUNTIME_BOUNDARIES_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="contract"></a>
 - [contract](development/ENGINE_RUNTIME_BOUNDARIES_RU.md#contract)

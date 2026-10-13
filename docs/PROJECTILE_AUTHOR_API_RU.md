@@ -1,6 +1,6 @@
 # Projectile Author: точные формы position, immunity и when — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [PROJECTILE_AUTHOR_API_RU.md](reference/PROJECTILE_AUTHOR_API_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [PROJECTILE_AUTHOR_API_RU.md](reference/PROJECTILE_AUTHOR_API_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="projectile-author-точные-формы-position-immunity-и-when"></a>
 - [Projectile Author: точные формы position, immunity и when](reference/PROJECTILE_AUTHOR_API_RU.md#projectile-author-точные-формы-position-immunity-и-when)

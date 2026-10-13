@@ -1,4 +1,4 @@
-# Generated canonical contracts — 0.4.254
+# Generated canonical contracts — 0.5.00
 
 **Полные generated projections сохранены на исходных путях.** Они читают canonical source, не заменяют его и не копируются в краткие руководства. Ручная правка каталога запрещена: меняй source/producer у его владельца.
 

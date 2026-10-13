@@ -1,6 +1,6 @@
 # Terraria/tModLoader standardization — точная граница 0.4.248 — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [TERRARIA_TMODLOADER_STANDARDIZATION_RU.md](reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [TERRARIA_TMODLOADER_STANDARDIZATION_RU.md](reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="boundary"></a>
 - [boundary](reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#boundary)

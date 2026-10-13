@@ -1,4 +1,4 @@
-# Эксплуатация LocalGenerator — 0.4.254
+# Эксплуатация LocalGenerator — 0.5.00
 
 **Рабочее дерево подготовки к альфе, не опубликованная поставка.** Для первого запуска используй [пошаговый сценарий](START_RU.md). Здесь владелец точной операционной семантики: config priority, безопасный restart/stop, effective health, trace/cache и MP transport. История версий — в [архиве](../archive/README_RU.md).
 

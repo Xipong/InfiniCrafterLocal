@@ -1,4 +1,4 @@
-# Сборка и runtime QoL — 0.4.254
+# Сборка и runtime QoL — 0.5.00
 
 Установка и запуск принадлежат [пользовательскому runbook](../user/OPERATIONS_RU.md); здесь — зависимости C# и граница runtime cache.
 

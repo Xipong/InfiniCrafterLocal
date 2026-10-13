@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.254 — карта owners — навигация 0.4.254
+# InfiniCrafterLocal v0.5.00 — карта owners — навигация 0.5.00
 
 Python owners: registry/schema/validator/compiler в core/runtime_authoring; orchestration в pipelines. C# consumers, storage и persistence не смешиваются с authored решениями.
 

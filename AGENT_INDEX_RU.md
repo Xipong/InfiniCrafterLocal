@@ -1,4 +1,4 @@
-# Агенту: от задачи к владельцу — навигация 0.4.254
+# Агенту: от задачи к владельцу — навигация 0.5.00
 
 Сначала найди canonical owner задачи. Capability требует полного registry → schema/prompt → validator/compiler → strict wire → C# DTO/executor → tests/docs.
 

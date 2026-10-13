@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.254 — карта owners
+# InfiniCrafterLocal v0.5.00 — карта owners
 
 [Архитектура и trust boundaries](ARCHITECTURE_RU.md) · [Добавить capability](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) · [Generated contract](../../lowery.md) · [Placed PNG source/runtime owners](../reference/PRESENT_PLACED_ITEM_SPRITE_RU.md)
 

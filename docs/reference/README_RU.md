@@ -1,4 +1,4 @@
-# Техническая справка — 0.4.254
+# Техническая справка — 0.5.00
 
 [Generated canonical contracts](GENERATED_RU.md) · [Разработка](../development/README_RU.md) · [Пользовательские инструкции](../user/README_RU.md)
 

@@ -1,4 +1,4 @@
-# Команды InfiniCrafterLocal в Terraria — навигация 0.4.254
+# Команды InfiniCrafterLocal в Terraria — навигация 0.5.00
 
 Команды выполняются в Terraria/tModLoader, не в терминале. Debug outputs и полный trace могут содержать личный контекст; проверь их перед публикацией.
 
