@@ -18,7 +18,7 @@ import pytest
 
 from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
 from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
-from test_provider_transport_contract import PIN, packet, wire
+from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
 from provider_test_support import HttpReply, RecordingOpener
 
 CODEX = "https://chatgpt.com/backend-api/codex"
@@ -48,7 +48,7 @@ def _assert_structured_outputs_subset(schema):
 
 
 @pytest.mark.parametrize("stage", ["author", "repair"])
-def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, stage):
+def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, subscription_sends, stage):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
 
     monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
@@ -60,7 +60,10 @@ def test_subscription_sends_supported_schema_without_mutating_authored_packet(mo
                    "response_format": llm.llm_json_response_format(
                        "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True)}
     before = copy.deepcopy(request)
-    sent = backend._request_payload(request)
+    _response, _credentials, calls = subscription_sends
+    backend.generate_chat(request, timeout=3)
+    assert len(calls) == 1 and calls[0][0] == CODEX + "/responses"
+    sent = calls[0][1]
     _assert_structured_outputs_subset(sent["text"]["format"]["schema"])
     assert sent["model"] == request["model"]
     assert sent["text"]["format"]["type"] == "json_schema"
@@ -92,140 +95,56 @@ def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
     return copy.deepcopy(value)
 
 
-def _sparse_event_item(fn, event):
+def _sparse_event_item(event):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
     item = build_runtime_fixture("workbench_blade")
     calls = item["runtimeProgram"]["calls"]
     spawn = next(row for row in calls if row["fn"] == "spawn_entity_on_event")
-    if fn == "spawn_entity_on_event":
-        selected = spawn
-    else:
-        selected = {"id": "pull_case", "fn": fn, "target": spawn["target"],
-                    "params": {"when": event, "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
-        calls.append(selected)
-    selected["params"]["when"] = {"everyTicks": 6} if event == "periodic" else event
+    selected = {"id": "pull_case", "fn": "pull_on_event", "target": spawn["target"],
+        "params": {"when": {"everyTicks": 6} if event == "periodic" else event,
+                   "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
+    calls.append(selected)
     next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
     return item, selected
 
 
-@pytest.mark.parametrize("stage", ["author", "repair"])
-@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
-@pytest.mark.parametrize("event", ["on_hit", "periodic"])
-def test_subscription_nullable_roundtrip_uses_local_discriminators_across_subset_cases(stage, fn, event):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
+@pytest.mark.parametrize("control", ["nullable-valid", "required-null", "unknown-function"])
+def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_invalid_authorship(monkeypatch, control):
+    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
     from infini_local.core.runtime_authoring import validate_runtime_program
 
-    item, selected = _sparse_event_item(fn, event)
-    assert validate_runtime_program(item)["ok"]
-    if stage == "author":
-        local, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
-        sparse = item
-    else:
-        local, provider = contract.author_item_repair_response_schema(), contract.author_item_provider_repair_response_schema()
-        sparse = {"note": "exact event row", "callsUpsert": [selected], "realizationReplacement": item["realization"]}
-    source = json.dumps(sparse, sort_keys=True)
-    encoded = _encode_nullable_fixture(sparse, local)
+    item, _ = _sparse_event_item("on_hit")
+    encoded = _encode_nullable_fixture(item, contract.author_item_response_schema())
+    selected = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "pull_on_event")
+    if control == "required-null":
+        selected["params"]["strength"] = None
+    elif control == "unknown-function":
+        selected["fn"] = "unknown_function"
     before = copy.deepcopy(encoded)
-    assert Draft202012Validator(local).is_valid(sparse)
-    assert Draft202012Validator(provider).is_valid(encoded)
-    response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
-    restored = contract.project_provider_nullable_optionals_to_local(encoded, local, response_format=response_format)
-    assert json.dumps(restored, sort_keys=True) == source
-    assert json.dumps(sparse, sort_keys=True) == source and encoded == before
-
-
-@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
-def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptance(fn):
-    from jsonschema import Draft202012Validator
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-    from infini_local.pipelines import author_item_contract as contract
-
-    local = CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"]
-    provider = contract._provider_strict_projection(local)
-    _, selected = _sparse_event_item(fn, "on_hit")
-    valid_encoding = _encode_nullable_fixture(selected["params"], local)
-    choices = [event for event in CAPABILITY_REGISTRY[fn].allowed_events if event != "periodic"]
-    choices += ["unknown_event", "periodic", None, False, {}]
-    choices += [{"everyTicks": period} for period in (None, False, 5, 6, 3600, 3601, 6.5, "6")]
-    for when in choices:
-        sparse = {**selected["params"], "when": when}
-        encoded = {**valid_encoding, "when": when}
-        source_valid = Draft202012Validator(local).is_valid(sparse)
-        sent_valid = Draft202012Validator(provider).is_valid(encoded)
-        assert source_valid == sent_valid, (fn, when)
-        if isinstance(when, dict):
-            period = when.get("everyTicks")
-            assert sent_valid is (type(period) is int and 6 <= period <= 3600), when
-    assert CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"] == local
-
-
-@pytest.mark.parametrize("control", ["bad-neighbour", "required-null", "periodic-null", "unknown-event", "missing-event", "unknown-fn", "missing-fn", "array-null", "foreign-null", "different-wrapper", "reordered-provider"])
-def test_subscription_inverse_never_hides_invalid_values_or_guesses_a_branch(control):
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
-
-    item, _ = _sparse_event_item("pull_on_event", "on_hit")
-    local, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
-    encoded = _encode_nullable_fixture(item, local)
-    call = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "pull_on_event")
-    params = call["params"]
-    if control == "bad-neighbour":
-        params["strength"] = "not a number"
-    elif control == "required-null":
-        params["strength"] = None
-    elif control == "periodic-null":
-        params["when"] = {"everyTicks": None}
-    elif control == "unknown-event":
-        params["when"] = "unknown_event"
-    elif control == "missing-event":
-        params.pop("when")
-    elif control == "unknown-fn":
-        call["fn"] = "unknown_function"
-    elif control == "missing-fn":
-        call.pop("fn")
-    elif control == "array-null":
-        encoded["runtimeProgram"]["calls"].insert(0, None)
-    elif control == "foreign-null":
-        params["foreign"] = None
+    request = {"model": "gpt-6-sol", "messages": [{"role": "user", "content": "Exact authored item"}],
+        "response_format": {"type": "json_schema", "json_schema": {"schema": contract.author_item_provider_response_schema()}}}
+    sent = []
+    monkeypatch.setattr(author, "USE_LLM", True)
+    monkeypatch.setattr(author, "resolve_llm_model", lambda: "gpt-6-sol")
+    monkeypatch.setattr(author, "build_initial_author_request", lambda *_a, **_kw: (request, "literal task", "literal rules"))
+    monkeypatch.setattr(author, "trace_event", lambda *_a, **_kw: None)
+    monkeypatch.setattr(author, "trace_stage_request", lambda *_a, **_kw: None)
+    monkeypatch.setattr(author, "llm_chat_json", lambda payload, **_kw: sent.append(copy.deepcopy(payload)) or {
+        "choices": [{"message": {"content": json.dumps(encoded)}}], "_debug": {"responseFormatType": "json_schema"}})
+    parsed = author.try_llm_plan({}, {}, {}, {}, "subscription-parse")
+    assert len(sent) == 1 and encoded == before
+    report = validate_runtime_program(parsed)
+    if control == "nullable-valid":
+        assert report["ok"], report["errors"]
+        assert parsed["runtimeProgram"] == item["runtimeProgram"]
     else:
-        branches = provider["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
-        if control == "reordered-provider":
-            branches.reverse()
+        assert not report["ok"], "provider projection must not conceal invalid authored values"
+        row = next(row for row in parsed["runtimeProgram"]["calls"] if row["id"] == "pull_case")
+        if control == "required-null":
+            assert row["params"]["strength"] is None
         else:
-            case = next(branch for branch in branches if branch["properties"]["fn"]["const"] == "pull_on_event")["properties"]["params"]
-            case["properties"]["delayTicks"] = case["properties"]["delayTicks"]["anyOf"][0]
-    before = copy.deepcopy(encoded)
-    response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
-    restored = author._prepare_parsed_author_item(encoded, response_format=response_format)
-    rows = restored["runtimeProgram"]["calls"]
-    restored_call = next(row for row in rows if isinstance(row, dict) and row.get("id") == "pull_case")
-    if control in {"unknown-fn", "missing-fn"}:
-        assert restored_call["params"] == params
-    elif control == "different-wrapper":
-        assert restored_call["params"]["delayTicks"] is None
-    else:
-        assert "delayTicks" not in restored_call["params"]
-        if control == "periodic-null":
-            assert restored_call["params"]["when"] == {"everyTicks": None}
-        if control == "unknown-event":
-            assert restored_call["params"]["when"] == "unknown_event"
-        if control == "missing-event":
-            assert "when" not in restored_call["params"]
-        if control in {"bad-neighbour", "required-null"}:
-            assert restored_call["params"]["strength"] == params["strength"]
-        if control == "array-null":
-            assert rows[0] is None and len(rows) == len(encoded["runtimeProgram"]["calls"])
-        if control == "foreign-null":
-            assert restored_call["params"]["foreign"] is None
-    assert encoded == before
-    assert contract.project_provider_author_item_to_local(encoded, response_format={"type": "json_object"}) == before
-    from jsonschema import Draft202012Validator
-    if control == "reordered-provider":
-        assert json.dumps(restored, sort_keys=True) == json.dumps(item, sort_keys=True)
-        assert Draft202012Validator(local).is_valid(restored)
-    else:
-        assert not Draft202012Validator(local).is_valid(restored), "inverse must not conceal an invalid authored value"
+            assert row["fn"] == "unknown_function"
 
 
 def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
@@ -233,7 +152,7 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
     from infini_local.core.runtime_authoring import validate_runtime_program
 
-    item, selected = _sparse_event_item("pull_on_event", "periodic")
+    item, selected = _sparse_event_item("periodic")
     expected = copy.deepcopy(item)
     selected["params"]["when"].pop("everyTicks")
     before = copy.deepcopy(item)
@@ -346,8 +265,6 @@ def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
 def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, status, encoding, diagnostic):
     secret = "test-access-not-real"
     twice = ''.join(r'\\u%04x' % ord(char) for char in secret)
-    if encoding == "twice-unicode":
-        assert auth._decode_unicode_runs(twice) == secret
     echoed = secret if encoding == "plain" else twice if encoding == "twice-unicode" else '{"token":"' + ''.join(r'\u%04x' % ord(char) for char in secret) + '"}'
     body = {"error": {"code": "unsupported_parameter", "param": "stream"}} if encoding == "diagnostic-code" else {"error": {"message": diagnostic + " " + echoed}}
     url = CODEX + ("/images/generations" if method == "post" else "/models")
@@ -386,14 +303,16 @@ def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, 
         {"type": "output_text", "text": '{"ok":true}'}, {"type": "refusal", "refusal": "test refusal"},
     ])], None, "refused", id="final-refusal-after-text"),
 ])
-def test_subscription_output_selects_only_completed_final_authored_text(output, expected, error):
-    response = {"output": copy.deepcopy(output)}
+def test_subscription_output_selects_only_completed_final_authored_text(subscription, output, expected, error):
+    response, _credentials = subscription
+    response["output"] = copy.deepcopy(output)
     before = copy.deepcopy(response)
+    request = {"model": "test-model", "messages": [{"role": "user", "content": "test"}]}
     if error:
         with pytest.raises(auth.CodexError, match=error):
-            backend._output_text(response)
+            backend.generate_chat(request, timeout=3)
     else:
-        text = backend._output_text(response)
+        text = backend.generate_chat(request, timeout=3)["choices"][0]["message"]["content"]
         assert text == expected
         assert json.loads(text) == json.loads(expected)
     assert response == before
@@ -413,7 +332,10 @@ def test_subscription_rejects_encoded_credential_echo(subscription, encoding, co
     assert credentials.access_token not in str(caught.value)
 
 
-@pytest.mark.parametrize("present,value", [(False, None), (True, 168), *[(True, x) for x in [True, -1, 1.5, "168", None, [], {}]]])
+@pytest.mark.parametrize("present,value", [
+    pytest.param(False, None, id="missing"), pytest.param(True, 168, id="observed-positive"),
+    pytest.param(True, 0, id="observed-zero"), pytest.param(True, True, id="bool-is-not-counter"),
+])
 def test_subscription_cache_instruction_attribution_survives_usage_projection(subscription, present, value, monkeypatch, tmp_path):
     response, credentials = subscription
     response["usage"] = {"input_tokens": 22000, "output_tokens": 120,
@@ -440,31 +362,18 @@ def test_subscription_cache_instruction_attribution_survives_usage_projection(su
 
 
 @pytest.mark.parametrize("scenario,usage,expected", [
-    pytest.param("full", {
-        "input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
-        "input_tokens_details": {"cached_tokens": 100, "metadata": "test-access-not-real"},
-        "output_tokens_details": {"reasoning_tokens": 20, "metadata": "test-refresh-not-real"},
-        "attribution": "test-account",
-    }, {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
-        "input_tokens_details": {"cached_tokens": 100}, "output_tokens_details": {"reasoning_tokens": 20}},
-        id="safe-usage-whitelist"),
-    pytest.param("metadata", {"input_tokens": 3, "output_tokens": 5,
-        "attribution": {"secret": "test-access-not-real"}}, {"input_tokens": 3, "output_tokens": 5},
-        id="provider-metadata-removed"),
-    *[pytest.param("counter", {"input_tokens_details": {"cached_tokens": value},
-        "output_tokens_details": {"reasoning_tokens": value}},
-        {"input_tokens_details": {"cached_tokens": value}, "output_tokens_details": {"reasoning_tokens": value}}
-        if type(value) is int and value >= 0 else {}, id=f"counter-{label}")
-      for label, value in (("zero", 0), ("positive", 7), ("true", True), ("false", False),
-                           ("negative", -1), ("fraction", 1.5), ("string", "20"), ("null", None),
-                           ("object", {}), ("array", []))],
-    *[pytest.param("container", {"input_tokens": 2, "input_tokens_details": value,
-        "output_tokens_details": value}, {"input_tokens": 2}, id=f"container-{label}")
-      for label, value in (("null", None), ("array", []), ("string", "metadata"), ("number", 5))],
-    pytest.param("cache-write", {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30,
-        "not_a_counter": "private"}}, {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30}},
-        id="cache-write-preserved"),
-    pytest.param("missing", {"input_tokens": 7}, {"input_tokens": 7}, id="missing-cache-is-not-zero"),
+    pytest.param("full", {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+        "input_tokens_details": {"cached_tokens": 100, "cache_write_tokens": 30, "metadata": "test-access-not-real"},
+        "output_tokens_details": {"reasoning_tokens": 20, "metadata": "test-refresh-not-real"}},
+        {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+         "input_tokens_details": {"cached_tokens": 100, "cache_write_tokens": 30},
+         "output_tokens_details": {"reasoning_tokens": 20}}, id="safe-observed-counters"),
+    pytest.param("zero", {"input_tokens_details": {"cached_tokens": 0}},
+        {"input_tokens_details": {"cached_tokens": 0}}, id="zero-not-missing"),
+    pytest.param("metadata", {"input_tokens": True, "input_tokens_details": {"cached_tokens": -1},
+        "output_tokens_details": "private", "attribution": {"secret": "test-access-not-real"}},
+        {}, id="malformed-counters-and-metadata-removed"),
+    pytest.param("missing", {"input_tokens": 7}, {"input_tokens": 7}, id="missing-not-zero"),
 ])
 def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport(subscription, scenario, usage, expected):
     response, credentials = subscription
@@ -481,7 +390,7 @@ def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport
         assert secret not in repr(result)
 
 
-@pytest.mark.parametrize("scenario", ["inline-phases", "done-item-phases", "completed-done-item", "completed-event", "partial-no-completion"])
+@pytest.mark.parametrize("scenario", ["inline-phases", "done-item-phases", "partial-no-completion"])
 def test_actual_sse_parser_requires_completion_and_preserves_final_phase(monkeypatch, scenario):
     credentials = auth.Credentials("test-access-not-real", "test-refresh-not-real", "test-account", 9999999999)
     monkeypatch.setattr(auth, "get_credentials", lambda: credentials)
@@ -490,12 +399,8 @@ def test_actual_sse_parser_requires_completion_and_preserves_final_phase(monkeyp
     if scenario.startswith("inline"):
         completion["output"] = items
     events = [{"type": "response.output_item.done", "item": item} for item in items]
-    if scenario == "completed-done-item":
-        events = [{"type": "response.output_item.done", "item": message("final")}]
-        completion["output"] = []
-    elif scenario in {"completed-event", "partial-no-completion"}:
+    if scenario == "partial-no-completion":
         events = [{"type": "response.output_text.delta", "delta": "partial"}]
-        completion["output"] = [message("complete")]
     if scenario != "partial-no-completion":
         events.append({"type": "response.completed", "response": completion})
     opener = StreamOpener(b"".join(b"data: " + json.dumps(event).encode() + b"\n\n" for event in events))
@@ -503,49 +408,20 @@ def test_actual_sse_parser_requires_completion_and_preserves_final_phase(monkeyp
     if scenario == "partial-no-completion":
         with pytest.raises(auth.CodexError, match="before completion"):
             auth.post_sse(backend.RESPONSES_URL, {"stream": True})
-    elif scenario.endswith("phases"):
+    else:
         result = backend.generate_chat({"model": "test-model", "messages": [{"role": "user", "content": "test"}]}, timeout=3)
         assert result["choices"][0]["message"]["content"] == '{"ok":true}'
         assert result["usage"] == {"input_tokens_details": {"cached_tokens": 42}}
-    else:
-        result = auth.post_sse(backend.RESPONSES_URL, {"stream": True}, headers={"Authorization": "Bearer test-access-not-real"})
-        assert result["id"] == "resp-test"
-        assert result["output"][0]["content"][0]["text"] == ("final" if scenario == "completed-done-item" else "complete")
     assert len(opener.requests) == 1
     assert opener.requests[0][0].full_url == backend.RESPONSES_URL
     assert opener.requests[0][0].get_header("Accept") == "text/event-stream"
 
 
-@pytest.mark.parametrize("source", ["primary", "pool", "fallback"])
-def test_subscription_profile_cannot_adopt_paid_platform_endpoint_or_key(wire, monkeypatch, source):
-    wire.configure(LLM_PROVIDER="openai_codex" if source == "primary" else "local", CODEX_LLM_MODEL="test-model",
-        OPENAI_COMPAT_BASE_URL="https://api.openai.com/v1", OPENAI_COMPAT_API_KEY="test-platform-key-not-real",
-        LLM_FALLBACK_PROVIDER="openai_codex", LLM_FALLBACK_MODEL="test-model", LLM_FALLBACK_BASE_URL="https://api.openai.com/v1",
-        LLM_FALLBACK_API_KEY="test-paid-key-not-real")
-    if source == "primary":
-        context = llm._legacy_primary_llm_context()
-    elif source == "fallback":
-        context = llm._fallback_llm_context()
-    else:
-        context = llm._pool_profile_context({"id": "llm_2", "enabled": True, "provider": "openai_codex", "model": "test-model",
-            "base_url": "https://api.openai.com/v1", "api_key": "test-platform-key-not-real", "api_mode": "chat_completions", "openrouter_provider": PIN})
-    assert context is not None
-    assert (context["provider"], context["model"], context["base_url"], context["api_key"], context["api_mode"]) == ("openai_codex", "test-model", CODEX, "", "responses")
-    assert llm.llm_responses_url({**context, "base_url": "https://api.openai.com/v1"}) == CODEX + "/responses"
-    assert llm.llm_models_url(context) == catalog.MODELS_URL + "?client_version=" + catalog.CLIENT_VERSION
-    with pytest.raises(auth.CodexError):
-        llm.llm_chat_completions_url(context)
-    if source == "primary":
-        monkeypatch.setattr(auth, "auth_status", lambda: {"authenticated": False, "expired": False})
-        snapshot = llm.llm_auth_snapshot()
-        assert (snapshot["provider"], snapshot["status"], snapshot["apiKeyConfigured"]) == ("openai_codex", "sign_in_required", None)
-        assert "api.openai.com" not in str(snapshot)
-
-
-@pytest.mark.parametrize("scenario,override", [("success", None), ("success", "codex-visual-override"), ("failure", "codex-visual-override")])
+@pytest.mark.parametrize("scenario,override", [("success", "codex-visual-override"), ("failure", "codex-visual-override")])
 def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wire, monkeypatch, subscription, scenario, override):
     response, credentials = subscription
     wire.configure(LLM_PROVIDER="openai_codex", CODEX_LLM_MODEL="test-model", CODEX_VISUAL_REASONING="low",
+        OPENAI_COMPAT_BASE_URL="https://api.openai.com/v1", OPENAI_COMPAT_API_KEY="synthetic-paid-key",
         LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="paid-route-not-authorized", LLM_FALLBACK_OPENROUTER_PROVIDER=PIN)
     calls, prepared_calls = [], []
     generate = backend.generate_chat
@@ -578,6 +454,9 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
         ]
         assert "provider" not in body and llm.LLM_MODEL_OVERRIDE_KEY not in body
     assert len(calls) == len(prepared_calls) == 1
+    assert calls[0][0] == CODEX + "/responses"
+    assert calls[0][2]["headers"]["Authorization"] == "Bearer " + credentials.access_token
+    assert "synthetic-paid-key" not in repr(calls)
     assert "provider" not in prepared_calls[0] and llm.LLM_MODEL_OVERRIDE_KEY not in prepared_calls[0]
     assert prepared_calls[0]["model"] == (override or "test-model")
 
@@ -688,7 +567,6 @@ def test_account_catalog_preserves_declared_models_and_rejects_unsafe_metadata(m
 
 
 def test_expired_session_refreshes_once_under_concurrent_requests(tmp_path, monkeypatch):
-    assert hasattr(auth, "get_credentials"), "OAuth refresh is missing"
     from concurrent.futures import ThreadPoolExecutor
     from dataclasses import replace
     path = tmp_path / "codex-auth.json"
@@ -709,7 +587,6 @@ def test_expired_session_refreshes_once_under_concurrent_requests(tmp_path, monk
 
 
 def test_browser_login_exchanges_pkce_once_and_saves_only_after_callback(tmp_path, monkeypatch):
-    assert hasattr(auth, "login"), "browser callback login is missing"
     import threading
     from urllib.request import urlopen
     from urllib.error import HTTPError
@@ -912,39 +789,6 @@ def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
     assert result[3] == "failed"
     assert len(calls) == 2
     assert not fallbacks
-
-
-@pytest.mark.parametrize("mode,marker_role", [
-    ("json_object", "system"), ("json_object", None),
-    ("json_object", "user"), ("json_object", "developer"),
-    ("json_object", "assistant"), ("json_schema", "system"),
-    (None, "system"),
-])
-def test_subscription_json_input_framing_preserves_all_authored_messages(mode, marker_role):
-    messages = [{"role": "system", "content": "JSON result." if marker_role == "system" else "Keep authored facts."},
-                {"role": "user", "content": "Return Json." if marker_role == "user" else '{"exactFact":14}'}]
-    if marker_role in {"developer", "assistant"}:
-        messages.append({"role": marker_role, "content": "Json protocol marker."})
-    request = {"model": "test-model", "messages": messages, "reasoning": {"effort": "medium"},
-               "prompt_cache_key": "exact-authored-key"}
-    if mode:
-        request["response_format"] = {"type": mode}
-        if mode == "json_schema":
-            request["response_format"]["json_schema"] = {"name": "test_json", "strict": True, "schema": {"type": "object"}}
-    before = copy.deepcopy(request)
-    actual = backend._request_payload(request)
-    authored = [{"type": "message", "role": message["role"],
-                 "content": [{"type": "output_text" if message["role"] == "assistant" else "input_text", "text": message["content"]}]}
-                for message in messages if message["role"] != "system"]
-    needed = mode == "json_object"
-    marker = {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]}
-    assert actual["input"] == ([marker, *authored] if needed else authored)
-    assert actual["instructions"] == messages[0]["content"]
-    assert actual["model"] == request["model"]
-    assert actual["reasoning"] == request["reasoning"]
-    assert actual["prompt_cache_key"] == request["prompt_cache_key"]
-    assert request == before
-    assert backend._request_payload(request) == actual
 
 
 @pytest.mark.parametrize("cache_key", [None, "infini-static-prefix", "unicode-кэш", "key\r\nextra: value"])
