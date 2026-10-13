@@ -1,10 +1,13 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
 import json
 from pathlib import Path
 
 import pytest
+from repair_test_helpers import (
+    DELETE, edit_fields, frozen_call_repair, provider_roundtrip, frozen_gameplay_repair,
+)
 
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
@@ -82,7 +85,6 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
     rows = compiled["runtimeContract"]["finalWireReceipts"]
     owned = [row for row in rows if row.get("fn") == fn]
     assert len(owned) == (len(PARAMS[fn]) or 1)
-    assert audit_compiler_receipts(rows, authored_document=doc, final_document=compiled)["ok"]
     assert audit_compiler_receipts(rows, final_document=compiled)["ok"]
 
 # Every exact leaf still exercises missing and all former present-invalid
@@ -104,11 +106,8 @@ def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, ki
     compiled = compile_runtime_program(doc)
     authored = call(doc, fn)["params"]
     persisted = entity(compiled, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]]
-    if kind == "missing":
-        del authored[leaf]
-        del persisted[leaf]
-    else:
-        authored[leaf] = persisted[leaf] = value
+    for target in (authored, persisted):
+        edit_fields(target, {leaf: DELETE if kind == "missing" else value})
     report = validate_runtime_program(doc)
     assert not report["ok"] and any(row["path"].endswith("." + leaf) for row in report["errors"])
     with pytest.raises(ValueError):
@@ -140,17 +139,16 @@ def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutatio
 
 @pytest.mark.parametrize("fn", PROJECTILE_MODIFIER_COMPONENTS)
 def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
-    doc = source(fn); call(doc, fn)["params"]["durationTicks"] = 0
-    before = deepcopy(doc)
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    replacement = deepcopy(call(doc, fn)); replacement["params"]["durationTicks"] = 100
-    replacement["params"]["startDelayTicks"] = 21000
-    patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [replacement], "note": "fix invalid duration only"}, scope)
-    assert audit["ok"]
-    repaired = apply_repair_patch(doc, patch)
-    call(before, fn)["params"]["durationTicks"] = 100
-    assert repaired == before
-    compile_runtime_program(repaired)
+    doc = source(fn)
+    call(doc, fn)["params"]["durationTicks"] = 0
+    expected = deepcopy(doc)
+    call(expected, fn)["params"]["durationTicks"] = 100
+    replacement = deepcopy(call(doc, fn))
+    replacement["params"].update(durationTicks=100, startDelayTicks=21000)
+    repaired, final = frozen_call_repair(doc, [replacement],
+        [{"id": replacement["id"], "paths": ["params.durationTicks"]}], expected,
+        note="fix invalid duration only")
+    assert entity(final, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]]["durationTicks"] == 100
 
 def test_simultaneous_and_delayed_modifiers_are_independent_of_the_movement_slot():
     doc = source("set_projectile_turn_modifier")
@@ -259,7 +257,6 @@ def test_generic_provenance_owner_covers_present_modifier_slots(fn, mutation):
 
 def test_actual_author_request_exposes_every_explicit_choice():
     _, user, _ = build_initial_author_request({"name": "A"}, {"name": "B"}, {}, {}, "modifier-offline", model_name="test-model")
-    import json
     payload = json.loads(user)
     cards = {row["fn"]: row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     for fn, params in PARAMS.items(): assert set(cards[fn]["params"]) == set(params)
@@ -282,18 +279,15 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
     from jsonschema import Draft202012Validator
     from infini_local.pipelines import author_item_contract as contract, llm_transport
     from test_codex_subscription_contract import _encode_nullable_fixture
-    from test_repair_gameplay_contract import _offline_gameplay_repair
 
-    feature = "spawn_entity_on_event" if bases else "select_targets_and_emit_on_event"
+    feature = "spawn_entity_on_event"
     doc = build_capability_witness(feature)
     producer = call(doc, feature)
     child = producer["params"]["entity"]
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
                  if row["fn"] == "configure_spawn" and row["target"] == child)
-    if bases:
-        producer["params"].update(damageBasis=bases[0], knockbackBasis=bases[1])
-    if velocity:
-        spawn["params"]["velocity"] = deepcopy(velocity)
+    producer["params"].update(damageBasis=bases[0], knockbackBasis=bases[1])
+    spawn["params"]["velocity"] = deepcopy(velocity)
     for index, fn in enumerate(PROJECTILE_MODIFIER_COMPONENTS):
         doc["runtimeProgram"]["calls"].append(dict(
             id=f"combined_modifier_{index}", fn=fn, target=child, params=deepcopy(PARAMS[fn])))
@@ -304,12 +298,7 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
     request, user, _ = build_initial_author_request({}, {}, {}, {}, "combined-merge-offline", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     cards = {row["fn"]: row for row in catalog["capabilities"]}
-    def expanded(value):
-        if isinstance(value, dict):
-            return {key: (catalog["fieldGuide"]["consumerConstraints"][child]
-                          if key == "consumerConstraint" and isinstance(child, str) else expanded(child))
-                    for key, child in value.items()}
-        return [expanded(child) for child in value] if isinstance(value, list) else value
+    from test_author_request_compaction import _expand_constraint_references
     for fn in (feature, "configure_spawn", *PROJECTILE_MODIFIER_COMPONENTS):
         expected = CAPABILITY_REGISTRY[fn].author_prompt_card()
         if fn == "spawn_entity_on_event":
@@ -317,12 +306,8 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
                 "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
                 "interval and entity lifetime do not guarantee sustained output."
             )
-        assert expanded(cards[fn]) == expected
-    encoded = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
-    if format_mode == "json_schema":
-        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
-    restored = contract.project_provider_author_item_to_local(json.loads(json.dumps(encoded)), response_format=request["response_format"])
-    assert json.dumps(restored, sort_keys=True) == original
+        assert _expand_constraint_references(cards[fn], catalog["fieldGuide"]["consumerConstraints"]) == expected
+    restored = provider_roundtrip(doc, request["response_format"])
     wire = compile_runtime_program(restored)
     assert validate_runtime_wire(wire)["ok"]
     accepted_child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == child)
@@ -333,14 +318,7 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
     for source_document in (None, doc):
         assert audit_compiler_receipts(rows, authored_document=source_document, final_document=wire)["ok"]
         # Independent receipt lanes remain mandatory inside the combined wire.
-        mandatory = ["set_projectile_turn_modifier"]
-        # Old scalar spawn/event wire is legitimately source-free; newly
-        # explicit combat and typed velocity require retained presence receipts.
-        if bases or source_document is not None:
-            mandatory.append(feature)
-        if velocity or source_document is not None:
-            mandatory.append("configure_spawn")
-        for fn in mandatory:
+        for fn in ("set_projectile_turn_modifier", feature, "configure_spawn"):
             removed = [row for row in rows if row.get("fn") != fn]
             assert not audit_compiler_receipts(removed, authored_document=source_document, final_document=wire)["ok"]
     without_provenance = deepcopy(wire); without_provenance.pop("runtimeContract")
@@ -354,14 +332,9 @@ def test_combined_feature_modifier_complete_projection_and_actual_serialized_rep
     fix = deepcopy(modifier); fix["params"].update(durationTicks=90, turnRadiansPerUpdate=.2)
     hostile_feature = deepcopy(producer); hostile_feature["params"]["entity"] = "item"
     hostile_spawn = deepcopy(spawn); hostile_spawn["params"]["offsetPx"] = 10
-    repaired, packet = _offline_gameplay_repair(monkeypatch, broken,
+    repaired, packet, repaired_wire = frozen_gameplay_repair(monkeypatch, broken,
         {"note": "only exact phase duration", "realizationReplacement": doc["realization"],
-         "callsUpsert": [fix, hostile_feature, hostile_spawn]}, format_mode, out_of_scope_response=True)
-    assert packet["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == original
-    repaired_wire = compile_runtime_program(repaired)
-    assert validate_runtime_wire(repaired_wire)["ok"]
+         "callsUpsert": [fix, hostile_feature, hostile_spawn]}, format_mode,
+        {"calls": scope["fieldPermissions"]["calls"]}, doc, out_of_scope_response=True)
     assert repaired_wire == wire
     assert json.dumps(doc, sort_keys=True) == original

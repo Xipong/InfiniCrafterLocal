@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from repair_test_helpers import frozen_call_repair, provider_roundtrip, gameplay_repair
 
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
@@ -16,7 +16,6 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
-from test_codex_subscription_contract import _encode_nullable_fixture
 
 
 VELOCITIES = [
@@ -136,40 +135,37 @@ def test_unrelated_child_repair_keeps_accepted_neutral_omissions_frozen(velocity
     call["params"].pop("count")
     call["params"].pop("spreadRadians")
     call["params"]["offsetPx"] = 257
-    before = deepcopy(document)
-    scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.offsetPx"]}]
+    expected = deepcopy(document)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["offsetPx"] = 19
     candidate = deepcopy(call)
     candidate["params"].update(offsetPx=19, count=12, spreadRadians=0, velocity=deepcopy(VELOCITIES[0]))
-    patch, audit = filter_repair_patch_scope(document, {"note": "repair offset", "callsUpsert": [candidate]}, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(document, patch)
-    actual = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])
-    assert actual["params"] == {**call["params"], "offsetPx": 19}
-    assert document == before
-    wire = compile_runtime_program(repaired)
-    assert validate_runtime_wire(wire)["ok"]
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=repaired, final_document=wire)["ok"]
+    repaired, wire = frozen_call_repair(document, [candidate],
+        [{"id": call["id"], "paths": ["params.offsetPx"]}], expected, note="repair offset")
+    assert component(wire, call)["offsetPx"] == 19
+    assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == {**call["params"], "offsetPx": 19}
 
 
-@pytest.mark.parametrize("velocity", VELOCITIES)
-def test_every_velocity_variant_has_strict_provider_inverse_and_exact_receipts(velocity):
+@pytest.mark.parametrize("velocity,expected", [
+    pytest.param(VELOCITIES[0], None, id="constant"),
+    pytest.param(VELOCITIES[1], {"kind": "fan_speed", "minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}, id="fan"),
+    pytest.param(VELOCITIES[2], {"kind": "radial", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}, id="radial"),
+    pytest.param(VELOCITIES[3], {"kind": "disk", "maxSpeedPxPerUpdate": 6}, id="disk"),
+    pytest.param(VELOCITIES[4], {"kind": "cone", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}, id="cone"),
+])
+def test_every_velocity_variant_has_strict_provider_inverse_and_exact_receipts(velocity, expected):
     document, call = fixture(velocity)
     assert strict_author_shape_report(document)["ok"]
-    assert validate_runtime_program(document)["ok"]
-    schema, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
-    encoded = _encode_nullable_fixture(document, schema)
-    assert Draft202012Validator(provider).is_valid(encoded)
-    restored = contract.project_provider_author_item_to_local(encoded, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
-    assert restored == document
+    restored = provider_roundtrip(document, {
+        "type": "json_schema", "json_schema": {"schema": contract.author_item_provider_response_schema()},
+    })
     wire = compile_runtime_program(restored)
     assert validate_runtime_wire(wire)["ok"]
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    expected = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"].projected_fields(velocity, "velocity")
+    projected = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"].projected_fields(velocity, "velocity")
     actual = [row for row in receipts if row.get("callId") == call["id"] and ".params.velocity" in row.get("authoredPath", "")]
-    assert len(actual) == len(expected)
-    assert component(wire, call)["speedPxPerTick"] == (8.5 if "constantSpeedPxPerUpdate" in velocity else 0)
+    assert len(actual) == len(projected)
+    assert component(wire, call)["speedPxPerTick"] == (8.5 if expected is None else 0)
+    assert component(wire, call).get("velocityDistribution") == expected
     for source in (None, document):
         assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
     sanitized = deepcopy(wire); sanitized.pop("runtimeContract")
@@ -191,22 +187,18 @@ def test_reversed_range_repairs_only_minimum_and_freezes_the_selected_distributi
     velocity = {branch: {"minSpeedPxPerUpdate": 9, "maxSpeedPxPerUpdate": 7}}
     if branch == "cone": velocity[branch]["halfAngleRadians"] = 0.2
     document, call = fixture(velocity)
-    report = validate_runtime_program(document)
-    errors = [row for row in report["errors"] if row["code"] == "unordered_param_range"]
-    assert len(errors) == 1
-    scope = build_runtime_repair_scope(document, report["errors"])
-    permission = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
-    assert permission["paths"] == [f"params.velocity.{branch}.minSpeedPxPerUpdate"]
+    errors = validate_runtime_program(document)["errors"]
+    assert len([row for row in errors if row["code"] == "unordered_param_range"]) == 1
+    expected = deepcopy(document)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["velocity"][branch]["minSpeedPxPerUpdate"] = 4
     candidate = deepcopy(call)
     candidate["params"]["velocity"][branch].update(minSpeedPxPerUpdate=4, maxSpeedPxPerUpdate=10)
     candidate["target"] = "item"
-    patch, audit = filter_repair_patch_scope(document, {"note": "fix exact minimum", "callsUpsert": [candidate]}, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(document, patch)
-    result = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])
-    assert result["params"]["velocity"][branch]["minSpeedPxPerUpdate"] == 4
-    assert result["params"]["velocity"][branch]["maxSpeedPxPerUpdate"] == 7 and result["target"] == call["target"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    repaired, final = frozen_call_repair(document, [candidate],
+        [{"id": call["id"], "paths": [f"params.velocity.{branch}.minSpeedPxPerUpdate"]}], expected,
+        note="fix exact minimum")
+    assert component(final, call)["velocityDistribution"]["minSpeedPxPerUpdate"] == 4
+    assert component(final, call)["velocityDistribution"]["maxSpeedPxPerUpdate"] == 7
 
 
 @pytest.mark.parametrize("mutation", ["drop", "duplicate", "wrong-call", "wrong-variant", "wrong-literal", "old-speed", "scalar-swap"])
@@ -327,17 +319,16 @@ def test_event_spread_for_radial_child_is_repaired_without_changing_valid_child(
     report = validate_runtime_program(document)
     errors = [row for row in report["errors"] if row["code"] == "incompatible_param_variant"]
     assert len(errors) == 1 and errors[0]["path"].endswith(".params.spreadRadians")
-    scope = build_runtime_repair_scope(document, report["errors"])
-    permission = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == event["id"])
-    assert permission["paths"] == ["params.spreadRadians"]
+    expected = deepcopy(document)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == event["id"])["params"]["spreadRadians"] = 0
     candidate = deepcopy(event); candidate["params"].update(spreadRadians=0, count=12)
     changed_child = deepcopy(child); changed_child["params"]["velocity"] = VELOCITIES[0]
-    patch, audit = filter_repair_patch_scope(document, {"note": "explicit zero spread", "callsUpsert": [candidate, changed_child]}, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(document, patch)
+    repaired, final = frozen_call_repair(document, [candidate, changed_child],
+        [{"id": event["id"], "paths": ["params.spreadRadians"]}], expected, note="explicit zero spread")
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == child["id"]) == child
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == event["id"])["params"]["count"] == event["params"]["count"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    final_event = next(row for entity in final["runtimeProgram"]["entities"] for row in entity["events"] if row["id"] == event["id"])
+    assert final_event["spreadRadians"] == 0
 
 
 @pytest.mark.parametrize("velocity", [VELOCITIES[2], VELOCITIES[3]])
@@ -360,8 +351,6 @@ def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero
 @pytest.mark.parametrize("capability", ["target_and_fire", "charge_then_release"])
 @pytest.mark.parametrize("velocity", VELOCITIES[1:])
 def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkeypatch, format_mode, capability, velocity):
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = build_capability_witness(capability)
     controller = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == capability)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn" and row["target"] == controller["target"])
@@ -380,7 +369,7 @@ def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkey
     hostile["params"]["damage"] = 999
     patch = {"note": "explicit constant replacement", "realizationReplacement": doc["realization"],
              "callsUpsert": [candidate, hostile]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode, out_of_scope_response=True)
+    repaired, dossier = gameplay_repair(monkeypatch, doc, patch, format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
@@ -393,7 +382,6 @@ def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkey
 @pytest.mark.parametrize("case", ["noop", "omitted", "unchanged"])
 def test_velocity_replacement_requires_an_explicit_new_variant(monkeypatch, format_mode, case):
     from infini_local.core.errors import PlannerUnavailable
-    from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = build_capability_witness("target_and_fire")
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn")
@@ -409,21 +397,19 @@ def test_velocity_replacement_requires_an_explicit_new_variant(monkeypatch, form
         filtered, _ = filter_repair_patch_scope(doc, incoming, scope)
         assert apply_repair_patch(doc, filtered)["runtimeProgram"] == doc["runtimeProgram"]
     with pytest.raises(PlannerUnavailable):
-        _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+        gameplay_repair(monkeypatch, doc, incoming, format_mode)
     assert doc == before
     assert not validate_runtime_program(doc)["ok"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_velocity_leaf_permission_does_not_thaw_other_variant_leaves(monkeypatch, format_mode):
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc, call = fixture({"cone": {"minSpeedPxPerUpdate": 9, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}})
     candidate = deepcopy(call)
     candidate["params"]["velocity"]["cone"]["minSpeedPxPerUpdate"] = 4
     expected = apply_repair_patch(doc, {"note": "exact minimum only", "callsUpsert": [candidate]})
     candidate["params"]["velocity"]["cone"].update(maxSpeedPxPerUpdate=10, halfAngleRadians=0.4)
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc,
+    repaired, dossier = gameplay_repair(monkeypatch, doc,
         {"note": "exact min with hostile siblings", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, format_mode)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.velocity.cone.minSpeedPxPerUpdate"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

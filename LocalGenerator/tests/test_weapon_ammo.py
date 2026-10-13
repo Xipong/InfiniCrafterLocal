@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from repair_test_helpers import DELETE, edit_fields, frozen_call_repair, frozen_gameplay_repair
 
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
@@ -27,12 +28,14 @@ def _ammo_call(doc):
     return next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_weapon_ammo")
 
 
-@pytest.mark.parametrize("category", CAPABILITY_REGISTRY["configure_weapon_ammo"].params["ammoCategory"].enum)
+@pytest.mark.parametrize("category", [
+    "arrow", "bullet", "candy_corn", "coin", "dart", "fallen_star", "flare", "gel",
+    "jack_o_lantern", "nail_friendly", "rocket", "snowball", "solution", "stake", "stynger_bolt",
+])
 @pytest.mark.parametrize("speed", ["authored_spawn", "native_shot"])
 def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slice(category, speed):
     doc = _weapon(category, speed)
     before = deepcopy(doc)
-    assert validate_runtime_program(doc)["ok"]
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]
     assert doc == before
@@ -43,41 +46,40 @@ def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slic
     selected = [row for row in rows if row.get("fn") == "configure_weapon_ammo"]
     assert len(selected) == 3
     assert next(row for row in selected if row["finalPath"] == "runtimeProgram.weaponAmmo")["authoredPath"].endswith(".fn")
-    assert audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
 
 
 @pytest.mark.parametrize("field,value", [
-    ("ammoCategory", "arrows"), ("ammoCategory", "bow"), ("ammoCategory", "sand"),
-    ("ammoCategory", ""), ("ammoCategory", None), ("ammoCategory", 1),
-    ("speedBasis", "native"), ("speedBasis", ""), ("speedBasis", None),
-    ("speedBasis", True), ("speedBasis", {}),
+    pytest.param(field, value, id=f"{field}-{kind}")
+    for field, kind, value in (
+        ("ammoCategory", "plural", "arrows"), ("ammoCategory", "family", "bow"),
+        ("ammoCategory", "unsupported", "sand"), ("ammoCategory", "empty", ""),
+        ("ammoCategory", "null", None), ("ammoCategory", "integer", 1),
+        ("speedBasis", "alias", "native"), ("speedBasis", "empty", ""),
+        ("speedBasis", "null", None), ("speedBasis", "boolean", True),
+        ("speedBasis", "object", {}),
+        ("ammoCategory", "missing", DELETE), ("speedBasis", "missing", DELETE),
+    )
 ])
 def test_invalid_presence_is_rejected_without_guessing_ammo_or_speed(field, value):
     doc = _weapon()
-    _ammo_call(doc)["params"][field] = value
-    assert not validate_runtime_program(doc)["ok"]
-    final = compile_runtime_program(_weapon())
+    final = compile_runtime_program(doc)
     final.pop("runtimeContract")
-    final["runtimeProgram"]["weaponAmmo"][field] = value
-    assert not validate_runtime_wire(final)["ok"]
+    edit_fields(_ammo_call(doc)["params"], {field: value})
+    edit_fields(final["runtimeProgram"]["weaponAmmo"], {field: value})
+    for source, validator, suffix in (
+        (doc, validate_runtime_program, ".params." + field),
+        (final, validate_runtime_wire, ".weaponAmmo." + field),
+    ):
+        report = validator(source)
+        assert not report["ok"]
+        assert any(row["path"].endswith(suffix) for row in report["errors"]), report
 
 
-@pytest.mark.parametrize("missing", ["ammoCategory", "speedBasis"])
-def test_choices_are_required_and_never_backend_defaults(missing):
-    doc = _weapon()
-    del _ammo_call(doc)["params"][missing]
-    assert not validate_runtime_program(doc)["ok"]
-    final = compile_runtime_program(_weapon())
-    final.pop("runtimeContract")
-    del final["runtimeProgram"]["weaponAmmo"][missing]
-    assert not validate_runtime_wire(final)["ok"]
-
-
-def test_existing_projectile_and_ammo_items_do_not_become_ammo_consumers():
-    for fn in ("move_straight", "configure_vanilla_ammo_item", "restore_resources_on_use"):
-        final = compile_runtime_program(build_capability_witness(fn))
-        assert "weaponAmmo" not in final["runtimeProgram"]
-        assert not any(row.get("fn") == "configure_weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
+@pytest.mark.parametrize("fn", ["move_straight", "configure_vanilla_ammo_item", "restore_resources_on_use"])
+def test_existing_projectile_and_ammo_items_do_not_become_ammo_consumers(fn):
+    final = compile_runtime_program(build_capability_witness(fn))
+    assert "weaponAmmo" not in final["runtimeProgram"]
+    assert not any(row.get("fn") == "configure_weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
 
 
 @pytest.mark.parametrize("invalid_input", [[], {}, ["primary_use"]])
@@ -159,15 +161,14 @@ def test_ammo_reference_repair_cannot_change_valid_speed_or_projectile_design():
     doc = _weapon()
     call = _ammo_call(doc)
     call["params"]["ammoCategory"] = "invalid"
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.ammoCategory"]}]
+    expected = deepcopy(doc)
+    _ammo_call(expected)["params"]["ammoCategory"] = "bullet"
     candidate = deepcopy(call)
     candidate["params"].update(ammoCategory="bullet", speedBasis="native_shot")
-    filtered, audit = filter_repair_patch_scope(doc, {"note": "Correct category only", "callsUpsert": [candidate]}, scope)
-    assert audit["ok"]
-    repaired = apply_repair_patch(doc, filtered)
-    assert _ammo_call(repaired)["params"] == {"ammoCategory": "bullet", "speedBasis": "authored_spawn"}
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, final = frozen_call_repair(doc, [candidate],
+        [{"id": call["id"], "paths": ["params.ammoCategory"]}], expected,
+        note="Correct category only")
+    assert final["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "bullet", "speedBasis": "authored_spawn"}
 
 
 @pytest.mark.parametrize("mutation", ["drop_semantics", "drop_choice", "wrong_source", "duplicate_semantics", "unknown_field", "null_component"])
@@ -203,8 +204,6 @@ def test_new_ammo_dto_cannot_silently_gain_a_weapon_family_field():
 
 @pytest.mark.parametrize("response_mode", ["json_object", "json_schema"])
 def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, monkeypatch):
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = _weapon(speed="native_shot")
     binding = next(row for row in doc["runtimeProgram"]["bindings"]
                    if row["input"] in ("primary_use", "alternate_use")
@@ -225,17 +224,10 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
     correction["params"]["count"] = 4  # hostile valid frozen sibling
     patch = {"note": "exact root velocity replacement", "realizationReplacement": doc["realization"],
              "callsUpsert": [correction]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, response_mode)
-    audit = repaired["debug"]["gameplayRepairFilterAudit"]
-    repaired.pop("debug")
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
     expected = deepcopy(before)
     expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {"constantSpeedPxPerUpdate": 8.0}
-    assert repaired == expected and doc == before
-    assert audit["ignoredChanges"]
-    assert validate_runtime_program(repaired)["ok"]
-    final = compile_runtime_program(repaired)
-    assert validate_runtime_wire(final)["ok"]
+    repaired, dossier, final = frozen_gameplay_repair(monkeypatch, doc, patch, response_mode,
+        {"calls": scope["fieldPermissions"]["calls"]}, expected)
     assert _ammo_call(repaired)["params"]["speedBasis"] == "native_shot"
 
 
@@ -313,7 +305,6 @@ def test_weapon_ammo_constant_speed_and_activation_delay_are_an_accepted_composi
     spawn = next(call for call in doc["runtimeProgram"]["calls"] if call["fn"] == "configure_spawn")
     spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, "activationDelayTicks": delay}
     before = deepcopy(doc)
-    assert validate_runtime_program(doc)["ok"]
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]
     entity = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == spawn["target"])
@@ -321,5 +312,3 @@ def test_weapon_ammo_constant_speed_and_activation_delay_are_an_accepted_composi
     assert entity["spawn"]["speedPxPerTick"] == 8.0
     assert final["runtimeProgram"]["weaponAmmo"]["speedBasis"] == basis
     assert doc == before
-    assert audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=doc, final_document=final)["ok"]

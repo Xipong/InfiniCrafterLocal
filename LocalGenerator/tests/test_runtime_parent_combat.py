@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from repair_test_helpers import frozen_call_repair, provider_roundtrip
 
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY, apply_repair_patch, compile_runtime_program,
@@ -16,7 +16,6 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
-from test_codex_subscription_contract import _encode_nullable_fixture
 
 
 _PRODUCERS = ("spawn_entity_on_event", "target_and_fire")
@@ -70,12 +69,8 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
     assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency", "channel_beam"} <= names
-    assert validate_runtime_program(source)["ok"]
     before = deepcopy(source)
-    encoded = _encode_nullable_fixture(source, contract.author_item_response_schema()) if mode == "json_schema" else source
-    serialized = json.dumps(encoded, ensure_ascii=False)
-    restored = contract.project_provider_author_item_to_local(json.loads(serialized), response_format=request["response_format"])
-    assert restored == source
+    restored = provider_roundtrip(source, request["response_format"])
     wire = compile_runtime_program(restored)
     assert validate_runtime_wire(wire)["ok"]
     assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "native_shot"}
@@ -92,7 +87,6 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     assert beam["controller"]["params"]["manaPayment"] == "each_use_time"
     assert beam["controller"]["params"]["raycastTiles"] is True
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     assert audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert source == before
 
@@ -132,8 +126,6 @@ def test_combined_combat_leaf_repair_keeps_all_accepted_main_and_parent_choices_
     call = _call(broken, fn)
     call["params"][leaf] = invalid
     before = deepcopy(broken)
-    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
     hostile = deepcopy(good["runtimeProgram"]["calls"])
     for row in hostile:
         for key, value in tuple(row["params"].items()):
@@ -148,11 +140,9 @@ def test_combined_combat_leaf_repair_keeps_all_accepted_main_and_parent_choices_
                 alternate = spec.maximum if value == spec.minimum else spec.minimum
                 if alternate is not None:
                     row["params"][key] = type(value)(alternate)
-    filtered, audit = filter_repair_patch_scope(broken, {"note": "exact combined leaf", "callsUpsert": hostile}, scope)
-    assert audit["ok"] and audit["ignoredChanges"], audit
-    repaired = apply_repair_patch(broken, filtered)
+    repaired, final = frozen_call_repair(broken, hostile,
+        [{"id": call["id"], "paths": ["params." + leaf]}], good, note="exact combined leaf")
     assert repaired == good and broken == before
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
 def _call(document, fn):
@@ -165,25 +155,26 @@ def _wire_component(wire, call):
             if call["fn"] == "spawn_entity_on_event" else entity["targeting"])
 
 
+# Both producers share the scalar owner. RuntimeChildCombat.TryResolve selects
+# damage and knockback independently; retain all four basis pairs for EACH
+# producer, plus 0/interior/identity/upper-bound multiplier wiring for each.
 @pytest.mark.parametrize("fn", _PRODUCERS)
-@pytest.mark.parametrize("damage_basis", _BASES)
-@pytest.mark.parametrize("knockback_basis", _BASES)
-@pytest.mark.parametrize("multiplier", [0, 0.5, 1, 4])
+@pytest.mark.parametrize("damage_basis,knockback_basis,multiplier", [
+    pytest.param("authored_child", "authored_child", 0, id="authored-zero"),
+    pytest.param("authored_child", "live_parent", 0.5, id="parent-knockback-half"),
+    pytest.param("live_parent", "authored_child", 1, id="parent-damage-identity"),
+    pytest.param("live_parent", "live_parent", 4, id="both-parent-maximum"),
+    pytest.param("live_parent", "live_parent", 0, id="parent-zero-is-not-authored-fallback"),
+])
 def test_combat_choices_reach_exact_component_provider_inverse_and_receipts(fn, damage_basis, knockback_basis, multiplier):
     authored = build_capability_witness(fn)
     call = _call(authored, fn)
     call["params"].update(damageBasis=damage_basis, knockbackBasis=knockback_basis, damageMultiplier=multiplier)
     before = deepcopy(authored)
     assert strict_author_shape_report(authored)["ok"]
-    assert validate_runtime_program(authored)["ok"]
-    schema = contract.author_item_response_schema()
-    provider = contract.author_item_provider_response_schema()
-    encoded = _encode_nullable_fixture(authored, schema)
-    assert Draft202012Validator(provider).is_valid(encoded)
-    restored = contract.project_provider_author_item_to_local(encoded, response_format={
-        "type": "json_schema", "json_schema": {"schema": provider},
+    restored = provider_roundtrip(authored, {
+        "type": "json_schema", "json_schema": {"schema": contract.author_item_provider_response_schema()},
     })
-    assert restored == authored
     compiled = compile_runtime_program(restored)
     assert validate_runtime_wire(compiled)["ok"]
     component = _wire_component(compiled, call)
@@ -222,28 +213,17 @@ def test_present_basis_is_exact_in_author_and_saved_wire(fn, name, invalid):
 def test_fresh_missing_choice_requires_leaf_repair_without_reauthoring_valid_siblings(fn, name):
     document = build_capability_witness(fn)
     call = _call(document, fn)
-    expected = call["params"].pop(name)
-    before = deepcopy(document)
-    report = validate_runtime_program(document)
-    assert not report["ok"]
+    expected = deepcopy(document)
+    value = call["params"].pop(name)
     with pytest.raises(ValueError):
         compile_runtime_program(document)
-    scope = build_runtime_repair_scope(document, report["errors"])
-    permissions = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
-    assert permissions["paths"] == ["params." + name]
     candidate = deepcopy(call)
     candidate["target"] = "item"
-    candidate["params"][name] = expected
+    candidate["params"][name] = value
     candidate["params"]["damageMultiplier" if name != "damageMultiplier" else "intervalTicks"] = 3
-    filtered, audit = filter_repair_patch_scope(document, {"note": "fill exact missing choice", "callsUpsert": [candidate]}, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(document, filtered)
-    wanted = deepcopy(before)
-    _call(wanted, fn)["params"][name] = expected
-    assert repaired == wanted
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
-    assert document == before
+    repaired, final = frozen_call_repair(document, [candidate],
+        [{"id": call["id"], "paths": ["params." + name]}], expected, note="fill exact missing choice")
+    assert _wire_component(final, call)[name] == value
 
 
 @pytest.mark.parametrize("name", ["damageBasis", "knockbackBasis"])

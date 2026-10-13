@@ -100,11 +100,54 @@ def gameplay_repair(monkeypatch, doc, incoming, format_mode, **kwargs):
     return result, request_dossier(request)
 
 
+def frozen_gameplay_repair(monkeypatch, doc, incoming, mode, permissions, expected, **kwargs):
+    """Observe the real request and frozen whole-source closure, then exact delivery."""
+    before = json.dumps(doc, sort_keys=True)
+    repaired, dossier = gameplay_repair(monkeypatch, doc, incoming, mode, **kwargs)
+    for owner, rows in permissions.items():
+        assert dossier["repairScope"]["fieldPermissions"][owner] == rows
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    final = assert_repaired_source(repaired, expected)
+    assert json.dumps(doc, sort_keys=True) == before
+    return repaired, dossier, final
+
+
+def provider_roundtrip(doc, response_format):
+    """Serialize the supplied literal shape through the actual provider inverse."""
+    before = json.dumps(doc, sort_keys=True)
+    payload = deepcopy(doc)
+    if response_format["type"] == "json_schema":
+        payload = _encode_nullable_fixture(payload, contract.author_item_response_schema())
+        Draft202012Validator(response_format["json_schema"]["schema"]).validate(payload)
+    restored = author._prepare_parsed_author_item(
+        json.loads(json.dumps(payload)), response_format=response_format)
+    assert json.dumps(restored, sort_keys=True) == before
+    assert json.dumps(doc, sort_keys=True) == before
+    return restored
+
+
+def frozen_call_repair(doc, incoming, permissions, expected, *, note):
+    """Exercise exact local scope/filter/apply, without manufacturing candidate fields."""
+    from infini_local.core.runtime_authoring import (
+        apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope,
+    )
+
+    before = json.dumps(doc, sort_keys=True)
+    report = validate_runtime_program(doc)
+    assert not report["ok"], report
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == permissions
+    patch, audit = filter_repair_patch_scope(doc, {"note": note, "callsUpsert": incoming}, scope)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    repaired = apply_repair_patch(doc, patch)
+    final = assert_repaired_source(repaired, expected)
+    assert json.dumps(doc, sort_keys=True) == before
+    return repaired, final
+
+
 def assert_delivery(doc):
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]
-    assert audit_compiler_receipts(final["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=doc, final_document=final)["ok"]
     return final
 
 

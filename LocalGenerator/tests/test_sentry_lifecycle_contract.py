@@ -1,15 +1,13 @@
 """Native sentry, explicit placement and descendant accounting remain independent."""
 from copy import deepcopy
-from itertools import product
 import json
 from pathlib import Path
 
 import pytest
+from repair_test_helpers import frozen_call_repair
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
-    compile_runtime_program, filter_repair_patch_scope,
-    validate_runtime_program, validate_runtime_wire,
+    CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
@@ -33,8 +31,23 @@ def _entity(wire):
     return next(e for e in wire["runtimeProgram"]["entities"] if e.get("targeting"))
 
 
-@pytest.mark.parametrize("native,pool,placement", list(product(
-    (None, False, True), (None, 1, 3, 96), ("item_use_origin", "cursor", "native_resting_spot"))))
+# Keep all 3 x 2 presence/value masks for each placement consumer: native true
+# triggers sentry/UpdateMaxTurrets, false differs from absence in DTO/receipts,
+# and pool presence installs its independent ancestor ledger. Capacity's 1..96
+# identity branch does not interact with placement or native; endpoints need one
+# additional witness each, not another full cross-product.
+@pytest.mark.parametrize("native,pool,placement", [
+    pytest.param(native, pool, placement, id=f"{mask}-{placement}")
+    for placement in ("item_use_origin", "cursor", "native_resting_spot")
+    for mask, native, pool in (
+        ("neither", None, None), ("explicit-inert-native", False, None),
+        ("native-only", True, None), ("pool-only", None, 3),
+        ("inert-native-and-pool", False, 3), ("native-and-pool", True, 3),
+    )
+] + [
+    pytest.param(True, 1, "native_resting_spot", id="native-pool-minimum"),
+    pytest.param(True, 96, "native_resting_spot", id="native-pool-maximum"),
+])
 def test_every_independent_combination_preserves_exact_authored_delta(native, pool, placement):
     base = compile_runtime_program(_fixture())
     doc = _fixture(native, pool, placement)
@@ -120,13 +133,11 @@ def test_frozen_repair_can_fix_pool_limit_without_enabling_native_or_changing_pl
     good = _fixture(pool=3)
     broken = deepcopy(good)
     next(c for c in broken["runtimeProgram"]["calls"] if c["id"] == "pool")["params"]["maxActive"] = 0
-    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": "pool", "paths": ["params.maxActive"]}]
     hostile = _fixture(True, 3, "native_resting_spot")
-    patch = {"callsUpsert": hostile["runtimeProgram"]["calls"], "note": "pool correction"}
-    filtered, audit = filter_repair_patch_scope(broken, patch, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    assert apply_repair_patch(broken, filtered) == good
+    repaired, final = frozen_call_repair(broken, hostile["runtimeProgram"]["calls"],
+        [{"id": "pool", "paths": ["params.maxActive"]}], good, note="pool correction")
+    assert _entity(final)["spawn"]["descendantMaxActive"] == 3
+    assert "nativeSentry" not in _entity(final)
 
 
 def test_accepted_absence_of_lifecycle_and_pool_is_not_materialized():

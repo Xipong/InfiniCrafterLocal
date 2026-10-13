@@ -8,6 +8,8 @@ import json
 import re
 from pathlib import Path
 import pytest
+from repair_test_helpers import offline_builder, repair_with_response, assert_repaired_source
+
 from infini_local.core.runtime_authoring import (
     CAPABILITY_REGISTRY,
     INPUT_KIND_REGISTRY,
@@ -40,17 +42,17 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_author_request_compaction import _expand_constraint_references
 
 
-@pytest.fixture
-def packet(monkeypatch):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+@pytest.fixture(scope="module")
+def packet():
     a = {"name": "Thorn Whip", "fullName": "Terraria/ThornWhip", "damage": 7, "useTime": 20}
     b = {"name": "Workbench", "createTile": 18, "useTime": 15}
-    request, user, system = build_initial_author_request(a, b, a, b, "whip+bench", model_name="test-model")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+        request, user, system = build_initial_author_request(a, b, a, b, "whip+bench", model_name="test-model")
     assert request["response_format"] == {"type": "json_object"}
     assert [r["role"] for r in request["messages"]] == ["system", "developer", "user"]
     assert request["messages"][0]["content"] == system and dossier_text(request) == user
     return request, json.loads(user), system
-
 
 def test_serialized_construction_is_one_immutable_response_without_draft_loop(packet):
     request, payload, system = packet
@@ -92,6 +94,12 @@ def test_serialized_construction_is_one_immutable_response_without_draft_loop(pa
     assert "runtimeProgram alone defines executable gameplay" in system
     assert "non-binding" in payload["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
     assert "diagnostic" in system and "not evidence of an observed run" in system
+    assert "bindings[].target" not in catalog["fieldGuide"]["bindingTarget"]
+    assert "free_projectile" in {r["kind"] for r in catalog["entityKinds"]}
+    immunity = cards_from(catalog)["set_projectile_collision"]["params"]["immunity"]["shape"]
+    cooldown = next(row["properties"]["localCooldown"] for row in immunity["oneOf"] if row.get("type") == "object")
+    assert cooldown["minimum"] == 0 and cooldown["maximum"] == 600
+    assert "per projectile update" in cards_from(catalog)["move_drift"]["does"]
 
 
 
@@ -196,9 +204,6 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
 
 
 def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(monkeypatch):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
-    monkeypatch.setattr(pipeline, "USE_LLM", True)
-    monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-test")
     item = build_runtime_fixture("fishing_platform_tool")
     before = copy.deepcopy(item)
     stats = _stats(item)
@@ -209,23 +214,29 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
         "note": "Repair only invalid damage", "realizationReplacement": copy.deepcopy(item["realization"]),
         "callsUpsert": [replacement], "bindingIdsDelete": ["alternate_place"], "callIdsDelete": ["platform_result"],
     }
-    requests = []
-
-    def respond(request, **kwargs):
-        requests.append(request)
-        return {"choices": [{"message": {"content": json.dumps(patch)}}]}
-
-    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
-    repaired = pipeline.repair_author_item_after_failure(
-        item, {}, {}, {}, {}, "frozen-placement", failure_report=validate_runtime_program(item),
-    )
-    context = request_dossier(requests[0])
+    repaired, request = repair_with_response(monkeypatch, item, patch, "json_object")
+    context = request_dossier(request)
     assert "concept" not in context["requiredJsonShape"]
-    assert "one clear core gameplay loop" not in dossier_text(requests[0])
-    assert validate_runtime_program(repaired)["ok"]
-    assert repaired["runtimeProgram"] == before["runtimeProgram"]
-    assert repaired["concept"] == before["concept"]
+    assert "one clear core gameplay loop" not in dossier_text(request)
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert_repaired_source(repaired, before)
     assert _stats(item)["params"]["damage"] == -1, "repair does not mutate its input"
+
+
+@pytest.mark.parametrize("path,keys", [
+    pytest.param("concept", ('coreMechanic', 'literalSynthesis', 'parentAContribution', 'parentBContribution', 'plannedPlayerActions', 'playerExperience'), id="concept"),
+    pytest.param("concept.plannedPlayerActions.0", ('input', 'intent'), id="concept.plannedPlayerActions.0"),
+    pytest.param("realization", ('description', 'playerExperience', 'selfEvaluation'), id="realization"),
+    pytest.param("realization.selfEvaluation.planVsProgram", ('actionChecks', 'summary', 'verdict'), id="realization.selfEvaluation.planVsProgram"),
+    pytest.param("realization.selfEvaluation.programVsReport", ('behaviorChecks', 'summary', 'verdict'), id="realization.selfEvaluation.programVsReport"),
+    pytest.param("realization.selfEvaluation.planVsProgram.actionChecks.0", ('implementedBehavior', 'intentionality', 'plannedIntent', 'reason', 'result', 'runtimeRefs'), id="realization.selfEvaluation.planVsProgram.actionChecks.0"),
+    pytest.param("realization.selfEvaluation.programVsReport.behaviorChecks.0", ('programBehavior', 'reason', 'reportedBehavior', 'result', 'runtimeRefs'), id="realization.selfEvaluation.programVsReport.behaviorChecks.0"),
+])
+def test_shape_card_object_members_are_exact(path, keys):
+    value = author_item_prompt_shape_card()
+    for part in path.split("."):
+        value = value[int(part)] if isinstance(value, list) else value[part]
+    assert set(value) == set(keys)
 
 
 def test_author_prompt_shape_card_matches_root_object_cardinality_without_provider_schema() -> None:
@@ -240,41 +251,9 @@ def test_author_prompt_shape_card_matches_root_object_cardinality_without_provid
     assert list(exported["properties"]) == expected_model_order
     assert list(author_item_provider_response_schema()["properties"]) == expected_model_order
     assert isinstance(card["concept"], dict)
-    assert set(card["concept"]) == {
-        "literalSynthesis",
-        "coreMechanic",
-        "parentAContribution",
-        "parentBContribution",
-        "playerExperience",
-        "plannedPlayerActions",
-    }
-    planned_action = card["concept"]["plannedPlayerActions"][0]
-    assert set(planned_action) == {"input", "intent"}
     assert "runtimeContract" not in card
-    assert set(card["realization"]) == {
-        "description",
-        "playerExperience",
-        "selfEvaluation",
-    }
     evaluation = card["realization"]["selfEvaluation"]
     assert set(evaluation) == {"planVsProgram", "programVsReport"}
-    assert set(evaluation["planVsProgram"]) == {"verdict", "summary", "actionChecks"}
-    assert set(evaluation["programVsReport"]) == {"verdict", "summary", "behaviorChecks"}
-    assert set(evaluation["planVsProgram"]["actionChecks"][0]) == {
-        "plannedIntent",
-        "implementedBehavior",
-        "runtimeRefs",
-        "result",
-        "intentionality",
-        "reason",
-    }
-    assert set(evaluation["programVsReport"]["behaviorChecks"][0]) == {
-        "runtimeRefs",
-        "programBehavior",
-        "reportedBehavior",
-        "result",
-        "reason",
-    }
     assert card["runtimeProgram"]["apiVersion"] == "infini.runtime-program.v5"
     assert card["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v5"
     assert card["runtimeProgram"]["primaryEntityId"] == "exact existing entity id chosen once by the model"
@@ -399,103 +378,72 @@ def test_authority_facts_are_exact_registry_declarations(fn, key, expected):
         assert actual == expected
 
 
-UNIT_MEANINGS = {
-    "configure_item_stats": {"knockback": "Item.knockBack", "scale": "1 unchanged"},
-    "configure_item_contact_hitbox": {"contactForgivenessPx": "each side"},
-    "apply_generated_buff_on_use": {
-        "moveSpeedBonusPercent": "Player.moveSpeed",
-        "jumpSpeedBonusPxPerTick": "pixels/tick",
-        "manaRegenBonusPoints": "Player.manaRegen",
-        "miningSpeedMultiplier": "pickSpeed",
-        "lightStrength": "RGB",
-    },
-    "configure_tool": {"pickPower": "tooltip", "hammerPower": "tooltip", "miningSpeedMultiplier": "pickSpeed"},
-    "configure_tile_placement": {"placeStyle": "Item.placeStyle"},
-    "require_use_condition": {"condition": "thresholds include equality"},
-    "add_hold_light": {"strength": "RGB"},
-    "emit_light_while_active": {"strength": "RGB"},
-    "configure_accessory": {
-        "manaRegenBonusPoints": "Player.manaRegenBonus",
-        "aggroPoints": "Player.aggro",
-        "genericArmorPenetrationPoints": "armor",
-        "lightStrength": "RGB",
-    },
-    "configure_armor": {
-        "manaRegenBonusPoints": "Player.manaRegenBonus",
-        "aggroPoints": "Player.aggro",
-        "genericArmorPenetrationPoints": "armor",
-        "lightStrength": "RGB",
-    },
-    "configure_spawn": {"velocity": "initial velocity", "count": "root binding"},
-    "set_projectile_hitbox": {"drawScale": "visual scale"},
-    "set_projectile_damage": {"knockback": "Projectile.knockBack"},
-    "set_projectile_collision": {"updatesPerTick": "per world tick", "immunity": "engine"},
-    "move_gravity_arc": {"accelY": "per projectile update"},
-    "move_sine_homing": {"waveVelocityCoefficient": "0.03"},
-    "move_accelerate": {"speedMultiplierPerUpdate": "per projectile update"},
-    "move_spiral": {"turnRadiansPerUpdate": "per projectile update"},
-    "move_expanding_wave": {"scaleGrowthPerUpdate": "per projectile update"},
-    "target_and_fire": {"sameTargetBias": "0.9", "rangeTiles": "hard geometric"},
-    "pull_on_event": {"strength": "velocity", "radiusTiles": "no active direct target"},
-    "heal_owner_on_event": {"damageFraction": "0.15 = 15%"},
-}
-EXPLICIT_MEANINGS = [
-    ("charge_then_release", "powerMultiplier", "release velocity"),
-    ("move_phase", "phaseStrength", "alpha"),
-    ("move_player_on_use", "safeTileOnly", "ignored for recall_home"),
-    ("move_owner_on_event", "safeTileOnly", "not a general hazard check"),
-    ("configure_item_stats", "manaCost", "Base Item.mana"),
-    ("configure_item_stats", "craftYield", "maxStack"),
-    ("restore_resources_on_use", "usesPotionRules", "Quick Heal"),
-    ("configure_item_use", "customHeldSprite", "not gameplay release timing"),
-    ("configure_accessory", "ammoSaveChancePercent", "any weapon"),
-    ("configure_accessory", "ammoSaveChancePercent", "CanConsumeAmmo"),
-    ("configure_accessory", "manaRegenBonusPoints", "not mana/s"),
-    ("configure_item_stats", "useAnimationTicks", "independent"),
-    ("configure_item_stats", "useTimeTicks", "interval"),
-    ("set_projectile_hitbox", "hitboxScale", "1 unchanged"),
-    ("move_accelerate", "speedMultiplierPerUpdate", "1 unchanged"),
-    ("charge_then_release", "powerMultiplier", "1 unchanged"),
-    ("configure_item_stats", "damageClass", "DamageClass.FullName"),
-    ("configure_item_stats", "damageClass", "not item FullName"),
-    ("set_projectile_damage", "damageClass", "DamageClass.FullName"),
-    ("set_projectile_damage", "damageClass", "not item FullName"),
-    ("damage_area_on_event", "damageMultiplier", "item_body"),
-    ("damage_area_on_event", "damageMultiplier", "configure_item_stats.damage"),
-    ("damage_area_on_event", "damageMultiplier", "set_projectile_damage.damage"),
-    ("damage_area_on_event", "damageMultiplier", "damageDone"),
-    ("damage_area_on_event", "damageMultiplier", "at least 1"),
-    ("damage_area_on_event", "damageMultiplier", "before target defense"),
-    ("damage_nearest_on_event", "damageMultiplier", "item_body"),
-    ("damage_nearest_on_event", "damageMultiplier", "configure_item_stats.damage"),
-    ("damage_nearest_on_event", "damageMultiplier", "set_projectile_damage.damage"),
-    ("damage_nearest_on_event", "damageMultiplier", "damageDone"),
-    ("damage_nearest_on_event", "damageMultiplier", "at least 1"),
-    ("damage_nearest_on_event", "damageMultiplier", "before target defense"),
-    ("set_projectile_collision", "immunity", "unscaled"),
-    ("set_projectile_collision", "immunity", "once"),
-    ("set_projectile_collision", "immunity", "0..600"),
-    ("set_projectile_collision", "immunity", "owner"),
-    ("set_projectile_collision", "immunity", "updatesPerTick"),
-    ("configure_accessory", "lifeRegenHpPerSecond", "+2"),
-    ("configure_accessory", "lifeRegenHpPerSecond", "+1 HP/s"),
-    ("configure_accessory", "lifeRegenHpPerSecond", "-2"),
-    ("configure_accessory", "lifeRegenHpPerSecond", "-1 HP/s"),
-    ("move_drift", "velocityRetention", "updatesPerTick"),
-    ("configure_spawn", "velocity", "No peer reroll"),
-]
-
-
-@pytest.mark.parametrize(
-    "fn,name,phrase",
-    [pytest.param(fn, name, p, id=fn + "-" + name + "-" + p) for fn, params in UNIT_MEANINGS.items() for name, p in params.items()]
-    + [pytest.param(fn, n, p, id=fn + "-" + n + "-" + p) for fn, n, p in EXPLICIT_MEANINGS],
-)
-def test_serialized_numeric_card_explains_exact_consumer_meaning(packet, fn, name, phrase):
+# Each case owns one serialized field's complete consumer explanation.
+# Phrase clauses are assertions on that one field, not separate setup/requests.
+@pytest.mark.parametrize("fn,name,phrases", [
+    pytest.param("configure_item_stats", "knockback", ('Item.knockBack',), id="configure_item_stats-knockback"),
+    pytest.param("configure_item_stats", "scale", ('1 unchanged',), id="configure_item_stats-scale"),
+    pytest.param("configure_item_contact_hitbox", "contactForgivenessPx", ('each side',), id="configure_item_contact_hitbox-contactForgivenessPx"),
+    pytest.param("apply_generated_buff_on_use", "moveSpeedBonusPercent", ('Player.moveSpeed',), id="apply_generated_buff_on_use-moveSpeedBonusPercent"),
+    pytest.param("apply_generated_buff_on_use", "jumpSpeedBonusPxPerTick", ('pixels/tick',), id="apply_generated_buff_on_use-jumpSpeedBonusPxPerTick"),
+    pytest.param("apply_generated_buff_on_use", "manaRegenBonusPoints", ('Player.manaRegen',), id="apply_generated_buff_on_use-manaRegenBonusPoints"),
+    pytest.param("apply_generated_buff_on_use", "miningSpeedMultiplier", ('pickSpeed',), id="apply_generated_buff_on_use-miningSpeedMultiplier"),
+    pytest.param("apply_generated_buff_on_use", "lightStrength", ('RGB',), id="apply_generated_buff_on_use-lightStrength"),
+    pytest.param("configure_tool", "pickPower", ('tooltip',), id="configure_tool-pickPower"),
+    pytest.param("configure_tool", "hammerPower", ('tooltip',), id="configure_tool-hammerPower"),
+    pytest.param("configure_tool", "miningSpeedMultiplier", ('pickSpeed',), id="configure_tool-miningSpeedMultiplier"),
+    pytest.param("configure_tile_placement", "placeStyle", ('Item.placeStyle',), id="configure_tile_placement-placeStyle"),
+    pytest.param("require_use_condition", "condition", ('thresholds include equality',), id="require_use_condition-condition"),
+    pytest.param("add_hold_light", "strength", ('RGB',), id="add_hold_light-strength"),
+    pytest.param("emit_light_while_active", "strength", ('RGB',), id="emit_light_while_active-strength"),
+    pytest.param("configure_accessory", "manaRegenBonusPoints", ('Player.manaRegenBonus', 'not mana/s'), id="configure_accessory-manaRegenBonusPoints"),
+    pytest.param("configure_accessory", "aggroPoints", ('Player.aggro',), id="configure_accessory-aggroPoints"),
+    pytest.param("configure_accessory", "genericArmorPenetrationPoints", ('armor',), id="configure_accessory-genericArmorPenetrationPoints"),
+    pytest.param("configure_accessory", "lightStrength", ('RGB',), id="configure_accessory-lightStrength"),
+    pytest.param("configure_armor", "manaRegenBonusPoints", ('Player.manaRegenBonus',), id="configure_armor-manaRegenBonusPoints"),
+    pytest.param("configure_armor", "aggroPoints", ('Player.aggro',), id="configure_armor-aggroPoints"),
+    pytest.param("configure_armor", "genericArmorPenetrationPoints", ('armor',), id="configure_armor-genericArmorPenetrationPoints"),
+    pytest.param("configure_armor", "lightStrength", ('RGB',), id="configure_armor-lightStrength"),
+    pytest.param("configure_spawn", "velocity", ('initial velocity', 'No peer reroll'), id="configure_spawn-velocity"),
+    pytest.param("configure_spawn", "count", ('root binding',), id="configure_spawn-count"),
+    pytest.param("set_projectile_hitbox", "drawScale", ('visual scale',), id="set_projectile_hitbox-drawScale"),
+    pytest.param("set_projectile_damage", "knockback", ('Projectile.knockBack',), id="set_projectile_damage-knockback"),
+    pytest.param("set_projectile_collision", "updatesPerTick", ('per world tick',), id="set_projectile_collision-updatesPerTick"),
+    pytest.param("set_projectile_collision", "immunity", ('engine', 'unscaled', 'once', '0..600', 'owner', 'updatesPerTick'), id="set_projectile_collision-immunity"),
+    pytest.param("move_gravity_arc", "accelY", ('per projectile update',), id="move_gravity_arc-accelY"),
+    pytest.param("move_sine_homing", "waveVelocityCoefficient", ('0.03',), id="move_sine_homing-waveVelocityCoefficient"),
+    pytest.param("move_accelerate", "speedMultiplierPerUpdate", ('per projectile update', '1 unchanged'), id="move_accelerate-speedMultiplierPerUpdate"),
+    pytest.param("move_spiral", "turnRadiansPerUpdate", ('per projectile update',), id="move_spiral-turnRadiansPerUpdate"),
+    pytest.param("move_expanding_wave", "scaleGrowthPerUpdate", ('per projectile update',), id="move_expanding_wave-scaleGrowthPerUpdate"),
+    pytest.param("target_and_fire", "sameTargetBias", ('0.9',), id="target_and_fire-sameTargetBias"),
+    pytest.param("target_and_fire", "rangeTiles", ('hard geometric',), id="target_and_fire-rangeTiles"),
+    pytest.param("pull_on_event", "strength", ('velocity',), id="pull_on_event-strength"),
+    pytest.param("pull_on_event", "radiusTiles", ('no active direct target',), id="pull_on_event-radiusTiles"),
+    pytest.param("heal_owner_on_event", "damageFraction", ('0.15 = 15%',), id="heal_owner_on_event-damageFraction"),
+    pytest.param("charge_then_release", "powerMultiplier", ('release velocity', '1 unchanged'), id="charge_then_release-powerMultiplier"),
+    pytest.param("move_phase", "phaseStrength", ('alpha',), id="move_phase-phaseStrength"),
+    pytest.param("move_player_on_use", "safeTileOnly", ('ignored for recall_home',), id="move_player_on_use-safeTileOnly"),
+    pytest.param("move_owner_on_event", "safeTileOnly", ('not a general hazard check',), id="move_owner_on_event-safeTileOnly"),
+    pytest.param("configure_item_stats", "manaCost", ('Base Item.mana',), id="configure_item_stats-manaCost"),
+    pytest.param("configure_item_stats", "craftYield", ('maxStack',), id="configure_item_stats-craftYield"),
+    pytest.param("restore_resources_on_use", "usesPotionRules", ('Quick Heal',), id="restore_resources_on_use-usesPotionRules"),
+    pytest.param("configure_item_use", "customHeldSprite", ('not gameplay release timing',), id="configure_item_use-customHeldSprite"),
+    pytest.param("configure_accessory", "ammoSaveChancePercent", ('any weapon', 'CanConsumeAmmo'), id="configure_accessory-ammoSaveChancePercent"),
+    pytest.param("configure_item_stats", "useAnimationTicks", ('independent',), id="configure_item_stats-useAnimationTicks"),
+    pytest.param("configure_item_stats", "useTimeTicks", ('interval',), id="configure_item_stats-useTimeTicks"),
+    pytest.param("set_projectile_hitbox", "hitboxScale", ('1 unchanged',), id="set_projectile_hitbox-hitboxScale"),
+    pytest.param("configure_item_stats", "damageClass", ('DamageClass.FullName', 'not item FullName'), id="configure_item_stats-damageClass"),
+    pytest.param("set_projectile_damage", "damageClass", ('DamageClass.FullName', 'not item FullName'), id="set_projectile_damage-damageClass"),
+    pytest.param("damage_area_on_event", "damageMultiplier", ('item_body', 'configure_item_stats.damage', 'set_projectile_damage.damage', 'damageDone', 'at least 1', 'before target defense'), id="damage_area_on_event-damageMultiplier"),
+    pytest.param("damage_nearest_on_event", "damageMultiplier", ('item_body', 'configure_item_stats.damage', 'set_projectile_damage.damage', 'damageDone', 'at least 1', 'before target defense'), id="damage_nearest_on_event-damageMultiplier"),
+    pytest.param("configure_accessory", "lifeRegenHpPerSecond", ('+2', '+1 HP/s', '-2', '-1 HP/s'), id="configure_accessory-lifeRegenHpPerSecond"),
+    pytest.param("move_drift", "velocityRetention", ('updatesPerTick',), id="move_drift-velocityRetention"),
+])
+def test_serialized_numeric_card_explains_exact_consumer_meaning(packet, fn, name, phrases):
     row = cards_from(packet[1]["runtimeCapabilityContract"]["catalog"])[fn]["params"][name]
     meaning = row.get("meaning") or CAPABILITY_REGISTRY["configure_accessory"].params.get(name).description
-    assert phrase in meaning
-
+    for phrase in phrases:
+        assert phrase in meaning
 
 # Units that are raw engine coefficients have no percent conversion layer.
 RAW_COEFFICIENTS = {
@@ -550,73 +498,79 @@ def test_serialized_speed_units_are_projectile_updates(packet, fn, name):
     assert cards_from(packet[1]["runtimeCapabilityContract"]["catalog"])[fn]["params"][name]["units"] == "pixels/projectile update"
 
 
-@pytest.mark.parametrize(
-    "section,identity,field,phrase",
-    [
-        pytest.param(*row, id="-".join(row[:3]) + "-" + str(i))
-        for i, row in enumerate(
-            (
-                ("fieldGuide", "stackCost", "", "Projectile return does not refund"),
-                ("fieldGuide", "stackCost", "", "stackCost=0"),
-                ("fieldGuide", "stackCost", "", "whole generated item"),
-                ("fieldGuide", "stackCost", "", "stackCost=1"),
-                ("fieldGuide", "bindingTarget", "", "contactDamage=true"),
-                ("fieldGuide", "bindingTarget", "", "bindings[].action.targetId"),
-                ("fieldGuide", "rowShapes", "", "place_item stackCost=1"),
-                ("bindingActions", "place_item", "constructionMeaning", "returned"),
-                ("bindingActions", "place_item", "constructionMeaning", "item_body.on_use"),
-                ("bindingActions", "apply_item_effects", "does", "only active binding"),
-                ("bindingActions", "use_item_body", "does", "never pair it with spawn_entity"),
-                ("inputs", "primary_use", "does", "exactly one action root"),
-                ("events", "on_use", "does", "including spawn_entity actions"),
-                ("events", "on_expire", "does", "an early kill otherwise emits on_kill only"),
-                ("entityKinds", "item_body", "requiredComponents", "configure_item_stats"),
-                ("entityKinds", "stationary_projectile", "positionRequirement", "movement is optional"),
-                ("fieldGuide", "paramNotation", "", "15 means 15%, not 0.15"),
-            )
-        )
-    ]
-    + [
-        pytest.param("fieldGuide", "paramNotation", "", p, id="numeric-guide-" + p)
-        for p in (
-            "per projectile update",
-            "updatesPerTick",
-            "world ticks",
-            "updatesPerTick updates",
-            "immunity.localCooldown",
-            "15",
-            "0.15",
-            "bonusPercent",
-            "CritChancePercentagePoints",
-            "manaCostReductionPercentagePoints",
-            "damageReductionPercentagePoints",
-            "ammoSaveChancePercent",
-            "damageMultiplier=1",
-            "AoE/nearest-event damage floor at 1",
-            "damageFraction=0.15",
-            "homingStrength=0.15",
-            "pierce=-1",
-            "configure_tile_placement selects tileId>=0",
-            "configure_wall_placement selects wallId>=0",
-            "Default receives no Generic",
-            "Summon crit is nonstandard",
-        )
-    ],
-)
-def test_serialized_construction_guide_keeps_specific_obligations(packet, section, identity, field, phrase):
+@pytest.mark.parametrize("section,identity,field,phrases", [
+    pytest.param("fieldGuide", "stackCost", "", (
+        'Projectile return does not refund',
+        'stackCost=0',
+        'whole generated item',
+        'stackCost=1',
+    ), id="fieldGuide-stackCost"),
+    pytest.param("fieldGuide", "bindingTarget", "", (
+        'contactDamage=true',
+        'bindings[].action.targetId',
+    ), id="fieldGuide-bindingTarget"),
+    pytest.param("fieldGuide", "rowShapes", "", (
+        'place_item stackCost=1',
+    ), id="fieldGuide-rowShapes"),
+    pytest.param("bindingActions", "place_item", "constructionMeaning", (
+        'returned',
+        'item_body.on_use',
+    ), id="bindingActions-place_item"),
+    pytest.param("bindingActions", "apply_item_effects", "does", (
+        'only active binding',
+    ), id="bindingActions-apply_item_effects"),
+    pytest.param("bindingActions", "use_item_body", "does", (
+        'never pair it with spawn_entity',
+    ), id="bindingActions-use_item_body"),
+    pytest.param("inputs", "primary_use", "does", (
+        'exactly one action root',
+    ), id="inputs-primary_use"),
+    pytest.param("events", "on_use", "does", (
+        'including spawn_entity actions',
+    ), id="events-on_use"),
+    pytest.param("events", "on_expire", "does", (
+        'an early kill otherwise emits on_kill only',
+    ), id="events-on_expire"),
+    pytest.param("entityKinds", "item_body", "requiredComponents", (
+        'configure_item_stats',
+    ), id="entityKinds-item_body"),
+    pytest.param("entityKinds", "stationary_projectile", "positionRequirement", (
+        'movement is optional',
+    ), id="entityKinds-stationary_projectile"),
+    pytest.param("fieldGuide", "paramNotation", "", (
+        '15 means 15%, not 0.15',
+        'per projectile update',
+        'updatesPerTick',
+        'world ticks',
+        'updatesPerTick updates',
+        'immunity.localCooldown',
+        '15',
+        '0.15',
+        'bonusPercent',
+        'CritChancePercentagePoints',
+        'manaCostReductionPercentagePoints',
+        'damageReductionPercentagePoints',
+        'ammoSaveChancePercent',
+        'damageMultiplier=1',
+        'AoE/nearest-event damage floor at 1',
+        'damageFraction=0.15',
+        'homingStrength=0.15',
+        'pierce=-1',
+        'configure_tile_placement selects tileId>=0',
+        'configure_wall_placement selects wallId>=0',
+        'Default receives no Generic',
+        'Summon crit is nonstandard',
+    ), id="fieldGuide-paramNotation"),
+])
+def test_serialized_construction_guide_keeps_specific_obligations(packet, section, identity, field, phrases):
     catalog = packet[1]["runtimeCapabilityContract"]["catalog"]
     if section == "fieldGuide":
         value = catalog[section][identity]
     else:
         key = {"bindingActions": "action", "events": "event", "inputs": "input", "entityKinds": "kind"}[section]
         value = next(r[field] for r in catalog[section] if r[key] == identity)
-    assert phrase in value
-    assert "bindings[].target" not in catalog["fieldGuide"]["bindingTarget"]
-    assert "free_projectile" in {r["kind"] for r in catalog["entityKinds"]}
-    immunity = cards_from(catalog)["set_projectile_collision"]["params"]["immunity"]["shape"]
-    cooldown = next(row["properties"]["localCooldown"] for row in immunity["oneOf"] if row.get("type") == "object")
-    assert cooldown["minimum"] == 0 and cooldown["maximum"] == 600
-    assert "per projectile update" in cards_from(catalog)["move_drift"]["does"]
+    for phrase in phrases:
+        assert phrase in value
 
 
 def test_proximity_expiration_is_explicit_without_synthetic_hit() -> None:
@@ -708,9 +662,6 @@ def test_nullable_projection_requires_actual_schema_and_preserves_invalid_neighb
     + [pytest.param("json_schema", "json_schema", True, id="schema-format-repair")],
 )
 def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_to_repair(monkeypatch, mode, actual, malformed):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    monkeypatch.setattr(pipeline, "USE_LLM", True)
-    monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-test")
     item = build_runtime_fixture("workbench_blade")
     _stats(item)["params"]["manaCost"] = None
     content = json.dumps(item)
@@ -722,7 +673,7 @@ def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_
         requests.append(request)
         return {"choices": [{"message": {"content": next(responses)}}], "_debug": {"responseFormatType": actual}}
 
-    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
+    offline_builder(monkeypatch, mode, respond)
     result = pipeline.try_llm_plan({}, {}, {}, {}, "nullable-test")
     assert result is not None
     assert ("manaCost" not in _stats(result)["params"]) is (actual == "json_schema")
@@ -793,9 +744,6 @@ def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(
     from infini_local.core.errors import PlannerUnavailable
     from infini_local.pipelines.author_item_contract import strict_author_item_repair_report
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    monkeypatch.setattr(pipeline, "USE_LLM", True)
-    monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-test")
     item = build_runtime_fixture("workbench_blade")
     stats = _stats(item)
     if mana is None:
@@ -818,7 +766,7 @@ def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(
     response = {"choices": [{"message": {"content": json.dumps(patch)}}]}
     if actual is not None:
         response["_debug"] = {"responseFormatType": actual}
-    monkeypatch.setattr(pipeline, "llm_chat_json", lambda *a, **kw: response)
+    offline_builder(monkeypatch, mode, lambda *a, **kw: response)
     args = (item, {}, {}, {}, {}, "repair-contract")
     if shape_guard or (variant == "nullable" and actual != "json_schema"):
         with pytest.raises(PlannerUnavailable):
@@ -838,9 +786,6 @@ def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(
 def test_serialized_stage_prose_explains_nullable_transport_only_with_schema(monkeypatch, stage, mode):
     from infini_local.pipelines import llm_transport as transport
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-    monkeypatch.setattr(pipeline, "USE_LLM", True)
-    monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-test")
     requests = []
 
     class Captured(BaseException):
@@ -850,7 +795,7 @@ def test_serialized_stage_prose_explains_nullable_transport_only_with_schema(mon
         requests.append(request)
         raise Captured()
 
-    monkeypatch.setattr(pipeline, "llm_chat_json", capture)
+    offline_builder(monkeypatch, mode, capture)
     with pytest.raises(Captured):
         if stage == "author":
             pipeline.try_llm_plan({}, {}, {}, {}, "prose")
