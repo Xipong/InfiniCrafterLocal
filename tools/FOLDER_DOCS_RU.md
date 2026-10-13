@@ -15,7 +15,7 @@ Development/agent utilities. None of these files are imported by the game runtim
 - `EngineRuntimeChecks.RootCombat.cs` — native ItemCheck/shoot query contexts and counts, active primary/alternate roots, applied prefixes, actual hook order, terminal hold and restoration of the original source Item/crit/armor. Uses scoped native hooks and intercepted spawn boundaries; not a gameplay/MP smoke.
 - `EngineRuntimeChecks.Tooltips.cs` — real `ModifyTooltips`/`TooltipLine`/Language consumers with typed CPU fixtures and existing EN/RU HJSON: exact executable bindings, separate stack costs, base mana, bounded effects, UI number culture and non-mutation. Does not prove native inventory/GPU UI or player-dependent mana discounts.
 
-All three partial check files are registered in `EngineRuntimeChecks.cs` and `EngineRuntimeChecks.csproj`. Registration is not an execution result; compilation and native acceptance remain separate integration gates.
+The remaining named behavior checks are registered in `EngineRuntimeChecks.cs` and `EngineRuntimeChecks.csproj`. The portfolio favors craft/material ownership, cancellation, world persistence and asset lifecycle over exhaustive DTO/pixel microchecks. Registration is not an execution result.
 
 - `agentctl.py` — doctor/context/diff-aware verify/task boundary/handoff/snapshot baseline.
 - `contract_parity.py`, `check_delivery_contract.py`, `mutation_contract_gate.py` — cross-language lifecycle, strict delivered-JSON DTO parity, and mutation proof.
