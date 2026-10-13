@@ -645,7 +645,9 @@ def test_simple_view_keeps_active_basics_and_preserves_hidden_values():
     assert calls[fields["INFINI_LLM_REASONING_MAX_TOKENS"][0]] is False
     gui.advanced_var.set(True)
     settings_gui.SettingsGui._apply_view_mode(gui)
-    assert all(calls[row[0]] for row in fields.values())
+    # Advanced exposes active expert fields, not settings of an inactive provider.
+    assert calls[fields["INFINI_SDCPP_MODEL"][0]] is False
+    assert calls[fields["INFINI_LLM_REASONING_MAX_TOKENS"][0]] is True
 
 
 def test_codex_settings_do_not_display_an_unrelated_flux_preset():

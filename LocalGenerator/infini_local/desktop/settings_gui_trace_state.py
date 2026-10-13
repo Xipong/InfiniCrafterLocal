@@ -76,46 +76,8 @@ class SettingsGuiTraceStateMixin:
         self.status_var.set(f"Профиль «{name}» сохранён отдельно. config.env не изменён; ключи и токены в профиль не входят.")
 
     def _build_trace(self, parent):
-        outer = ttk.Frame(parent, padding=10)
-        outer.pack(fill="both", expand=True)
-        ttk.Label(outer, text="Pipeline trace / prompts / sd.cpp", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        ttk.Label(
-            outer,
-            text="Чёрный ящик генерации: что отправили ЛЛМ, какие image prompts ушли в backend, что ответил sd.cpp, где отвалился step.",
-            foreground="#666",
-        ).pack(anchor="w", pady=(2, 8))
-
-        bar = ttk.Frame(outer)
-        bar.pack(fill="x", pady=(0, 8))
-        ttk.Button(bar, text="Refresh trace", command=self.refresh_trace).pack(side="left", padx=2)
-        ttk.Button(bar, text="Cancel refresh", command=self.cancel_trace_refresh).pack(side="left", padx=2)
-        ttk.Button(bar, text="Open /trace", command=self.open_trace_page).pack(side="left", padx=2)
-        ttk.Button(bar, text="Open trace.json", command=self.open_trace_json).pack(side="left", padx=2)
-        ttk.Button(bar, text="Open cache folder", command=self.open_cache_folder).pack(side="left", padx=2)
-        ttk.Button(bar, text="Clear trace", command=self.clear_trace_files).pack(side="left", padx=8)
-        self.trace_status_var = tk.StringVar(value="Нажми Refresh trace. Если server.py не запущен, GUI покажет локальные cache/*.ndjson.")
-        ttk.Label(bar, textvariable=self.trace_status_var, foreground="#666").pack(side="left", padx=8)
-
-        self.trace_views = ttk.Notebook(outer)
-        self.trace_views.pack(fill="both", expand=True)
-        self.trace_texts: dict[str, tk.Text] = {}
-        for key, title in [
-            ("summary", "Сводка"),
-            ("prompts", "Промпты"),
-            ("pipeline", "Steps"),
-            ("events", "Events"),
-            ("sdcpp", "sd.cpp"),
-            ("failure", "Last failure"),
-        ]:
-            frame = ttk.Frame(self.trace_views)
-            self.trace_views.add(frame, text=title)
-            text = tk.Text(frame, wrap="word", undo=False, font=("Consolas", 9), bg="#101828", fg="#e5e7eb", insertbackground="#e5e7eb")
-            scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
-            text.configure(yscrollcommand=scroll.set)
-            text.pack(side="left", fill="both", expand=True)
-            scroll.pack(side="right", fill="y")
-            self._enable_edit_menu(text)
-            self.trace_texts[key] = text
+        from infini_local.desktop.settings_page_diagnostics import DiagnosticsPageMixin
+        return DiagnosticsPageMixin._build_trace(self, parent)
 
     def _set_trace_text(self, key: str, content: str):
         text = self.trace_texts.get(key)
@@ -332,9 +294,8 @@ class SettingsGuiTraceStateMixin:
         return self.data.get(key, DEFAULTS.get(key, default)).strip()
 
     def _refresh_visibility(self):
-        # Keep fields visible, but block the inactive branch.  This is less confusing
-        # than disappearing boxes and prevents editing settings that the current
-        # provider/backend/profile will ignore anyway.
+        # Resolve enablement first; the shell hides inactive rows without rewriting
+        # their values, and advanced mode exposes only active expert controls.
         self._refresh_secret_entries()
         for key in list(self.field_widgets):
             self._set_field_enabled(key, True, "")

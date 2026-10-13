@@ -33,8 +33,8 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1160x820")
-        self.minsize(960, 700)
+        self.geometry("1240x880")
+        self.minsize(1040, 740)
         self._configure_theme()
         self.proc: subprocess.Popen | None = None
         self._gui_closed = False
@@ -73,6 +73,8 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
             self.status_var.set(preset_error)
 
     def _var(self, key: str) -> tk.StringVar:
+        if key in self.vars:
+            return self.vars[key]
         v = tk.StringVar(value=self.data.get(key, DEFAULTS.get(key, "")))
         self.vars[key] = v
         return v

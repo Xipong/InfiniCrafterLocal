@@ -12,7 +12,7 @@ from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E
     CAPABILITY_REGISTRY, LEGACY_EQUIPMENT_CLASS_DAMAGE_BOUNDS,
 )
 
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedEquipmentBounds.g.cs"
+OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs"
 
 
 def _literal(value: int | float, *, integer: bool) -> str:

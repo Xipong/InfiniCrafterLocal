@@ -52,8 +52,10 @@ def test_python_lint_accepts_decoys_and_reports_import_cycle(gates):
 
 
 @pytest.mark.parametrize("path,source,code", [
-    ("Common/Models/GeneratedItemData.Renamed.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
-    ("Common/Models/GeneratedItemData.Apply.cs", "item.useStyle = 0;", "numeric_sentinel"),
+    ("Common/Models/Contracts/GeneratedItemData.Renamed.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Common/Models/Runtime/GeneratedItemData.Renamed.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Common/Services/Generation/GeneratorClient.cs", "item.shoot > 0", "numeric_sentinel"),
+    ("Common/Models/Runtime/GeneratedItemData.Apply.cs", "item.useStyle = 0;", "numeric_sentinel"),
     ("Renamed.cs", "#pragma warning disable CS0246", "warning_suppression"),
 ])
 def test_csharp_lint_reports_invalid_source_not_comment_or_string_decoys(gates, path, source, code):

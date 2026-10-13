@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from infini_local.desktop.tk_compat import tk, ttk
+from infini_local.desktop.settings_gui_theme import APP_BG, CARD_BG, TEXT_FG, BORDER_DARK_FG
 
 
 # AGENT MAP: small reusable Tk widgets for settings_gui.py.
@@ -64,7 +65,7 @@ class ToolTip:
             pady=7,
             relief="solid",
             borderwidth=1,
-            background="#ffffe8",
+            background=CARD_BG, foreground=TEXT_FG, highlightthickness=1, highlightbackground=BORDER_DARK_FG,
         )
         label.pack(ipadx=1)
         self._tip = tip
@@ -84,7 +85,7 @@ class ToolTip:
             self._tip = None
 
 class ScrollFrame(ttk.Frame):
-    def __init__(self, master, *, background: str = "#f5f7fb"):
+    def __init__(self, master, *, background: str = APP_BG):
         super().__init__(master)
         self.configure(style="Infini.TFrame")
         self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0, background=background)

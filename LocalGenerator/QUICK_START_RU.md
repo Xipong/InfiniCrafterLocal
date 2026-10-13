@@ -1,22 +1,19 @@
-# LocalGenerator v0.4.254 — offline QA
+# LocalGenerator 0.4.254 — offline QA
 
-Для установки/запуска парной поставки 0.4.254 используй [корневой runbook](../QUICK_START_RU.md): обновляй мод и генератор вместе, сохраняя личный конфиг, cache, recipes/PNG и данные миров. Здесь только проверка source checkout; runtime requirements и dev requirements различаются. Прежние offline/native результаты не заменяют проверку финальных release-байтов и не доказывают исправление старых визуальных результатов.
+Для **пользовательского запуска** нужен [основной Windows-вход](../docs/user/START_RU.md). Здесь только source checkout без model/image/game/login. Dev-зависимости отличаются от runtime; установка не gate.
 
 ## Команды из корня репозитория
 
-В уже подготовленном Python-окружении разработчика:
+Используй уже подготовленное dev-окружение: [подготовка](../docs/development/README_RU.md#подготовь-dev-окружение).
 
 ```bash
-python -m pip install -r LocalGenerator/requirements-dev.txt
 python tools/validate_sandbox.py
-PYTHONPATH=LocalGenerator python -m pytest -q
 PYTHONPATH=LocalGenerator python tools/audit_capability_library.py
 PYTHONPATH=LocalGenerator python tools/check_delivery_contract.py
 python tools/check_project_hygiene.py
 python tools/check_csharp_contracts.py
-python tools/check_planner_prompt_usability.py
 ```
 
-Установка — подготовка окружения, а не gate; не переустанавливай зависимости, если оно уже готово. [AGENTS](../AGENTS.md#обязательный-vertical-slice) перечисляет полный release набор, [test owners](../docs/TEST_CONTRACT_OWNERS_RU.md) — тематические suites/shards. Portable validation не равна полному pytest и не доказывает C# build.
+Для regression выбери affected suite в [тестовом runbook](../docs/development/TESTING_RU.md); полный runner обоих test roots — `PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4`. Полный packaging набор — [AGENTS](../AGENTS.md#обязательный-vertical-slice).
 
-[C# prerequisites](../BUILD_QOL_RU.md#сборка) обязательны отдельно. Неисполненную проверку среды записывай `notRun`, не GREEN. LLM/image/game/login не нужны для перечисленных offline gates; [Live20](../toolbox/README.md) — отдельная разрешаемая кампания с реальным text provider.
+[C# prerequisites](../docs/development/BUILD_RU.md#сборка) нужны отдельно. Portable validation не равна full pytest/build; offline/headless не доказывает художественное качество, world/GPU/MP. Неисполненное — `notRun`. Live campaigns требуют отдельного разрешения: [toolbox](../toolbox/README.md).

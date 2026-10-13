@@ -374,7 +374,7 @@
       "name": "INFINI_ASSET_PUBLIC_BASE_URL",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "secret": false,
       "type": "string",
@@ -1223,7 +1223,7 @@
       "minimum": null,
       "name": "INFINI_CRAFT_CACHE_HTTP_TIMEOUT_SECONDS",
       "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "secret": false,
       "type": "unknown",
@@ -1239,7 +1239,7 @@
       "minimum": null,
       "name": "INFINI_CRAFT_CACHE_RECOVERY_SECONDS",
       "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "secret": false,
       "type": "unknown",
@@ -1255,7 +1255,7 @@
       "minimum": null,
       "name": "INFINI_CRAFT_HTTP_ATTEMPTS",
       "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "secret": false,
       "type": "unknown",
@@ -1271,7 +1271,7 @@
       "minimum": null,
       "name": "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
       "owners": [
-        "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs"
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "secret": false,
       "type": "unknown",
@@ -1381,7 +1381,7 @@
       "declarations": [],
       "default": [],
       "documented": true,
-      "example": "Локалка: LM Studio + local Z-Image/sd.cpp",
+      "example": "Custom",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3768,7 +3768,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\Qwen 3\\Qwen3-4B-UD-Q5_K_XL.gguf",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3888,7 +3888,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\flux-2-klein-4b-Q8_0.gguf",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3912,7 +3912,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -3984,7 +3984,7 @@
       ],
       "default": false,
       "documented": true,
-      "example": "1",
+      "example": "0",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -4056,7 +4056,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\sd-server.exe",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -4080,7 +4080,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "-v --backend diffusion=rocm0,vae=vulkan0,te=rocm0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -4408,7 +4408,7 @@
       ],
       "default": "",
       "documented": true,
-      "example": "C:\\Games\\sdcpp-hybrid-gfx1030-134c821\\models\\Flux 2 4B\\ae.safetensors",
+      "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -5632,7 +5632,7 @@
   ],
   "errors": [],
   "fieldCount": 231,
-  "fingerprint": "2730eda0d8aafdda6e971983cbe64756d070f7133bdba27bd9e354d250711c34",
+  "fingerprint": "ff3538a0ce5a3286fb370cadf3f483f128eb7297deee279bbba133d0fb681959",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

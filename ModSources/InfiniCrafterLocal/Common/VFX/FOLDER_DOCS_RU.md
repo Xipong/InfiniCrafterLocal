@@ -1,6 +1,6 @@
 # Common/VFX
 
-Исполнение принятого [VfxManifestSpec](../Models/VfxManifestSpec.cs), не интерпретация style/prose:
+Исполнение принятого [VfxManifestSpec](../Models/Presentation/VfxManifestSpec.cs), не интерпретация style/prose:
 
 - [InfiniVfxRuntime.cs](InfiniVfxRuntime.cs) — active slot events/draw и общий budget.
 - [InfiniItemVfxRuntime.cs](InfiniItemVfxRuntime.cs), [InfiniItemVfxRuntime.MaterialEvents.cs](InfiniItemVfxRuntime.MaterialEvents.cs) — Item producers/material events.

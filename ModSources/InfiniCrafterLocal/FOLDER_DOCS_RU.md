@@ -4,16 +4,16 @@
 
 ## Owners
 
-- `Common/Models/RuntimeProgramSpec.cs` — strict DTO, versions, bounds, refs, events, component dependencies.
+- `Common/Models/Contracts/RuntimeProgramSpec.cs` — strict DTO, versions, bounds, refs, events, component dependencies.
 - `Common/Runtime/RuntimeProgramExecutor.cs` — explicit item bindings and event actions.
-- `Common/Models/GeneratedItemData*.cs` — v5 JSON normalize/application, без `AttackSpec`.
+- `Common/Models/Contracts/GeneratedItemData*.cs` и `Common/Models/Runtime/GeneratedItemData*.cs` — v5 JSON normalize/application, без `AttackSpec`.
 - `Content/Items/GeneratedItem.cs` и `.UseStyle.cs` — primary/alternate/hold/equipment binding dispatch.
 - `Content/Projectiles/GeneratedProjectile.cs` — entity bootstrap.
 - `.Executors.cs` — finite movement/controller opcode dispatch.
 - `.RuntimeEvents.cs` — bounded event actions/authority.
 - `.NetSync.cs` — compact required instance state.
 - `.Visuals.cs` — entity visual role/assets, не weapon family.
-- `Common/Models/VfxManifestSpec.cs` — exact `entityId + event` VFX slots.
+- `Common/Models/Presentation/VfxManifestSpec.cs` — exact `entityId + event` VFX slots.
 
 ## Правила
 

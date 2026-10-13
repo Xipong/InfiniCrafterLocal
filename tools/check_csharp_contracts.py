@@ -46,7 +46,8 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
         code = stripped(text)
         if re.search(r"#\s*(?:pragma\s+warning\s+disable|nullable\s+disable\s+warnings)\b", code):
             issues.append(f"warning_suppression:{path}")
-        if path.startswith("Common/Models/GeneratedItemData") or path == "Content/Items/GeneratedItem.cs":
+        if (Path(path).parent.as_posix() in {"Common/Models/Contracts", "Common/Models/Runtime"}
+                and Path(path).name.startswith("GeneratedItemData")) or path == "Content/Items/GeneratedItem.cs":
             if re.search(r"\b(?:Tooltip|TooltipLine|ModifyTooltips|SetBonusText)\b|\bplayer\s*\.\s*setBonus\b", code):
                 issues.append(f"authored_tooltip:{path}")
         patterns = []
@@ -55,9 +56,9 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
                 blocks = re.findall(r"\b" + name + r":\s*\{([^}]*)\}", stripped(text, keep_strings=True))
                 if not blocks or any(re.search(r"\bTooltip\s*:", block) for block in blocks):
                     issues.append(f"proxy_tooltip:{path}:{name}")
-        if path == "Common/Models/GeneratedItemData.Apply.cs":
+        if path == "Common/Models/Runtime/GeneratedItemData.Apply.cs":
             patterns = [r"\b(?:item|Item)\s*\.\s*useStyle\s*=\s*0\s*;"]
-        elif path == "Common/Services/GeneratorClient.cs":
+        elif path == "Common/Services/Generation/GeneratorClient.cs":
             patterns = [r"\.\s*shoot\s*(?:>|<=)\s*0\b", r"\bprojectileType\s*(?:<=|>=)\s*0\b",
                         r"\.\s*create(?:Tile|Wall)\s*>=\s*0\b", r"\.\s*rare\s*>=\s*3\b"]
         elif path in {"Common/Commands/InfiniDumpCommand.cs", "Common/Commands/InfiniDumpPictureCommand.cs"}:

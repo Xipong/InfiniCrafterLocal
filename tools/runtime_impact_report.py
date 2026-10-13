@@ -24,7 +24,7 @@ def build_report() -> dict[str, Any]:
             leaks.append(path.relative_to(ROOT).as_posix())
 
     csharp_root = ROOT / "ModSources/InfiniCrafterLocal"
-    selftest = csharp_root / "Common/Systems/InfiniAgentContractSelfTestSystem.cs"
+    selftest = csharp_root / "Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs"
     source = (
         selftest.read_text(encoding="utf-8-sig", errors="ignore")
         if selftest.exists()

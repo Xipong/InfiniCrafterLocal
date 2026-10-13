@@ -67,10 +67,10 @@ def report() -> dict[str, Any]:
         if not ok:
             issues.append({"code": name, "message": detail})
 
-    vocabulary = read("ModSources/InfiniCrafterLocal/Common/Models/TerrariaRuntimeVocabulary.cs")
-    normalize = read("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Normalize.cs")
-    apply = read("ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Apply.cs")
-    dto = read("ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs")
+    vocabulary = read("ModSources/InfiniCrafterLocal/Common/Models/Contracts/TerrariaRuntimeVocabulary.cs")
+    normalize = read("ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Normalize.cs")
+    apply = read("ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs")
+    dto = read("ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs")
     projectile = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
     executors = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs")
     transport = read("LocalGenerator/infini_local/pipelines/llm_transport.py")
@@ -79,7 +79,7 @@ def report() -> dict[str, Any]:
     vfx = read("ModSources/InfiniCrafterLocal/Common/VFX/InfiniVfxRuntime.cs")
     parent_cards = read("LocalGenerator/infini_local/pipelines/parent_context_cards.py")
     parent_constants = read("LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py")
-    generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs")
+    generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs")
     generated_item = read("ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs")
     program_schema = read("LocalGenerator/infini_local/core/runtime_authoring/program_schema.py")
 

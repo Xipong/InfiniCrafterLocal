@@ -1,5 +1,5 @@
 # LocalGenerator 0.4.254 — карта исходников
 
-[Каноническая Python owner table](../PROJECT_MAP_RU.md#python) · [C# consumers](../PROJECT_MAP_RU.md#csharp) · [Generated gates](../PROJECT_MAP_RU.md#projections)
+Canonical source — пакет `infini_local/`; `server.py`/`settings_gui.py` лишь launchers. Runtime authoring — `core/runtime_authoring/`, orchestration — `pipelines/`, HTTP — `web/`, файлы/health/traces — `storage/`, UI — `desktop/`.
 
-Public source imports: `infini_local.core.runtime_authoring`. Deleted legacy compiler/root-lowering paths не заменяют owners. Начало vertical slice — [добавление capability](../docs/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice).
+[Полная карта owners](../docs/development/CODE_MAP_RU.md#python) · [задача → owner](../docs/development/OWNERS_RU.md) · [тестовые контракты](../docs/development/TESTING_RU.md) · [developer hub](../docs/development/README_RU.md).
