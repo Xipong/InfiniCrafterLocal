@@ -320,37 +320,5 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void WeaponAmmoNativeDtoPreservesAbsenceAndRejectsInvalidPresence()
-    {
-        string json = WeaponAmmoFixture("bullet", "native_shot").ToJson();
-        var parsed = GeneratedItemData.FromJson(json);
-        Equal("bullet", parsed!.RuntimeProgram.WeaponAmmo!.AmmoCategory, "ammo category survives native JSON roundtrip");
-        Equal("native_shot", parsed.RuntimeProgram.WeaponAmmo.SpeedBasis, "explicit speed choice survives native JSON roundtrip");
-        foreach (string mutation in new[] { "null", "missing_category", "missing_speed", "alias", "native_projectile_policy", "passive_only", "dual_ammo_role" })
-        {
-            JsonObject root = JsonNode.Parse(json)!.AsObject();
-            JsonObject runtime = root["runtimeProgram"]!.AsObject();
-            JsonObject ammo = runtime["weaponAmmo"]!.AsObject();
-            if (mutation == "null") runtime["weaponAmmo"] = null;
-            else if (mutation == "missing_category") ammo.Remove("ammoCategory");
-            else if (mutation == "missing_speed") ammo.Remove("speedBasis");
-            else if (mutation == "alias") ammo["ammoCategory"] = "bullets";
-            else if (mutation == "native_projectile_policy") ammo["projectilePolicy"] = "native_ammo";
-            else if (mutation == "passive_only")
-            {
-                JsonArray bindings = runtime["bindings"]!.AsArray();
-                for (int index = bindings.Count - 1; index >= 0; index--)
-                    if (RuntimeBindingSpec.IsActiveInput((string?)bindings[index]!["input"] ?? ""))
-                        bindings.RemoveAt(index);
-            }
-            else
-            {
-                root["gameplay"]!["ammoCategory"] = "bullet";
-                root["gameplay"]!["ammoProjectileId"] = ProjectileID.Bullet;
-            }
-            Equal(true, GeneratedItemData.FromJson(root.ToJsonString()) is null, "invalid native weapon ammo rejected: " + mutation);
-        }
-        Equal(true, GeneratedItemData.FromJson(RootSpawnFixture(0, 1).ToJson())!.RuntimeProgram.WeaponAmmo is null,
-            "legacy native DTO does not invent ammo requirements");
-    }
+
 }

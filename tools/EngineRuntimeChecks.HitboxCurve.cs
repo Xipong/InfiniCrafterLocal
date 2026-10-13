@@ -168,35 +168,5 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void HitboxCurveDtoPresenceAndDriverBoundaries()
-    {
-        var source = RootSpawnFixture(8, 1);
-        var raw = JsonNode.Parse(source.ToJson())!.AsObject();
-        JsonObject curve = JsonNode.Parse("{\"startScale\":1,\"endScale\":4,\"startDelayTicks\":5,\"durationTicks\":60,\"curve\":\"exponential\",\"mirrorToSprite\":false}")!.AsObject();
-        raw["runtimeProgram"]!["entities"]![1]!["hitboxCurve"] = curve;
-        var parsed = GeneratedItemData.FromJson(raw.ToJsonString()) ?? throw new InvalidOperationException("valid hitbox curve rejected");
-        Equal(4f, parsed.RuntimeProgram.Entities[1].HitboxCurve!.EndScale, "DTO preserves explicit scale");
-        Equal(true, GeneratedItemData.FromJson(parsed.ToNetworkJson()) is not null, "network DTO roundtrip");
-        foreach (string name in curve.Select(pair => pair.Key).ToArray())
-        {
-            JsonNode? saved = curve[name]?.DeepClone();
-            curve.Remove(name);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "present curve requires " + name);
-            curve[name] = saved;
-        }
-        foreach (string invalid in new[] { "null", "true", "\"1\"", "0", "9" })
-        {
-            curve["startScale"] = JsonNode.Parse(invalid);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "invalid curve scalar " + invalid);
-        }
-        curve["startScale"] = 1;
-        curve["unknown"] = 1;
-        Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "unknown curve field rejected");
-        curve.Remove("unknown");
-        raw["runtimeProgram"]!["entities"]![1]!["hitboxCurve"] = null;
-        Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "present null curve rejected");
-        raw["runtimeProgram"]!["entities"]![1]!.AsObject().Remove("hitboxCurve");
-        var legacy = GeneratedItemData.FromJson(raw.ToJsonString()) ?? throw new InvalidOperationException("legacy curve absence rejected");
-        Equal(false, legacy.ToJson().Contains("hitboxCurve", StringComparison.Ordinal), "saved absence does not materialize curve");
-    }
+
 }

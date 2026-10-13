@@ -22,13 +22,8 @@ internal static partial class EngineRuntimeChecks
             ?? throw new InvalidOperationException("longer parent report JSON rejected");
         Equal(description, data.GeneratedParentSummary.Description, "parent description not clipped");
         Equal(experience, data.GeneratedParentSummary.PlayerExperience, "parent experience not clipped");
-        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() })
-        {
-            var copy = GeneratedItemData.FromJson(json)
-                ?? throw new InvalidOperationException("longer report round trip rejected");
-            Equal(description, copy.GeneratedParentSummary.Description, "description survives native serializers");
-            Equal(experience, copy.GeneratedParentSummary.PlayerExperience, "experience survives native serializers");
-        }
+        AssertDtoRoundTrips(data, (description, experience),
+            copy => (copy.GeneratedParentSummary.Description, copy.GeneratedParentSummary.PlayerExperience), "parent report transport");
         string saveReference = data.ToPlayerSaveJson();
         var restoredReference = GeneratedItemData.FromPlayerSaveJson(saveReference)
             ?? throw new InvalidOperationException("longer report broke compact player reference");

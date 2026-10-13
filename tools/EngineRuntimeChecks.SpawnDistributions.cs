@@ -85,32 +85,17 @@ internal static partial class EngineRuntimeChecks
             LaunchRoot(competing)["spawn"]!["speedPxPerTick"] = 2;
             Equal(true, GeneratedItemData.FromJson(competing.ToJsonString()) is null, "sampled branch cannot hide a second speed");
         }
-        foreach (string mutation in new[] { "missing-aim", "missing-offset", "missing-placement", "case-aim", "case-placement", "negative-over", "null-over", "case-event", "wrong-event", "missing-geometry" })
-        {
-            var raw = JsonNode.Parse(HitTargetLaunchFixture().ToNetworkJson())!;
-            var child = raw["runtimeProgram"]!["entities"]!.AsArray().Single(row => (string?)row!["id"] == "child")!;
-            var spawn = child["spawn"]!.AsObject(); var action = LaunchRoot(raw)["events"]![0]!;
-            switch (mutation)
-            {
-                case "missing-aim": spawn.Remove("aim"); break;
-                case "missing-offset": spawn.Remove("offsetPx"); break;
-                case "missing-placement": spawn.Remove("placement"); break;
-                case "case-aim": spawn["aim"] = "VELOCITY"; break;
-                case "case-placement": spawn["placement"] = "ITEM_USE_ORIGIN"; break;
-                case "negative-over": spawn["overTarget"]!["heightTiles"] = -1; break;
-                case "null-over": spawn["overTarget"] = null; break;
-                case "case-event": action["event"] = "ON_HIT"; break;
-                case "wrong-event": action["event"] = "on_expire"; break;
-                case "missing-geometry": action["hitTargetSpawn"]!.AsObject().Remove("clearancePx"); break;
-            }
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "new target adapter rejects before legacy normalization: " + mutation);
-        }
-        foreach (string field in new[] { "count", "spreadRadians", "damageMultiplier", "delayTicks" })
-        {
-            var raw = JsonNode.Parse(HitTargetLaunchFixture().ToNetworkJson())!;
-            LaunchRoot(raw)["events"]![0]!.AsObject().Remove(field);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "new geometry cannot inherit a missing action default " + field);
-        }
+        string target = HitTargetLaunchFixture().ToNetworkJson();
+        const string childSpawn = "runtimeProgram/entities/2/spawn";
+        var changes = new[] {
+            JsonRefusal.For(childSpawn + "/aim", null), JsonRefusal.For(childSpawn + "/offsetPx", null),
+            JsonRefusal.For(childSpawn + "/placement", null), JsonRefusal.For(childSpawn + "/aim", "\"VELOCITY\""),
+            JsonRefusal.For(childSpawn + "/placement", "\"ITEM_USE_ORIGIN\""), JsonRefusal.For(childSpawn + "/overTarget/heightTiles", "-1"),
+            JsonRefusal.For(childSpawn + "/overTarget", "null"), JsonRefusal.For(EventJson + "/event", "\"ON_HIT\""),
+            JsonRefusal.For(EventJson + "/event", "\"on_expire\""), JsonRefusal.For(EventJson + "/hitTargetSpawn/clearancePx", null),
+        };
+        CheckDtoRefusals(target, changes, "HitTargetSpawn",
+            new[] { "count", "spreadRadians", "damageMultiplier", "delayTicks" }.Select(leaf => EventJson + "/" + leaf).ToArray());
         foreach (float spread in new[] { -0.5f, 0.5f })
         {
             var raw = JsonNode.Parse(HitTargetLaunchFixture().ToNetworkJson())!;
@@ -134,16 +119,10 @@ internal static partial class EngineRuntimeChecks
             ("halfAngleRadians", "1e-46", "0"),
         })
         {
-            var raw = JsonNode.Parse(SampledLaunchFixture("cone").ToNetworkJson())!;
-            var spec = LaunchRoot(raw)["spawn"]!["velocityDistribution"]!.AsObject();
-            spec[field] = "RAW_VELOCITY_NUMBER";
-            string document = raw.ToJsonString();
-            Equal(true, GeneratedItemData.FromJson(document.Replace("\"RAW_VELOCITY_NUMBER\"", outside, StringComparison.Ordinal)) is null,
-                "raw distribution domain refuses before narrowing " + field + "=" + outside);
-            var accepted = GeneratedItemData.FromJson(document.Replace("\"RAW_VELOCITY_NUMBER\"", valid, StringComparison.Ordinal))
-                ?? throw new InvalidOperationException("valid raw distribution refused " + field);
-            foreach (string payload in new[] { accepted.ToJson(), accepted.ToNetworkJson() })
-                Equal(true, GeneratedItemData.FromJson(payload) is not null, "distribution rounded endpoint retains roundtrip " + field);
+            string raw = SampledLaunchFixture("cone").ToNetworkJson();
+            const string path = ActorJson + "/spawn/velocityDistribution";
+            CheckRawDtoPair(raw, path, JsonAt(JsonNode.Parse(raw)!, path).ToJsonString(),
+                field, outside, valid, "SampledVelocity/" + field);
         }
     }
 

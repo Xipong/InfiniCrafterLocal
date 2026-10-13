@@ -73,10 +73,6 @@ internal static partial class EngineRuntimeChecks
         => (GeneratedItemData)typeof(GeneratedItemRegistryService).GetMethod("PrepareForNetworkSync", PersistenceStatic)!
             .Invoke(null, new object[] { data, force })!;
 
-    private static void Pb02PreparationHttpToNative() => Pb02Preparation("http", "native");
-    private static void Pb02PreparationNativeToHttp() => Pb02Preparation("native", "http");
-    private static void Pb02PreparationHttpWithoutGenerator() => Pb02Preparation("http", null);
-
     private static void Pb02Preparation(string from, string? hostTransport)
     {
         WithPlacedLedger((_, __) => {
@@ -128,9 +124,6 @@ internal static partial class EngineRuntimeChecks
         changed[offset] = changed[offset] == (byte)'0' ? (byte)'1' : (byte)'0';
         return changed;
     }
-
-    private static void Pb02LateHydrationHttpToNative() => Pb02LateHydration("http", "native");
-    private static void Pb02LateHydrationNativeToHttp() => Pb02LateHydration("native", "http");
 
     private static void Pb02LateHydration(string from, string to)
     {

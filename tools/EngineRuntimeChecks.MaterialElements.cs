@@ -665,34 +665,31 @@ internal static partial class EngineRuntimeChecks
 
     private static void MaterialElementStrictWireRejectsForeignNullAndDangling()
     {
-        int cases = 0;
-        void Reject(Action<JsonObject> change) {
-            var wire = MaterialElementWire(); change(wire);
-            Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "invalid material wire must fail, case=" + cases++);
+        string raw = MaterialElementWire().ToJsonString();
+        const string slot = "vfxManifest/slots/0";
+        const string element = slot + "/element";
+        const string asset = "vfxManifest/assets/0";
+        var invalid = new[] {
+            JsonRefusal.For("vfxManifest/assets", "null"), JsonRefusal.For(asset, "null"), JsonRefusal.For(element, "null"),
+            JsonRefusal.For(element + "/widthProfile", null), JsonRefusal.For(element + "/widthProfile", "null"),
+            JsonRefusal.For(element + "/widthPx", "129"), JsonRefusal.For(element + "/texture/assetId", "\"missing\""),
+            JsonRefusal.For(asset + "/id", "\"../Shard_A\""), JsonRefusal.For("vfxManifest/slots", "[]"),
+            JsonRefusal.For(slot + "/rendererKind", "\"childMotes\""), JsonRefusal.For(slot + "/scale", "2"),
+            JsonRefusal.For(element + "/speedMaxPxPerTick", "0"), JsonRefusal.For(element + "/colorProfile/start", "\"CYAN\""),
+            JsonRefusal.For(slot + "/startTick", "1"), JsonRefusal.For(asset + "/spritePath", "\"\""),
+            JsonRefusal.For(asset + "/spriteStatus", "\"failed\""),
+        };
+        CheckDtoRefusals(raw, invalid, "MaterialElementDto");
+        var duplicate = MaterialElementWire();
+        duplicate["vfxManifest"]!["assets"]!.AsArray().Add(duplicate["vfxManifest"]!["assets"]![0]!.DeepClone());
+        Equal(true, GeneratedItemData.FromJson(duplicate.ToJsonString()) is null, "MaterialElementDto/duplicate asset identity");
+        foreach (string malformed in new[] { "Shard_A\n", "Shard_A\r", "Shard_A\r\n", "Shard_A\u2028", "Shard_A\u2029", " Shard_A", "Shard_A " })
+        {
+            CheckJsonRefusal(raw, JsonRefusal.For(asset + "/id", JsonSerializer.Serialize(malformed)), "MaterialAssetId");
+            CheckJsonRefusal(raw, JsonRefusal.For(element + "/texture/assetId", JsonSerializer.Serialize(malformed)), "MaterialAssetReference");
+            Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson", out var error) && error!.Message.Contains("invalid VFX texture assetId", StringComparison.Ordinal),
+                "malformed reference fails lexical validation before dangling lookup");
         }
-        Reject(w => w["vfxManifest"]!["assets"] = null);
-        Reject(w => w["vfxManifest"]!["assets"]![0] = null);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"] = null);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!.AsObject().Remove("widthProfile"));
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!["widthProfile"] = null);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!["widthPx"] = 129);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!["texture"]!["assetId"] = "missing");
-        Reject(w => w["vfxManifest"]!["assets"]![0]!["id"] = "../Shard_A");
-        Reject(w => w["vfxManifest"]!["assets"]!.AsArray().Add(w["vfxManifest"]!["assets"]![0]!.DeepClone()));
-        Reject(w => w["vfxManifest"]!["slots"] = new JsonArray());
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["rendererKind"] = "childMotes");
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["scale"] = 2);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!["speedMaxPxPerTick"] = 0);
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["element"]!["colorProfile"]!["start"] = "CYAN");
-        Reject(w => w["vfxManifest"]!["slots"]![0]!["startTick"] = 1); // no invented item activation clock
-        Reject(w => w["vfxManifest"]!["assets"]![0]!["spritePath"] = "");
-        Reject(w => w["vfxManifest"]!["assets"]![0]!["spriteStatus"] = "failed");
-        foreach(string malformed in new[]{"Shard_A\n","Shard_A\r","Shard_A\r\n","Shard_A\u2028","Shard_A\u2029"," Shard_A","Shard_A "}) {
-            Reject(w=>w["vfxManifest"]!["assets"]![0]!["id"]=malformed);
-            Reject(w=>w["vfxManifest"]!["slots"]![0]!["element"]!["texture"]!["assetId"]=malformed);
-            Equal(true,ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson",out var invalidRef)&&invalidRef!.Message.Contains("invalid VFX texture assetId",StringComparison.Ordinal),"malformed literal reference fails lexical validation before a dangling-ID lookup");
-        }
-        Console.WriteLine("DETAIL: material DTO invalid cases=" + cases);
     }
 
     private static void MaterialElementDtoPreservesAuthoredAxesAndAsset()

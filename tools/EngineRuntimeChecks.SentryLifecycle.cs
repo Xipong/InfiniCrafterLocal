@@ -54,13 +54,10 @@ internal static partial class EngineRuntimeChecks
         var data = RootSpawnFixture(32, 1); var entity = data.RuntimeProgram.TryGetEntity("root")!;
         entity.NativeSentry = true; entity.Spawn.DescendantMaxActive = 3; entity.Spawn.Placement = "native_resting_spot";
         entity.LifetimeTicks = 7200; entity.Hitbox.WidthPx = 26; entity.Hitbox.HeightPx = 42;
-        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() }) {
-            var copy = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("native lifecycle fixture rejected");
+        AssertDtoRoundTrips(data, (true, 3, "native_resting_spot"), copy => {
             var root = copy.RuntimeProgram.TryGetEntity("root")!;
-            Equal(true, root.NativeSentry == true, "native flag survives wire");
-            Equal(3, root.Spawn.DescendantMaxActive ?? -1, "descendant cap survives wire");
-            Equal("native_resting_spot", root.Spawn.Placement, "native anchor survives wire");
-        }
+            return (root.NativeSentry == true, root.Spawn.DescendantMaxActive ?? -1, root.Spawn.Placement);
+        }, "native sentry lifecycle");
         var generated = SentryLifeHost(data, entity);
         Equal(true, generated.Projectile.sentry, "Configure installs explicit native sentry flag");
         Equal(7200, generated.Projectile.timeLeft, "native registration keeps authored lifetime");

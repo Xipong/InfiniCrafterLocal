@@ -75,8 +75,8 @@ internal static partial class EngineRuntimeChecks
         var itemWire=JsonNode.Parse(GeneratedItemData.Placeholder().ToJson())!.AsObject();
         itemWire["vfxManifest"]=LibraryManifestWire();
         var item=GeneratedItemData.FromJson(itemWire.ToJsonString());Equal(true,item is not null,"particle reaches full GeneratedItemData decoder");
-        foreach(string json in new[]{item!.ToJson(),item.ToLocalCacheJson(),item.ToNetworkJson()})
-            Equal(20f,JsonNode.Parse(json)!["vfxManifest"]!["slots"]![0]!["particle"]!["heightPx"]!.GetValue<float>(),"independent pixel height survives all serializers");
+        AssertDtoRoundTrips(item!, 20f, copy => copy.VfxManifest.Slots[0].Particle!.HeightPx,
+            "library independent pixel height", cache: true);
         var legacy=GeneratedItemData.Placeholder();
         foreach(string json in new[]{legacy.ToJson(),legacy.ToLocalCacheJson(),legacy.ToNetworkJson()})foreach(var slot in JsonNode.Parse(json)!["vfxManifest"]!["slots"]!.AsArray()) {
             Equal(false,slot!.AsObject().ContainsKey("particle"),"absent new particle remains absent on legacy wire");

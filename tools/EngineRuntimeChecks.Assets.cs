@@ -74,13 +74,6 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void DisposedAssetDownloadCannotPublish()
-        => CheckDisposedAssetDownloadsAsync().GetAwaiter().GetResult();
-    private static void DisposedAssetDownloadRetiresWhileBodyIsWithheld()
-        => CheckAssetBodyRetirementAsync().GetAwaiter().GetResult();
-    private static void DisposedAssetDownloadRetiresWhileHttpSlotsAreHeld()
-        => CheckAssetSlotRetirementAsync().GetAwaiter().GetResult();
-
     private static Task AssetLifetimeDownload(GeneratedAssetSyncService service, AssetHeldResponse server, string file)
         => (Task)typeof(GeneratedAssetSyncService).GetMethod("DownloadOneAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(service, new object?[] { server.BaseUrl, "", file, Path.Combine(service.CacheRoot, file), server.BaseUrl + "||" + file, null })!;

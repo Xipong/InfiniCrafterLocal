@@ -11,8 +11,7 @@ using Terraria.ModLoader.IO;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void CraftQolMetadataCommitNeverWaitsForWorkerLock()
-        => CraftQolMetadataCommitNeverWaitsForWorkerLockAsync().GetAwaiter().GetResult();
+
 
     private static async Task CraftQolMetadataCommitNeverWaitsForWorkerLockAsync()
     {
@@ -41,9 +40,6 @@ internal static partial class EngineRuntimeChecks
             generator.SetValue(null, previous);
         }
     }
-
-    private static void CraftQolUnknownMetadataPreservesAcceptedRouting()
-        => CraftQolUnknownMetadataPreservesAcceptedRoutingAsync().GetAwaiter().GetResult();
 
     private static async Task CraftQolUnknownMetadataPreservesAcceptedRoutingAsync()
     {
@@ -108,9 +104,6 @@ internal static partial class EngineRuntimeChecks
         }
         finally { server.Release(); generator.SetValue(null, previous); Terraria.Main.netMode = mode; Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", url); }
     }
-
-    private static void CraftQolFatalHttpRefundPresentationTracksDelivery()
-        => CraftQolFatalHttpRefundPresentationTracksDeliveryAsync().GetAwaiter().GetResult();
 
     private static async Task CraftQolFatalHttpRefundPresentationTracksDeliveryAsync()
     {

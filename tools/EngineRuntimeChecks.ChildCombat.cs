@@ -60,42 +60,21 @@ internal static partial class EngineRuntimeChecks
         targeting.Remove("damageBasis"); targeting.Remove("knockbackBasis"); targeting.Remove("damageMultiplier");
         var saved = GeneratedItemData.FromJson(raw.ToJsonString())
             ?? throw new InvalidOperationException("historical child-combat absence rejected");
-        foreach (string payload in new[] { saved.ToJson(), saved.ToNetworkJson() })
-        {
-            var copy = JsonNode.Parse(payload)!;
-            var copyParent = copy["runtimeProgram"]!["entities"]!.AsArray().Single(row => (string?)row!["id"] == "root")!;
-            Equal(false, copyParent["events"]![0]!.AsObject().ContainsKey("damageBasis"), "old event selector absence retained");
-            Equal(false, copyParent["targeting"]!.AsObject().ContainsKey("knockbackBasis"), "old targeting selector absence retained");
-            Equal(false, copyParent["targeting"]!.AsObject().ContainsKey("damageMultiplier"), "old targeting multiplier absence retained");
-        }
+        AssertDtoOmissions(saved, EventJson, new[] { "damageBasis" }, "historical child event");
+        AssertDtoOmissions(saved, ActorJson + "/targeting", new[] { "knockbackBasis", "damageMultiplier" }, "historical targeting");
         foreach (string field in new[] { "damageBasis", "knockbackBasis" })
-        foreach (string invalid in new[] { "null", "true", "0", "{}", "\"Live_Parent\"", "\" live_parent\"", "\"parent\"" })
-        foreach (bool onTargeting in new[] { false, true })
-        {
-            var candidate = JsonNode.Parse(raw.ToJsonString())!;
-            var candidateParent = candidate["runtimeProgram"]!["entities"]!.AsArray().Single(row => (string?)row!["id"] == "root")!;
-            var component = onTargeting ? candidateParent["targeting"]! : candidateParent["events"]![0]!;
-            component[field] = JsonNode.Parse(invalid);
-            Equal(true, GeneratedItemData.FromJson(candidate.ToJsonString()) is null, "present invalid child basis rejected: " + invalid);
-        }
-        foreach (string invalid in new[] { "null", "true", "\"1\"", "-0.01", "4.01" })
-        {
-            targeting["damageMultiplier"] = JsonNode.Parse(invalid);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "present targeting multiplier rejected: " + invalid);
-        }
-        foreach (string literal in new[] { "-1e-50", "4.000000000000001", "4.000000000000000000000000000000000001" })
-        {
-            targeting["damageMultiplier"] = "RAW_CHILD_NUMBER";
-            string invalid = raw.ToJsonString().Replace("\"RAW_CHILD_NUMBER\"", literal, StringComparison.Ordinal);
-            Equal(true, GeneratedItemData.FromJson(invalid) is null, "original targeting multiplier domain refused " + literal);
-        }
+        foreach (string component in new[] { EventJson, ActorJson + "/targeting" })
+            foreach (var refusal in InvalidJsonValues(component + "/" + field, "null", "true", "0", "{}", "\"Live_Parent\"", "\" live_parent\"", "\"parent\""))
+                CheckJsonRefusal(raw.ToJsonString(), refusal, "ChildCombatBasis");
+        foreach (var refusal in InvalidJsonValues(ActorJson + "/targeting/damageMultiplier", "null", "true", "\"1\"", "-0.01", "4.01",
+            "-1e-50", "4.000000000000001", "4.000000000000000000000000000000000001"))
+            CheckJsonRefusal(raw.ToJsonString(), refusal, "ChildCombatMultiplier");
         foreach (string literal in new[] { "0", "4", "3.999999999999999999999999999999999999", "1e-40" })
         {
-            targeting["damageMultiplier"] = "RAW_CHILD_NUMBER";
-            string valid = raw.ToJsonString().Replace("\"RAW_CHILD_NUMBER\"", literal, StringComparison.Ordinal);
+            string valid = ChangedJson(raw.ToJsonString(), new JsonChange(ActorJson + "/targeting/damageMultiplier", literal));
             var accepted = GeneratedItemData.FromJson(valid) ?? throw new InvalidOperationException("valid targeting raw multiplier rejected");
-            foreach (string payload in new[] { accepted.ToJson(), accepted.ToNetworkJson() })
-                Equal(true, GeneratedItemData.FromJson(payload) is not null, "targeting multiplier rounded endpoint survives re-admission");
+            foreach (var (route, payload) in DtoRoutes(accepted))
+                Equal(true, GeneratedItemData.FromJson(payload) is not null, "ChildCombatMultiplier/" + route + "/" + literal);
         }
         var inactive = ChildCombatFixture();
         var inactiveParent = inactive.RuntimeProgram.TryGetEntity("root")!;

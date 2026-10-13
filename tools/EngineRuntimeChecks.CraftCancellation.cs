@@ -52,9 +52,6 @@ internal static partial class EngineRuntimeChecks
         finally { Terraria.Main.netMode = oldMode; }
     }
 
-    private static void CraftCancellationInterruptsHttpAndRecovery()
-        => CraftCancellationInterruptsHttpAndRecoveryAsync().GetAwaiter().GetResult();
-
     private static async Task CraftCancellationInterruptsHttpAndRecoveryAsync()
     {
         string? oldRecovery = Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS");
@@ -110,9 +107,6 @@ internal static partial class EngineRuntimeChecks
             Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", oldAttempts);
         }
     }
-
-    private static void CraftCancellationRetiresMetadataWaiters()
-        => CraftCancellationRetiresMetadataWaitersAsync().GetAwaiter().GetResult();
 
     private static async Task CraftCancellationRetiresMetadataWaitersAsync()
     {
@@ -177,9 +171,6 @@ internal static partial class EngineRuntimeChecks
         }
         finally { request.Cancel(); server.Release(); await worker.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
-
-    private static void CraftCancellationKeepsLiveRetryAndDelivery()
-        => CraftCancellationKeepsLiveRetryAndDeliveryAsync().GetAwaiter().GetResult();
 
     private static async Task CraftCancellationKeepsLiveRetryAndDeliveryAsync()
     {

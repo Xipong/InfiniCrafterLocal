@@ -25,9 +25,7 @@ internal static partial class EngineRuntimeChecks
                 ?? throw new InvalidOperationException("projectile lifetime rejected: " + ticks);
             var entity = data.RuntimeProgram.TryGetEntity("root")!;
             Equal(ticks, entity.LifetimeTicks, "native DTO retains lifetime");
-            foreach (string payload in new[] { data.ToJson(), data.ToLocalCacheJson(), data.ToNetworkJson() })
-                Equal(ticks, GeneratedItemData.FromJson(payload)!.RuntimeProgram.TryGetEntity("root")!.LifetimeTicks,
-                    "native full/cache/network round trip");
+            AssertDtoRoundTrips(data, ticks, copy => copy.RuntimeProgram.TryGetEntity("root")!.LifetimeTicks, "native full/cache/network round trip", cache: true);
             var generated = SwarmHost(data, entity);
             Equal(ticks * (1 + extra), generated.Projectile.timeLeft, "actual Configure world-tick lifetime");
         }

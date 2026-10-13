@@ -138,69 +138,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void EquipmentAuthoredRangesReachPlayer()
     {
-        // Endpoints from configure_accessory/configure_armor in capability_registry.py.
-        // No alternate stat formulas: observe the real public ModItem hooks.
-        (string Group, string Field, float[] Values, Func<Player, float> Observe)[] cases = {
-            ("accessory", "MovementSpeed", new[] { -0.9f, -0.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
-            ("accessory", "LifeRegen", new[] { -100f, 0f, 150f, 200f }, p => p.lifeRegen),
-            ("accessory", "ManaRegen", new[] { -100f, 0f, 150f, 200f }, p => p.manaRegenBonus),
-            ("accessory", "SentrySlots", new[] { 0f, 15f, 20f }, p => p.maxTurrets),
-            ("armor", "MovementSpeed", new[] { -0.9f, -0.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
-            ("set", "SetBonusMovementSpeed", new[] { -0.9f, -0.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
-            ("set", "SetBonusLifeRegen", new[] { -100f, 0f, 150f, 200f }, p => p.lifeRegen),
-        };
-        var failures = new List<string>();
-        foreach (var test in cases)
-        foreach (float value in test.Values)
-        {
-            string label = test.Group + "." + test.Field + "=" + value;
-            try
-            {
-                WithPlayer((player, _) =>
-                {
-                    var data = GeneratedItemData.Placeholder();
-                    data.Id = "equipment_range_probe";
-                    data.SourceMode = "test_fixture";
-                    data.Accessory.Enabled = test.Group == "accessory";
-                    data.Armor.Enabled = !data.Accessory.Enabled;
-                    data.Armor.Slot = data.Armor.Enabled ? "head" : "";
-                    data.Armor.SetKey = "range_probe";
-                    // Metadata-only fixture; no texture is opened or GPU initialized.
-                    data.Visual.EquipOverlayPath = "range_probe_overlay.png";
-                    data.Visual.EquipOverlayStatus = "generated";
-                    data.RuntimeProgram.Bindings = new[] {
-                        new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
-                            Role = RuntimeEntityRole.Primary, UsePolicy = new RuntimeBindingUsePolicySpec {
-                                Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId },
-                            } },
-                    };
-                    object equipment = data.Accessory.Enabled ? data.Accessory : data.Armor;
-                    var property = equipment.GetType().GetProperty(test.Field)!;
-                    property.SetValue(equipment, Convert.ChangeType(value, property.PropertyType));
-                    // Serialize BEFORE Normalize: ToJson would already erase the value under test.
-                    string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-                    data = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("fixture rejected before equipment hook");
-                    var item = new Item();
-                    var generated = new GeneratedItem();
-                    typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
-                    typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                    data.ApplyToItem(item);
-                    player.moveSpeed = 0f;
-                    player.lifeRegen = player.manaRegenBonus = player.maxTurrets = 0;
-                    if (test.Group == "accessory") generated.UpdateAccessory(player, false);
-                    else if (test.Group == "armor") generated.UpdateEquip(player);
-                    else generated.UpdateArmorSet(player);
-                    Equal(value, test.Observe(player), label + " reaches real hook output");
-                    var roundtrip = GeneratedItemData.FromJson(data.ToNetworkJson())!;
-                    object transported = test.Group == "accessory" ? roundtrip.Accessory : roundtrip.Armor;
-                    Equal(value, Convert.ToSingle(property.GetValue(transported)), label + " survives network round trip");
-                });
-            }
-            catch (Exception error) { failures.Add(label + ": " + error.Message); }
-        }
-        if (failures.Count > 0)
-            throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
-
+        CheckEquipmentCases(EquipmentRanges);
         // This fix widens only previously narrowing bounds. Keep finite caps,
         // including the existing broader negative regeneration boundary.
         foreach (int sign in new[] { -1, 1 })
@@ -225,56 +163,90 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void EquipmentClassDamageReachesExactDamageClass()
+
+    private sealed record EquipmentCase(string Group, string Field, float[] Values,
+        Func<Player, float>? Observe = null, DamageClass? DamageClass = null);
+
+    private static void CheckEquipmentCases(EquipmentCase[] cases)
     {
-        (string Group, string Field, DamageClass Class)[] cases = {
-            ("accessory", "GenericDamage", DamageClass.Generic),
-            ("accessory", "MeleeDamage", DamageClass.Melee),
-            ("accessory", "RangedDamage", DamageClass.Ranged),
-            ("accessory", "MagicDamage", DamageClass.Magic),
-            ("accessory", "SummonDamage", DamageClass.Summon),
-            ("armor", "GenericDamage", DamageClass.Generic),
-            ("armor", "MeleeDamage", DamageClass.Melee),
-            ("armor", "RangedDamage", DamageClass.Ranged),
-            ("armor", "MagicDamage", DamageClass.Magic),
-            ("armor", "SummonDamage", DamageClass.Summon),
-            ("set", "SetBonusGenericDamage", DamageClass.Generic),
-            ("set", "SetBonusMeleeDamage", DamageClass.Melee),
-            ("set", "SetBonusRangedDamage", DamageClass.Ranged),
-            ("set", "SetBonusMagicDamage", DamageClass.Magic),
-            ("set", "SetBonusSummonDamage", DamageClass.Summon),
-        };
         foreach (var test in cases)
-        {
-            WithPlayer((player, _) =>
+        foreach (float value in test.Values)
+        WithPlayer((player, _) => {
+            string label = test.Group + "/" + test.Field + "=" + value;
+            var source = GeneratedItemData.Placeholder();
+            bool range = test.Observe is not null;
+            source.Accessory.Enabled = test.Group == "accessory";
+            source.Armor.Enabled = !source.Accessory.Enabled;
+            source.Armor.Slot = range && source.Accessory.Enabled ? "" : "head";
+            source.Armor.SetKey = range ? "range_probe" : "class_damage_probe";
+            if (range)
             {
-                var data = GeneratedItemData.Placeholder();
-                data.Accessory.Enabled = test.Group == "accessory";
-                data.Armor.Enabled = !data.Accessory.Enabled;
-                data.Armor.Slot = "head";
-                data.Armor.SetKey = "class_damage_probe";
-                data.RuntimeProgram.Bindings = new[] {
-                    new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
-                        Role = RuntimeEntityRole.Primary, UsePolicy = new RuntimeBindingUsePolicySpec {
-                            Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId },
-                        } },
-                };
-                object equipment = test.Group == "accessory" ? data.Accessory : data.Armor;
-                equipment.GetType().GetProperty(test.Field)!.SetValue(equipment, 0.15f);
-                string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-                data = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("class damage fixture rejected");
-                var generated = new GeneratedItem();
-                var item = new Item();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(generated, item);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                float before = player.GetDamage(test.Class).Additive;
-                float untouched = player.GetDamage(DamageClass.Throwing).Additive;
-                if (test.Group == "accessory") generated.UpdateAccessory(player, false);
-                else if (test.Group == "armor") generated.UpdateEquip(player);
-                else generated.UpdateArmorSet(player); // tML calls this only after IsArmorSet matches.
-                Equal(before + 0.15f, player.GetDamage(test.Class).Additive, test.Group + "." + test.Field + " class modifier");
-                Equal(untouched, player.GetDamage(DamageClass.Throwing).Additive, "unselected class remains unchanged");
-            });
-        }
+                source.Id = "equipment_range_probe"; source.SourceMode = "test_fixture";
+                source.Visual.EquipOverlayPath = "range_probe_overlay.png"; source.Visual.EquipOverlayStatus = "generated";
+            }
+            source.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec {
+                Id = "equip", Input = RuntimeInputKind.Equipped, Role = RuntimeEntityRole.Primary,
+                UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = source.RuntimeProgram.ItemEntityId } },
+            } };
+            object equipment = source.Accessory.Enabled ? source.Accessory : source.Armor;
+            var field = equipment.GetType().GetProperty(test.Field)!;
+            field.SetValue(equipment, Convert.ChangeType(value, field.PropertyType));
+            // Raw serialization is before any normalizing writer, as in both old observers.
+            var data = GeneratedItemData.FromJson(JsonSerializer.Serialize(source,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
+                ?? throw new InvalidOperationException(label + ": fixture rejected");
+            var item = new Item();
+            var generated = AttachItem(new GeneratedItem(), item, data);
+            if (range)
+            {
+                data.ApplyToItem(item);
+                player.moveSpeed = 0; player.lifeRegen = player.manaRegenBonus = player.maxTurrets = 0;
+            }
+            float before = test.DamageClass is null ? 0 : player.GetDamage(test.DamageClass).Additive;
+            float untouched = player.GetDamage(DamageClass.Throwing).Additive;
+            if (test.Group == "accessory") generated.UpdateAccessory(player, false);
+            else if (test.Group == "armor") generated.UpdateEquip(player);
+            else generated.UpdateArmorSet(player);
+            if (range)
+            {
+                Equal(value, test.Observe!(player), label + ": real hook projection");
+                var copy = GeneratedItemData.FromJson(data.ToNetworkJson())!;
+                Equal(value, Convert.ToSingle(field.GetValue(test.Group == "accessory" ? copy.Accessory : copy.Armor)), label + ": native network projection");
+            }
+            else
+            {
+                Equal(before + value, player.GetDamage(test.DamageClass!).Additive, label + ": exact selected class");
+                Equal(untouched, player.GetDamage(DamageClass.Throwing).Additive, label + ": unrelated class unchanged");
+            }
+            Console.WriteLine("CASE PASS: Equipment/" + label);
+        });
     }
+
+    private static readonly EquipmentCase[] EquipmentRanges = {
+        new("accessory", "MovementSpeed", new[] { -.9f, -.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
+        new("accessory", "LifeRegen", new[] { -100f, 0f, 150f, 200f }, p => p.lifeRegen),
+        new("accessory", "ManaRegen", new[] { -100f, 0f, 150f, 200f }, p => p.manaRegenBonus),
+        new("accessory", "SentrySlots", new[] { 0f, 15f, 20f }, p => p.maxTurrets),
+        new("armor", "MovementSpeed", new[] { -.9f, -.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
+        new("set", "SetBonusMovementSpeed", new[] { -.9f, -.7f, 0f, 2.5f, 3f }, p => p.moveSpeed),
+        new("set", "SetBonusLifeRegen", new[] { -100f, 0f, 150f, 200f }, p => p.lifeRegen),
+    };
+    private static readonly EquipmentCase[] EquipmentDamageClasses = {
+        new("accessory", "GenericDamage", new[] { .15f }, DamageClass: DamageClass.Generic),
+        new("accessory", "MeleeDamage", new[] { .15f }, DamageClass: DamageClass.Melee),
+        new("accessory", "RangedDamage", new[] { .15f }, DamageClass: DamageClass.Ranged),
+        new("accessory", "MagicDamage", new[] { .15f }, DamageClass: DamageClass.Magic),
+        new("accessory", "SummonDamage", new[] { .15f }, DamageClass: DamageClass.Summon),
+        new("armor", "GenericDamage", new[] { .15f }, DamageClass: DamageClass.Generic),
+        new("armor", "MeleeDamage", new[] { .15f }, DamageClass: DamageClass.Melee),
+        new("armor", "RangedDamage", new[] { .15f }, DamageClass: DamageClass.Ranged),
+        new("armor", "MagicDamage", new[] { .15f }, DamageClass: DamageClass.Magic),
+        new("armor", "SummonDamage", new[] { .15f }, DamageClass: DamageClass.Summon),
+        new("set", "SetBonusGenericDamage", new[] { .15f }, DamageClass: DamageClass.Generic),
+        new("set", "SetBonusMeleeDamage", new[] { .15f }, DamageClass: DamageClass.Melee),
+        new("set", "SetBonusRangedDamage", new[] { .15f }, DamageClass: DamageClass.Ranged),
+        new("set", "SetBonusMagicDamage", new[] { .15f }, DamageClass: DamageClass.Magic),
+        new("set", "SetBonusSummonDamage", new[] { .15f }, DamageClass: DamageClass.Summon),
+    };
+
 }

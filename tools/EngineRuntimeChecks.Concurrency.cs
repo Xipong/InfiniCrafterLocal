@@ -25,36 +25,6 @@ internal static partial class EngineRuntimeChecks
             ?? throw new InvalidOperationException("explicit maxActive wire rejected");
     }
 
-    private static void ExplicitConcurrencyWirePreservesAbsenceAndRejectsInvalidPresence()
-    {
-        foreach (int value in new[] { 1, 3, 96 })
-        {
-            var data = ConcurrencyFixture(value);
-            foreach (string json in new[] { data.ToJson(), data.ToNetworkJson(), System.Text.Json.JsonSerializer.Serialize(data) })
-            {
-                var parsed = JsonNode.Parse(json)!;
-                var program = parsed["runtimeProgram"] ?? parsed["RuntimeProgram"];
-                var entities = program!["entities"] ?? program["Entities"];
-                var spawn = entities![1]!["spawn"] ?? entities[1]!["Spawn"];
-                Equal(value, (spawn!["maxActive"] ?? spawn["MaxActive"])!.GetValue<int>(), "explicit concurrency survives serializers");
-                Equal(true, GeneratedItemData.FromJson(json) is not null, "concurrency roundtrip admitted");
-            }
-        }
-        var legacy = ConcurrencyFixture(null);
-        Equal(false, legacy.ToJson().Contains("maxActive", StringComparison.Ordinal), "absent concurrency not invented");
-        Equal(false, legacy.ToNetworkJson().Contains("maxActive", StringComparison.Ordinal), "network preserves saved absence");
-        var raw = JsonNode.Parse(legacy.ToJson())!.AsObject();
-        raw["runtimeProgram"]!["entities"]![0]!["spawn"]!["maxActive"] = 1;
-        Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "item body rejects projectile concurrency even when spawn disabled");
-        raw["runtimeProgram"]!["entities"]![0]!["spawn"]!.AsObject().Remove("maxActive");
-        Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is not null, "legacy item body absence stays valid");
-        foreach (string literal in new[] { "0", "97", "-1", "null", "true", "1.5", "\"1\"" })
-        {
-            raw["runtimeProgram"]!["entities"]![1]!["spawn"]!["maxActive"] = JsonNode.Parse(literal);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "invalid explicit maxActive refused: " + literal);
-        }
-    }
-
     private static void ExplicitConcurrencyFencesAllSpawnProducersWithoutChangingLegacy()
     {
         using var actorState = new NativeActorState();

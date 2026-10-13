@@ -153,12 +153,6 @@ internal static partial class EngineRuntimeChecks
         }));
     }
 
-    private static void PlacedLightWitnessReloadRequiresTypedIdentity()
-        => PlacedLightWitnessRequiresTypedIdentity(mirror: false);
-
-    private static void PlacedLightWitnessMirrorRequiresTypedIdentity()
-        => PlacedLightWitnessRequiresTypedIdentity(mirror: true);
-
     private static void PlacedLightWitnessRequiresTypedIdentity(bool mirror)
     {
         WithPlacedLedger((player, ledger) => WithLighting((_, lights) => {

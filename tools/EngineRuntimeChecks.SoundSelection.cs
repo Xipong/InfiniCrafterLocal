@@ -98,15 +98,11 @@ internal static partial class EngineRuntimeChecks
 
     private static void VfxSoundControlsStrictDtoAndPitchInterval()
     {
-        string Json(Action<JsonObject>? mutate = null)
-        {
-            var node = JsonNode.Parse(SoundSelectionJson("Item26"))!.AsObject();
-            var slot = node["Slots"]![0]!.AsObject();
-            slot["sound"] = new JsonObject { ["volume"] = 0.37, ["pitch"] = -0.9, ["pitchVariance"] = 0.2 };
-            mutate?.Invoke(slot);
-            return node.ToJsonString();
-        }
-        var exact = VfxManifestSpec.FromJson(Json());
+        var fixture = JsonNode.Parse(SoundSelectionJson("Item26"))!;
+        fixture["Slots"]![0]!["sound"] = JsonNode.Parse("{\"volume\":0.37,\"pitch\":-0.9,\"pitchVariance\":0.2}");
+        string rawFixture = fixture.ToJsonString();
+        const string sound = "slots/0/sound";
+        var exact = VfxManifestSpec.FromJson(rawFixture);
         Equal(1, exact.Slots.Length, "explicit full sound object survives native JSON");
         var round = VfxManifestSpec.FromJson(exact.ToJson());
         Equal(0.37f, round.Slots[0].Sound!.Volume, "sound volume round trip");
@@ -118,16 +114,16 @@ internal static partial class EngineRuntimeChecks
             ("pitch", "0.900000001"), ("pitch", "-0.90000000000000000000000000000000000001"),
             ("pitch", "1e-46"), ("pitchVariance", "0.60000001"), ("pitchVariance", "1e-46"),
         }) {
-            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
-                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
+            string raw = ChangedJson(rawFixture, new JsonChange(sound + "/pitch", "0"),
+                new JsonChange(sound + "/pitchVariance", "0"), new JsonChange(sound + "/" + field, literal));
             Equal(0, VfxManifestSpec.FromJson(raw).Slots.Length, "original sound scalar refuses before float32 " + field + "=" + literal);
         }
         foreach ((string field, string literal) in new[] {
             ("volume", "1e-40"), ("volume", "0.99999999999999999999999999999999999"),
             ("pitch", "0.89999999999999999999999999999999999"), ("pitchVariance", "0.59999999999999999999999999999999999"),
         }) {
-            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
-                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
+            string raw = ChangedJson(rawFixture, new JsonChange(sound + "/pitch", "0"),
+                new JsonChange(sound + "/pitchVariance", "0"), new JsonChange(sound + "/" + field, literal));
             var valid = VfxManifestSpec.FromJson(raw);
             Equal(1, valid.Slots.Length, "in-domain sound rounding retained " + field);
             Equal(1, VfxManifestSpec.FromJson(valid.ToJson()).Slots.Length, "sound writer retains admitted rounded endpoint " + field);
@@ -135,27 +131,18 @@ internal static partial class EngineRuntimeChecks
         var legacy = SoundSelectionRead("Item26");
         Equal(true, legacy.Slots[0].Sound is null, "absent sound keeps old mode");
         Equal(false, JsonNode.Parse(legacy.ToJson())!["Slots"]![0]!.AsObject().ContainsKey("Sound"), "serializer does not materialize sound controls");
-        foreach (string field in new[] { "volume", "pitch", "pitchVariance" }) {
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]!.AsObject().Remove(field))).Slots.Length, "missing sound leaf is not a default");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = null)).Slots.Length, "present null sound scalar rejected");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = true)).Slots.Length, "boolean sound scalar rejected");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = "native")).Slots.Length, "string sound scalar rejected");
-        }
-        foreach (Action<JsonObject> invalid in new Action<JsonObject>[] {
-            slot => slot["sound"] = null,
-            slot => slot["sound"] = new JsonObject(),
-            slot => slot["sound"] = new JsonArray(),
-            slot => slot["sound"]!["volume"] = 1.01,
-            slot => slot["sound"]!["volume"] = -0.01,
-            slot => slot["sound"]!["pitch"] = -0.91,
-            slot => slot["sound"]!["pitch"] = 0.91,
-            slot => slot["sound"]!["pitchVariance"] = -0.01,
-            slot => slot["sound"]!["pitchVariance"] = 0.61,
-            slot => slot["sound"]!["pitchVariance"] = 0.6, // individual bounds valid, random interval exceeds -1
-            slot => slot["sound"]!["family"] = "harp",
-            slot => slot.Remove("soundId"),
-            slot => { slot["RendererKind"] = "lightCue"; slot["Channel"] = "light"; },
-        }) Equal(0, VfxManifestSpec.FromJson(Json(invalid)).Slots.Length, "invalid sound presence fails closed");
+        foreach (string field in new[] { "volume", "pitch", "pitchVariance" })
+        foreach (string? value in new string?[] { null, "null", "true", "\"native\"" })
+            AssertManifestRefusal(rawFixture, "Sound/" + field + "=" + (value ?? "<absent>"), new JsonChange(sound + "/" + field, value));
+        var invalidValues = new (string Path, string? Literal)[] {
+            (sound, "null"), (sound, "{}"), (sound, "[]"), (sound + "/volume", "1.01"), (sound + "/volume", "-0.01"),
+            (sound + "/pitch", "-0.91"), (sound + "/pitch", "0.91"), (sound + "/pitchVariance", "-0.01"),
+            (sound + "/pitchVariance", "0.61"), (sound + "/pitchVariance", "0.6"), // interval exceeds -1 although individual bounds admit
+            (sound + "/family", "\"harp\""), ("slots/0/soundId", null),
+        };
+        foreach (var invalid in invalidValues)
+            AssertManifestRefusal(rawFixture, "Sound/" + invalid.Path + "=" + invalid.Literal, new JsonChange(invalid.Path, invalid.Literal));
+        AssertManifestRefusal(rawFixture, "Sound/foreign renderer", new JsonChange("slots/0/RendererKind", "\"lightCue\""), new JsonChange("slots/0/Channel", "\"light\""));
         foreach (float invalid in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity }) {
             bool rejected = false;
             try { new VfxSoundSpec { Volume = 1f, Pitch = invalid, PitchVariance = 0 }.NormalizeAndValidate(); }

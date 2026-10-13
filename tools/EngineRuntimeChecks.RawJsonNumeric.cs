@@ -11,11 +11,7 @@ internal static partial class EngineRuntimeChecks
     // Inject the literal as bytes after fixture serialization: JsonNode/float/double
     // fixture conversion must not erase the counterexample before FromJson sees it.
     private static string HitboxRawNumber(string json, string property, string literal)
-    {
-        JsonObject root = JsonNode.Parse(json)!.AsObject();
-        root["runtimeProgram"]!["entities"]![1]!["hitboxCurve"]![property] = "RAW_HITBOX_NUMBER";
-        return root.ToJsonString().Replace("\"RAW_HITBOX_NUMBER\"", literal, StringComparison.Ordinal);
-    }
+        => ChangedJson(json, new JsonChange(ActorJson + "/hitboxCurve/" + property, literal));
 
     private static string HitboxNumericFixture()
     {
@@ -78,19 +74,9 @@ internal static partial class EngineRuntimeChecks
     {
         string json = HitboxNumericFixture();
         foreach (string field in new[] { "startScale", "endScale" })
-        {
-            foreach (string invalid in new[] { "null", "true", "false", "\"1\"", "[]", "{}" })
-                Equal(true, GeneratedItemData.FromJson(HitboxRawNumber(json, field, invalid)) is null, field + " rejects " + invalid);
-            var missing = JsonNode.Parse(json)!;
-            missing["runtimeProgram"]!["entities"]![1]!["hitboxCurve"]!.AsObject().Remove(field);
-            Equal(true, GeneratedItemData.FromJson(missing.ToJsonString()) is null, field + " remains required");
-        }
-        foreach (string invalid in new[] { "null", "[]", "true", "\"curve\"", "0", "{}" })
-        {
-            var malformed = JsonNode.Parse(json)!;
-            malformed["runtimeProgram"]!["entities"]![1]!["hitboxCurve"] = JsonNode.Parse(invalid);
-            Equal(true, GeneratedItemData.FromJson(malformed.ToJsonString()) is null, "invalid curve container " + invalid);
-        }
+            CheckDtoRefusals(json, InvalidJsonValues(ActorJson + "/hitboxCurve/" + field, "null", "true", "false", "\"1\"", "[]", "{}"),
+                "HitboxNumericTypes", new[] { ActorJson + "/hitboxCurve/" + field });
+        CheckDtoRefusals(json, InvalidJsonValues(ActorJson + "/hitboxCurve", "null", "[]", "true", "\"curve\"", "0", "{}"), "HitboxNumericContainer");
         var absent = JsonNode.Parse(json)!;
         absent["runtimeProgram"]!["entities"]![1]!.AsObject().Remove("hitboxCurve");
         var legacy = GeneratedItemData.FromJson(absent.ToJsonString()) ?? throw new InvalidOperationException("absence rejected");
