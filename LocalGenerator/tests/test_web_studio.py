@@ -131,21 +131,29 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         app.destroy()
 
 
-def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_path, monkeypatch):
+@pytest.mark.parametrize('fresh_install', [False, True])
+def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_path, monkeypatch, fresh_install):
     """No Tk/display needed: use the actual bridge and settings file owner."""
     from types import SimpleNamespace
-    from infini_local.desktop import settings_gui_trace_state
+    from infini_local.desktop import settings_gui_trace_state, settings_gui_theme
     from infini_local.desktop.settings_env import write_env, parse_env
     from infini_local.desktop.settings_gui import SettingsGui
     module = bridge_module()
     config = tmp_path / 'config.env'
-    write_env(config, {'INFINI_PROMPT_STYLE': 'Default', 'INFINI_OPENAI_COMPAT_API_KEY': 'dummy-old'})
+    example = tmp_path / 'config.example.env'
+    initial = {'INFINI_PROMPT_STYLE': 'Default', 'INFINI_OPENAI_COMPAT_API_KEY': 'dummy-old',
+               'INFINI_SDCPP_SERVER_AUTOSTART': '0', 'INFINI_SDCPP_SERVER_EXE': ''}
+    write_env(example, initial)
+    if not fresh_install:
+        # Existing personal config wins even when it differs from the example.
+        write_env(config, dict(initial, INFINI_SDCPP_SERVER_EXE='personal-sd-server'))
     monkeypatch.setattr(settings_gui_trace_state, 'CONFIG_PATH', config)
+    monkeypatch.setattr(settings_gui_theme, 'EXAMPLE_PATH', example)
     value = lambda text='': SimpleNamespace(get=lambda: text)
-    current = parse_env(config)
+    current = parse_env(config if config.exists() else example)
     app = SimpleNamespace(
         field_widgets={}, pages={}, field_disabled_reasons={}, user_presets={},
-        _current_profile_settings=lambda: dict(current), preset_var=value('Custom'),
+        _current_profile_settings=lambda: dict(current), preset_var=value(SettingsGui._pipeline_preset_from_config(current, {})),
         status_var=value('Ready'), activity_var=value(), applied_config_var=value(),
         home_state_var=value(), home_detail_var=value(), home_config_var=value(),
         trace_texts={}, _gui_tasks={}, radmin_enabled=value(False),
@@ -153,6 +161,9 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
         _pipeline_preset_from_config=SettingsGui._pipeline_preset_from_config,
     )
     controller = module.StudioController(app, None)
+    initial_snapshot = controller.snapshot()
+    assert initial_snapshot['values'] == initial_snapshot['savedValues']
+    assert config.exists() is not fresh_install
     current.update(INFINI_PROMPT_STYLE='Terraria Like', INFINI_OPENAI_COMPAT_API_KEY='dummy-new')
     unsaved = controller.snapshot()
     assert unsaved['values']['INFINI_PROMPT_STYLE'] == 'Terraria Like'

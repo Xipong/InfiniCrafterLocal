@@ -210,6 +210,7 @@ class StudioController:
     def snapshot(self):
         from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
         from infini_local.desktop.settings_env import parse_env
+        from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
         from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
         values = self.app._current_profile_settings()
         values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
@@ -217,7 +218,8 @@ class StudioController:
         # browser must compare them to disk, never adopt them as a saved baseline.
         saved_error = ''
         try:
-            saved_values = parse_env(CONFIG_PATH)
+            # Match SettingsGui startup: a fresh install loads the example.
+            saved_values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
             self._saved_values = dict(saved_values)
         except OSError as exc:
             # A transient read failure must not kill polling or certify a draft.
