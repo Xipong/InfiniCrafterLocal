@@ -84,6 +84,7 @@
     <Compile Include="EngineRuntimeChecks.DelayedNpcIncarnation.cs" />
     <Compile Include="EngineRuntimeChecks.InitialNpcExclusion.cs" />
     <Compile Include="EngineRuntimeChecks.SpawnDistributions.cs" />
+    <Compile Include="EngineRuntimeChecks.ProjectileHydration.cs" />
     <Compile Include="EngineRuntimeChecks.TargetEmission.cs" />
     <Compile Include="EngineRuntimeChecks.ParentPlacement.cs" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
