@@ -20,6 +20,8 @@
 | Profile pin, retry/failover, request semantics, HTTP и lifecycle | `test_provider_*`; [activity/real-route faults](../../LocalGenerator/tests/test_provider_activity_contract.py) — current stages, semaphore/rate waits, cache I/O recovery, actionable failures и sibling identity; [Codex subscription](../../LocalGenerator/tests/test_codex_subscription_contract.py) отдельно защищает auth/SSE/privacy/no-paid-fallback |
 | Placement provenance, maxStack и use-policy | [placement](../../LocalGenerator/tests/test_item_placement_contracts.py), [dual-use transactions](../../LocalGenerator/tests/test_dual_use_placeable_contract.py) |
 | Source-language policies и runner registration | Существующие [C# gate](../../tools/check_csharp_contracts.py), [hygiene gate](../../tools/check_project_hygiene.py); их synthetic positive/negative controls — [source audits](../../LocalGenerator/tests/test_source_audit_gates.py) |
+| Studio HTTP/session и native controller: все поля, сохранение и unknown keys | [bridge/controller](../../LocalGenerator/tests/test_web_studio.py) |
+| Browser draft: поздняя LAN-правка и polling до подтверждения преобразования | [delayed-response integration](../../LocalGenerator/tests/test_web_studio_browser.py) — настоящий Tk/controller + Chromium, не mock API |
 | Реальная C#/tML/FNA CPU-семантика | [EngineRuntimeChecks.csproj](../../tools/EngineRuntimeChecks.csproj) и зарегистрированные partial checks |
 
 Самостоятельные UI, multiplayer, trace и tooling-контракты сохраняют своих владельцев. Сходство названий не доказывает дублирование.
@@ -40,6 +42,12 @@
 ```bash
 PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/<affected_module>.py
 python tools/check_csharp_contracts.py
+```
+
+Для native Studio-проверок нужен Python с Tcl/Tk и доступным дисплеем (в Linux — Xvfb). Для browser integration дополнительно нужны `playwright` и установленный Chromium (`python -m playwright install chromium`). Без этих optional prerequisites соответствующая проверка явно пропускается; HTTP/security-контракт остаётся headless. Запуск:
+
+```bash
+PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py
 ```
 
 Полная Python приёмка: `PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4` (оба test roots). Native:

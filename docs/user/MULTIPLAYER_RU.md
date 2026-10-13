@@ -11,7 +11,7 @@
 
 ## HTTP assets: только если ты выбрал этот режим
 
-В разделе **«Игра с друзьями»** выбери `http`, задай достижимый для друзей `INFINI_ASSET_PUBLIC_BASE_URL` и bind `INFINI_HOST=0.0.0.0`. Разрешай generator port в firewall **только доверенным LAN/Radmin peers**; не публикуй сервер в интернет без отдельного анализа безопасности.
+В разделе **«Совместная игра»** выбери `http`, задай достижимый для друзей `INFINI_ASSET_PUBLIC_BASE_URL` и bind `INFINI_HOST=0.0.0.0`. Разрешай generator port в firewall **только доверенным LAN/Radmin peers**; не публикуй сервер в интернет без отдельного анализа безопасности.
 
 - `/get_asset?file=...` проверяет descriptor/bytes.
 - `INFINI_PORT` обычно **5055**, Terraria port — обычно **7777**; это разные службы.

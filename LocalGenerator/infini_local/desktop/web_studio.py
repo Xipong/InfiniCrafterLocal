@@ -241,6 +241,13 @@ class StudioController:
                 if widget.get('1.0', 'end-1c') != value:
                     widget.delete('1.0', 'end')
                     widget.insert('1.0', value)
+            else:
+                # The browser exposes retained extension settings explicitly.
+                # Keep collect() and profile snapshots on the same existing owner.
+                self.app.data[key] = value
+                self.app.__dict__.setdefault('_profile_extra_settings', {})[key] = value
+                if key == 'INFINI_GUI_PIPELINE_PRESET':
+                    self.app.preset_var.set(value)
         if 'lanEnabled' in extra:
             self.app.radmin_enabled.set(bool(extra['lanEnabled']))
         self.app._refresh_visibility()

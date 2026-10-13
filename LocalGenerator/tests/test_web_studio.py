@@ -122,6 +122,8 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         assert saved['INFINI_LLM_MAX_TOKENS'] == '12345'
         assert saved['INFINI_PROMPT_STYLE'] == 'Terraria Like'
         assert controller.last_action['ok'] is True
+        controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
+        assert parse_env(config)['INFINI_PRIVATE_UNKNOWN'] == 'edited-explicitly'
         controller.apply({'id':'reset-proof','action':'resetSprite','values':{},'extra':{}})
         assert app.vars['INFINI_SPRITE_DOWNSCALE_FILTER'].get() == 'box'
     finally:

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#242622">
+  <title>Infinicraft — мастерская предметов</title>
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
+  <link rel="stylesheet" href="studio.css">
+  <script defer src="studio.js"></script>
+</head>
+<body>
+<a class="skip" href="#workspace">К рабочему столу</a>
+<svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-mark" viewBox="0 0 32 32"><path d="M16 9 23 5l7 4v8l-7 4-7-4-7 4-7-4V9l7-4 7 4Zm0 0v8M2 9l7 4 7-4 7 4 7-4M9 13v8m14-8v8"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><path d="M3 6h18v13H3zM3 10h18M7 14h4m4 0h2m-10 3h7"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h5m4 0h7M4 12h11m4 0h1M4 18h2m4 0h10"/><circle cx="11" cy="6" r="2"/><circle cx="17" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 5h16M12 5v15m-4 0h8M4 5v4m16-4v4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5"/><circle cx="16" cy="8" r="1.5"/></symbol>
+  <symbol id="i-pixel" viewBox="0 0 24 24"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/></symbol>
+  <symbol id="i-stack" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8l10-5ZM2 12l10 5 10-5M2 16l10 5 10-5"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><path d="M9 3h6v6H9zM3 15h6v6H3zm12 0h6v6h-6zM12 9v3M6 15v-3h12v3"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 5h7l2 3h9v12H3V5Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3m0 3v.1"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4V3Zm3 0v6h9V3M8 21v-7h8v7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3Zm0 6v5m0 3v.1"/></symbol>
+  <symbol id="i-exit" viewBox="0 0 24 24"><path d="M10 4H4v16h6m-1-8h12m-5-5 5 5-5 5"/></symbol>
+</defs></svg>
+<div class="app-shell">
+  <aside class="rail" aria-label="Навигация мастерской">
+    <a href="#operate" class="brand" aria-label="Infinicraft — рабочий стол"><svg class="brand-mark"><use href="#i-mark"/></svg><span>infinicraft<span class="brand-caption">МАСТЕРСКАЯ ПРЕДМЕТОВ</span></span></a>
+    <div class="rail-location"><span class="local-dot"></span> Локальная студия <span class="rail-edition">/ α</span></div>
+    <nav id="navigation">
+      <a class="nav-link main-nav" data-route="operate" href="#operate"><svg><use href="#i-work"/></svg><span>Рабочий стол</span><span class="nav-indicator">↗</span></a>
+      <div class="nav-label">УСТРОЙСТВО МАСТЕРСКОЙ</div>
+      <a class="nav-link" data-route="configure" href="#configure"><svg><use href="#i-sliders"/></svg>Конфигурация</a>
+      <a class="nav-link" data-route="providers" href="#providers"><svg><use href="#i-text"/></svg>Идея и механика</a>
+      <a class="nav-link" data-route="images" href="#images"><svg><use href="#i-image"/></svg>Изображения</a>
+      <a class="nav-link" data-route="sprites" href="#sprites"><svg><use href="#i-pixel"/></svg>Спрайты и цвет</a>
+      <a class="nav-link" data-route="models" href="#models"><svg><use href="#i-stack"/></svg>Модели и LoRA</a>
+      <a class="nav-link" data-route="multiplayer" href="#multiplayer"><svg><use href="#i-network"/></svg>Совместная игра</a>
+      <div class="nav-label system-label">СИСТЕМА</div>
+      <a class="nav-link" data-route="diagnostics" href="#diagnostics"><svg><use href="#i-pulse"/></svg>Диагностика</a>
+    </nav>
+    <div class="rail-bottom">
+      <button class="rail-help" data-ui="help"><svg><use href="#i-help"/></svg>Как устроен крафт<svg class="small"><use href="#i-arrow"/></svg></button>
+      <div class="rail-colophon"><span>СОЗДАВАЙ НЕВОЗМОЖНОЕ.</span><span id="version">INFINICRAFT / LOCAL</span></div>
+    </div>
+  </aside>
+  <div class="main-shell">
+    <header class="topbar">
+      <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-expanded="false"><svg><use href="#i-sliders"/></svg></button>
+      <div class="breadcrumb"><span>Студия</span><span class="slash">/</span><span id="crumb">Рабочий стол</span></div>
+      <div class="top-actions"><button class="search-trigger" data-ui="search"><svg><use href="#i-search"/></svg><span>Найти настройку</span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span>Подключение…</span></span><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
+    </header>
+    <div id="connection-banner" class="connection-banner" role="status" hidden></div>
+    <main id="workspace" tabindex="-1"><div class="initial-loading"><span class="eyebrow">INFINICRAFT / LOCAL STUDIO</span><h1>Открываем<br><em>мастерскую.</em></h1><div class="loading-line"></div><p>Получаем настройки локального генератора.</p><button class="button" data-ui="retry" hidden>Повторить подключение</button></div></main>
+    <footer class="workspace-footer"><span>Идея → механика → изображение → предмет</span><span>Крафт происходит в Terraria<span class="footer-square"></span></span></footer>
+  </div>
+</div>
+<div class="save-tray" id="save-tray" hidden><span class="tray-dot"></span><div><strong id="dirty-label">Есть изменения</strong><small>Сначала сохранить. Затем безопасно перезапустить.</small></div><button class="text-button" data-ui="discard">Отменить</button><button class="button button-primary" data-action="save"><svg><use href="#i-save"/></svg>Сохранить</button></div>
+<dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="dialog-top"><h2 id="search-title">Найти в мастерской</h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть поиск"><svg><use href="#i-close"/></svg></button></div><div class="command-input"><svg><use href="#i-search"/></svg><input id="global-search" placeholder="Модель, прозрачность, порт…" autocomplete="off" aria-label="Поиск настроек"><kbd>Esc</kbd></div><div id="search-results" class="search-results"></div><div class="search-footer">Поиск по всем параметрам, включая неактивные<span>↑ ↓ выбрать · Enter открыть</span></div></dialog>
+<dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"><div class="dialog-top"><h2 id="utility-title"></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть"><svg><use href="#i-close"/></svg></button></div><div id="utility-body"></div></dialog>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<noscript><div class="no-script">Для мастерской нужен JavaScript. Включи его и обнови страницу.</div></noscript>
+</body>
+</html>
