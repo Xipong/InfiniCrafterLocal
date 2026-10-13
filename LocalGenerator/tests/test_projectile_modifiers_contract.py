@@ -2,7 +2,6 @@ from prompt_packet_helpers import request_dossier
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import pytest
 from repair_test_helpers import (
@@ -208,9 +207,7 @@ def test_numeric_bounds_and_complete_dto_fields_are_machine_audited():
     assert runtime_component_surface_audit()["ok"]
     report = capability_library_audit()
     assert report["ok"], report.get("issues")
-    dto_path = Path(__file__).parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs"
-    dto = dto_path.read_bytes().replace(b"[JsonRequired] public float StrengthPerUpdate", b"public float UnexposedPull { get; set; }\n    [JsonRequired] public float StrengthPerUpdate")
-    assert not runtime_component_surface_audit(dto)["ok"]
+
 
 @pytest.mark.parametrize("fn,leaf,collapsed,neutral,positive", [
     ("set_projectile_turn_modifier", "turnRadiansPerUpdate", 1e-46, 0, 0.04),

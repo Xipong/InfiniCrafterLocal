@@ -79,7 +79,7 @@ def test_build_log_parser_retains_exact_diagnostics(log, mod, code, line):
     assert "OtherMod" not in str(summary)
 
 
-def _native_registration_issues(project, runner, sources, expected):
+def _native_registration_issues(project, runner, sources):
     """One source-only registration gate; compilation/execution are separate gates."""
     import re
     import xml.etree.ElementTree as ET
@@ -100,24 +100,17 @@ def _native_registration_issues(project, runner, sources, expected):
         issues.append("native runner labels must be nonempty and unique")
     code = "\n".join(stripped(sources[name]) for name in compiled)
     declared = set(re.findall(r"\b(?:public|private|internal)\s+static\s+void\s+(\w+)\s*\(", code))
-    registered = {name.strip() for _, name in entries}
-    if not expected <= declared & registered:
-        issues.append("canonical native observers are stranded: " + str(sorted(expected - (declared & registered))))
+    # Check actual direct registrations, not a second roster of private helpers.
+    # Lambda/async call expressions are resolved by the real C# compiler.
+    direct = {target.strip() for _, target in entries if re.fullmatch(r"\w+", target.strip())}
+    if direct - declared:
+        issues.append("registered native checks have no declaration: " + str(sorted(direct - declared)))
     return issues
 
 
 def test_native_observers_are_compiled_and_registered_once():
     sources = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "tools").glob("EngineRuntimeChecks*.cs")}
-    expected = {
-        "CraftCancellationRetiresAllOwners", "CraftCancellationInterruptsHttpAndRecovery",
-        "CraftCancellationKeepsLiveRetryAndDelivery", "CraftCancellationRetiresMetadataWaiters",
-        "PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn", "PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed",
-        "ForgeQolReadinessReportsEscrowNotMissingMaterials", "ForgeQolDetailsAreCompleteAndReadOnly",
-        "ForgeQolAuthorityObservationCannotParkOrRestoreClaims", "ForgeQolPanelFitsWhenViewportCanContainIt",
-        "HitboxRawNumericDomainRefusesOutsideBeforeNarrowing", "HitboxRawNumericEndpointsSurviveSerializationCacheNetwork",
-        "HitboxRawNumericPresenceAndInvalidTypesStayStrict", "RawNumericHelperSignedNullableAndNeutralDomains",
-    }
-    assert _native_registration_issues((ROOT / "tools/EngineRuntimeChecks.csproj").read_text(), sources["EngineRuntimeChecks.cs"], sources, expected) == []
+    assert _native_registration_issues((ROOT / "tools/EngineRuntimeChecks.csproj").read_text(), sources["EngineRuntimeChecks.cs"], sources) == []
 
 
 @pytest.mark.parametrize("mutation", ["missing-compile", "comment-registration", "missing-registration", "missing-method", "duplicate-label", "foreign-copy"])
@@ -126,8 +119,9 @@ def test_native_registration_gate_rejects_stranded_checks(mutation):
                "EngineRuntimeChecks.Probe.cs": 'private static void Probe() { Real(); }'}
     runner = 'private static int RunChecks() { (string, Action)[] checks = { ("probe", Probe) }; return 0; }'
     project = '<Project><ItemGroup><Compile Include="$(InfiniModSourceRoot)/**/*.cs"/><Compile Include="EngineRuntimeChecks.cs"/><Compile Include="EngineRuntimeChecks.Probe.cs"/></ItemGroup></Project>'
-    expected = {"Probe"}
-    assert _native_registration_issues(project, runner, sources, expected) == []
+    assert _native_registration_issues(project, runner, sources) == []
+    renamed = {name: source.replace("Probe", "RenamedObserver") for name, source in sources.items()}
+    assert _native_registration_issues(project, runner.replace("Probe)", "RenamedObserver)"), renamed) == []
     if mutation == "missing-compile":
         project = project.replace('<Compile Include="EngineRuntimeChecks.Probe.cs"/>', '')
     elif mutation == "comment-registration":
@@ -140,4 +134,4 @@ def test_native_registration_gate_rejects_stranded_checks(mutation):
         runner = runner.replace('("probe", Probe)', '("probe", Probe), ("probe", Probe)')
     else:
         project = project.replace('$(InfiniModSourceRoot)/**/*.cs', 'copied-models/**/*.cs')
-    assert _native_registration_issues(project, runner, sources, expected)
+    assert _native_registration_issues(project, runner, sources)

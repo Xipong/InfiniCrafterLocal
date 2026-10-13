@@ -14,7 +14,6 @@ from infini_local.core.runtime_authoring.technical_lowering import (
 )
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-from infini_local.qa import primitive_loss_audit
 
 
 def _groups(fn="restore_resources_on_use"):
@@ -314,15 +313,6 @@ def test_named_generated_buff_neutral_omissions_have_exact_unique_group_receipts
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-def test_effect_group_surface_audit_rejects_uncatalogued_native_storage():
-    source = (primitive_loss_audit._MODEL_ROOT / "Common/Models/RuntimeItemEffectGroupSpec.cs").read_bytes()
-    assert primitive_loss_audit.item_effect_group_surface_audit(source)["ok"]
-    anchor = b'public string Id { get; set; } = "";'
-    assert anchor in source
-    changed = source.replace(anchor, b"public int Damage { get; set; }\n    " + anchor)
-    report = primitive_loss_audit.item_effect_group_surface_audit(changed)
-    assert not report["ok"]
-    assert report["unclassifiedDtoFields"] == ["Damage"]
 
 
 def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects():

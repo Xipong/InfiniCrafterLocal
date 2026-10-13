@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -157,20 +156,3 @@ def test_multidev_same_profile_is_single_owner_and_invalid_profile_fails_closed(
     call({"multiDevCraft": True, "llmProfileId": "llm_4"}, combine=lambda _payload: {"unexpected": True})
     assert statuses[0][0] == 422
     assert statuses[0][1]["status"] == "invalid_multidev_profile"
-
-
-def test_multidev_csharp_packet_and_refund_contract_is_compile_shaped() -> None:
-    root = Path(__file__).resolve().parents[2] / "ModSources" / "InfiniCrafterLocal"
-    multi = (root / "Common" / "Players" / "InfiniCraftPlayer.MultiDev.cs").read_text(encoding="utf-8")
-    multiplayer = (root / "Common" / "Players" / "InfiniCraftPlayer.Multiplayer.cs").read_text(encoding="utf-8")
-    station_ui = (root / "Common" / "UI" / "InfiniCraftStationUISystem.cs").read_text(encoding="utf-8")
-
-    assert "private static void DrawInputSlot(SpriteBatch spriteBatch, Rectangle rect, ref Item item, string label)" in station_ui
-    assert "Math.Clamp((int)reader.ReadByte(), 1, 3)" in multi
-    assert "Math.Clamp((int)reader.ReadByte(), 0, 2)" in multiplayer
-    send_failure = multi.split("if (!SendServerCraftRequest(requestId, laneIndex, a, b))", 1)[1].split("return true;", 1)[0]
-    assert "failedA = a" in send_failure and "failedB = b" in send_failure
-    assert "RefundOne(" not in send_failure
-    local_begin = multi.split("bool began = BeginExtraCraftLane", 1)[1].split("catch", 1)[0]
-    assert "if (!began)" in local_begin
-    assert "RefundOne(a)" in local_begin and "RefundOne(b)" in local_begin

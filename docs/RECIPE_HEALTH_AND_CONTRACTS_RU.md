@@ -52,5 +52,5 @@ Delivery projection удаляет internal `_llmHistory`, compile caches, `visu
 `EngineRuntimeChecks.CraftCancellation.cs` регистрирует реальные C# проверки
 owner retirement, loopback HTTP во время initial-cache/generation/recovery,
 прерывания recovery delay, metadata HTTP/lock wait, изоляции соседней lane и сохранения retry/cache/fresh
-success. Portable `test_craft_cancellation_contract.py` проверяет только wiring и
-регистрацию; без .NET/tModLoader native-проверки имеют статус `notRun`.
+success. Python больше не дублирует эти сценарии проверками строк C#; без
+.NET/tModLoader native-проверки имеют статус `notRun`.

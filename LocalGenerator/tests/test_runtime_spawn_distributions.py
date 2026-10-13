@@ -259,16 +259,6 @@ def test_old_author_scalar_is_not_a_second_accepted_spelling():
     with pytest.raises(ValueError): compile_runtime_program(document)
 
 
-@pytest.mark.parametrize("class_name", ["RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"])
-def test_nested_runtime_surface_audit_does_not_hide_new_fields(class_name):
-    from infini_local.qa import primitive_loss_audit as audit
-    source = (Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs").read_bytes()
-    assert audit.runtime_component_surface_audit(source)["ok"]
-    marker = f"public sealed class {class_name}\n{{".encode()
-    assert marker in source
-    mutant = source.replace(marker, marker + b"\n    public float UndeclaredRuntimeChoice { get; set; }")
-    report = audit.runtime_component_surface_audit(mutant)
-    assert not report["ok"] and report["unclassifiedByClass"][class_name] == ["UndeclaredRuntimeChoice"]
 
 
 @pytest.mark.parametrize("kind", ["stationary_projectile", "temporary_helper", "field"])

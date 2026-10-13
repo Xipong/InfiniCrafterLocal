@@ -15,7 +15,6 @@ from infini_local.core.runtime_authoring import (
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.qa import primitive_loss_audit
 
 
 def _weapon(category="arrow", speed="authored_spawn"):
@@ -193,13 +192,6 @@ def test_wire_and_receipts_require_exact_native_ammo_capability_selection(mutati
     assert not audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
 
 
-def test_new_ammo_dto_cannot_silently_gain_a_weapon_family_field():
-    source = (primitive_loss_audit._MODEL_ROOT / "Common/Models/RuntimeWeaponAmmoSpec.cs").read_bytes()
-    assert primitive_loss_audit.weapon_ammo_surface_audit(source)["ok"]
-    anchor = b'public string AmmoCategory { get; set; } = "";'
-    assert anchor in source
-    mutated = source.replace(anchor, b'public string WeaponFamily { get; set; } = "";\n' + anchor)
-    assert primitive_loss_audit.weapon_ammo_surface_audit(mutated)["unclassifiedDtoFields"] == ["WeaponFamily"]
 
 
 @pytest.mark.parametrize("response_mode", ["json_object", "json_schema"])

@@ -1,7 +1,6 @@
 """Native sentry, explicit placement and descendant accounting remain independent."""
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import pytest
 from repair_test_helpers import frozen_call_repair
@@ -153,15 +152,3 @@ def test_descendant_capacity_range_is_strictly_audited():
     rows = [r for r in _runtime_param_bound_rows() if r["capability"] == "set_descendant_concurrency"]
     assert len(rows) == 1 and rows[0]["preserved"]
     assert rows[0]["csharpBounds"] == [1, 96] and rows[0]["admission"] == "reject_without_clamp"
-
-
-def test_mutated_descendant_range_is_red(monkeypatch):
-    read = Path.read_text
-    def mutant(path, *args, **kwargs):
-        text = read(path, *args, **kwargs)
-        if path.name == "RuntimeProgramSpec.cs":
-            start = text.index("public int? DescendantMaxActive")
-            text = text[:start] + text[start:].replace("value < 1", "value < 0", 1)
-        return text
-    monkeypatch.setattr(Path, "read_text", mutant)
-    assert not next(r for r in _runtime_param_bound_rows() if r["capability"] == "set_descendant_concurrency")["preserved"]

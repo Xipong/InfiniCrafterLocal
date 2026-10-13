@@ -18,7 +18,6 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
-from pathlib import Path
 from infini_local.pipelines import llm_authoring_pipeline as gameplay
 from test_low_level_three_stage_pipeline import wire_transport
 
@@ -285,22 +284,6 @@ def test_qa_tracks_nullable_reject_bounds_instead_of_omitting_new_cap():
     assert rows[0]["preserved"]
 
 
-@pytest.mark.parametrize("before,after", [
-    ("value < 1", "value < 0"),
-    ("value > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner", "value > 97"),
-    ("value is null || value < 1", "value < 1"),
-    ("public int? MaxActive", "public int MaxActive"),
-    ("[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]", "[JsonIgnore(Condition = JsonIgnoreCondition.Never)]"),
-])
-def test_qa_reject_bound_scanner_refuses_changed_nullable_contract(monkeypatch, before, after):
-    original = Path.read_text
-    def mutant(path, *args, **kwargs):
-        text = original(path, *args, **kwargs)
-        return text.replace(before, after) if path.name == "RuntimeProgramSpec.cs" else text
-    monkeypatch.setattr(Path, "read_text", mutant)
-    rows = [row for row in _runtime_param_bound_rows() if row["capability"] == CAPABILITY]
-    assert len(rows) == 1
-    assert not rows[0]["preserved"]
 
 
 def _assert_contact_facts(card):

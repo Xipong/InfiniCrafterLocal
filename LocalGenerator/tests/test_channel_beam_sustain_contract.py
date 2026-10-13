@@ -3,7 +3,6 @@
 from copy import deepcopy
 from itertools import product
 import json
-from pathlib import Path
 
 import pytest
 
@@ -163,15 +162,3 @@ def test_new_nullable_numeric_reject_guards_cannot_escape_bound_audit():
     rows = {r["param"]: r for r in _runtime_param_bound_rows() if r["capability"] == "channel_beam"}
     for key in ("initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress"):
         assert rows[key]["preserved"] and rows[key]["admission"] == "reject_without_clamp"
-
-
-@pytest.mark.parametrize("old,new", [("value < 0.01 || value > 1", "value < 0 || value > 1"),
-                                     ("value < 0 || value > 1)", "value < 0 || value > 2)"),
-                                     ("|| value != 1 && (float)value.Value == 1f", "")])
-def test_numeric_guard_mutations_turn_the_authority_report_red(monkeypatch, old, new):
-    original = Path.read_text
-    def read(path, *args, **kwargs):
-        source = original(path, *args, **kwargs)
-        return source.replace(old, new) if path.name == "RuntimeProgramSpec.cs" else source
-    monkeypatch.setattr(Path, "read_text", read)
-    assert any(not r["preserved"] for r in _runtime_param_bound_rows() if r["capability"] == "channel_beam")

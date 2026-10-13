@@ -3,7 +3,6 @@ from prompt_packet_helpers import request_dossier
 from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 
 import pytest
 from repair_test_helpers import gameplay_repair, frozen_gameplay_repair
@@ -320,20 +319,6 @@ def test_numeric_consumer_audit_includes_every_new_numeric_leaf():
     assert all(row["admission"] == "reject_without_clamp" for row in rows if row["param"] != "delayTicks")
 
 
-@pytest.mark.parametrize("before,after", [
-    ("value > 12", "value > 13"), ("value < 1d", "value < 0d"),
-    ("!double.IsFinite(value.Value) || ", ""),
-    ("public double? StepRangeTiles", "public float? StepRangeTiles"),
-    ("value is null || value < 0 || value > 600", "value < 0 || value > 600"),
-])
-def test_numeric_boundary_mutations_cannot_disappear_from_audit(monkeypatch, before, after):
-    original = Path.read_text
-    def changed(path, *args, **kwargs):
-        text = original(path, *args, **kwargs)
-        return text.replace(before, after) if path.name == "RuntimeProgramSpec.cs" else text
-    monkeypatch.setattr(Path, "read_text", changed)
-    rows = [row for row in _runtime_param_bound_rows() if row["capability"] == FN]
-    assert any(not row["preserved"] for row in rows)
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):

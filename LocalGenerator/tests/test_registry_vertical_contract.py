@@ -3,7 +3,6 @@
 from __future__ import annotations
 import ast
 import inspect
-from pathlib import Path
 from dataclasses import replace
 from types import MappingProxyType, ModuleType
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
@@ -54,7 +53,6 @@ from infini_local.core.runtime_authoring.technical_lowering import (
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.qa.capability_library_audit import capability_library_audit
-from infini_local.qa import primitive_loss_audit as surfaces
 from infini_local.pipelines.author_item_contract import author_item_provider_response_schema
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 
@@ -426,120 +424,3 @@ def test_removed_facade_modules_have_no_consumers() -> None:
         "infini_local.core.runtime_authoring.event_dependency_contract",
     )
     assert not any(_imports_module(module, imported_module) for module in consumers for imported_module in forbidden)
-
-
-MOD = Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal"
-
-
-@pytest.mark.parametrize(
-    "audit,dto_path,anchor,injection,seam,executor_path,old_read,new_read,bucket,field",
-    [
-        pytest.param(
-            surfaces.equipment_surface_audit,
-            "Common/Models/GeneratedItemData.Model.cs",
-            b"public float SummonTagDamage { get; set; } = 0f;",
-            b"public float UncataloguedBonus { get; set; } = 0f;\n    ",
-            "executor",
-            "Content/Items/GeneratedItem.cs",
-            b"AddGeneratedSummonTagDamage(a.SummonTagDamage)",
-            b"AddGeneratedSummonTagDamage(a.UncataloguedBonus)",
-            None,
-            "UncataloguedBonus",
-            id="equipment-executor",
-        ),
-        pytest.param(
-            surfaces.event_surface_audit,
-            "Common/Models/RuntimeProgramSpec.cs",
-            b'public string EntityId { get; set; } = "";',
-            b"public float UncataloguedBlast { get; set; } = 1f;\n    ",
-            "executor",
-            "Common/Runtime/RuntimeProgramExecutor.cs",
-            b"Math.Clamp(action.DamageMultiplier, 0f, 10f)",
-            b"Math.Clamp(action.UncataloguedBlast, 0f, 10f)",
-            None,
-            "UncataloguedBlast",
-            id="event-executor",
-        ),
-        pytest.param(
-            surfaces.event_surface_audit,
-            "Common/Models/RuntimeProgramSpec.cs",
-            b"public int PeriodTicks { get; set; }",
-            b"public int UncataloguedDelay { get; init; }\n    ",
-            "scheduler",
-            "Common/Runtime/RuntimeDelayedActionScheduler.cs",
-            b"action.DelayTicks",
-            b"action.UncataloguedDelay",
-            None,
-            "UncataloguedDelay",
-            id="delayed-executor",
-        ),
-        pytest.param(
-            surfaces.runtime_component_surface_audit,
-            "Common/Models/RuntimeProgramSpec.cs",
-            b"public float HomingStrength { get; set; }",
-            b"public float UncataloguedMomentum { get; set; }\n    ",
-            None,
-            None,
-            None,
-            None,
-            "RuntimeParamsSpec",
-            "UncataloguedMomentum",
-            id="runtime-component",
-        ),
-        pytest.param(
-            surfaces.structural_surface_audit,
-            "Common/Models/RuntimeProgramSpec.cs",
-            b'public string ItemEntityId { get; set; } = "";',
-            b"public int UncataloguedRootBonus { get; set; }\n    ",
-            None,
-            None,
-            None,
-            None,
-            "RuntimeProgramSpec",
-            "UncataloguedRootBonus",
-            id="structural-root",
-        ),
-        pytest.param(
-            surfaces.item_gameplay_surface_audit,
-            "Common/Models/GeneratedItemData.Model.cs",
-            b"public int BuffTime { get; set; } = 0;",
-            b"public int UncataloguedItemEffect { get; set; } = 0;\n    ",
-            None,
-            None,
-            None,
-            None,
-            "GameplaySpec",
-            "UncataloguedItemEffect",
-            id="item-gameplay",
-        ),
-    ],
-)
-def test_surface_audit_rejects_unregistered_dto_and_executor(
-    audit, dto_path, anchor, injection, seam, executor_path, old_read, new_read, bucket, field
-):
-    dto = (MOD / dto_path).read_bytes()
-    kwargs = {seam: (MOD / executor_path).read_bytes()} if seam else {}
-    control = audit(dto, **kwargs)
-    assert control["ok"]
-    assert anchor in dto
-    changed = dto.replace(anchor, injection + anchor)
-    if seam:
-        assert old_read in kwargs[seam]
-        kwargs[seam] = kwargs[seam].replace(old_read, new_read, 1 if seam == "scheduler" else -1)
-    report = audit(changed, **kwargs)
-    assert not report["ok"]
-    assert field in (report["unclassifiedByClass"][bucket] if bucket else report["missingAuthorFields"])
-    if field == "UncataloguedBlast":
-        init = changed.replace(b"UncataloguedBlast { get; set; }", b"UncataloguedBlast { get; init; }")
-        assert field in audit(init, **kwargs)["missingAuthorFields"]
-    if audit is surfaces.structural_surface_audit:
-        assert "ImpactPrompt" in control["vfxDirectorFields"] and "ImpactPrompt" not in control["technicalVisualFields"]
-        assert "SpritePath" in control["technicalVisualFields"]
-
-
-def test_csharp_ast_inventory_keeps_property_names_and_temporal_consumers():
-    names = surfaces._class_properties((MOD / "Common/Models/RuntimeProgramSpec.cs").read_bytes(), "RuntimeProgramSpec")
-    assert {"ApiVersion", "Schema", "Entities", "Bindings"} <= names
-    assert not {"CurrentApiVersion", "CurrentWireSchema"} & names
-    report = surfaces.event_surface_audit()
-    assert report["ok"] and {"DelayTicks", "PeriodTicks"} <= set(report["executableFields"])

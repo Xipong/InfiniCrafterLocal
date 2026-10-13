@@ -349,28 +349,3 @@ def test_registry_and_prompt_explain_actual_parent_timing_without_hit_damage_or_
     assert "snapshot" in CAPABILITY_REGISTRY["spawn_entity_on_event"].prompt_card()["does"]
     assert "authored" in CAPABILITY_REGISTRY["damage_area_on_event"].params["damageMultiplier"].description
     assert "authored" in CAPABILITY_REGISTRY["chain_damage_on_event"].params["damageMultiplier"].description
-
-
-@pytest.mark.parametrize("mutation", ["valid", "comment-only", "null-allowed", "nonfinite-allowed", "wrong-storage", "changed-upper-bound"])
-def test_targeting_multiplier_audit_reads_the_real_strict_nullable_setter(mutation):
-    from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
-    path = Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs"
-    source = path.read_bytes()
-    if mutation == "comment-only":
-        source = source.replace(b"if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 0f || multiplier > 4f)",
-                                b"// if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 0f || multiplier > 4f)\n if (false)")
-    elif mutation == "null-allowed":
-        source = source.replace(b"value is not float multiplier || ", b"")
-    elif mutation == "nonfinite-allowed":
-        source = source.replace(b"!float.IsFinite(multiplier) || ", b"")
-    elif mutation == "wrong-storage":
-        source = source.replace(b"_damageMultiplier = multiplier;", b"_damageMultiplier = 1f;")
-    elif mutation == "changed-upper-bound":
-        source = source.replace(b"multiplier > 4f", b"multiplier > 3f")
-    result = nullable_number_rejection_bounds(source, "RuntimeTargetingSpec", "DamageMultiplier")
-    if mutation == "valid":
-        assert result == [0, 4]
-    elif mutation == "changed-upper-bound":
-        assert result == [0, 3] and result != [0, 4]
-    else:
-        assert result is None

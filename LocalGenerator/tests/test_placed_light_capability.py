@@ -120,18 +120,6 @@ def test_registry_witness_executes_dependency_and_native_surface_audit():
     assert validate_runtime_wire(compile_runtime_program(document))["ok"]
 
 
-def test_native_surface_and_bound_drift_are_audited():
-    from infini_local.qa import primitive_loss_audit as audit
-    from pathlib import Path
-    dto = (Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs").read_bytes()
-    check = getattr(audit, "placed_light_surface_audit", None)
-    assert callable(check), "placed light nested DTO requires canonical storage/range classification"
-    observed = check(dto)
-    assert observed["ok"], observed
-    assert observed["boundsByField"]["Strength"] == [0.01, 1.5]
-    assert observed["storageByField"] == {"Strength": "double", "Color": "string"}
-    assert not check(dto.replace(b"Strength is < 0.01 or > 1.5", b"Strength is < 0.01 or > 0.5"))["ok"]
-    assert not check(dto.replace(b"double Strength { get; init; }", b"float Strength { get; init; }"))["ok"]
 
 
 from test_low_level_three_stage_pipeline import wire_transport

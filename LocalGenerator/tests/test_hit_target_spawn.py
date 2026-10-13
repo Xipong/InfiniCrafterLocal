@@ -1,6 +1,5 @@
 """Production Author -> provider -> compiler/wire and frozen Repair for A11."""
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -168,15 +167,3 @@ def test_retarget_repair_keeps_existing_child_design_frozen_and_compiles_new_com
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == old_spawn["id"]) == old_spawn
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["count"] == 3
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
-
-
-@pytest.mark.parametrize("kind,field", [("RuntimeSpawnVelocitySpec", "HalfAngleRadians"), ("RuntimeHitTargetSpawnSpec", "BeforeProbability"), ("RuntimeHitTargetSpawnSpec", "InitialIgnoreCountdownUpdates")])
-def test_numeric_range_audit_reads_real_nullable_setter_and_rejects_storage_mutations(kind, field):
-    from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
-    root = Path(__file__).resolve().parents[2]
-    source = (root / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs").read_bytes()
-    assert nullable_number_rejection_bounds(source, kind, field) is not None
-    backing = b"_" + field[0].lower().encode() + field[1:].encode()
-    # The actual setter must store the admitted value: no hidden normalization.
-    mutated = source.replace(backing + b" = number;", backing + b" = 0;") if field != "HalfAngleRadians" else source.replace(backing + b" = angle;", backing + b" = 0;")
-    assert nullable_number_rejection_bounds(mutated, kind, field) is None

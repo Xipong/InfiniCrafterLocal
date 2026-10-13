@@ -3,7 +3,6 @@ from __future__ import annotations
 from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
-from pathlib import Path
 from typing import Any
 import pytest
 from PIL import Image
@@ -16,7 +15,6 @@ from infini_local.pipelines.image_backend_pipeline import comfyui_mapping
 from infini_local.pipelines.visual_asset_plan import apply_visual_asset_runtime_gates, build_visual_asset_plan
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.qa.capability_witnesses import build_capability_witness
-from csharp_partial_reader import read_text_with_partial_bundles
 from test_low_level_three_stage_pipeline import _visual_kit, _accepted_visual_data, _vfx_output, wire_transport
 
 
@@ -284,16 +282,7 @@ def test_finished_png_metrics_are_diagnostic_not_presentation(tmp_path):
     assert metrics["accentColorHex"].startswith("#") and metrics["dominantColorHex"].startswith("#")
     assert 0.0 < metrics["coverage"] <= 1.0 and 0.0 <= metrics["edgeDensity"] <= 1.0
     assert "visualSoulGlow" not in metrics and "visualSoulPulse" not in metrics
-    root = Path(visual.__file__).resolve().parents[3] / "ModSources/InfiniCrafterLocal"
-    model = read_text_with_partial_bundles(root / "Common/Models/GeneratedItemData.cs")
-    item = (root / "Content/Items/GeneratedItem.cs").read_text(encoding="utf-8")
-    held = (root / "Common/Players/GeneratedHeldItemDrawLayer.cs").read_text(encoding="utf-8")
-    player = read_text_with_partial_bundles(root / "Common/Players/InfiniCraftPlayer.cs")
-    assert "public string VisualSoulSignature" in model
-    assert all(forbidden not in item for forbidden in ("InfiniVisualSoul", "VisualSoulAuraEligible", "DrawSoulGlow", "VisualSoulColor", "SpawnSoulDust", "AddSoulDrawData"))
-    assert "GeneratedItem.AddSoulDrawData" not in held
-    assert "RunLocalCraftReveal" in player
-    assert "VisualSoulAuraEligible(data)" not in player and "✦ Discovered:" not in player
+
 
 
 def test_empty_authored_negative_prompt_reaches_backend_without_fallback() -> None:

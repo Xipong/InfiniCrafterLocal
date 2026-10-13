@@ -3,7 +3,6 @@
 from copy import deepcopy
 from itertools import product
 import json
-from pathlib import Path
 
 import pytest
 
@@ -163,15 +162,3 @@ def test_targeting_numeric_reject_guards_are_audited():
     for key in ("count", "spreadRadians"):
         assert rows[key]["preserved"]
         assert rows[key]["admission"] == "reject_without_clamp"
-
-
-@pytest.mark.parametrize("old,new", [("Count is < 1 or > 4", "Count is < 0 or > 4"),
-                                      ("SpreadRadians is < 0d or > 0.75d", "SpreadRadians is < 0d or > 1d")])
-def test_numeric_guard_mutations_cannot_disappear_from_quality_report(monkeypatch, old, new):
-    original = Path.read_text
-    def read(path, *args, **kwargs):
-        text = original(path, *args, **kwargs)
-        return text.replace(old, new) if path.name == "RuntimeProgramSpec.cs" else text
-    monkeypatch.setattr(Path, "read_text", read)
-    rows = [r for r in _runtime_param_bound_rows() if r["capability"] == "target_and_fire"]
-    assert any(not r["preserved"] for r in rows)

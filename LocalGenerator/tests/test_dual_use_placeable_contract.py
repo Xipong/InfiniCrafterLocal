@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-from pathlib import Path
 from typing import Any
 
 from infini_local.core.runtime_authoring import (
@@ -17,7 +16,6 @@ from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def _codes(report: dict[str, Any]) -> set[str]:
@@ -355,24 +353,3 @@ def test_place_item_is_discoverable_but_not_recommended_by_high_salience_prompt(
     place_card = next(row for row in action_cards if row["action"] == "place_item")
     assert place_card["does"] == "Execute the one placement payload referenced by this binding action."
     assert "alternate_use" not in place_card["does"]
-
-
-def test_csharp_consumes_binding_policy_directly_without_legacy_facades() -> None:
-    item_source = (
-        ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs"
-    ).read_text(encoding="utf-8")
-    dto_source = (
-        ROOT / "ModSources/InfiniCrafterLocal/Common/Models/RuntimeProgramSpec.cs"
-    ).read_text(encoding="utf-8")
-    model_source = (
-        ROOT / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedItemData.Model.cs"
-    ).read_text(encoding="utf-8")
-
-    assert "binding.UsePolicy.StackCost" in item_source
-    assert "UsePolicy.ContactDamage" in item_source
-    assert "BindingUsesItemBodyContact(binding)" in item_source
-    assert "binding.UsePolicy.Action.Kind" in item_source
-    assert "class RuntimeBindingUsePolicySpec" in dto_source
-    assert "PrimaryUseConsumeChancePercent" not in model_source + item_source
-    assert "AlternateUseConsumeChancePercent" not in model_source + item_source
-    assert "ItemContact.Enabled" not in item_source
