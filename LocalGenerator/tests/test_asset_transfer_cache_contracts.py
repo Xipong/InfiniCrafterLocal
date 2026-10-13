@@ -23,29 +23,7 @@ from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.vfx_debug_routes import _sample_data
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _slot, offline_backend
-
-
-def test_full_cache_callback_performs_one_png_assessment(offline_backend, monkeypatch):
-    from collections import Counter
-    from infini_local.pipelines import sprite_postprocess
-
-    data = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(layout='strip')]))
-    calls = Counter()
-    validate = asset_sync_service.is_complete_png_file
-
-    def observe(path):
-        calls[Path(path).resolve()] += 1
-        return validate(path)
-
-    monkeypatch.setattr(asset_sync_service, 'is_complete_png_file', observe)
-    monkeypatch.setattr(sprite_postprocess, 'is_complete_png_file', observe)
-    report = _cached_payload_report(data)
-    assert report['ok'], report['errors']
-    selected = [visual_delivery_gate._resolved_asset_path(name)
-                for name in asset_sync_service.runtime_asset_files(data)]
-    assert all(path is not None for path in selected)
-    files = {path.resolve() for path in selected if path is not None}
-    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+from pipeline_test_support import isolated_serving_roots, png_assessments, selected_pngs
 
 
 def _get_asset(filename: str) -> HttpCapture:
@@ -183,40 +161,28 @@ def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offli
     assert {p["code"] for p in report["problems"]} == {"asset_roster_byte_limit_exceeded"}
     _assert_cache_refusal(data, tmp_path / "over-budget-cache")
 
-@pytest.mark.parametrize('requests', [[], [_request(layout='cutout')], [_request(layout='strip')]],
-                         ids=['shared-item', 'cutout-ingredient', 'strip-ingredient'])
-def test_delivery_assesses_each_selected_png_once_and_rechecks_next_operation(
-    offline_backend, monkeypatch, requests,
+@pytest.mark.parametrize("consumer", ["delivery", "cache"])
+@pytest.mark.parametrize("requests", [[], [_request(layout="cutout")], [_request(layout="strip")]],
+                         ids=["shared-item", "cutout-ingredient", "strip-ingredient"])
+def test_png_assessment_is_operation_local_and_once_per_selected_file(
+    offline_backend, png_assessments, consumer, requests,
 ):
-    from collections import Counter
-    from infini_local.pipelines import sprite_postprocess
-
     data = visual_sprite_generation.maybe_generate_visual_assets(_data(requests))
     before = copy.deepcopy(data)
-    calls = Counter()
-    real = asset_sync_service.is_complete_png_file
-
-    def counted(path):
-        calls[Path(path).resolve()] += 1
-        return real(path)
-
-    monkeypatch.setattr(asset_sync_service, 'is_complete_png_file', counted)
-    monkeypatch.setattr(sprite_postprocess, 'is_complete_png_file', counted)
-    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
-    assert report['ok'], report['problems']
-    selected_files = [visual_delivery_gate._resolved_asset_path(name)
-                      for name in asset_sync_service.runtime_asset_files(data)]
-    assert all(path is not None for path in selected_files)
-    files = {path.resolve() for path in selected_files if path is not None}
-    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+    files = selected_pngs(data)
+    assess = _cached_payload_report if consumer == "cache" else lambda value: visual_delivery_gate.visual_delivery_report(value, check_backend_config=False)
+    png_assessments.clear()  # Generation precedes the measured consumer transaction.
+    report = assess(data)
+    assert report["ok"], report
+    assert dict(png_assessments) == dict.fromkeys(files, 1)
     assert data == before
-    # No operation result may survive into a later assessment.
-    Path(data['visual']['spritePath']).write_bytes(b'explicit corrupt next-operation fixture')
-    calls.clear()
-    next_report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
-    assert not next_report['ok']
-    assert any(row['code'] == 'asset_roster_invalid_png' for row in next_report['problems'])
-    assert set(calls) == files and all(calls[path] == 1 for path in files), calls
+    Path(data["visual"]["spritePath"]).write_bytes(b"explicit corrupt next-operation fixture")
+    png_assessments.clear()
+    refused = assess(data)
+    visual = refused["visual"] if consumer == "cache" else refused
+    assert not refused["ok"]
+    assert "asset_roster_invalid_png" in {row["code"] for row in visual["problems"]}
+    assert dict(png_assessments) == dict.fromkeys(files, 1)
     assert data == before
 
 
@@ -323,84 +289,43 @@ def test_whole_roster_file_count_refusal_reaches_cache(offline_backend, monkeypa
     assert {p["code"] for p in report["problems"]} == {"asset_roster_file_limit_exceeded"}
     _assert_cache_refusal(data, tmp_path / "over-count-cache")
 
-@pytest.fixture(autouse=True)
-def isolated_serving_roots(monkeypatch, tmp_path):
-    # Temporary PNGs must belong to the real filename-serving owner, not bypass
-    # delivery's canonical root resolution via an arbitrary existing local path.
-    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
-    monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
-
 def _equipment_data() -> dict:
     return {
-        "id": "equipment_probe",
-        "name": "Equipment Probe",
-        "accessory": {"enabled": True},
-        "armor": {"enabled": False, "slot": ""},
-        "runtimeProgram": {
-            "itemEntityId": "item",
-            "entities": [
-                {
-                    "id": "item",
-                    "kind": "item_body",
-                    "visualRole": "inventory_item",
-                    "visual": {},
-                },
-                {
-                    "id": "shot",
-                    "kind": "free_projectile",
-                    "visualRole": "projectile",
-                    "visual": {},
-                    "hitbox": {"widthPx": 18, "heightPx": 10},
-                },
-            ],
-        },
+        "id": "equipment_probe", "name": "Equipment Probe",
+        "accessory": {"enabled": True}, "armor": {"enabled": False, "slot": ""},
+        "runtimeProgram": {"itemEntityId": "item", "entities": [
+            {"id": "item", "kind": "item_body", "visualRole": "inventory_item", "visual": {}},
+            {"id": "shot", "kind": "free_projectile", "visualRole": "projectile",
+             "visual": {}, "hitbox": {"widthPx": 18, "heightPx": 10}},
+        ]},
     }
 
+
 def _equipment_kit(*, include_overlay: bool) -> dict:
+    item = {
+        "prompt": "literal inventory icon", "negativePrompt": "authored negative exact",
+        "silhouette": "compact icon", "visualIdentity": "literal item", "palette": ["steel", "amber"],
+        "preferredCanvasSize": 32, "renderSizePx": 40, "forwardAngleDegrees": 45,
+        "inventoryScale": 1.0, "worldScale": 1.0,
+    }
     kit = {
-        "schema": "infini.visual-kit.runtime-entities.v2",
-        "item": {
-            "prompt": "literal inventory icon",
-            "negativePrompt": "authored negative exact",
-            "silhouette": "compact icon",
-            "visualIdentity": "literal item",
-            "palette": ["steel", "amber"],
-            "preferredCanvasSize": 32,
-            "renderSizePx": 40, "forwardAngleDegrees": 45,
-            "inventoryScale": 1.0,
-            "worldScale": 1.0,
-        },
+        "schema": "infini.visual-kit.runtime-entities.v2", "item": item,
         "entities": [
-            {
-                "entityId": "item",
-                "assetMode": "baked_sprite",
-                "visualProjectRef": "item",
-                "prompt": "literal inventory icon",
-                "silhouette": "compact icon",
-                "visualIdentity": "literal item",
-                "scale": 1.0,
-            },
-            {
-                "entityId": "shot",
-                "assetMode": "baked_sprite",
-                "visualProjectRef": "entity",
-                "prompt": "literal projectile",
-                "silhouette": "compact projectile",
-                "visualIdentity": "literal shot",
-                "preferredCanvasSize": 64, "renderSizePx": 32, "forwardAngleDegrees": 0,
-                "scale": 1.0,
-            },
+            {"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
+             **{key: item[key] for key in ("prompt", "silhouette", "visualIdentity")}, "scale": 1.0},
+            {"entityId": "shot", "assetMode": "baked_sprite", "visualProjectRef": "entity",
+             "prompt": "literal projectile", "silhouette": "compact projectile", "visualIdentity": "literal shot",
+             "preferredCanvasSize": 64, "renderSizePx": 32, "forwardAngleDegrees": 0, "scale": 1.0},
         ],
         "animationPlan": "Follow accepted runtime movement only.",
     }
     if include_overlay:
         kit["equipOverlay"] = {
-            "prompt": "separate wearable amber brooch overlay",
-            "silhouette": "small readable brooch",
-            "visualIdentity": "amber brooch worn on the player",
-            "preferredCanvasSize": 48,
+            "prompt": "separate wearable amber brooch overlay", "silhouette": "small readable brooch",
+            "visualIdentity": "amber brooch worn on the player", "preferredCanvasSize": 48,
         }
     return kit
+
 
 def _stub_image_generation(monkeypatch, tmp_path: Path) -> list[tuple[str, str, str]]:
     """Intercept imagegen while leaving final PNG validation on its real path."""
@@ -453,75 +378,51 @@ def test_equipment_visual_kit_requires_and_projects_separate_overlay() -> None:
     assert overlay["assetMode"] == "baked_sprite"
     assert overlay["canvas"] == 48
 
-def test_overlay_and_entity_generation_receive_exact_authored_negative_prompt(monkeypatch, tmp_path: Path) -> None:
-    kit, errors = _validate_kit(
-        _equipment_kit(include_overlay=True),
-        ["item", "shot"],
-        "item",
-        equipment_overlay_required=True,
-    )
+@pytest.mark.parametrize("impact", [False, True], ids=["equipment-overlay-and-body", "vfx-authored-impact"])
+def test_authored_asset_transaction_projects_generates_and_refuses_missing_bytes(monkeypatch, tmp_path, impact):
+    kit, errors = _validate_kit(_equipment_kit(include_overlay=True), ["item", "shot"], "item", equipment_overlay_required=True)
     assert kit is not None, errors
     data = _apply_kit(_equipment_data(), kit)
+    if impact:
+        _hydrate_vfx_asset_prompts(data, {"slots": [{
+            "entityId": "shot", "rendererKind": "impactSprite",
+            "spritePrompt": "authored amber shard impact burst",
+            "spriteNegativePrompt": "text, watermark, opaque square",
+        }]})
+        data["vfxManifest"] = {"schema": VFX_MANIFEST_SCHEMA, "slots": [{
+            "id": "shot_impact", "entityId": "shot", "event": "on_spawn",
+            "rendererKind": "impactSprite", "textureRole": "impact",
+        }]}
+        assert validate_vfx_manifest_wire(data)["ok"]
+        planned = next(row for row in build_visual_asset_plan(data) if row["role"] == "impact:shot")
+        assert planned["required"] is True and planned["prompt"] == "authored amber shard impact burst"
     calls = _stub_image_generation(monkeypatch, tmp_path)
-
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
     by_role = {role: (prompt, negative) for role, prompt, negative in calls}
     assert by_role["runtime:projectile"][1] == "authored negative exact"
-    assert by_role["equip_overlay"] == (
-        "separate wearable amber brooch overlay",
-        "authored negative exact",
-    )
+    assert by_role["equip_overlay"] == ("separate wearable amber brooch overlay", "authored negative exact")
     assert out["visual"]["equipOverlayStatus"] == "generated"
     assert out["visual"]["equipOverlayPath"].endswith("equipment_probe_equip_overlay.png")
-    delivery = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
-    assert delivery["ok"], delivery["problems"]
-    assert {slot["role"] for slot in delivery["slots"] if slot["usable"]} == {
-        "item", "equip_overlay", "entity:shot"
-    }
-    Path(out["visual"]["equipOverlayPath"]).unlink()
-    missing_overlay = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
-    assert not missing_overlay["ok"]
-    assert "required_equipment_overlay_missing" in {p["code"] for p in missing_overlay["problems"]}
-
-def test_impact_texture_is_vfx_authored_planned_generated_and_projected(monkeypatch, tmp_path: Path) -> None:
-    kit, errors = _validate_kit(
-        _equipment_kit(include_overlay=True),
-        ["item", "shot"],
-        "item",
-        equipment_overlay_required=True,
-    )
-    assert kit is not None, errors
-    data = _apply_kit(_equipment_data(), kit)
-    _hydrate_vfx_asset_prompts(data, {"slots": [{
-        "entityId": "shot", "rendererKind": "impactSprite",
-        "spritePrompt": "authored amber shard impact burst",
-        "spriteNegativePrompt": "text, watermark, opaque square",
-    }]})
-    data["vfxManifest"] = {
-        "schema": VFX_MANIFEST_SCHEMA,
-        "slots": [{"id": "shot_impact", "entityId": "shot", "event": "on_spawn",
-                   "rendererKind": "impactSprite", "textureRole": "impact"}],
-    }
-    assert validate_vfx_manifest_wire(data)["ok"]
-    impact = next(row for row in build_visual_asset_plan(data) if row["role"] == "impact:shot")
-    assert impact["required"] is True
-    assert impact["prompt"] == "authored amber shard impact burst"
-
-    calls = _stub_image_generation(monkeypatch, tmp_path)
-
-    out = visual_sprite_generation.maybe_generate_visual_assets(data)
-    assert ("impact", "authored amber shard impact burst", "text, watermark, opaque square") in calls
-    shot = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "shot")
-    assert shot["visual"]["impactSpritePath"].endswith("equipment_probe_shot_impact.png")
-    assert shot["visual"]["impactSpriteStatus"] == "generated"
+    owner = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "shot")["visual"] if impact else out["visual"]
+    prefix = "impactSprite" if impact else "equipOverlay"
+    if impact:
+        assert by_role["impact"] == ("authored amber shard impact burst", "text, watermark, opaque square")
+        assert owner[prefix + "Path"].endswith("equipment_probe_shot_impact.png")
+        assert owner[prefix + "Status"] == "generated"
     report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
-    impact_slot = next(slot for slot in report["slots"] if slot["role"] == "impact:shot")
-    assert impact_slot["usable"] is True
-    assert not any(problem.get("code") == "required_impact_sprite_missing" for problem in report["problems"])
-    Path(shot["visual"]["impactSpritePath"]).write_bytes(b"not a PNG")
-    corrupt_impact = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
-    assert not corrupt_impact["ok"]
-    assert "required_impact_sprite_missing" in {p["code"] for p in corrupt_impact["problems"]}
+    assert report["ok"], report["problems"]
+    assert {slot["role"] for slot in report["slots"] if slot["usable"]} == {"item", "equip_overlay", "entity:shot"} | ({"impact:shot"} if impact else set())
+    problem = "required_impact_sprite_missing" if impact else "required_equipment_overlay_missing"
+    assert not any(row.get("code") == problem for row in report["problems"])
+    path = Path(owner[prefix + "Path"])
+    if impact:
+        path.write_bytes(b"not a PNG")
+    else:
+        path.unlink()
+    refused = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
+    assert not refused["ok"]
+    assert problem in {row["code"] for row in refused["problems"]}
+
 
 def test_delivery_asset_roster_is_bounded_by_count_and_total_bytes(tmp_path: Path) -> None:
     many: list[Path] = []
@@ -558,51 +459,35 @@ def _delivery_data(path: Path) -> dict:
         },
     }
 
-def test_visual_delivery_rejects_corrupt_and_truncated_png(monkeypatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("name,damage,status,accepted", [
+    pytest.param("valid.png", "none", "generated", True, id="complete-png"),
+    pytest.param("valid.PNG", "none", "generated", True, id="uppercase-png-extension"),
+    pytest.param("placeholder.png", "none", "placeholder", False, id="healthy-placeholder-not-generated"),
+    pytest.param("corrupt.png", "corrupt", "generated", False, id="corrupt-png"),
+    pytest.param("truncated.png", "truncated", "generated", False, id="truncated-real-png"),
+    *(pytest.param(name, "corrupt", "generated", False, id=f"non-png-{name}")
+      for name in ("sprite.txt", "sprite.json", "sprite")),
+])
+def test_delivery_png_admission_requires_complete_bytes_and_completed_status(monkeypatch, tmp_path, name, damage, status, accepted):
     monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", True)
-    valid = write_no_image_fixture_png(tmp_path / "valid.png")
-    assert visual_delivery_gate.visual_delivery_report(
-        _delivery_data(valid), check_backend_config=False
-    )["ok"] is True
-    placeholder = _delivery_data(valid)
-    placeholder["visual"]["spriteStatus"] = "placeholder"
-    placeholder_report = visual_delivery_gate.visual_delivery_report(placeholder, check_backend_config=False)
-    assert not placeholder_report["ok"]
-    assert "required_item_sprite_missing" in {p["code"] for p in placeholder_report["problems"]}
+    path = write_no_image_fixture_png(tmp_path / name)
+    if damage == "corrupt":
+        path.write_bytes(b"not a png" if name.endswith(".png") else b"not an image")
+    elif damage == "truncated":
+        path.write_bytes(path.read_bytes()[:-1])
+    data = _delivery_data(path)
+    data["visual"]["spriteStatus"] = status
+    before = copy.deepcopy(data)
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert report["ok"] is accepted, report
+    if not accepted:
+        assert report["slots"][0]["usable"] is False
+        if damage != "none":
+            assert report["slots"][0]["completePng"] is False
+        else:
+            assert "required_item_sprite_missing" in {row["code"] for row in report["problems"]}
+    assert data == before
 
-    corrupt = tmp_path / "corrupt.png"
-    corrupt.write_bytes(b"not a png")
-    corrupt_report = visual_delivery_gate.visual_delivery_report(
-        _delivery_data(corrupt), check_backend_config=False
-    )
-    assert corrupt_report["ok"] is False
-    assert corrupt_report["slots"][0]["completePng"] is False
-
-    truncated = tmp_path / "truncated.png"
-    truncated.write_bytes(valid.read_bytes()[:-1])
-    truncated_report = visual_delivery_gate.visual_delivery_report(
-        _delivery_data(truncated), check_backend_config=False
-    )
-    assert truncated_report["ok"] is False
-    assert truncated_report["slots"][0]["completePng"] is False
-
-def test_visual_delivery_rejects_non_png_sprite_files(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", True)
-    for name in ("sprite.txt", "sprite.json", "sprite"):
-        path = tmp_path / name
-        path.write_bytes(b"not an image")
-        report = visual_delivery_gate.visual_delivery_report(
-            _delivery_data(path), check_backend_config=False
-        )
-        assert report["ok"] is False, name
-        assert report["slots"][0]["completePng"] is False, name
-        assert report["slots"][0]["usable"] is False, name
-
-    # An intact PNG with the supported extension must still be delivered.
-    valid = write_no_image_fixture_png(tmp_path / "valid.PNG")
-    assert visual_delivery_gate.visual_delivery_report(
-        _delivery_data(valid), check_backend_config=False
-    )["ok"] is True
 
 def test_image_request_gate_bounds_parallel_backend_ownership() -> None:
     gate = ImageRequestGate(1)

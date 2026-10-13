@@ -15,6 +15,7 @@ from infini_local.pipelines import image_backend_pipeline, visual_delivery_gate,
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
+from provider_test_support import loopback_server
 
 @pytest.fixture
 def adapter_transport(offline, monkeypatch, tmp_path):
@@ -193,7 +194,7 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
     offline, monkeypatch, kind, returned_url,
 ):
     import threading
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from http.server import BaseHTTPRequestHandler
     from urllib import request as urlrequest
     from infini_local.core import http_io
 
@@ -236,70 +237,64 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
             wire_calls.append(('GET', self.path, None))
             self.reply(raw, 'image/png', not self.path.startswith('/healthy'))
 
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-    server.daemon_threads = True
-    thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01})
-    thread.start()
-    url = f'http://127.0.0.1:{server.server_port}'
-    # Restore real loopback HTTP, overriding only the offline fixture seam.
-    monkeypatch.setenv('NO_PROXY', '127.0.0.1')
-    monkeypatch.setenv('no_proxy', '127.0.0.1')
-    monkeypatch.setattr(backend.urlrequest, 'urlopen', urlrequest.build_opener(urlrequest.ProxyHandler({})).open)
+    with loopback_server(Handler) as server:
+        server.daemon_threads = True
+        url = f'http://127.0.0.1:{server.server_port}'
+        # Restore real loopback HTTP, overriding only the offline fixture seam.
+        monkeypatch.setenv('NO_PROXY', '127.0.0.1')
+        monkeypatch.setenv('no_proxy', '127.0.0.1')
+        monkeypatch.setattr(backend.urlrequest, 'urlopen', urlrequest.build_opener(urlrequest.ProxyHandler({})).open)
 
-    def real_open(req, *, deadline):
-        deadlines.append(deadline)
-        return http_io.urlopen_no_redirect(req, deadline=deadline)
+        def real_open(req, *, deadline):
+            deadlines.append(deadline)
+            return http_io.urlopen_no_redirect(req, deadline=deadline)
 
-    monkeypatch.setattr(backend, 'urlopen_no_redirect', real_open, raising=False)
-    monkeypatch.setattr(backend, 'SDCPP_SERVER_URL', url)
-    monkeypatch.setattr(backend, 'SDCPP_SERVER_REQUEST_TIMEOUT', 0.08)
-    monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', 'auto')
-    monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', url)
-    monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-not-a-secret')
-    monkeypatch.setattr(backend, 'IMAGE_API_PATH', '/images/generations')
-    monkeypatch.setattr(backend, 'IMAGE_API_TIMEOUT', 0.08)
-    monkeypatch.setattr(generation, 'IMAGE_BACKEND', kind)
-    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
-    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
-    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
-    try:
-        started = time.monotonic()
-        if kind == 'binary_get':
-            with pytest.raises(http_io.HttpDeadlineExceeded):
-                backend.http_binary_get(url + '/image.png', timeout=0.08)
-        else:
-            data = {'id': 'deadline_fixture', 'visual': {'imagePrompt': 'one isolated amber deadline fixture'}}
-            result = generation.maybe_generate_sprite(data)
-            visual = result['visual']
-            assert visual['spriteStatus'] == 'failed', 'socket-idle timeout adopted a trickling image'
-            assert visual['spritePath'] == visual['spriteUrl'] == visual['spriteRawPath'] == ''
-            assert result['debug']['itemSpriteFailurePhase'] == 'backend'
-            assert len([row for row in wire_calls if row[0] == 'POST']) == 1
-            assert not list(root.glob('*.png'))
-        elapsed = time.monotonic() - started
-        assert body_started.is_set() and elapsed < 0.6
-        assert deadlines and len(set(deadlines)) == 1, 'POST and returned-URL reads reset the logical image budget'
-        assert generation.IMAGE_GENERATION_GATE._semaphore.acquire(blocking=False)
-        generation.IMAGE_GENERATION_GATE._semaphore.release()
-        # A real healthy sibling can still use the released admission slot.
-        if kind == 'binary_get':
-            assert backend.http_binary_get(url + '/healthy.png', timeout=1) == raw
-        else:
-            healthy = generation.maybe_generate_sprite({'id': 'healthy', 'visual': {'imagePrompt': 'one isolated healthy amber fixture'}})
-            assert healthy['visual']['spriteStatus'] == 'generated'
-            assert asset_sync_service.is_complete_png_file(healthy['visual']['spritePath'])
-    finally:
-        stop.set()
-        server.shutdown()
-        server.server_close()
-        thread.join(2)
-        assert not thread.is_alive()
+        monkeypatch.setattr(backend, 'urlopen_no_redirect', real_open, raising=False)
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_URL', url)
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_REQUEST_TIMEOUT', 0.08)
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', 'auto')
+        monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', url)
+        monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-not-a-secret')
+        monkeypatch.setattr(backend, 'IMAGE_API_PATH', '/images/generations')
+        monkeypatch.setattr(backend, 'IMAGE_API_TIMEOUT', 0.08)
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', kind)
+        monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+        monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+        monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+        try:
+            started = time.monotonic()
+            if kind == 'binary_get':
+                with pytest.raises(http_io.HttpDeadlineExceeded):
+                    backend.http_binary_get(url + '/image.png', timeout=0.08)
+            else:
+                data = {'id': 'deadline_fixture', 'visual': {'imagePrompt': 'one isolated amber deadline fixture'}}
+                result = generation.maybe_generate_sprite(data)
+                visual = result['visual']
+                assert visual['spriteStatus'] == 'failed', 'socket-idle timeout adopted a trickling image'
+                assert visual['spritePath'] == visual['spriteUrl'] == visual['spriteRawPath'] == ''
+                assert result['debug']['itemSpriteFailurePhase'] == 'backend'
+                assert len([row for row in wire_calls if row[0] == 'POST']) == 1
+                assert not list(root.glob('*.png'))
+            elapsed = time.monotonic() - started
+            assert body_started.is_set() and elapsed < 0.6
+            assert deadlines and len(set(deadlines)) == 1, 'POST and returned-URL reads reset the logical image budget'
+            assert generation.IMAGE_GENERATION_GATE._semaphore.acquire(blocking=False)
+            generation.IMAGE_GENERATION_GATE._semaphore.release()
+            # A real healthy sibling can still use the released admission slot.
+            if kind == 'binary_get':
+                assert backend.http_binary_get(url + '/healthy.png', timeout=1) == raw
+            else:
+                healthy = generation.maybe_generate_sprite({'id': 'healthy', 'visual': {'imagePrompt': 'one isolated healthy amber fixture'}})
+                assert healthy['visual']['spriteStatus'] == 'generated'
+                assert asset_sync_service.is_complete_png_file(healthy['visual']['spritePath'])
+        finally:
+            stop.set()
 
 
 @pytest.mark.parametrize('overall_timeout', [0.025, 0.6], ids=['whole-budget-expired', 'advisory-only-expired'])
 def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline, monkeypatch, tmp_path, overall_timeout):
     import threading
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from http.server import BaseHTTPRequestHandler
     from infini_local.core import http_io
 
     raw = png((210, 100, 20))
@@ -330,53 +325,47 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
             self.end_headers()
             self.wfile.write(raw)
 
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-    server.daemon_threads = True
-    worker = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01})
-    worker.start()
-    actual_catalog_get = backend.http_json_get
+    with loopback_server(Handler) as server:
+        server.daemon_threads = True
+        actual_catalog_get = backend.http_json_get
 
-    def short_catalog(url, timeout, *, deadline):
-        outer_deadlines.append(deadline)
-        # Scale only the advisory 5s subbudget; actual socket/read/deadline code runs.
-        return actual_catalog_get(url, timeout=min(timeout, 0.08), deadline=deadline)
+        def short_catalog(url, timeout, *, deadline):
+            outer_deadlines.append(deadline)
+            # Scale only the advisory 5s subbudget; actual socket/read/deadline code runs.
+            return actual_catalog_get(url, timeout=min(timeout, 0.08), deadline=deadline)
 
-    def open_request(req, *, deadline):
-        if req.get_method() == 'POST':
-            post_deadlines.append(deadline)
-        return http_io.urlopen_no_redirect(req, deadline=deadline)
+        def open_request(req, *, deadline):
+            if req.get_method() == 'POST':
+                post_deadlines.append(deadline)
+            return http_io.urlopen_no_redirect(req, deadline=deadline)
 
-    monkeypatch.setenv('NO_PROXY', '127.0.0.1')
-    monkeypatch.setenv('no_proxy', '127.0.0.1')
-    monkeypatch.setattr(backend, 'http_json_get', short_catalog)
-    monkeypatch.setattr(backend, 'urlopen_no_redirect', open_request)
-    monkeypatch.setattr(backend, 'SDCPP_SERVER_URL', f'http://127.0.0.1:{server.server_port}')
-    monkeypatch.setattr(backend, 'SDCPP_SERVER_REQUEST_TIMEOUT', overall_timeout)
-    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
-    monkeypatch.setattr(backend, '_effective_sdcpp_lora_prompt_tags', lambda: '<lora:fixture:1>')
-    private = tmp_path / 'private'
-    private.mkdir()
-    try:
-        if overall_timeout < 0.08:
-            with pytest.raises(http_io.HttpDeadlineExceeded):
-                backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
-            assert not posts and not list(private.iterdir())
-        else:
-            paths = backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
-            assert len(posts) == len(paths) == 1
-            assert Path(paths[0]).read_bytes() == raw
-            assert post_deadlines == outer_deadlines, 'continuation must not reset the original image budget'
-        # A whole deadline may expire before the server thread accepts GET. The
-        # refusal/no-POST/no-file oracle above still proves the total-budget path;
-        # handler entry is required only for the advisory-timeout continuation.
-        if overall_timeout >= 0.08:
-            assert entered.is_set()
-    finally:
-        release.set()
-        server.shutdown()
-        server.server_close()
-        worker.join(2)
-        assert not worker.is_alive()
+        monkeypatch.setenv('NO_PROXY', '127.0.0.1')
+        monkeypatch.setenv('no_proxy', '127.0.0.1')
+        monkeypatch.setattr(backend, 'http_json_get', short_catalog)
+        monkeypatch.setattr(backend, 'urlopen_no_redirect', open_request)
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_URL', f'http://127.0.0.1:{server.server_port}')
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_REQUEST_TIMEOUT', overall_timeout)
+        monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
+        monkeypatch.setattr(backend, '_effective_sdcpp_lora_prompt_tags', lambda: '<lora:fixture:1>')
+        private = tmp_path / 'private'
+        private.mkdir()
+        try:
+            if overall_timeout < 0.08:
+                with pytest.raises(http_io.HttpDeadlineExceeded):
+                    backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
+                assert not posts and not list(private.iterdir())
+            else:
+                paths = backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
+                assert len(posts) == len(paths) == 1
+                assert Path(paths[0]).read_bytes() == raw
+                assert post_deadlines == outer_deadlines, 'continuation must not reset the original image budget'
+            # A whole deadline may expire before the server thread accepts GET. The
+            # refusal/no-POST/no-file oracle above still proves the total-budget path;
+            # handler entry is required only for the advisory-timeout continuation.
+            if overall_timeout >= 0.08:
+                assert entered.is_set()
+        finally:
+            release.set()
 
 
 @pytest.mark.parametrize('kind,expected_calls', [('sdcpp', 3), ('image_api', 2)])

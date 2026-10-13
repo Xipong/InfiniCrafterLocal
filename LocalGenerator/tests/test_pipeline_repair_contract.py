@@ -21,7 +21,8 @@ from infini_local.core.vfx_manifest import VFX_REPAIR_PATCH_SCHEMA, _apply_vfx_r
 from infini_local.pipelines.combine_validation import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _binding_row, _binding_transaction, _visual_kit, _accepted_visual_data, _vfx_output, _empty_gameplay_patch
+from pipeline_test_support import RepairTransaction
+from test_low_level_three_stage_pipeline import _binding_row, _binding_transaction, _visual_kit, _accepted_visual_data, _vfx_output, _empty_gameplay_patch, wire_transport
 
 @pytest.mark.parametrize("source,selection,ok", [
     pytest.param("invalid", "item", True, id="invalid-primary-select-item"),
@@ -56,12 +57,10 @@ def test_primary_identity_transaction(source, selection, ok):
         assert not empty_audit["ok"]
         assert any("leaves a reported repair error open" in e["message"] for e in empty_audit["errors"])
     patch = dict(_empty_gameplay_patch(), primaryEntitySelection=selection)
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
-    repaired = apply_repair_patch(current, filtered)
+    transaction = RepairTransaction(current, report=report, scope=scope)
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
         assert repaired["runtimeProgram"]["primaryEntityId"] == selection
-        assert validate_runtime_program(repaired)["ok"]
         assert all("role" not in row for key in ("bindings", "calls") for row in repaired["runtimeProgram"][key])
         compiled = compile_runtime_program(repaired)
         assert all(row["role"] == ("primary" if row["usePolicy"]["action"]["targetId"] == selection else "secondary") for row in compiled["runtimeProgram"]["bindings"])
@@ -100,15 +99,13 @@ def test_exclusive_input_transaction(scenario, duplicates):
         patch["bindingsUpsert"] = [{**original, "input": "alternate_use"}]
         selected = "duplicate_0"
     patch["exclusiveInputSelections"] = [{"input": "primary_use", "keepBindingId": selected}]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
+    transaction = RepairTransaction(current, errors, scope=scope)
+    repaired, filtered, audit = transaction.apply(patch)
     if scenario == "retarget-conflict":
         assert filtered["exclusiveInputSelections"] == []
         assert any(e["reason"] == "exclusive_input_conflict_already_resolved" for e in audit["ignoredChanges"])
     else:
         assert filtered["exclusiveInputSelections"] == patch["exclusiveInputSelections"]
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
     if scenario.startswith("retarget"):
         moved_id = "duplicate_0" if scenario == "retarget-conflict" else original["id"]
         assert next(e for e in repaired["runtimeProgram"]["bindings"] if e["id"] == moved_id)["input"] == "alternate_use"
@@ -133,7 +130,8 @@ def test_binding_alternatives_are_atomic(scenario, ok):
         assert any(e["path"].endswith(".action.kind") for e in errors)
     if scenario == "legacy-row":
         assert any(e["code"] == "shape_additional_property" for e in errors)
-    scope = build_runtime_repair_scope(current, errors)
+    transaction = RepairTransaction(current, errors)
+    scope = transaction.scope
     alternatives = next(e["allowed"] for e in scope["bindingAlternatives"] if e["bindingId"] == binding["id"])
     if scenario == "unknown-kind":
         assert binding["id"] in scope["identityChanges"]["bindingActionIds"]
@@ -142,12 +140,10 @@ def test_binding_alternatives_are_atomic(scenario, ok):
     if not ok:
         accepted = _binding_row(binding["id"], "hold", "use_item_body", "item")
     patch = dict(_empty_gameplay_patch(), bindingsUpsert=[accepted])
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
         assert filtered["bindingsUpsert"] == [accepted]
         assert all(k not in filtered["bindingsUpsert"][0] for k in ("usePolicy", "target"))
-        assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
     else:
         assert any(e.get("code") == "repair_scope_violation" or e.get("kind") in {"additional_property", "one_of", "any_of", "exactly_one"} for e in audit["errors"])
 
@@ -176,11 +172,10 @@ def test_metadata_scope_changes_only_reported_field(field):
         current["concept"]["author"] = "gemini-3.5-flash-lite"
         error = {"path": "$.concept.author", "code": "shape_additional_property", "message": "additional property"}
         value = {k: v for k, v in current["concept"].items() if k != "author"}
-    scope = build_runtime_repair_scope(current, [error])
+    transaction = RepairTransaction(current, [error])
+    scope = transaction.scope
     assert scope["nonRepairableErrors"] == [] and scope["metadataFields"] == [field]
-    filtered, audit = filter_repair_patch_scope(current, dict(_empty_gameplay_patch(), metadataPatch={field: value}), scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
+    repaired, filtered, audit = transaction.apply(dict(_empty_gameplay_patch(), metadataPatch={field: value}))
     assert repaired[field] == value
     assert "tooltip" not in repaired
     assert repaired["runtimeProgram"] == current["runtimeProgram"]
@@ -196,9 +191,8 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     original = copy.deepcopy(use)
     use["params"].pop("useStyle")
     use["params"].pop("autoReuse" if scenario == "required-pair" else "customHeldSprite")
-    report = validate_runtime_program(current)
-    assert not report["ok"]
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current)
+    report, scope = transaction.report, transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert scope["repairRequirements"][0]["repairStrategy"]
     assert scope["repairRequirements"][0]["llmRepairable"] is True
@@ -213,10 +207,8 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
     patch = dict(_empty_gameplay_patch(), callsUpsert=[fixed, unrelated])
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
+    assert audit["ignoredChanges"]
     calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
     assert calls["item_use"]["params"]["useStyle"] == "shoot"
     assert calls["item_use"]["params"]["autoReuse"] is True
@@ -245,7 +237,8 @@ def test_exact_call_key_deletion(scenario):
     report = validate_runtime_program(current)
     assert not report["ok"]
     assert any(e["code"] == "shape_additional_property" and e["path"].endswith('.' + key) for e in report["errors"])
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     roster_key = "callPropertyKeys" if scenario == "call-property" else "callParamKeys"
     permission = {"callId": call["id"], "key": key}
     assert permission in scope["deletable"][roster_key]
@@ -257,11 +250,8 @@ def test_exact_call_key_deletion(scenario):
     patch = dict(_empty_gameplay_patch(), callsUpsert=[candidate], primaryEntitySelection=None, exclusiveInputSelections=[])
     if scenario != "param-extra":
         patch[roster_key + "Delete"] = [permission]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
+    result, filtered, audit = transaction.apply(patch)
     assert filtered[roster_key + "Delete"] == [permission]
-    result = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(result)["ok"]
     result_call = next(c for c in result["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert key not in (result_call if scenario == "call-property" else result_call["params"])
     if scenario == "call-property":
@@ -288,7 +278,8 @@ def test_missing_dependency_creation(scenario, ok):
     assert [e["code"] for e in report["errors"]] == ["binding_dependency"]
     if scenario == "missing-identity":
         report["errors"][0]["relatedIds"] = []
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert scope["mutable"]["bindingIds"] == []
     assert "requiredRolesByTarget" not in scope["create"]["calls"]
     if scenario == "missing-identity":
@@ -320,11 +311,9 @@ def test_missing_dependency_creation(scenario, ok):
         assert not audit["ok"]
         assert any(e.get("actual", {}).get("code") == "ambiguous_global_id" for e in audit["errors"])
         return
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
         assert [c["id"] for c in filtered["callsUpsert"]] == ["repair_item_use"]
-        assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
         if scenario == "delete-new-param":
             assert filtered["callParamKeysDelete"] == []
             assert any(e["reason"] == "call_param_delete_outside_exact_error_scope" for e in audit["ignoredChanges"])
@@ -413,16 +402,16 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
         if scenario == "placement":
             return
         assert [e["code"] for e in report["errors"]] == ["event_not_emitted"]
-        scope = build_runtime_repair_scope(current, report["errors"])
+        transaction = RepairTransaction(current, report=report)
+        scope = transaction.scope
         requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
         assert binding["id"] in requirement["allowedExistingBindingIds"]
         assert any(e["contactDamage"] is True and e["action"] == {"kind": "use_item_body"} for e in requirement["allowedBindingTransactions"])
         assert any(e["action"]["kind"] == "spawn_entity" and e["action"]["targetId"] == "workbench_blade" for e in requirement["allowedBindingTransactions"])
         fixed = copy.deepcopy(binding)
         fixed["contactDamage"] = True
-        filtered, audit = filter_repair_patch_scope(current, dict(_empty_gameplay_patch(), bindingsUpsert=[fixed]), scope)
-        assert audit["ok"] and filtered["bindingsUpsert"] == [fixed]
-        current = apply_repair_patch(current, filtered)
+        current, filtered, audit = transaction.apply(dict(_empty_gameplay_patch(), bindingsUpsert=[fixed]))
+        assert filtered["bindingsUpsert"] == [fixed]
     assert validate_runtime_program(current)["ok"]
     compiled = compile_runtime_program(current)
     item_id = compiled["runtimeProgram"]["itemEntityId"]
@@ -462,7 +451,8 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         patch["callsUpsert"] = [item_use]
     report = validate_runtime_program(current)
     assert [e["code"] for e in report["errors"]] == (["missing_capability_dependency", "missing_binding_dependency"] if scenario == "missing-binding-and-call" else ["missing_binding_dependency"])
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     if scenario != "missing-contact":
         assert scope["create"]["bindings"] == {
             "allowed": True, "allowedTargetIds": ["item"], "allowedInputs": ["primary_use"],
@@ -482,9 +472,8 @@ def test_tool_primary_binding_requirement_consumes_registry_transactions(scenari
         return
     binding = _binding_row("repair_tool_primary", "primary_use", "use_item_body", "item", contact_damage=False)
     patch["bindingsUpsert"] = [binding]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] and filtered["bindingsUpsert"] == [binding]
-    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
+    assert filtered["bindingsUpsert"] == [binding]
 
 
 
@@ -518,7 +507,8 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
     program["bindings"].append(duplicate)
     report = validate_runtime_program(current)
     assert [e["code"] for e in report["errors"]] == (["duplicate_exclusive_input", "event_not_emitted"] if scenario == "tool" else ["event_not_emitted"])
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
     assert "requiredBindingUpdates" not in requirement
     assert not requirement.get("mustApplyAll", False)
@@ -537,11 +527,8 @@ def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scena
     patch = dict(_empty_gameplay_patch(), bindingsUpsert=[fixed_original, fixed_duplicate] if repair == "both" else [fixed_original if scenario == "tool" else fixed_duplicate])
     if scenario == "tool":
         patch["exclusiveInputSelections"] = [{"input": "primary_use", "keepBindingId": duplicate["id"] if repair == "misaligned" else original["id"]}]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
-        repaired = apply_repair_patch(current, filtered)
-        assert validate_runtime_program(repaired)["ok"]
         if scenario == "tool":
             assert [e["id"] for e in repaired["runtimeProgram"]["bindings"]] == [original["id"], "projectile_hold"]
     elif repair == "both":
@@ -567,7 +554,8 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["missing_binding_dependency"]
 
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     alternatives = {row["bindingId"]: row["allowed"] for row in scope["bindingAlternatives"]}
     assert alternatives["primary_place"] == [{
@@ -599,16 +587,13 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
         {"id": "tool_primary", **primary_create},
     ]
     assert validate_repair_patch_scope(current, patch, scope)["ok"]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
     by_id = {row["id"]: row for row in repaired["runtimeProgram"]["bindings"]}
     assert by_id["primary_place"]["input"] == "alternate_use"
     assert by_id["tool_primary"]["input"] == "primary_use"
 
 
-def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wire_transport) -> None:
     current = build_runtime_fixture("workbench_blade")
     original_item = next(
         copy.deepcopy(row) for row in current["runtimeProgram"]["entities"]
@@ -634,7 +619,8 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
         "item_body_count",
         "binding_dependency",
     }
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert scope["create"]["calls"]["allowedTargetKinds"] == ["item_body"]
     assert {"configure_item_stats", "configure_item_use"}.issubset(
@@ -662,26 +648,15 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
     assert not orphan_audit["ok"]
     assert orphan_filtered["callsUpsert"] == []
 
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
 
-    captured_request: dict[str, Any] = {}
-    llm_patch = copy.deepcopy(patch)
-    llm_patch["realizationReplacement"] = copy.deepcopy(repaired["realization"])
-
-    def repair_transport(request: dict[str, Any], timeout: int) -> dict[str, Any]:
-        captured_request.update(copy.deepcopy(request))
-        return {"choices": [{"message": {"content": json.dumps(llm_patch)}}]}
-
-    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
-    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(gameplay_stage, "llm_chat_json", repair_transport)
+    responses, requests = wire_transport
+    responses.append({**patch, "realizationReplacement": copy.deepcopy(repaired["realization"])})
     llm_repaired = gameplay_stage.repair_author_item_after_failure(
         current, {}, {}, {}, {}, "missing-item-body", failure_report=report,
     )
-    repair_system = captured_request["messages"][0]["content"]
+    assert len(requests) == 1 and not responses
+    repair_system = requests[0]["messages"][0]["content"]
     assert "create.calls.allowedTargetKinds" in repair_system
     assert "emitted exactly once in entitiesUpsert" in repair_system
     assert validate_runtime_program(llm_repaired)["ok"]
@@ -977,7 +952,8 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
     assert code in codes
     if scenario in {"unwanted-binding", "inert-accessory", "channel"}:
         assert codes == [code]
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     expected = copy.deepcopy(current)
     patch = _empty_gameplay_patch()
@@ -1019,9 +995,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
             fixed["params"]["bounceCount"] = 1
 
         patch["callsUpsert"] = [fixed]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    result = apply_repair_patch(current, filtered)
+    result, filtered, audit = transaction.apply(patch)
     assert json.dumps(result, sort_keys=True) == json.dumps(expected, sort_keys=True), "only the authorized closure may change"
     if scenario == "collision":
         assert any(row["path"].endswith(".params.bounceCount") for row in audit["ignoredChanges"])
@@ -1069,13 +1043,14 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     event_error = next(row for row in report["errors"] if row["code"] == "capability_event_incompatible")
     if scenario == "lifetime":
         assert {"capability_event_incompatible", "missing_required_component"} <= {row["code"] for row in report["errors"]}
-    scope = build_runtime_repair_scope(current, report["errors"] if scenario == "lifetime" else [event_error])
+    transaction = RepairTransaction(current, report["errors"] if scenario == "lifetime" else [event_error])
+    scope = transaction.scope
     if scenario == "producer":
-        transaction = scope["eventAlternatives"][0]
-        assert transaction["callId"] == "door_stun"
-        assert transaction["targetId"] == "chained_door"
-        assert {row["event"] for row in transaction["allowed"]} == {"on_hit", "on_crit"}
-        assert all(row["requiredCalls"] == [{"fn": "set_projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in transaction["allowed"])
+        alternative = scope["eventAlternatives"][0]
+        assert alternative["callId"] == "door_stun"
+        assert alternative["targetId"] == "chained_door"
+        assert {row["event"] for row in alternative["allowed"]} == {"on_hit", "on_crit"}
+        assert all(row["requiredCalls"] == [{"fn": "set_projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in alternative["allowed"])
         assert scope["blockerPlan"]["supportingCapabilityNames"] == ["set_projectile_damage"]
     fixed = copy.deepcopy(event_call)
     fixed["params"]["when"] = chosen_event
@@ -1092,10 +1067,7 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     _, refused = filter_repair_patch_scope(current, invalid, scope)
     assert not refused["ok"]
     assert any(message in row["message"] for row in refused["errors"]), refused
-    filtered, audit = filter_repair_patch_scope(current, complete, scope)
-    assert audit["ok"], audit
-    result = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(result)["ok"]
+    result, filtered, audit = transaction.apply(complete)
     compile_runtime_program(result)
 
 

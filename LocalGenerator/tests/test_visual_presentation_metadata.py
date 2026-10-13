@@ -359,29 +359,22 @@ def test_visual_gate_reason_stays_in_asset_plan_not_executable_runtime_wire() ->
 
 
 @pytest.mark.parametrize("repair_needed", [False, True])
-def test_real_director_dispatch_projects_metadata_with_conditional_repair(monkeypatch, repair_needed):
+def test_real_director_dispatch_projects_metadata_with_conditional_repair(wire_transport, monkeypatch, repair_needed):
     from infini_local.pipelines import llm_transport
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
-    monkeypatch.setattr(visual, "USE_LLM", True)
-    monkeypatch.setattr(visual, "VISUAL_DIRECTOR_LLM", True)
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual, "equipment_overlay_requirement", lambda _: {"required": True, "slot": "accessory"})
     raw = kit()
     raw["item"]["grip"] = {"normalizedX": 0.25, "normalizedY": 2 if repair_needed else 0.75}
     raw["equipOverlay"]["accessoryMount"] = "back"
-    responses = [raw]
+    responses, requests = wire_transport
+    responses.append(raw)
     if repair_needed:
         responses.append(dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"grip": {"normalizedX": 0.9, "normalizedY": 0.75}}, equipOverlayPatch=None, entitiesUpsert=[], entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="repair grip Y only"))
-    requests = []
-    def reply(request, **_):
-        requests.append(request)
-        return {"choices": [{"message": {"content": json.dumps(responses.pop(0))}}]}
-    monkeypatch.setattr(visual, "llm_chat_json", reply)
     data = {"name": "opaque object", "runtimeProgram": {"entities": [{"id": "opaque_id", "kind": "item_body", "visualRole": "inventory_item"}]}}
     result = visual.apply_visual_director(data, {}, {}, {}, {})
     assert result["visual"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
     assert result["visual"]["accessoryMount"] == "back"
-    assert len(requests) == (2 if repair_needed else 1)
+    assert len(requests) == (2 if repair_needed else 1) and not responses
     assert result["debug"]["llmStageAccounting"]["visualRepairCalls"] == int(repair_needed)
     if repair_needed:
         scope = request_dossier(requests[1])["repairScope"]
@@ -681,42 +674,35 @@ def test_serialized_presentation_repair_closes_only_exact_choices(wire_transport
         animationPlan="hostile animation", note="Only exact diagnosed choices")
     if returned == "no-op":
         patch.update(itemPatch=None, entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None)
-    schema_refused = returned in {"missing", "invalid", "still-forbidden"}
-    if schema_refused:
-        with pytest.raises(PlannerUnavailable, match="patch shape rejected"):
-            visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-        repaired, audit = None, {}
-    else:
-        repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
-        assert audit["ok"]
     expected = copy.deepcopy(control)
     if duplicate and case["duplicate"] == "keep":
         expected["entities"].append(duplicate)
+        repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
+        assert audit["ok"] and audit["ignoredChanges"]
+        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
+        assert json.dumps(audit["filteredPatch"]["entitiesUpsert"], sort_keys=True) == json.dumps([target], sort_keys=True)
     if returned == "no-op":
         expected = before
-    if not returned:
-        assert repaired is not None
-        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-        assert audit["ignoredChanges"]
-        if owner != "item":
-            assert json.dumps(audit["filteredPatch"]["entitiesUpsert"], sort_keys=True) == json.dumps([target], sort_keys=True)
-        if case.get("defect") == "typed":
-            fixed = next(e for e in repaired["entities"] if e["entityId"] == entity_id)
-            assert type(fixed[field]) is type(case["new"]) and fixed[field] == case["new"]
-        if owner == "branch":
-            assert {p.rsplit(".", 1)[-1] for p in audit["acceptedPaths"] if p.rsplit(".", 1)[-1] in PRESENTATION_FIELDS} == PRESENTATION_FIELDS
-    elif not schema_refused:
-        assert visual._validate_kit(repaired, ids, item_id)[0] is None
-        if returned == "no-op":
-            assert json.dumps(repaired, sort_keys=True) == json.dumps(before, sort_keys=True)
+        unchanged, audit = visual._apply_visual_repair_patch(raw, patch, scope, ids, return_audit=True)
+        assert audit["ok"]
+        assert visual._validate_kit(unchanged, ids, item_id)[0] is None
+        assert json.dumps(unchanged, sort_keys=True) == json.dumps(before, sort_keys=True)
     responses.extend([raw, patch])
     refused = bool(returned) or case.get("duplicate") == "keep"
     if refused:
-        with pytest.raises(PlannerUnavailable):
+        with pytest.raises(PlannerUnavailable, match="patch shape rejected" if returned in {"missing", "invalid", "still-forbidden"} else None):
             visual.apply_visual_director(data, {}, {}, {}, {})
     else:
         result = visual.apply_visual_director(data, {}, {}, {}, {})
-        assert json.dumps(result["visualKit"], sort_keys=True) == json.dumps(control, sort_keys=True)
+        assert json.dumps(result["visualKit"], sort_keys=True) == json.dumps(expected, sort_keys=True)
+        audit = result["debug"]["visualRepairFilterAudit"]
+        if owner != "item":
+            assert json.dumps(result["debug"]["visualRepairPatch"]["entitiesUpsert"], sort_keys=True) == json.dumps([target], sort_keys=True)
+        if case.get("defect") == "typed":
+            fixed = next(e for e in result["visualKit"]["entities"] if e["entityId"] == entity_id)
+            assert type(fixed[field]) is type(case["new"]) and fixed[field] == case["new"]
+        if owner == "branch":
+            assert {p.rsplit(".", 1)[-1] for p in audit["acceptedPaths"] if p.rsplit(".", 1)[-1] in PRESENTATION_FIELDS} == PRESENTATION_FIELDS
         assert result["visual"]["worldScale"] == control["item"]["worldScale"]
         assert visual._validate_kit(result["visualKit"], ids, item_id)[1] == []
         assert result["debug"]["visualRepairFilterAudit"]["ok"]
