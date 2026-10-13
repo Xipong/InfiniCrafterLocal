@@ -19,6 +19,7 @@ public sealed partial class GeneratedProjectile
         Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
         foreach (RuntimeEventActionSpec action in _entity.ActionsFor(eventName))
         {
+            Vector2 eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, Projectile.Center, target);
             if (action.DelayTicks > 0)
             {
                 if (RuntimeDelayedActionScheduler.TrySchedule(
@@ -27,7 +28,7 @@ public sealed partial class GeneratedProjectile
                     action,
                     Owner(),
                     Projectile.GetSource_FromThis(),
-                    target?.Center ?? Projectile.Center,
+                    eventPosition,
                     direction,
                     target,
                     damageDone,
@@ -37,7 +38,7 @@ public sealed partial class GeneratedProjectile
                     Projectile.netUpdate = true;
                 continue;
             }
-            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), target?.Center ?? Projectile.Center, direction, target, damageDone, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
+            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), eventPosition, direction, target, damageDone, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
         }
     }
 

@@ -234,6 +234,9 @@ internal static class RuntimeHitPullBridge
             || RuntimeHitNpcGeneration.Get(target) != npcGeneration
             || !AdmitClaim(whoAmI, owner)) return;
         RuntimeEntitySpec entity; GeneratedItemData data; Terraria.DataStructures.IEntitySource source;
+        // Item receipts retain their existing target-centered origin. Projectile
+        // receipts use only the server-resolved source, never client coordinates.
+        var sourceCenter = target.Center;
         if (kind == ProjectileSource)
         {
             if (itemSlot != 0 || input != 0) return;
@@ -241,6 +244,7 @@ internal static class RuntimeHitPullBridge
             if (projectile?.ModProjectile is not GeneratedProjectile generated
                 || !generated.TryGetHitSource(out data, out entity)) return;
             source = projectile.GetSource_FromThis();
+            sourceCenter = projectile.Center;
         }
         else
         {
@@ -271,24 +275,25 @@ internal static class RuntimeHitPullBridge
         if (ReferenceEquals(LastOwner[whoAmI], owner) && sequence <= LastSequence[whoAmI]) return;
         LastOwner[whoAmI] = owner;
         LastSequence[whoAmI] = sequence;
-        Apply(entity, data, owner, source, target, RuntimeEventKind.OnHit);
-        if (crit) Apply(entity, data, owner, source, target, RuntimeEventKind.OnCrit);
+        Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnHit);
+        if (crit) Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnCrit);
     }
 
     private static void Apply(RuntimeEntitySpec entity, GeneratedItemData data, Player owner,
-        Terraria.DataStructures.IEntitySource source, NPC target, string eventName)
+        Terraria.DataStructures.IEntitySource source, Microsoft.Xna.Framework.Vector2 sourceCenter, NPC target, string eventName)
     {
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
         {
             if (action.ActionCode != RuntimeEventActionCode.Pull || action.Mode == "owner_to_target") continue;
             var budget = new RuntimeSpawnBudget(0);
+            var eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, sourceCenter, target);
             if (action.DelayTicks > 0)
                 RuntimeDelayedActionScheduler.TrySchedule(data, entity, action, owner, source,
-                    target.Center, Microsoft.Xna.Framework.Vector2.Zero, target, 0, 0, budget,
+                    eventPosition, Microsoft.Xna.Framework.Vector2.Zero, target, 0, 0, budget,
                     ownerHitReceipt: true);
             else
                 RuntimeProgramExecutor.ExecuteAction(data, entity, action, owner, source,
-                    target.Center, Microsoft.Xna.Framework.Vector2.Zero, target, 0, 0, budget);
+                    eventPosition, Microsoft.Xna.Framework.Vector2.Zero, target, 0, 0, budget);
         }
     }
 
