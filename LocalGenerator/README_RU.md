@@ -1,4 +1,4 @@
-# LocalGenerator — 0.5.00
+# LocalGenerator — 0.5.02
 
 Python HTTP-сервис генерации и локальный браузерный **Infinicraft Studio**. Для обычного запуска открой **`OPEN_INFINICRAFT.bat` в корне проекта**: [пошаговая инструкция](../docs/user/START_RU.md). Мод и image/text servers устанавливаются отдельно; готовые модели не скачиваются автоматически.
 

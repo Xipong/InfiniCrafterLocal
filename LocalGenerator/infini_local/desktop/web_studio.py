@@ -23,7 +23,7 @@ ACTIONS = frozenset({
     'save', 'start', 'stop', 'health', 'validate', 'trace', 'applyPreset', 'savePreset',
     'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'clearLora', 'useLora',
     'resetSprite', 'openConfig', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
-    'forceRestart', 'cancelTrace', 'codexLogout',
+    'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults',
 })
 STATIC_FILES = {'/studio.css': ('studio.css', 'text/css; charset=utf-8'),
                 '/studio.js': ('studio.js', 'text/javascript; charset=utf-8')}
@@ -209,7 +209,8 @@ class StudioController:
 
     def snapshot(self):
         from infini_local.core.config_bootstrap import APP_VERSION
-        from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
+        from infini_local.desktop.settings_schema import DEFAULTS, FIELD_HELP, PRESETS
+        from infini_local.desktop.settings_defaults import defaults_offer
         from infini_local.desktop.settings_env import parse_env
         from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
         from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
@@ -226,6 +227,12 @@ class StudioController:
             # A transient read failure must not kill polling or certify a draft.
             saved_values = dict(self._saved_values or DEFAULTS)
             saved_error = f'Не удалось проверить сохранённую конфигурацию: {exc}'
+        try:
+            defaults_update = defaults_offer(CONFIG_PATH)
+        except (OSError, UnicodeError, ValueError) as exc:
+            # A recommendation read must not take the entire control plane down.
+            defaults_update = {'changes': [], 'dismissed': True}
+            saved_error = saved_error or f'Не удалось проверить рекомендации: {exc}'
         saved_values['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(saved_values, self.app.user_presets)
         saved_lan = saved_values.get('INFINI_HOST') == '0.0.0.0' or bool(saved_values.get('INFINI_ASSET_PUBLIC_BASE_URL'))
         fields = [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], '')) for field in self.fields]
@@ -238,7 +245,8 @@ class StudioController:
                 field['options'] = list(self.app.codex_visual_reasoning_combo.cget('values'))
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan,
-            'defaults': DEFAULTS, 'fields': fields, 'presets': PRESETS,
+            'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
+            'fields': fields, 'presets': PRESETS,
             'userPresets': self.app.user_presets, 'status': saved_error or self.app.status_var.get(),
             'activity': self.app.activity_var.get(), 'appliedConfig': self.app.applied_config_var.get(),
             'home': {'state': self.app.home_state_var.get(), 'detail': self.app.home_detail_var.get(),
@@ -277,7 +285,8 @@ class StudioController:
         from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
         app = self.app
         action, extra = command['action'], command.get('extra', {})
-        self._values(command.get('values', {}), extra)
+        if action not in {'acceptDefaults', 'declineDefaults'}:
+            self._values(command.get('values', {}), extra)
         callbacks = {'save': app.save, 'start': app.start_server, 'stop': app.stop_server,
                      'health': app._delayed_health_check, 'validate': app.validate_paths,
                      'trace': app.refresh_trace, 'codexLogin': app.codex_login,
@@ -287,7 +296,29 @@ class StudioController:
                      'openConfig': app.open_config, 'openCache': app.open_cache_folder,
                      'clearTrace': app.clear_trace_files, 'cancelTrace': app.cancel_trace_refresh,
                      'codexLogout': app.codex_logout}
-        if action in callbacks:
+        if action in {'acceptDefaults', 'declineDefaults'}:
+            from infini_local.desktop.settings_defaults import decide_defaults
+            changed = decide_defaults(CONFIG_PATH, extra.get('revision'), accept=action == 'acceptDefaults')
+            # No collect/save or whole-profile baseline capture: unrelated native
+            # and browser drafts remain unsaved, including the selected preset.
+            guard = app.__dict__.get('_profile_edit_guard', False)
+            app._profile_edit_guard = True
+            try:
+                for key, value in changed.items():
+                    app.data[key] = value
+                    if key in app.vars:
+                        app.vars[key].set(value)
+                    elif key in app.text_widgets:
+                        widget = app.text_widgets[key]
+                        widget.delete('1.0', 'end')
+                        widget.insert('1.0', value)
+                    elif key in app.__dict__.get('_profile_extra_settings', {}):
+                        app._profile_extra_settings[key] = value
+            finally:
+                app._profile_edit_guard = guard
+            app.status_var.set('Рекомендованные изменения записаны в config.env.' if changed else
+                               'Рекомендации отклонены. config.env не изменён.')
+        elif action in callbacks:
             callbacks[action]()
         elif action == 'forceRestart':
             if extra.get('confirm') is not True:

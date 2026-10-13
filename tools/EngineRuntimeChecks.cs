@@ -169,6 +169,7 @@ internal static partial class EngineRuntimeChecks
             ("draw budgets reset without world tick", DrawBudgetsResetWithoutWorldTick),
             ("detached VFX state is bounded and cleared", DetachedVfxStateIsBoundedAndCleared),
             ("legacy detached VFX client cleanup does not require Draw", DetachedVfxClientCleanupDoesNotRequireDraw),
+            ("native craft HTTP timeout default override floor and cancellation", () => CraftHttpTimeoutUsesNativeEnvironmentAsync().GetAwaiter().GetResult()),
             ("cache-only flag preserves request", CacheOnlyFlagPreservesRequest),
             ("generator delivery requires identity", GeneratorDeliveryRequiresIdentity),
             ("parent summary unicode roundtrip", ParentSummaryUnicodeRoundtrip),

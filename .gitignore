@@ -40,6 +40,7 @@ LocalGenerator/prompt_traces/
 LocalGenerator/sprites/
 LocalGenerator/*trace*.ndjson
 LocalGenerator/config.env
+LocalGenerator/config.env.defaults.json
 LocalGenerator/gui_user_presets.json
 LocalGenerator/data/Runtime_dumps/
 build_logs/

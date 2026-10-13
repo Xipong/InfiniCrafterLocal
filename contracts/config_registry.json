@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 129,
+  "documentedFieldCount": 132,
   "entries": [
     {
       "declarations": [
@@ -2728,16 +2728,20 @@
     {
       "declarations": [
         {
-          "default": "off",
+          "default": {
+            "expression": "GENERATION_DEFAULTS[\"INFINI_LLM_REASONING_MODE\"]"
+          },
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
         }
       ],
-      "default": "off",
+      "default": {
+        "expression": "GENERATION_DEFAULTS[\"INFINI_LLM_REASONING_MODE\"]"
+      },
       "documented": true,
-      "example": "off",
+      "example": "medium",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -2750,48 +2754,51 @@
       "visibility": "gui"
     },
     {
-      "declarations": [],
-      "default": [],
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
       "documented": true,
       "example": "",
       "gui": true,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
-      "owners": [],
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+      ],
       "secret": false,
-      "type": "unknown",
+      "type": "string",
       "visibility": "gui"
     },
     {
       "declarations": [
         {
-          "default": 0.12,
+          "default": "",
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "maximum": 0.8,
-          "minimum": 0.0,
-          "type": "number"
-        },
-        {
-          "default": 0.12,
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-          "maximum": 0.8,
-          "minimum": 0.0,
-          "type": "number"
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
         }
       ],
-      "default": 0.12,
+      "default": "",
       "documented": false,
       "example": null,
       "gui": false,
-      "maximum": 0.8,
-      "minimum": 0.0,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_LLM_REPAIR_TEMPERATURE",
       "owners": [
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
       ],
       "secret": false,
-      "type": "number",
+      "type": "string",
       "visibility": "internal"
     },
     {
@@ -2870,16 +2877,20 @@
     {
       "declarations": [
         {
-          "default": 0.38,
+          "default": {
+            "expression": "float(GENERATION_DEFAULTS[\"INFINI_LLM_TEMPERATURE\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
         }
       ],
-      "default": 0.38,
+      "default": {
+        "expression": "float(GENERATION_DEFAULTS[\"INFINI_LLM_TEMPERATURE\"])"
+      },
       "documented": true,
-      "example": "0.38",
+      "example": "0.5",
       "gui": true,
       "maximum": 1.2,
       "minimum": 0.0,
@@ -2894,48 +2905,68 @@
     {
       "declarations": [
         {
-          "default": 95,
+          "default": {
+            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+          },
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "integer"
+        },
+        {
+          "default": {
+            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         },
         {
-          "default": 95,
+          "default": {
+            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         },
         {
-          "default": 95,
+          "default": {
+            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         },
         {
-          "default": 95,
+          "default": {
+            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": 95,
-      "documented": false,
-      "example": null,
+      "default": {
+        "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
+      },
+      "documented": true,
+      "example": "600",
       "gui": false,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_LLM_TIMEOUT",
       "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
         "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
         "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
       ],
       "secret": false,
       "type": "integer",
-      "visibility": "internal"
+      "visibility": "documented"
     },
     {
       "declarations": [
@@ -5120,7 +5151,7 @@
         }
       ],
       "default": "<redacted>",
-      "documented": false,
+      "documented": true,
       "example": null,
       "gui": false,
       "maximum": null,
@@ -5131,7 +5162,7 @@
       ],
       "secret": true,
       "type": "integer",
-      "visibility": "internal"
+      "visibility": "documented"
     },
     {
       "declarations": [
@@ -5184,16 +5215,20 @@
     {
       "declarations": [
         {
-          "default": 75,
+          "default": {
+            "expression": "LLM_TIMEOUT"
+          },
           "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": 75,
-      "documented": false,
-      "example": null,
+      "default": {
+        "expression": "LLM_TIMEOUT"
+      },
+      "documented": true,
+      "example": "",
       "gui": false,
       "maximum": null,
       "minimum": null,
@@ -5203,7 +5238,7 @@
       ],
       "secret": false,
       "type": "integer",
-      "visibility": "internal"
+      "visibility": "documented"
     },
     {
       "declarations": [
@@ -5328,16 +5363,20 @@
     {
       "declarations": [
         {
-          "default": 0.45,
+          "default": {
+            "expression": "float(GENERATION_DEFAULTS[\"INFINI_VISUAL_DIRECTOR_TEMPERATURE\"])"
+          },
           "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
         }
       ],
-      "default": 0.45,
+      "default": {
+        "expression": "float(GENERATION_DEFAULTS[\"INFINI_VISUAL_DIRECTOR_TEMPERATURE\"])"
+      },
       "documented": true,
-      "example": "0.42",
+      "example": "0.45",
       "gui": true,
       "maximum": null,
       "minimum": null,
@@ -5632,7 +5671,7 @@
   ],
   "errors": [],
   "fieldCount": 231,
-  "fingerprint": "ff3538a0ce5a3286fb370cadf3f483f128eb7297deee279bbba133d0fb681959",
+  "fingerprint": "7637ab58ca7bc83ce783b69e1097d9f14e93cd6456d35c6c77bc3c6917985e1a",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
@@ -5666,10 +5705,6 @@
     },
     {
       "field": "INFINI_GUI_PIPELINE_PRESET",
-      "kind": "presented_without_env_helper_declaration"
-    },
-    {
-      "field": "INFINI_LLM_REAUTHOR_TEMPERATURE",
       "kind": "presented_without_env_helper_declaration"
     },
     {

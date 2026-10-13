@@ -1,4 +1,4 @@
-# LocalGenerator 0.5.00 — архитектурная навигация
+# LocalGenerator 0.5.02 — архитектурная навигация
 
 Python не принимает gameplay-решения вместо Author: он владеет validation, leaf-local frozen-first Repair, lossless projections, assets и strict world storage.
 

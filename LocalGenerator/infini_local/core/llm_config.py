@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from infini_local.core.env_utils import env_bool, env_first, env_int, env_str
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 
 
 # LLM transport and generation policy configuration. This module owns env-derived
@@ -69,8 +70,9 @@ LLM_POOL_PROFILES = (
 )
 
 LLM_RESPONSE_FORMAT_MODE = env_str("INFINI_LLM_RESPONSE_FORMAT", "auto").lower()
-LLM_MAX_TOKENS = env_int("INFINI_LLM_MAX_TOKENS", 9000, lo=256, hi=64000)
-LLM_REASONING_MODE = env_str("INFINI_LLM_REASONING_MODE", "off").lower()
+LLM_MAX_TOKENS = env_int("INFINI_LLM_MAX_TOKENS", int(GENERATION_DEFAULTS["INFINI_LLM_MAX_TOKENS"]), lo=256, hi=64000)
+LLM_TIMEOUT = env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"]))
+LLM_REASONING_MODE = env_str("INFINI_LLM_REASONING_MODE", GENERATION_DEFAULTS["INFINI_LLM_REASONING_MODE"]).lower()
 LLM_REASONING_MAX_TOKENS = env_int("INFINI_LLM_REASONING_MAX_TOKENS", 1500, lo=0, hi=32000)
 LLM_REASONING_EXCLUDE = env_bool("INFINI_LLM_REASONING_EXCLUDE", True)
 LLM_LOCAL_REASONING_PROMPT = env_bool("INFINI_LLM_LOCAL_REASONING_PROMPT", True)

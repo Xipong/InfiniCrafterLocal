@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from infini_local.core.env_utils import env_float, env_int
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
@@ -1122,7 +1123,7 @@ def _request_visual_kit(
         "temperature": (
             env_float("INFINI_VISUAL_REPAIR_TEMPERATURE", 0.12)
             if repair
-            else env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", 0.45)
+            else env_float("INFINI_VISUAL_DIRECTOR_TEMPERATURE", float(GENERATION_DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"]))
         ),
         "max_tokens": visual_director_max_tokens(),
         "response_format": response_format,
@@ -1135,7 +1136,7 @@ def _request_visual_kit(
     stage_name = "visual_repair" if repair else "visual_director"
     trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
     trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
-    raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+    raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)
     try:

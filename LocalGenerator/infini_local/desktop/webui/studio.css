@@ -254,6 +254,12 @@ dialog::backdrop{background:#252b2355;backdrop-filter:blur(2px)}
 .search-footer{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);padding:14px 22px;border-top:1px solid var(--line);gap:20px}
 .utility-dialog{max-width:570px}
 #utility-body{padding:4px 22px 23px}
+.defaults-changes{font-size:12px;line-height:1.65;overflow-wrap:anywhere}
+.defaults-changes>div{padding:12px 0;border-top:1px solid var(--line)}
+.defaults-changes code{font-size:10px;color:var(--muted)}
+.defaults-values{margin:5px 0;color:var(--ink)}
+.defaults-error{color:var(--danger);font-size:12px}
+.utility-dialog[data-kind="defaults"] .dialog-actions{flex-wrap:wrap}
 .dialog-copy{font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:15px}
 .dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:24px}
 .dialog-input{display:block;width:100%;padding:11px;border:1px solid #c5cbb8;background:var(--white);border-radius:3px;margin:8px 0}
