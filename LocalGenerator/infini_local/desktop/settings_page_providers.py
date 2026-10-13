@@ -48,7 +48,7 @@ class ProvidersPageMixin:
         controls = self._card(parent, "Генерация и рассуждение", "Gameplay Author и текстовый Visual Director. PNG-качество на вкладке «Картинки».", icon="◇")
         self.row(controls, "Response format", "INFINI_LLM_RESPONSE_FORMAT", values=["auto", "json_schema", "json_object", "off"])
         self.row(controls, "Разнообразие ответа", "INFINI_LLM_TEMPERATURE", width=16, hint="Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.")
-        self.row(controls, "Температура исправлений", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = Разнообразие ответа. Обычно 0.0-0.2 для bounded repair rejected domain.")
+        self.row(controls, "Температура исправлений", "INFINI_LLM_REAUTHOR_TEMPERATURE", width=16, hint="Пусто = 0.12. Обычно 0.0-0.2 для scoped Repair; явно заданный INFINI_LLM_REPAIR_TEMPERATURE имеет приоритет.")
         self.row(controls, "Разнообразие образа", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", width=16, hint="Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.")
         visual_row = self.row(controls, "Visual Director effort", "INFINI_CODEX_VISUAL_REASONING", values=["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"], hint="Отдельный reasoning текстового Visual Director; inherit = усилие основной LLM, model_default = без effort в запросе; не image-модель.")
         self.codex_visual_reasoning_combo = next(w for w in visual_row.winfo_children() if isinstance(w, ttk.Combobox))

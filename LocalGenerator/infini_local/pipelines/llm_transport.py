@@ -22,6 +22,7 @@ from infini_local.core.env_utils import env_str
 from infini_local.core.http_io import HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds, read_with_deadline, urlopen_no_redirect
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, static_instruction_prefix_parts, instruction_segment_index
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.llm_config import (
     CODEX_LLM_MODEL,
     CODEX_VISUAL_REASONING,
@@ -1028,7 +1029,7 @@ def llm_answer_max_tokens(default: int | None = None) -> int:
     try:
         value = int(raw)
     except Exception:
-        value = 9000
+        value = int(GENERATION_DEFAULTS["INFINI_LLM_MAX_TOKENS"])
     return max(512, min(64000, value))
 
 def visual_director_max_tokens() -> int:

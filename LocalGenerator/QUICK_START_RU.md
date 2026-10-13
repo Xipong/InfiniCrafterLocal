@@ -1,4 +1,4 @@
-# LocalGenerator 0.5.00 — offline QA
+# LocalGenerator 0.5.02 — offline QA
 
 Для **пользовательского запуска** нужен [основной Windows-вход](../docs/user/START_RU.md). Здесь только source checkout без model/image/game/login. Dev-зависимости отличаются от runtime; установка не gate.
 

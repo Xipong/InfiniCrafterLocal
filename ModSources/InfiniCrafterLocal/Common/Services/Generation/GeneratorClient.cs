@@ -320,7 +320,7 @@ public sealed class GeneratorClient
             return null;
 
         int attempts = Math.Max(1, int.TryParse(Environment.GetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS"), out int envAttempts) ? envAttempts : 2);
-        int timeoutSeconds = Math.Max(15, int.TryParse(Environment.GetEnvironmentVariable("INFINI_CRAFT_HTTP_TIMEOUT_SECONDS"), out int envTimeout) ? envTimeout : 240);
+        int timeoutSeconds = Math.Max(15, int.TryParse(Environment.GetEnvironmentVariable("INFINI_CRAFT_HTTP_TIMEOUT_SECONDS"), out int envTimeout) ? envTimeout : 900);
         int cacheTimeoutSeconds = Math.Max(2, int.TryParse(Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_HTTP_TIMEOUT_SECONDS"), out int envCacheTimeout) ? envCacheTimeout : 12);
         int cacheRecoverySeconds = Math.Max(0, int.TryParse(Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS"), out int envCacheRecovery) ? envCacheRecovery : 90);
 

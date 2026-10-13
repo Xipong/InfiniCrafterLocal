@@ -5,7 +5,7 @@
 ## Владельцы
 
 - `webui/index.html`, `studio.css`, `studio.js` — внешний вид, формы, поиск, keyboard navigation, unsaved draft и отображение состояний. Offline, без CDN.
-- `web_studio.py` — browser entrypoint и адаптер к прежним owners; token-required read/write API, только loopback, без сторонних Origins.
+- `web_studio.py` — browser entrypoint и адаптер к прежним owners; token-required read/write API, только loopback, без сторонних Origins. Synthetic defaults-only поля получают `FIELD_HELP` из canonical schema и сохраняются через retained config owner.
 
 - `settings_gui.py` — публичный `SettingsGui`, инициализация состояния и `main()`. Launcher `LocalGenerator/settings_gui.py` остаётся совместимым.
 - `settings_gui_ui.py` — только композиция mixins и совместимые импорты; не монолитная форма.
@@ -23,6 +23,7 @@
 - `settings_gui_trace_state.py` — async trace refresh/cancel, collect/save/presets и multiplayer state. Неизвестные настройки сохраняются; пользовательские профили не содержат ключей.
 - `settings_gui_server_controls.py` — path pickers, bounded async workers/main-thread apply, health identity/effective-config и безопасный lifecycle сервера. Семантика Start/Stop/Force не меняется при смене UI.
 - `settings_schema.py`, `settings_env.py`, `settings_sdcpp_args.py` — canonical GUI defaults/order/help, env persistence и чистые helpers аргументов.
+- `settings_defaults.py` — версионное предложение только пересмотренных defaults, сравнение current → recommended и выборочная атомарная запись после согласия; отказ хранится отдельно в `config.env.defaults.json`. Не использует полный `collect/save`, не меняет providers/credentials/paths/неизменённые настройки.
 - `settings_widgets.py`, `tk_compat.py` — generic scroll/tooltips и headless import shims.
 
 ## Совместимость и проверки
