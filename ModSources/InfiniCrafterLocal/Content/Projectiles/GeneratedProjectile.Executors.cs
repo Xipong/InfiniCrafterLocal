@@ -14,7 +14,9 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
     public override bool ShouldUpdatePosition()
-        => !_configured || !(_entity?.IsOwnerAttached == true && _entity.Movement.Code is 18 or 19)
+        // Pending definitions suspend native position integration without destroying
+        // the latest SyncProjectile velocity that hydration will resume.
+        => _configured && !(_entity?.IsOwnerAttached == true && _entity.Movement.Code is 18 or 19)
             && _entity?.Controller.Code != RuntimeControllerCode.ChannelBeam;
 
     public override void AI()

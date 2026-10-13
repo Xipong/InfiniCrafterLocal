@@ -506,7 +506,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 registry?.RequestOneFromServer(_generatedItemId, forceAssetRetry: false);
         }
         Projectile.friendly = false;
-        Projectile.velocity = Vector2.Zero;
+        // Native tile collision precedes ShouldUpdatePosition; a previously
+        // configured actor must not collide while waiting for its definition.
+        Projectile.tileCollide = false;
         Projectile.timeLeft = Math.Max(Projectile.timeLeft, 30);
         if (_pendingHydrationTicks > 600) Projectile.Kill();
         return false;
