@@ -11,13 +11,105 @@ using Terraria.ModLoader.IO;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void CancelledCraftReconnectResolvesOnlyOwnedJournal()
+    {
+        using var peers = new ReviewPeers(); peers.Mode(NetmodeID.Server, 255);
+        var world = new GeneratedStationEscrowStateSystem();
+        try
+        {
+            foreach (bool alreadyCompleted in new[] { false, true })
+            {
+                world.ClearWorld();
+                using (var writer = new BinaryWriter(new MemoryStream())) world.NetSend(writer);
+                string scope = GeneratedStationEscrowStateSystem.AuthorityScope;
+                string token = new string('a', 32), request = new string('c', 32);
+                WithPlayer((oldPlayer, oldOwner) =>
+                {
+                    EscrowBind(oldPlayer, oldOwner, token, 0);
+                    oldOwner.InputA = new Item(ItemID.CopperShortsword, 1); oldOwner.InputB = new Item(ItemID.Wood, 1);
+                    GeneratedStationEscrowStateSystem.CaptureOwnerState(token, oldOwner);
+                    Equal(true, GeneratedStationEscrowStateSystem.TryBeginCraft(token, request, 0), "request before disconnect");
+                    if (alreadyCompleted)
+                        Equal(true, GeneratedStationEscrowStateSystem.CompleteCraft(token, request, true, "exact result", "ok"), "completion raced disconnect");
+                    WithPlayer((player, owner) =>
+                    {
+                        owner.Initialize(); player.active = true; player.whoAmI = 7; Terraria.Main.player[7] = player;
+                        int sends = 0; bool? success = null;
+                        var send = typeof(InfiniCraftPlayer).GetMethod("SendCraftCommitResult", PersistenceStatic)!;
+                        using var observer = new MonoMod.RuntimeDetour.ILHook(send, il => {
+                            var cursor = new MonoMod.Cil.ILCursor(il);
+                            cursor.Emit(Mono.Cecil.Cil.OpCodes.Ldarg_2);
+                            cursor.EmitDelegate<Action<bool>>(value => { sends++; success = value; });
+                            cursor.Emit(Mono.Cecil.Cil.OpCodes.Ret); // Only suppress the native socket boundary.
+                        });
+                        void Cancel(string requestId, string authorityScope, int version = 2)
+                        {
+                            using var bytes = new MemoryStream();
+                            using (var writer = new BinaryWriter(bytes, System.Text.Encoding.UTF8, true)) {
+                                writer.Write(version); writer.Write(authorityScope); writer.Write(token);
+                                writer.Write(requestId); writer.Write("client cancel");
+                            }
+                            bytes.Position = 0;
+                            InfiniCraftPlayer.HandleCancelServerCraftPacket(new BinaryReader(bytes), 7);
+                        }
+                        Cancel(request, scope);
+                        Equal(0, sends, "another live session cannot steal the bearer claim");
+                        Equal(false, GeneratedStationEscrowStateSystem.IsBoundOwner(token, owner), "foreign session remains unbound");
+                        oldPlayer.active = false;
+                        Cancel(request, new string('f', 32));
+                        Equal(0, sends, "wrong world scope cannot resolve cancellation");
+                        try { Cancel(request, scope, version: 1); throw new InvalidOperationException("old wire accepted"); }
+                        catch (InvalidDataException) { }
+                        Cancel(request, scope);
+                        Equal(1, sends, "cancel alone binds replacement and returns terminal result");
+                        Equal(alreadyCompleted, success, "committed success stays success; orphan becomes failure");
+                        Equal(true, GeneratedStationEscrowStateSystem.IsBoundOwner(token, owner), "replacement owns exact durable escrow");
+                        Equal(false, GeneratedStationEscrowStateSystem.CanCommitCraft(token, request, 0, oldOwner), "retired owner cannot commit after rebind");
+                        Equal(false, GeneratedStationEscrowStateSystem.IsCraftPending(token, request), "orphan no longer blocks cancellation");
+                        Equal(true, GeneratedStationEscrowStateSystem.TryReplayCraft(token, request, out var outcome), "terminal outcome remains replayable");
+                        Equal(alreadyCompleted, outcome.Success, "canonical journal owns the result");
+                        if (alreadyCompleted) Equal("exact result", outcome.ItemName, "cancel preserves committed item identity");
+                        Equal(alreadyCompleted, owner.InputA.IsAir && owner.InputB.IsAir, "only committed result consumes materials");
+                        if (!alreadyCompleted) {
+                            Equal(ItemID.CopperShortsword, owner.InputA.type, "exact input A retained");
+                            Equal(ItemID.Wood, owner.InputB.type, "exact input B retained");
+                        }
+                        Cancel(request, scope);
+                        Equal(2, sends, "repeated cancellation replays the same result");
+                        string unknown = new string('e', 32);
+                        Cancel(unknown, scope);
+                        Equal(2, sends, "unknown request creates no terminal claim");
+                        Equal(false, GeneratedStationEscrowStateSystem.IsCraftPending(token, unknown), "unknown request is never admitted");
+                        Equal(false, GeneratedStationEscrowStateSystem.TryReplayCraft(token, unknown, out _), "unknown request has no refund outcome");
+                        Equal(0, player.inventory.Take(58).Count(i => !i.IsAir), "server cancellation never invents local refund copies");
+
+                        // A currently owned worker must still be cancelled, not merely orphan-retired.
+                        if (!alreadyCompleted)
+                        {
+                            string live = new string('d', 32);
+                            Equal(true, GeneratedStationEscrowStateSystem.TryBeginCraft(token, live, 0), "next live craft admitted");
+                            var prepared = new InfiniCrafterLocal.Common.Services.GeneratorClient.PreparedGenerationRequest();
+                            typeof(InfiniCraftPlayer).GetField("_request", PersistenceInstance)!.SetValue(owner, prepared);
+                            typeof(InfiniCraftPlayer).GetField("_serverRequestId", PersistenceInstance)!.SetValue(owner, live);
+                            Cancel(live, scope);
+                            Equal(true, prepared.CancellationToken.IsCancellationRequested, "live request worker token cancelled");
+                            Equal(false, owner.HasPendingCraft, "live lane retired");
+                            Equal(true, GeneratedStationEscrowStateSystem.TryReplayCraft(token, live, out var cancelled) && !cancelled.Success, "live cancel keeps canonical failure");
+                        }
+                    });
+                });
+            }
+        }
+        finally { world.ClearWorld(); }
+    }
+
     private static byte[] EscrowRequest(string scope, string token, bool craft)
     {
         using var wire = new MemoryStream();
         using (var writer = new BinaryWriter(wire, System.Text.Encoding.UTF8, true))
         {
             writer.Write(craft ? InfiniNetPacketIds.RequestServerCraft : InfiniNetPacketIds.RequestStationEscrow);
-            writer.Write(1); writer.Write(scope); writer.Write(token); writer.Write(new string('f', 32));
+            writer.Write(2); writer.Write(scope); writer.Write(token); writer.Write(new string('f', 32));
             if (craft)
             {
                 writer.Write((byte)0);

@@ -327,7 +327,7 @@ internal static partial class EngineRuntimeChecks
                 {
                     using var wire = new MemoryStream();
                     using (var writer = new BinaryWriter(wire, System.Text.Encoding.UTF8, true)) {
-                        writer.Write(1); writer.Write(origin); writer.Write(new string('d', 32)); writer.Write((byte)3);
+                        writer.Write(2); writer.Write(origin); writer.Write(new string('d', 32)); writer.Write((byte)3);
                         writer.Write((sbyte)0); writer.Write(true); writer.Write("");
                     }
                     wire.Position = 0; using var reader = new BinaryReader(wire); InfiniCraftPlayer.HandleStationEscrowResultPacket(reader, 0);
@@ -455,14 +455,14 @@ internal static partial class EngineRuntimeChecks
     {
         using var reader = new BinaryReader(new MemoryStream(request));
         Equal(InfiniCrafterLocal.Common.InfiniNetPacketIds.RequestStationEscrow, reader.ReadByte(), "actual station request dispatcher id");
-        Equal(1, reader.ReadInt32(), "scoped request version");
+        Equal(2, reader.ReadInt32(), "scoped request version");
         Equal(scope, reader.ReadString(), "fresh request names only current authority, never dormant origin");
         reader.ReadString(); string operation = reader.ReadString(); byte action = reader.ReadByte(); sbyte index = reader.ReadSByte();
         Equal((byte)1, action, "one fresh deposit request");
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
             writer.Write(InfiniCrafterLocal.Common.InfiniNetPacketIds.StationEscrowResult);
-            writer.Write(1); writer.Write(scope); writer.Write(operation); writer.Write(action); writer.Write(index); writer.Write(true); writer.Write("");
+            writer.Write(2); writer.Write(scope); writer.Write(operation); writer.Write(action); writer.Write(index); writer.Write(true); writer.Write("");
         }
         peers.Receive(stream.ToArray());
     }
