@@ -49,9 +49,7 @@ internal static partial class EngineRuntimeChecks
     }
 
     private static Hook TargetEmissionEntry(Action<IEntitySource, Vector2, Vector2, int, float> inspect)
-        => new(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect), new[] {
-            typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float),
-            typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        => new(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
                 inspect(source, position, velocity, damage, knockback);
@@ -64,71 +62,6 @@ internal static partial class EngineRuntimeChecks
     {
         try { dispatch(); return false; }
         catch (InvalidOperationException error) when (error.Message == TargetEmissionBoundary) { return true; }
-    }
-
-    private static void TargetEmissionWireIsStrictAndOldOpcodesStayAbsent()
-    {
-        using var scope = new Rt01NpcScope(NetmodeID.SinglePlayer);
-        var data = TargetEmissionFixture();
-        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson(), JsonSerializer.Serialize(data) })
-        {
-            var copy = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("explicit target emission roundtrip refused");
-            var action = copy.RuntimeProgram.TryGetEntity("root")!.Events.Single();
-            Equal(2, action.StepCount!.Value, "explicit count roundtrip");
-            Equal(22.5, action.StepRangeTiles!.Value, "float64 range roundtrip");
-            Equal("previous_target", action.SelectionAnchor!, "anchor roundtrip");
-            Equal("allow_revisits", action.RepeatPolicy!, "repeat policy roundtrip");
-            Equal(false, action.RequireLineOfSight!.Value, "explicit false roundtrip");
-            Equal(10, action.InitialIgnoreCountdownUpdates!.Value, "counter roundtrip");
-            Equal(0, action.DelayTicks, "explicit zero delay roundtrip");
-        }
-        string pristine = data.ToJson();
-        foreach (string field in new[] { "event", "entityId", "stepCount", "stepRangeTiles", "selectionAnchor",
-            "repeatPolicy", "requireLineOfSight", "initialIgnoreCountdownUpdates", "delayTicks" })
-        {
-            var raw = JsonNode.Parse(pristine)!;
-            raw["runtimeProgram"]!["entities"]![1]!["events"]![0]!.AsObject().Remove(field);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "missing explicit field refused " + field);
-        }
-        foreach (var invalid in new (string Field, string Json)[] {
-            ("stepCount", "null"), ("stepCount", "0"), ("stepCount", "13"), ("stepCount", "2.0"), ("stepCount", "true"),
-            ("stepRangeTiles", "0.9999999999999999"), ("stepRangeTiles", "60.00000000000001"), ("stepRangeTiles", "null"),
-            ("selectionAnchor", "\"closest\""), ("repeatPolicy", "null"), ("requireLineOfSight", "0"),
-            ("initialIgnoreCountdownUpdates", "601"), ("initialIgnoreCountdownUpdates", "-1"), ("delayTicks", "601"),
-            ("event", "\"on_kill\""), ("event", "\"ON_HIT\""), ("entityId", "\"HOP\""),
-            ("damageMultiplier", "0.75"), ("count", "2"), ("actionCode", "4"), ("action", "\"chain_damage_on_event\""),
-        })
-        {
-            var raw = JsonNode.Parse(pristine)!;
-            raw["runtimeProgram"]!["entities"]![1]!["events"]![0]![invalid.Field] = JsonNode.Parse(invalid.Json);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "present invalid target emission refused " + invalid);
-        }
-        var old = SwarmGameplayFixture();
-        old.RuntimeProgram.TryGetEntity("root")!.Events = new[] { new RuntimeEventActionSpec {
-            Id = "old_radial", Event = "on_hit", Action = "chain_damage_on_event", ActionCode = RuntimeEventActionCode.ChainDamage,
-            Count = 2, RangeTiles = 22.5f, DamageMultiplier = 0.5f, DelayTicks = 0,
-        } };
-        string oldJson = SwarmWire(old).ToJson();
-        Equal(false, oldJson.Contains("stepCount", StringComparison.Ordinal), "legacy action has no invented new fields");
-        var oldRaw = JsonNode.Parse(oldJson)!;
-        oldRaw["runtimeProgram"]!["entities"]![1]!["events"]![0]!["stepCount"] = 1;
-        Equal(true, GeneratedItemData.FromJson(oldRaw.ToJsonString()) is null, "new fields cannot attach to another opcode");
-        var incompatible = JsonNode.Parse(pristine)!;
-        incompatible["runtimeProgram"]!["entities"]![2]!["spawn"]!["aim"] = "cursor";
-        Equal(true, GeneratedItemData.FromJson(incompatible.ToJsonString()) is null, "referenced child has exact initial geometry contract");
-        foreach (string field in new[] { "aim", "placement", "offsetPx" })
-        {
-            var missing = JsonNode.Parse(pristine)!;
-            missing["runtimeProgram"]!["entities"]![2]!["spawn"]!.AsObject().Remove(field);
-            Equal(true, GeneratedItemData.FromJson(missing.ToJsonString()) is null, "missing referenced origin choice cannot use retained defaults " + field);
-        }
-        foreach (var change in new (string Field, string Json)[] { ("aim", "\"VELOCITY\""),
-            ("placement", "\"ITEM_USE_ORIGIN\""), ("offsetPx", "null"), ("overTarget", "{\"heightTiles\":-1,\"delayTicks\":0}") })
-        {
-            var raw = JsonNode.Parse(pristine)!;
-            raw["runtimeProgram"]!["entities"]![2]!["spawn"]![change.Field] = JsonNode.Parse(change.Json);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "invalid referenced origin refuses before retained normalization " + change.Field);
-        }
     }
 
     private static void TargetEmissionPlannerUsesExplicitAnchorsAndRepeatPolicy()

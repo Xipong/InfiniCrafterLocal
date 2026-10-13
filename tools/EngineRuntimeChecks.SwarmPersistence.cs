@@ -156,35 +156,21 @@ internal static partial class EngineRuntimeChecks
         {
             var data = PersistencePlacementData();
             var item = new Item(ItemID.WoodenSword, 1); var generated = new GeneratedItem();
-            typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-            typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-            typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
+            AttachItem(generated, item, data);
             Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is not null, "strict native placement fixture is valid");
             player.inventory[0] = item; player.selectedItem = 0;
-            void Packet(bool intent, ulong sequence, int x = 40, int y = 40)
-            {
-                using var stream = new MemoryStream();
-                using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                {
-                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence);
-                    writer.Write((byte)(intent ? 0 : 2)); writer.Write(x); writer.Write(y);
-                    if (intent) writer.Write(0UL);
-                }
-                stream.Position = 0; using var reader = new BinaryReader(stream);
-                if (intent) GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, 0);
-                else GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, 0);
-            }
+
             Tile cell = Terraria.Main.tile[40, 40]; cell.WallType = 0;
-            Packet(true, 1); cell.WallType = 1; Packet(false, 1);
+            ReceivePlacementPacket(true, 1); cell.WallType = 1; ReceivePlacementPacket(false, 1);
             Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "server-captured intent commits exact changed cell");
             var save = new TagCompound(); ledger.SaveWorldData(save);
             Equal(data.Id, save.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2")[0].GetString("generatedItemId"), "identity comes from server-held generated item");
-            Packet(false, 1); var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
+            ReceivePlacementPacket(false, 1); var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
             Equal(1, repeated.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2").Count, "notify replay does not create another material return");
             // A late notify may not create a new authorization from after-state.
-            Packet(false, 2, 41, 40);
+            ReceivePlacementPacket(false, 2, 41, 40);
             Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "late/unarmed notify cannot authorize");
-            Packet(true, 2, int.MinValue, int.MaxValue); Packet(false, 2, int.MaxValue, int.MinValue);
+            ReceivePlacementPacket(true, 2, int.MinValue, int.MaxValue); ReceivePlacementPacket(false, 2, int.MaxValue, int.MinValue);
             var wall = new GeneratedPlacementLedgerWall(); int dropType = 0;
             Equal(false, wall.Drop(40, 40, 1, ref dropType), "exact tracked wall suppresses vanilla fallback");
             var pending = new TagCompound(); ledger.SaveWorldData(pending);
@@ -198,33 +184,23 @@ internal static partial class EngineRuntimeChecks
         WithPersistenceTilemap((player, ledger) =>
         {
             var data = PersistencePlacementData(); player.inventory[0] = ReviewItem(data).Item;
-            void Packet(bool intent, ulong sequence, int x = 40, int y = 40, byte layer = 2)
-            {
-                using var stream = new MemoryStream();
-                using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!); writer.Write(sequence); writer.Write(intent ? (byte)0 : layer); writer.Write(x); writer.Write(y);
-                    if (intent) writer.Write(0UL);
-                }
-                stream.Position = 0; using var reader = new BinaryReader(stream);
-                if (intent) GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, 0);
-                else GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, 0);
-            }
+
             Tile cell = Terraria.Main.tile[40, 40];
             foreach (string scenario in new[] { "late", "notify_before_mutation", "unarmed", "already_placed", "expired", "rate_replay", "player_replaced", "bounds", "wrong_target" })
             {
                 ledger.ClearWorld(); MaterialClock(100); Terraria.Main.player[0] = player; cell.WallType = 0;
                 if (scenario is "unarmed" or "already_placed") cell.WallType = 1;
-                if (scenario != "unarmed") Packet(true, 1);
-                if (scenario == "notify_before_mutation") { Packet(false, 1); ledger.PostUpdateWorld(); }
+                if (scenario != "unarmed") ReceivePlacementPacket(true, 1);
+                if (scenario == "notify_before_mutation") { ReceivePlacementPacket(false, 1); ledger.PostUpdateWorld(); }
                 if (scenario == "late") MaterialClock(140);
                 if (scenario == "expired") { MaterialClock(221); ledger.PostUpdateWorld(); }
-                if (scenario == "rate_replay") { Packet(true, 2); Packet(true, 1); }
-                if (scenario == "bounds") { ledger.ClearWorld(); Packet(true, 1, int.MinValue, int.MaxValue); Packet(false, 1, int.MaxValue, int.MinValue); }
+                if (scenario == "rate_replay") { ReceivePlacementPacket(true, 2); ReceivePlacementPacket(true, 1); }
+                if (scenario == "bounds") { ledger.ClearWorld(); ReceivePlacementPacket(true, 1, int.MinValue, int.MaxValue); ReceivePlacementPacket(false, 1, int.MaxValue, int.MinValue); }
                 if (scenario == "player_replaced") Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, position = player.position };
                 cell.WallType = 1;
-                if (scenario == "wrong_target") { Packet(false, 1, 41); Packet(false, 1, layer: 1); }
-                if (scenario == "rate_replay") Packet(false, 2);
-                Packet(false, 1); ledger.PostUpdateWorld(); Packet(false, 1);
+                if (scenario == "wrong_target") { ReceivePlacementPacket(false, 1, 41); ReceivePlacementPacket(false, 1, layer: 1); }
+                if (scenario == "rate_replay") ReceivePlacementPacket(false, 2);
+                ReceivePlacementPacket(false, 1); ledger.PostUpdateWorld(); ReceivePlacementPacket(false, 1);
                 bool accepted = scenario is "late" or "notify_before_mutation" or "rate_replay" or "wrong_target";
                 Equal(accepted, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "bounded exact-before intent: " + scenario);
                 var save = new TagCompound(); ledger.SaveWorldData(save);
@@ -300,9 +276,7 @@ internal static partial class EngineRuntimeChecks
             {
                 Player.tileTargetX = Player.tileTargetY = 40;
                 var data = PersistencePlacementData(); var item = new Item(ItemID.WoodenSword, 1); var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-                typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-                typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
+                AttachItem(generated, item, data);
                 player.inventory[0] = item; player.selectedItem = 0;
                 Tile cell = Terraria.Main.tile[40, 40]; cell.WallType = 0;
                 Equal(true, generated.CanUseItem(player), "real local CanUseItem establishes before snapshot");
@@ -590,306 +564,18 @@ internal static partial class EngineRuntimeChecks
         finally { world.ClearWorld(); Terraria.Main.mouseItem = oldMouse; }
     }
 
-    private static IDisposable PersistenceItemCheckHooks(InfiniCraftPlayer modPlayer)
-    {
-        var restores = new List<Action>();
-        foreach (string name in new[] { "HookPreItemCheck", "HookPostItemCheck" }) {
-            object hook = typeof(PlayerLoader).GetField(name, PersistenceStatic)!.GetValue(null)!;
-            FieldInfo indices = hook.GetType().GetField("indices", PersistenceInstance)!;
-            FieldInfo defaults = hook.GetType().GetField("defaultInstances", PersistenceInstance)!;
-            object oldIndices = indices.GetValue(hook)!, oldDefaults = defaults.GetValue(hook)!;
-            hook.GetType().GetMethod("Update")!.Invoke(hook, new object[] { new ModPlayer[] { modPlayer } });
-            restores.Add(() => { indices.SetValue(hook, oldIndices); defaults.SetValue(hook, oldDefaults); });
-        }
-        return new PersistenceRestore(() => { foreach (Action restore in restores) restore(); });
-    }
 
-    private static GeneratedItem PersistenceItemCheckItem(GeneratedItemData data)
-    {
-        // ReviewItem's bare Item shell intentionally skips vanilla defaults. Native
-        // ItemCheck needs real non-fishing, non-mount, non-potion defaults too.
-        var item = new Item(ItemID.WoodenSword, 1);
-        var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", PersistenceInstance)!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem", PersistenceInstance)!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, data);
-        data.ApplyToItem(item);
-        return generated;
-    }
-
-    private sealed class PersistenceNativeUseBoundary : Exception { }
     private delegate void PersistenceNativeStartOriginal(Player player, Item item);
     private delegate void PersistenceNativeStartObserver(PersistenceNativeStartOriginal original, Player player, Item item);
 
-    private static void NativeItemCheckRetriesUnstartedPlacementAfterReadyWithoutAutoReuse()
-    {
-        WithPersistenceTilemap((_, ledger) => {
-            var scenarios = new[] { "sp", "autoreuse", "repress", "released", "item_changed", "player_changed", "data_changed", "data_mutated", "selector_changed", "target_changed", "expired", "wrong_sequence", "held_nonauto" };
-            int x = Player.tileTargetX, y = Player.tileTargetY;
-            var oldNpcs = Terraria.Main.npc; var oldView = Terraria.Main.GameViewMatrix;
-            try {
-                Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
-                Terraria.Main.GameViewMatrix = new Terraria.Graphics.SpriteViewMatrix(null!);
-                Terraria.Main.GameViewMatrix.SetViewportOverride(new Microsoft.Xna.Framework.Graphics.Viewport(0, 0, 800, 600));
-                PersistenceMatrix(scenarios.Select(scenario => ("native ItemCheck " + scenario, (Action)(() => {
-                    ledger.ClearWorld(); using var peers = new ReviewPeers();
-                    WithPlayer((client, modPlayer) => {
-                        modPlayer.Initialize(); using var hooks = PersistenceItemCheckHooks(modPlayer);
-                        client.whoAmI = 0; client.active = true; client.position = new Microsoft.Xna.Framework.Vector2(640, 640);
-                        client.controlUseItem = true; client.releaseUseItem = true; client.selectedItem = 0; client.direction = 1;
-                        var data = PersistencePlacementData("native-latch-" + scenario);
-                        data.Gameplay.AutoReuse = scenario == "autoreuse"; data.Gameplay.UseStyle = ItemUseStyleID.Swing;
-                        data.Gameplay.UseTime = data.Gameplay.UseAnimation = 20; data.Gameplay.ManaCost = 0; data.Gameplay.HoldLightStrength = 0;
-                        data = GeneratedItemData.FromJson(data.ToNetworkJson())
-                            ?? throw new InvalidOperationException("strict latch fixture failed actual FromJson");
-                        peers.Register(data);
-                        var generated = PersistenceItemCheckItem(data); client.inventory[0] = generated.Item;
-                        var server = new Player { whoAmI = 0, active = true, position = client.position };
-                        var serverData = GeneratedItemData.FromJson(data.ToNetworkJson())!;
-                        var serverItem = PersistenceItemCheckItem(serverData); server.inventory[0] = serverItem.Item;
-                        peers.Mode(scenario == "sp" ? NetmodeID.SinglePlayer : NetmodeID.MultiplayerClient, 0);
-                        Terraria.Main.dedServ = true; Terraria.Main.player[0] = client;
-                        Player.tileTargetX = Player.tileTargetY = 40; MaterialClock(100); Terraria.Main.tile[40, 40].WallType = 0;
-                        Equal(scenario == "autoreuse", client.CanAutoReuseItem(generated.Item), "authored native autoReuse control; no accessory/global override");
-                        int starts = 0;
-                        PersistenceNativeStartObserver observe = (original, player, item) => {
-                            if (player.whoAmI == 0) { starts++; throw new PersistenceNativeUseBoundary(); }
-                            original(player, item);
-                        };
-                        using var entry = new MonoMod.RuntimeDetour.Hook(typeof(Player).GetMethod("ItemCheck_StartActualUse", PersistenceInstance)!, observe);
-                        void Check(Player player) { try { player.ItemCheck(); } catch (PersistenceNativeUseBoundary) { } }
-                        using var network = PersistenceObserveNetworkSend((_, __) => { });
-                        Check(client);
-                        if (scenario == "sp") { Equal(1, starts, "SP first press reaches actual native start entry"); return; }
-                        Equal(0, starts, "no actual use before ready");
-                        Equal(false, client.releaseUseItem, "native first refused hook consumed release latch");
-                        Equal(1, peers.Sent.Count, "one actual intent from real native ItemCheck");
-                        Equal(InfiniCrafterLocal.Common.InfiniNetPacketIds.RequestGeneratedPlacementIntent, peers.Sent[0][0], "real native intent id");
-                        byte[] intent = peers.Sent[0]; peers.Sent.Clear();
-                        peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(intent, 0);
-                        Equal(1, peers.Sent.Count, "server-produced ready"); byte[] ready = peers.Sent[0]; peers.Sent.Clear();
-                        ((System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations", PersistenceStatic)!.GetValue(null)!).Clear();
-                        peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.dedServ = true; Terraria.Main.player[0] = client;
-                        if (scenario == "released") { client.controlUseItem = false; Check(client); }
-                        if (scenario == "item_changed") client.inventory[0] = PersistenceItemCheckItem(data).Item;
-                        if (scenario == "player_changed") Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, position = client.position };
-                        if (scenario == "data_changed") typeof(GeneratedItem).GetProperty("Data", PersistenceInstance)!.SetValue(generated, GeneratedItemData.FromJson(data.ToNetworkJson()));
-                        if (scenario == "data_mutated") data.Name = "mutated after intent";
-                        if (scenario == "selector_changed") client.altFunctionUse = 2;
-                        if (scenario == "target_changed") Player.tileTargetX = 41;
-                        if (scenario == "expired") MaterialClock(221); else MaterialClock(101);
-                        if (scenario == "wrong_sequence") BitConverter.GetBytes(999UL).CopyTo(ready, 5);
-                        peers.Receive(ready);
-                        if (scenario == "repress") { client.controlUseItem = false; Check(client); client.controlUseItem = true; MaterialClock(102); }
-                        Check(client);
-                        if (scenario == "repress" && starts == 0) {
-                            // A lifecycle fence may retire a released activation;
-                            // the new press then needs its own genuine ready.
-                            byte[] next = peers.Sent.Single(); peers.Sent.Clear();
-                            peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(next, 0);
-                            byte[] nextReady = peers.Sent.Single(); peers.Sent.Clear();
-                            ((System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations", PersistenceStatic)!.GetValue(null)!).Clear();
-                            peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.dedServ = true; Terraria.Main.player[0] = client; peers.Receive(nextReady);
-                            MaterialClock(103); Check(client);
-                        }
-                        bool canStart = scenario is "autoreuse" or "held_nonauto" or "repress";
-                        Equal(canStart ? 1 : 0, starts, "same held activation reaches native start; lifecycle controls cannot start old activation");
-                        Equal(0, (int)Terraria.Main.tile[40, 40].WallType, "throwing native start observer performs no fake world placement");
-                        Equal(1, generated.Item.stack, "boundary observer performs no fake stack consumption");
-                        Equal(scenario == "autoreuse", generated.Item.autoReuse, "authored AutoReuse remains unchanged");
-                        if (scenario == "held_nonauto") {
-                            // The observer aborts before native start's body; emulate only
-                            // the native latch retirement, never success/world mutation.
-                            client.releaseUseItem = false; Check(client);
-                            Equal(1, starts, "one-shot native retry cannot turn held non-auto item into repeated starts");
-                        }
-                    });
-                }))));
-            }
-            finally { Player.tileTargetX = x; Player.tileTargetY = y; Terraria.Main.npc = oldNpcs; Terraria.Main.GameViewMatrix = oldView; }
-        });
-    }
-
     private static byte[] PersistencePlacementNotify(ulong sequence, int x, int y, byte layer = 2)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-            writer.Write(InfiniCrafterLocal.Common.InfiniNetPacketIds.NotifyGeneratedPlacement); writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!);
-            writer.Write(sequence); writer.Write(layer); writer.Write(x); writer.Write(y);
-        }
-        return stream.ToArray();
-    }
-
-    private static void UnmutatedAbandonedPlacementDoesNotStallNewTarget()
-    {
-        WithPersistenceTilemap((player, ledger) => {
-            var data = PersistencePlacementData(); var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
-            player.inventory[player.selectedItem] = ReviewItem(data).Item;
-            PersistenceMatrix(new (string, Action)[] {
-                ("SP abandoned unmutated target supersession", () => {
-                    ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.SinglePlayer; MaterialClock(100);
-                    Terraria.Main.tile[40, 40].WallType = Terraria.Main.tile[41, 40].WallType = 0;
-                    Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40, 40), "SP before-state A captured");
-                    MaterialClock(101);
-                    Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 41, 40), "unmutated abandoned A does not stall legitimate B target");
-                    Terraria.Main.tile[40, 40].WallType = 1;
-                    Equal(false, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "retired A change cannot commit B snapshot");
-                    Terraria.Main.tile[41, 40].WallType = 1;
-                    Equal(true, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "only fresh B before-state commits");
-                    Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "retired A is never tracked");
-                    Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "fresh B tracked once");
-                }),
-                ("MP native client change retires ordered unmutated A only", () => {
-                    ledger.ClearWorld(); using var peers = new ReviewPeers(); peers.Register(data);
-                    int x = Player.tileTargetX, y = Player.tileTargetY;
-                    try {
-                        var client = new Player { whoAmI = 0, active = true, position = player.position };
-                        var server = new Player { whoAmI = 0, active = true, position = player.position };
-                        var clientItem = ReviewItem(data); client.inventory[0] = clientItem.Item;
-                        server.inventory[0] = ReviewItem(GeneratedItemData.FromJson(data.ToNetworkJson())!).Item;
-                        var auths = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations", PersistenceStatic)!.GetValue(null)!;
-                        Player.tileTargetX = Player.tileTargetY = 40; MaterialClock(100);
-                        Terraria.Main.tile[40, 40].WallType = Terraria.Main.tile[41, 40].WallType = 0;
-                        peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client;
-                        Equal(false, clientItem.CanUseItem(client), "A sends real client intent without mutating");
-                        byte[] aIntent = peers.Sent.Single(); peers.Sent.Clear();
-                        peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(aIntent, 0);
-                        object a = auths[0]!; byte[] aReady = peers.Sent.Single(); peers.Sent.Clear(); auths.Clear();
-                        peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client; peers.Receive(aReady);
-                        Player.tileTargetX = 41; MaterialClock(101);
-                        Equal(false, clientItem.CanUseItem(client), "real client hook retires mismatched local A");
-                        MaterialClock(102); Equal(false, clientItem.CanUseItem(client), "B waits for fresh server before-state");
-                        byte[] bIntent = peers.Sent.Single(); peers.Sent.Clear();
-                        auths[0] = a; peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(bIntent, 0);
-                        Equal(true, auths[0] is not null && !ReferenceEquals(a, auths[0]), "server supersedes only unmutated unnotified A with fresh B before-state");
-                        byte[] bReady = peers.Sent.Single(); peers.Sent.Clear(); object b = auths[0]!;
-                        auths.Clear(); peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client; peers.Receive(bReady);
-                        Equal(true, clientItem.CanUseItem(client), "exact new B ready admits B");
-                        auths.Clear(); auths[0] = b; peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server;
-                        Terraria.Main.tile[40, 40].WallType = 1;
-                        peers.Receive(PersistencePlacementNotify(1, 40, 40), 0);
-                        Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "late retired A notify cannot reconstruct snapshot");
-                        Terraria.Main.tile[41, 40].WallType = 1;
-                        peers.Receive(PersistencePlacementNotify(2, 41, 40), 0); peers.Receive(PersistencePlacementNotify(2, 41, 40), 0);
-                        Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "new B exact notify commits once");
-                        var save = new TagCompound(); ledger.SaveWorldData(save);
-                        Equal(1, save.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2").Count, "only B owns one exact material return");
-                    }
-                    finally { Player.tileTargetX = x; Player.tileTargetY = y; }
-                }),
-                ("native changed A cannot be superseded", () => {
-                    ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.SinglePlayer; MaterialClock(100);
-                    Terraria.Main.tile[40, 40].WallType = Terraria.Main.tile[41, 40].WallType = 0;
-                    Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40, 40), "before A");
-                    Terraria.Main.tile[40, 40].WallType = 1; MaterialClock(101);
-                    Equal(false, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 41, 40), "actual A completion cannot be discarded");
-                    Equal(true, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "A completion still returns exact material");
-                }),
-                ("MP supersession preserves mutated/notified A and requires exact retirement", () => {
-                    PersistenceMatrix(new[] { "native_changed", "notify_received", "wrong_retirement", "expired" }.Select(scenario => ("MP retirement " + scenario, (Action)(() => {
-                        ledger.ClearWorld(); using var peers = new ReviewPeers(); peers.Register(data);
-                        int x = Player.tileTargetX, y = Player.tileTargetY;
-                        try {
-                            var client = new Player { whoAmI = 0, active = true, position = player.position };
-                            var server = new Player { whoAmI = 0, active = true, position = player.position };
-                            var generated = ReviewItem(data); client.inventory[0] = generated.Item;
-                            server.inventory[0] = ReviewItem(GeneratedItemData.FromJson(data.ToNetworkJson())!).Item;
-                            var auths = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations", PersistenceStatic)!.GetValue(null)!;
-                            Player.tileTargetX = Player.tileTargetY = 40; MaterialClock(100);
-                            Terraria.Main.tile[40, 40].WallType = Terraria.Main.tile[41, 40].WallType = 0;
-                            peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client;
-                            Equal(false, generated.CanUseItem(client), "A intent uses actual client hook");
-                            byte[] intent = peers.Sent.Single(); peers.Sent.Clear();
-                            peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(intent, 0);
-                            object a = auths[0]!; byte[] ready = peers.Sent.Single(); peers.Sent.Clear(); auths.Clear();
-                            peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client; peers.Receive(ready);
-                            Player.tileTargetX = 41; MaterialClock(101); Equal(false, generated.CanUseItem(client), "retire unchanged local A");
-                            MaterialClock(102); Equal(false, generated.CanUseItem(client), "new B still waits for server");
-                            byte[] next = peers.Sent.Single(); peers.Sent.Clear();
-                            using (var payload = new BinaryReader(new MemoryStream(next))) {
-                                payload.ReadByte(); Equal((int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!, payload.ReadInt32(), "versioned ordered supersession");
-                                Equal(2UL, payload.ReadUInt64(), "new actual intent sequence"); payload.ReadByte(); payload.ReadInt32(); payload.ReadInt32();
-                                Equal(1UL, payload.ReadUInt64(), "actual request names exact retired A");
-                            }
-                            if (scenario == "wrong_retirement") BitConverter.GetBytes(999UL).CopyTo(next, next.Length - sizeof(ulong));
-                            auths[0] = a; peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server;
-                            if (scenario == "native_changed") Terraria.Main.tile[40, 40].WallType = 1;
-                            if (scenario == "notify_received") peers.Receive(PersistencePlacementNotify(1, 40, 40), 0);
-                            if (scenario == "expired") MaterialClock(221);
-                            peers.Receive(next, 0);
-                            byte[] response = peers.Sent.Single(); peers.Sent.Clear();
-                            using (var payload = new BinaryReader(new MemoryStream(response))) {
-                                payload.ReadByte(); payload.ReadInt32(); payload.ReadUInt64();
-                                Equal(scenario == "expired", payload.ReadBoolean(), "only expiry permits B in refusal controls");
-                            }
-                            Equal(scenario != "expired", ReferenceEquals(a, auths[0]), "native change/notify/wrong retirement cannot discard A");
-                            if (scenario == "expired") {
-                                Terraria.Main.tile[40, 40].WallType = 1; peers.Receive(PersistencePlacementNotify(1, 40, 40), 0);
-                                Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "expired A notify cannot borrow B snapshot");
-                                Terraria.Main.tile[41, 40].WallType = 1; peers.Receive(PersistencePlacementNotify(2, 41, 40), 0);
-                                Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "fresh B remains usable after old expiry");
-                            }
-                            else {
-                                Terraria.Main.tile[40, 40].WallType = 1; peers.Receive(PersistencePlacementNotify(1, 40, 40), 0);
-                                Equal(true, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 40, 40), "preserved A can complete through its actual notify");
-                                Equal(false, GeneratedPlacementLedgerSystem.Contains(GeneratedPlacementLayer.Wall, 41, 40), "refused B never grants material");
-                            }
-                        }
-                        finally { Player.tileTargetX = x; Player.tileTargetY = y; }
-                    }))));
-                }),
-            });
-        });
-    }
-
-    private static void PlacementReadyCannotApproveDifferentServerResolvedBinding()
-    {
-        WithPersistenceTilemap((player, ledger) => {
-            int x = Player.tileTargetX, y = Player.tileTargetY;
-            try {
-                PersistenceMatrix(new[] { "same", "different_id_wall", "same_id_different_definition", "different_style" }.Select(scenario => ("ready identity " + scenario, (Action)(() => {
-                    ledger.ClearWorld(); using var peers = new ReviewPeers();
-                    var clientData = PersistencePlacementData("client-wall-1"); peers.Register(clientData);
-                    var serverData = GeneratedItemData.FromJson(clientData.ToNetworkJson())!;
-                    if (scenario == "different_id_wall") { serverData.Id = "server-wall-2"; serverData.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!.WallId = 2; }
-                    if (scenario == "same_id_different_definition") serverData.Name = "different exact definition";
-                    if (scenario == "different_style") serverData.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!.PlaceStyle = 1;
-                    serverData = GeneratedItemData.FromJson(serverData.ToNetworkJson())
-                        ?? throw new InvalidOperationException("independently strict server-held definition failed actual FromJson");
-                    var client = new Player { whoAmI = 0, active = true, position = player.position };
-                    var server = new Player { whoAmI = 0, active = true, position = player.position };
-                    var generated = ReviewItem(clientData); client.inventory[0] = generated.Item; server.inventory[0] = ReviewItem(serverData).Item;
-                    Player.tileTargetX = Player.tileTargetY = 40; Terraria.Main.tile[40, 40].WallType = 0;
-                    peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client;
-                    Equal(false, generated.CanUseItem(client), "client never grants own definition authority");
-                    byte[] intent = peers.Sent.Single(); peers.Sent.Clear();
-                    peers.Mode(NetmodeID.Server, 255); Terraria.Main.player[0] = server; peers.Receive(intent, 0);
-                    byte[] ready = peers.Sent.Single(); peers.Sent.Clear();
-                    var auths = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations", PersistenceStatic)!.GetValue(null)!;
-                    Equal(1, auths.Count, "server authorization uses its independently resolved held definition"); auths.Clear();
-                    peers.Mode(NetmodeID.MultiplayerClient, 0); Terraria.Main.player[0] = client; peers.Receive(ready);
-                    Equal(scenario == "same", generated.CanUseItem(client), "ready cannot approve a different server-derived identity/type/style/definition");
-                    Equal(0, (int)Terraria.Main.tile[40, 40].WallType, "mismatch never mutates native wall");
-                    Equal(1, generated.Item.stack, "mismatch never consumes native item");
-                }))));
-            }
-            finally { Player.tileTargetX = x; Player.tileTargetY = y; }
-        });
-    }
+        => PlacementPacket(false, sequence, x, y, layer, includePacketId: true);
 
     private static string PersistenceRawBytes(TagCompound tag)
     {
         using var stream = new MemoryStream(); TagIO.ToStream(tag, stream, compress: false);
         return Convert.ToBase64String(stream.ToArray());
     }
-
-    private static TagCompound PersistenceQuarantineEnvelope(string group, bool requeued = false)
-        => new() {
-            ["claim"] = new TagCompound { ["groupId"] = group, ["generatedItemId"] = "exact_return_id",
-                ["definitionJson"] = "{broken-original-" + group, ["x"] = 40, ["y"] = 40, ["rawExtension"] = group },
-            ["cause"] = "definition_invalid", ["requeued"] = requeued,
-            ["requeueDefinitionJson"] = "", ["lastFailureCause"] = "",
-        };
 
     private static void PersistenceMatrix(IEnumerable<(string Name, Action Case)> cases)
     {
@@ -905,138 +591,4 @@ internal static partial class EngineRuntimeChecks
         Equal(0, failures.Count, string.Join("\n", failures));
     }
 
-    private static void MalformedQuarantineEnvelopePreservesHealthyNeighbors()
-    {
-        using var serializer = WithPersistenceBoolSerializer();
-        WithPersistenceTilemap((_, ledger) => {
-            var variants = new List<(string, Action)>();
-            foreach (string field in new[] { "valid", "claim", "cause", "requeued", "requeueDefinitionJson", "lastFailureCause" })
-            foreach (int position in new[] { 0, 1, 2 })
-            {
-                string f = field; int p = position;
-                variants.Add(($"quarantine envelope {f} at {p}", () => {
-                    var bad = PersistenceQuarantineEnvelope("q-bad");
-                    bad["unknownEnvelopeField"] = "literal-unrecognized-payload";
-                    if (f != "valid") bad[f] = f == "claim" ? "not a compound" : f == "requeued" ? "not a boolean" : 17;
-                    string literal = PersistenceRawBytes(bad);
-                    var head = PersistenceQuarantineEnvelope("q-head"); var tail = PersistenceQuarantineEnvelope("q-tail");
-                    var rows = new List<TagCompound> { head, tail }; rows.Insert(p, bad);
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
-                    for (int round = 0; round < 3; round++) {
-                        var save = new TagCompound(); ledger.SaveWorldData(save);
-                        var healthy = save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1");
-                        Equal(f == "valid" ? 3 : 2, healthy.Count, "canonical envelopes only; malformed row cannot become a fabricated claim");
-                        foreach (TagCompound original in new[] { head, tail })
-                            Equal(PersistenceRawBytes(original.GetCompound("claim")), PersistenceRawBytes(healthy.Single(r => r.GetCompound("claim").GetString("groupId") == original.GetCompound("claim").GetString("groupId")).GetCompound("claim")), "healthy sibling claim survives verbatim");
-                        var raw = save.GetList<TagCompound>("infiniGeneratedPlacementRawQuarantineEnvelopesV1");
-                        Equal(f == "valid" ? 0 : 1, raw.Count, "malformed full envelope is retained in separate versioned read-only bucket");
-                        if (f != "valid") Equal(literal, PersistenceRawBytes(raw[0]), "full malformed envelope/type/extension is literal after each reload");
-                        ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
-                    }
-                    var data = PersistencePlacementData("exact_return_id");
-                    InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
-                    string json = data.ToNetworkJson();
-                    if (f != "valid") Equal(false, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-bad", json), "raw malformed envelope cannot grant recovery authority");
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "valid healthy tail remains requeueable");
-                    var after = new TagCompound(); ledger.SaveWorldData(after); ledger.LoadWorldData(PersistenceNbtRoundtrip(after));
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("q-tail", json), "healthy requeue replay remains idempotent after reload");
-                    var repeated = new TagCompound(); ledger.SaveWorldData(repeated);
-                    Equal(1, repeated.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "one exact healthy pending owner");
-                }));
-            }
-            PersistenceMatrix(variants);
-        });
-    }
-
-    private static void QuarantineRequeueReceiptDoesNotCountAsSecondMaterialOwner()
-    {
-        using var serializer = WithPersistenceBoolSerializer();
-        WithPersistenceTilemap((player, ledger) => {
-            var data = PersistencePlacementData("exact_return_id");
-            player.inventory[player.selectedItem] = ReviewItem(data).Item;
-            InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
-            string json = data.ToNetworkJson();
-            Equal(true, GeneratedItemData.FromJson(json) is not null, "strict current-world repair fixture");
-            var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
-            PersistenceMatrix(new (string, Action)[] {
-                ("distinct live owner ceiling refuses new grant", () => {
-                    var rows = Enumerable.Range(0, 8192).Select(i => PersistenceQuarantineEnvelope("capacity-" + i)).ToList();
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
-                    Terraria.Main.tile[40, 40].WallType = 0;
-                    Equal(false, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40, 40), "full live material capacity refuses before mutation");
-                    var save = new TagCompound(); ledger.SaveWorldData(save);
-                    Equal(8192, save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count, "no claim discarded to free capacity");
-                }),
-                ("requeue has one material owner not two", () => {
-                    var rows = Enumerable.Range(0, 8191).Select(i => PersistenceQuarantineEnvelope("capacity-" + i)).ToList();
-                    string raw = PersistenceRawBytes(rows[0].GetCompound("claim"));
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("capacity-0", json), "real requeue admits one owner");
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("capacity-0", json), "same payload replay adds no owner");
-                    var changed = GeneratedItemData.FromJson(json)!; changed.Name = "different replacement";
-                    Equal(false, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("capacity-0", changed.ToNetworkJson()), "changed payload cannot borrow receipt");
-                    var save = new TagCompound(); ledger.SaveWorldData(save);
-                    Equal(8191, save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count, "forensic journal retained");
-                    Equal(raw, PersistenceRawBytes(save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1")[0].GetCompound("claim")), "original raw claim unchanged");
-                    Equal(1, save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "one pending owner only");
-                    Terraria.Main.tile[40, 40].WallType = 0;
-                    Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40, 40), "8190 quarantined plus one pending leaves one authorization slot");
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
-                    Equal(true, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn("capacity-0", json), "idempotence survives reload");
-                    var after = new TagCompound(); ledger.SaveWorldData(after);
-                    Equal(1, after.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "reload replay never duplicates");
-                }),
-                ("receipt-only journal is not material capacity", () => {
-                    var rows = Enumerable.Range(0, 8192).Select(i => PersistenceQuarantineEnvelope("receipt-" + i, requeued: true)).ToList();
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnQuarantineV1"] = rows }));
-                    Terraria.Main.tile[40, 40].WallType = 0;
-                    Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40, 40), "no live material owners in receipt-only saved-state fixture");
-                    var save = new TagCompound(); ledger.SaveWorldData(save);
-                    Equal(8192, save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count, "receipt history never silently deleted");
-                    Equal(0, save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "fixture does not pretend to deliver or spawn items");
-                }),
-            });
-        });
-    }
-
-    private static void PendingRawMalformedAndOverflowRowsKeepValidNeighbors()
-    {
-        using var serializer = WithPersistenceBoolSerializer();
-        WithPersistenceTilemap((_, ledger) => {
-            string json = PersistencePlacementData("exact_return_id").ToNetworkJson();
-            TagCompound Row(string group) => new() { ["groupId"] = group, ["generatedItemId"] = "exact_return_id",
-                ["definitionJson"] = json, ["x"] = 40, ["y"] = 40, ["rawExtension"] = group };
-            foreach (bool reverse in new[] { false, true }) {
-                var badX = Row("bad-coordinate"); badX["x"] = "not an integer";
-                var badId = Row("bad-identity"); badId["generatedItemId"] = "";
-                var rows = new List<TagCompound> { badX, Row("valid-middle"), badId };
-                if (reverse) rows.Reverse();
-                ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnsV2"] = rows }));
-                for (int round = 0; round < 3; round++) {
-                    var save = new TagCompound(); ledger.SaveWorldData(save);
-                    Equal(1, save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "valid middle owns one pending return");
-                    Equal("valid-middle", save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2")[0].GetString("groupId"), "valid sibling identity retained");
-                    var raw = save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1");
-                    foreach (var bad in new[] { badX, badId })
-                        Equal(PersistenceRawBytes(bad), PersistenceRawBytes(raw.Single(r => r.GetCompound("claim").GetString("groupId") == bad.GetString("groupId")).GetCompound("claim")), "malformed pending raw bytes retained");
-                    ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
-                }
-            }
-            var malformed = Row("malformed-head"); malformed["x"] = "literal-overflow-head";
-            var overflow = Enumerable.Range(0, 8193).Select(i => Row("pending-" + i)).ToList(); overflow.Insert(0, malformed);
-            ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementReturnsV2"] = overflow }));
-            for (int round = 0; round < 2; round++) {
-                var save = new TagCompound(); ledger.SaveWorldData(save);
-                var pending = save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2");
-                var raw = save.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1");
-                Equal(8192, pending.Count, "malformed head consumes no valid pending admission slot");
-                Equal(2, raw.Count, "malformed head and valid overflow remain durable");
-                var retained = pending.Concat(raw.Select(r => r.GetCompound("claim"))).ToDictionary(r => r.GetString("groupId"), StringComparer.Ordinal);
-                Equal(8194, retained.Count, "every literal source group retains exactly one material owner");
-                foreach (TagCompound source in overflow)
-                    Equal(PersistenceRawBytes(source), PersistenceRawBytes(retained[source.GetString("groupId")]), "pending/overflow literal roster retained");
-                ledger.LoadWorldData(PersistenceNbtRoundtrip(save));
-            }
-        });
-    }
 }

@@ -18,6 +18,7 @@ from infini_local.core.runtime_authoring import technical_lowering
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
+from test_registry_receipt_identity import _call, _receipt
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
@@ -41,10 +42,6 @@ DECLARED = {
 BUFF_NEUTRALS = DECLARED["apply_generated_buff_on_use"]
 
 
-def _call(doc, fn):
-    return next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-
-
 def _wire_payload(doc):
     wire = compile_runtime_program(doc)
     assert validate_runtime_wire(wire)["ok"]
@@ -58,10 +55,6 @@ def _stats(*, omit=True):
     if omit:
         del call["params"]["manaCost"]
     return source
-
-
-def _receipt(rows, path):
-    return next(row for row in rows if row.get("finalPath") == path)
 
 
 def _audit(source, compiled, rows):
@@ -108,7 +101,7 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
             {n: v for n, v in (("holdoutOffsetX", x), ("holdoutOffsetY", y)) if v is not None},
             id=f"x-{x}-y-{y}",
         )
-        for x, y in product([None, 0, -96, 96], repeat=2)
+        for x, y in ((None, None), (0, 0), (None, -96), (96, None), (-96, 96), (-96, None), (None, 96))
     ],
 )
 def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omitted, values):
@@ -144,44 +137,50 @@ def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omi
         assert _wire_payload(source)["gameplay"]["manaCost"] == 7
 
 
-@pytest.mark.parametrize(
-    "fn,param,value,accepted",
-    [
-        pytest.param(fn, n, v, accepted, id=f"{fn}-{n}-{label}")
-        for fn, values in DECLARED.items()
-        for n in values
-        for spec in (CAPABILITY_REGISTRY[fn].params[n],)
-        for label, v, accepted in (
-            ("null", None, False),
-            ("text", "missing", False),
-            ("wrong-json-type", False if spec.kind != "boolean" else 0, False),
-            ("minimum", False if spec.kind == "boolean" else spec.enum[0] if spec.enum else spec.minimum, True),
-            ("maximum", True if spec.kind == "boolean" else spec.enum[-1] if spec.enum else spec.maximum, True),
-        )
-    ]
-    + [
-        pytest.param("configure_item_stats", "manaCost", v, False, id="mana-present-" + label)
-        for label, v in (("numeric-text", "0"), ("negative", -1), ("overflow", 501))
-    ],
-)
+@pytest.mark.parametrize("fn,params,label", [
+    pytest.param(fn, names, label, id=f"{fn}-{label}")
+    for fn, names in DECLARED.items() for label in ("null", "text", "wrong-json-type")
+])
+def test_optional_shape_owner_reports_every_broken_indexed_leaf(fn, params, label):
+    doc = build_capability_witness(fn)
+    index, call = next((i, row) for i, row in enumerate(doc["runtimeProgram"]["calls"]) if row["fn"] == fn)
+    for name in params:
+        spec = CAPABILITY_REGISTRY[fn].params[name]
+        call["params"][name] = None if label == "null" else "missing" if label == "text" else False if spec.kind != "boolean" else 0
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    paths = {e["path"] for e in report["errors"]}
+    assert not report["ok"] and {f"$.runtimeProgram.calls[{index}].params.{name}" for name in params} <= paths, report
+    with pytest.raises(ValueError, match="runtime program rejected"):
+        compile_runtime_program(doc)
+    assert doc == before
+
+
+@pytest.mark.parametrize("fn,param,value,accepted", [
+    pytest.param(fn, name, value, True, id=f"{fn}-{name}-{label}")
+    for fn, names in DECLARED.items() for name in names
+    for spec in (CAPABILITY_REGISTRY[fn].params[name],)
+    for label, value in (("minimum", False if spec.kind == "boolean" else spec.enum[0] if spec.enum else spec.minimum),
+                         ("maximum", True if spec.kind == "boolean" else spec.enum[-1] if spec.enum else spec.maximum))
+] + [pytest.param("configure_item_stats", "manaCost", value, False, id="mana-present-" + label)
+     for label, value in (("numeric-text", "0"), ("negative", -1), ("overflow", 501))])
 def test_present_optional_parameter_keeps_type_bounds_and_projection(fn, param, value, accepted):
     doc = build_capability_witness(fn)
     call = _call(doc, fn)
     call["params"][param] = value
-    report = validate_runtime_program(doc)
-    assert report["ok"] is accepted, report
+    before = deepcopy(doc)
     if not accepted:
-        with pytest.raises(ValueError):
+        report = validate_runtime_program(doc)
+        assert not report["ok"] and any(e["path"].endswith(".params." + param) for e in report["errors"]), report
+        with pytest.raises(ValueError, match="runtime program rejected"):
             compile_runtime_program(doc)
-        return
-    wire = compile_runtime_program(doc)
-    assert validate_runtime_wire(wire)["ok"]
-    rows = [
-        r
-        for r in wire["runtimeContract"]["finalWireReceipts"]
-        if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param)
-    ]
-    assert rows and all(r["status"] == "delivered" and r["value"] == CAPABILITY_REGISTRY[fn].params[param].to_wire(value) for r in rows)
+    else:
+        wire = compile_runtime_program(doc)
+        assert validate_runtime_wire(wire)["ok"]
+        rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
+                if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param)]
+        assert rows and all(r["status"] == "delivered" and r["value"] == CAPABILITY_REGISTRY[fn].params[param].to_wire(value) for r in rows)
+    assert doc == before
 
 
 # Optional neutral leaves are independent; all 64 masks repeat the same two
@@ -235,7 +234,9 @@ def test_joint_buff_omissions_preserve_light_or_reject_inert(present, active):
             ("set_projectile_collision", ("immunity", "updatesPerTick")),
             ("move_boomerang", ("returnAfterTicks", "returnSpeed")),
         )
-        for present in product([False, True], repeat=len(names))
+        for present in ([(False,) * len(names), (True,) * len(names)]
+                        + [tuple(j != i for j in range(len(names))) for i in range(len(names))]
+                        if len(names) > 2 else product([False, True], repeat=len(names)))
     ],
 )
 def test_coupled_parameters_do_not_gain_omission_permission(fn, names, present):

@@ -43,18 +43,6 @@ def test_actual_visual_packets_keep_accepted_hitbox_curve_and_exact_body_scale(w
     assert data == frozen
 
 
-def test_default_author_system_explicitly_targets_terraria(monkeypatch):
-    from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author
-
-    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default", raising=False)
-    request, user, system = author.build_initial_author_request({}, {}, {}, {}, "target-game", model_name="test-model")
-    assert "Target game: Terraria (tModLoader)" in system
-    assert request["messages"][0]["content"] == system
-    assert dossier_text(request) == user
-    assert "Terraria Like art direction" not in system
-
-
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_prompt_style_reaches_all_real_stage_requests_without_changing_contracts(wire_transport, monkeypatch, format_mode):
     from infini_local.core import llm_config
@@ -69,7 +57,9 @@ def test_prompt_style_reaches_all_real_stage_requests_without_changing_contracts
     for style in ("Default", "Terraria Like"):
         monkeypatch.setattr(llm_config, "PROMPT_STYLE", style, raising=False)
         sent.clear()
-        request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "style-proof", model_name="test-model")
+        request, user, system = author.build_initial_author_request({}, {}, {}, {}, "style-proof", model_name="test-model")
+        assert request["messages"][0]["content"] == system
+        assert dossier_text(request) == user
         sent.append(request)
         raw = json.dumps(source)
         responses.append(raw)
@@ -145,9 +135,8 @@ def _static_json_prefix(payload, keys):
     return prefix
 
 
-@pytest.mark.parametrize("stage", ["visual", "vfx"])
 @pytest.mark.parametrize("kind", ["director", "malformed-repair", "scoped-repair"])
-def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, kind):
+def test_visual_packet_cache_boundary_and_frozen_context(wire_transport, kind):
     responses, sent = wire_transport
     payloads = []
     for fixture in ("workbench_blade", "door_on_chain"):
@@ -156,58 +145,29 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
         scope: dict = {}
         malformed = kind == "malformed-repair"
         repair = kind != "director"
-        if stage == "visual":
-            previous = visual.MalformedVisualDirectorOutput("{broken", "missing brace") if malformed else {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "valid literal item"}, "entities": []}
-            errors = [{"path": "$" if malformed else "$.item.silhouette", "message": "malformed_json" if malformed else "required"}]
-            scope = {"itemMutable": True, "fieldPermissions": {"itemPaths": ["" if malformed else "silhouette"]}}
-            responses.append({})
-            visual._request_visual_kit(data, {"name": "A"}, {"name": "B"}, {}, {},
-                **({"repair_errors": errors, "previous": previous, "repair_scope": scope} if repair else {}))
-            request = sent[-1]
-            payload = request_dossier(request)
-            keys = ("task", "assetModeCatalog", "rules")
-            assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
-            assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-            assert payload["assetModeCatalog"] == visual.visual_asset_mode_catalog()
-            if repair:
-                assert set(payload) == {"task", "assetModeCatalog", "rules", "exactErrors", "malformedRawText", "repairScope", "brokenFragments", "validGeneratedContext", "parentFactsReadOnly", "runtimeEntitiesReadOnly", "itemReadOnly", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
-                if not malformed:
-                    assert isinstance(previous, dict)
-                    assert payload["brokenFragments"]["item"] == previous["item"]
-            else:
-                assert set(payload) == {"task", "assetModeCatalog", "rules", "item", "parents", "runtimeEntities", "requiredEntityIds", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
-                assert payload["item"]["name"] == f"different name: {fixture}"
-                assert payload["item"]["realization"]["description"] == f"literal {fixture} description"
-                assert payload["requiredEntityIds"] == [r["id"] for r in data["runtimeProgram"]["entities"]]
-            schema_key = "responseSchema"
+        previous = visual.MalformedVisualDirectorOutput("{broken", "missing brace") if malformed else {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"prompt": "valid literal item"}, "entities": []}
+        errors = [{"path": "$" if malformed else "$.item.silhouette", "message": "malformed_json" if malformed else "required"}]
+        scope = {"itemMutable": True, "fieldPermissions": {"itemPaths": ["" if malformed else "silhouette"]}}
+        responses.append({})
+        visual._request_visual_kit(data, {"name": "A"}, {"name": "B"}, {}, {},
+            **({"repair_errors": errors, "previous": previous, "repair_scope": scope} if repair else {}))
+        request = sent[-1]
+        payload = request_dossier(request)
+        keys = ("task", "assetModeCatalog", "rules")
+        assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
+        assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
+        assert payload["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+        if repair:
+            assert set(payload) == {"task", "assetModeCatalog", "rules", "exactErrors", "malformedRawText", "repairScope", "brokenFragments", "validGeneratedContext", "parentFactsReadOnly", "runtimeEntitiesReadOnly", "itemReadOnly", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
+            if not malformed:
+                assert isinstance(previous, dict)
+                assert payload["brokenFragments"]["item"] == previous["item"]
         else:
-            packet = vfx._prompt_packet(data, {"name": f"parent {fixture}"}, {"name": "B"})
-            if repair:
-                captured = []
-                previous = vfx.MalformedVfxDirectorOutput("{broken", "invalid") if malformed else {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "slots": []}
-                errors = [{"path": "$" if malformed else "$.effectMagnitude", "message": "malformed_json" if malformed else "invalid number"}]
-                scope = {"mutableGlobals": ["effectMagnitude"], "fieldPermissions": {"globals": {"effectMagnitude": [""]}}}
-                vfx._request(lambda _system, user, *args, **kwargs: captured.append((user, kwargs["messages"])) or {}, packet,
-                    repair_errors=errors, previous=previous, repair_scope=scope)
-                payload, messages = captured[0]
-                assert json.loads(messages[1]["content"]) == payload
-                assert payload["outputSchema"] == vfx._vfx_repair_schema_from_packet(packet)
-                assert set(payload) == {"task", "rules", "runtimeVocabularyReadOnly", "item", "acceptedVisualKitReadOnly", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
-                keys = vfx.VFX_REPAIR_PROMPT_STATIC_KEYS
-                if not malformed:
-                    assert payload["brokenFragments"]["globals"] == {"effectMagnitude": 0.5}
-                assert messages[1]["content"].startswith(_static_json_prefix(payload, keys))
-            else:
-                payload = packet
-                keys = vfx.VFX_PROMPT_STATIC_KEYS
-                assert set(payload) == {"schema", "rules", "runtimeVocabulary", "item", "parents", "acceptedVisualKit", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"}
-                assert payload["parents"][0]["name"] == f"parent {fixture}"
-                assert payload["acceptedVisualKit"] == data["visualKit"]
-                assert {**payload["runtimeVocabulary"], **payload["runtimeSurface"]} == vfx.vfx_director_surface(data)
-                assert payload["outputSchema"] == vfx.vfx_director_schema(data)
-                assert list(payload["runtimeSurface"])[-2:] == ["runtimePairs", "runtimeVisualRoles"]
-            assert payload["acceptedGameplayReadOnly"] == data["gameplay"]
-            schema_key = "outputSchema"
+            assert set(payload) == {"task", "assetModeCatalog", "rules", "item", "parents", "runtimeEntities", "requiredEntityIds", "equipmentOverlayReadOnly", "acceptedPresentationMechanicsReadOnly", "spritePresentationReadOnly", "responseSchema"}
+            assert payload["item"]["name"] == f"different name: {fixture}"
+            assert payload["item"]["realization"]["description"] == f"literal {fixture} description"
+            assert payload["requiredEntityIds"] == [r["id"] for r in data["runtimeProgram"]["entities"]]
+        schema_key = "responseSchema"
         if repair:
             assert payload["exactErrors"] == errors
             assert payload["repairScope"] == scope
@@ -220,9 +180,8 @@ def test_stage_packet_cache_boundary_and_frozen_context(wire_transport, stage, k
     assert before[schema_key] != after[schema_key]
     assert before["rules"] == after["rules"]
     assert "workbench_blade" not in prefixes[0] and "door_on_chain" not in prefixes[0]
-    if stage == "visual":
-        assert len(sent) == 2
-        assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+    assert len(sent) == 2
+    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
@@ -268,6 +227,11 @@ def test_vfx_invariant_vocabulary_enlarges_actual_wire_prefix(wire_transport, mo
         assert vocabulary_key in keys, "canonical invariant VFX vocabulary must precede recipe facts"
         vocabulary, surface = payload[vocabulary_key], payload[surface_key]
         canonical = vfx.vfx_director_surface(data)
+        assert set(payload) == ({"task", "rules", "runtimeVocabularyReadOnly", "item", "acceptedVisualKitReadOnly", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurfaceReadOnly", "exactErrors", "repairScope", "brokenFragments", "malformedRawText", "validGeneratedContext", "outputSchema"}
+                                if repair else {"schema", "rules", "runtimeVocabulary", "item", "parents", "acceptedVisualKit", "acceptedGameplayReadOnly", "acceptedRuntimeProgramReadOnly", "runtimeSurface", "outputSchema"})
+        assert payload["acceptedGameplayReadOnly"] == data["gameplay"]
+        assert list(payload)[:len(keys)] == list(keys)
+        assert list(surface)[-2:] == ["runtimePairs", "runtimeVisualRoles"]
         assert set(surface) == dynamic_fields
         assert not (set(vocabulary) & set(surface))
         assert json.dumps({**vocabulary, **surface}, sort_keys=True) == json.dumps(canonical, sort_keys=True)

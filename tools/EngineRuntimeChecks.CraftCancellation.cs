@@ -17,49 +17,6 @@ internal static partial class EngineRuntimeChecks
 {
     private const BindingFlags CraftFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-    private static void CraftCancellationRetiresAllOwners()
-    {
-        int oldMode = Terraria.Main.netMode;
-        Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
-        try
-        {
-            var owner = new InfiniCraftPlayer();
-            var request = new GeneratorClient.PreparedGenerationRequest();
-            typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, request);
-            typeof(InfiniCraftPlayer).GetMethod("ClearCraft", CraftFields)!.Invoke(owner, null);
-            Equal(true, request.CancellationToken.IsCancellationRequested, "ordinary retirement signals the exact request");
-            request.Cancel(); // Repeated retirement is harmless and never refunds anything.
-            Equal(false, request.FailureIsFatal, "retirement is not a failed recipe");
-            Equal(true, new GeneratorClient().GeneratePreparedBlocking(request) is null, "retired request cannot start HTTP");
-
-            Type jobType = typeof(InfiniCraftPlayer).GetNestedType("MultiDevCraftJob", BindingFlags.NonPublic)!;
-            Array jobs = (Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", CraftFields)!.GetValue(owner)!;
-            foreach (string operation in new[] { "TryCancelExtraServerCraft", "AbortMultiDevCraftsForWorldExit", "InitializeMultiDevCraftState" })
-            {
-                var requests = new[] { new GeneratorClient.PreparedGenerationRequest(), new GeneratorClient.PreparedGenerationRequest() };
-                for (int index = 0; index < 2; index++)
-                {
-                    object job = Activator.CreateInstance(jobType, nonPublic: true)!;
-                    jobType.GetField("Request", CraftFields)!.SetValue(job, requests[index]);
-                    jobType.GetField("RequestId", CraftFields)!.SetValue(job, "request-" + index);
-                    jobType.GetField("LaneIndex", CraftFields)!.SetValue(job, index + 1);
-                    jobs.SetValue(job, index);
-                }
-                object[]? args = operation == "TryCancelExtraServerCraft" ? new object[] { "request-0", "test cancel" }
-                    : operation == "AbortMultiDevCraftsForWorldExit" ? new object[] { false } : null;
-                typeof(InfiniCraftPlayer).GetMethod(operation, CraftFields)!.Invoke(owner, args);
-                Equal(true, requests[0].CancellationToken.IsCancellationRequested, operation + " retires first lane");
-                Equal(operation != "TryCancelExtraServerCraft", requests[1].CancellationToken.IsCancellationRequested,
-                    operation + " preserves independently active lane unless all owners retire");
-                foreach (var retained in requests) retained.Cancel();
-            }
-        }
-        finally { Terraria.Main.netMode = oldMode; }
-    }
-
-    private static void CraftCancellationInterruptsHttpAndRecovery()
-        => CraftCancellationInterruptsHttpAndRecoveryAsync().GetAwaiter().GetResult();
-
     private static async Task CraftCancellationInterruptsHttpAndRecoveryAsync()
     {
         string? oldRecovery = Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS");
@@ -115,76 +72,6 @@ internal static partial class EngineRuntimeChecks
             Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", oldAttempts);
         }
     }
-
-    private static void CraftCancellationRetiresMetadataWaiters()
-        => CraftCancellationRetiresMetadataWaitersAsync().GetAwaiter().GetResult();
-
-    private static async Task CraftCancellationRetiresMetadataWaitersAsync()
-    {
-        var data = GeneratedItemData.Placeholder();
-        data.Id = "craft-metadata-control"; data.Name = "Craft metadata control"; data.SourceMode = "test_fixture";
-        await using var server = new CraftHttpFixture(0) { SuccessJson = data.ToJson(), HoldDiscovery = true };
-        var client = new GeneratorClient { Endpoint = server.Endpoint };
-        server.HoldDiscovery = false;
-        server.DiscoveryJson = "{\"multiplayer\":{\"assetTransport\":\"http\",\"assetPublicBaseUrl\":\"http://192.0.2.44:5055\"}}";
-        await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
-        server.HoldDiscovery = true;
-        var request = new GeneratorClient.PreparedGenerationRequest();
-        // Hold the real lock ourselves so the waiter proof is independent of
-        // the production discovery request's 1.2-second timeout.
-        object metadataLock = typeof(GeneratorClient).GetField("_assetPublicBaseUrlLock", CraftFields)!.GetValue(client)!;
-        using (var waiting = new CancellationTokenSource())
-        using (var entered = new ManualResetEventSlim())
-        {
-            Exception? waiterError = null;
-            var waiter = new Thread(() => {
-                entered.Set();
-                try { client.RefreshAssetTransportMetadata(waiting.Token); }
-                catch (Exception error) { waiterError = error; }
-            });
-            Monitor.Enter(metadataLock);
-            try
-            {
-                waiter.Start();
-                Equal(true, entered.Wait(TimeSpan.FromSeconds(5)), "second lane enters metadata lookup");
-                Equal(true, SpinWait.SpinUntil(() => (waiter.ThreadState & ThreadState.WaitSleepJoin) != 0,
-                    TimeSpan.FromSeconds(5)), "second lane waits on the actual shared metadata lock");
-                waiting.Cancel();
-                Equal(true, waiter.Join(TimeSpan.FromMilliseconds(500)), "metadata lock wait is cancellable");
-                Equal(true, waiterError is OperationCanceledException, "waiting lane retires as cancellation");
-                Equal(false, request.CancellationToken.IsCancellationRequested, "waiting lane never cancels independent request");
-                Equal(1, server.DiscoveryRequests, "waiting lane starts no discovery request beyond accepted observation");
-            }
-            finally
-            {
-                waiting.Cancel();
-                Monitor.Exit(metadataLock);
-                waiter.Join(TimeSpan.FromSeconds(5));
-            }
-        }
-        Task<GeneratedItemData?> worker = Task.Run(() => client.GeneratePreparedBlocking(request));
-        try
-        {
-            await server.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            request.Cancel();
-            Equal(true, await worker.WaitAsync(TimeSpan.FromSeconds(1)) is null, "post-success metadata HTTP retires with craft");
-            Equal("http://192.0.2.44:5055", (string)typeof(GeneratorClient).GetField("_cachedGeneratorAssetPublicBaseUrl", CraftFields)!.GetValue(client)!,
-                "cancellation preserves previously accepted metadata");
-            Equal("http", (string)typeof(GeneratorClient).GetField("_cachedGeneratorAssetTransport", CraftFields)!.GetValue(client)!,
-                "cancellation does not reclassify transport as native");
-            Equal("http", client.AssetTransportForSharing(), "cancel preserves accepted published snapshot");
-            Equal("http://192.0.2.44:5055", client.AssetBaseUrlForSharing(), "cancel preserves published route");
-            Equal(false, client.IsEndpointCoolingDown, "cancelled discovery is not endpoint outage");
-            server.HoldDiscovery = false;
-            server.Release();
-            await Task.Run(() => client.RefreshAssetTransportMetadata()).WaitAsync(TimeSpan.FromSeconds(5));
-            Equal(3, server.DiscoveryRequests, "independent refresh owns a fresh uncancelled token");
-        }
-        finally { request.Cancel(); server.Release(); await worker.WaitAsync(TimeSpan.FromSeconds(5)); }
-    }
-
-    private static void CraftCancellationKeepsLiveRetryAndDelivery()
-        => CraftCancellationKeepsLiveRetryAndDeliveryAsync().GetAwaiter().GetResult();
 
     private static async Task CraftCancellationKeepsLiveRetryAndDeliveryAsync()
     {

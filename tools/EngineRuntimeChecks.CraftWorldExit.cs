@@ -79,21 +79,8 @@ internal static partial class EngineRuntimeChecks
                         requests.Add(request); servers.Add(server);
                         Task<GeneratedItemData?> worker = Task.Run(() => client.GeneratePreparedBlocking(request));
                         workers.Add(worker);
-                        if (lane == 0)
-                        {
-                            typeof(InfiniCraftPlayer).GetField("_request", CraftFields)!.SetValue(owner, request);
-                            typeof(InfiniCraftPlayer).GetField("_task", CraftFields)!.SetValue(owner, worker);
-                            typeof(InfiniCraftPlayer).GetField("_serverRequestId", CraftFields)!.SetValue(owner, requestId);
-                        }
-                        else
-                        {
-                            object job = Activator.CreateInstance(jobType, nonPublic: true)!;
-                            jobType.GetField("Request", CraftFields)!.SetValue(job, request);
-                            jobType.GetField("Task", CraftFields)!.SetValue(job, worker);
-                            jobType.GetField("RequestId", CraftFields)!.SetValue(job, requestId);
-                            jobType.GetField("LaneIndex", CraftFields)!.SetValue(job, lane);
-                            ((Array)typeof(InfiniCraftPlayer).GetField("_multiDevJobs", CraftFields)!.GetValue(owner)!).SetValue(job, lane - 1);
-                        }
+                        CraftLane(owner, lane, ("_request", "Request", request),
+                            ("_task", "Task", worker), ("_serverRequestId", "RequestId", requestId));
                         server.Held.Task.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
                     }
                 }

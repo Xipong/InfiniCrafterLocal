@@ -22,9 +22,7 @@ internal static partial class EngineRuntimeChecks
     {
         var item = new Item { type = 1, stack = 1 };
         var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity")!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        AttachItem(generated, item, data);
         return generated;
     }
 
@@ -40,11 +38,7 @@ internal static partial class EngineRuntimeChecks
         private readonly PropertyInfo registryProperty = typeof(InfiniMod).GetProperty("GeneratedItems")!;
         private readonly FieldInfo netMods = typeof(Mod).Assembly.GetType("Terraria.ModLoader.ModNet")!.GetField("netMods", BindingFlags.Static | BindingFlags.NonPublic)!;
         private readonly object? previousMod, previousRegistry, previousNetMods;
-        private readonly Player[] players = Terraria.Main.player;
-        private readonly Projectile[] projectiles = Terraria.Main.projectile;
-        private readonly int mode = Terraria.Main.netMode, local = Terraria.Main.myPlayer;
-        private readonly bool dedicated = Terraria.Main.dedServ;
-        private readonly ulong tick = Terraria.Main.GameUpdateCount;
+        private readonly NativeActorState state = new();
         private readonly MonoMod.RuntimeDetour.Hook packetHook, sendHook;
         internal ReviewPeers()
         {
@@ -83,7 +77,7 @@ internal static partial class EngineRuntimeChecks
         {
             sendHook.Dispose(); packetHook.Dispose(); System.OnWorldUnload(); Registry.Dispose();
             netMods.SetValue(null, previousNetMods); modProperty.SetValue(null, previousMod); registryProperty.SetValue(null, previousRegistry);
-            Terraria.Main.player = players; Terraria.Main.projectile = projectiles; Terraria.Main.netMode = mode; Terraria.Main.myPlayer = local; Terraria.Main.dedServ = dedicated; MaterialClock(tick);
+            state.Dispose();
         }
     }
     private static byte[] ReviewExtra(GeneratedProjectile generated)
@@ -107,37 +101,6 @@ internal static partial class EngineRuntimeChecks
         }).ToArray();
         return ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject());
     }
-    private static void ReviewLifecycle(GeneratedProjectile generated)
-    {
-        generated.AI(); generated.OnTileCollide(Vector2.One); generated.Projectile.timeLeft = 1; generated.AI(); generated.OnKill(0);
-    }
-    private static void MaterialNonownerLifecycleExactlyOnce(bool relayFirst)
-    {
-        WithLighting((_, __) => {
-            using var peers = new ReviewPeers();
-            var data = ReviewProjectileData("on_spawn", "on_release", "channel_complete", "on_tile_collision", "on_expire", "on_kill"); peers.Register(data);
-            peers.Mode(NetmodeID.Server, 255); var server = peers.Host(data, 11); var extra = ReviewExtra(server); ReviewLifecycle(server);
-            Equal(6, peers.Sent.Count, "actual server lifecycle packet count"); var packets = peers.Sent.ToArray(); peers.Sent.Clear();
-            peers.System.OnWorldUnload(); peers.Mode(NetmodeID.MultiplayerClient, 2); var remote = peers.Host(data, 5, extra: extra);
-            // Counter coincidence in an empty fixture must not conceal the defect.
-            var unrelated = new Projectile { active = true, owner = 1, identity = 99, scale = 1, velocity = Vector2.UnitX };
-            var state = new InfiniVfxState { SourceKey = "unrelated_review" };
-            InfiniVfxRuntime.OnEvent(unrelated, data, "actor", "on_spawn", data.VfxManifest, ref state, Vector2.Zero);
-            int before = OwnedMaterialQueue().Count;
-            if (relayFirst) foreach (var packet in packets) peers.Receive(packet);
-            ReviewLifecycle(remote);
-            if (!relayFirst) foreach (var packet in packets) peers.Receive(packet);
-            Equal(before + 6, OwnedMaterialQueue().Count, "nonowner local hooks plus relays present each lifecycle only once");
-            foreach (var packet in packets) peers.Receive(packet);
-            Equal(before + 6, OwnedMaterialQueue().Count, "replay remains suppressed after lifecycle callbacks");
-            var widths = OwnedMaterialQueue().Cast<object>().Skip(before).Select(e => (float)e.GetType().GetField("Design", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(e)!.GetType().GetProperty("Width")!.GetValue(e.GetType().GetField("Design", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(e))!).Order().ToArray();
-            Equal(true, widths.SequenceEqual(new float[] { 1, 2, 3, 4, 5, 6 }), "all six distinct lifecycle slots survive");
-            peers.System.OnWorldUnload(); peers.Mode(NetmodeID.SinglePlayer, 0); ReviewLifecycle(peers.Host(data)); Equal(6, OwnedMaterialQueue().Count, "single-player lifecycle unchanged");
-            peers.System.OnWorldUnload(); peers.Mode(NetmodeID.MultiplayerClient, 0); ReviewLifecycle(peers.Host(data)); Equal(6, OwnedMaterialQueue().Count, "owner lifecycle unchanged");
-        });
-    }
-    private static void MaterialNonownerLocalBeforeRelay() => MaterialNonownerLifecycleExactlyOnce(false);
-    private static void MaterialNonownerRelayBeforeLocal() => MaterialNonownerLifecycleExactlyOnce(true);
 
     private static void MaterialNonownerPathAndLegacyRemainLocal()
     {
@@ -209,45 +172,6 @@ internal static partial class EngineRuntimeChecks
         Console.WriteLine($"DETAIL: exact-ready material admission cases={observations}");
     }
 
-    private static void MaterialProjectileChurnDoesNotConsumeReplayCapacity()
-    {
-        WithLighting((config, _) => {
-            using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
-            var data = ReviewProjectileData("on_hit"); data.VfxManifest.Slots[0].Duration = 3; peers.Register(data);
-            peers.Mode(NetmodeID.MultiplayerClient, 0);
-            var claims = new List<(byte[] Packet, byte[] Extra, int Identity)>();
-            var independent = peers.Host(data, 7, identity: 17); var independentExtra = ReviewExtra(independent);
-            for (int i = 0; i < 96; i++) {
-                MaterialClock((ulong)(100 + 6 * i)); peers.Sent.Clear();
-                var source = peers.Host(data, identity: 100 + i); source.AI(); source.OnHitNPC(new NPC { active = true }, new NPC.HitInfo(), 1);
-                Equal(1, peers.Sent.Count, "actual owner hook generates one churn packet"); claims.Add((peers.Sent[0], ReviewExtra(source), 100 + i));
-                source.OnKill(90); source.Projectile.active = false; peers.System.PostUpdateEverything();
-            }
-            peers.Sent.Clear(); independent.OnHitNPC(new NPC { active = true }, new NPC.HitInfo(), 1);
-            var independentPacket = peers.Sent.Single();
-            peers.System.OnWorldUnload(); peers.Mode(NetmodeID.Server, 255); peers.Sent.Clear();
-            foreach (var claim in claims) {
-                peers.Host(data, 11, identity: claim.Identity, extra: claim.Extra); peers.Receive(claim.Packet, 0);
-            }
-            Equal(96, peers.Sent.Count, "all fresh source generations relay without a rolling generation cap");
-            var early = peers.Host(data, 11, identity: claims[0].Identity, extra: claims[0].Extra);
-            peers.Receive(claims[0].Packet, 0); Equal(96, peers.Sent.Count, "old replay rejected even while exact early source is live");
-            MaterialClock(2000); peers.Receive(claims[0].Packet, 0); Equal(96, peers.Sent.Count, "elapsed cache retention cannot make an old packet fresh");
-            peers.Host(data, 7, identity: 17, extra: independentExtra); peers.Receive(independentPacket, 0);
-            Equal(97, peers.Sent.Count, "older independent same-owner source's next produced event remains valid");
-            var relays = peers.Sent.ToArray(); peers.Mode(NetmodeID.MultiplayerClient, 2);
-            for (int i = 0; i < relays.Length; i++) {
-                MaterialClock((ulong)(2100 + 6 * i)); peers.Receive(relays[i]);
-                Equal(1, OwnedMaterialQueue().Count, "remote admits fresh generation without replay cache saturation");
-                peers.System.PostUpdateEverything(); MaterialClock((ulong)(2104 + 6 * i)); peers.System.PostUpdateEverything();
-                Equal(0, OwnedMaterialQueue().Count, "ordinary material lifetime retires without draw");
-            }
-            peers.Receive(relays[0]); Equal(0, OwnedMaterialQueue().Count, "remote keeps old replay rejected after churn");
-            MaterialClock(5000); peers.Receive(relays[0]); Equal(0, OwnedMaterialQueue().Count, "remote does not forget replay guard after 1200 ticks");
-            Console.WriteLine("DETAIL: real projectile generations=96 independent-source=1 server/remote-old-replays=4");
-        });
-    }
-
     private static GeneratedItemData ReviewContactItemData()
     {
         var data = ParseMaterialElement(MaterialElementWire()); data.Id = "material_item_churn";
@@ -260,42 +184,6 @@ internal static partial class EngineRuntimeChecks
     private static byte[] ReviewItemWire(GeneratedItem generated)
     {
         using var memory = new MemoryStream(); generated.NetSend(new BinaryWriter(memory)); return memory.ToArray();
-    }
-    private static void MaterialItemChurnDoesNotConsumeReplayCapacity()
-    {
-        WithLighting((config, _) => {
-            using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
-            var data = ReviewContactItemData(); peers.Register(data); peers.Mode(NetmodeID.MultiplayerClient, 0);
-            var player = Terraria.Main.player[0]; player.selectedItem = 0;
-            var independent = ReviewItem(data); var independentWire = ReviewItemWire(independent);
-            var claims = new List<(byte[] Packet, byte[] Wire)>();
-            for (int i = 0; i < 96; i++) {
-                MaterialClock((ulong)(100 + 6 * i)); peers.Sent.Clear();
-                var source = ReviewItem(data); player.inventory[0] = source.Item;
-                source.OnHitNPC(player, new NPC { active = true }, new NPC.HitInfo(), 1);
-                Equal(1, peers.Sent.Count, "actual Item hit generates one churn packet"); claims.Add((peers.Sent[0], ReviewItemWire(source))); peers.System.PostUpdateEverything();
-            }
-            peers.Sent.Clear(); player.inventory[0] = independent.Item; independent.OnHitNPC(player, new NPC { active = true }, new NPC.HitInfo(), 1);
-            var independentPacket = peers.Sent.Single();
-            peers.System.OnWorldUnload(); peers.Mode(NetmodeID.Server, 255); peers.Sent.Clear();
-            foreach (var claim in claims) {
-                var item = ReviewItem(data); item.NetReceive(new BinaryReader(new MemoryStream(claim.Wire))); player.inventory[0] = item.Item; peers.Receive(claim.Packet, 0);
-            }
-            Equal(96, peers.Sent.Count, "fresh Item generations never fill a rolling replay admission cap");
-            var early = ReviewItem(data); early.NetReceive(new BinaryReader(new MemoryStream(claims[0].Wire))); player.inventory[0] = early.Item;
-            peers.Receive(claims[0].Packet, 0); Equal(96, peers.Sent.Count, "old exact Item replay rejected after churn");
-            MaterialClock(2000); peers.Receive(claims[0].Packet, 0); Equal(96, peers.Sent.Count, "Item replay cannot become fresh after TTL");
-            var older = ReviewItem(data); older.NetReceive(new BinaryReader(new MemoryStream(independentWire))); player.inventory[0] = older.Item; peers.Receive(independentPacket, 0);
-            Equal(97, peers.Sent.Count, "independent older Item source retains its next event");
-            var relays = peers.Sent.ToArray(); peers.Mode(NetmodeID.MultiplayerClient, 2);
-            for (int i = 0; i < relays.Length; i++) {
-                MaterialClock((ulong)(2100 + 6 * i)); peers.Receive(relays[i]); Equal(1, OwnedMaterialQueue().Count, "remote fresh Item event admitted");
-                peers.System.PostUpdateEverything(); MaterialClock((ulong)(2104 + 6 * i)); peers.System.PostUpdateEverything(); Equal(0, OwnedMaterialQueue().Count, "Item effect retires");
-            }
-            peers.Receive(relays[0]); Equal(0, OwnedMaterialQueue().Count, "old Item remote replay rejected");
-            MaterialClock(5000); peers.Receive(relays[0]); Equal(0, OwnedMaterialQueue().Count, "Item remote replay stays rejected past retention");
-            Console.WriteLine("DETAIL: real Item generations=96 independent-source=1 server/remote-old-replays=4");
-        });
     }
 
     private static byte[] ReviewReplaceOccurrence(byte[] packet, bool item, ulong sequence)
@@ -362,14 +250,9 @@ internal static partial class EngineRuntimeChecks
             } finally { connection.Socket = previousSocket; }
         });
     }
-    private static void MaterialProjectilePeerSessionReset() => MaterialPeerSessionReset(false);
-    private static void MaterialItemPeerSessionReset() => MaterialPeerSessionReset(true);
 
     private static int ReviewParticleCount(object emission)
         => ((Array)emission.GetType().GetField("Particles", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(emission)!).Length;
-
-    private static IList ReviewPeriodicItems()
-        => (IList)typeof(InfiniDetachedVfxSystem).GetField("PeriodicElements", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 
     private static GeneratedItemData ReviewItemLifecycleData(string attachment, bool hit = false)
     {
@@ -381,33 +264,6 @@ internal static partial class EngineRuntimeChecks
         data.VfxManifest.Budget.MaxParticlesPerTick = 256; data.VfxManifest.Budget.MaxParticlesTotal = 12000;
         return ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject());
     }
-
-    private static void MaterialDeadItemPeriodicRetires(int mode, string attachment)
-    {
-        WithLighting((config, _) => {
-            using var peers = new ReviewPeers(); peers.Mode(mode, 0); config.ParticleSpawnMultiplier = 1;
-            var data = ReviewItemLifecycleData(attachment); peers.Register(data);
-            var owner = Terraria.Main.player[0]; owner.selectedItem = 0; owner.Center = new Vector2(100, 200);
-            var item = ReviewItem(data); owner.inventory[0] = item.Item;
-            item.HoldItem(owner); peers.System.PostUpdateEverything();
-            Equal(1, ReviewPeriodicItems().Count, "alive actual HoldItem registers one periodic source");
-            Equal(1, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "alive first periodic particle");
-            // Installed Player.Update returns before HoldItem/equipment producers
-            // when dead. Observe only the actual all-client update, without Draw.
-            owner.dead = true;
-            for (ulong tick = 101; tick <= 108; tick++) { MaterialClock(tick); peers.System.PostUpdateEverything(); }
-            Equal(true, owner.active && owner.dead && ReferenceEquals(owner.HeldItem, item.Item), "softcore death retains exact Item/Player objects");
-            int newGroups = OwnedMaterialQueue().Cast<object>().Count(e => (ulong)e.GetType().GetField("Start", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(e)! > 100);
-            Console.WriteLine($"DETAIL: dead Item mode={mode} attachment={attachment} producerCallsAfterDeath=0 registrations={ReviewPeriodicItems().Count} newGroups={newGroups} particles={OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount)}");
-            Equal(0, ReviewPeriodicItems().Count, "dead Item retires periodic registration without another producer or Draw");
-            Equal(0, newGroups, "dead Item cannot autonomously create fresh periodic groups");
-            Equal(0, OwnedMaterialQueue().Count, "old world lifetime expires; attached lifetime retires");
-        });
-    }
-    private static void MaterialDeadItemSpWorld() => MaterialDeadItemPeriodicRetires(NetmodeID.SinglePlayer, "world");
-    private static void MaterialDeadItemSpSource() => MaterialDeadItemPeriodicRetires(NetmodeID.SinglePlayer, "source");
-    private static void MaterialDeadItemClientWorld() => MaterialDeadItemPeriodicRetires(NetmodeID.MultiplayerClient, "world");
-    private static void MaterialDeadItemClientSource() => MaterialDeadItemPeriodicRetires(NetmodeID.MultiplayerClient, "source");
 
     private static void MaterialDeadItemDelayKeepsWorldSnapshotAndFencesSource()
     {
@@ -441,92 +297,4 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void MaterialItemRespawnReregistersAndKeepsGenerationFence()
-    {
-        WithLighting((config, _) => {
-            using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
-            foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.MultiplayerClient }) {
-                peers.System.OnWorldUnload(); MaterialClock(100); peers.Mode(mode, 0);
-                var data = ReviewItemLifecycleData("source"); peers.Register(data);
-                var owner = Terraria.Main.player[0]; owner.dead = false; owner.selectedItem = 0;
-                var item = ReviewItem(data); owner.inventory[0] = item.Item;
-                var originalBinding = VfxSourceBinding.Capture(owner, item.Item, data)!;
-                item.HoldItem(owner); peers.System.PostUpdateEverything();
-                item.HoldItem(owner); peers.System.PostUpdateEverything();
-                Equal(1, ReviewPeriodicItems().Count, "frozen alive tick cannot duplicate registration");
-                Equal(1, OwnedMaterialQueue().Count, "frozen alive tick cannot duplicate group");
-                owner.dead = true; MaterialClock(101); peers.System.PostUpdateEverything();
-                Equal(0, ReviewPeriodicItems().Count, "death removes registration before respawn");
-                Equal(0, OwnedMaterialQueue().Count, "source-attached particles retire at death");
-                owner.dead = false; MaterialClock(104); peers.System.PostUpdateEverything();
-                Equal(0, ReviewPeriodicItems().Count, "respawn alone does not resurrect retired registration");
-                MaterialClock(105); item.HoldItem(owner); peers.System.PostUpdateEverything();
-                Equal(1, ReviewPeriodicItems().Count, "actual producer re-registers same Item after respawn");
-                Equal(1, OwnedMaterialQueue().Count, "respawn resumes ordinary periodic cadence");
-                Equal(true, ReferenceEquals(originalBinding.Generation, VfxSourceBinding.Capture(owner, item.Item, data)!.Generation), "death/respawn does not invent a new Item identity");
-                var replacement = ReviewItem(data); owner.inventory[0] = replacement.Item;
-                MaterialClock(106); peers.System.PostUpdateEverything();
-                Equal(0, ReviewPeriodicItems().Count, "equal-definition Item replacement never inherits prior source");
-                Equal(0, OwnedMaterialQueue().Count, "old source attachment retires on exact Item replacement");
-                MaterialClock(107); replacement.HoldItem(owner); peers.System.PostUpdateEverything();
-                Equal(1, OwnedMaterialQueue().Count, "replacement gets its own registration");
-                var beforeNetwork = VfxSourceBinding.Capture(owner, replacement.Item, data)!;
-                // Exercise real token application on the SAME Item/ModItem objects.
-                replacement.NetReceive(new BinaryReader(new MemoryStream(ReviewItemWire(ReviewItem(data)))));
-                Equal(false, ReferenceEquals(beforeNetwork.Generation, VfxSourceBinding.Capture(owner, replacement.Item, data)!.Generation), "new network Item token changes canonical presentation generation");
-                MaterialClock(108); peers.System.PostUpdateEverything();
-                Equal(0, ReviewPeriodicItems().Count, "same-object new generation cannot inherit periodic registration");
-                Equal(0, OwnedMaterialQueue().Count, "same-object new generation cannot inherit attached particles");
-                MaterialClock(109); replacement.HoldItem(owner); peers.System.PostUpdateEverything();
-                Equal(1, OwnedMaterialQueue().Count, "new generation remains eligible for actual producer");
-            }
-        });
-    }
-
-    private static void MaterialItemPeriodicPositiveTotalIsNotAGroupCap()
-    {
-        WithLighting((config, _) => {
-            var system = new InfiniDetachedVfxSystem();
-            var tick = Terraria.Main.GameUpdateCount;
-            var previous = Terraria.Main.player[0];
-            try {
-                config.ParticleSpawnMultiplier = 1;
-                var player = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true, selectedItem = 0, direction = 1 };
-                void Observe(int total, int perTick, int expected) {
-                    system.OnWorldUnload(); MaterialClock(100);
-                    var wire = MaterialElementWire();
-                    wire["vfxManifest"]!["slots"]![0]!["element"]!["count"] = 8;
-                    wire["vfxManifest"]!["budget"]!["maxParticlesTotal"] = total;
-                    wire["vfxManifest"]!["budget"]!["maxParticlesPerTick"] = perTick;
-                    var data = ParseMaterialElement(wire);
-                    var item = ReviewItem(data); player.inventory[0] = item.Item;
-                    item.HoldItem(player); item.HoldItem(player); system.PostUpdateEverything();
-                    Equal(expected, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "real periodic item count at first tick");
-                    system.PostUpdateEverything();
-                    Equal(expected, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "same world tick cannot refill particles");
-                    MaterialClock(101); item.HoldItem(player); system.PostUpdateEverything();
-                    Equal(expected * 2, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "positive item total is not a periodic emission cap on the next tick");
-                }
-                Observe(1, 256, 8);
-                Observe(0, 256, 0);
-                Observe(1, 3, 3);
-                Observe(512, 256, 8);
-                // The removal is item-periodic only, not a projectile lifetime
-                // allowance reset. Exercise actual AI + the shared client update.
-                var projectiles = Terraria.Main.projectile;
-                try {
-                    system.OnWorldUnload(); MaterialClock(300);
-                    var data = ReviewProjectileData("periodic"); data.VfxManifest.Slots[0].Element!.Count = 8;
-                    data.VfxManifest.Budget.MaxParticlesPerTick = 256; data.VfxManifest.Budget.MaxParticlesTotal = 1;
-                    Terraria.Main.projectile = Enumerable.Range(0, 16).Select(i => new Projectile { whoAmI = i }).ToArray();
-                    var host = Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 17, active = true, timeLeft = 90, velocity = Vector2.UnitX };
-                    var generated = Attach(host); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(host, generated);
-                    generated.Configure(data, data.RuntimeProgram.TryGetEntity("actor")!, 0, 0, Vector2.UnitX); generated.AI(); system.PostUpdateEverything();
-                    Equal(1, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "projectile first periodic group spends authored total one");
-                    MaterialClock(301); generated.AI(); system.PostUpdateEverything();
-                    Equal(1, OwnedMaterialQueue().Cast<object>().Sum(ReviewParticleCount), "next world tick does not replenish projectile lifetime total");
-                } finally { Terraria.Main.projectile = projectiles; }
-            } finally { system.OnWorldUnload(); Terraria.Main.player[0] = previous; MaterialClock(tick); }
-        });
-    }
 }

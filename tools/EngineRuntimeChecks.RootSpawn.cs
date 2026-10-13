@@ -95,90 +95,65 @@ internal static partial class EngineRuntimeChecks
 
     private static void RootSpawnPreflightRetainsDepthAndOwnerCaps()
     {
-        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
-        Player oldOwner = Terraria.Main.player[0];
+        using var actorState = new NativeActorState();
+
         Projectile[] oldProjectiles = Terraria.Main.projectile;
-        try
+                Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.myPlayer = 0;
+        var owner = Terraria.Main.player[0] = new Player { active = true, whoAmI = 0 };
+        var data = RootSpawnFixture(0, 4);
+        var source = owner.GetSource_Misc("RootSpawnHeadlessPreflight");
+        Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
+            Vector2.Zero, Vector2.UnitX, data.RuntimeProgram.Limits.MaxChildDepth + 1,
+            GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "depth cap remains active");
+        Terraria.Main.projectile = new Projectile[oldProjectiles.Length];
+        for (int i = 0; i < Terraria.Main.projectile.Length; i++)
         {
-            Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            Terraria.Main.myPlayer = 0;
-            var owner = Terraria.Main.player[0] = new Player { active = true, whoAmI = 0 };
-            var data = RootSpawnFixture(0, 4);
-            var source = owner.GetSource_Misc("RootSpawnHeadlessPreflight");
-            Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
-                Vector2.Zero, Vector2.UnitX, data.RuntimeProgram.Limits.MaxChildDepth + 1,
-                GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "depth cap remains active");
-            Terraria.Main.projectile = new Projectile[oldProjectiles.Length];
-            for (int i = 0; i < Terraria.Main.projectile.Length; i++)
-            {
-                var projectile = Terraria.Main.projectile[i] = new Projectile {
-                    active = i < InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner,
-                    owner = 0, whoAmI = i,
-                };
-                if (!projectile.active) continue;
-                var generated = Attach(projectile);
-                typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generated);
-            }
-            Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
-                Vector2.Zero, Vector2.UnitX, 0,
-                GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "owner projectile cap remains active");
+            var projectile = Terraria.Main.projectile[i] = new Projectile {
+                active = i < InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner,
+                owner = 0, whoAmI = i,
+            };
+            if (!projectile.active) continue;
+            var generated = Attach(projectile);
+            typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generated);
         }
-        finally
-        {
-            Terraria.Main.projectile = oldProjectiles;
-            Terraria.Main.player[0] = oldOwner;
-            Terraria.Main.myPlayer = oldLocal;
-            Terraria.Main.netMode = oldMode;
-        }
+        Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
+            Vector2.Zero, Vector2.UnitX, 0,
+            GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "owner projectile cap remains active");
     }
 
     private static void RootHooksReachUnregisteredSpawnBoundary()
     {
-        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
-        Player oldOwner = Terraria.Main.player[0];
+        using var actorState = new NativeActorState();
+
         Projectile[] oldProjectiles = Terraria.Main.projectile;
-        try
+                Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.myPlayer = 0;
+        var owner = Terraria.Main.player[0] = new Player { active = true, whoAmI = 0, direction = 1 };
+        Terraria.Main.projectile = Enumerable.Range(0, oldProjectiles.Length)
+            .Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
+        // Stop precisely at the real NewProjectileDirect entry. Never return a
+        // projectile or claim a game spawn in this unregistered headless process.
+        using var intercept = new Hook(NativeProjectileEntry(),
+            (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
+                InterceptUnregisteredRootSpawn);
+        Equal(0, ModContent.ProjectileType<GeneratedProjectile>(), "generated projectile is not registered in headless check");
+        foreach (int eventAllowance in new[] { 0, 7 })
+        foreach (int count in new[] { 1, 4 })
         {
-            Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            Terraria.Main.myPlayer = 0;
-            var owner = Terraria.Main.player[0] = new Player { active = true, whoAmI = 0, direction = 1 };
-            Terraria.Main.projectile = Enumerable.Range(0, oldProjectiles.Length)
-                .Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
-            // Stop precisely at the real NewProjectileDirect entry. Never return a
-            // projectile or claim a game spawn in this unregistered headless process.
-            using var intercept = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-                new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int),
-                    typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
-                (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
-                    InterceptUnregisteredRootSpawn);
-            Equal(0, ModContent.ProjectileType<GeneratedProjectile>(), "generated projectile is not registered in headless check");
-            foreach (int eventAllowance in new[] { 0, 7 })
-            foreach (int count in new[] { 1, 4 })
-            {
-                var data = GeneratedItemData.FromJson(RootSpawnFixture(eventAllowance, count).ToNetworkJson())!;
-                var item = new Item { type = ItemID.CopperShortsword, stack = 1 };
-                var generated = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)!
-                    .SetValue(generated, item);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
-                Equal(true, generated.CanUseItem(owner), "root use binding accepted");
-                var ledger = (RuntimeSpawnBudget)typeof(GeneratedItem).GetField("_itemEventBudget",
-                    BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(generated)!;
-                Equal(eventAllowance, ledger.Remaining, "root use starts with authored event ledger");
-                var source = new EntitySource_ItemUse_WithAmmo(owner, item, ItemID.MusketBall, "root test");
-                ExpectUnregisteredRootSpawn(() => generated.Shoot(owner, source, Vector2.Zero,
-                    Vector2.UnitX, 0, 0, 0f), "Shoot event budget=" + eventAllowance + " count=" + count);
-                Equal(eventAllowance, ledger.Remaining, "free root Shoot does not spend event ledger");
-                ExpectUnregisteredRootSpawn(() => generated.HoldItem(owner), "HoldItem event budget=" + eventAllowance + " count=" + count);
-            }
-        }
-        finally
-        {
-            Terraria.Main.projectile = oldProjectiles;
-            Terraria.Main.player[0] = oldOwner;
-            Terraria.Main.myPlayer = oldLocal;
-            Terraria.Main.netMode = oldMode;
+            var data = GeneratedItemData.FromJson(RootSpawnFixture(eventAllowance, count).ToNetworkJson())!;
+            var item = new Item { type = ItemID.CopperShortsword, stack = 1 };
+            var generated = new GeneratedItem();
+            AttachItem(generated, item, data);
+            Equal(true, generated.CanUseItem(owner), "root use binding accepted");
+            var ledger = (RuntimeSpawnBudget)typeof(GeneratedItem).GetField("_itemEventBudget",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(generated)!;
+            Equal(eventAllowance, ledger.Remaining, "root use starts with authored event ledger");
+            var source = new EntitySource_ItemUse_WithAmmo(owner, item, ItemID.MusketBall, "root test");
+            ExpectUnregisteredRootSpawn(() => generated.Shoot(owner, source, Vector2.Zero,
+                Vector2.UnitX, 0, 0, 0f), "Shoot event budget=" + eventAllowance + " count=" + count);
+            Equal(eventAllowance, ledger.Remaining, "free root Shoot does not spend event ledger");
+            ExpectUnregisteredRootSpawn(() => generated.HoldItem(owner), "HoldItem event budget=" + eventAllowance + " count=" + count);
         }
     }
 

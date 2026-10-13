@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
 from pathlib import Path
@@ -13,6 +12,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import pytest
+from provider_test_support import deliverable_recipe, endpoint_options
+from test_provider_transport_contract import loopback_transport
 
 from infini_local.pipelines import llm_transport as transport
 from infini_local.storage import world_storage
@@ -265,21 +266,39 @@ def test_health_acknowledges_only_allowlisted_applied_config(tmp_path, monkeypat
     assert health["generationActivity"] == {"active": 0, "waiting": 0, "accepting": True, "requests": [], "requestsOmitted": 0}
 
 
-@pytest.mark.parametrize("phase", ["active", "waiting", "failure"])
-def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, monkeypatch, phase):
+@pytest.mark.parametrize("phase,forced,multi_dev", [
+    pytest.param("active", False, False, id="safe-active"),
+    pytest.param("waiting", False, False, id="safe-waiting"),
+    pytest.param("failure", False, False, id="safe-failing-work"),
+    pytest.param("waiting", True, False, id="force-ordinary-waiter"),
+    pytest.param("waiting", True, True, id="force-profile-waiter"),
+])
+def test_shutdown_admission_and_activity_are_atomic(tmp_path, monkeypatch, phase, forced, multi_dev):
     from infini_local.services import combine_endpoint as endpoint
 
-    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True, raising=False)
-    semaphore = threading.BoundedSemaphore(1)
-    monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", semaphore)
+    entered, release, stopped = (threading.Event() for _ in range(3))
+
+    class ObservedSemaphore(threading.BoundedSemaphore):
+        def acquire(self, blocking=True, timeout=None):
+            acquired = super().acquire(blocking=blocking, timeout=timeout)
+            if not blocking and not acquired:
+                entered.set()
+            return acquired
+
+    semaphore = ObservedSemaphore(1)
+    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True)
     monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 2)
-    entered, release = threading.Event(), threading.Event()
-    failures = []
-    result = Capture()
+    if multi_dev:
+        monkeypatch.setattr(endpoint, "MULTIDEV_PROFILE_SEMAPHORES", {"llm_2": semaphore})
+    else:
+        monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", semaphore)
     if phase == "waiting":
         semaphore.acquire()
+    result, shutdown, failures, calls = Capture(), Capture(), [], []
+    shutdown.server = SimpleNamespace(shutdown=stopped.set)
 
     def generate(_):
+        calls.append("generate")
         entered.set()
         assert release.wait(5)
         if phase == "failure":
@@ -289,26 +308,31 @@ def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, mon
     def run():
         try:
             endpoint.handle_combine_request(
-                {}, app_version="test", combine_cache_lookup=lambda _: ("key", None),
-                sanitize_recipe_for_delivery=lambda p: p, combine=generate,
-                trace_event=lambda _l, _s, msg, _d: entered.set() if "waiting for active craft" in msg else None,
-                json=result.json, json_status=result.json_status,
+                ({'multiDevCraft': multi_dev, 'llmProfileId': 'llm_2'} if forced else {}), **endpoint_options(
+                    combine=generate,
+                    json=result.json,
+                    json_status=result.json_status,
+                ),
             )
         except BaseException as exc:
             failures.append(exc)
 
     worker = threading.Thread(target=run)
     worker.start()
-    shutdown = Capture()
-    routes = utility_routes(tmp_path)
     try:
         assert entered.wait(5)
-        routes.handle_get(shutdown, "/shutdown")
-        assert shutdown.code == 409, "safe restart must not discard admitted work"
-        assert shutdown.payload["status"] == "generator_busy"
+        utility_routes(tmp_path).handle_get(shutdown, "/shutdown?force=1" if forced else "/shutdown")
+        assert shutdown.code == (200 if forced else 409)
+        if forced:
+            assert shutdown.payload["forced"] is True
+        else:
+            assert shutdown.payload["status"] == "generator_busy"
         activity = shutdown.payload["generationActivity"]
-        assert {k: activity[k] for k in ("active", "waiting", "accepting")} == {"active": int(phase != "waiting"), "waiting": int(phase == "waiting"), "accepting": True}
-        assert len(activity["requests"]) == 1 and activity["requestsOmitted"] == 0
+        assert {k: activity[k] for k in ("active", "waiting", "accepting")} == {
+            "active": int(phase != "waiting"), "waiting": int(phase == "waiting"), "accepting": not forced,
+        }
+        assert len(activity["requests"]) == 1
+        assert activity["requestsOmitted"] == 0
     finally:
         release.set()
         if phase == "waiting":
@@ -316,7 +340,13 @@ def test_safe_shutdown_refuses_admitted_work_and_balances_activity(tmp_path, mon
         worker.join(5)
     assert not worker.is_alive()
     assert len(failures) == int(phase == "failure"), failures
-    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": True, "requests": [], "requestsOmitted": 0}
+    if forced:
+        assert not calls
+        assert result.code == 503
+        assert stopped.wait(2)
+    assert endpoint.generation_activity_snapshot() == {
+        "active": 0, "waiting": 0, "accepting": not forced, "requests": [], "requestsOmitted": 0,
+    }
     assert semaphore.acquire(blocking=False)
     semaphore.release()
 
@@ -332,9 +362,11 @@ def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypat
     routes.handle_get(shutdown, "/shutdown")
     assert shutdown.code == 200
     endpoint.handle_combine_request(
-        {}, app_version="test", combine_cache_lookup=lambda _: ("key", None),
-        sanitize_recipe_for_delivery=lambda p: p, combine=lambda _: {"id": "must_not_start"},
-        trace_event=lambda *_: None, json=generated.json, json_status=generated.json_status,
+        {}, **endpoint_options(
+            combine=lambda _: {'id': 'must_not_start'},
+            json=generated.json,
+            json_status=generated.json_status,
+        ),
     )
     assert generated.code == 503 and generated.payload["status"] == "generator_shutting_down"
     assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False, "requests": [], "requestsOmitted": 0}
@@ -377,61 +409,6 @@ def test_debug_views_read_only_selected_recipe_bodies(tmp_path, view, recipe_rea
         assert handler.payload["latestRecipeContractVersions"] == {"fixture": 199}
     assert sum(p.parent.name == "recipes" for p in reads) == recipe_reads
     assert sum(p.name == "manifest.json" for p in reads) <= 2
-
-
-@pytest.mark.parametrize("multi_dev", [False, True], ids=["ordinary-slot", "multidev-profile-slot"])
-def test_explicit_force_shutdown_does_not_start_waiting_generation(tmp_path, monkeypatch, multi_dev):
-    from infini_local.services import combine_endpoint as endpoint
-
-    entered, stopped = threading.Event(), threading.Event()
-
-    class ObservedSemaphore(threading.BoundedSemaphore):
-        def acquire(self, blocking=True, timeout=None):
-            acquired = super().acquire(blocking=blocking, timeout=timeout)
-            if not blocking and not acquired:
-                entered.set()
-            return acquired
-
-    held = ObservedSemaphore(1)
-    held.acquire()
-    monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True)
-    monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 2)
-    if multi_dev:
-        monkeypatch.setattr(endpoint, "MULTIDEV_PROFILE_SEMAPHORES", {"llm_2": held})
-    else:
-        monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", held)
-    result, shutdown, failures, calls = Capture(), Capture(), [], []
-    setattr(shutdown, "server", SimpleNamespace(shutdown=stopped.set))
-
-    def run():
-        try:
-            endpoint.handle_combine_request(
-                {"multiDevCraft": multi_dev, "llmProfileId": "llm_2"}, app_version="test",
-                combine_cache_lookup=lambda _: ("key", None), sanitize_recipe_for_delivery=lambda p: p,
-                combine=lambda _: calls.append("generate") or {"id": "unexpected"},
-                trace_event=lambda *_: None, json=result.json, json_status=result.json_status,
-            )
-        except BaseException as exc:
-            failures.append(exc)
-
-    worker = threading.Thread(target=run)
-    worker.start()
-    try:
-        assert entered.wait(5)
-        utility_routes(tmp_path).handle_get(shutdown, "/shutdown?force=1")
-        assert shutdown.code == 200 and shutdown.payload["forced"] is True
-        activity = shutdown.payload["generationActivity"]
-        assert {k: activity[k] for k in ("active", "waiting", "accepting")} == {"active": 0, "waiting": 1, "accepting": False}
-        assert len(activity["requests"]) == 1 and activity["requestsOmitted"] == 0
-    finally:
-        held.release()
-        worker.join(5)
-    assert not worker.is_alive() and not failures and not calls
-    assert result.code == 503
-    assert endpoint.generation_activity_snapshot() == {"active": 0, "waiting": 0, "accepting": False, "requests": [], "requestsOmitted": 0}
-    assert held.acquire(blocking=False)
-    held.release()
-    assert stopped.wait(2)
 
 
 def test_debug_views_skip_unreadable_without_mutating_authority(tmp_path):
@@ -596,33 +573,20 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
     from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
     from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
 
-    recipe_a = _sample_data()
-    recipe_a.update({"id": "generated-a", "name": "Generated A", "contractVersions": {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}, "visual": {"spriteStatus": "generated", "spritePath": "generated-a.png"}})
-    recipe_a = attach_hybrid_vfx_manifest(recipe_a, "recipe-a")
-    recipe_b = _sample_data()
-    recipe_b.update({"id": "generated-b", "name": "Generated B", "visual": {"spriteStatus": "generated", "spritePath": "generated-b.png"}})
-    recipe_b = attach_hybrid_vfx_manifest(recipe_b, "recipe-b")
-
-    world_storage.write_world_recipe_cache(
-        tmp_path,
-        "9.9.9",
-        "recipe-a",
-        "debug-world",
-        recipe_a,
-        parent_a_name="Wooden Sword",
-        parent_b_name="Work Bench",
-        world_name="Debug World",
-    )
-    world_storage.write_world_recipe_cache(
-        tmp_path,
-        "9.9.9",
-        "recipe-b",
-        "debug-world",
-        recipe_b,
-        parent_a_name="Gel",
-        parent_b_name="Torch",
-        world_name="Debug World",
-    )
+    for suffix, parents, versions in [
+        ("a", ("Wooden Sword", "Work Bench"), {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}),
+        ("b", ("Gel", "Torch"), None),
+    ]:
+        recipe = _sample_data()
+        recipe.update({"id": f"generated-{suffix}", "name": f"Generated {suffix.upper()}",
+                       "visual": {"spriteStatus": "generated", "spritePath": f"generated-{suffix}.png"}})
+        if versions is not None:
+            recipe["contractVersions"] = versions
+        recipe = attach_hybrid_vfx_manifest(recipe, f"recipe-{suffix}")
+        world_storage.write_world_recipe_cache(
+            tmp_path, "9.9.9", f"recipe-{suffix}", "debug-world", recipe,
+            parent_a_name=parents[0], parent_b_name=parents[1], world_name="Debug World",
+        )
 
     root = world_storage.world_recipe_dir(tmp_path, "debug-world")
     assert not (root / "index.json").exists()
@@ -683,24 +647,11 @@ def test_cache_rejection_retains_quarantine_diagnostics(tmp_path, monkeypatch, m
 def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, monkeypatch):
     """Schedule either an atomic reader or a versioned/CAS reader without sleeps."""
     from copy import deepcopy
-    from infini_local.core.vfx_manifest import _compile_manifest
-    from infini_local.pipelines import combine_pipeline as pipeline, visual_delivery_gate as visual
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.pipelines import combine_pipeline as pipeline
     from infini_local.services import combine_endpoint
     from infini_local.storage import world_recipe_runtime as recipes
-    from infini_local.web.vfx_debug_routes import _sample_data
 
-    monkeypatch.setattr(recipes, "WORLD_RECIPES_DIR", tmp_path / "worlds")
-    monkeypatch.setattr(visual, "WORLD_RECIPES_DIR", tmp_path / "worlds")
-    monkeypatch.setattr(visual, "SPRITE_DIR", tmp_path / "sprites")
-    good = _sample_data()
-    hydrate_no_image_fixture_assets(good, write_no_image_fixture_png(tmp_path / "sprites" / "test.png"))
-    good["vfxManifest"] = _compile_manifest(good, {
-        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
-                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
-    }, "cache-race-contract")
-    assert pipeline._cached_payload_report(good)["ok"]
+    good = deliverable_recipe(tmp_path, monkeypatch, manifest_key="cache-race-contract")
     payload = {"worldId": "race", "itemA": {"type": 1}, "itemB": {"type": 2}}
     key, _ = pipeline.combine_cache_lookup(payload)
     path = recipes.world_recipe_file("race", key)
@@ -765,47 +716,58 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
     assert world_storage.read_json_file(path)["id"] == "fresh_valid_recipe"
     handler = Capture()
     combine_endpoint.handle_combine_request(
-        {**payload, "cacheOnly": True}, app_version="test",
-        combine_cache_lookup=pipeline.combine_cache_lookup,
-        sanitize_recipe_for_delivery=recipes.sanitize_recipe_for_delivery,
-        combine=lambda _: pytest.fail("cacheOnly must not generate"), trace_event=lambda *_a, **_k: None,
-        json=handler.json, json_status=handler.json_status,
+        {**payload, 'cacheOnly': True}, **endpoint_options(
+            combine=lambda _: pytest.fail('cacheOnly must not generate'),
+            json=handler.json,
+            json_status=handler.json_status,
+            combine_cache_lookup=pipeline.combine_cache_lookup,
+            sanitize_recipe_for_delivery=recipes.sanitize_recipe_for_delivery,
+        ),
     )
     assert handler.code == 200 and handler.payload["id"] == "fresh_valid_recipe"
     assert all(world_storage.read_json_file(p).get("id") != "fresh_valid_recipe"
                for p in (path.parent.parent / "invalid").glob("*.json") if not p.name.endswith(".reason.json"))
 
 
-@pytest.mark.parametrize("source", ["snapshot", "exception"])
-def test_provider_schema_rejection_is_not_authored_output_or_retryable(source):
+PROVIDER_SCHEMA_ERROR = (
+    "OpenAI HTTP 400: Invalid schema for response_format 'infini_low_level_runtime_author': "
+    "In context=('properties', 'runtimeProgram', 'properties', 'apiVersion'), "
+    "schema must have a 'type' key."
+)
+
+
+@pytest.mark.parametrize("scenario,error_text,expected", [
+    pytest.param("snapshot", PROVIDER_SCHEMA_ERROR, (424, "llm_request_rejected", False), id="provider-schema-snapshot"),
+    pytest.param("exception", PROVIDER_SCHEMA_ERROR, (424, "llm_request_rejected", False), id="provider-schema-exception"),
+    pytest.param("authored", "Gameplay Author failed: schema validation rejected the authored runtimeProgram", (422, "llm_output_invalid", True), id="authored-schema"),
+    pytest.param("authored", "Gameplay Author failed: invalid JSON output after repair", (422, "llm_output_invalid", True), id="authored-json"),
+    pytest.param("promise", "PlannerUnavailable('planner repeated unsupported gameplay promises after 2 re-author attempts: orbiting_companion')", (422, "llm_output_invalid", True), id="promise-exhaustion"),
+])
+def test_http_failure_classification_preserves_boundary_and_retry_authority(scenario, error_text, expected):
     from infini_local.services.codex_auth import CodexError
 
-    diagnostic = (
-        "OpenAI HTTP 400: Invalid schema for response_format 'infini_low_level_runtime_author': "
-        "In context=('properties', 'runtimeProgram', 'properties', 'apiVersion'), "
-        "schema must have a 'type' key."
-    )
-    failure = {"stage": "01_gameplay_author", "error": f"Gameplay Author failed: {CodexError(diagnostic)!r}"}
-    error = "structured combine failure" if source == "snapshot" else CodexError(diagnostic)
-    status, code, retryable, friendly = _combine_failure_http_response(error, failure if source == "snapshot" else {})
+    provider_rejection = scenario in {"snapshot", "exception"}
+    failure = {
+        "stage": "01_author_llm_plan" if scenario == "promise" else "01_gameplay_author",
+        "error": f"Gameplay Author failed: {CodexError(error_text)!r}" if provider_rejection else error_text,
+    }
+    error = CodexError(error_text) if scenario == "exception" else "structured combine failure"
+    status, code, retryable, friendly = _combine_failure_http_response(error, {} if scenario == "exception" else failure)
+    assert (status, code, retryable) == expected
     payload = _combine_failure_payload(status, code, friendly, failure, retryable=retryable)
-
-    assert (status, code, retryable) == (424, "llm_request_rejected", False)
     assert payload["lastFailure"] == failure
-    assert payload["cacheRecoveryAllowed"] is False and payload["manualRegenerateAllowed"] is False
-    assert "provider" in payload["playerMessage"].lower() and "request" in payload["playerMessage"].lower()
-    assert "schema" in payload["message"].lower()
-    assert "repair" not in payload["playerMessage"].lower() and "try crafting again" not in payload["playerMessage"].lower()
-    assert "update" in payload["playerMessage"].lower()
-
-
-@pytest.mark.parametrize("message", [
-    "Gameplay Author failed: schema validation rejected the authored runtimeProgram",
-    "Gameplay Author failed: invalid JSON output after repair",
-])
-def test_authored_schema_failure_remains_retryable_invalid_output(message):
-    failure = {"stage": "01_gameplay_author", "error": message}
-    assert _combine_failure_http_response("structured combine failure", failure)[:3] == (422, "llm_output_invalid", True)
+    if provider_rejection:
+        assert payload["cacheRecoveryAllowed"] is False
+        assert payload["manualRegenerateAllowed"] is False
+        player_message = payload["playerMessage"].lower()
+        assert "provider" in player_message
+        assert "request" in player_message
+        assert "repair" not in player_message
+        assert "try crafting again" not in player_message
+        assert "update" in player_message
+        assert "schema" in payload["message"].lower()
+    elif scenario == "promise":
+        assert "invalid" in payload["playerMessage"].lower()
 
 
 @pytest.mark.parametrize("flag", ["cacheOnly", "cacheOnlyIfReady"])
@@ -814,94 +776,43 @@ def test_cache_probe_miss_returns_404_without_calling_planner(flag):
 
     capture = Capture()
     combine_endpoint.handle_combine_request(
-        {flag: True}, app_version="test", combine_cache_lookup=lambda _: ("saved-pair", None),
-        sanitize_recipe_for_delivery=lambda _: pytest.fail("cache miss has no recipe to sanitize"),
-        combine=lambda _: pytest.fail("cache probe must not invoke Planner"), trace_event=lambda *_a, **_k: None,
-        json=capture.json, json_status=capture.json_status,
+        {flag: True}, **endpoint_options(
+            combine=lambda _: pytest.fail('cache probe must not invoke Planner'),
+            json=capture.json,
+            json_status=capture.json_status,
+            combine_cache_lookup=lambda _: ('saved-pair', None),
+            sanitize_recipe_for_delivery=lambda _: pytest.fail('cache miss has no recipe to sanitize'),
+        ),
     )
     assert capture.code == 404 and capture.payload["status"] == "cache_miss"
     assert capture.payload["cacheRecoveryAllowed"] is True and capture.payload["recipeKey"] == "saved-pair"
 
 
-def test_authored_promise_exhaustion_reports_invalid_output() -> None:
-    failure = {
-        "stage": "01_author_llm_plan",
-        "error": "PlannerUnavailable('planner repeated unsupported gameplay promises after 2 re-author attempts: orbiting_companion')",
+@pytest.mark.parametrize("mode,responses_missing,upstream,paths", [
+    pytest.param("chat_completions", False, "ExactVendor/region-1", ["/v1/chat/completions"], id="pinned-chat"),
+    pytest.param("responses", False, "ExactVendor/region-1", ["/v1/responses"], id="pinned-responses"),
+    pytest.param("auto", True, "ExactVendor/region-1", ["/v1/responses", "/v1/chat/completions"], id="pinned-negotiation"),
+    pytest.param("chat_completions", False, "", ["/v1/chat/completions"], id="automatic-chat"),
+])
+def test_actual_serialized_http_preserves_provider_pin(loopback_transport, mode, responses_missing, upstream, paths):
+    endpoint, _events = loopback_transport
+    replies = ([{"status": 404, "body": {"error": {"message": "Responses endpoint not supported"}}}]
+               if responses_missing else [])
+    envelope = ({"id": "local-response", "output": [{"type": "message", "content": [{"type": "output_text", "text": '{"ok":true}'}]}]}
+                if mode == "responses" else {"choices": [{"message": {"role": "assistant", "content": '{"ok":true}'}, "finish_reason": "stop"}]})
+    base, observed = endpoint([*replies, {"body": envelope}])
+    context = {
+        "provider": "openrouter", "openrouter_provider": upstream, "base_url": base,
+        "model": "owner/model:free", "api_mode": mode, "api_key": "offline-loopback-only",
     }
-
-    status, code, retryable, friendly = _combine_failure_http_response(
-        "structured combine failure",
-        failure,
-    )
-    payload = _combine_failure_payload(status, code, friendly, failure, retryable=retryable)
-
-    assert (status, code, retryable) == (422, "llm_output_invalid", True)
-    assert "invalid" in payload["playerMessage"].lower()
-    assert payload["lastFailure"] == failure
-
-
-@pytest.mark.parametrize(
-    ("mode", "responses_missing", "upstream", "paths"),
-    [
-        ("chat_completions", False, "ExactVendor/region-1", ["/v1/chat/completions"]),
-        ("responses", False, "ExactVendor/region-1", ["/v1/responses"]),
-        ("auto", True, "ExactVendor/region-1", ["/v1/responses", "/v1/chat/completions"]),
-        ("chat_completions", False, "", ["/v1/chat/completions"]),
-    ],
-)
-def test_actual_serialized_http_preserves_provider_pin(monkeypatch, mode, responses_missing, upstream, paths):
-    observed = []
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, format, *args):
-            pass
-
-        def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            observed.append((self.path, body))
-            missing = responses_missing and self.path == "/v1/responses"
-            if missing:
-                response = {"error": {"message": "Responses endpoint not supported"}}
-            elif self.path == "/v1/responses":
-                response = {"id": "local-response", "output": [{"type": "message", "content": [{"type": "output_text", "text": '{"ok":true}'}]}]}
-            else:
-                response = {"choices": [{"message": {"role": "assistant", "content": '{"ok":true}'}, "finish_reason": "stop"}]}
-            encoded = json.dumps(response).encode()
-            self.send_response(404 if missing else 200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(encoded)))
-            self.end_headers()
-            self.wfile.write(encoded)
-
-    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
-    monkeypatch.setenv("no_proxy", "127.0.0.1")
-    monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(transport, "_RESPONSES_CAPABILITY", {})
-    monkeypatch.setattr(transport, "_STRICT_SCHEMA_CAPABILITY", {})
-    monkeypatch.setattr(transport, "_llm_replay_json_response", lambda _payload: None)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    token = transport._CURRENT_LLM_ITEM_LEASE.set(None)
-    thread.start()
-    try:
-        context = {
-            "provider": "openrouter", "openrouter_provider": upstream,
-            "base_url": f"http://127.0.0.1:{server.server_port}",
-            "model": "owner/model:free", "api_mode": mode, "api_key": "offline-loopback-only",
-        }
-        payload = {"messages": [{"role": "user", "content": "offline transport fixture"}], "max_tokens": 32}
-        result = transport._llm_json_single_context(payload, 3, context)
-        assert json.loads(result["choices"][0]["message"]["content"]) == {"ok": True}
-        assert [path for path, _ in observed] == paths
-        for _, body in observed:
-            assert body["model"] == "owner/model:free"
-            if upstream:
-                assert body["provider"] == {"only": [upstream], "allow_fallbacks": False}
-            else:
-                assert "provider" not in body
-        assert "provider" not in payload  # No mutation of author-owned input.
-    finally:
-        transport._CURRENT_LLM_ITEM_LEASE.reset(token)
-        server.shutdown()
-        thread.join(timeout=3)
-        server.server_close()
+    payload = {"messages": [{"role": "user", "content": "offline transport fixture"}], "max_tokens": 32}
+    result = transport._llm_json_single_context(payload, 3, context)
+    assert json.loads(result["choices"][0]["message"]["content"]) == {"ok": True}
+    assert [path for _, path, _, _ in observed] == paths
+    for _, _, body, _ in observed:
+        assert body["model"] == "owner/model:free"
+        if upstream:
+            assert body["provider"] == {"only": [upstream], "allow_fallbacks": False}
+        else:
+            assert "provider" not in body
+    assert "provider" not in payload  # No mutation of author-owned input.

@@ -138,9 +138,7 @@ internal static partial class EngineRuntimeChecks
                 Vector2.Zero, Vector2.UnitX, 1, 8, initialTransform: invalid), "invalid transform refuses before real spawn boundary");
         var transform = new RuntimeSpawnTransform(new Vector2(128, 160), Vector2.UnitY);
         Equal(true, transform.IsValid, "explicit finite transform accepted");
-        using var intercept = new MonoMod.RuntimeDetour.Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(Terraria.DataStructures.IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int),
-                typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var intercept = new MonoMod.RuntimeDetour.Hook(NativeProjectileEntry(),
             (Func<Terraria.DataStructures.IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
                 ((src, position, velocity, type, damage, kb, who, a, b, c) => {
                     Equal(transform.Position, position, "adapter transform reaches exact native position");

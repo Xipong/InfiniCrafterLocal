@@ -6,19 +6,8 @@ from pathlib import Path
 from infini_local.desktop import settings_env, settings_schema as schema
 from infini_local.desktop.settings_gui_ui import SettingsGuiUiMixin
 from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin
-from infini_local.desktop.settings_gui_trace_state import SettingsGuiTraceStateMixin
 from infini_local.services.codex_catalog import CodexModel
-
-
-class Var:
-    def __init__(self, value=""):
-        self.value = value
-
-    def get(self):
-        return self.value
-
-    def set(self, value):
-        self.value = value
+from test_settings_gui_contract import _UiVar as Var, _SpriteGuiHarness
 
 
 class Combo:
@@ -194,38 +183,17 @@ def test_logout_invalidates_pending_account_catalog_and_image_ping(monkeypatch):
 
 
 def test_codex_text_and_visual_controls_follow_llm_provider():
-    class Visibility(SettingsGuiTraceStateMixin):
-        def __init__(self):
-            self.values = dict(schema.DEFAULTS)
-            self.field_widgets = {}
-            self.extra_arg_buttons = []
-            self.sdcpp_debug_buttons = []
-            self.radmin_enabled = Var(False)
-            self.vars = {}
-            self.enabled = {}
-
-        def _value(self, key, default=""):
-            return self.values.get(key, default)
-
-        def _set_field_enabled(self, key, enabled, reason=""):
-            self.enabled[key] = enabled
-
-        def _set_widgets_enabled(self, _widgets, _enabled):
-            pass
-
-        def _refresh_secret_entries(self):
-            pass
-
-    gui = Visibility()
+    gui = _SpriteGuiHarness()
     gui._refresh_visibility()
-    assert gui.enabled["INFINI_CODEX_LLM_MODEL"] is False
-    assert gui.enabled["INFINI_LLM_MAX_TOKENS"] is True
-    assert gui.enabled["INFINI_LLM_TEMPERATURE"] is True
-    gui.values.update(INFINI_LLM_PROVIDER="openai_codex", INFINI_IMAGE_BACKEND="openai_codex")
+    assert gui.field_state["INFINI_CODEX_LLM_MODEL"][0] is False
+    assert gui.field_state["INFINI_LLM_MAX_TOKENS"][0] is True
+    assert gui.field_state["INFINI_LLM_TEMPERATURE"][0] is True
+    gui.vars["INFINI_LLM_PROVIDER"].set("openai_codex")
+    gui.vars["INFINI_IMAGE_BACKEND"].set("openai_codex")
     gui._refresh_visibility()
-    assert gui.enabled["INFINI_CODEX_LLM_MODEL"] is True
-    assert gui.enabled["INFINI_CODEX_VISUAL_REASONING"] is True
-    assert gui.enabled["INFINI_CODEX_IMAGE_QUALITY"] is True
-    assert gui.enabled["INFINI_LLM_MAX_TOKENS"] is False
+    assert gui.field_state["INFINI_CODEX_LLM_MODEL"][0] is True
+    assert gui.field_state["INFINI_CODEX_VISUAL_REASONING"][0] is True
+    assert gui.field_state["INFINI_CODEX_IMAGE_QUALITY"][0] is True
+    assert gui.field_state["INFINI_LLM_MAX_TOKENS"][0] is False
     for key in ("INFINI_LLM_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", "INFINI_LLM_REASONING_EXCLUDE"):
-        assert gui.enabled[key] is False, key
+        assert gui.field_state[key][0] is False, key

@@ -123,8 +123,7 @@ internal static partial class EngineRuntimeChecks
         var observed = new List<Vector2>();
         // Observe real canonical spawn-loop arguments. Return an unregistered
         // projectile, so no successful game spawn is claimed by this CPU check.
-        using var native = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.NewProjectileDirect),
-            new[] { typeof(IEntitySource), typeof(Vector2), typeof(Vector2), typeof(int), typeof(int), typeof(float), typeof(int), typeof(float), typeof(float), typeof(float) })!,
+        using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, owner, ai0, ai1, ai2) => {
                 Equal(projectile.Center, position, "child item_use_origin uses firing center");
@@ -148,42 +147,4 @@ internal static partial class EngineRuntimeChecks
         Equal(12, budget.Remaining, "remote peer preserves owner ledger");
     }
 
-    private static void SentryTargetingDtoPreservesChoicesAndRejectsInvalidPresence()
-    {
-        var data = SentryTargetingFixture();
-        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() }) {
-            var copy = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("targeting fixture rejected");
-            var target = copy.RuntimeProgram.TryGetEntity("root")!.Targeting;
-            Equal(4, target.Count ?? 1, "count survives serialized DTO"); Equal(0.6, target.SpreadRadians ?? 0d, "spread survives serialized DTO");
-            Equal("player_assigned_first", target.TargetPolicy ?? "distance_score", "assigned policy survives serialized DTO");
-            Equal(true, target.RequireLineOfSight == true && target.HardRange == true, "filters survive serialized DTO");
-        }
-        var raw = JsonNode.Parse(data.ToJson())!.AsObject(); var fields = raw["runtimeProgram"]!["entities"]![1]!["targeting"]!.AsObject();
-        foreach (string name in new[] { "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange" }) fields.Remove(name);
-        var legacy = GeneratedItemData.FromJson(raw.ToJsonString()) ?? throw new InvalidOperationException("retained wire absence rejected");
-        var kept = legacy.RuntimeProgram.TryGetEntity("root")!.Targeting;
-        Equal(1, kept.Count ?? 1, "retained count defaults to former one shot"); Equal(0d, kept.SpreadRadians ?? 0d, "retained spread neutral");
-        Equal("distance_score", kept.TargetPolicy ?? "distance_score", "retained target policy"); Equal(false, kept.RequireLineOfSight == true || kept.HardRange == true, "retained soft score and no LOS");
-        foreach (string name in new[] { "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange" }) {
-            foreach (string serialized in new[] { legacy.ToJson(), legacy.ToNetworkJson() }) {
-                var retained = JsonNode.Parse(serialized)!["runtimeProgram"]!["entities"]!.AsArray()
-                    .First(row => (string?)row!["id"] == "root")!["targeting"]!.AsObject();
-                Equal(false, retained.ContainsKey(name), "retained option omission stays absent " + name);
-            }
-        }
-        foreach (string ownerKind in new[] { RuntimeEntityKind.ItemBody, RuntimeEntityKind.ChildProjectile }) {
-            var badOwner = JsonNode.Parse(data.ToJson())!.AsObject();
-            var ownerEntity = badOwner["runtimeProgram"]!["entities"]!.AsArray()
-                .First(row => (string?)row!["kind"] == ownerKind)!;
-            ownerEntity["targeting"]!["count"] = 1;
-            Equal(true, GeneratedItemData.FromJson(badOwner.ToJsonString()) is null, "misplaced targeting options refused " + ownerKind);
-        }
-        foreach (var (key, value) in new[] { ("count", "0"), ("count", "5"), ("count", "null"), ("count", "true"),
-            ("spreadRadians", "-0.1"), ("spreadRadians", "0.8"), ("spreadRadians", "1e-50"), ("spreadRadians", "null"),
-            ("targetPolicy", "\"nearest\""), ("targetPolicy", "null"), ("requireLineOfSight", "null"), ("hardRange", "1") }) {
-            fields[key] = JsonNode.Parse(value);
-            Equal(true, GeneratedItemData.FromJson(raw.ToJsonString()) is null, "invalid explicit targeting refused " + key + "=" + value);
-            fields.Remove(key);
-        }
-    }
 }

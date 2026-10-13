@@ -1,6 +1,6 @@
 """Offline canonical vfx frozen boundary contracts; no live services."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 
 from pathlib import Path
 from tests.vfx_image_fixtures import apply_edits
@@ -20,14 +20,24 @@ from infini_local.pipelines import visual_delivery_gate, visual_sprite_generatio
 from infini_local.storage import world_storage
 from tests.vfx_material_fixtures import _data, _legacy, _sprite, _with_asset
 from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx, roundtrip
-from tests.vfx_image_fixtures import _request, offline_backend
+from tests.vfx_image_fixtures import _request, offline_backend as offline_backend
 
 BAD_SELECTORS = [
-    ("projectileAfterimage", "runtime_geometry", "entity"),
-    ("spriteStampTrail", "no_asset", "entity"),
-    ("actorAfterimage", "no_asset", "projectile"),
-    ("projectileAfterimage", "reuse_item_icon", "field"),
+    pytest.param("projectileAfterimage", "runtime_geometry", "entity", id="geometry-afterimage"),
+    pytest.param("spriteStampTrail", "no_asset", "entity", id="missing-stamp-png"),
+    pytest.param("actorAfterimage", "no_asset", "projectile", id="missing-actor-png"),
+    pytest.param("projectileAfterimage", "reuse_item_icon", "field", id="field-role-mismatch"),
 ]
+
+
+def _serialized_vfx_repair(monkeypatch, data, raw, patch, case, image_calls):
+    sent = _offline_transport(monkeypatch, case, [raw, patch])
+    final = vfx.attach_hybrid_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 2 and image_calls == []
+    assert [request["model"] for request in sent] == ["explicit-offline-fixture-model"] * 2
+    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    director, repair = [request_dossier(request) for request in sent]
+    return final, director, repair
 
 
 def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
@@ -48,12 +58,12 @@ def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
 
 
 @pytest.mark.parametrize("renderer,selector", [
-    ("projectileAfterimage", "entity"),
-    ("projectileAfterimage", "projectile"),
-    ("projectileAfterimage", "field"),
-    ("projectileAfterimage", "impact"),
-    ("spriteElement", "entity"),
-    ("texturedPath", "entity"),
+    pytest.param("projectileAfterimage", "entity", id="entity-texture"),
+    pytest.param("projectileAfterimage", "projectile", id="projectile-texture"),
+    pytest.param("projectileAfterimage", "field", id="field-texture"),
+    pytest.param("projectileAfterimage", "impact", id="impact-producer"),
+    pytest.param("spriteElement", "entity", id="element-source"),
+    pytest.param("texturedPath", "entity", id="path-source"),
 ])
 def test_unknown_entity_pair_repairs_without_thawing_valid_texture_selector(
     offline_backend, monkeypatch, renderer, selector,
@@ -91,10 +101,8 @@ def test_unknown_entity_pair_repairs_without_thawing_valid_texture_selector(
         candidate["textureRole"] = "item"
     patch = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"], effectMagnitude=0.9,
                    assetsUpsert=[_request("compensation")])
-    sent = _offline_transport(monkeypatch, "unknown_entity_" + renderer + "_" + selector, [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, "unknown_pair", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 2 and calls == []
-    director, repair = [request_dossier(request) for request in sent]
+    final, director, repair = _serialized_vfx_repair(
+        monkeypatch, data, raw, patch, "unknown_entity_" + renderer + "_" + selector, calls)
     scope = repair["repairScope"]
     assert scope["fieldPermissions"] == {
         "globals": {}, "slots": [{"slotId": "selected", "paths": ["entityId", "event"]}], "assets": [],
@@ -129,10 +137,7 @@ def test_unknown_entity_pairs_keep_shared_ingredient_request_frozen(offline_back
     assert [row["role"] for row in projection["dependencies"]] == ["vfx:shared", "vfx:shared"]
     hostile_asset = {**accepted["assets"][0], "prompt": "unrequested replacement artwork"}
     patch = _patch(slotsUpsert=accepted["slots"], assetsUpsert=[hostile_asset], assetIdsDelete=["shared"])
-    sent = _offline_transport(monkeypatch, "unknown_pairs_shared_ingredient", [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, "unknown_pairs_shared_ingredient", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 2 and calls == []
-    repair = request_dossier(sent[1])
+    final, _, repair = _serialized_vfx_repair(monkeypatch, data, raw, patch, "unknown_pairs_shared_ingredient", calls)
     scope = repair["repairScope"]
     assert scope["fieldPermissions"] == {
         "globals": {}, "slots": [
@@ -160,13 +165,10 @@ def test_bad_legacy_selector_repairs_only_exact_leaf_before_image_jobs(
     correction = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"],
                         assetsUpsert=[{"id": "compensation", "prompt": "unrequested art", "negativePrompt": "",
                                        "canvasSize": 64, "layout": "strip"}], effectMagnitude=0.9)
-    sent = _offline_transport(monkeypatch, "legacy_" + renderer + "_" + mode + "_" + selector, [raw, correction])
-    final = vfx.attach_hybrid_vfx_manifest(data, "png_dependencies", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 2 and calls == [], "real VFX stage failed to invoke the required bounded Repair"
+    final, director, repair = _serialized_vfx_repair(
+        monkeypatch, data, raw, correction, "legacy_" + renderer + "_" + mode + "_" + selector, calls)
     assert not report["ok"], "legacy PNG consumer admitted a producer that cannot resolve"
     assert {error["path"] for error in report["errors"]} == {"$.slots[0].textureRole"}
-    director, repair = [request_dossier(request) for request in sent]
-    assert [request["model"] for request in sent] == ["explicit-offline-fixture-model"] * 2
     assert repair["repairScope"]["fieldPermissions"] == {
         "globals": {}, "slots": [{"slotId": "selected", "paths": ["textureRole"]}], "assets": [],
     }

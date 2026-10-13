@@ -22,6 +22,7 @@ internal static partial class EngineRuntimeChecks
     // No registered mod, GPU pixels, content loading or world/player update loop.
     private static void HeldProxyIsReplacedOnlyByReadyInstanceSprite()
     {
+        using var actorState = new NativeActorState();
         const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         const BindingFlags statics = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         T Shell<T>() where T : class { var value = (T)RuntimeHelpers.GetUninitializedObject(typeof(T)); GC.SuppressFinalize(value); return value; }
@@ -40,16 +41,14 @@ internal static partial class EngineRuntimeChecks
         var savedChildren = new List<object>(); foreach (object value in children) savedChildren.Add(value);
         object? savedCache = sprites.GetValue(null), savedLight = light.GetValue(null);
         var savedMain = Terraria.Main.instance; var savedAssets = TextureAssets.Item;
-        bool savedServer = Terraria.Main.dedServ; int savedMode = Terraria.Main.netMode, savedPlayer = Terraria.Main.myPlayer;
+
         string path = System.IO.Path.Combine(Terraria.Program.SavePath, "held_proxy_cpu.png");
         var data = GeneratedItemData.Placeholder();
         data.Visual.SpritePath = path; data.Visual.RenderSizePx = 32;
         data.Gameplay.UseStyleName = "hold_up"; data.RuntimeProgram.ItemUse.UseStyle = "hold_up";
         var item = new Item(); item.SetDefaults(ItemID.WoodenSword);
         var generated = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", instance)!.SetValue(generated, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, generated);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(generated, data);
+        AttachItem(generated, item, data);
         data.ApplyToItem(item);
         var player = new Player { whoAmI = 0, active = true, selectedItem = 0, position = new Vector2(160, 160), itemAnimation = 8, itemAnimationMax = 24, heldProj = -1, direction = 1, gravDir = 1f };
         player.inventory[0] = item;
@@ -131,7 +130,7 @@ internal static partial class EngineRuntimeChecks
             typeof(PlayerDrawLayer).GetProperty("Visible", instance)!.SetValue(parent, true);
             textures.Clear(); sprites.SetValue(null, savedCache); light.SetValue(null, savedLight);
             TextureAssets.Item = savedAssets; typeof(Terraria.Main).GetField("instance", statics)!.SetValue(null, savedMain);
-            Terraria.Main.dedServ = savedServer; Terraria.Main.netMode = savedMode; Terraria.Main.myPlayer = savedPlayer;
+
             cache.Dispose();
         }
     }

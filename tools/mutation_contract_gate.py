@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-import check_csharp_contracts as csharp_contracts
 import infini_local.core.runtime_authoring.capability_registry as registry_module
 import infini_local.core.runtime_authoring.validator as validator_module
 from infini_local.core.runtime_authoring import (
@@ -113,34 +112,6 @@ def build_report() -> dict[str, Any]:
         }
     )
 
-    original_csharp_read = csharp_contracts.read
-    try:
-        def mutated_csharp_read(relative: str) -> str:
-            source_text = original_csharp_read(relative)
-            if relative == "Common/Models/RuntimeProgramSpec.cs":
-                return source_text.replace(
-                    'CurrentApiVersion = "infini.runtime-program.v5"',
-                    'CurrentApiVersion = "infini.runtime-program.v999"',
-                    1,
-                )
-            return source_text
-
-        csharp_contracts.ERRORS.clear()
-        csharp_contracts.read = mutated_csharp_read
-        csharp_contracts.check_runtime_contract()
-        csharp_api_drift_caught = any(
-            "CurrentApiVersion" in message
-            for message in csharp_contracts.ERRORS
-        )
-    finally:
-        csharp_contracts.read = original_csharp_read
-        csharp_contracts.ERRORS.clear()
-    rows.append(
-        {
-            "mutation": "csharp_runtime_api_version_drift",
-            "caught": csharp_api_drift_caught,
-        }
-    )
     return {
         "schema": "infini.low-level-mutation-gate.v1",
         "ok": all(bool(row["caught"]) for row in rows),

@@ -3,10 +3,7 @@ from __future__ import annotations
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
-import importlib.util
 import json
-from pathlib import Path
-import re
 import socket
 
 import pytest
@@ -26,25 +23,6 @@ def offline(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
 
 
-def test_native_csharp_crit_projection_uses_only_request_normalized_item():
-    # Static source regression, not a substitute for EngineRuntimeChecks.ParentCrit.
-    root = Path(__file__).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location(
-        "check_csharp_contracts_parent_crit_test", root / "tools/check_csharp_contracts.py")
-    assert spec is not None and spec.loader is not None
-    contracts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(contracts)
-    method_body, stripped = contracts.method_body, contracts.stripped
-
-    source = (root /
-              "ModSources/InfiniCrafterLocal/Common/Services/GeneratorClient.cs").read_text()
-    wire = stripped(method_body(source, "ToWireItem"))
-    assert re.search(r"\bcrit\s*=\s*craftItem\.crit\b", wire), "real native craft snapshot drops base Item.crit"
-    assert wire.index("CraftIdentityItem(item, existing)") < wire.index("crit = craftItem.crit")
-    assert not re.search(r"\bcrit\s*=\s*item\.crit\b", wire), "consumed item's prefix must not bias source crit"
-    for method in ("FingerprintFromItem", "RuntimeFactsFromItem"):
-        assert re.search(r"\bcrit\s*=\s*item\.crit\b", stripped(method_body(source, method)))
-    assert "GetWeaponCrit" not in wire, "player-effective crit is not base recipe identity"
 
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])

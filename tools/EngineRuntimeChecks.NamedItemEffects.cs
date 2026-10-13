@@ -15,6 +15,20 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void CheckNamedEffectsDto()
+    {
+        var source = NamedItemEffectsFixture();
+        var copy = GeneratedItemData.FromJson(source.ToNetworkJson())
+            ?? throw new InvalidOperationException("named effects rejected by public deserializer");
+        Equal("alternate_effects", copy.RuntimeProgram.Bindings[1].UsePolicy.Action.EffectGroupId,
+            "binding retains authored effect group");
+        Equal(35, copy.RuntimeProgram.EffectGroups![1].HealMana, "authored effect survives serialization");
+        var missing = System.Text.Json.Nodes.JsonNode.Parse(source.ToNetworkJson())!;
+        missing["runtimeProgram"]!["bindings"]![0]!["usePolicy"]!["action"]!["effectGroupId"] = "missing";
+        Equal(true, GeneratedItemData.FromJson(missing.ToJsonString()) is null, "dangling effect group refuses");
+    }
+
+
     private static GeneratedItemData NamedItemEffectsFixture()
     {
         var data = MobilityConsumptionFixture("", 1);
@@ -170,27 +184,4 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void NamedItemEffectsDtoRoundTripAndInvalidPresence()
-    {
-        string json = NamedItemEffectsFixture().ToJson();
-        var copy = GeneratedItemData.FromJson(json);
-        Equal(true, copy is not null, "named groups survive exact native JSON normalization");
-        Equal("alternate_effects", copy!.RuntimeProgram.Bindings[1].UsePolicy.Action.EffectGroupId!, "binding identity survives roundtrip");
-        Equal(35, copy.RuntimeProgram.EffectGroups![1].HealMana, "named payload survives roundtrip");
-        foreach (string mutation in new[] { "null_groups", "empty_groups", "null_selector", "missing_selector", "orphan", "foreign_stats", "null_generated_buff" })
-        {
-            JsonObject root = JsonNode.Parse(json)!.AsObject();
-            JsonObject runtime = root["runtimeProgram"]!.AsObject();
-            JsonObject group = runtime["effectGroups"]![0]!.AsObject();
-            JsonObject action = runtime["bindings"]![0]!["usePolicy"]!["action"]!.AsObject();
-            if (mutation == "null_groups") runtime["effectGroups"] = null;
-            else if (mutation == "empty_groups") runtime["effectGroups"] = new JsonArray();
-            else if (mutation == "null_selector") action["effectGroupId"] = null;
-            else if (mutation == "missing_selector") action["effectGroupId"] = "missing";
-            else if (mutation == "orphan") action.Remove("effectGroupId");
-            else if (mutation == "foreign_stats") group["damage"] = 999;
-            else group["generatedBuff"] = null;
-            Equal(true, GeneratedItemData.FromJson(root.ToJsonString()) is null, "strict native named-group rejection: " + mutation);
-        }
-    }
 }

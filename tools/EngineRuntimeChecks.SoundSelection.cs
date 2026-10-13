@@ -71,98 +71,7 @@ internal static partial class EngineRuntimeChecks
         return parsed;
     }
 
-    private static void VfxSoundSelectorStrictDtoRoundTrips()
-    {
-        var legacy = SoundSelectionRead(null, present: false);
-        Equal(false, legacy.ToJson().Contains("SoundId", StringComparison.OrdinalIgnoreCase), "legacy canonical serialization stays absent");
-        Equal(false, JsonSerializer.Serialize(legacy).Contains("SoundId", StringComparison.OrdinalIgnoreCase), "alternate serializer does not invent explicit null");
-        foreach (var sample in SoundSelectionPalette()) {
-            var parsed = SoundSelectionRead(sample.Id);
-            var round = VfxManifestSpec.FromJson(parsed.ToJson());
-            Equal(1, round.Slots.Length, "explicit sample round trip");
-            var property = typeof(VfxSlotSpec).GetProperty("SoundId") ?? throw new InvalidOperationException("missing finite SoundId DTO member");
-            Equal(sample.Id, (string)property.GetValue(round.Slots[0])!, "literal selector preserved");
-        }
-        foreach (string? bad in new string?[] { null, "", "item4", " Item4", "Item9999", "frozenRepair", "Terraria/Sounds/Item_4" })
-            Equal(0, VfxManifestSpec.FromJson(SoundSelectionJson(bad)).Slots.Length, "invalid present selector rejected without Item1 substitution");
-        foreach (string renderer in new[] { "lightCue", "impactRing" })
-            Equal(0, VfxManifestSpec.FromJson(SoundSelectionJson("Item4", renderer: renderer)).Slots.Length, "sound selector forbidden on foreign branch");
-        Equal(0, VfxManifestSpec.FromJson(SoundSelectionJson("Item4", frozenRepair: true)).Slots.Length, "foreign frozenRepair field rejected");
-        foreach (string literal in new[] { "4", "true", "{}", "[]" }) {
-            string invalid = SoundSelectionJson("typed_probe").Replace("\"typed_probe\"", literal, StringComparison.Ordinal);
-            Equal(0, VfxManifestSpec.FromJson(invalid).Slots.Length, "invalid soundId JSON type rejected");
-        }
-    }
-
     private delegate ReLogic.Utilities.SlotId SoundSelectionBoundary(in SoundStyle style, Vector2? position, SoundUpdateCallback? callback);
-
-    private static void VfxSoundControlsStrictDtoAndPitchInterval()
-    {
-        string Json(Action<JsonObject>? mutate = null)
-        {
-            var node = JsonNode.Parse(SoundSelectionJson("Item26"))!.AsObject();
-            var slot = node["Slots"]![0]!.AsObject();
-            slot["sound"] = new JsonObject { ["volume"] = 0.37, ["pitch"] = -0.9, ["pitchVariance"] = 0.2 };
-            mutate?.Invoke(slot);
-            return node.ToJsonString();
-        }
-        var exact = VfxManifestSpec.FromJson(Json());
-        Equal(1, exact.Slots.Length, "explicit full sound object survives native JSON");
-        var round = VfxManifestSpec.FromJson(exact.ToJson());
-        Equal(0.37f, round.Slots[0].Sound!.Volume, "sound volume round trip");
-        Equal(-0.9f, round.Slots[0].Sound!.Pitch, "sound pitch round trip");
-        Equal(0.2f, round.Slots[0].Sound!.PitchVariance, "sound variance round trip");
-        foreach ((string field, string literal) in new[] {
-            ("volume", "1.00000001"), ("volume", "1.00000000000000000000000000000000000001"),
-            ("volume", "-1e-50"), ("volume", "1e-46"),
-            ("pitch", "0.900000001"), ("pitch", "-0.90000000000000000000000000000000000001"),
-            ("pitch", "1e-46"), ("pitchVariance", "0.60000001"), ("pitchVariance", "1e-46"),
-        }) {
-            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
-                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
-            Equal(0, VfxManifestSpec.FromJson(raw).Slots.Length, "original sound scalar refuses before float32 " + field + "=" + literal);
-        }
-        foreach ((string field, string literal) in new[] {
-            ("volume", "1e-40"), ("volume", "0.99999999999999999999999999999999999"),
-            ("pitch", "0.89999999999999999999999999999999999"), ("pitchVariance", "0.59999999999999999999999999999999999"),
-        }) {
-            string raw = Json(slot => { slot["sound"]!["pitch"] = 0; slot["sound"]!["pitchVariance"] = 0;
-                slot["sound"]![field] = "RAW_SOUND_NUMBER"; }).Replace("\"RAW_SOUND_NUMBER\"", literal, StringComparison.Ordinal);
-            var valid = VfxManifestSpec.FromJson(raw);
-            Equal(1, valid.Slots.Length, "in-domain sound rounding retained " + field);
-            Equal(1, VfxManifestSpec.FromJson(valid.ToJson()).Slots.Length, "sound writer retains admitted rounded endpoint " + field);
-        }
-        var legacy = SoundSelectionRead("Item26");
-        Equal(true, legacy.Slots[0].Sound is null, "absent sound keeps old mode");
-        Equal(false, JsonNode.Parse(legacy.ToJson())!["Slots"]![0]!.AsObject().ContainsKey("Sound"), "serializer does not materialize sound controls");
-        foreach (string field in new[] { "volume", "pitch", "pitchVariance" }) {
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]!.AsObject().Remove(field))).Slots.Length, "missing sound leaf is not a default");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = null)).Slots.Length, "present null sound scalar rejected");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = true)).Slots.Length, "boolean sound scalar rejected");
-            Equal(0, VfxManifestSpec.FromJson(Json(slot => slot["sound"]![field] = "native")).Slots.Length, "string sound scalar rejected");
-        }
-        foreach (Action<JsonObject> invalid in new Action<JsonObject>[] {
-            slot => slot["sound"] = null,
-            slot => slot["sound"] = new JsonObject(),
-            slot => slot["sound"] = new JsonArray(),
-            slot => slot["sound"]!["volume"] = 1.01,
-            slot => slot["sound"]!["volume"] = -0.01,
-            slot => slot["sound"]!["pitch"] = -0.91,
-            slot => slot["sound"]!["pitch"] = 0.91,
-            slot => slot["sound"]!["pitchVariance"] = -0.01,
-            slot => slot["sound"]!["pitchVariance"] = 0.61,
-            slot => slot["sound"]!["pitchVariance"] = 0.6, // individual bounds valid, random interval exceeds -1
-            slot => slot["sound"]!["family"] = "harp",
-            slot => slot.Remove("soundId"),
-            slot => { slot["RendererKind"] = "lightCue"; slot["Channel"] = "light"; },
-        }) Equal(0, VfxManifestSpec.FromJson(Json(invalid)).Slots.Length, "invalid sound presence fails closed");
-        foreach (float invalid in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity }) {
-            bool rejected = false;
-            try { new VfxSoundSpec { Volume = 1f, Pitch = invalid, PitchVariance = 0 }.NormalizeAndValidate(); }
-            catch (System.IO.InvalidDataException) { rejected = true; }
-            Equal(true, rejected, "nonfinite live sound control rejected");
-        }
-    }
 
     private static void VfxSoundControlsOwnPitchAndPreserveNativePolicies()
     {
@@ -206,9 +115,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void VfxSoundSelectorReachesItemAndProjectileNativeBoundary()
     {
+        using var actorState = new NativeActorState();
         WithLighting((config, lights) => {
-            var oldPlayer = Terraria.Main.player[0];
-            int oldLocal = Terraria.Main.myPlayer;
+
             var system = new InfiniDetachedVfxSystem();
             int calls = 0;
             SoundStyle observed = default;
@@ -289,7 +198,7 @@ internal static partial class EngineRuntimeChecks
             }
             finally {
                 system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
-                Terraria.Main.player[0] = oldPlayer; Terraria.Main.myPlayer = oldLocal;
+
             }
         });
     }

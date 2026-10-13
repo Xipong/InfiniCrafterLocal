@@ -51,9 +51,7 @@ internal static partial class EngineRuntimeChecks
                 player.moveSpeed = player.pickSpeed = 1f;
                 var item = new Item { type = 1, stack = 1 };
                 var host = new GeneratedItem();
-                typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(host, item);
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, host);
-                typeof(GeneratedItem).GetProperty("Data")!.SetValue(host, data);
+                AttachItem(host, item, data);
                 data.ApplyToItem(item);
                 Equal(true, host.CanUseItem(player), "small buff CanUseItem");
                 host.UseItem(player);

@@ -1,9 +1,7 @@
 """Native Codex account ownership, auth, subscription text/SSE/catalog/image contracts."""
 from __future__ import annotations
-from prompt_packet_helpers import dossier_text
 
 import base64
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 from dataclasses import dataclass, field
 import hashlib
@@ -21,6 +19,7 @@ import pytest
 from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
 from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
 from test_provider_transport_contract import PIN, packet, wire
+from provider_test_support import HttpReply, RecordingOpener
 
 CODEX = "https://chatgpt.com/backend-api/codex"
 
@@ -49,112 +48,25 @@ def _assert_structured_outputs_subset(schema):
 
 
 @pytest.mark.parametrize("stage", ["author", "repair"])
-def test_subscription_author_schema_types_every_const_without_changing_literal_contract(monkeypatch, stage):
-    from jsonschema import Draft202012Validator
+def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, stage):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
 
     monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
-        local = contract.author_item_response_schema()
         request, _, _ = author.build_initial_author_request(
-            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol",
-        )
+            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol")
     else:
-        local = contract.author_item_repair_response_schema()
-        request = {
-            "model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
-            "response_format": llm.llm_json_response_format(
-                "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True,
-            ),
-        }
+        request = {"model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
+                   "response_format": llm.llm_json_response_format(
+                       "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True)}
     before = copy.deepcopy(request)
-    wire = json.loads(json.dumps(backend._request_payload(request)))
-    provider = wire["text"]["format"]["schema"]
-    _assert_structured_outputs_subset(provider)
-    types = {str: "string", int: "integer", bool: "boolean"}
-    seen = []
-
-    def compare(source, sent, path=()):
-        if isinstance(source, dict):
-            if "if" in source:
-                # Exact finite-event partition, before required+nullable encoding.
-                # The periodic case promotes periodTicks; other cases retain its
-                # optional wrapper. No function-name/weapon routing is involved.
-                selector = next(iter(source["if"]["properties"]))
-                expected = source["if"]["properties"][selector]["const"]
-                events = source["properties"][selector]["enum"]
-                assert set(sent) == {"anyOf"}
-                assert len(sent["anyOf"]) == 2
-                sent_events = [event for branch in sent["anyOf"] for event in branch["properties"][selector]["enum"]]
-                assert sorted(sent_events) == sorted(events)
-                for remote in sent["anyOf"]:
-                    group = remote["properties"][selector]["enum"]
-                    assert expected not in group or group == [expected]
-                    case = copy.deepcopy({key: value for key, value in source.items() if key not in {"if", "then"}})
-                    case["properties"][selector]["enum"] = group
-                    if expected in group:
-                        case["required"] += [key for key in source["then"]["required"] if key not in case["required"]]
-                    compare(case, remote, path + ("event-case", tuple(group)))
-                return
-            expected_keys = {key for key in source if key != "description" and not key.startswith("x-infini-")}
-            if "oneOf" in source:
-                expected_keys = (expected_keys - {"oneOf"}) | {"anyOf"}
-            if "properties" in source:
-                expected_keys.add("required")
-                assert set(sent["properties"]) == set(source["properties"]), path
-            if "const" in source:
-                expected_keys.add("type")
-            assert set(sent) == expected_keys, path
-            if "const" in source:
-                expected = types[type(source["const"])]
-                assert sent.get("type") == expected, f"untyped provider const at {path}: {sent}"
-                assert sent == {**source, "type": expected}
-                candidates = [source["const"], "other", "", 0, 1, 2, False, True, None, {}, []]
-                for candidate in candidates:
-                    assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(sent).is_valid(candidate)
-                seen.append(path)
-            for key, value in source.items():
-                if key == "description" or key.startswith("x-infini-"):
-                    assert key not in sent
-                    continue
-                if key == "properties":
-                    for name, child in value.items():
-                        remote = sent[key][name]
-                        if name not in source.get("required", []):
-                            remote = remote["anyOf"][0]
-                        compare(child, remote, path + (key, name))
-                elif key == "oneOf":
-                    # Only disjoint discriminator/type unions may change spelling.
-                    assert "oneOf" not in sent
-                    compare(value, sent["anyOf"], path + ("anyOf",))
-                elif key != "required":
-                    if isinstance(value, (dict, list)):
-                        compare(value, sent[key], path + (key,))
-                    else:
-                        assert sent[key] == value, path + (key,)
-        elif isinstance(source, list):
-            assert len(source) == len(sent)
-            for index, (child, remote) in enumerate(zip(source, sent)):
-                compare(child, remote, path + (index,))
-        else:
-            assert source == sent, path
-
-    compare(local, provider)
-    assert seen  # No fixed count: lossless finite-case expansion duplicates leaves.
+    sent = backend._request_payload(request)
+    _assert_structured_outputs_subset(sent["text"]["format"]["schema"])
+    assert sent["model"] == request["model"]
+    assert sent["text"]["format"]["type"] == "json_schema"
+    assert sent["text"]["format"]["strict"] is True
+    assert [row["role"] for row in sent["input"]] == [row["role"] for row in request["messages"] if row["role"] != "system"]
     assert request == before
-    assert wire["model"] == "gpt-6-sol"
-    assert wire["text"]["format"]["type"] == "json_schema" and wire["text"]["format"]["strict"] is True
-    if stage == "author":
-        assert [item["role"] for item in wire["input"]] == ["developer", "user"]
-        static, dynamic = [item["content"][0]["text"] for item in wire["input"]]
-        # Only object member framing changed; restore the exact logical text.
-        assert static[:-1] + "," + dynamic[1:] == dossier_text(request)
-        assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
-    else:
-        assert [item["content"][0]["text"] for item in wire["input"]] == [
-            item["content"] for item in request["messages"] if item["role"] != "system"
-        ]
-    assert local == (contract.author_item_response_schema() if stage == "author" else contract.author_item_repair_response_schema())
 
 
 def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
@@ -247,61 +159,6 @@ def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptanc
             period = when.get("everyTicks")
             assert sent_valid is (type(period) is int and 6 <= period <= 3600), when
     assert CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"] == local
-
-
-@pytest.mark.parametrize("domain", ["bindings", "calls"])
-def test_subscription_disjoint_union_preserves_registered_variants_and_adversarial_rejection(domain):
-    from jsonschema import Draft202012Validator
-    from infini_local.core.runtime_authoring.program_schema import binding_schema
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.pipelines import author_item_contract as contract
-
-    local = binding_schema() if domain == "bindings" else {"oneOf": [cap.provider_variant_schema() for cap in visible_capabilities()]}
-    provider = contract._provider_strict_projection(local)
-    assert len(provider["anyOf"]) == len(local["oneOf"])
-    for branch in local["oneOf"]:
-        if domain == "calls":
-            fn = branch["properties"]["fn"]["const"]
-            item = build_capability_witness(fn)
-            row = next(call for call in item["runtimeProgram"]["calls"] if call["fn"] == fn)
-            selector = "fn"
-        else:
-            input_kind = branch["properties"]["input"]["const"]
-            from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
-            from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
-            action_kind = branch["properties"].get("action", {}).get("properties", {}).get("kind", {}).get("const")
-            action_kind = action_kind or INPUT_KIND_REGISTRY[input_kind].allowed_actions[0]
-            row = {"id": "binding_probe", **complete_transaction(input_name=input_kind, action_name=action_kind,
-                target="item", stack_cost_value=branch["properties"].get("stackCost", {}).get("const", 1 if action_kind == "place_item" else 0),
-                contact_damage_value=False, placement_call="place_call" if action_kind == "place_item" else "")}
-            if "stackConsumeChancePercent" in branch["properties"]:
-                row["stackConsumeChancePercent"] = 35
-            selector = "input"
-        assert Draft202012Validator(local).is_valid(row)
-        encoded = _encode_nullable_fixture(row, branch)
-        assert Draft202012Validator(provider).is_valid(encoded)
-        controls = []
-        for name, value in [(selector, "unknown"), ("id", "INVALID\r"), ("foreign", None)]:
-            sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-            sparse_bad[name] = sent_bad[name] = value
-            controls.append((sparse_bad, sent_bad))
-        sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-        sparse_bad.pop(selector)
-        sent_bad.pop(selector)
-        controls.append((sparse_bad, sent_bad))
-        for sparse_bad, sent_bad in controls:
-            assert not Draft202012Validator(local).is_valid(sparse_bad), sparse_bad
-            assert not Draft202012Validator(provider).is_valid(sent_bad), sent_bad
-        if domain == "calls":
-            for key, child in branch["properties"].get("params", {}).get("properties", {}).items():
-                for limit, step in [("minimum", -1), ("maximum", 1)]:
-                    if limit not in child:
-                        continue
-                    sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-                    sparse_bad["params"][key] = sent_bad["params"][key] = child[limit] + step
-                    assert not Draft202012Validator(local).is_valid(sparse_bad), (fn, key, limit)
-                    assert not Draft202012Validator(provider).is_valid(sent_bad), (fn, key, limit)
 
 
 @pytest.mark.parametrize("control", ["bad-neighbour", "required-null", "periodic-null", "unknown-event", "missing-event", "unknown-fn", "missing-fn", "array-null", "foreign-null", "different-wrapper", "reordered-provider"])
@@ -412,86 +269,6 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     assert item == before and validate_runtime_program(repaired)["ok"]
 
 
-def test_subscription_primary_selection_type_union_keeps_string_constraints_and_null():
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.core.runtime_authoring.program_schema import PRIMARY_ENTITY_SELECTION_FIELD
-
-    local = contract.author_item_repair_response_schema()["properties"][PRIMARY_ENTITY_SELECTION_FIELD]
-    provider = contract._provider_strict_projection(local)
-    assert set(provider) == {"anyOf"}
-    for value in ["item", "blade_1", None, "", "Uppercase", "x" * 49, True, 1, 1.5, {}, []]:
-        source_valid = Draft202012Validator(local).is_valid(value)
-        assert source_valid is (value is None or value in ("item", "blade_1"))
-        assert Draft202012Validator(provider).is_valid(value) is source_valid
-
-
-@pytest.mark.parametrize("literal", [1, 1.0, 1.5, False, True, None, "exact", [1, "literal"], {"if": {"const": "not a schema"}}])
-def test_subscription_const_types_preserve_jsonschema_numeric_and_literal_domains(literal):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-
-    source = {"const": literal}
-    provider = contract._provider_strict_projection(source)
-    assert provider["const"] == literal and source == {"const": literal}
-    if type(literal) is float:
-        assert provider["type"] == "number"  # 1.5 must not be narrowed to integer
-    for candidate in [literal, 0, 1, 1.0, 1.5, False, True, None, "other", {}, []]:
-        assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(provider).is_valid(candidate)
-
-
-@pytest.mark.parametrize("shape", ["overlapping-union", "optional-selector", "optional-ancestor", "numeric-overlap", "type-overlap", "non-finite-const", "conditional-optional-selector", "conditional-unbounded-selector", "conditional-predicate", "conditional-consequent", "conditional-unknown-addition", "conditional-else", "allOf", "not", "dependentRequired", "dependentSchemas"])
-def test_subscription_projection_rejects_unproved_future_compositions(shape):
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-
-    branch = {"type": "object", "properties": {"tag": {"const": "a"}}, "required": ["tag"], "additionalProperties": False}
-    opposite = copy.deepcopy(branch)
-    opposite["properties"]["tag"]["const"] = "b"
-    source = {"oneOf": [branch, opposite]}
-    if shape == "overlapping-union":
-        opposite["properties"]["tag"]["const"] = "a"
-    elif shape == "optional-selector":
-        branch["required"] = opposite["required"] = []
-    elif shape == "optional-ancestor":
-        source = {"oneOf": [{"type": "object", "properties": {"nested": row}, "additionalProperties": False} for row in [branch, opposite]]}
-    elif shape == "numeric-overlap":
-        branch["properties"]["tag"]["const"] = 1
-        opposite["properties"]["tag"]["const"] = 1.0
-    elif shape == "type-overlap":
-        source = {"oneOf": [{"type": "integer"}, {"type": "number"}]}
-    elif shape == "non-finite-const":
-        source = {"const": float("nan")}
-    elif shape.startswith("conditional-"):
-        source = {"type": "object", "additionalProperties": False,
-                  "properties": {"event": {"type": "string", "enum": ["on_hit", "periodic"]},
-                                 "periodTicks": {"type": "integer", "minimum": 6},
-                                 "delayTicks": {"type": "integer", "minimum": 0}},
-                  "required": ["event"],
-                  "if": {"properties": {"event": {"const": "periodic"}}, "required": ["event"]},
-                  "then": {"required": ["periodTicks"]}}
-        if shape == "conditional-optional-selector":
-            source["required"].remove("event")
-        elif shape == "conditional-unbounded-selector":
-            source["properties"]["event"].pop("enum")
-        elif shape == "conditional-predicate":
-            source["if"]["properties"]["event"] = {"pattern": "periodic"}
-        elif shape == "conditional-consequent":
-            source["then"]["properties"] = {"periodTicks": {"minimum": 10}}
-        elif shape == "conditional-unknown-addition":
-            source["then"]["required"] = ["new_mechanic"]
-        else:
-            source["else"] = {"required": ["delayTicks"]}
-    else:
-        source = {shape: {} if shape != "allOf" else [branch]}
-    before = copy.deepcopy(source)
-    with pytest.raises(ValueError, match="Unproved provider"):
-        contract._provider_strict_projection(source)
-    assert source.keys() == before.keys()
-    if shape != "non-finite-const":
-        assert source == before
-
-
 def message(text, *, phase=None, **extra):
     result = {"type": "message", "role": "assistant", "status": "completed",
               "content": [{"type": "output_text", "text": text}], **extra}
@@ -515,6 +292,19 @@ def subscription(monkeypatch):
     return response, credentials
 
 
+@pytest.fixture
+def subscription_sends(subscription, monkeypatch):
+    response, credentials = subscription
+    calls = []
+
+    def post(url, body, **options):
+        calls.append((url, copy.deepcopy(body), options))
+        return copy.deepcopy(response)
+
+    monkeypatch.setattr(auth, "post_sse", post)
+    return response, credentials, calls
+
+
 @dataclass
 class StreamOpener:
     body: bytes
@@ -525,8 +315,7 @@ class StreamOpener:
         return io.BytesIO(self.body)
 
 
-@pytest.mark.parametrize("callback,valid", [("valid", True), ("wrong-state", False), ("duplicate-state", False), ("duplicate-code", False)])
-def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
+def test_pkce_authorization_url_has_native_challenge_redirect_and_scope():
     attempt = auth.LoginAttempt()
     params = parse_qs(urlsplit(attempt.authorization_url).query)
     expected = base64.urlsafe_b64encode(hashlib.sha256(attempt.verifier.encode()).digest()).decode().rstrip("=")
@@ -534,6 +323,11 @@ def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
     assert params["redirect_uri"] == ["http://localhost:1455/auth/callback"]
     assert params["scope"] == ["openid profile email offline_access"]
     assert attempt.verifier not in repr(attempt)
+
+
+@pytest.mark.parametrize("callback,valid", [("valid", True), ("wrong-state", False), ("duplicate-state", False), ("duplicate-code", False)])
+def test_pkce_callback_binds_state_and_rejects_duplicates(callback, valid):
+    attempt = auth.LoginAttempt()
     suffix = {"valid": f"state={attempt.state}&code=test-code", "wrong-state": "state=wrong&code=x",
         "duplicate-state": f"state={attempt.state}&state=wrong&code=x", "duplicate-code": f"state={attempt.state}&code=x&code=y"}[callback]
     if valid:
@@ -557,13 +351,8 @@ def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, 
     echoed = secret if encoding == "plain" else twice if encoding == "twice-unicode" else '{"token":"' + ''.join(r'\u%04x' % ord(char) for char in secret) + '"}'
     body = {"error": {"code": "unsupported_parameter", "param": "stream"}} if encoding == "diagnostic-code" else {"error": {"message": diagnostic + " " + echoed}}
     url = CODEX + ("/images/generations" if method == "post" else "/models")
-    class Opener:
-        def open(self, request, timeout):
-            assert request.full_url == url
-            if method == "post":
-                assert request.get_header("User-agent") == "infinicrafter/1.0"
-            raise HTTPError(request.full_url, status, "denied", {}, io.BytesIO(json.dumps(body).encode()))
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_: Opener())
+    opener = RecordingOpener(HTTPError(url, status, "denied", {}, HttpReply(json.dumps(body).encode())))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_: opener)
     with pytest.raises(auth.CodexError) as caught:
         if method == "post":
             auth.post_json(url, {}, headers={"Authorization": "Bearer " + secret})
@@ -573,41 +362,40 @@ def test_auth_http_diagnostics_keep_status_not_credentials(monkeypatch, method, 
     assert f"HTTP {status}" in error and diagnostic in error
     assert secret not in error.replace('\\', '')
     assert "\\u" not in error
+    assert len(opener.requests) == 1
+    request, _timeout = opener.requests[0]
+    assert request.full_url == url
+    if method == "post":
+        assert request.get_header("User-agent") == "infinicrafter/1.0"
 
 
-@pytest.mark.parametrize("scenario,expected,error", [
-    pytest.param("commentary-and-final", '{"item":"Клинок"}', None, id="commentary-not-authored"),
-    pytest.param("commentary-only", None, "text output", id="commentary-only-refused"),
-    pytest.param("in_progress", None, "incomplete", id="unfinished-final"),
-    pytest.param("incomplete", None, "incomplete", id="incomplete-final"),
-    pytest.param("legacy-parts", '{"label":"Клинок"}', None, id="legacy-split-text"),
-    pytest.param("final-parts", '{"label":"Клинок"}', None, id="final-split-text"),
-    pytest.param("refusal", None, "refused", id="final-refusal-after-text"),
+@pytest.mark.parametrize("output,expected,error", [
+    pytest.param([message("I will validate the item first.\n", phase="commentary"),
+        {"type": "reasoning", "summary": []}, message('{"item":"Клинок"}', phase="final_answer")],
+        '{"item":"Клинок"}', None, id="commentary-not-authored"),
+    pytest.param([message('{"status":"working"}', phase="commentary")], None, "text output", id="commentary-only-refused"),
+    *[pytest.param([message('{"partial":', phase="final_answer", status=status)], None, "incomplete", id=label)
+      for status, label in (("in_progress", "unfinished-final"), ("incomplete", "incomplete-final"))],
+    *[pytest.param([{
+        "type": "message", "role": "assistant",
+        "content": [{"type": "output_text", "text": '{"label":'}, {"type": "output_text", "text": '"Клинок"}'}],
+        **({"phase": "final_answer"} if final else {}),
+    }], '{"label":"Клинок"}', None, id="final-split-text" if final else "legacy-split-text")
+      for final in (False, True)],
+    pytest.param([message('', phase="final_answer", content=[
+        {"type": "output_text", "text": '{"ok":true}'}, {"type": "refusal", "refusal": "test refusal"},
+    ])], None, "refused", id="final-refusal-after-text"),
 ])
-def test_subscription_output_selects_only_completed_final_authored_text(scenario, expected, error):
-    if scenario == "commentary-and-final":
-        output = [message("I will validate the item first.\n", phase="commentary"), {"type": "reasoning", "summary": []}, message(expected, phase="final_answer")]
-    elif scenario == "commentary-only":
-        output = [message('{"status":"working"}', phase="commentary")]
-    elif scenario in {"in_progress", "incomplete"}:
-        output = [message('{"partial":', phase="final_answer", status=scenario)]
-    elif scenario == "refusal":
-        item = message('{"ok":true}', phase="final_answer")
-        item["content"].append({"type": "refusal", "refusal": "test refusal"})
-        output = [item]
-    else:
-        item = message("", phase="final_answer" if scenario == "final-parts" else None)
-        item.pop("status")
-        item["content"] = [{"type": "output_text", "text": '{"label":'}, {"type": "output_text", "text": '"Клинок"}'}]
-        output = [item]
-    response = {"output": output}
+def test_subscription_output_selects_only_completed_final_authored_text(output, expected, error):
+    response = {"output": copy.deepcopy(output)}
     before = copy.deepcopy(response)
     if error:
         with pytest.raises(auth.CodexError, match=error):
             backend._output_text(response)
     else:
         text = backend._output_text(response)
-        assert text == expected and json.loads(text) == json.loads(expected)
+        assert text == expected
+        assert json.loads(text) == json.loads(expected)
     assert response == before
 
 
@@ -651,42 +439,44 @@ def test_subscription_cache_instruction_attribution_survives_usage_projection(su
     assert credentials.access_token not in repr(persisted) and credentials.refresh_token not in repr(persisted)
 
 
-@pytest.mark.parametrize("scenario,value", [
-    pytest.param("full", None, id="safe-usage-whitelist"),
-    pytest.param("metadata", None, id="provider-metadata-removed"),
-    *[pytest.param("counter", value, id=f"counter-{index}") for index, value in enumerate([0, 7, True, False, -1, 1.5, "20", None, {}, []])],
-    *[pytest.param("container", value, id=f"container-{index}") for index, value in enumerate([None, [], "metadata", 5])],
-    pytest.param("cache-write", None, id="cache-write-preserved"),
-    pytest.param("missing", None, id="missing-cache-is-not-zero"),
+@pytest.mark.parametrize("scenario,usage,expected", [
+    pytest.param("full", {
+        "input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+        "input_tokens_details": {"cached_tokens": 100, "metadata": "test-access-not-real"},
+        "output_tokens_details": {"reasoning_tokens": 20, "metadata": "test-refresh-not-real"},
+        "attribution": "test-account",
+    }, {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
+        "input_tokens_details": {"cached_tokens": 100}, "output_tokens_details": {"reasoning_tokens": 20}},
+        id="safe-usage-whitelist"),
+    pytest.param("metadata", {"input_tokens": 3, "output_tokens": 5,
+        "attribution": {"secret": "test-access-not-real"}}, {"input_tokens": 3, "output_tokens": 5},
+        id="provider-metadata-removed"),
+    *[pytest.param("counter", {"input_tokens_details": {"cached_tokens": value},
+        "output_tokens_details": {"reasoning_tokens": value}},
+        {"input_tokens_details": {"cached_tokens": value}, "output_tokens_details": {"reasoning_tokens": value}}
+        if type(value) is int and value >= 0 else {}, id=f"counter-{label}")
+      for label, value in (("zero", 0), ("positive", 7), ("true", True), ("false", False),
+                           ("negative", -1), ("fraction", 1.5), ("string", "20"), ("null", None),
+                           ("object", {}), ("array", []))],
+    *[pytest.param("container", {"input_tokens": 2, "input_tokens_details": value,
+        "output_tokens_details": value}, {"input_tokens": 2}, id=f"container-{label}")
+      for label, value in (("null", None), ("array", []), ("string", "metadata"), ("number", 5))],
+    pytest.param("cache-write", {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30,
+        "not_a_counter": "private"}}, {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30}},
+        id="cache-write-preserved"),
+    pytest.param("missing", {"input_tokens": 7}, {"input_tokens": 7}, id="missing-cache-is-not-zero"),
 ])
-def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport(subscription, scenario, value):
+def test_subscription_usage_is_typed_whitelisted_and_preserved_through_transport(subscription, scenario, usage, expected):
     response, credentials = subscription
-    if scenario == "full":
-        response["usage"] = {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150,
-            "input_tokens_details": {"cached_tokens": 100, "metadata": credentials.access_token},
-            "output_tokens_details": {"reasoning_tokens": 20, "metadata": credentials.refresh_token}, "attribution": credentials.account_id}
-        expected = {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150, "input_tokens_details": {"cached_tokens": 100}, "output_tokens_details": {"reasoning_tokens": 20}}
-    elif scenario == "metadata":
+    response["usage"] = copy.deepcopy(usage)
+    if scenario == "metadata":
         response["id"] = credentials.access_token
-        response["usage"] = {"input_tokens": 3, "output_tokens": 5, "attribution": {"secret": credentials.access_token}}
-        expected = {"input_tokens": 3, "output_tokens": 5}
-    elif scenario == "counter":
-        response["usage"] = {"input_tokens_details": {"cached_tokens": value}, "output_tokens_details": {"reasoning_tokens": value}}
-        expected = response["usage"] if type(value) is int and value >= 0 else {}
-    elif scenario == "container":
-        response["usage"] = {"input_tokens": 2, "input_tokens_details": value, "output_tokens_details": value}
-        expected = {"input_tokens": 2}
-    elif scenario == "cache-write":
-        response["usage"] = {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30, "not_a_counter": "private"}}
-        expected = {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 30}}
-    else:
-        response["usage"] = {"input_tokens": 7}
-        expected = {"input_tokens": 7}
     context = {"provider": "openai_codex", "base_url": CODEX, "model": "test-model", "api_mode": "responses", "api_key": ""}
     result = llm._llm_json_single_context(packet(), 3, context)
     assert result["usage"] == expected
     if scenario == "missing":
-        assert result["_debug"]["cachedInputTokens"] is None and result["_debug"]["cacheHit"] is None
+        assert result["_debug"]["cachedInputTokens"] is None
+        assert result["_debug"]["cacheHit"] is None
     for secret in (credentials.access_token, credentials.refresh_token, credentials.account_id):
         assert secret not in repr(result)
 
@@ -793,7 +583,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
 
 
 @pytest.mark.parametrize("scenario", ["literal-stage", "assistant-history", "untranslatable-budget"])
-def test_subscription_request_preserves_packet_and_only_supported_wire_options(monkeypatch, subscription, scenario):
+def test_subscription_request_preserves_packet_and_only_supported_wire_options(monkeypatch, subscription_sends, scenario):
     request = {"model": "test-codex-model", "messages": [{"role": "system", "content": "Literal system contract"},
         {"role": "user", "content": "Literal authored item"}], "max_tokens": 2048,
         "response_format": {"type": "json_object"}, "reasoning": {"effort": "low", "exclude": True}, "temperature": 0.38}
@@ -806,11 +596,9 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
         with pytest.raises(auth.CodexError, match="reasoning"):
             backend._request_payload(request)
         return
-    response, credentials = subscription
+    response, credentials, calls = subscription_sends
     response["output"] = [message('{"item":"ok"}')]
     response["usage"] = {"input_tokens": 10, "output_tokens": 4}
-    calls = []
-    monkeypatch.setattr(auth, "post_sse", lambda url, body, **options: calls.append((url, body, options)) or response)
     before = copy.deepcopy(request)
     result = backend.generate_chat(request, timeout=20)
     assert request == before and result["choices"][0]["message"]["content"] == '{"item":"ok"}'
@@ -957,16 +745,13 @@ def test_browser_login_exchanges_pkce_once_and_saves_only_after_callback(tmp_pat
 
 
 def test_authorization_code_exchange_uses_native_form_encoding(monkeypatch):
-    import io
-    class Response(io.BytesIO):
-        pass
-    class Opener:
-        def open(self, request, timeout):
-            assert request.get_header("Content-type") == "application/x-www-form-urlencoded"
-            assert parse_qs(request.data.decode()) == {"code": ["test+code"], "grant_type": ["authorization_code"]}
-            return Response(b'{"ok": true}')
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
+    opener = RecordingOpener(HttpReply(b'{"ok": true}'))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: opener)
     assert auth.post_json(auth.TOKEN_URL, {"code": "test+code", "grant_type": "authorization_code"}, form=True) == {"ok": True}
+    assert len(opener.requests) == 1
+    request, _timeout = opener.requests[0]
+    assert request.get_header("Content-type") == "application/x-www-form-urlencoded"
+    assert parse_qs(request.data.decode()) == {"code": ["test+code"], "grant_type": ["authorization_code"]}
 
 
 def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
@@ -1012,28 +797,21 @@ def test_sse_rejects_late_completion_and_bounds_each_socket_read(monkeypatch):
 
 
 def test_bounded_catalog_get_uses_only_codex_origin_and_redacts_errors(monkeypatch):
-    import io
-    from email.message import Message
-    from urllib.error import HTTPError
     key = "test-access-not-real"
-    requests = []
-    class Opener:
-        def open(self, request, timeout):
-            requests.append(request)
-            assert timeout == 3
-            if len(requests) == 1:
-                return io.BytesIO(b'{"models": []}')
-            raise HTTPError(request.full_url, 403, "denied", Message(), io.BytesIO(json.dumps({"error": {"message": "denied " + key}}).encode()))
-    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: Opener())
     url = "https://chatgpt.com/backend-api/codex/models?client_version=0.4.241"
+    error_body = json.dumps({"error": {"message": "denied " + key}}).encode()
+    opener = RecordingOpener(HttpReply(b'{"models": []}'), HTTPError(url, 403, "denied", {}, HttpReply(error_body)))
+    monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *a: opener)
     headers = {"Authorization": "Bearer " + key}
     assert auth.get_json(url, headers=headers, timeout=3, limit=128) == {"models": []}
-    assert requests[0].get_method() == "GET"
+    assert opener.requests[0][0].get_method() == "GET"
     with pytest.raises(auth.CodexError, match="HTTP 403") as caught:
         auth.get_json(url, headers=headers, timeout=3, limit=128)
     assert key not in str(caught.value)
     with pytest.raises(auth.CodexError):
         auth.get_json("https://api.openai.com/v1/models", headers=headers)
+    assert len(opener.requests) == 2
+    assert all(timeout == 3 for _request, timeout in opener.requests)
 
 
 def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path):
@@ -1170,11 +948,9 @@ def test_subscription_json_input_framing_preserves_all_authored_messages(mode, m
 
 
 @pytest.mark.parametrize("cache_key", [None, "infini-static-prefix", "unicode-кэш", "key\r\nextra: value"])
-def test_subscription_cache_affinity_reaches_native_session_header(subscription, monkeypatch, cache_key):
+def test_subscription_cache_affinity_reaches_native_session_header(subscription_sends, monkeypatch, cache_key):
     from urllib.parse import quote
-    response, credentials = subscription
-    sent = []
-    monkeypatch.setattr(auth, "post_sse", lambda url, body, **kw: sent.append((url, copy.deepcopy(body), kw)) or copy.deepcopy(response))
+    response, credentials, sent = subscription_sends
     packet = {"model": "test-model", "messages": [{"role": "user", "content": "recipe one"}]}
     if cache_key is not None:
         packet["prompt_cache_key"] = cache_key

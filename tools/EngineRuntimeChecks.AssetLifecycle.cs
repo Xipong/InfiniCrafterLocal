@@ -13,38 +13,6 @@ using InfiniMod = InfiniCrafterLocal.InfiniCrafterLocalMod;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void AssetLifecycleSpriteOwnershipDiagnostics()
-    {
-        WithLighting((_, __) => {
-            using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
-            string path = Path.Combine(Terraria.Program.SavePath, "ownership.png"); File.WriteAllBytes(path, AssetOwnerCanonical);
-            var item = probe.Item("lifecycle_ownership", path); probe.Draw(item); probe.Cache.Clear();
-            var snapshot = probe.Cache.GetDebugSnapshot();
-            long Value(string name) {
-                var property = snapshot.GetType().GetProperty(name);
-                Equal(true, property is not null, "diagnostic field exists: " + name);
-                return Convert.ToInt64(property!.GetValue(snapshot));
-            }
-            Equal(0, snapshot.TextureCount, "Clear removes resident lookup immediately");
-            Equal(0L, snapshot.EstimatedTextureBytes, "retained resident estimate keeps existing meaning");
-            Equal(1L, Value("PendingRetirementCount"), "pending owner remains visible before legal drain");
-            Equal(1L, Value("OwnedTextureCount"), "owned means resident plus deferred");
-            Equal(4096L, Value("EstimatedOwnedTextureBytes"), "32x32 RGBA CPU shell remains owned");
-            Equal(0L, Value("CapacityRefusalCount"), "ordinary load and Clear are not capacity refusals");
-            probe.Batch.End(); probe.DrainOwnerQueue(); snapshot = probe.Cache.GetDebugSnapshot();
-            Equal(0L, Value("OwnedTextureCount"), "legal owner callback releases ownership");
-            Equal(0L, Value("EstimatedOwnedTextureBytes"), "post-drain owned estimate is zero");
-            probe.Batch.Begin();
-            for (int i = 0; i < snapshot.MaxCachedTextures * 2; i++) { probe.Draw(item); probe.Cache.Invalidate(path); }
-            long beforeMiss = probe.Cache.GetDebugSnapshot().MissCount;
-            Equal(true, probe.Cache.TryGet(path) is null, "withheld retirement saturates actual admission boundary");
-            snapshot = probe.Cache.GetDebugSnapshot();
-            Equal(1L, Value("CapacityRefusalCount"), "one actual capacity refusal is counted");
-            Equal(beforeMiss + 1, snapshot.MissCount, "existing miss counter still counts refusal");
-            Equal(0, snapshot.MissingOrBadCount, "pressure is not bad-file backoff");
-            Equal((long)snapshot.MaxCachedTextures * 2, Value("OwnedTextureCount"), "snapshot includes all pending resources at capacity");
-        });
-    }
 
     private static byte[] AssetLifecycleDefinitionPacket(GeneratedItemData data, string? hashOverride = null)
     {

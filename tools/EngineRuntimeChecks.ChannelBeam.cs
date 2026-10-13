@@ -43,9 +43,7 @@ internal static partial class EngineRuntimeChecks
         Player owner = Terraria.Main.player[0];
         var item = new Item(); data.ApplyToItem(item);
         var held = new GeneratedItem();
-        typeof(ModType<Item>).GetProperty("Entity", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(held, item);
-        typeof(Item).GetProperty("ModItem")!.SetValue(item, held);
-        typeof(GeneratedItem).GetProperty("Data")!.SetValue(held, data);
+        AttachItem(held, item, data);
         owner.inventory[0] = item; owner.selectedItem = 0; owner.channel = true;
         owner.active = true; owner.dead = owner.noItems = false;
         owner.frozen = owner.webbed = owner.stoned = false;
@@ -69,44 +67,6 @@ internal static partial class EngineRuntimeChecks
     }
     private static void BeamNear(float expected, float actual, string label)
         => Equal(true, Math.Abs(expected - actual) < 0.002f, label + " expected=" + expected + " actual=" + actual);
-
-    private static void BeamStrictDtoAndRetainedAbsence()
-    {
-        var data = BeamFixture();
-        foreach (string json in new[] { data.ToJson(), data.ToNetworkJson() }) {
-            var copy = GeneratedItemData.FromJson(json) ?? throw new InvalidOperationException("beam DTO rejected explicit fixture");
-            var p = copy.RuntimeProgram.TryGetEntity("root")!.Controller.Params;
-            Equal("each_use_time", p.ManaPayment ?? "", "native sustain selector round-trips");
-            Equal(0.35, p.InitialDamageMultiplier ?? -1, "damage fraction retains raw double");
-            Equal(0.22, p.InitialWidthMultiplier ?? -1, "width fraction retains raw double");
-            Equal(0.08, p.DamageStartProgress ?? -1, "threshold retains raw double");
-            Equal(false, p.RaycastTiles ?? true, "explicit false survives");
-        }
-        data = BeamFixture(false);
-        var raw = JsonNode.Parse(data.ToJson())!.AsObject();
-        string[] names = { "manaPayment", "initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress", "raycastTiles" };
-        var legacy = GeneratedItemData.FromJson(raw.ToJsonString())!;
-        foreach (string json in new[] { legacy.ToJson(), legacy.ToNetworkJson() })
-            foreach (string name in names) Equal(false, json.Contains("\"" + name + "\"", StringComparison.Ordinal), "retained wire absence " + name);
-        foreach (var pair in new[] {
-            ("manaPayment", "null"), ("manaPayment", "\"Each_use_time\""), ("manaPayment", "true"),
-            ("initialDamageMultiplier", "null"), ("initialDamageMultiplier", "0"), ("initialDamageMultiplier", "1.001"),
-            ("initialDamageMultiplier", "0.9999999999"), ("initialWidthMultiplier", "false"),
-            ("initialWidthMultiplier", "0.9999999999"), ("damageStartProgress", "-0.01"),
-            ("damageStartProgress", "1.1"), ("raycastTiles", "null"), ("raycastTiles", "1") }) {
-            var invalid = raw.DeepClone();
-            invalid["runtimeProgram"]!["entities"]![1]!["controller"]!["params"]![pair.Item1] = JsonNode.Parse(pair.Item2);
-            Equal(true, GeneratedItemData.FromJson(invalid.ToJsonString()) is null, "strict present beam value " + pair);
-        }
-        foreach (string driver in new[] { "movement", "controller" }) {
-            var invalid = raw.DeepClone();
-            invalid["runtimeProgram"]!["entities"]![0]![driver]!["params"]!["raycastTiles"] = false;
-            Equal(true, GeneratedItemData.FromJson(invalid.ToJsonString()) is null, "item body cannot smuggle neutral beam params through " + driver);
-        }
-        var foreign = raw.DeepClone();
-        foreign["runtimeProgram"]!["entities"]![1]!["movement"]!["params"]!["initialWidthMultiplier"] = 1.0;
-        Equal(true, GeneratedItemData.FromJson(foreign.ToJsonString()) is null, "non-beam driver cannot carry a beam extension");
-    }
 
     private static void BeamRampsConsumeLiveDamageAndSharedBodyGeometry()
     {

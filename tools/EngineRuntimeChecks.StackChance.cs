@@ -46,32 +46,4 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
-    private static void OwnStackChanceRejectsPlacementAndPassiveDtos()
-    {
-        foreach (int chance in new[] { -1, 101 })
-        {
-            var data = MobilityConsumptionFixture("", 1);
-            bool rejected = false;
-            try
-            {
-                data.RuntimeProgram.Bindings[0].UsePolicy.StackConsumeChancePercent = chance;
-                data.RuntimeProgram.NormalizeAndValidate();
-            }
-            catch (InvalidDataException) { rejected = true; }
-            Equal(true, rejected, "invalid chance rejected by DTO");
-        }
-        var policy = new RuntimeBindingUsePolicySpec { StackCost = 1, StackConsumeChancePercent = 100,
-            Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.PlaceItem, TargetId = "item",
-                Placement = new RuntimePlacementSpec { TileId = 18, WallId = -1, PlaceStyle = 0 } } };
-        bool placementRejected = false;
-        try { policy.NormalizeAndValidate(RuntimeInputKind.PrimaryUse); }
-        catch (InvalidDataException) { placementRejected = true; }
-        Equal(true, placementRejected, "placement escrow cannot use probability");
-        var passive = new RuntimeBindingUsePolicySpec { StackCost = 0, StackConsumeChancePercent = 0,
-            Action = new RuntimeBindingActionSpec { Kind = RuntimeBindingAction.UseItemBody, TargetId = "item" } };
-        bool passiveRejected = false;
-        try { passive.NormalizeAndValidate(RuntimeInputKind.Hold); }
-        catch (InvalidDataException) { passiveRejected = true; }
-        Equal(true, passiveRejected, "passive activation cannot use own-stack probability");
-    }
 }

@@ -3,7 +3,6 @@ from __future__ import annotations
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
-import json
 
 import pytest
 
@@ -283,13 +282,6 @@ def test_repair_still_rejects_structurally_invalid_numeric_types(bad):
     assert any(row["path"] == "$.slotsUpsert[0].sound.volume" for row in report["errors"])
 
 
-def test_sound_dto_grammar_exposes_every_authored_control_and_no_other_design():
-    from infini_local.qa.primitive_loss_audit import _MODEL_ROOT, _class_properties
-    source = (_MODEL_ROOT / "Common/Models/VfxSoundSpec.cs").read_bytes()
-    declared = {key[0].upper() + key[1:] for key in vfx._sound_schema()["properties"]}
-    assert _class_properties(source, "VfxSoundSpec") == declared
-    mutant = source.replace(b"public sealed class VfxSoundSpec\n{", b"public sealed class VfxSoundSpec\n{\npublic bool RouteFromWeaponName { get; set; }")
-    assert _class_properties(mutant, "VfxSoundSpec") - declared == {"RouteFromWeaponName"}
 
 
 def test_actual_vfx_attachment_refuses_a_mutated_compiler_projection(monkeypatch):

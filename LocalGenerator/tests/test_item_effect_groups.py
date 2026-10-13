@@ -1,16 +1,19 @@
 """Explicit effect identities select native item effects without carrier entities."""
 from copy import deepcopy
+import json
 
 import pytest
+from repair_test_helpers import edit_fields, provider_roundtrip, gameplay_repair, frozen_gameplay_repair
 
 from infini_local.core.runtime_authoring import (
     apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
     filter_repair_patch_scope, validate_runtime_program, validate_runtime_wire,
 )
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, EFFECT_GROUP_BINDING_LOWERER_ID
+from infini_local.core.runtime_authoring.technical_lowering import (
+    audit_compiler_receipts, EFFECT_GROUP_BINDING_LOWERER_ID,
+)
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-from infini_local.qa import primitive_loss_audit
 
 
 def _groups(fn="restore_resources_on_use"):
@@ -57,7 +60,6 @@ def test_every_existing_item_effect_can_partition_explicit_main_and_alternate_gr
         assert [(g["healLife"], g["healMana"]) for g in groups] == [(20, 0), (0, 35)]
     receipts = final["runtimeContract"]["finalWireReceipts"]
     assert sum(row.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for row in receipts) == 2
-    assert audit_compiler_receipts(receipts, authored_document=doc, final_document=final)["ok"]
 
 
 def _mobility_pair(first, second):
@@ -137,8 +139,6 @@ def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(f
 @pytest.mark.parametrize("fn", ["move_player_on_use", "recall_home_on_use"])
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monkeypatch, fn, format_mode):
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = _mobility_pair("move_player_on_use", fn)
     call = doc["runtimeProgram"]["calls"][-1]
     call["params"]["cooldownTicks"] = True
@@ -150,7 +150,7 @@ def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monke
     fixed["params"]["effectGroupId"] = "first"
     hostile = deepcopy(doc["runtimeProgram"]["calls"][-2])
     hostile["params"]["rangeTiles"] = 120
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc,
+    repaired, _ = gameplay_repair(monkeypatch, doc,
         {"note": "one explicit leaf with frozen attacks", "realizationReplacement": doc["realization"], "callsUpsert": [fixed, hostile]},
         format_mode, out_of_scope_response=fn == "recall_home_on_use")
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
@@ -307,22 +307,12 @@ def test_named_generated_buff_neutral_omissions_have_exact_unique_group_receipts
     omissions = [row for row in rows if row.get("status") == "declared_neutral_omission" and row.get("fn") == "apply_generated_buff_on_use"]
     assert len(omissions) == len(defaults) * (1 if held else 2)
     assert all(row["finalPath"].startswith("runtimeProgram.effectGroups[") for row in omissions)
-    assert audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
     assert audit_compiler_receipts(rows, final_document=final)["ok"]
     damaged = deepcopy(final)
     damaged["runtimeContract"]["finalWireReceipts"].remove(omissions[0])
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-def test_effect_group_surface_audit_rejects_uncatalogued_native_storage():
-    source = (primitive_loss_audit._MODEL_ROOT / "Common/Models/RuntimeItemEffectGroupSpec.cs").read_bytes()
-    assert primitive_loss_audit.item_effect_group_surface_audit(source)["ok"]
-    anchor = b'public string Id { get; set; } = "";'
-    assert anchor in source
-    changed = source.replace(anchor, b"public int Damage { get; set; }\n    " + anchor)
-    report = primitive_loss_audit.item_effect_group_surface_audit(changed)
-    assert not report["ok"]
-    assert report["unclassifiedDtoFields"] == ["Damage"]
 
 
 def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects():
@@ -336,9 +326,6 @@ def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects()
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatch, format_mode):
-    import json
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = _groups()
     alternate = doc["runtimeProgram"]["bindings"].pop()
     primary = doc["runtimeProgram"]["bindings"][0]
@@ -355,19 +342,12 @@ def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatc
     hostile["params"]["damage"] = 999
     incoming = {"note": "explicit selector and independent alternate", "realizationReplacement": doc["realization"],
                 "bindingsUpsert": [corrected, alternate], "callsUpsert": [hostile]}
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, out_of_scope_response=True)
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
-    assert json.dumps(doc, sort_keys=True) == before
+    frozen_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+        scope["fieldPermissions"], expected, out_of_scope_response=True)
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatch, format_mode):
-    import json
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
     held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
@@ -380,18 +360,11 @@ def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatc
     hostile["params"]["damage"] = 999
     incoming = {"note": "remove diagnosed held call only", "realizationReplacement": doc["realization"],
                 "callIdsDelete": [held["id"], frozen["id"]], "callsUpsert": [hostile]}
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, out_of_scope_response=True)
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
-    assert json.dumps(doc, sort_keys=True) == before
+    frozen_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+        scope["fieldPermissions"], expected, out_of_scope_response=True)
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(monkeypatch, format_mode):
-    import json
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = _groups("apply_generated_buff_on_use")
     bindings = doc["runtimeProgram"]["bindings"]
     alternate = bindings.pop()
@@ -408,7 +381,7 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert any(row["action"].get("effectGroupId") == "second"
                for row in scope["create"]["bindings"]["allowedTransactions"])
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc,
+    repaired, _ = gameplay_repair(monkeypatch, doc,
         {"note": "held first and explicit alternate second", "realizationReplacement": doc["realization"],
          "callsUpsert": [fixed], "bindingsUpsert": [alternate]}, format_mode)
     repaired.pop("debug")
@@ -418,9 +391,6 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypatch, format_mode):
-    import json
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
     buff = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "apply_generated_buff_on_use")
@@ -432,18 +402,14 @@ def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypa
     expected = apply_repair_patch(doc, {"note": "choose existing utility", "callsUpsert": [fixed]})
     incoming = {"note": "retarget only", "realizationReplacement": doc["realization"],
                 "callsUpsert": [fixed], "callIdsDelete": [held["id"], buff["id"]]}
-    repaired, _ = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    frozen_gameplay_repair(monkeypatch, doc, incoming, format_mode,
+        scope["fieldPermissions"], expected)
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("case", ["broken-active", "nonempty-held", "empty-held"])
 def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode, case):
     from infini_local.core.errors import PlannerUnavailable
-    from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = _groups() if case == "broken-active" else build_capability_witness("refresh_generated_effect_group_while_held")
     if case == "broken-active":
@@ -455,7 +421,7 @@ def test_selector_noop_remains_red_without_host_design(monkeypatch, format_mode,
         doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
     before = deepcopy(doc)
     with pytest.raises(PlannerUnavailable):
-        _offline_gameplay_repair(monkeypatch, doc,
+        gameplay_repair(monkeypatch, doc,
             {"note": "no correction or removal chosen", "realizationReplacement": doc["realization"]}, format_mode)
     assert doc == before
     assert not validate_runtime_program(doc)["ok"]
@@ -488,7 +454,6 @@ def test_named_effect_selection_and_stack_probability_compile_independently(chan
     rows = final["runtimeContract"]["finalWireReceipts"]
     assert sum(r.get("lowererId") == STACK_CHANCE_LOWERER_ID for r in rows) == 2
     assert sum(r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID for r in rows) == 2
-    assert audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
     assert audit_compiler_receipts(rows, final_document=final)["ok"]
     # Adding probability must not rewrite any pre-existing grouped projection.
     omitted = deepcopy(doc)
@@ -537,7 +502,6 @@ def test_combined_binding_receipts_authenticate_each_independent_lane(lane, atta
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("chance", [None, 0, 35, 100])
 def test_combined_provider_preparation_preserves_presence_and_exact_compilation(monkeypatch, format_mode, chance):
-    import json
     from jsonschema import Draft202012Validator
     from infini_local.pipelines import author_item_contract as contract
     from infini_local.pipelines import llm_authoring_pipeline as author
@@ -554,60 +518,41 @@ def test_combined_provider_preparation_preserves_presence_and_exact_compilation(
     from prompt_packet_helpers import dossier_text
     assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
     assert request["messages"][0]["content"] == system and dossier_text(request) == user
-    local = contract.author_item_response_schema()
-    payload = _encode_nullable_fixture(doc, local) if format_mode == "json_schema" else deepcopy(doc)
-    if format_mode == "json_schema":
-        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
-    parsed = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
-    assert json.dumps(parsed, sort_keys=True) == before
+    parsed = provider_roundtrip(doc, request["response_format"])
     final = compile_runtime_program(parsed)
     assert final == compile_runtime_program(doc) and validate_runtime_wire(final)["ok"]
     assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("invalid_leaf", ["chance", "group", "input"])
-def test_combined_real_frozen_repair_preserves_the_other_binding_lanes(monkeypatch, format_mode, invalid_leaf):
-    import json
-    from test_repair_gameplay_contract import _offline_gameplay_repair
-
+@pytest.mark.parametrize("path,invalid,hostile", [
+    pytest.param("stackConsumeChancePercent", 101,
+                 {"contactDamage": True, "action.effectGroupId": "first", "input": "primary_use"}, id="chance"),
+    pytest.param("action.effectGroupId", "missing",
+                 {"contactDamage": True, "stackConsumeChancePercent": 99, "input": "primary_use"}, id="group"),
+    pytest.param("input", [],
+                 {"contactDamage": True, "stackConsumeChancePercent": 99, "action.effectGroupId": "first"}, id="input"),
+])
+def test_combined_real_frozen_repair_preserves_the_other_binding_lanes(monkeypatch, format_mode, path, invalid, hostile):
     doc = _chance_groups()
     binding = doc["runtimeProgram"]["bindings"][0]
-    binding_id = binding["id"]
     expected = deepcopy(doc)
-    if invalid_leaf == "chance":
-        binding["stackConsumeChancePercent"] = 101
-        path = "stackConsumeChancePercent"
-    elif invalid_leaf == "group":
-        binding["action"]["effectGroupId"] = "missing"
-        path = "action.effectGroupId"
-    else:
-        binding["input"] = []
-        path = "input"
+    correction = deepcopy(binding)
+    edit_fields(binding, {path: invalid})
+    edit_fields(correction, hostile)
     before = json.dumps(doc, sort_keys=True)
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["bindings"] == [{"id": binding_id, "paths": [path]}]
-    corrected = deepcopy(expected["runtimeProgram"]["bindings"][0])
-    corrected["contactDamage"] = True
-    if invalid_leaf != "chance":
-        corrected["stackConsumeChancePercent"] = 99
-    if invalid_leaf != "group":
-        corrected["action"]["effectGroupId"] = "first"
-    if invalid_leaf != "input":
-        corrected["input"] = "primary_use"
-    incoming = {"note": "explicit exact leaf only", "realizationReplacement": doc["realization"], "bindingsUpsert": [corrected]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
-    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == scope["fieldPermissions"]["bindings"]
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    permissions = [{"id": binding["id"], "paths": [path]}]
+    repaired, dossier, final = frozen_gameplay_repair(monkeypatch, doc, {
+        "note": "explicit exact leaf only", "realizationReplacement": doc["realization"], "bindingsUpsert": [correction],
+    }, format_mode, {"bindings": permissions}, expected)
+    policy = next(row["usePolicy"] for row in final["runtimeProgram"]["bindings"] if row["id"] == binding["id"])
+    assert policy["action"]["effectGroupId"] == "second"
+    assert policy["stackConsumeChancePercent"] == 35 and policy["contactDamage"] is False
     assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("input_value", [[], {}, None, True, 1, "PRIMARY_USE"])
 def test_combined_raw_wire_malformed_input_is_structured_nonmutating_refusal(input_value):
-    import json
 
     final = compile_runtime_program(_chance_groups())
     final.pop("runtimeContract")

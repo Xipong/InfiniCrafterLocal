@@ -1,27 +1,21 @@
 from __future__ import annotations
 
-import ast
 import copy
 import json
-from dataclasses import replace
-from pathlib import Path
-from typing import Any
 
 import pytest
 
 import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
 import infini_local.pipelines.visual_generation_pipeline as visual_stage
-import infini_local.core.runtime_authoring.repair_scope as repair_scope_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope, compile_runtime_program, filter_repair_patch_scope, REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES, runtime_event_inventory, runtime_repair_fragments, runtime_repair_scope_schema, strict_schema_errors, validate_repair_patch_scope, validate_runtime_program, VALIDATION_ERROR_CODES
-from infini_local.core.runtime_authoring.capability_registry import EventBindingRequirement, EventDependencyAlternative, RequirementSpec, visible_capabilities
+from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope, compile_runtime_program, filter_repair_patch_scope, runtime_event_inventory, runtime_repair_fragments, runtime_repair_scope_schema, strict_schema_errors, validate_repair_patch_scope, validate_runtime_program
 from infini_local.core.vfx_manifest import VFX_REPAIR_PATCH_SCHEMA, _apply_vfx_repair_patch, _build_vfx_repair_scope, validate_vfx_director_output, vfx_director_surface
 from infini_local.pipelines.combine_validation import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _binding_row, _binding_transaction, _visual_kit, _accepted_visual_data, _vfx_output, _empty_gameplay_patch
+from pipeline_test_support import RepairTransaction
+from test_low_level_three_stage_pipeline import _binding_row, _visual_kit, _accepted_visual_data, _vfx_output, _empty_gameplay_patch, wire_transport
 
 @pytest.mark.parametrize("source,selection,ok", [
     pytest.param("invalid", "item", True, id="invalid-primary-select-item"),
@@ -56,12 +50,10 @@ def test_primary_identity_transaction(source, selection, ok):
         assert not empty_audit["ok"]
         assert any("leaves a reported repair error open" in e["message"] for e in empty_audit["errors"])
     patch = dict(_empty_gameplay_patch(), primaryEntitySelection=selection)
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
-    repaired = apply_repair_patch(current, filtered)
+    transaction = RepairTransaction(current, report=report, scope=scope)
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
         assert repaired["runtimeProgram"]["primaryEntityId"] == selection
-        assert validate_runtime_program(repaired)["ok"]
         assert all("role" not in row for key in ("bindings", "calls") for row in repaired["runtimeProgram"][key])
         compiled = compile_runtime_program(repaired)
         assert all(row["role"] == ("primary" if row["usePolicy"]["action"]["targetId"] == selection else "secondary") for row in compiled["runtimeProgram"]["bindings"])
@@ -100,93 +92,18 @@ def test_exclusive_input_transaction(scenario, duplicates):
         patch["bindingsUpsert"] = [{**original, "input": "alternate_use"}]
         selected = "duplicate_0"
     patch["exclusiveInputSelections"] = [{"input": "primary_use", "keepBindingId": selected}]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
+    transaction = RepairTransaction(current, errors, scope=scope)
+    repaired, filtered, audit = transaction.apply(patch)
     if scenario == "retarget-conflict":
         assert filtered["exclusiveInputSelections"] == []
         assert any(e["reason"] == "exclusive_input_conflict_already_resolved" for e in audit["ignoredChanges"])
     else:
         assert filtered["exclusiveInputSelections"] == patch["exclusiveInputSelections"]
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
     if scenario.startswith("retarget"):
         moved_id = "duplicate_0" if scenario == "retarget-conflict" else original["id"]
         assert next(e for e in repaired["runtimeProgram"]["bindings"] if e["id"] == moved_id)["input"] == "alternate_use"
     else:
         assert all(e["id"] == original["id"] for e in repaired["runtimeProgram"]["bindings"])
-
-
-@pytest.mark.parametrize("scenario,ok", [("unknown-kind", True), ("wrong-target", True), ("legacy-row", True), ("cross-product", False)])
-def test_binding_alternatives_are_atomic(scenario, ok):
-    current = build_runtime_fixture("workbench_blade")
-    binding = current["runtimeProgram"]["bindings"][0]
-    accepted = copy.deepcopy(binding)
-    if scenario == "unknown-kind":
-        binding["action"]["kind"] = "not_registered"
-    elif scenario == "wrong-target":
-        binding["action"]["targetId"] = "item"
-    elif scenario == "legacy-row":
-        binding["usePolicy"] = {key: binding.pop(key) for key in ("action", "stackCost", "contactDamage")}
-    errors = validate_runtime_program(current)["errors"] if scenario != "cross-product" else [{"path": "$.runtimeProgram.bindings[0]", "code": "unsupported_input_action", "message": "exact tuple", "relatedIds": [binding["id"]]}]
-    assert errors
-    if scenario == "unknown-kind":
-        assert any(e["path"].endswith(".action.kind") for e in errors)
-    if scenario == "legacy-row":
-        assert any(e["code"] == "shape_additional_property" for e in errors)
-    scope = build_runtime_repair_scope(current, errors)
-    alternatives = next(e["allowed"] for e in scope["bindingAlternatives"] if e["bindingId"] == binding["id"])
-    if scenario == "unknown-kind":
-        assert binding["id"] in scope["identityChanges"]["bindingActionIds"]
-    assert {k: v for k, v in accepted.items() if k != "id"} in alternatives
-    assert not any(row["input"] == "hold" and row.get("action", {}).get("kind") == "use_item_body" for row in alternatives)
-    if not ok:
-        accepted = _binding_row(binding["id"], "hold", "use_item_body", "item")
-    patch = dict(_empty_gameplay_patch(), bindingsUpsert=[accepted])
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
-    if ok:
-        assert filtered["bindingsUpsert"] == [accepted]
-        assert all(k not in filtered["bindingsUpsert"][0] for k in ("usePolicy", "target"))
-        assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
-    else:
-        assert any(e.get("code") == "repair_scope_violation" or e.get("kind") in {"additional_property", "one_of", "any_of", "exactly_one"} for e in audit["errors"])
-
-
-@pytest.mark.parametrize("authorized,candidate_author,expected", [(False, None, "gemini"), (True, None, None), (True, "gpt", "gemini")], ids=["omission-frozen", "authorized-omission-deletes", "authorization-not-rewrite"])
-def test_metadata_deletion_authorization(authorized, candidate_author, expected):
-    candidate = {"literalSynthesis": "s"}
-    if candidate_author is not None:
-        candidate["author"] = candidate_author
-    result, _, accepted = merge_frozen_subtree({"literalSynthesis": "s", "author": "gemini"}, candidate,
-        mutable_paths=("literalSynthesis",), audit_path="$", allow_additions=False,
-        delete_paths=("author",) if authorized else ())
-    assert result.get("author") == expected
-    if expected is None:
-        assert "author" not in result and "$.author" in accepted
-
-
-@pytest.mark.parametrize("field", ["name", "concept"])
-def test_metadata_scope_changes_only_reported_field(field):
-    current = build_runtime_fixture("workbench_blade")
-    if field == "name":
-        current["name"] = "Workbench"
-        error = {"path": "$.name", "code": "uncombined_identity", "message": "authored name"}
-        value = "Workbench Blade"
-    else:
-        current["concept"]["author"] = "gemini-3.5-flash-lite"
-        error = {"path": "$.concept.author", "code": "shape_additional_property", "message": "additional property"}
-        value = {k: v for k, v in current["concept"].items() if k != "author"}
-    scope = build_runtime_repair_scope(current, [error])
-    assert scope["nonRepairableErrors"] == [] and scope["metadataFields"] == [field]
-    filtered, audit = filter_repair_patch_scope(current, dict(_empty_gameplay_patch(), metadataPatch={field: value}), scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    assert repaired[field] == value
-    assert "tooltip" not in repaired
-    assert repaired["runtimeProgram"] == current["runtimeProgram"]
-    if field == "concept":
-        assert "author" not in repaired["concept"]
-        assert repaired["concept"]["literalSynthesis"] == current["concept"]["literalSynthesis"]
 
 
 @pytest.mark.parametrize("scenario", ["required-pair", "optional-absence"])
@@ -196,9 +113,8 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     original = copy.deepcopy(use)
     use["params"].pop("useStyle")
     use["params"].pop("autoReuse" if scenario == "required-pair" else "customHeldSprite")
-    report = validate_runtime_program(current)
-    assert not report["ok"]
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert scope["repairRequirements"][0]["repairStrategy"]
     assert scope["repairRequirements"][0]["llmRepairable"] is True
@@ -213,10 +129,8 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
     patch = dict(_empty_gameplay_patch(), callsUpsert=[fixed, unrelated])
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
+    assert audit["ignoredChanges"]
     calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
     assert calls["item_use"]["params"]["useStyle"] == "shoot"
     assert calls["item_use"]["params"]["autoReuse"] is True
@@ -245,7 +159,8 @@ def test_exact_call_key_deletion(scenario):
     report = validate_runtime_program(current)
     assert not report["ok"]
     assert any(e["code"] == "shape_additional_property" and e["path"].endswith('.' + key) for e in report["errors"])
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     roster_key = "callPropertyKeys" if scenario == "call-property" else "callParamKeys"
     permission = {"callId": call["id"], "key": key}
     assert permission in scope["deletable"][roster_key]
@@ -257,11 +172,8 @@ def test_exact_call_key_deletion(scenario):
     patch = dict(_empty_gameplay_patch(), callsUpsert=[candidate], primaryEntitySelection=None, exclusiveInputSelections=[])
     if scenario != "param-extra":
         patch[roster_key + "Delete"] = [permission]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
+    result, filtered, audit = transaction.apply(patch)
     assert filtered[roster_key + "Delete"] == [permission]
-    result = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(result)["ok"]
     result_call = next(c for c in result["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert key not in (result_call if scenario == "call-property" else result_call["params"])
     if scenario == "call-property":
@@ -288,7 +200,8 @@ def test_missing_dependency_creation(scenario, ok):
     assert [e["code"] for e in report["errors"]] == ["binding_dependency"]
     if scenario == "missing-identity":
         report["errors"][0]["relatedIds"] = []
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert scope["mutable"]["bindingIds"] == []
     assert "requiredRolesByTarget" not in scope["create"]["calls"]
     if scenario == "missing-identity":
@@ -320,11 +233,9 @@ def test_missing_dependency_creation(scenario, ok):
         assert not audit["ok"]
         assert any(e.get("actual", {}).get("code") == "ambiguous_global_id" for e in audit["errors"])
         return
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
+    repaired, filtered, audit = transaction.apply(patch, accepted=ok)
     if ok:
         assert [c["id"] for c in filtered["callsUpsert"]] == ["repair_item_use"]
-        assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
         if scenario == "delete-new-param":
             assert filtered["callParamKeysDelete"] == []
             assert any(e["reason"] == "call_param_delete_outside_exact_error_scope" for e in audit["ignoredChanges"])
@@ -336,58 +247,6 @@ def test_missing_dependency_creation(scenario, ok):
         assert any(e["reason"] == "capability_not_in_blocker_closure" for e in audit["ignoredChanges"])
         assert any("leaves a reported repair error open" in e["message"] for e in audit["errors"])
 
-
-@pytest.mark.parametrize("scenario,capability,fixture,kind,target,allowed", [
-    pytest.param("ambiguous-body", "configure_tool", "configure_tool", "binding_input_present", "item_body", "primary_use", id="ambiguous-item-owner"),
-    pytest.param("foreign-target", "configure_item_stats", "workbench_blade", "binding_action_present", "same_target", "spawn_entity", id="foreign-action-target"),
-    pytest.param("existing-tuple", "configure_item_stats", "workbench_blade", "binding_tuple_present", "same_target", "primary_use|spawn_entity|contactDamage=true", id="foreign-existing-tuple-target"),
-    pytest.param("non-place", "configure_tile_placement", "configure_tile_placement", "binding_action_reference", "item_body", "spawn_entity", id="non-place-action-reference"),
-    pytest.param("foreign-error", "configure_tool", "configure_tool", None, None, None, id="planned-support-foreign-error-identity"),
-    pytest.param("foreign-body", "configure_tool", "configure_tool", None, None, None, id="planned-support-foreign-item-owner"),
-])
-def test_binding_requirement_projection_refuses_foreign_owners(monkeypatch, scenario, capability, fixture, kind, target, allowed):
-    current = build_runtime_fixture(fixture) if fixture == "workbench_blade" else build_capability_witness(fixture)
-    program = current["runtimeProgram"]
-    if kind is not None:
-        registry = dict(CAPABILITY_REGISTRY)
-        registry[capability] = replace(registry[capability], requirements=(RequirementSpec(
-            kind=kind, target=target, any_of=(allowed,), message="Synthetic exact-owner contract."),))
-        monkeypatch.setattr(repair_scope_stage, "CAPABILITY_REGISTRY", registry)
-    if scenario == "existing-tuple":
-        program["bindings"][0]["contactDamage"] = False
-    else:
-        program["bindings"] = []
-    if scenario == "ambiguous-body":
-        program["entities"].append({**program["entities"][0], "id": "other_item"})
-    call_index, call = next((i, row) for i, row in enumerate(program["calls"]) if row["fn"] == capability)
-    requirement_index = 0
-    if kind is not None:
-        errors = [{"path": f"$.runtimeProgram.calls[{call_index}]", "code": "missing_binding_dependency",
-                   "message": "Synthetic exact-owner contract.", "relatedIds": [call["id"], "item"],
-                   "allowed": [f"binding(input={allowed})" if kind == "binding_input_present" else allowed]}]
-    else:
-        program["calls"] = [row for row in program["calls"] if row["fn"] != "configure_item_use"]
-        if scenario == "foreign-error":
-            source_error = next(row for row in validate_runtime_program(current)["errors"] if row["code"] == "missing_binding_dependency")
-            errors = [source_error, {**copy.deepcopy(source_error), "allowed": ["configure_item_use"], "relatedIds": ["foreign_call", "foreign_target"]}]
-        else:
-            item = next(row for row in program["entities"] if row["kind"] == "item_body")
-            program["entities"].append({**item, "id": "other_item"})
-            call["target"] = "item"  # Malformed explicit owners must not infer an ambiguous body.
-            program["calls"].append({**copy.deepcopy(call), "id": "other_tool", "target": "other_item"})
-            report = validate_runtime_program(current)
-            errors = [next(row for row in report["errors"] if row["code"] == "missing_capability_dependency" and row.get("relatedIds") == ["item"]),
-                      next(row for row in report["errors"] if row["code"] == "missing_binding_dependency" and "other_tool" in row.get("relatedIds", []))]
-            requirement_index = 1
-    scope = build_runtime_repair_scope(current, errors)
-    requirement = scope["repairRequirements"][requirement_index]
-    assert requirement["allowedBindingTransactions"] == []
-    if kind is not None and kind != "binding_action_reference":
-        assert requirement["allowedExistingBindingIds"] == []
-    if scenario == "existing-tuple":
-        assert "requiredBindingUpdates" not in requirement
-    if scenario == "foreign-body":
-        assert requirement["affectedIds"] == ["other_tool"]
 
 @pytest.mark.parametrize("scenario,event_ok", [("placement", False), ("missing-contact", False), ("foreign-target-contact", True), ("no-optional-geometry", True)])
 def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
@@ -413,139 +272,22 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
         if scenario == "placement":
             return
         assert [e["code"] for e in report["errors"]] == ["event_not_emitted"]
-        scope = build_runtime_repair_scope(current, report["errors"])
+        transaction = RepairTransaction(current, report=report)
+        scope = transaction.scope
         requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
         assert binding["id"] in requirement["allowedExistingBindingIds"]
         assert any(e["contactDamage"] is True and e["action"] == {"kind": "use_item_body"} for e in requirement["allowedBindingTransactions"])
         assert any(e["action"]["kind"] == "spawn_entity" and e["action"]["targetId"] == "workbench_blade" for e in requirement["allowedBindingTransactions"])
         fixed = copy.deepcopy(binding)
         fixed["contactDamage"] = True
-        filtered, audit = filter_repair_patch_scope(current, dict(_empty_gameplay_patch(), bindingsUpsert=[fixed]), scope)
-        assert audit["ok"] and filtered["bindingsUpsert"] == [fixed]
-        current = apply_repair_patch(current, filtered)
+        current, filtered, audit = transaction.apply(dict(_empty_gameplay_patch(), bindingsUpsert=[fixed]))
+        assert filtered["bindingsUpsert"] == [fixed]
     assert validate_runtime_program(current)["ok"]
     compiled = compile_runtime_program(current)
     item_id = compiled["runtimeProgram"]["itemEntityId"]
     pairs = {(e["entityId"], e["event"]) for e in runtime_event_inventory(compiled)}
     assert {(item_id, "on_hit"), (item_id, "on_crit")} <= pairs
     assert any(e["event"] == "on_hit" for e in next(e for e in compiled["runtimeProgram"]["entities"] if e["id"] == item_id)["events"])
-
-
-@pytest.mark.parametrize("scenario", ["missing-binding", "empty-transaction-catalog", "missing-binding-and-call", "missing-contact", "projected-tool"])
-def test_tool_primary_binding_requirement_consumes_registry_transactions(scenario):
-    card = next(r.card() for r in CAPABILITY_REGISTRY["configure_tool"].requirements if r.kind == "binding_tuple_present")
-    assert card == {
-        "kind": "binding_tuple_present", "target": "any_entity",
-        "anyOf": ["primary_use|use_item_body", "primary_use|spawn_entity"],
-        "message": "A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
-    }
-    current = build_runtime_fixture("workbench_blade") if scenario == "projected-tool" else build_capability_witness("configure_tool")
-    program = current["runtimeProgram"]
-    if scenario == "projected-tool":
-        assert program["bindings"][0]["action"]["kind"] == "spawn_entity"
-        program["bindings"][0]["contactDamage"] = False
-        program["calls"].append({"id": "projected_tool_power", "fn": "configure_tool", "params": {"pickPower": 225, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 0.75}})
-        assert validate_runtime_program(current)["ok"]
-        return
-    if scenario == "missing-contact":
-        program["bindings"][0]["contactDamage"] = False
-        assert validate_runtime_program(current)["ok"]
-        from infini_local.core.runtime_authoring import validate_runtime_wire
-        assert validate_runtime_wire(compile_runtime_program(current))["ok"]
-        return
-    else:
-        program["bindings"] = []
-    patch = _empty_gameplay_patch()
-    if scenario == "missing-binding-and-call":
-        item_use = next(c for c in program["calls"] if c["fn"] == "configure_item_use")
-        program["calls"].remove(item_use)
-        patch["callsUpsert"] = [item_use]
-    report = validate_runtime_program(current)
-    assert [e["code"] for e in report["errors"]] == (["missing_capability_dependency", "missing_binding_dependency"] if scenario == "missing-binding-and-call" else ["missing_binding_dependency"])
-    scope = build_runtime_repair_scope(current, report["errors"])
-    if scenario != "missing-contact":
-        assert scope["create"]["bindings"] == {
-            "allowed": True, "allowedTargetIds": ["item"], "allowedInputs": ["primary_use"],
-            "allowedActions": ["use_item_body"], "requiredTargetIds": ["item"],
-            "allowedTransactions": [_binding_transaction("primary_use", "use_item_body", "item", stack_cost=cost, contact_damage=contact)
-                                    for cost in (0, 1) for contact in (False, True)],
-            "mustChooseExactlyOne": True,
-        }
-    if scenario == "missing-binding-and-call":
-        assert scope["create"]["calls"]["allowedFns"] == ["configure_item_use"]
-    if scenario == "empty-transaction-catalog":
-        scope["create"]["bindings"]["allowedTransactions"] = []
-        patch["bindingsUpsert"] = [_binding_row("must_not_cross_product", "primary_use", "use_item_body", "item")]
-        filtered, audit = filter_repair_patch_scope(current, patch, scope)
-        assert filtered["bindingsUpsert"] == []
-        assert any(e["reason"] == "binding_transaction_not_in_registry_projection" for e in audit["ignoredChanges"])
-        return
-    binding = _binding_row("repair_tool_primary", "primary_use", "use_item_body", "item", contact_damage=False)
-    patch["bindingsUpsert"] = [binding]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] and filtered["bindingsUpsert"] == [binding]
-    assert validate_runtime_program(apply_repair_patch(current, filtered))["ok"]
-
-
-
-
-@pytest.mark.parametrize("scenario,repair,ok", [
-    pytest.param("tool", "both", False, id="tool-double-choice"),
-    pytest.param("tool", "misaligned", False, id="tool-selection-discards-repaired-lane"),
-    pytest.param("tool", "single", True, id="tool-selected-single-choice"),
-    pytest.param("contact", "both", False, id="contact-double-choice"),
-    pytest.param("contact", "single", True, id="contact-selected-single-lane"),
-])
-def test_requirement_choice_is_single_and_aligned_with_exclusive_selection(scenario, repair, ok):
-    # Contact dependency comes from an actual hit event, never native tool power.
-    current = build_runtime_fixture("workbench_blade")
-    program = current["runtimeProgram"]
-    original = program["bindings"][0]
-    original["contactDamage"] = False
-    duplicate = copy.deepcopy(original)
-    duplicate["id"] = "duplicate_tool_primary" if scenario == "tool" else "alternate_body"
-    original["action"] = {"kind": "use_item_body"}
-    duplicate["action"] = copy.deepcopy(original["action"])
-    if scenario == "contact":
-        duplicate["input"] = "alternate_use"
-    else:
-        program["calls"].append({"id": "native_tool", "fn": "configure_tool", "params": {
-            "pickPower": 190, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 1}})
-    program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
-    event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
-    event_call["target"] = "item"
-    event_call["params"]["when"] = "on_hit"
-    program["bindings"].append(duplicate)
-    report = validate_runtime_program(current)
-    assert [e["code"] for e in report["errors"]] == (["duplicate_exclusive_input", "event_not_emitted"] if scenario == "tool" else ["event_not_emitted"])
-    scope = build_runtime_repair_scope(current, report["errors"])
-    requirement = next(e for e in scope["repairRequirements"] if e["code"] == "event_not_emitted")
-    assert "requiredBindingUpdates" not in requirement
-    assert not requirement.get("mustApplyAll", False)
-    assert requirement["mustChooseExactlyOne"] is True
-    assert not requirement.get("mustCreateExactlyOne", False)
-    if scenario == "tool":
-        assert _binding_transaction("primary_use", "use_item_body", "item", contact_damage=True) in requirement["allowedBindingTransactions"]
-        assert all(row["contactDamage"] is True for row in requirement["allowedBindingTransactions"])
-        assert requirement["allowedExistingBindingIds"] == [duplicate["id"], original["id"]]
-        assert {e["bindingId"] for e in scope["bindingAlternatives"]} == {original["id"], duplicate["id"]}
-        assert scope["repairTransactions"]["exclusiveInputSelections"] == [{"input": "primary_use", "candidateBindingIds": [duplicate["id"], original["id"]], "mustKeepExactlyOne": True}]
-    else:
-        assert len(requirement["allowedBindingTransactions"]) == 2
-    fixed_original, fixed_duplicate = copy.deepcopy(original), copy.deepcopy(duplicate)
-    fixed_original["contactDamage"] = fixed_duplicate["contactDamage"] = True
-    patch = dict(_empty_gameplay_patch(), bindingsUpsert=[fixed_original, fixed_duplicate] if repair == "both" else [fixed_original if scenario == "tool" else fixed_duplicate])
-    if scenario == "tool":
-        patch["exclusiveInputSelections"] = [{"input": "primary_use", "keepBindingId": duplicate["id"] if repair == "misaligned" else original["id"]}]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"] is ok, audit
-    if ok:
-        repaired = apply_repair_patch(current, filtered)
-        assert validate_runtime_program(repaired)["ok"]
-        if scenario == "tool":
-            assert [e["id"] for e in repaired["runtimeProgram"]["bindings"]] == [original["id"], "projectile_hold"]
-    elif repair == "both":
-        assert any("exactly one listed binding transaction" in e["message"] for e in audit["errors"])
 
 
 def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_move_and_create() -> None:
@@ -567,7 +309,8 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     report = validate_runtime_program(current)
     assert [row["code"] for row in report["errors"]] == ["missing_binding_dependency"]
 
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     alternatives = {row["bindingId"]: row["allowed"] for row in scope["bindingAlternatives"]}
     assert alternatives["primary_place"] == [{
@@ -599,16 +342,13 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
         {"id": "tool_primary", **primary_create},
     ]
     assert validate_repair_patch_scope(current, patch, scope)["ok"]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
     by_id = {row["id"]: row for row in repaired["runtimeProgram"]["bindings"]}
     assert by_id["primary_place"]["input"] == "alternate_use"
     assert by_id["tool_primary"]["input"] == "primary_use"
 
 
-def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wire_transport) -> None:
     current = build_runtime_fixture("workbench_blade")
     original_item = next(
         copy.deepcopy(row) for row in current["runtimeProgram"]["entities"]
@@ -634,7 +374,8 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
         "item_body_count",
         "binding_dependency",
     }
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert scope["create"]["calls"]["allowedTargetKinds"] == ["item_body"]
     assert {"configure_item_stats", "configure_item_use"}.issubset(
@@ -662,73 +403,18 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(mo
     assert not orphan_audit["ok"]
     assert orphan_filtered["callsUpsert"] == []
 
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    repaired = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(repaired)["ok"]
+    repaired, filtered, audit = transaction.apply(patch)
 
-    captured_request: dict[str, Any] = {}
-    llm_patch = copy.deepcopy(patch)
-    llm_patch["realizationReplacement"] = copy.deepcopy(repaired["realization"])
-
-    def repair_transport(request: dict[str, Any], timeout: int) -> dict[str, Any]:
-        captured_request.update(copy.deepcopy(request))
-        return {"choices": [{"message": {"content": json.dumps(llm_patch)}}]}
-
-    monkeypatch.setattr(gameplay_stage, "USE_LLM", True)
-    monkeypatch.setattr(gameplay_stage, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(gameplay_stage, "llm_chat_json", repair_transport)
+    responses, requests = wire_transport
+    responses.append({**patch, "realizationReplacement": copy.deepcopy(repaired["realization"])})
     llm_repaired = gameplay_stage.repair_author_item_after_failure(
         current, {}, {}, {}, {}, "missing-item-body", failure_report=report,
     )
-    repair_system = captured_request["messages"][0]["content"]
+    assert len(requests) == 1 and not responses
+    repair_system = requests[0]["messages"][0]["content"]
     assert "create.calls.allowedTargetKinds" in repair_system
     assert "emitted exactly once in entitiesUpsert" in repair_system
     assert validate_runtime_program(llm_repaired)["ok"]
-
-
-def test_repair_scope_does_not_mask_same_path_error_for_different_related_ids(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    current = build_runtime_fixture("workbench_blade")
-    stats = next(
-        row for row in current["runtimeProgram"]["calls"]
-        if row["id"] == "item_stats"
-    )
-    stats["target"] = "missing_original_item"
-    source_report = validate_runtime_program(current)
-    source_error = next(
-        row for row in source_report["errors"]
-        if row["code"] == "missing_entity_reference"
-        and row["path"].endswith("calls[0].target")
-    )
-    scope = build_runtime_repair_scope(current, [source_error])
-    fixed = copy.deepcopy(stats)
-    fixed["target"] = next(row["id"] for row in current["runtimeProgram"]["entities"] if row["kind"] == "item_body")
-    patch = _empty_gameplay_patch()
-    patch["callsUpsert"] = [fixed]
-
-    monkeypatch.setattr(
-        repair_scope_stage,
-        "validate_runtime_program",
-        lambda _preview: {
-            "ok": False,
-            "errors": [{
-                "code": source_error["code"],
-                "path": source_error["path"],
-                "message": "different reference failed at the same list position",
-                "relatedIds": ["different_call", "different_missing_item"],
-            }],
-        },
-    )
-
-    _filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert not audit["ok"]
-    assert any(
-        row.get("message") == "patch introduces a new runtime validation error outside the reported Repair scope"
-        and row.get("actual", {}).get("relatedIds") == ["different_call", "different_missing_item"]
-        for row in audit["errors"]
-    )
 
 
 def test_malformed_vfx_repair_output_fails_closed_as_planner_unavailable() -> None:
@@ -856,86 +542,6 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     if scenario == "root-pair":
         assert any(row["path"].endswith(".duration") for row in audit["ignoredChanges"])
 
-@pytest.mark.parametrize("scenario", [
-    pytest.param("foreign-producer", id="exact-call-target-not-foreign-related-producer"),
-    pytest.param("atomic-alternatives", id="complete-binding-alternatives-no-cross-product"),
-])
-def test_event_binding_projection_preserves_exact_ownership(monkeypatch, scenario):
-    current = build_runtime_fixture("workbench_blade")
-    program = current["runtimeProgram"]
-    if scenario == "foreign-producer":
-        foreign = copy.deepcopy(next(row for row in program["calls"] if row["fn"] == "set_projectile_damage" and row["target"] == "nail"))
-        foreign["id"] = "foreign_producer"
-        program["calls"].append(foreign)
-        root = program["bindings"][0]
-        program["bindings"][0] = _binding_row(root["id"], "hold", "spawn_entity", "workbench_blade")
-        allowed = ["binding input one of: primary_use,alternate_use; action one of: spawn_entity,use_item_body,apply_item_effects"]
-    else:
-        monkeypatch.setattr(repair_scope_stage, "event_dependency_alternatives", lambda _event, _kind: (
-            EventDependencyAlternative(required_bindings=(EventBindingRequirement(("primary_use",), ("use_item_body",), False),)),
-            EventDependencyAlternative(required_bindings=(EventBindingRequirement(("alternate_use",), ("apply_item_effects",), False),)),
-        ))
-        program["bindings"] = []
-        restore = build_capability_witness("restore_resources_on_use")["runtimeProgram"]["calls"]
-        program["calls"].append(copy.deepcopy(next(row for row in restore if row["fn"] == "restore_resources_on_use")))
-        allowed = ["binding input one of: primary_use; action one of: use_item_body; contactDamage=false",
-                   "binding input one of: alternate_use; action one of: apply_item_effects; contactDamage=false"]
-    event_call = next(row for row in program["calls"] if row["id"] == "shed_nails")
-    event_call["target"] = "item"
-    event_call["params"]["when"] = "on_use"
-    scope = build_runtime_repair_scope(current, [{
-        "path": f"$.runtimeProgram.calls[{program['calls'].index(event_call)}].params.when",
-        "code": "event_not_emitted", "message": "Synthetic exact event-alternative contract.",
-        "allowed": allowed, "relatedIds": ["item", "foreign_producer"] if scenario == "foreign-producer" else ["item"],
-    }])
-    transactions = scope["repairRequirements"][0]["allowedBindingTransactions"]
-    assert transactions
-    if scenario == "foreign-producer":
-        assert {row["action"].get("targetId", "item") for row in transactions} == {"item", "workbench_blade"}
-        assert all(row["action"]["kind"] == "spawn_entity" or "targetId" not in row["action"] for row in transactions)
-    else:
-        assert {(row["input"], row["action"]["kind"], row["contactDamage"]) for row in transactions} == {
-            ("primary_use", "use_item_body", False), ("alternate_use", "apply_item_effects", False),
-        }
-
-
-@pytest.mark.parametrize("create_only,message", [
-    pytest.param(False, "outside this requirement's existing binding choices", id="existing-choice-owned-by-requirement-ids"),
-    pytest.param(True, "exactly one listed binding transaction", id="create-only-refuses-existing-transaction"),
-])
-def test_requirement_binding_choice_refuses_foreign_mutable_id(monkeypatch, create_only, message):
-    current = build_runtime_fixture("workbench_blade")
-    program = current["runtimeProgram"]
-    original = program["bindings"][0]
-    original["contactDamage"] = False
-    original["action"] = {"kind": "use_item_body"}
-    duplicate = {**copy.deepcopy(original), "id": "duplicate_tool_primary"}
-    unrelated = {**copy.deepcopy(original), "id": "unrelated_mutable_binding", "input": "unknown_input"}
-    program["bindings"] = [unrelated] if create_only else [original, duplicate, unrelated]
-    program["bindings"].append(_binding_row("projectile_hold", "hold", "spawn_entity", "workbench_blade"))
-    event_call = next(c for c in program["calls"] if c["id"] == "shed_nails")
-    event_call["target"] = "item"
-    event_call["params"]["when"] = "on_hit"
-    report = validate_runtime_program(current)
-    scope = build_runtime_repair_scope(current, report["errors"])
-    requirement = next(row for row in scope["repairRequirements"] if row["code"] == "event_not_emitted")
-    assert requirement["allowedExistingBindingIds"] == ([] if create_only else [duplicate["id"], original["id"]])
-    if create_only:
-        assert requirement["mustCreateExactlyOne"] is True
-    transaction = copy.deepcopy(next(row for row in requirement["allowedBindingTransactions"]
-                                     if row["input"] == "primary_use" and row["action"]["kind"] == "use_item_body"))
-    unrelated_alternatives = next(row["allowed"] for row in scope["bindingAlternatives"] if row["bindingId"] == unrelated["id"])
-    assert transaction in unrelated_alternatives
-    upserts = [{"id": unrelated["id"], **copy.deepcopy(transaction)}]
-    if create_only:
-        upserts.append({"id": "created_tool_lane", **copy.deepcopy(transaction)})
-    patch = dict(_empty_gameplay_patch(), bindingsUpsert=upserts)
-    # Isolate transaction ownership from the later runtime-error closure guard.
-    monkeypatch.setattr(repair_scope_stage, "validate_runtime_program", lambda _preview: {"ok": True, "errors": []})
-    audit = validate_repair_patch_scope(current, patch, scope)
-    assert not audit["ok"]
-    assert any(message in row["message"] for row in audit["errors"]), audit
-
 
 @pytest.mark.parametrize("scenario,fixture,code", [
     pytest.param("set-key", "configure_armor", "missing_set_key", id="armor-exact-set-key"),
@@ -977,7 +583,8 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
     assert code in codes
     if scenario in {"unwanted-binding", "inert-accessory", "channel"}:
         assert codes == [code]
-    scope = build_runtime_repair_scope(current, report["errors"])
+    transaction = RepairTransaction(current, report=report)
+    scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     expected = copy.deepcopy(current)
     patch = _empty_gameplay_patch()
@@ -1019,9 +626,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
             fixed["params"]["bounceCount"] = 1
 
         patch["callsUpsert"] = [fixed]
-    filtered, audit = filter_repair_patch_scope(current, patch, scope)
-    assert audit["ok"], audit
-    result = apply_repair_patch(current, filtered)
+    result, filtered, audit = transaction.apply(patch)
     assert json.dumps(result, sort_keys=True) == json.dumps(expected, sort_keys=True), "only the authorized closure may change"
     if scenario == "collision":
         assert any(row["path"].endswith(".params.bounceCount") for row in audit["ignoredChanges"])
@@ -1069,13 +674,14 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     event_error = next(row for row in report["errors"] if row["code"] == "capability_event_incompatible")
     if scenario == "lifetime":
         assert {"capability_event_incompatible", "missing_required_component"} <= {row["code"] for row in report["errors"]}
-    scope = build_runtime_repair_scope(current, report["errors"] if scenario == "lifetime" else [event_error])
+    transaction = RepairTransaction(current, report["errors"] if scenario == "lifetime" else [event_error])
+    scope = transaction.scope
     if scenario == "producer":
-        transaction = scope["eventAlternatives"][0]
-        assert transaction["callId"] == "door_stun"
-        assert transaction["targetId"] == "chained_door"
-        assert {row["event"] for row in transaction["allowed"]} == {"on_hit", "on_crit"}
-        assert all(row["requiredCalls"] == [{"fn": "set_projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in transaction["allowed"])
+        alternative = scope["eventAlternatives"][0]
+        assert alternative["callId"] == "door_stun"
+        assert alternative["targetId"] == "chained_door"
+        assert {row["event"] for row in alternative["allowed"]} == {"on_hit", "on_crit"}
+        assert all(row["requiredCalls"] == [{"fn": "set_projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in alternative["allowed"])
         assert scope["blockerPlan"]["supportingCapabilityNames"] == ["set_projectile_damage"]
     fixed = copy.deepcopy(event_call)
     fixed["params"]["when"] = chosen_event
@@ -1092,26 +698,8 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     _, refused = filter_repair_patch_scope(current, invalid, scope)
     assert not refused["ok"]
     assert any(message in row["message"] for row in refused["errors"]), refused
-    filtered, audit = filter_repair_patch_scope(current, complete, scope)
-    assert audit["ok"], audit
-    result = apply_repair_patch(current, filtered)
-    assert validate_runtime_program(result)["ok"]
+    result, filtered, audit = transaction.apply(complete)
     compile_runtime_program(result)
-
-
-def test_every_validator_error_has_explicit_repair_policy() -> None:
-    validator_path = Path(gameplay_stage.__file__).parents[1] / "core" / "runtime_authoring" / "validator.py"
-    tree = ast.parse(validator_path.read_text(encoding="utf-8"))
-    emitted: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "ValidationIssue":
-            continue
-        if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
-            emitted.add(node.args[1].value)
-    assert emitted == set(VALIDATION_ERROR_CODES)
-    assert set(REPAIR_VALIDATION_ERROR_CODES) == set(REPAIR_ERROR_POLICY)
-    assert REPAIR_ERROR_POLICY["uncombined_identity"]["strategy"] == "patch_exact_name"
-    assert REPAIR_ERROR_POLICY["unknown_registry_requirement"]["llmRepairable"] is False
 
 
 def _bounded_invalid_buff_calls(fields=("durationTicks",)):
@@ -1129,8 +717,9 @@ def _bounded_invalid_buff_calls(fields=("durationTicks",)):
     return invalid, good
 
 
-@pytest.mark.parametrize("fields", [("durationTicks",), ("buffId", "durationTicks")], ids=["single-leaf", "saturated-multi-leaf"])
-@pytest.mark.parametrize("failure_envelope", ["direct", "nested", "orchestration"])
+@pytest.mark.parametrize("fields,failure_envelope", [
+    pytest.param(("buffId", "durationTicks"), "orchestration", id="all-canonical-leaves-reach-single-repair")
+])
 def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
     from infini_local.pipelines.combine_pipeline import _failure_report
 
@@ -1154,111 +743,6 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
     filtered, audit = filter_repair_patch_scope(current, {"note": "repair every diagnosed duration", "realizationReplacement": good["realization"], "callsUpsert": candidate}, dossier["repairScope"])
     assert audit["ok"] and audit["ignoredChanges"], audit
     assert apply_repair_patch(current, filtered) == good
-
-
-@pytest.mark.parametrize("consumer", ["shape", "runtime", "author", "parsed-author", "dossier"])
-@pytest.mark.parametrize("damage", ["oversized-list", "extra-members", "deep-container", "cyclic-container", "oversized-text"])
-def test_author_input_work_guard_precedes_validation_copy_and_repair(consumer, damage):
-    from infini_local.core.runtime_authoring import program_schema
-
-    class UninspectedList(list):
-        def __iter__(self):
-            raise AssertionError("oversized array must be refused before enumeration")
-
-        def __deepcopy__(self, memo):
-            raise AssertionError("oversized array must be refused before copying")
-
-    class UninspectedDict(dict):
-        def __iter__(self):
-            raise AssertionError("oversized object must be refused before enumeration")
-
-        def items(self):
-            raise AssertionError("oversized object must be refused before enumeration")
-
-        def __deepcopy__(self, memo):
-            raise AssertionError("oversized object must be refused before copying")
-
-    current = build_runtime_fixture("workbench_blade")
-    nodes, depth, width, _ = program_schema._author_schema_work_bounds(program_schema.author_item_response_schema())
-    if damage == "oversized-list":
-        current["runtimeProgram"]["calls"] = UninspectedList([None] * (nodes + 1))
-    elif damage == "extra-members":
-        current["runtimeProgram"]["calls"][0]["params"] = UninspectedDict({f"extra_{i}": 0 for i in range(nodes + 1)})
-    elif damage == "oversized-text":
-        current["realization"]["description"] = "x" * (nodes * width + 1)
-    else:
-        value = {}
-        if damage == "cyclic-container":
-            value["cycle"] = value
-        else:
-            for _ in range(depth + 1):
-                value = {"nested": value}
-        current["runtimeProgram"]["calls"][0]["params"]["unknown"] = value
-    consume = {
-        "shape": program_schema.strict_author_shape_report,
-        "runtime": validate_runtime_program,
-        "author": authored_item_validation_report,
-        "parsed-author": gameplay_stage._prepare_parsed_author_item,
-        "dossier": lambda value: gameplay_stage.build_gameplay_repair_dossier(
-            value, {}, {}, {}, {}, failure_report={"errors": [{"path": "$", "code": "compile_or_wire_rejection", "message": "guard before fragments"}]}),
-    }[consumer]
-    with pytest.raises(RuntimeError, match="Author input exceeds schema-derived work bounds"):
-        consume(current)
-
-
-def test_maximal_author_schema_shape_keeps_worst_branch_and_report_tail():
-    from infini_local.core.runtime_authoring import program_schema
-
-    schema = program_schema.author_item_response_schema()
-    program_schema_properties = schema["properties"]["runtimeProgram"]["properties"]
-    branches = program_schema_properties["calls"]["items"]["oneOf"]
-    worst = max(branches, key=lambda branch: len(branch["properties"].get("params", {}).get("properties", {})))
-    fn = worst["properties"]["fn"]["const"]
-    good = build_capability_witness(fn)
-    call = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)
-    for key, spec in CAPABILITY_REGISTRY[fn].params.items():
-        if key not in call["params"]:
-            call["params"][key] = ({child: leaf.enum[0] if leaf.enum else leaf.neutral for child, leaf in spec.properties.items()}
-                                   if spec.properties else spec.enum[0] if spec.enum else spec.neutral)
-    assert set(call["params"]) == set(worst["properties"]["params"]["properties"])
-    program = good["runtimeProgram"]
-    for namespace, source in (("calls", call), ("entities", program["entities"][0]), ("bindings", program["bindings"][0])):
-        program[namespace] = [dict(copy.deepcopy(source), id=f"max_{namespace}_{index}") for index in range(program_schema_properties[namespace]["maxItems"])]
-    concept_schema = schema["properties"]["concept"]["properties"]["plannedPlayerActions"]
-    good["concept"]["plannedPlayerActions"] = [{"input": "primary_use", "intent": "bounded sketch"} for _ in range(concept_schema["maxItems"])]
-    evaluation_schema = schema["properties"]["realization"]["properties"]["selfEvaluation"]["properties"]
-    for section, checks in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
-        rows_schema = evaluation_schema[section]["properties"][checks]
-        row = good["realization"]["selfEvaluation"][section][checks][0]
-        row["runtimeRefs"] = ["bounded_ref"] * rows_schema["items"]["properties"]["runtimeRefs"]["maxItems"]
-        good["realization"]["selfEvaluation"][section][checks] = [copy.deepcopy(row) for _ in range(rows_schema["maxItems"])]
-    good = {key: good[key] for key in schema["properties"]}
-    # This is a maximal strict-shape control, not a semantically valid graph:
-    # repeating singleton components deliberately isolates diagnostic collection.
-    assert program_schema.strict_author_shape_report(good)["ok"]
-    current = copy.deepcopy(good)
-    for row in current["runtimeProgram"]["calls"]:
-        row["params"] = {key: "bad" for key in row["params"]}
-    for section, checks in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
-        for row in current["realization"]["selfEvaluation"][section][checks]:
-            row["runtimeRefs"] = [0] * len(row["runtimeRefs"])
-    expected = strict_schema_errors(current, schema, limit=len(json.dumps(current)))
-    assert len(expected) > 1024, "do not replace 128 with another guessed prefix"
-    report = program_schema.strict_author_shape_report(current)
-    assert report["errors"] == expected
-    last_check = evaluation_schema["programVsReport"]["properties"]["behaviorChecks"]["maxItems"] - 1
-    last_ref = evaluation_schema["programVsReport"]["properties"]["behaviorChecks"]["items"]["properties"]["runtimeRefs"]["maxItems"] - 1
-    tail_path = f"$.realization.selfEvaluation.programVsReport.behaviorChecks[{last_check}].runtimeRefs[{last_ref}]"
-    assert report["errors"][-1]["path"] == tail_path
-    canonical = validate_runtime_program(current)["errors"]
-    shape_errors = [row for row in canonical if row["code"].startswith("shape_")]
-    blocking_expected = [row for row in expected
-                         if not row["path"].startswith("$.realization.selfEvaluation.planVsProgram.")]
-    assert [(row["path"], row["code"]) for row in shape_errors] == [(row["path"], "shape_" + row["kind"]) for row in blocking_expected]
-    assert authored_item_validation_report(current)["errors"] == canonical
-    assert strict_schema_errors(current, schema) == expected[:128]
-    assert strict_schema_errors(current, schema, limit=7) == expected[:7]
-    assert strict_schema_errors(current, schema, limit=0) == []
 
 
 @pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
@@ -1293,101 +777,3 @@ def test_complete_author_errors_do_not_override_distinct_downstream_provenance()
     assert dossier["exactValidationErrors"] == downstream
     assert dossier["repairScope"]["nonRepairableErrors"]
     assert all(not paths for paths in dossier["repairScope"]["fieldPermissions"].values())
-
-
-def test_gameplay_repair_dossier_matches_blocker_subset_and_is_not_full_author_prompt() -> None:
-    current = build_runtime_fixture("workbench_blade")
-    current["runtimeProgram"]["calls"] = [
-        row for row in current["runtimeProgram"]["calls"]
-        if row["id"] != "workbench_blade_motion"
-    ]
-    validation = validate_runtime_program(current)
-    parents = ({"name": "Workbench"}, {"name": "Sword"})
-    facts = ({"facts": ["literal workbench"]}, {"facts": ["metal blade"]})
-    dossier = gameplay_stage.build_gameplay_repair_dossier(
-        current, parents[0], parents[1], facts[0], facts[1],
-        failure_report={"stage": "runtime_program_validation", "errors": validation["errors"]},
-    )
-    scope = dossier["repairScope"]
-    assert "configure_item_stats" not in scope["capabilitySubset"]
-    movement_allowed = set(next(row for row in validation["errors"] if row["code"] == "missing_movement_component")["allowed"])
-    direct = set(scope["blockerPlan"]["directCapabilityNames"])
-    assert direct < movement_allowed
-    assert movement_allowed - direct == {"channel_beam", "charge_then_release"}
-    requirement = next(row for row in scope["repairRequirements"] if row["code"] == "missing_movement_component")
-    assert set(requirement["requiredOneOfCapabilities"]) == direct
-    assert len(scope["capabilitySubset"]) < len(gameplay_stage.CAPABILITY_REGISTRY)
-    assert len(scope["capabilitySubset"]) < len(visible_capabilities())
-    assert set(scope["capabilitySubset"]) == set().union(*(scope["blockerPlan"][key] for key in (
-        "directCapabilityNames", "supportingCapabilityNames", "existingBrokenCapabilityNames")))
-    repair_rules = " ".join(dossier["rules"])
-    assert "Every upsert entry must be a complete schema-valid node" in repair_rules
-    assert "Copy the existing node from readOnlySourceFragments.brokenFragments" in repair_rules
-    assert "preserve unchanged required fields and accepted optional values or absences" in repair_rules
-    assert "zero-argument calls use params={}" in repair_rules
-    required_shape = dossier["requiredJsonShape"]
-    assert not any(key in dossier for key in ("brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments"))
-    assert set(dossier["readOnlySourceFragments"]) == {
-        "brokenFragments", "brokenFragmentsByIndex", "validDependencyFragments",
-    }
-    assert "claimsUpsert" not in required_shape
-    assert "claimIdsDelete" not in required_shape
-    assert {frozenset(row) for row in required_shape["callsUpsert"]} == {
-        frozenset({"id", "fn", "target", "params"}),
-    }
-    card_fns = {
-        card["fn"]
-        for key in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards")
-        for card in dossier[key]
-    }
-    assert card_fns == set(dossier["repairScope"]["capabilitySubset"])
-    assert len(card_fns) == 19
-    assert "move_bounce" not in card_fns and "move_gravity_arc" in card_fns
-    assert "channel_beam" not in card_fns
-    assert "charge_then_release" not in card_fns
-    _, author_payload, _ = gameplay_stage.build_initial_author_request(
-        parents[0], parents[1], facts[0], facts[1], "repair-audit", model_name="test-model",
-    )
-    repair_payload = json.dumps(dossier, ensure_ascii=False, separators=(",", ":"))
-    assert len(repair_payload) < len(author_payload) / 2
-    from infini_local.pipelines.llm_authoring_prompt import realization_execution_truth_for_llm, runtime_units_for_llm
-    assert dossier["runtimeExecutionTruth"] == {
-        **realization_execution_truth_for_llm(), "units": runtime_units_for_llm(),
-    }
-    author = json.loads(author_payload)
-    assert "selfEvaluation" in author["diagnosticReport"]
-    assert "early kill otherwise emits on_kill only" in next(row for row in author["runtimeCapabilityContract"]["catalog"]["events"] if row["event"] == "on_expire")["does"]
-    assert "interpretation of the exact post-merge program, not an observed run" in repair_rules
-    assert "rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport" in repair_rules
-    assert set(dossier["acceptedItemContext"]) == {"name", "category", "realization", "concept", "runtimeProgram"}
-    assert dossier["acceptedItemContext"]["concept"] == current["concept"]
-    assert dossier["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
-
-
-def test_initial_author_packet_places_unchanged_contract_before_recipe_specific_facts() -> None:
-    _, first, _ = gameplay_stage.build_initial_author_request(
-        {"name": "Workbench"}, {"name": "Sword"},
-        {"name": "Workbench", "facts": ["wood"]},
-        {"name": "Sword", "facts": ["blade"]},
-        "workbench+sword", model_name="test-model",
-    )
-    _, second, _ = gameplay_stage.build_initial_author_request(
-        {"name": "Lens"}, {"name": "Bird"},
-        {"name": "Lens", "facts": ["glass"]},
-        {"name": "Bird", "facts": ["feather"]},
-        "lens+bird", model_name="test-model",
-    )
-
-    common_prefix = 0
-    for left, right in zip(first, second):
-        if left != right:
-            break
-        common_prefix += 1
-    assert common_prefix > 65_000
-
-    payload = json.loads(first)
-    assert list(payload).index("runtimeCapabilityContract") < list(payload).index("recipeKey")
-    assert "balanceCorridor" not in payload["runtimeCapabilityContract"]
-    assert "primaryEntityOwnership" in payload["runtimeProgramInvariants"]
-    assert "primaryEntitySelection" not in payload["runtimeProgramInvariants"]
-    assert list(payload)[-2:] == ["balanceCorridor", "sourceWireUnits"]

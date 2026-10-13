@@ -1,6 +1,4 @@
-from prompt_packet_helpers import request_dossier, dossier_text
 """Canonical Gameplay Repair: diagnostics -> exact scope -> filter -> apply -> compiler."""
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 import json
 
@@ -16,203 +14,120 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
-def _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode, *, out_of_scope_response=False):
-    """Exercise the real request/parser/scope/merge caller; only provider I/O is synthetic."""
-    import socket
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
-    requests = []
-
-    def no_network(*args, **kwargs):
-        raise AssertionError("live network forbidden in offline Gameplay Repair regression")
-
-    def respond(request, **kwargs):
-        requests.append(copy.deepcopy(request))
-        assert request["response_format"]["type"] == format_mode
-        payload = copy.deepcopy(incoming)
-        if format_mode == "json_schema":
-            payload = _encode_nullable_fixture(payload, contract.author_item_repair_response_schema())
-            validator = Draft202012Validator(request["response_format"]["json_schema"]["schema"])
-            if out_of_scope_response:
-                # Foreign hostile rows are not nullable choices offered by the
-                # scoped grammar. Keep their literal sparse bytes after encoding.
-                scope = request_dossier(request)["repairScope"]
-                mutable_ids = {row["id"] for row in scope["fieldPermissions"]["calls"]}
-                payload["callsUpsert"] = [
-                    encoded if original["id"] in mutable_ids else copy.deepcopy(original)
-                    for original, encoded in zip(incoming["callsUpsert"], payload["callsUpsert"])
-                ]
-                # A provider violating its grammar still meets frozen local merge.
-                assert not validator.is_valid(payload)
-            else:
-                validator.validate(payload)
-        return {"choices": [{"message": {"content": json.dumps(payload)}}],
-                "_debug": {"responseFormatType": format_mode}}
-
-    monkeypatch.setattr(socket, "create_connection", no_network)
-    monkeypatch.setattr(socket.socket, "connect", no_network)
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    for name, value in dict(
-        USE_LLM=True, resolve_llm_model=lambda: "offline-no-model", llm_chat_json=respond,
-        trace_event=lambda *args, **kwargs: None, trace_stage_request=lambda *args, **kwargs: None,
-        llm_reasoning_system_suffix=lambda *args, **kwargs: "",
-        apply_llm_common_options=lambda request, **kwargs: request,
-    ).items():
-        monkeypatch.setattr(author, name, value)
-    result = author.repair_author_item_after_failure(
-        doc, {}, {}, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
-    assert len(requests) == 1
-    return result, request_dossier(requests[0])
+from repair_test_helpers import gameplay_repair as _offline_gameplay_repair, assert_delivery, assert_repaired_source
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("leaf,old,new", [
-    pytest.param("damage", True, 1, id="true-to-integer-one"),
-    pytest.param("damage", False, 0, id="false-to-integer-zero"),
-    pytest.param("damage", 1.0, 1, id="float-to-integer"),
-    pytest.param("autoReuse", 1, True, id="integer-to-boolean"),
-    pytest.param("damage", True, 2, id="different-value-control"),
+@pytest.mark.parametrize("fn,leaf,old,new,hostile,frozen_leaf,frozen_value", [
+    pytest.param("configure_item_stats", "damage", True, 1, {"manaCost": 10}, "useStyle", "swing", id="true-to-integer-one"),
+    pytest.param("configure_item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
+    pytest.param("configure_item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
+    pytest.param("configure_item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
+    pytest.param("configure_item_stats", "damage", True, 2, {"manaCost": 10}, "useStyle", "swing", id="different-value-control"),
 ])
-def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, leaf, old, new):
+def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, fn, leaf, old, new, hostile, frozen_leaf, frozen_value):
     doc = build_capability_witness("configure_item_use")
-    fn = "configure_item_use" if leaf == "autoReuse" else "configure_item_stats"
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     call["params"][leaf] = old
     before = json.dumps(doc, sort_keys=True)
-    report = validate_runtime_program(doc)
-    assert not report["ok"]
-    scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
     expected = copy.deepcopy(doc)
-    next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"][leaf] = new
-    candidate = copy.deepcopy(call)
-    candidate["params"][leaf] = new
-    candidate["params"]["useTurn" if leaf == "autoReuse" else "manaCost"] = False if leaf == "autoReuse" else 10
+    expected_call = next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)
+    expected_call["params"][leaf] = new
+    candidate = copy.deepcopy(expected_call)
+    candidate["params"].update(hostile)
     frozen = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] != fn))
-    # The boolean case also challenges Python-equal but JSON-type-distinct frozen values.
-    frozen["params"]["knockback" if leaf == "autoReuse" else "useStyle"] = 3 if leaf == "autoReuse" else "swing"
-    incoming = {"note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
-                "callsUpsert": [candidate, frozen]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
-                                                out_of_scope_response=True)
+    frozen["params"][frozen_leaf] = frozen_value
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "explicit exact JSON-type correction", "realizationReplacement": doc["realization"],
+        "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + leaf in audit["acceptedPaths"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
-    assert json.dumps(repaired["debug"]["gameplayRepairPatch"]["callsUpsert"], sort_keys=True) == json.dumps(
-        [next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)], sort_keys=True)
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
+    assert json.dumps(repaired["debug"]["gameplayRepairPatch"]["callsUpsert"], sort_keys=True) == json.dumps([expected_call], sort_keys=True)
+    assert_repaired_source(repaired, expected)
     assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("choice", ["periodic", "life_above", "mana_above"])
-def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, choice):
-    fn = "pull_on_event" if choice == "periodic" else "require_use_condition"
-    selector = "when" if choice == "periodic" else "condition"
-    needed = "when" if choice == "periodic" else "condition"
-    threshold = "lifeAtLeast" if choice == "life_above" else "manaAtLeast"
-    value = 12 if choice == "periodic" else 100
+@pytest.mark.parametrize("fn,selector,value", [
+    pytest.param("pull_on_event", "when", {"everyTicks": 12}, id="periodic"),
+    pytest.param("require_use_condition", "condition", {"lifeAtLeast": 100}, id="life-threshold"),
+    pytest.param("require_use_condition", "condition", {"manaAtLeast": 100}, id="mana-threshold"),
+])
+def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, fn, selector, value):
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
-    if choice == "periodic":
+    if selector == "when":
         call["params"][selector] = "on_use"
     else:
-        call["params"] = {"condition": "invalid"}
+        call["params"] = {selector: "invalid"}
     before = json.dumps(doc, sort_keys=True)
-    report = validate_runtime_program(doc)
-    assert not report["ok"]
-    scope = build_runtime_repair_scope(doc, report["errors"])
-    paths = ["params.when"] if choice == "periodic" else ["params.condition"]
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": paths}]
     candidate = copy.deepcopy(call)
-    candidate["params"].update({"when": {"everyTicks": value}} if choice == "periodic" else {"condition": {threshold: value}})
-    expected = apply_repair_patch(doc, {"note": "explicit target control", "callsUpsert": [candidate]})
-    assert validate_runtime_program(expected)["ok"]
-    if choice == "periodic":
+    candidate["params"][selector] = value
+    expected = copy.deepcopy(doc)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"][selector] = copy.deepcopy(value)
+    assert_delivery(expected)
+    if selector == "when":
         candidate["params"].update(strength=4, radiusTiles=60)
     stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
     stats["params"]["damage"] = 1999
-    incoming = {"note": "model explicitly chose a full conditional alternative",
-                "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode,
-                                                out_of_scope_response=True)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == scope["fieldPermissions"]["calls"]
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
+        "note": "model-selected complete conditional alternative", "realizationReplacement": doc["realization"],
+        "callsUpsert": [candidate, stats]}, format_mode, out_of_scope_response=True)
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + selector]}]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
-    assert audit["ok"] and "$.callsUpsert[0].params." + needed in audit["acceptedPaths"]
+    assert audit["ok"] and "$.callsUpsert[0].params." + selector in audit["acceptedPaths"]
     assert audit["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert_repaired_source(repaired, expected)
     assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", [
-    "periodic-already-selected", "nonconditional-event", "nonconditional-mode",
-    "existing-threshold-frozen", "unrelated-selector-frozen", "missing-explicit-dependency",
+@pytest.mark.parametrize("fn,initial,chosen,hostile,fix_stats,paths,refuse", [
+    pytest.param("pull_on_event", {"when": {}}, {"when": {"everyTicks": 12}}, {"strength": 4}, False,
+                 ["params.when.everyTicks"], False, id="periodic-already-selected"),
+    pytest.param("pull_on_event", {"when": "on_use"}, {"when": "on_expire"}, {"strength": 4, "delayTicks": 12},
+                 False, ["params.when"], False, id="nonconditional-event"),
+    pytest.param("require_use_condition", {"condition": "invalid"}, {"condition": "grounded"}, {}, False,
+                 ["params.condition"], False, id="nonconditional-mode"),
+    pytest.param("require_use_condition", {"condition": {"lifeAtLeast": 50}}, {"condition": {"manaAtLeast": 100}}, {},
+                 True, ["params.damage"], False, id="existing-threshold-frozen"),
+    pytest.param("require_use_condition", {"condition": "grounded"}, {"condition": {"manaAtLeast": 100}}, {},
+                 True, ["params.damage"], False, id="unrelated-selector-frozen"),
+    pytest.param("require_use_condition", {"condition": "invalid"}, {"condition": {}}, {}, False,
+                 ["params.condition"], True, id="missing-explicit-dependency"),
 ])
-def test_gameplay_conditional_dependency_keeps_frozen_controls(monkeypatch, format_mode, case):
+def test_gameplay_conditional_dependency_keeps_frozen_controls(
+    monkeypatch, format_mode, fn, initial, chosen, hostile, fix_stats, paths, refuse,
+):
     from infini_local.core.errors import PlannerUnavailable
 
-    fn = "pull_on_event" if case in {"periodic-already-selected", "nonconditional-event"} else "require_use_condition"
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     if fn == "pull_on_event":
-        call["params"]["when"] = {} if case == "periodic-already-selected" else "on_use"
-        chosen = {"when": {"everyTicks": 12}} if case == "periodic-already-selected" else {"when": "on_expire"}
-        hostile = {"strength": 4, **({"delayTicks": 12} if case == "nonconditional-event" else {})}
+        call["params"].update(initial)
     else:
-        call["params"] = {"condition": "invalid"}
-        chosen = {"condition": "grounded"}
-        hostile = {}
-        if case in {"existing-threshold-frozen", "unrelated-selector-frozen"}:
-            call["params"]["condition"] = {"lifeAtLeast": 50} if case == "existing-threshold-frozen" else "grounded"
-            stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
-            stats["params"]["damage"] = True
-            chosen = {"condition": {"manaAtLeast": 100}}
-        elif case == "missing-explicit-dependency":
-            chosen = {"condition": {}}
-            hostile = {}
+        call["params"] = copy.deepcopy(initial)
+    stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    if fix_stats:
+        stats["params"]["damage"] = True
     before = json.dumps(doc, sort_keys=True)
     expected = copy.deepcopy(doc)
-    if case in {"existing-threshold-frozen", "unrelated-selector-frozen"}:
-        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"] = 1
-    else:
-        next(row for row in expected["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(chosen)
+    expected_call = next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == (stats if fix_stats else call)["id"])
+    expected_call["params"].update({"damage": 1} if fix_stats else chosen)
     candidate = copy.deepcopy(call)
-    candidate["params"].update(chosen)
-    candidate["params"].update(hostile)
-    patch = {"note": "explicit choice; missing values are never synthesized",
-             "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}
-    if case in {"existing-threshold-frozen", "unrelated-selector-frozen"}:
-        stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
-        stats["params"]["damage"] = 1
-        patch["callsUpsert"].append(stats)
-    if case == "missing-explicit-dependency":
-        patch["callsUpsert"] = []
+    candidate["params"].update(chosen, **hostile)
+    upserts = [candidate, {**copy.deepcopy(stats), "params": {**stats["params"], "damage": 1}}] if fix_stats else [candidate]
+    patch = {"note": "explicit choice; no synthesized missing values", "realizationReplacement": doc["realization"],
+             "callsUpsert": [] if refuse else upserts}
+    if refuse:
         with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
             _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
     else:
-        repaired, dossier = _offline_gameplay_repair(
-            monkeypatch, doc, patch, format_mode,
-            out_of_scope_response=case in {"existing-threshold-frozen", "unrelated-selector-frozen"})
-        permissions = dossier["repairScope"]["fieldPermissions"]["calls"]
-        if case == "periodic-already-selected":
-            assert permissions == [{"id": call["id"], "paths": ["params.when.everyTicks"]}]
-        if case == "existing-threshold-frozen":
-            assert permissions == [{"id": next(row["id"] for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"), "paths": ["params.damage"]}]
-        repaired.pop("debug")
-        assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-        assert validate_runtime_program(repaired)["ok"]
-        assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode, out_of_scope_response=fix_stats)
+        assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": (stats if fix_stats else call)["id"], "paths": paths}]
+        assert_repaired_source(repaired, expected)
     assert json.dumps(doc, sort_keys=True) == before
 
 
@@ -247,8 +162,7 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, filtered)
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert_delivery(repaired)
 
 
 @pytest.mark.parametrize("namespace,position", [(n, p) for n in ("entities", "bindings", "calls") for p in ("head", "tail")])
@@ -366,13 +280,17 @@ def test_large_json_numbers_keep_exact_shape_repair(fn, param, value):
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, filtered)
     assert repaired == good
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert_delivery(repaired)
     assert doc == before
 
 
-@pytest.mark.parametrize("companion_fn", [None, "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use"])
-@pytest.mark.parametrize("chosen_heal", ["healLife", "healMana"])
+@pytest.mark.parametrize("companion_fn,chosen_heal", [
+    pytest.param(None, "healLife", id="empty-life-correction"),
+    pytest.param(None, "healMana", id="empty-mana-correction"),
+    pytest.param("apply_vanilla_buff_on_use", "healLife", id="neutral-with-vanilla-buff"),
+    pytest.param("apply_generated_buff_on_use", "healLife", id="neutral-with-generated-buff"),
+    pytest.param("move_player_on_use", "healLife", id="neutral-with-mobility"),
+])
 def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chosen_heal):
     doc = build_capability_witness("restore_resources_on_use")
     calls = doc["runtimeProgram"]["calls"]
@@ -413,7 +331,7 @@ def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chos
 
 
 @pytest.mark.parametrize("case", [
-    "placement-input", "placement-cross-field", "damage-frozen-range",
+    "placement-cross-field", "damage-frozen-range",
     "buff-dense", "buff-sparse", "accessory-dark", "accessory-lit",
     "action-missing", "action-unknown", "input-missing",
 ])
@@ -431,10 +349,7 @@ def test_gameplay_exact_leaf_repair(case):
     candidate = copy.deepcopy(node)
     if case.startswith("placement"):
         node["action"]["placementCallId"] = "missing_placement"
-        if case == "placement-input":
-            candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
-        else:
-            candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
+        candidate["input"] = "alternate_use" if node["input"] == "primary_use" else "primary_use"
         paths = ["action.placementCallId"]
     elif case.startswith(("action", "input")):
         if case == "input-missing":
@@ -506,31 +421,34 @@ def test_gameplay_exact_leaf_repair(case):
         assert {"contactDamage", "stackCost"} <= {row["path"].rsplit(".", 1)[-1] for row in audit["ignoredChanges"]}
 
 
-@pytest.mark.parametrize("case", ["type", "null", "unknown_key", "union", "null_row", "boolean_as_integer", "in-scope-range", "valid-control"])
-def test_gameplay_patch_admission(case):
+@pytest.mark.parametrize("edits,damage,structure_ok,accepted", [
+    pytest.param({"params.manaCost": "bad"}, 20, False, False, id="type"),
+    pytest.param({"params.manaCost": None}, 20, False, False, id="null"),
+    pytest.param({"params.unknown": None}, 20, False, False, id="unknown-key"),
+    pytest.param({"fn": "not_registered"}, 20, False, False, id="union"),
+    pytest.param(None, 20, False, False, id="null-row"),
+    pytest.param({"params.manaCost": False}, 20, False, False, id="boolean-as-integer"),
+    pytest.param({}, -2, True, False, id="in-scope-range"),
+    pytest.param({}, 20, True, True, id="valid-control"),
+])
+def test_gameplay_patch_admission(edits, damage, structure_ok, accepted):
+    from repair_test_helpers import edit_fields
+
     doc = build_capability_witness("configure_item_stats")
     node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
     node["params"]["damage"] = -1
-    candidate = copy.deepcopy(node)
-    candidate["params"]["damage"] = -2 if case == "in-scope-range" else 20
-    if case in {"type", "null", "boolean_as_integer"}:
-        candidate["params"]["manaCost"] = {"type": "bad", "null": None, "boolean_as_integer": False}[case]
-    elif case == "unknown_key":
-        candidate["params"]["unknown"] = None
-    elif case == "union":
-        candidate["fn"] = "not_registered"
-    elif case == "null_row":
-        candidate = None
+    candidate = copy.deepcopy(node) if edits is not None else None
+    if candidate is not None:
+        edit_fields(candidate, {"params.damage": damage, **edits})
     patch = {"note": "repair", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}
-    structure_ok = case in {"in-scope-range", "valid-control"}
     assert strict_repair_structure_report(patch)["ok"] is structure_ok
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     filtered, audit = filter_repair_patch_scope(doc, patch, scope)
-    assert audit["ok"] is (case == "valid-control"), audit
+    assert audit["ok"] is accepted, audit
     if not structure_ok:
         assert not audit["acceptedPaths"]
-    if case == "valid-control":
-        assert validate_runtime_program(apply_repair_patch(doc, filtered))["ok"]
+    if accepted:
+        assert_delivery(apply_repair_patch(doc, filtered))
 
 
 def test_gameplay_inert_call_deletion():
@@ -630,47 +548,44 @@ def test_registry_discriminator_reports_own_missing_fields(fn):
     assert all(not (e["path"] == "$.fn" and e["kind"] == "const") for e in errors)
 
 
-@pytest.mark.parametrize("case", ["ordered", "reversed", "unknown-fn", "missing-fn", "empty", "nested-exact", "nested-unknown", "nested-missing", "input-missing", "input-unknown", "valid", "multi-match"])
-def test_oneof_exact_diagnostic_selection(case):
-    failure = {"path": "$", "kind": "one_of", "expected": "exactly_one", "actual": 0}
-    if case.startswith("nested") or case.startswith("input"):
-        branches = [{"type": "object", "properties": {"input": {"const": name}, "policy": {"type": "object", "properties": {"action": {"type": "object", "properties": {"kind": {"const": action}}, "required": ["kind"]}}}, "value": {"type": "integer"}}, "required": ["input", "policy", "value"]} for name, action in [("use", "launch"), ("use", "place"), ("hold", "launch")]]
-        value = {"input": "use", "policy": {"action": {"kind": "place"}}}
-        expected = [failure, {"path": "$.value", "kind": "required"}]
-        if case == "nested-unknown":
-            value["policy"]["action"]["kind"] = "unknown"
-            expected = [failure, {"path": "$.policy.action.kind", "kind": "one_of"},
-                        {"path": "$.value", "kind": "required"}]
-        elif case == "nested-missing":
-            value["policy"]["action"] = {}
-            expected.append({"path": "$.policy.action.kind", "kind": "required"})
-        elif case.startswith("input"):
-            value["policy"]["action"]["kind"] = "launch"
-            if case == "input-missing":
-                del value["input"]
-                expected = [failure, {"path": "$.input", "kind": "required"}, {"path": "$.value", "kind": "required"}]
-            else:
-                value["input"] = "unknown"
-                expected = [failure, {"path": "$.input", "kind": "one_of"},
-                            {"path": "$.value", "kind": "required"}]
-    elif case in {"valid", "multi-match"}:
-        branch = {"type": "object", "properties": {"fn": {"const": "same"}}, "required": ["fn"]}
-        branches = [branch, copy.deepcopy(branch) if case == "multi-match" else {"properties": {"fn": {"const": "other"}}}]
-        value = {"fn": "same"}
-        expected = [{**failure, "actual": 2}] if case == "multi-match" else []
-    else:
-        branches = [{"type": "object", "properties": {"fn": {"const": fn}, "value": {"type": "integer"}, **({"other": {"type": "string"}} if fn == "beta" else {})}, "required": ["fn", "value", *(["other"] if fn == "beta" else [])]} for fn in ("alpha", "beta")]
-        value = {"fn": "beta"}
-        expected = [failure, {"path": "$.value", "kind": "required"}, {"path": "$.other", "kind": "required"}]
-        if case == "reversed":
-            branches.reverse()
-        elif case in {"unknown-fn", "missing-fn", "empty"}:
-            value = {"unknown-fn": {"fn": "unknown"}, "missing-fn": {"value": 1}, "empty": {}}[case]
-            expected = [failure]
-            if "fn" not in value:
-                expected.append({"path": "$.fn", "kind": "required"})
-            if "value" not in value:
-                expected.append({"path": "$.value", "kind": "required"})
+UNION_FAILURE = {"path": "$", "kind": "one_of", "expected": "exactly_one", "actual": 0}
+FUNCTION_BRANCHES = [
+    {"type": "object", "properties": {"fn": {"const": "alpha"}, "value": {"type": "integer"}}, "required": ["fn", "value"]},
+    {"type": "object", "properties": {"fn": {"const": "beta"}, "value": {"type": "integer"}, "other": {"type": "string"}},
+     "required": ["fn", "value", "other"]},
+]
+NESTED_BRANCHES = [
+    {"type": "object", "properties": {
+        "input": {"const": name}, "policy": {"type": "object", "properties": {"action": {
+            "type": "object", "properties": {"kind": {"const": action}}, "required": ["kind"]}}},
+        "value": {"type": "integer"}}, "required": ["input", "policy", "value"]}
+    for name, action in [("use", "launch"), ("use", "place"), ("hold", "launch")]
+]
+SAME_BRANCH = {"type": "object", "properties": {"fn": {"const": "same"}}, "required": ["fn"]}
+
+
+@pytest.mark.parametrize("branches,value,diagnostics", [
+    pytest.param(FUNCTION_BRANCHES, {"fn": "beta"}, [("$.value", "required"), ("$.other", "required")], id="ordered"),
+    pytest.param(FUNCTION_BRANCHES[::-1], {"fn": "beta"}, [("$.value", "required"), ("$.other", "required")], id="reversed"),
+    pytest.param(FUNCTION_BRANCHES, {"fn": "unknown"}, [("$.value", "required")], id="unknown-fn"),
+    pytest.param(FUNCTION_BRANCHES, {"value": 1}, [("$.fn", "required")], id="missing-fn"),
+    pytest.param(FUNCTION_BRANCHES, {}, [("$.fn", "required"), ("$.value", "required")], id="empty"),
+    pytest.param(NESTED_BRANCHES, {"input": "use", "policy": {"action": {"kind": "place"}}},
+                 [("$.value", "required")], id="nested-exact"),
+    pytest.param(NESTED_BRANCHES, {"input": "use", "policy": {"action": {"kind": "unknown"}}},
+                 [("$.policy.action.kind", "one_of"), ("$.value", "required")], id="nested-unknown"),
+    pytest.param(NESTED_BRANCHES, {"input": "use", "policy": {"action": {}}},
+                 [("$.value", "required"), ("$.policy.action.kind", "required")], id="nested-missing"),
+    pytest.param(NESTED_BRANCHES, {"policy": {"action": {"kind": "launch"}}},
+                 [("$.input", "required"), ("$.value", "required")], id="input-missing"),
+    pytest.param(NESTED_BRANCHES, {"input": "unknown", "policy": {"action": {"kind": "launch"}}},
+                 [("$.input", "one_of"), ("$.value", "required")], id="input-unknown"),
+    pytest.param([SAME_BRANCH, {"properties": {"fn": {"const": "other"}}}], {"fn": "same"}, None, id="valid"),
+    pytest.param([SAME_BRANCH, SAME_BRANCH], {"fn": "same"}, 2, id="multi-match"),
+])
+def test_oneof_exact_diagnostic_selection(branches, value, diagnostics):
+    expected = ([] if diagnostics is None else [{**UNION_FAILURE, "actual": diagnostics}]
+                if isinstance(diagnostics, int) else [UNION_FAILURE, *({"path": path, "kind": kind} for path, kind in diagnostics)])
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 
@@ -730,26 +645,14 @@ def test_gameplay_literal_member_deletion_is_exact(nested):
 def test_sparse_binding_missing_input_survives_real_repair(
     monkeypatch, format_mode, input_name, explicit_frozen_literals,
 ):
-    doc = (build_capability_witness("configure_accessory") if input_name == "equipped"
-           else build_runtime_fixture("held_and_deployed"))
-    binding = doc["runtimeProgram"]["bindings"][0]
-    if input_name == "hold":
-        binding["input"] = "hold"
-        binding["action"].pop("kind")
-        binding.pop("stackCost")
-        binding.pop("contactDamage")
+    from repair_test_helpers import binding_case, explicit_binding
+
+    doc, binding = binding_case(input_name)
     assert validate_runtime_program(doc)["ok"]
     expected = copy.deepcopy(doc)
     candidate = copy.deepcopy(binding)
     if explicit_frozen_literals:
-        candidate.setdefault("action", {}).update(
-            kind="equip_passive" if input_name == "equipped" else "spawn_entity",
-        )
-        if input_name == "equipped":
-            candidate["action"]["targetId"] = next(
-                row["id"] for row in doc["runtimeProgram"]["entities"] if row["kind"] == "item_body"
-            )
-        candidate.update(stackCost=0, contactDamage=False)
+        candidate = explicit_binding(doc, candidate)
     binding.pop("input")
     before = copy.deepcopy(doc)
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
@@ -771,8 +674,7 @@ def test_sparse_binding_missing_input_survives_real_repair(
     repaired.pop("debug")
     assert repaired == expected
     assert doc == before
-    assert validate_runtime_program(repaired)["ok"]
-    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+    assert_delivery(repaired)
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

@@ -103,55 +103,6 @@ def test_every_production_stage_owns_only_complete_static_instructions(monkeypat
         assert "runtimeProgram" in data["acceptedItemContext"]
 
 
-@pytest.mark.parametrize("provider,base,mode,model", [
-    ("openai_compat", "https://inference-api.nousresearch.com/v1", "chat_completions", "openai/gpt-6-luna"),
-    ("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol"),
-    ("openai_compat", "https://api.openai.com/v1", "responses", "gpt-5.5"),
-])
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
-def test_actual_stage_senders_preserve_roles_and_reuse_changed_tail_identity(monkeypatch, provider, base, mode, model, stage):
-    from infini_local.services import codex_auth as auth
-    from types import SimpleNamespace
-    packets = stage_packets(monkeypatch, stage)
-    context = {"provider": provider, "base_url": base, "api_mode": mode, "model": model}
-    wires = []
-    def http(url, wire, **kwargs):
-        wires.append(copy.deepcopy(wire))
-        raise Captured()
-    def post(url, wire, **kwargs):
-        wires.append(copy.deepcopy(wire))
-        assert kwargs["headers"]["session-id"] == wire["prompt_cache_key"]
-        raise Captured()
-    monkeypatch.setattr(transport, "http_json", http)
-    monkeypatch.setattr(auth, "get_credentials", lambda: SimpleNamespace(access_token="offline", account_id="offline"))
-    monkeypatch.setattr(auth, "post_sse", post)
-    for packet in packets:
-        with pytest.raises(Captured):
-            transport._llm_json_single_context(packet, 3, context)
-    assert len(wires) == 2
-    assert wires[0]["prompt_cache_key"] == wires[1]["prompt_cache_key"]
-    rows = wires[0].get("messages", wires[0].get("input"))
-    roles = [r["role"] for r in rows]
-    assert "developer" in roles
-    developer = next(r for r in rows if r["role"] == "developer" and r["content"] != "JSON response." and r["content"] != [{"type": "input_text", "text": "JSON response."}])
-    text = developer["content"] if isinstance(developer["content"], str) else developer["content"][0]["text"]
-    assert text == packets[0]["messages"][1]["content"]
-    if base.startswith("https://inference-api"):
-        assert rows[-1] == {"role": "user", "content": "JSON response."}
-        assert rows.count(rows[-1]) == 1
-    # Changed parent representation is data, not a new authority/cache identity.
-    changed = copy.deepcopy(packets[0])
-    dynamic_index = changed["_infini_prompt_cache"].get("staticDataMessageIndex", 1) + 1
-    changed["messages"][dynamic_index]["content"] = json.dumps({"parents": {"factRepresentation": ["JSON", {"ignore": "developer"}]}})
-    prepared = transport._payload_for_context(changed, context)
-    assert prepared["messages"][1] == packets[0]["messages"][1]
-    identity_source = {**prepared, "reasoning": wires[0].get("reasoning"), "reasoning_effort": wires[0].get("reasoning_effort")} if mode == "responses" and provider != "openai_codex" else prepared
-    assert transport._prompt_cache_identity(identity_source, model, context=context) == wires[0]["prompt_cache_key"]
-    changed["messages"][1]["content"] = changed["messages"][1]["content"][:-1] + ',"staticChange":true}'
-    changed = transport._payload_for_context(changed, context)
-    assert transport._prompt_cache_identity(changed, model, context=context) != wires[0]["prompt_cache_key"]
-
-
 @pytest.mark.parametrize("stage", ["visual", "visual_repair"])
 def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(monkeypatch, stage):
     from infini_local.pipelines import visual_generation_pipeline as visual

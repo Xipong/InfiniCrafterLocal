@@ -15,13 +15,13 @@ internal static partial class EngineRuntimeChecks
 {
     private static void BlinkAuthoredRangeReachesTeleport()
     {
-        int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+        using var actorState = new NativeActorState();
+
         int oldMouseX = Terraria.Main.mouseX, oldMouseY = Terraria.Main.mouseY;
         var oldScreen = Terraria.Main.screenPosition;
-        var oldProjectiles = Terraria.Main.projectile;
+
         var oldDust = Terraria.Main.dust;
-        var oldPlayer = Terraria.Main.player[0];
-        var oldRandom = Terraria.Main.rand;
+
         var lastPositionField = typeof(PressurePlateHelper).GetField("PlayerLastPosition", BindingFlags.Static | BindingFlags.NonPublic)!;
         var oldLastPositions = lastPositionField.GetValue(null);
         var failures = new List<string>();
@@ -116,15 +116,13 @@ internal static partial class EngineRuntimeChecks
         }
         finally
         {
-            Terraria.Main.netMode = oldMode;
-            Terraria.Main.myPlayer = oldLocal;
+
             Terraria.Main.mouseX = oldMouseX;
             Terraria.Main.mouseY = oldMouseY;
             Terraria.Main.screenPosition = oldScreen;
-            Terraria.Main.projectile = oldProjectiles;
+
             Terraria.Main.dust = oldDust;
-            Terraria.Main.player[0] = oldPlayer;
-            Terraria.Main.rand = oldRandom;
+
             lastPositionField.SetValue(null, oldLastPositions);
         }
         if (failures.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));

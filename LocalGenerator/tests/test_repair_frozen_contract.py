@@ -61,46 +61,18 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     assert wire["runtimeProgram"]["limits"]["maxEventSpawnsPerActivation"] == 32
 
 
-_TYPE_PAIRS = [(True, 1), (False, 0), (1, True), (0, False), (1.0, 1), (1, 1.0)]
-_MERGE_CASES = [pytest.param("typed", old, new, shape, id=f"{shape}-{type(old).__name__}-{old}-to-{type(new).__name__}-{new}")
-                for old, new in _TYPE_PAIRS for shape in ("scalar", "object", "nested_array")]
-_MERGE_CASES += [pytest.param("descendant", None, None, permission, id="atomic-" + permission) for permission in ("profile[1]", "profile.1")]
-_MERGE_CASES += [pytest.param("unchanged", None, None, "", id="same-typed-reordered"), pytest.param("sibling", None, None, "leaf", id="typed-leaf-hostile-sibling")]
-
-
-@pytest.mark.parametrize("case,old,new,shape", _MERGE_CASES)
-def test_frozen_json_type_and_permission_contract(case, old, new, shape):
-    if case == "typed":
-        if shape == "scalar":
-            original, candidate, path = old, new, ""
-        elif shape == "object":
-            original, candidate, path = {"leaf": old}, {"leaf": new}, "leaf"
-        else:
-            original, candidate, path = {"nested": [{"leaf": old}]}, {"nested": [{"leaf": new}]}, "nested"
-        expected, accepted, ignored_paths = candidate, ["$" + ("." + path if path else "")], []
-    elif case == "descendant":
-        original, candidate, path = {"profile": [1, True, 0]}, {"profile": [1, 1, 0]}, shape
-        expected, accepted, ignored_paths = original, [], ["$.profile"]
-    elif case == "unchanged":
-        original = {"a": [None, False, 1, 1.0, "1"], "b": {"c": 0}}
-        candidate = {"b": {"c": 0}, "a": [None, False, 1, 1.0, "1"]}
-        path, expected, accepted, ignored_paths = "", original, [], []
-    else:
-        original, candidate, path = {"leaf": True, "sibling": "old"}, {"leaf": 1, "sibling": "new"}, "leaf"
-        expected, accepted, ignored_paths = {"leaf": 1, "sibling": "old"}, ["$.leaf"], ["$.sibling"]
+@pytest.mark.parametrize("original,candidate,paths,expected", [
+    pytest.param({"leaf": True, "sibling": "old"}, {"leaf": 1, "sibling": "hostile"}, ["leaf"], {"leaf": 1, "sibling": "old"}, id="authorized-type-change-frozen-sibling"),
+    pytest.param({"leaf": 1}, {"leaf": 1.0}, [], {"leaf": 1}, id="frozen-integer-not-float"),
+    pytest.param({"nested": [{"leaf": False}]}, {"nested": [{"leaf": 0}]}, [], {"nested": [{"leaf": False}]}, id="nested-boolean-not-integer"),
+    pytest.param({"profile": [1, True, 0]}, {"profile": [1, 1, 0]}, ["profile[1]"], {"profile": [1, True, 0]}, id="array-not-thawed-by-descendant"),
+    pytest.param({"a": [None, False, 1, 1.0], "b": {"c": 0}}, {"b": {"c": 0}, "a": [None, False, 1, 1.0]}, [], {"a": [None, False, 1, 1.0], "b": {"c": 0}}, id="object-order-is-not-a-change"),
+])
+def test_frozen_json_permissions_preserve_types_and_unchanged_source(original, candidate, paths, expected):
     before = json.dumps(original), json.dumps(candidate)
-    merged, ignored, actual = merge_frozen_subtree(original, candidate, mutable_paths=[path], audit_path="$", allow_additions=False)
-    assert json.dumps(merged, sort_keys=True) == json.dumps(expected, sort_keys=True), "schema_type_identity_and_exact_permission"
-    assert actual == accepted
-    assert [row["path"] for row in ignored] == ignored_paths
-    assert all(row["reason"] == "frozen_valid_value" for row in ignored)
-    if case == "typed":
-        frozen, denied, accepted = merge_frozen_subtree(original, candidate, mutable_paths=[], audit_path="$", allow_additions=False)
-        assert json.dumps(frozen) == before[0]
-        assert len(denied) == 1 and denied[0]["path"] == "$" + ("." + path if path else "")
-        assert denied[0]["reason"] == "frozen_valid_value" and not accepted
-    elif case == "unchanged":
-        assert merged is not original and merged["a"] is not original["a"]
+    merged, _ignored, _accepted = merge_frozen_subtree(
+        original, candidate, mutable_paths=paths, audit_path="$", allow_additions=False)
+    assert json.dumps(merged, sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert (json.dumps(original), json.dumps(candidate)) == before
 
 

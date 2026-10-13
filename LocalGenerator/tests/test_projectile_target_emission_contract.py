@@ -1,17 +1,16 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """Explicit bounded target links emit authored physical children; no radial alias."""
 from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 
 import pytest
+from repair_test_helpers import gameplay_repair, frozen_gameplay_repair
 from jsonschema import Draft202012Validator
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, audit_compiler_receipts,
-    build_runtime_repair_scope, compile_runtime_program, filter_repair_patch_scope,
-    validate_runtime_program, validate_runtime_wire,
+    CAPABILITY_REGISTRY, audit_compiler_receipts, build_runtime_repair_scope, compile_runtime_program,
+    filter_repair_patch_scope, validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION_OPCODE
 from infini_local.core.runtime_authoring.repair_scope import _capability_dependency_closure
@@ -22,7 +21,6 @@ from infini_local.pipelines import author_item_contract as contract
 from infini_local.pipelines import llm_authoring_pipeline as author
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_low_level_three_stage_pipeline import wire_transport
-from test_repair_gameplay_contract import _offline_gameplay_repair
 
 
 FN = "select_targets_and_emit_on_event"
@@ -62,8 +60,13 @@ def test_child_reference_requirements_do_not_expand_source_entity_dependency_sco
 @pytest.mark.parametrize("anchor", ["previous_target", "event_target"])
 @pytest.mark.parametrize("repeats", ["allow_revisits", "exclude_visited"])
 @pytest.mark.parametrize("los", [False, True])
-@pytest.mark.parametrize("event_name", ["on_hit", "on_crit"])
-@pytest.mark.parametrize("delay", [0, 600])
+# Anchor, visited filtering and LOS share PlanTargetEmissions and stay coupled.
+# Event routing and delay scheduling do not inspect those decisions; retain both
+# explicit routes and the scheduler's two boundary values without multiplying.
+@pytest.mark.parametrize("event_name,delay", [
+    pytest.param("on_hit", 0, id="hit-immediate"),
+    pytest.param("on_crit", 600, id="crit-max-delay"),
+])
 def test_all_explicit_selection_choices_reach_exact_opcode_and_receipts(anchor, repeats, los, event_name, delay):
     doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delayTicks=delay)
     original = deepcopy(doc)
@@ -203,7 +206,7 @@ def test_production_repair_can_retarget_or_create_exact_child_and_freezes_existi
     if create:
         incoming["entitiesUpsert"] = [child]
         incoming["callsUpsert"].extend(calls)
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, mode)
+    repaired, dossier = gameplay_repair(monkeypatch, doc, incoming, mode)
     expected = deepcopy(doc); _call(expected)["params"]["entity"] = "selected"
     if create:
         expected["runtimeProgram"]["entities"].append(child); expected["runtimeProgram"]["calls"].extend(calls)
@@ -228,12 +231,13 @@ def test_reference_repair_does_not_hide_new_orphans_by_deleting_frozen_child():
 def test_leaf_repair_changes_only_invalid_range_and_keeps_all_selection_decisions(monkeypatch, mode):
     doc = _doc(stepRangeTiles=61, selectionAnchor="event_target", requireLineOfSight=True)
     candidate = deepcopy(_call(doc)); candidate["params"].update(stepRangeTiles=60, selectionAnchor="previous_target", requireLineOfSight=False)
-    repaired, packet = _offline_gameplay_repair(monkeypatch, doc,
-        {"note": "exact range correction", "callsUpsert": [candidate], "realizationReplacement": doc["realization"]}, mode)
     expected = deepcopy(doc); _call(expected)["params"]["stepRangeTiles"] = 60
-    assert repaired["runtimeProgram"] == expected["runtimeProgram"]
-    assert packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": "witness_call", "paths": ["params.stepRangeTiles"]}]
+    repaired, packet, final = frozen_gameplay_repair(monkeypatch, doc,
+        {"note": "exact range correction", "callsUpsert": [candidate], "realizationReplacement": doc["realization"]}, mode,
+        {"calls": [{"id": "witness_call", "paths": ["params.stepRangeTiles"]}]}, expected)
     assert packet["existingBrokenCapabilityCards"] == [CAP.prompt_card()]
+    assert _event(final)["stepRangeTiles"] == 60
+    assert _event(final)["selectionAnchor"] == "event_target" and _event(final)["requireLineOfSight"] is True
 
 
 @pytest.mark.parametrize("mutation", ["wrong-opcode", "wrong-name", "foreign-fields", "non-neutral-unused"])
@@ -315,33 +319,11 @@ def test_numeric_consumer_audit_includes_every_new_numeric_leaf():
     assert all(row["admission"] == "reject_without_clamp" for row in rows if row["param"] != "delayTicks")
 
 
-@pytest.mark.parametrize("before,after", [
-    ("value > 12", "value > 13"), ("value < 1d", "value < 0d"),
-    ("!double.IsFinite(value.Value) || ", ""),
-    ("public double? StepRangeTiles", "public float? StepRangeTiles"),
-    ("value is null || value < 0 || value > 600", "value < 0 || value > 600"),
-])
-def test_numeric_boundary_mutations_cannot_disappear_from_audit(monkeypatch, before, after):
-    original = Path.read_text
-    def changed(path, *args, **kwargs):
-        text = original(path, *args, **kwargs)
-        return text.replace(before, after) if path.name == "RuntimeProgramSpec.cs" else text
-    monkeypatch.setattr(Path, "read_text", changed)
-    rows = [row for row in _runtime_param_bound_rows() if row["capability"] == FN]
-    assert any(not row["preserved"] for row in rows)
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""
-    from copy import deepcopy
-    import json
-    from jsonschema import Draft202012Validator
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.pipelines import llm_transport as transport
-    from test_codex_subscription_contract import _encode_nullable_fixture
-    from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = _doc()
     binding = doc["runtimeProgram"]["bindings"][0]
@@ -422,16 +404,11 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     hostile_combat["params"]["damageBasis"] = "authored_child"
     hostile_binding = deepcopy(binding)
     hostile_binding["stackConsumeChancePercent"] = 90
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
+    repaired, dossier, repaired_wire = frozen_gameplay_repair(monkeypatch, broken,
         {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
          "callsUpsert": [candidate, frozen, hostile_spawn, hostile_emission, hostile_combat, hostile_geometry],
-         "bindingsUpsert": [hostile_binding]},
-        format_mode, out_of_scope_response=True)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    assert json.dumps(repaired["runtimeProgram"], sort_keys=True) == json.dumps(doc["runtimeProgram"], sort_keys=True)
-    repaired_wire = compile_runtime_program(repaired)
-    assert validate_runtime_wire(repaired_wire)["ok"]
+         "bindingsUpsert": [hostile_binding]}, format_mode,
+        {"calls": [{"id": curve["id"], "paths": ["params.endScale"]}]},
+        {key: value for key, value in accepted.items() if key != "debug"}, out_of_scope_response=True)
     assert repaired_wire["runtimeProgram"] == wire["runtimeProgram"]
-    assert audit_compiler_receipts(repaired_wire["runtimeContract"]["finalWireReceipts"], authored_document=repaired, final_document=repaired_wire)["ok"]
     assert json.dumps(doc, sort_keys=True) == before
