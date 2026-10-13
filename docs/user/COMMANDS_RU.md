@@ -1,76 +1,113 @@
-# Команды InfiniCrafterLocal в Terraria
+# Команды в чате Terraria
 
-Вводи команды в чат Terraria/tModLoader. Пути ниже относительны **`<Main.SavePath>/InfiniCrafterLocal/`** пользовательского tModLoader, не Steam-папке игры. Windows Documents/OneDrive/локализация зависят от профиля; не копируй чужой абсолютный путь.
+Команды вводятся **в игровой чат tModLoader**, не в Windows-терминал. Они доступны при включённом моде. Для обычной игры большинство не требуется.
 
-| Команда | Результат |
+## Что выбрать
+
+| Задача | Команда | Что изменится |
+|---|---|---|
+| Получить Core для теста кузни | `/infinicore` | Выдаёт один Core; обычный рецепт — 20 дерева + 1 Fallen Star |
+| Догрузить уже созданные предметы/рисунки | `/getinfini` | Повторяет синхронизацию, без новых запросов к нейросети и без выдачи предмета |
+| Посмотреть состояние рисунков в памяти | `/infinicache stats` | Печатает статистику в чат |
+| Подготовить рисунок предмета в руке | `/infinicache warm held` | Загружает готовые assets и текстуры, не рисует заново |
+| Выдать манекен для теста урона | `/infinidummy` или `/infinidummy 3` | Выдаёт Target Dummy; количество от 1 до 99 |
+| Посмотреть данные предмета в руке | `/infiniitem trace held` | Печатает диагностические поля, не меняет предмет |
+| Экспортировать рисунки для отчёта | `/infinidumppicture latest` | Создаёт папку с PNG, JSON и HTML-галереей |
+| Экспортировать исходную игровую текстуру | `/infinidumppicture source held` | Копирует загруженную текстуру предмета и связанного снаряда |
+| Сохранить таблицы загруженных игровых данных | `/infinidump` | Перезаписывает два диагностических JSONL-файла |
+| Открыть несколько независимых кузниц для теста | `/multidevcraft 2` или `/multidevcraft 3` | Добавляет окна; каждому нужны собственные A/B |
+
+Проверяй ответ в чате: он сообщает результат и путь экспорта. Если команда не найдена, проверь включённый мод и точное написание.
+
+## Догрузка и кеш
+
+`/getinfini` сбрасывает задержку повторной загрузки и запрашивает недостающие данные. В MP — у сервера, в одиночной игре — у локальных источников. Он **не** создаёт новый рецепт, не вызывает нейросеть и не выдаёт новый предмет. Если файла нет у хозяина, команда не создаст его из ничего: [решение проблем](DIAGNOSTICS_RU.md#предмет-есть-а-рисунка-или-данных-нет).
+
+| Команда | Эффект |
 |---|---|
-| `/infinicore` | Один Core через quick-spawn в inventory; открыть inventory для station |
-| `/multidevcraft [2\|3\|off]` | Сессионное число независимых craft lanes; без предметов/файлов |
-| `/infinidummy [count]` | Target Dummy через quick-spawn; default 1, clamp 1–99, нечисло → 1 |
-| `/getinfini` | Registry/asset catch-up; definitions `generated_items/<id>.json`, PNG/JSON `asset_cache/` |
-| `/infiniitem [trace [held\|<1-58>]]` | Authored/last-applied snapshot только в чате; не изменяет предмет |
-| `/infinicache [stats\|warm\|clear\|resetbad] [held\|inventory\|registry] [limit]` | RAM/GPU cache diagnostics; warm может получить assets на диск |
-| `/infinidump` | Перезаписывает `items_runtime_dump.jsonl`, `projectiles_runtime_dump.jsonl` |
-| `/infinidumppicture [all\|latest\|id-or-name-filter]` | Generated PNG/JSON/gallery в `picture_dumps/YYYYMMDD_HHMMSS/` |
-| `/infinidumppicture source [held\|active\|baseline\|item <id/name>\|projectile <id/name>]` | Loaded Terraria/mod textures в `picture_dumps/source_YYYYMMDD_HHMMSS/` |
+| `/infinicache stats` | Число текстур, оценка памяти, ошибки загрузки, registry и количество файлов/скачиваний |
+| `/infinicache clear` | Освобождает текстуры и записи об ошибках **из памяти**, не удаляет PNG/JSON с диска |
+| `/infinicache resetbad` | Сбрасывает запомненные ошибки и задержку повторной загрузки |
+| `/infinicache warm inventory 64` | Подготавливает assets предметов из инвентаря, брони и аксессуаров |
+| `/infinicache warm registry 256` | Подготавливает assets из известных игре созданных предметов |
 
-## Полное логирование LocalGenerator
+Для `warm` области — `held`, `inventory`, `registry` (также `all`). Без области используется inventory, без лимита — 64; допустимый лимит ограничен диапазоном 1–512. `stats/status`, `resetbad/reset`, `warm/prefetch` — равнозначные названия. На выделенном сервере нет клиентского GPU-кеша, поэтому warm там недоступен.
 
-В GUI → **Сервер и крафт** галочка **«Полное логирование (без обрезки)»** видна без расширенного режима и включена для нового config. Сохранённый `INFINI_TRACE_PROMPTS=0` не сбрасывается при открытии/сохранении GUI или выборе встроенного pipeline preset; пользовательский профиль сохраняет выбранное значение. Изменения применяются после **Сохранить → перезапустить сервер**.
+**Результат:** чат показывает статистику/число загруженных текстур. Загрузка может продолжиться асинхронно; если остаются missing/bad, проверь источник файлов и доставку, не повторяй бесконечно очистку.
 
-- **ON:** полные sanitized prompts/ответы Gameplay/Visual/VFX (включая Repair), image prompts, payloads и шаги пишутся в `cache/prompt_trace.ndjson`, `cache/pipeline_trace.ndjson`, `cache/events.ndjson` без обрезки и автоматической ротации. Полные failure snapshots также архивируются в pipeline trace; `last_combine_failure.json` — только указатель последнего сбоя. `cache/stage_requests/*.json` сохраняет точные builder messages до provider conversion, с stage + recipeKey/recipeId + hash join, атомарно и без квот на длину/число записей. Не обещает захват transport headers или старого исторического HTTP wire; ошибка диска/неподдерживаемый message shape/linked storage дают refusal, а не частичный запрос.
-- **OFF:** нет новых дополнительных prompt/pipeline traces, stage/failure debug artifacts, info/debug/warn events, HTTP access echo и захвата stdout/stderr запущенного GUI sd.cpp backend. Краткие фатальные ошибки и стартовый server baseline остаются; старый архив автоматически не удаляется. Внешний уже работающий backend GUI не перенастраивает.
-- **Хранение ≠ показ:** GUI `/trace.json`/локальный fallback показывает последние записи; `INFINI_TRACE_EVENTS_TAIL` ограничивает число показанных строк, не архив. Содержимое показанного запроса/ответа остаётся полным. `INFINI_TRACE_MAX_PROMPT_CHARS=0` — настоящий unlimited sentinel для текстового web preview; положительное старое значение не обрезает сохранённые данные. При очень большом snapshot сохраняется I/O timeout, не подмена частичным успехом.
-- **Безопасность/диск:** credentials редактируются перед сохранением/эхом; чистый authored текст (Unicode/CRLF/escape sequences) не переписывается. ON может занимать много диска: архив очищается только вручную. GUI Clear trace очищает три NDJSON; stage-request архив удаляй отдельно при остановленном сервере.
-- **Область:** это переключатель дополнительной диагностики, не выключатель обязательного gameplay/progress, accepted recipe/history, механических receipts, transfer manifests или отдельно выбранного debug sprite-stage сохранения. Их отключение сломало бы pipeline/историю; модели, prompts/контракты и gameplay не меняются.
+## Данные предмета и игровых определений
 
-## `/multidevcraft`
+```console
+/infiniitem trace
+/infiniitem trace held
+/infiniitem trace 1
+```
 
-`2` закрепляет окна за `llm_1`/`llm_2`, `3` — за `llm_1..llm_3`; `off` (также `0`/`1`) возвращает одно окно. Без аргумента цикл `1 → 2 → 3 → 1`. Каждое окно имеет собственные A/B, request/progress/refund. Занятое скрываемое окно нужно сначала завершить/освободить. Профили LLM 2/3 настраиваются во вкладке Multi-dev GUI; команда не обходит validation и server-authoritative commit, не выдаёт ингредиенты.
+Последняя форма читает слот инвентаря **1–58**; неверный номер возвращает выбор к предмету в руке. Обычный предмет даёт сообщение `not generated`.
 
-## `/getinfini`
+В выводе `authored` — данные, созданные моделью; `last ApplyToItem snapshot` — последний снимок их применения **до последующих префиксов и других модификаторов**. Это не окончательный урон игрока со всеми баффами. У загруженного/склонированного определения снимок может ещё отсутствовать; само по себе это не доказывает поломку.
 
-Сбрасывает asset retry/backoff и повторяет недостающие PNG/JSON; в MP запрашивает полный registry сервера, вне MP обновляет локальные assets. **Не** создаёт рецепт, не вызывает LLM заново и не выдаёт предмет. Если catch-up не помог, проверь [выбранный MP transport](OPERATIONS_RU.md#multiplayer-и-диагностика).
+**`/infinidump`** сохраняет загруженные определения предметов и снарядов: характеристики, время использования, damage class, поля инструментов/брони/аксессуаров, сведения о снарядах и текстурах. Каждый запуск **перезаписывает** `items_runtime_dump.jsonl` и `projectiles_runtime_dump.jsonl`. Если нужен предыдущий файл для сравнения, сначала скопируй его. Это экспорт данных, не выдача предметов и не запуск генерации.
 
-## `/infiniitem`
+**Необязательно:** LocalGenerator может использовать эти снимки как дополнительные данные об исходных предметах и снарядах. Он ищет их в стандартных пользовательских папках tModLoader при запуске. Для нестандартного места задай в `config.env` **`INFINI_ITEMS_RUNTIME_DUMP`** и **`INFINI_PROJECTILES_RUNTIME_DUMP`** полными путями к двум JSONL-файлам, затем перезапусти генератор. Это не обязательный шаг установки: дампы нужны для уточнения данных и диагностики, а не вместо настройки нейросетей.
 
-Без аргумента/с `help` — помощь. `trace`/`trace held` — предмет в руке; `trace 1` … `trace 58` — inventory slot, неправильный slot → held. Обычный предмет — `not generated`.
+## Экспорт рисунков
 
-Applied — **последний `ApplyToItem` snapshot до последующих hooks/prefix**, не все текущие player/global modifiers; у clones/load snapshot может отсутствовать. Для полных чисел используй `/infinidump`.
+### Созданные предметы
 
-## `/infinicache`
+```console
+/infinidumppicture latest
+/infinidumppicture all
+/infinidumppicture <часть-id-или-имени>
+```
 
-| Action / aliases | Эффект |
+- `latest` (также без аргумента) — до 12 последних предметов;
+- `all` — все известные игре созданные предметы;
+- фильтр ищется в ID, имени, названиях родителей и ключе рецепта.
+
+**Результат:** в `picture_dumps/YYYYMMDD_HHMMSS/` появляются копии PNG предмета/эффектов, JSON, manifest и **`index.html`**. Открой HTML двойным щелчком для просмотра галереи. Если нужного предмета нет, сначала синхронизируй `/getinfini` и убедись, что он известен игре в текущем мире.
+
+### Исходные текстуры Terraria и других модов
+
+```console
+/infinidumppicture source held
+/infinidumppicture source active
+/infinidumppicture source baseline
+/infinidumppicture source item Гарпун
+/infinidumppicture source projectile <id-или-точное-имя>
+```
+
+| Область | Что экспортируется |
 |---|---|
-| Без args, `stats`, `status` | Texture count, memory estimate, hits/misses/loads/evictions, bad records, registry count, disk asset/download/missing counts |
-| `clear` | Resident textures и missing/bad records из памяти; disk PNG/JSON/recipes/dumps остаются |
-| `resetbad`, `reset` | Missing/bad backoff и asset retry state; только память |
-| `warm`, `prefetch` | Прогрев sprites; недостающие PNG/JSON приходят в `asset_cache`, textures — RAM/GPU |
+| `held` (по умолчанию) | Предмет в руке и его связанный `item.shoot` снаряд |
+| `active` | Уникальные текстуры активных снарядов и предмет в руке |
+| `baseline` | Встроенный набор исходных vanilla-оружий для сравнения |
+| `item <запрос>` | Предмет по числовому ID или точному имени |
+| `projectile <запрос>` | Снаряд по числовому ID или точному имени |
 
-`warm [held|inventory|registry|all] [limit]`: default scope `inventory` (inventory, armor, misc equips), `held` — generated в руке, `registry`/`all` — registry; неизвестный scope также использует inventory. Default limit 64, clamp 1–512. Примеры: `/infinicache warm held`, `/infinicache warm inventory 64`, `/infinicache warm registry 256`. Dedicated server не имеет client GPU cache для warm.
+Для vanilla используй имя текущего языка игры, для modded подходит `SomeMod/InternalItemName`. Предмет необязательно иметь в инвентаре. Если совпадений нет, проверь точное имя/ID и что нужный мод загружен.
 
-## `/infinidump`
+**Результат:** папка `picture_dumps/source_YYYYMMDD_HHMMSS/` с `index.html`, PNG и `source_texture_manifest.json`. Это **исходные статические текстуры**, не скриншот: вращение, освещение, цепи, частицы и следы во время игры туда не входят. Для такого поведения приложи отдельный скриншот/видео.
 
-Каждый запуск перезаписывает оба runtime JSONL. Item rows содержат stats, use timing, damage class, rarity, tool/armor/accessory/ammo fields, `item.shoot`, projectile snapshot и texture metrics. Projectile rows — hitbox, AI style, penetration/lifetime/collision/immunity, minion/sentry flags, frames, selected `ProjectileID.Sets`, texture metrics. Эти реальные loaded rows можно передать генератору как [runtime dump inputs](../../LocalGenerator/README_RU.md#данные-и-настройки).
+Экспорт рисунков требует клиентские текстуры; на dedicated server он недоступен.
 
-## `/infinidumppicture`: generated sprites
+## Несколько кузниц для тестирования
 
-Default `latest` — до 12 последних items; `all` — весь registry. Filter ищется в id, name, parentA, parentB, recipeKey. Bundle содержит копии item/projectile/impact/child/field PNG, full/network JSON, `picture_dump_manifest.json`, `index.html`, `README.txt`.
+**Необязательно.** `/multidevcraft 2` открывает два горна, `/multidevcraft 3` — три, `/multidevcraft off` возвращает один. Без аргумента число циклически меняется **1 → 2 → 3 → 1**; `0` и `1` также отключают дополнительные горны.
 
-## `/infinidumppicture source`: Terraria/mod textures
+Каждый горн расходует свою пару A/B и имеет свою операцию/отмену/возврат. Команда не выдаёт ингредиенты и не отключает проверку предметов. Горн нельзя скрыть, пока он занят или в нём остались материалы: заверши/отмени ковку и забери их.
 
-Aliases `source`: `src`, `ref`, `reference`, `original`, `vanilla`, `mod`, `modded`.
+Для этого режима окна закрепляются за текстовыми линиями `llm_1`, `llm_2`, `llm_3`. Настрой дополнительные линии в **«Идея и механика»** до теста. Они могут обращаться к своим платным источникам; это не бесплатное ускорение одного запроса. Режим действует в текущей сессии.
 
-| Scope / aliases | Экспорт |
-|---|---|
-| Без scope, `held`, `current`, `selected` | Held item + связанный `item.shoot` projectile, если есть |
-| `active`, `nearby`, `projectiles` | Уникальные active projectile textures + held item |
-| `baseline`, `vanilla-baseline`, `starter` | Встроенный starter vanilla weapons set |
-| `item`, `i` + query; либо query без `item` | Loaded item definitions по numeric id или точному display/internal/full name |
-| `projectile`, `proj`, `p` + query | Projectile по numeric id или точному display/internal/full name |
+## Где искать созданные файлы
 
-Предмет не нужно иметь, исследовать или крафтить. Для vanilla используй display name текущей локализации; для modded подходит `SomeMod/InternalItemName`. Например, `/infinidumppicture source Гарпун`, явная форма `/infinidumppicture source item Гарпун`, либо `/infinidumppicture source projectile <id-or-exact-name>`.
+Все игровые экспорты лежат внутри **`InfiniCrafterLocal/` в пользовательской папке сохранений tModLoader** (`Main.SavePath`), не в каталоге Steam и не в `LocalGenerator/cache`.
 
-Source bundle: `source_texture_manifest.json`, `index.html`, `README.txt`, `assets/item_<type>_<name>/item.png`, связанный `projectile_shoot.png`, `bundle_meta.json` (dimensions/types/use timing/shoot/shootSpeed/texture metrics). Item/projectile PNG — раздельные image references; итоговый путь выводится в чат.
+- `generated_items/<id>.json` — определения созданных предметов;
+- `asset_cache/` — полученные PNG/JSON;
+- `items_runtime_dump.jsonl`, `projectiles_runtime_dump.jsonl` — `/infinidump`;
+- `picture_dumps/` — галереи изображений.
 
-Это static `TextureAssets.Item/Projectile`, **не screenshot**: rotation, lighting, трос/цепь, dust/trail и runtime draw не запекаются. На dedicated server picture dump недоступен без GPU textures. [Source владельцы команд](../../ModSources/InfiniCrafterLocal/Common/Commands) задают фактический parsing и outputs.
+Точный путь экспорта выводится в чат. Место сохранений зависит от профиля Windows, OneDrive и настроек tModLoader; не используй чужой абсолютный путь.
+
+Журналы LocalGenerator — отдельные файлы и настраиваются в Studio: [логи и очистка](DIAGNOSTICS_RU.md#логи-и-место-на-диске). Реальные обработчики команд находятся в [Common/Commands](../../ModSources/InfiniCrafterLocal/Common/Commands).

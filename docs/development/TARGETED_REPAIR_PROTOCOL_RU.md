@@ -1,6 +1,6 @@
 # Targeted Repair — leaf-local frozen-first protocol
 
-[Generated boundary](../../lowery.md) · [Author construction](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Stage accounting](THREE_STAGE_LLM_PIPELINE_RU.md#repairs-accounting)
+[Generated boundary](../reference/generated/LOWERY_RU.md) · [Author construction](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Stage accounting](THREE_STAGE_LLM_PIPELINE_RU.md#repairs-accounting)
 
 Exact shape — `program_schema.py`; permissions/filter — `repair_scope.py`; requirement closure — `validator.py`; event alternatives — `capability_registry.py`; shared leaf merge — `core/repair_merge.py`. [Owner paths](CODE_MAP_RU.md#python) не заменяются facade/shadow contracts.
 

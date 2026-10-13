@@ -1,67 +1,76 @@
-# ChatGPT / Codex OAuth: LLM и PNG
+# ChatGPT / Codex: вход, текст и изображения
 
-Собственная InfiniCrafter сессия, не Platform key/баланс; Codex CLI/Hermes не нужны. [Setup/GUI](OPERATIONS_RU.md); LLM и PNG selectors независимы.
+Выбирай этот вариант, если хочешь использовать свой аккаунт ChatGPT. Infinicraft хранит **собственную** сессию; Codex CLI, Hermes и обычный OpenAI Platform API key не нужны. Доступ к текстовым моделям и изображениям зависит от аккаунта и сервиса. Их можно выбрать независимо.
 
-## Включение
+## Войти в аккаунт
 
-GUI тем же Python/пользователем, что сервер: **Sign in with ChatGPT** → browser login → `LLM provider=openai_codex`/text catalog/model и/или `Image backend=openai_codex` → Save/restart.
+1. В **«Идея и механика»** выбери источник **«ChatGPT / Codex»**. Либо выбери его в **«Изображениях»**, если нужен только рисунок.
+2. Нажми **«Войти в Codex»**. В отдельном окне браузера войди в свой ChatGPT и подтверди доступ.
+3. Вернись в Studio, дождись завершения входа и нажми **«Статус аккаунта»**.
 
-```dotenv
-INFINI_LLM_PROVIDER=openai_codex
-INFINI_CODEX_LLM_MODEL=<текстовый slug>
-INFINI_CODEX_VISUAL_REASONING=inherit
-INFINI_IMAGE_BACKEND=openai_codex
-INFINI_CODEX_IMAGE_MODEL=gpt-image-2
-INFINI_CODEX_IMAGE_QUALITY=medium
-INFINI_CODEX_IMAGE_SIZE=1024x1024
-INFINI_CODEX_IMAGE_TIMEOUT=240
-```
+**Результат:** приложение видит локальную сессию. Если браузерный вход не завершился, проверь, не занят ли порт **1455** другим входом Codex, и закончи/закрой ту попытку. Не открывай несколько входов одновременно. Ожидание ограничено примерно **180 секундами**; после ошибки повтори **«Войти в Codex»**.
 
-CLI из `LocalGenerator`, тем же окружением:
+Если выбран только один из двух источников, вход всё равно общий: повторная сессия для второго не нужна. В поле API-ключа ничего вставлять не требуется.
+
+## Выбрать текстовую модель
+
+1. В **«Идея и механика»** оставь **«ChatGPT / Codex»**.
+2. Нажми **«Обновить модели»**.
+3. Выбери модель в **«Текстовая модель Codex»** из полученного списка.
+4. Сохрани настройки и [безопасно перезапусти генератор](OPERATIONS_RU.md#изменить-настройки-и-перезапустить).
+
+**Результат:** в сводке указан выбранный текстовый ID. Обновление списка не вызывает крафт. При ошибке списка проверь вход и сеть; вручную введённый ID не стирается, но его доступность всё равно нужно подтвердить реальным запросом.
+
+**«Рассуждение арт-директора Codex»** относится к текстовой стадии, которая описывает будущий рисунок, а не к генератору изображений. `inherit` наследует общий уровень, `model_default` оставляет выбор модели. Если сервис отклоняет уровень рассуждения, выбери поддерживаемый этой текстовой моделью или `model_default` для арт-директора. Не вводи произвольные уровни вроде `ultra`.
+
+## Выбрать изображения
+
+1. В **«Изображения → Источник изображений»** выбери **«ChatGPT / Codex»**.
+2. Проверь **«Модель изображений Codex»**. Встроенное известное имя — `gpt-image-2`; это не подтверждение, что модель доступна каждому аккаунту.
+3. Для начала оставь **качество `medium`** и **размер `1024x1024`**.
+4. Нажми **«Проверить аккаунт»**, сохрани настройки и перезапусти генератор.
+
+**«Проверить аккаунт»** проверяет текстовый каталог аккаунта, **не квоту и не доступ к генерации изображений**. Отдельного подтверждённого списка image-моделей через этот маршрут нет. Только реальный рисунок при крафте проверит этот доступ.
+
+Если текст проходит, а изображения возвращают `403`, ошибку доступа или квоты, смотри именно условия изображений своего аккаунта. Повторный выбор текстовой модели это не исправит. Можно вручную выбрать другой [источник изображений](PROVIDERS_RU.md#изображения-выбери-один-источник).
+
+## Качество, размер и расход
+
+| Настройка | Допустимые значения |
+|---|---|
+| Качество изображения | `low`, `medium`, `high`, `auto` |
+| Размер исходного рисунка | `1024x1024`, `1536x1024`, `1024x1536`, `auto` |
+
+`auto` оставляет решение серверу. Это размер исходного рисунка, не игрового спрайта. Большее качество/размер могут менять время и расход; точный учёт определяется сервисом. Ковка может потребовать несколько рисунков для предмета и его эффектов, а также повторов при ошибке.
+
+Для подписного текстового маршрута `INFINI_LLM_MAX_TOKENS` **не отправляется как лимит output-токенов** и не ограничивает денежный расход. Параметр temperature также не отправляется. У image-запроса нет поля reasoning.
+
+При ошибке входа или квоты основной Codex-маршрут не переключается автоматически на платный API. Image API с отдельным ключом — другой источник; переход на него ты выбираешь сам. Внутренний сервис ChatGPT может менять поддержку маршрутов независимо от версии мода.
+
+## Прозрачный фон
+
+В **«Спрайты и цвет → Фон исходного рисунка»** значение `transparent` просит Codex вернуть прозрачный PNG и выключает локальное вырезание цвета. Для цветного фона с включённым **«Удалять фон»** запрос непрозрачный, а фон удаляется локально.
+
+Если сервер отклоняет прозрачность, выбери поддерживаемый цветной фон, включи удаление и повтори после сохранения/перезапуска. [Подробная настройка спрайтов](SETTINGS_RU.md#прозрачность-выбери-один-способ).
+
+## Где хранится вход
+
+- Windows: **`%USERPROFILE%\.infinicrafter\codex-auth.json`** пользователя, запускающего Python.
+- Linux: **`~/.infinicrafter/codex-auth.json`**.
+
+Вход не хранится в `config.env`, ZIP проекта или именованных профилях. В Windows он защищён средствами профиля пользователя; копировать его в WSL, на другой ПК или другому пользователю нельзя вместо повторного входа. Запускай Studio и генератор под одним пользователем и в одной среде.
+
+**«Выйти»** удаляет только локальную сессию Infinicraft, не все входы ChatGPT и не сессию Codex CLI. Во время незавершённого входа оно сначала отменяет ожидание; после завершения можно выйти ещё раз, чтобы удалить сохранённую сессию. При обновлении в том же профиле обычно не нужно переносить этот файл; на новом ПК войди заново.
+
+## Команды для ручного запуска
+
+**Необязательно.** После подготовки окружения открой Windows-терминал в корне распакованного проекта. Перейди в `LocalGenerator`, чтобы Python нашёл модуль приложения:
 
 ```console
-python -m infini_local.services.codex_auth login
-python -m infini_local.services.codex_auth status
-python -m infini_local.services.codex_auth logout
+cd LocalGenerator
+.venv\Scripts\python.exe -m infini_local.services.codex_auth status
+.venv\Scripts\python.exe -m infini_local.services.codex_auth login
+.venv\Scripts\python.exe -m infini_local.services.codex_auth logout
 ```
 
-## Модели, качество и расход
-
-| Поле/проверка | Contract |
-|---|---|
-| Text refresh | Read-only `/backend-api/codex/models?client_version=…`, text slugs/efforts аккаунта, не request success. Ошибка/неизвестный manual slug не стирают выбор |
-| Image account ping | Read-only text catalog, без image quota, **без image entitlement check**. Подтверждённого image model API-каталога нет; `gpt-image-2` — известное имя, не доступ |
-| `INFINI_CODEX_IMAGE_QUALITY` | `low\|medium\|high\|auto`, image request `n=1`; точный quota расход неизвестен. `auto` выбирает сервер |
-| `INFINI_CODEX_IMAGE_SIZE` | `1024x1024\|1536x1024\|1024x1536\|auto`, исходный request, не sprite canvas |
-| `INFINI_CODEX_VISUAL_REASONING` | `inherit\|model_default\|none\|minimal\|low\|medium\|high\|xhigh\|max`, **текстовые** Visual Director/visual repair; inherit → общий effort, model_default → omit |
-
-Effort должен поддерживаться text model; `ultra` не отправляется. Общий reasoning off не отменяет минимум medium Gameplay Author; Visual использует model default. У image endpoint нет reasoning field; text slug не image model.
-
-Subscription `/responses` не отправляет temperature/`max_output_tokens`: `INFINI_LLM_MAX_TOKENS` **не spending cap** (локально time/response-size bounds, не output-token cap). Основной `INFINI_LLM_PROVIDER=openai_codex` не переходит при auth/quota на paid route; image failure также не подменяется paid/procedural PNG. Keyed `image_api`/другие routes настраиваются отдельно и могут быть платными.
-
-## Сессия и ошибки
-
-- PKCE S256/state, loopback `127.0.0.1:1455`, redirect `http://localhost:1455/auth/callback`, timeout 180 с. Занят порт — закончи конкурирующий login; закрытие GUI отменяет ожидание.
-- `~/.infinicrafter/codex-auth.json` профиля **пользователя Python** (Windows `%USERPROFILE%\.infinicrafter\codex-auth.json`): Linux `0600`, Windows DPAPI; вне config/Git.
-- Access refresh перед запросом сериализован между GUI/серверными threads/processes. `status` проверяет файл, не quota.
-- Logout удаляет только локальную InfiniCrafter session, не CLI/все ChatGPT sessions. Во время login первая **Sign out** отменяет ожидание, следующая после завершения удаляет файл.
-- Windows/WSL profiles/DPAPI не переносимы; Windows session держи в Windows profile: прежний probe не поддерживал byte-range locks на `\\wsl.localhost\…`.
-- HTTP code + bounded credential-redacted error сохраняются; OAuth/quota/network сбой не требует автоматического повторения генерации/paid переключения.
-
-## PNG pipeline
-
-`Visual prompt → общий concurrency gate → Codex → PNG checks → sprite postprocess → delivery`. Endpoints: `https://chatgpt.com/backend-api/codex/responses`, `/images/generations`, не Platform `/v1/images/generations`.
-
-Positive prompt без дополнительной LLM; negative — suffix `\n\nAvoid: …`, отдельного field нет. Требуется одна base64 PNG, valid decoding/file bytes/dimensions, atomic publication; URL/повреждённый ответ не asset. [Image lifecycle](../development/IMAGE_ASSET_LIFECYCLE_RU.md). Сервер может изменить внутренний API/entitlement.
-
-## Фон и уменьшение PNG
-
-В 0.4.248 `BG color=transparent` выбирает нативную alpha-ветку: Visual/VFX/image-промпты требуют прозрачный фон, Codex JSON отправляет `background=transparent`, локальный chroma-keyer/retry-key не применяется. При magenta/white и включённом Remove BG запрос имеет `background=opaque`; финальную прозрачность создаёт локальный keyer. Выключенный Remove BG также выбирает native alpha. Неподдерживаемый цвет не заменяется автоматически на magenta.
-
-Базовый resize — `INFINI_SPRITE_DOWNSCALE_FILTER=box`, `INFINI_SPRITE_PREMULTIPLIED_RESIZE=1`; **Reset BOX** сбрасывает только эти две настройки. Сохрани изменения и перезапусти server. Offline transport/PNG проверки подтверждают отправляемые параметры и обработку, но не текущую поддержку native alpha подписным endpoint: отказ сервера остаётся явной ошибкой, без paid/procedural/opaque подмены.
-
-## Проверка реализации
-
-[Codex contracts](../../LocalGenerator/tests/test_codex_subscription_contract.py), [image adapters](../../LocalGenerator/tests/test_image_adapter_contracts.py), [GUI](../../LocalGenerator/tests/test_settings_gui_contract.py), [offline QA](../../LocalGenerator/QUICK_START_RU.md): PKCE/state/locks/privacy/SSE completion/dispatch/catalog/manual slug/quality/Visual reasoning, не live quota.
-
-**Прежние результаты, не текущий acceptance:** 363 Python passed; headless tML/FNA 40/0; 12 gates/Ruff; dummy-config Windows Tk UI/roundtrip без login. CLI session только в памяти: text catalog, `/images/models` 404, JSON `/responses` (`gpt-6-sol`, low), `max_output_tokens` 400. Один image (`gpt-image-2`, high, requested 1536x1024): illustration PNG 1672×941, 44.07 с, не sprite; секреты в repo не переносились. Собственный browser login, full craft/GPU/MP не доказаны; новых live запросов здесь нет.
+`status` читает состояние сессии, не проверяет квоту. `login` открывает браузер; `logout` удаляет локальный вход. Никому не передавай содержимое файла сессии или URL авторизации. [Остальные ошибки](DIAGNOSTICS_RU.md).

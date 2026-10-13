@@ -17,7 +17,7 @@ from infini_local.qa.primitive_loss_audit import (  # noqa: E402
     structural_surface_audit,
 )
 
-OUTPUT = ROOT / "docs/PRIMITIVE_PARITY_RU.md"
+OUTPUT = ROOT / "docs/reference/generated/PRIMITIVE_PARITY_RU.md"
 
 
 def _cell(value: object) -> str:
@@ -27,10 +27,10 @@ def _cell(value: object) -> str:
 
 def render() -> str:
     sections = ["# Parity примитивов Author ↔ Terraria/tModLoader",
-        "", "> Generated: [`tools/generate_primitive_parity.py`](../tools/generate_primitive_parity.py). Не редактировать вручную; [refresh/check](#refresh).",
-        "> Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — имена, единицы, диапазоны, wire и фазы; "
-        "[primitive_loss_audit.py](../LocalGenerator/infini_local/qa/primitive_loss_audit.py) — C# executable-поля из AST. "
-        "[Lowery](../lowery.md) — boundary/owners; [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) — полный каталог.",
+        "", "> Generated: [`tools/generate_primitive_parity.py`](../../../tools/generate_primitive_parity.py). Не редактировать вручную; [refresh/check](#refresh).",
+        "> Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — имена, единицы, диапазоны, wire и фазы; "
+        "[primitive_loss_audit.py](../../../LocalGenerator/infini_local/qa/primitive_loss_audit.py) — C# executable-поля из AST. "
+        "[Lowery](LOWERY_RU.md) — boundary/owners; [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) — полный каталог.",
         "", "**Навигация:** [история](#history) · [machine audit](#audit) · [equipment](#equipment) · "
         "[events/runtime](#events) · [невосстановленное](#unsupported) · [extraUpdates units](#units) · "
         "[границы проверки](#limits) · [обновление](#refresh).",
@@ -93,7 +93,7 @@ def render() -> str:
         "- Legacy `GameplaySpec.BuffCode`/`BuffTime` (`Item.buffType`/`buffTime`) сохраняются для старого wire. Новый Author использует явный многобафовый `ExtraBuffs` и не смешивает эти два пути; различие vanilla Item hook и пользовательского AddBuff не доказано эквивалентным.",
         "- `Archetype`, `Kind`, `Stage`, `PowerBudget` — исторические display/plan поля, не семантические маршрутизаторы. `Enabled`, opcodes, роли, `UseStyle` и DTO IDs выводятся из явно авторских calls.",
         "", '<a id="unsupported"></a>', "", "## Исторические возможности вне нынешнего executable surface", "",
-        "Историческая проверка должна учитывать удалённые consumers отдельно от нынешнего AST. В pre-v5 `f04ee02` реальный `GeneratedProjectile.Sentry.cs:42–53` исполняет shotCount/spread за залп: этот механизм доказан. Вероятность собственного расхода сохранялась при импорте v5 и исчезла 2 августа (`3831d93`/`7f4e86a`). Ammo-side PickAmmo существует и не заменяет weapon Item.useAmmo. Старый Extractinator proxy хранил output в instance Data, но ExtractinatorUse неинстансный; intended per-instance output не доказан рабочим, а удаление произошло 15 июля (`5adb9fa`). Полная классификация с ранними архивами, source paths и ограничениями — [исторический snapshot-аудит](HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md). Последующие restoration PR оцениваются отдельно: snapshot не является реестром текущих возможностей. Новая поддержка требует explicit bounded primitives и полного vertical slice, без whole-weapon macros.",
+        "Историческая проверка должна учитывать удалённые consumers отдельно от нынешнего AST. В pre-v5 `f04ee02` реальный `GeneratedProjectile.Sentry.cs:42–53` исполняет shotCount/spread за залп: этот механизм доказан. Вероятность собственного расхода сохранялась при импорте v5 и исчезла 2 августа (`3831d93`/`7f4e86a`). Ammo-side PickAmmo существует и не заменяет weapon Item.useAmmo. Старый Extractinator proxy хранил output в instance Data, но ExtractinatorUse неинстансный; intended per-instance output не доказан рабочим, а удаление произошло 15 июля (`5adb9fa`). Полная классификация с ранними архивами, source paths и ограничениями — [исторический snapshot-аудит](../../archive/HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md). Последующие restoration PR оцениваются отдельно: snapshot не является реестром текущих возможностей. Новая поддержка требует explicit bounded primitives и полного vertical slice, без whole-weapon macros.",
         "", '<a id="units"></a>', "", "## Единицы при extraUpdates > 0", "",
         "`set_projectile_collision.extraUpdates=n` даёт `n+1` AI/physics-обновлений снаряда за мировой тик. В Author-карточках исходная `Projectile.velocity`, гравитация, поворот, ускорение и скорость возврата обозначены **за projectile update**, а не как гарантированные пиксели за мировой тик. Длительности и event-периоды остаются в мировых тиках; C# переводит их через `AuthoredTicksToProjectileUpdates`. Это точное описание существующего wire/v5 поведения без смены старых рецептов и без приблизительного пересчёта нелинейного движения в px/сек.",
         "", '<a id="limits"></a>', "", "## Границы проверки", "",
@@ -105,8 +105,8 @@ def render() -> str:
         "PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check",
         "```", "",
         "Generation/check исполняют все пять surface audits выше и завершаются ошибкой при loss; freshness доказывает совпадение projection с owners, а не игровой smoke. "
-        "Affected regressions: [test_registry_vertical_contract.py](../LocalGenerator/tests/test_registry_vertical_contract.py), "
-        "[test_registry_author_packet.py](../LocalGenerator/tests/test_registry_author_packet.py).", ""]
+        "Affected regressions: [test_registry_vertical_contract.py](../../../LocalGenerator/tests/test_registry_vertical_contract.py), "
+        "[test_registry_author_packet.py](../../../LocalGenerator/tests/test_registry_author_packet.py).", ""]
     return "\n".join(sections)
 
 

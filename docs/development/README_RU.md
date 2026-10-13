@@ -1,32 +1,31 @@
-# Центр разработки — 0.5.00
+# Разработка InfiniCrafterLocal
 
-Это вход для изменения source checkout, не пользовательская установка. Для запуска приложения — [руководство игрока](../user/START_RU.md).
+Этот раздел — для изменения checkout. Установка и первый craft — в [руководстве игрока](../user/START_RU.md); вся документация — в [общем индексе](../README_RU.md).
 
-## Перед изменением
+## Короткий маршрут
 
-1. Прочитай [AGENTS](../../AGENTS.md), [архитектуру](ARCHITECTURE_RU.md) и [карту кода](CODE_MAP_RU.md).
-2. Найди [canonical owner задачи](OWNERS_RU.md); не добавляй shadow registry/facade.
-3. Выбери [тестовый контракт](TESTING_RU.md). Прямой regression через настоящего consumer важнее source snapshot.
-4. Для gameplay изменения нужен [полный vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md): registry → schema/prompt → validation/compiler → strict wire → C# DTO/executor → tests/docs.
+1. [AGENTS](../../AGENTS.md) — правила изменения и разрешённые преобразования.
+2. [ARCHITECTURE](ARCHITECTURE_RU.md) — кто выбирает дизайн, как проходит craft и где материал/authority.
+3. [CODE_MAP](CODE_MAP_RU.md) — реальные пути; [OWNERS](OWNERS_RU.md) — конкретная задача → точка изменения.
+4. [MODULES](MODULES_RU.md) — ограничения затронутой подсистемы, вместо папочных заметок.
+5. [TESTING](TESTING_RU.md) — regression через настоящий consumer и уровень доказательства; [BUILD](BUILD_RU.md) — сборка с реальными DLL.
 
-## Основные владельцы
+## Углубление по задаче
 
-| Решение | Документ |
+| Задача | Один канонический маршрут |
 |---|---|
-| Authority, trust и data flow | [Архитектура](ARCHITECTURE_RU.md), [границы runtime](ENGINE_RUNTIME_BOUNDARIES_RU.md) |
-| Пути source и задача → owner | [Карта кода](CODE_MAP_RU.md), [owners](OWNERS_RU.md) |
-| LLM стадии и exact-scope Repair | [Pipeline](THREE_STAGE_LLM_PIPELINE_RU.md), [Repair](TARGETED_REPAIR_PROTOCOL_RU.md) |
-| Разрешённые преобразования | [Lowering policy](TECHNICAL_LOWERING_POLICY_RU.md), [generated boundary](../../lowery.md) |
-| Image attempts, atomic publication и delivery | [Image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) |
-| Escrow/refund/cancellation/ready-result wait | [Native craft lifecycle](NATIVE_CRAFT_LIFECYCLE_QOL.md) |
-| Provider envelope/admission/cache | [Transport](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [admission](LLM_PROVIDER_ADMISSION_RU.md), [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
-| Сборка с настоящими DLL | [Сборка](BUILD_RU.md) |
-| Regression, full runner и пределы доказательства | [Тесты](TESTING_RU.md) |
-| Структура документации и миграция | [Docs ownership](DOCUMENTATION_RU.md) |
+| Новая механика | [Vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) → [Author contract](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) → [generated inventory](../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) |
+| LLM стадии и локальное исправление | [Pipeline](THREE_STAGE_LLM_PIPELINE_RU.md), [frozen-first Repair](TARGETED_REPAIR_PROTOCOL_RU.md) |
+| Lowering/fix/normalization | [Policy](TECHNICAL_LOWERING_POLICY_RU.md), [generated boundary](../reference/generated/LOWERY_RU.md) |
+| Provider envelope/quota/cache | [Request shape](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [admission](LLM_PROVIDER_ADMISSION_RU.md), [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
+| Image attempts/publication/delivery | [Image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) |
+| Craft/cancel/refund/world-exit | [Native craft lifecycle](NATIVE_CRAFT_LIFECYCLE_QOL.md) |
+| Engine execution/trust | [Runtime boundaries](ENGINE_RUNTIME_BOUNDARIES_RU.md) |
+| Где хранить и обновлять docs | [Организация и sources](DOCUMENTATION_RU.md), [generated refresh](../reference/GENERATED_RU.md) |
 
-## Подготовь dev-окружение
+## Dev-окружение
 
-Из корня checkout, пример Linux/WSL с отдельным окружением; Windows runtime `.venv` не переиспользуй в Linux:
+Из корня checkout, пример Linux/WSL с отдельным venv; Windows runtime `.venv` не переиспользуется в Linux:
 
 ```bash
 python3 -m venv .venv-dev
@@ -34,8 +33,9 @@ python3 -m venv .venv-dev
 python -m pip install -r LocalGenerator/requirements-dev.txt
 ```
 
-Это установка dev-зависимостей, не gate. Если окружение уже подготовлено, используй его. На Windows можно использовать отдельный venv и его `Scripts/python.exe`; production GUI открывается через основной BAT. C# требует [.NET/tML/внешних DLL](BUILD_RU.md), отдельно от Python.
+Если окружение уже есть, используй его. Это установка dev-зависимостей, не acceptance. На Windows нужен отдельный venv/`Scripts/python.exe`; пользовательский Studio открывается основным BAT. .NET/tML/external DLL — отдельные prerequisites [BUILD](BUILD_RU.md).
 
+<a id="быстрый-offline-проход"></a>
 ## Быстрый offline проход
 
 ```bash
@@ -45,6 +45,6 @@ PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
 python tools/check_project_hygiene.py
 ```
 
-Affected behavioral suite выбирай из [TESTING](TESTING_RU.md); оба Python test roots запускаются `tools/run_pytest_shards.py`. Полный packaging набор — [AGENTS](../../AGENTS.md#обязательный-vertical-slice). Не запускай live campaign, модель, OAuth/login, игру или платный API как часть обычного docs/offline прохода.
+Affected behavioral suite выбирай по [TESTING](TESTING_RU.md). Полный Python runner — `tools/run_pytest_shards.py` (оба roots); полный packaging набор — [AGENTS](../../AGENTS.md#обязательный-vertical-slice). Для gameplay требуется registry → schema/prompt → validator/compiler receipts → strict wire → C# DTO/executor → tests/docs, не локальная запись только в prompt/schema/C#.
 
-Headless CPU, source audit, full build, GPU/world loop, art quality и реальный MP — **разные** уровни. Неисполненный уровень — `notRun`, не PASS. [Generated refresh](../reference/GENERATED_RU.md) не имеет права менять canonical JSON/schema без отдельного owner action. [PR workflow и лицензия](../../CONTRIBUTING.md).
+Обычный docs/offline проход не запускает live campaign, модель, OAuth/login, игру или paid API. Source/headless CPU/full build/GPU/world loop/art/MP — разные уровни; неисполненное — `notRun`, не PASS. [PR workflow и лицензия](../../CONTRIBUTING.md).

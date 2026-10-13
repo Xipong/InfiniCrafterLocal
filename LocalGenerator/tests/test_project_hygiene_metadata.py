@@ -22,9 +22,8 @@ def hygiene(tmp_path, monkeypatch):
     return module
 
 
-def test_workspace_index_needs_no_folder_docs(hygiene):
+def test_workspace_index_is_not_a_project_folder(hygiene):
     assert hygiene.iter_project_dirs() == [hygiene.ROOT]
-    hygiene.check_folder_docs()
     hygiene.check_no_packaged_runtime_junk()
 
 

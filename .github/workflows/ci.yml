@@ -58,6 +58,8 @@ jobs:
         run: python tools/check_project_hygiene.py
       - name: Generated schema drift
         run: PYTHONPATH=LocalGenerator python tools/export_contract_schemas.py --check
+      - name: Offline handbook freshness and links
+        run: python tools/build_documentation.py --check
       - name: Canonical equipment bounds drift
         run: PYTHONPATH=LocalGenerator python tools/generate_equipment_bounds.py --check
       - name: C# executable primitive loss audit

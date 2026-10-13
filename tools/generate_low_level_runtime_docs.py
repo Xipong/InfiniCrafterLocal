@@ -106,10 +106,10 @@ def inventory_markdown() -> str:
     lines = [
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
-        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
-        "> Sources: [capability_registry.py](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
-        "[capability_library_audit.py](../LocalGenerator/infini_local/qa/capability_library_audit.py). "
-        "[Lowery](../lowery.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.",
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
+        "> Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[capability_library_audit.py](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). "
+        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -198,9 +198,9 @@ def inventory_markdown() -> str:
         "",
         "Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. "
         "`required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. "
-        "Пропуски полного Author и Repair различаются: [boundary](../lowery.md#boundary). "
+        "Пропуски полного Author и Repair различаются: [boundary](LOWERY_RU.md#boundary). "
         "`omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. "
-        "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](PROJECTILE_AUTHOR_API_RU.md).",
+        "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../PROJECTILE_AUTHOR_API_RU.md).",
         "",
         "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | prompt | status | external reference | решение |",
         "|---|---|---|---|---|---|---|---|---|---:|---|---|---|",
@@ -254,8 +254,8 @@ def inventory_markdown() -> str:
         "",
         "Без `--check` generator записывает ровно три Markdown-файла: этот inventory, "
         "[machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) и "
-        "[technical lowering audit](../TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. "
-        "`--check` сравнивает все три projections без записи; [Lowery](../lowery.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.",
+        "[technical lowering audit](TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. "
+        "`--check` сравнивает все три projections без записи; [Lowery](LOWERY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.",
         "",
     ]
     return "\n".join(lines)
@@ -267,11 +267,11 @@ def audit_markdown() -> str:
     lines = [
         "# Аудит машиночитаемости библиотеки компонентов",
         "",
-        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../tools/generate_low_level_runtime_docs.py) из "
-        "[registry](../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
-        "[audit-кода](../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py) из "
+        "[registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[audit-кода](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
         "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
-        "> Architecture/owners: [Lowery](../lowery.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).",
+        "> Architecture/owners: [Lowery](LOWERY_RU.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).",
         "",
         "**Навигация:** [вердикт/критерии](#verdict) · [измерения](#metrics) · [проверяемость](#proof) · "
         "[ограничения](#limits) · [практическая оценка](#assessment).",
@@ -326,7 +326,7 @@ def audit_markdown() -> str:
         "- Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.",
         "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
         "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
-        "[`tools/check_planner_prompt_usability.py`](../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.",
+        "[`tools/check_planner_prompt_usability.py`](../../../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.",
         f"- Публичный каталог покрывает реализованные {len(visible_capabilities())} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
         "",
         '<a id="assessment"></a>',
@@ -350,10 +350,10 @@ def lowering_markdown() -> str:
     lines = [
         "# TECHNICAL LOWERING AUDIT",
         "",
-        "> Generated: [`tools/generate_low_level_runtime_docs.py`](tools/generate_low_level_runtime_docs.py) из "
-        "[technical_lowering.py](LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
-        "[refresh/check всех трёх outputs](docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
-        "> Policy/owners: [Lowery](lowery.md). Полные wire outputs каждого lowerer: [manifest](lowery.md#lowering).",
+        "> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py) из "
+        "[technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
+        "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
+        "> Policy/owners: [Lowery](LOWERY_RU.md). Полные wire outputs каждого lowerer: [manifest](LOWERY_RU.md#lowering).",
         "",
         f"Schema: `{manifest['schema']}`.",
         "",
@@ -402,9 +402,9 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     outputs = {
-        ROOT / "docs" / "LOW_LEVEL_CAPABILITY_INVENTORY_RU.md": inventory_markdown(),
-        ROOT / "docs" / "CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md": audit_markdown(),
-        ROOT / "TECHNICAL_LOWERING_AUDIT_RU.md": lowering_markdown(),
+        ROOT / "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md": inventory_markdown(),
+        ROOT / "docs/reference/generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md": audit_markdown(),
+        ROOT / "docs/reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md": lowering_markdown(),
     }
     stale: list[str] = []
     for path, text in outputs.items():

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: file:; font-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Infinicraft — книга документации</title>
+<style>/*__BOOK_CSS__*/</style>
+</head>
+<body>
+<a class="skip-link" href="#article">Перейти к руководству</a>
+<header class="masthead">
+<a class="wordmark" href="#/docs/user/START_RU.md">Infinicraft<span>Книга документации</span></a>
+<span class="offline-label">Читай без интернета</span>
+<button id="contents-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Главы и поиск</button>
+</header>
+<nav class="audiences" aria-label="Разделы книги">
+<button type="button" data-audience="user" aria-pressed="true">Игроку</button>
+<button type="button" data-audience="development" aria-pressed="false">Разработчику</button>
+<button type="button" data-audience="reference" aria-pressed="false">Справочники</button>
+<button type="button" data-audience="archive" aria-pressed="false">История</button>
+</nav>
+<div class="layout">
+<aside id="sidebar" class="sidebar" aria-label="Главы и поиск">
+<label class="search-label" for="search">Найти в книге <kbd>Ctrl K</kbd></label>
+<div class="search-box"><input id="search" type="search" placeholder="Тема, команда, ошибка…" autocomplete="off" spellcheck="false"><button id="clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div>
+<p class="search-help" id="search-help">Пустой поиск — главы выбранного раздела. Введи слова, чтобы искать по всей книге.</p>
+<div class="chapter-heading"><span id="list-label">Главы для игрока</span><span id="page-count"></span></div>
+<p id="result-status" class="sr-only" aria-live="polite"></p>
+<nav id="page-list" aria-label="Список страниц"></nav>
+<p class="book-note">Все страницы встроены в этот файл.<br>Внешние сайты требуют интернет. Ссылки на исходники открывают файлы проекта.</p>
+</aside>
+<main id="main">
+<div class="page-kicker"><span id="section-label">Игроку</span><span id="page-kind">Руководство</span></div>
+<div id="history-notice" hidden>Архивная страница: описывает свою версию и проверку, не текущее состояние проекта.</div>
+<article id="article" tabindex="-1" aria-label="Текст руководства"></article>
+<div class="page-footer"><span id="source-path"></span><a id="source-link">Исходник Markdown ↗</a></div>
+<nav id="page-turns" aria-label="Предыдущая и следующая главы"></nav>
+</main>
+<aside class="toc-rail" aria-label="Оглавление страницы">
+<details id="toc-details" open><summary>На этой странице</summary><nav id="toc" aria-label="Разделы страницы"></nav></details>
+<a class="back-top" href="#article">К началу страницы ↑</a>
+</aside>
+</div>
+<noscript><p class="noscript">Для переключения встроенных глав включи JavaScript в браузере. Сервер и интернет для чтения не нужны.</p></noscript>
+<script id="handbook-data" type="application/json">/*__BOOK_DATA__*/</script>
+<script>/*__BOOK_JS__*/</script>
+</body>
+</html>

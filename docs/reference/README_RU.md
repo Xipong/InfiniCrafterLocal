@@ -1,41 +1,40 @@
-# Техническая справка — 0.5.00
+# Техническая справка
 
-[Generated canonical contracts](GENERATED_RU.md) · [Разработка](../development/README_RU.md) · [Пользовательские инструкции](../user/README_RU.md)
+Здесь ищут точные правила реализации после знакомства с [архитектурой](../development/ARCHITECTURE_RU.md). Для установки генератора используй [пользовательское руководство](../user/START_RU.md).
 
-Здесь сохранены **полные тематические контракты**: units, absence/null/zero, exact Repair context, native authority, geometry, VFX и retained wire provenance. Старые измерения внутри них не становятся текущими гарантиями. Внешний Terraria guide — human reference, не model ontology или gameplay router.
+## Формат ответа модели
 
-## Каталог руководств
+- [Авторство механики и построение предмета](LOW_LEVEL_RUNTIME_AUTHORING_RU.md).
+- [Формы предмета и их точная проекция](AUTHOR_ITEM_ALIASES_RU.md), [типизированные параметры](TYPED_AUTHOR_PARAMETER_PROJECTIONS_RU.md).
+- [Единицы измерения](MODEL_FACING_UNITS_RU.md), [нейтральные пропуски](DECLARED_NEUTRAL_OMISSIONS_RU.md), [ссылки между сущностями](REFERENCED_ENTITY_REQUIREMENTS_RU.md).
+- [Контекст исходных предметов и качество описания](ITEM_QUALITY_CONTEXT_RU.md), [числовые ориентиры баланса](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md).
 
-- [Точное имя nearest damage и разделение fresh/wire domain](AUTHOR_EVENT_DOMAINS_RU.md)
-- [Предметные формы Author: точные проекции в прежний runtime wire](AUTHOR_ITEM_ALIASES_RU.md)
-- [Balance corridor — текущий owner и архив legacy policy](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md)
-- [A7 — удержание, рост и геометрия channel beam](CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md)
-- [Явное наследование текущего combat state родителя](CHILD_COMBAT_INHERITANCE_RU.md)
-- [Объявленные нейтральные пропуски Gameplay Author](DECLARED_NEUTRAL_OMISSIONS_RU.md)
-- [Точный исходный NPC для новых projectile emission adapters](INITIAL_NPC_EXCLUSION_RUNTIME_RU.md)
-- [Качество контекста и явная физика — 0.4.250](ITEM_QUALITY_CONTEXT_RU.md)
-- [Gameplay Author — authored shape и construction contract](LOW_LEVEL_RUNTIME_AUTHORING_RU.md)
-- [Runtime references — external patterns, не локальная authority](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md)
-- [Model-facing units — Gameplay / Visual / VFX](MODEL_FACING_UNITS_RU.md)
-- [Именованные эффекты основного, альтернативного и удерживаемого предмета](NAMED_ITEM_EFFECT_GROUPS_RU.md)
-- [Native equipment utilities](NATIVE_EQUIPMENT_UTILITIES_RU.md)
-- [Вероятность расхода собственного стека](OWN_STACK_CHANCE_RU.md)
-- [Presentation: активные render contracts и ограничения](PRESENTATION_CONSISTENCY_RU.md)
-- [Явный placed-body из PNG предмета](PRESENT_PLACED_ITEM_SPRITE_RU.md)
-- [Projectile Author: точные формы position, immunity и when](PROJECTILE_AUTHOR_API_RU.md)
-- [Явный рост игровой области столкновения](PROJECTILE_HITBOX_CURVE_RU.md)
-- [Ортогональные модификаторы, фазы и независимое притяжение](PROJECTILE_PHASE_MODIFIERS_RU.md)
-- [Выбор последовательности NPC и выпуск физических снарядов](PROJECTILE_TARGET_EMISSION_RU.md)
-- [Strict world recipes, contract stamps и health](RECIPE_HEALTH_AND_CONTRACTS_RU.md)
-- [Совместимость ссылок между authored entities](REFERENCED_ENTITY_REQUIREMENTS_RU.md)
-- [A6b/A6c — native sentry и активный бюджет потомков](SENTRY_LIFECYCLE_BUDGET_RU.md)
-- [A6a/A6d — явный залп и выбор цели](SENTRY_TARGETING_VOLLEY_RU.md)
-- [Знаковое вертикальное ускорение](SIGNED_VERTICAL_ACCELERATION_RU.md)
-- [Начальная скорость и создание дочерних снарядов вокруг поражённого NPC](SPAWN_DISTRIBUTIONS_AND_TARGET_GEOMETRY_RU.md)
-- [Terraria/tModLoader standardization — точная граница 0.4.248](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md)
-- [Terraria: внешний справочник оружия и прогрессии](TERRARIA_WEAPONS_AND_PROGRESSION_FULL_GUIDE_RU.md)
-- [Типизированные параметры Author: точная проекция](TYPED_AUTHOR_PARAMETER_PROJECTIONS_RU.md)
-- [VFX material elements — активный контракт 0.4.249](VFX_MATERIAL_ELEMENTS_RU.md)
-- [Точная звуковая палитра и явные параметры воспроизведения](VFX_SOUND_PALETTE_RU.md)
-- [Visual Director: проекты и explicit presentation metadata](VISUAL_PRESENTATION_METADATA.md)
-- [Явное потребление боеприпасов generated оружием](WEAPON_AMMO_CONSUMPTION_RU.md)
+## Использование предмета и экипировка
+
+- [Основное, альтернативное и удерживаемое действие](NAMED_ITEM_EFFECT_GROUPS_RU.md).
+- [Эффекты экипировки](NATIVE_EQUIPMENT_UTILITIES_RU.md).
+- [Вероятность расхода собственного стека](OWN_STACK_CHANCE_RU.md) и [расход боеприпасов](WEAPON_AMMO_CONSUMPTION_RU.md).
+- [Готовность сохранённых рецептов и health](RECIPE_HEALTH_AND_CONTRACTS_RU.md).
+
+## Снаряды, события и цели
+
+- [Формат снаряда: позиция, иммунитет и условия](PROJECTILE_AUTHOR_API_RU.md), [события и область урона](AUTHOR_EVENT_DOMAINS_RU.md).
+- [Начальная скорость и распределение дочерних снарядов](SPAWN_DISTRIBUTIONS_AND_TARGET_GEOMETRY_RU.md).
+- [Наследование боевых характеристик](CHILD_COMBAT_INHERITANCE_RU.md), [исключение исходной цели](INITIAL_NPC_EXCLUSION_RUNTIME_RU.md), [последовательность целей](PROJECTILE_TARGET_EMISSION_RU.md).
+- [Вертикальное ускорение](SIGNED_VERTICAL_ACCELERATION_RU.md), [модификаторы и фазы](PROJECTILE_PHASE_MODIFIERS_RU.md), [рост области столкновения](PROJECTILE_HITBOX_CURVE_RU.md).
+- [Удерживаемый луч: рост и геометрия](CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md).
+- [Турель: залп и выбор цели](SENTRY_TARGETING_VOLLEY_RU.md), [время жизни и бюджет потомков](SENTRY_LIFECYCLE_BUDGET_RU.md).
+
+## Изображение, размещение и эффекты
+
+- [Описание внешности Visual Director](VISUAL_PRESENTATION_METADATA.md), [согласованность отображения](PRESENTATION_CONSISTENCY_RU.md).
+- [Размещённый предмет из его PNG](PRESENT_PLACED_ITEM_SPRITE_RU.md).
+- [Материалы визуальных эффектов](VFX_MATERIAL_ELEMENTS_RU.md), [звуки и параметры воспроизведения](VFX_SOUND_PALETTE_RU.md).
+
+## Соответствие Terraria и полные каталоги
+
+- [Границы использования Terraria/tModLoader API](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md).
+- [Внешние примеры реализации](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md), [справочник оружия и прогрессии Terraria](TERRARIA_WEAPONS_AND_PROGRESSION_FULL_GUIDE_RU.md).
+- [Автоматически собранные каталоги и их обновление](GENERATED_RU.md): полный набор возможностей, точные параметры, преобразования и сравнение с C#.
+
+Смысловые решения принадлежат модели, технические правила — исходному коду. Эти главы объясняют существующий контракт; новый пункт документации сам по себе не добавляет игровую возможность. Прежние замеры и проверки читаются с указанными в них ограничениями.

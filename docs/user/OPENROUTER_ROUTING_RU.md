@@ -1,46 +1,55 @@
-# OpenRouter: точный upstream provider
+# OpenRouter: выбрать конкретную площадку
 
-**LocalGenerator 0.4.247 — поставка:** upstream pin включён; старый опубликованный ZIP 0.4.246 его не содержит. `LLM provider=openrouter` выбирает API; **OpenRouter provider slug** фиксирует upstream/endpoint за этим API. [Базовая настройка и restart](OPERATIONS_RU.md#настройки) общие.
+**Необязательно.** OpenRouter — сервис, который направляет запрос выбранной модели к одной из площадок. **«Модель OpenRouter»** выбирает модель, а **«Площадка OpenRouter»** ограничивает, где она исполняется. Если тебе это не нужно, оставь площадку пустой: [обычная настройка](PROVIDERS_RU.md#openrouter-openrouter).
 
-## Настройка
+## Настроить строгий выбор
 
-GUI: **LLM → Другие провайдеры** → `openrouter` → API key/model slug → **OpenRouter provider slug**. Возьми точный slug из routing выбранной модели, не model slug/отображаемое название компании. Сохрани и перезапусти сервер.
+1. В **«Идея и механика»** выбери **OpenRouter**, заполни ключ и model ID.
+2. В информации о маршрутах этой модели на OpenRouter найди **точный ID площадки/endpoint**. Это не model ID и не произвольное отображаемое название компании.
+3. Вставь его в **«Площадка OpenRouter»**. Например, `deepinfra` — только пример; проверь, что нужная модель доступна на этой площадке. Если опубликован ID с суффиксом `/…`, сохрани его полностью.
+4. Сохрани настройки и [перезапусти генератор](OPERATIONS_RU.md#изменить-настройки-и-перезапустить).
+
+В `config.env` это выглядит так:
 
 ```dotenv
 INFINI_LLM_PROVIDER=openrouter
-INFINI_OPENROUTER_API_KEY=<личный ключ вне Git>
 INFINI_OPENROUTER_MODEL=owner/model
 INFINI_OPENROUTER_PROVIDER=deepinfra
 ```
 
-`deepinfra` — пример, не рекомендация/обещание доступности. Сохраняются регистр и endpoint suffix `/...`, если он опубликован OpenRouter; trim краёв не меняет содержимое. Пустой `INFINI_OPENROUTER_PROVIDER=` возвращает auto, **не** строка `auto`.
+Ключ введи в Studio; не публикуй рабочий конфиг.
 
-## Строгая семантика
+**Результат:** запросы этого профиля ограничены выбранной площадкой. Если она недоступна, генерация завершится ошибкой вместо перехода на другую. Если ты хотел разрешить автоматический выбор, очисти поле и снова сохрани/перезапусти. Не вписывай слово `auto`: автоматический режим обозначается **пустым полем**.
 
-Для непустого slug Chat Completions и Responses получают:
+## Что именно запрещает этот выбор
+
+В запрос передаётся:
 
 ```json
 {"provider":{"only":["deepinfra"],"allow_fallbacks":false}}
 ```
 
-Pin принадлежит выбранному профилю, сохраняется в Author/Visual/VFX/Repair, stage model overrides, same-profile retries и допустимом [Responses → Chat downgrade](../development/LLM_TRANSPORT_REQUEST_SHAPE_RU.md#retries-и-границы-ошибок). Недоступная площадка заканчивается ошибкой после допустимых повторов **на ней же**: соседний профиль/legacy fallback не обходят pin. Код не подбирает модель/цену и не запускает проверочную генерацию. Доступность и стоимость определяет сочетание model/provider/account.
+Ограничение сохраняется для всех текстовых стадий выбранного профиля: механика, описание рисунка, эффекты и исправления. Допустимы повторные попытки на той же площадке, но не обход через другую площадку, дополнительную линию или запасной профиль. Доступность и стоимость определяются сочетанием модели, площадки и аккаунта.
 
-Пустое поле сохраняет обычный routing/failover. В `local`, `openai_compat`, `openai_codex` provider object не отправляется.
+## Если включено несколько текстовых линий
 
-## Несколько профилей
+Каждая линия имеет **своё** поле площадки. Ограничение не наследуется:
 
-| Профиль | Независимое поле |
+| Линия | Параметр |
 |---|---|
-| LLM 1 | `INFINI_OPENROUTER_PROVIDER` |
-| LLM 2 / 3 / 4 | `INFINI_LLM_POOL_2_OPENROUTER_PROVIDER` / `INFINI_LLM_POOL_3_OPENROUTER_PROVIDER` / `INFINI_LLM_POOL_4_OPENROUTER_PROVIDER` |
-| Legacy fallback | `INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER` |
+| Основная | `INFINI_OPENROUTER_PROVIDER` |
+| Дополнительная 2 | `INFINI_LLM_POOL_2_OPENROUTER_PROVIDER` |
+| Дополнительная 3 | `INFINI_LLM_POOL_3_OPENROUTER_PROVIDER` |
+| Дополнительная 4 | `INFINI_LLM_POOL_4_OPENROUTER_PROVIDER` |
+| Запасной источник | `INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER` |
 
-Pin не наследуется: пустое поле другого профиля — auto. Начальный round-robin явно enabled profiles сохраняется; для одного upstream оставь enabled только один профиль. После выбора pinned profile failover запрещён. Multi-dev lanes сохраняют своё profile закрепление.
+Если несколько линий включены, начальный выбор может распределяться между ними. Чтобы все предметы шли через один выбранный профиль, отключи остальные линии. Пустое поле в другой линии оставляет её автоматическую маршрутизацию. Для LM Studio, Совместимого API и ChatGPT/Codex это поле не используется.
 
-Fallback pin действует, только когда fallback действительно выбран и его provider — OpenRouter; pinned primary туда не переходит. GUI сохраняет поля при смене provider, но выключает неиспользуемые. Апдейт не меняет личный `config.env`/ключи.
+## Если площадка не отвечает
 
-## Источники и проверка
+1. Прочитай точную ошибку в **«Диагностика → Ошибка»**.
+2. Проверь доступность сочетания model ID и площадки в своём OpenRouter.
+3. При ошибке авторизации/квоты исправь аккаунт или ключ, не площадку.
+4. Если строгий выбор не принципиален, очисти поле. Если принципиален — дождись восстановления или вручную выбери другую допустимую площадку.
 
-[Transport owner](../../LocalGenerator/infini_local/pipelines/llm_transport.py), [config](../../LocalGenerator/infini_local/core/llm_config.py), [offline regressions](../../LocalGenerator/tests/test_openrouter_provider_settings.py) проверяют bodies/retry/isolation/GUI roundtrip. Это не live availability/price check.
-
-[OpenRouter Provider Routing](https://openrouter.ai/docs/guides/routing/provider-selection) · [Responses ProviderPreferences](https://openrouter.ai/docs/client-sdks/python/sdks/responses/README).
+[Правила выбора площадок OpenRouter](https://openrouter.ai/docs/guides/routing/provider-selection). Реализация локального ограничения: [llm_transport.py](../../LocalGenerator/infini_local/pipelines/llm_transport.py).

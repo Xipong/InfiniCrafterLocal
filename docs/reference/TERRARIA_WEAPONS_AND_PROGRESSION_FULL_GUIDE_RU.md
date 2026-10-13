@@ -6,7 +6,7 @@
 
 Основные upstream страницы для сверки (это citation index, не новые audit receipts): [Weapons](https://terraria.wiki.gg/wiki/Weapons), [Class setups](https://terraria.wiki.gg/wiki/Guide:Class_setups), [Game progression](https://terraria.wiki.gg/wiki/Guide:Game_progression), [Walkthrough](https://terraria.wiki.gg/wiki/Guide:Walkthrough), [Bosses](https://terraria.wiki.gg/wiki/Bosses), [Armor](https://terraria.wiki.gg/wiki/Armor), [Accessories](https://terraria.wiki.gg/wiki/Accessories), [Potions](https://terraria.wiki.gg/wiki/Potions), [Shimmer](https://terraria.wiki.gg/wiki/Shimmer), [Pylons](https://terraria.wiki.gg/wiki/Pylons), [Zenith](https://terraria.wiki.gg/wiki/Zenith). Для конкретного numeric stat, drop probability или material count нужна страница конкретного предмета и история версии.
 
-Runtime decisions: [registry inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md), [balance corridor](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md), [engine boundaries](../development/ENGINE_RUNTIME_BOUNDARIES_RU.md). История редакции — [HISTORY_RU](../archive/HISTORY_RU.md#reference).
+Runtime decisions: [registry inventory](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md), [balance corridor](BALANCE_REFERENCE_VANILLA_PROGRESS_LIMITS_RU.md), [engine boundaries](../development/ENGINE_RUNTIME_BOUNDARIES_RU.md). История редакции — [HISTORY_RU](../archive/HISTORY_RU.md#reference).
 
 ## Навигация
 

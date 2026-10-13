@@ -46,10 +46,14 @@ def iter_project_dirs() -> list[Path]:
     return [ROOT] + dirs
 
 
-def check_folder_docs() -> None:
-    missing = [str(p.relative_to(ROOT) or ".") for p in iter_project_dirs() if not (p / "FOLDER_DOCS_RU.md").exists()]
+def check_documentation_layout() -> None:
+    """Require reader entrypoints, not a duplicate note in every source folder."""
+    required = ("README.md", "START_HERE.html", "docs/user/START_RU.md",
+                "docs/development/README_RU.md", "docs/development/MODULES_RU.md",
+                "docs/reference/README_RU.md", "docs/archive/README_RU.md")
+    missing = [name for name in required if not (ROOT / name).is_file()]
     if missing:
-        fail("folders without FOLDER_DOCS_RU.md: " + ", ".join(missing[:30]))
+        fail("missing documentation entrypoints: " + ", ".join(missing))
 
 
 def _is_runtime_junk(rel: Path, p: Path) -> bool:
@@ -395,14 +399,8 @@ def check_release_docs_version() -> None:
         fail("could not read canonical APP_VERSION for docs check")
     current = version.group(1)
     docs = [
-        "README_RU.md",
-        "PROJECT_ARCHITECTURE_RU.md",
-        "PROJECT_MAP_RU.md",
-        "QUICK_START_RU.md",
-        "LocalGenerator/README_RU.md",
-        "LocalGenerator/PROJECT_ARCHITECTURE_RU.md",
-        "LocalGenerator/PROJECT_MAP_RU.md",
-        "LocalGenerator/QUICK_START_RU.md",
+        "README.md",
+        "docs/user/START_RU.md",
         "ModSources/InfiniCrafterLocal/description.txt",
     ]
     stale = []
@@ -417,7 +415,7 @@ def check_release_docs_version() -> None:
 
 def main() -> int:
     strict_archive = "--strict-archive" in sys.argv[1:]
-    check_folder_docs()
+    check_documentation_layout()
     check_no_packaged_runtime_junk(strict_archive=strict_archive)
     check_version_sync()
     check_runtime_api_sync()

@@ -1,0 +1,125 @@
+# Модули и рабочие границы
+
+Этот guide объясняет, **что нельзя сломать при изменении конкретной подсистемы**. Пути исходников — в [карте кода](CODE_MAP_RU.md), выбор владельца по задаче — в [OWNERS](OWNERS_RU.md). Общий поток и authority описаны один раз в [архитектуре](ARCHITECTURE_RU.md); здесь нет отдельного gameplay registry.
+
+<a id="generator"></a>
+## 1. Authoring, сервисы и хранение
+
+`LocalGenerator/infini_local/` — production-пакет. Launchers `LocalGenerator/server.py` и `settings_gui.py` только открывают соответствующее приложение; тесты и tools импортируют настоящего владельца, а не launcher или HTTP composition root.
+
+`LocalGenerator/scripts/bootstrap.py` готовит изолированную `LocalGenerator/.venv`, не меняет системный Python/config.env и не импортирует приложение до запуска. `gui` открывает browser Studio, `setup` устанавливает runtime requirements, `server` — прямой console server **без GUI ownership guards**, `doctor` — только read-only пути/Python без установки/сети. При переносе воспроизводимую `.venv` можно пересоздать, но личные config/profiles/cache/recipes сохраняют; пользовательский вход остаётся `OPEN_INFINICRAFT.bat`.
+
+- `core/runtime_authoring/` разделяет registry, Author/Repair schema, scope, validation, compilation, lossless lowering и strict wire. Event producer alternatives принадлежат `capability_registry.py`, finite Terraria tokens — `terraria_vocabulary.py`. Новый opcode требует [полного vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md), не записи только в prompt.
+- `pipelines/` составляет Author → Visual → VFX → images. Repair относится только к отвергнутой стадии и не перезапускает уже принятые предыдущие стадии. `category` — metadata интерфейса, не gameplay selector. Balance corridor — числовой совет, не выбор movement/family.
+- `services/combine_endpoint.py` отказывает non-object/non-finite delivery до HTTP serialization. `web/server.py` собирает маршруты; `server_handler.py` и `http_response_helpers.py` владеют JSON/error boundary. `server_utility_routes.py` проверяет containment при выдаче файлов. Dashboard не доказывает игровое исполнение.
+- `services/asset_sync_service.py` публикует только безопасные final `.png/.json` filenames. Raw intermediates и prompts не превращаются в MP assets. `sdcpp_service.py` владеет lazy/thread-safe запуском optional backend и cleanup; внешний sd.cpp не требует локальных EXE/весов. [Asset lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) — единственный подробный контракт попыток и доставки.
+- `storage/world_storage.py` хранит рецепт отдельным authoritative world-scoped JSON: per-file lock, уникальный sibling temp, atomic replace. Не добавляй агрегатные `index.json`/`health.json` записи как второго владельца. `world_recipe_runtime.py` — API сериализации; health производный, trace/debug — evidence, не authoring.
+- `LocalGenerator/data/` — компактные seed/reference данные. Запись в JSON-каталоге сама по себе не реализует capability. Deleted family/root-lowering/VFX macros, compatibility importer, `server_services.py`/`api.py`, wildcard barrels и launcher substitution не восстанавливаются.
+
+<a id="studio"></a>
+## 2. Studio: браузерный draft, native controller, сервер
+
+Основная поверхность — `desktop/webui/index.html`, `studio.css`, `studio.js`; `web_studio.py` связывает её с существующим скрытым Tk-контроллером. Это UI настроек, **не** новая gameplay/config authority. Для интеграционной проверки нужен настоящий loopback bridge: открытый HTML-файл его не заменяет.
+
+### Кто меняет состояние
+
+- `web_studio.py` обслуживает loopback HTTP, session token, deep-copied snapshots и bounded action queue. HTTP workers не читают/меняют Tk variables; callbacks, OAuth, native browse и lifecycle остаются на главном Tk-потоке. Synthetic defaults-only поля получают `FIELD_HELP` из canonical schema и сохраняются через retained config owner.
+- `core/generation_defaults.py` — общий согласованный набор LLM-рекомендаций для runtime и Studio, не gameplay defaults и не provider routing; явные process/config overrides сохраняются. `settings_schema.py` задаёт order/help и GUI-проекцию defaults, `settings_env.py` — env persistence, `settings_sdcpp_args.py` — чистые argument helpers. `settings_gui.py` инициализирует controller; `settings_gui_ui.py` только компонует mixins.
+- `settings_defaults.py` владеет versioned offer/revision и selective atomic write рекомендаций после согласия; отказ хранится отдельно в `config.env.defaults.json`. Не использует полный collect/save, сохраняет providers/credentials/paths/неизменённые строки, отказывает при изменении config после preview. `web_studio.py` выполняет consent на main thread; `studio.js` защищает несохранённый и post-submit draft. [Пользовательская инструкция](../user/SETTINGS_RU.md#обновление-рекомендуемых-значений-0502).
+- `settings_gui_server_controls.py` владеет bounded async workers/main-thread apply, path pickers, health identity/effective-config и safe Start/Stop/Force. `settings_gui_trace_state.py` — trace refresh/cancel, collect/save/presets и MP state; неизвестные настройки сохраняются, пользовательские профили не содержат ключей.
+- `settings_page_operate.py`, `settings_page_providers.py`, `settings_page_images.py`, `settings_page_sprites.py`, `settings_page_configure.py`, `settings_page_diagnostics.py` — соответствующие native формы. Shell/components/theme/fields/widgets меняют композицию, стиль и ввод, не серверную семантику. LoRA/reset callbacks остаются в `settings_gui_image_args.py`.
+- `settings_gui_shell.py` создаёт страницы один раз: навигация не перечитывает config и не сбрасывает ввод. Именованный `navigate(key)` не меняет legacy indices: 0 запуск, 1 текст, 2 параллельный крафт, 3 изображения, 4 спрайты, 5 диагностика, 6 multiplayer, 7 профили/сервер. Basic/advanced скрывают, но не очищают неактивные значения.
+
+### Контракт браузера
+
+1. Bootstrap передаёт `window.INFINI_BOOTSTRAP.token`; каждый API-запрос, включая GET `/api/state`, отправляет `X-Infini-Token`. POST `/api/action` содержит `{action, values, extra}`. Bridge проверяет Host/Origin и не пишет token-bearing URLs/config payload в лог. URL с токеном нужен для refresh; токен не показывается в форме или статусе.
+2. Поля и LAN snapshot фиксируются **до** POST; submitted-поля защищены от polling уже до action id. POST/202 подтверждает очередь, не запись на диск и не готовность генератора. Клиент ждёт точный `lastAction.id`, учитывает `revision` и номера локальных edits; правки после отправки остаются dirty. Save подтверждается `lastAction.ok` плюс status `Saved:`; состояние запуска — backend `home`, не успешный ответ Studio.
+3. Draft/секреты живут в памяти вкладки, не в localStorage/sessionStorage. Polling не стирает dirty-поля; поиск индексирует ключи/описания, не значения. Password input хранит исходное значение, не подставные звёздочки. Credential words проверяются по границам `_`: `MAX_TOKENS` — видимый лимит, `SECRET`/`CREDENTIAL` — скрытые credentials.
+4. Все backend поля доступны через разделы/поиск/«Все параметры»; неизвестные `INFINI_` поля передаются без нормализации. Активность веток вычисляется по **draft**, не устаревшему `fields.disabled`. Ctrl+S сохраняет, Ctrl+K ищет, `beforeunload` предупреждает; подтверждённая отмена восстанавливает baseline.
+5. Мобильное меню блокирует фон, удерживает фокус, закрывается также при выборе текущего раздела и возвращает фокус при Escape. Enter в search input выбирает результат, Enter на кнопке — обычное действие кнопки. Refresh не крадёт фокус/help state.
+6. Destructive clear/stop/reset/force требуют подтверждения; force передаёт `extra.confirm=true`. Native browse/OAuth требует интерактивного хоста, браузерный fake path не является выбором файла. Закрыть Studio ≠ Stop генератора. Health подтверждает только ограниченную non-secret проекцию, не secrets/pools/готовность всех моделей.
+
+WebUI работает без CDN; локальные Manrope/Cormorant WOFF2 и их SIL OFL notices остаются в `webui/assets/`. Эти лицензии не заменяются LICENSE проекта. UI не должен показывать фиктивные предметы, метрики, процент готовности модели или ETA. Текущий compact CSS — источник размеров; на ограниченном X11 native Tk использует scalable helvetica, Windows — Segoe UI.
+
+Проверки: [HTTP/controller](../../LocalGenerator/tests/test_web_studio.py), [browser](../../LocalGenerator/tests/test_web_studio_browser.py), [native field inventory](../../LocalGenerator/tests/test_desktop_forge_ui.py), `test_settings_gui_contract.py`, `test_codex_gui_catalog.py`, `test_full_logging_contract.py`. Browser/native display prerequisites и skip semantics — [TESTING](TESTING_RU.md). Наличие regression не означает, что он был запущен.
+
+Исторический UI evidence: исходные заметки PR #67 фиксировали Chromium/bridge, 129 полей и 390 px; PR #68 — настоящие Tk/StudioController/Chromium, save→reload 9000→9001→9000 и узкое окно 544 px снаружи. В последнем проходе 390 px, browse/OAuth и игра не подтверждены; позднее изменили только компактность заголовков/текст. Это результаты прежних композиций, **не acceptance текущего CSS**. Исходные записи доступны по [правилу истории](DOCUMENTATION_RU.md#history), а не копируются в каждую папку.
+
+<a id="contracts"></a>
+## 3. DTO, numeric admission и проекция Item
+
+В `Common/Models/Contracts/` находятся serialization/admission/vocabulary, в `Models/Runtime/` — projection/debug, в `Models/Presentation/` — sprite geometry и typed Visual/VFX. `GeneratedItemData` остаётся одним partial type: размещение файлов не создаёт второй wire/API/namespace.
+
+- `RuntimeProgramSpec.cs` принимает runtime v5 / wire v3, exact entity/binding/component/event relations и hard bounds. Metadata/visual wrappers не вводят `AttackSpec`, `runtimeFamily` или weapon profile.
+- `RawJsonNumericDomain.cs` — **property-local admission**, не normalization. Original JSON decimal lexeme проверяется до float32; nullable omission остаётся absent, present null/type/range — fail closed. Обычное in-domain округление разрешено; nonneutral→neutral refusal действует только при объявленной neutral. Нет process-wide converter, нового token/exponent cap или semantic routing.
+- Если shortest binary32 endpoint text выходит за decimal domain, writer выдаёт объявленный exact endpoint только для того же stored endpoint. Это round-trip equivalence, не разрешение принять outside-source число. Python JSON-decoded int/float ingestion отдельно не обещает сохранения исходной decimal lexeme.
+- `GeneratedItemData.Apply.cs` проецирует DTO в Item, `.Debug.cs` фиксирует результат. `GeneratedEquipmentBounds.g.cs` генерируется `tools/generate_equipment_bounds.py`; правка generated bounds вручную запрещена.
+- `GeneratedItem.PrefixLifecycle.cs` хранит **instance-only** native prefix/base snapshot и pending token для compact hydration. Перед `Item.Prefix` восстанавливает native base fields; accepted definition и craft normalization не меняет. Placement contact damage обнуляется после prefix application, ammo независим. Native refusal нельзя форсировать или заменить другим prefix.
+
+<a id="craft-placement"></a>
+## 4. Station transactions и размещённый материал
+
+### Station
+
+`InfiniCraftPlayer.Station.cs` содержит шесть явных A/B slots для трёх lanes: нет скрытого выбора «первых двух inventory items». `.CraftState.cs` владеет task/retry/cache recovery и transient cleanup; `.Multiplayer.cs` — server-authoritative request/ACK/FAIL/cancel. Клиент запрашивает craft, но не коммитит `GeneratedItemData`; сервер проверяет generated parent identity в registry и потребляет реальные slots.
+
+`.MultiDev.cs` изолирует lanes 2/3 и пинит `llm_2/llm_3`; lane 1 получает `llm_1` только в multi-dev. Retry остаётся на том же profile без fallback/hopping. `/multidevcraft [2|3|off]` — session unlock, не выдача предметов/обход validation. World-owned escrow/outcome journal находится в `GeneratedStationEscrowStateSystem.cs`; `InfiniCraftWorldExitSystem.cs` завершает workers/refund/save и очищает derived cache, не создаёт второго refund owner. [Native craft lifecycle](NATIVE_CRAFT_LIFECYCLE_QOL.md) и [архитектура escrow](ARCHITECTURE_RU.md#profiles-world) задают детали commit.
+
+`InfiniCraftStationUISystem.cs` только наблюдает readiness из `.MultiDev.cs` и манипулирует player state. Drawing/hover не park/restore claims и не отменяют jobs. Каждая карточка имеет свои A/B, Craft, status и actual elapsed ticks; native `MouseText` показывает полные input names/стадию/дисклеймер таймера, не модельный процент/ETA. `StationPanelBounds` (минимум 280 px) и `StationLaneBounds` дают общие draw/hit-test rectangles. Заявленные в старой заметке CPU viewport checks не найдены в текущем registered runner: panel-fit, высота ниже панели, ширина <280 px, UI-scale и GPU/native UI требуют отдельного подтверждения.
+
+### Placement и возврат
+
+Все partials `GeneratedPlacementLedgerSystem` остаются **одним** владельцем material claims: authorization, accepted-placement receipt/однократный stack debit, persistent groups/returns, prefix, placed-body admission/net/view/light. `GeneratedPlacedBodyNativeAdapter*` владеет guarded native boundaries; read-only drawing/light не заводят новую ledger.
+
+- Break атомарно переводит group в `PendingReturns` с item ID, `DefinitionJson` и server-observed native prefix exact held instance, снятым до stack debit. Авторитетная выдача — server/singleplayer; клиент сообщает placement через `NotifyGeneratedPlacement`.
+- Полный/cooling world-item pool — transient failure: durable claim сохраняется, очередь повторяет попытку без потери/вытеснения чужого drop. Отсутствие registry entry не мешает восстановлению из сохранённой **валидной** definition; совпадающий registry ID не позволяет подменить повреждённую definition.
+- Permanent invalid definition/identity/proxy/prefix/application сохраняется буквально в world quarantine; vanilla drop подавлен, vanilla/unprefixed fallback запрещён. Definition-only requeue не переписывает prefix. Слом не даёт права молча потерять 100% return claim, но corrupt record сам по себе не гарантирует немедленную выдачу.
+- Prefix NBT проходит save/load/quarantine/requeue отдельно от definition: legacy отсутствие = unprefixed 0; integer-only допускается для vanilla, modded требует stable mod/name. Недоступная identity/native refusal не разрешает замену.
+- `add_placed_light` независим от sprite/held-light/PNG: exact authenticated definition/binding + persistent footprint дают один center-cell `Lighting.AddLight` в `PostUpdateEverything`. Общая typed projection требует presence и literal NBT int identity/geometry до `GetInt`; explicit int-zero tile/style допустим, missing/coercible — нет. Restore/suppression используют ту же admission; malformed witness остаётся material-owned без света. Break/removal/world/mod unload прекращают emission.
+
+Проверки этих seams: `EngineRuntimeChecks.PlacementPool.cs`, `.PlacementPrefix.cs`, `.PlacedLight.cs`, `LocalGenerator/tests/test_placed_light_capability.py`. [Runtime boundaries](ENGINE_RUNTIME_BOUNDARIES_RU.md) отделяют linked-source CPU от настоящего world/MP smoke.
+
+<a id="runtime-presentation"></a>
+## 5. Runtime, assets и presentation
+
+Общие item/armor/projectile proxy classes исполняют per-instance data, не отдельный C# класс на каждый generated item. `GeneratedProjectile` разделяет bootstrap, finite controller dispatch (`.Executors`), events (`.RuntimeEvents`), net (`.NetSync`) и entity visual role (`.Visuals`). Flail/yoyo/whip/beam/targeting — explicit capabilities, не resurrected whole-weapon partials; global sentry/yoyo/flail flags для shared type запрещены.
+
+- `RuntimeProgramExecutor` исполняет bindings/events, `RuntimeDelayedActionScheduler` сохраняет delayed identity/budget; `RuntimeSpawnBudget` — один reservation/refund ledger. `RuntimeHitNpcGeneration` и `RuntimeHitPullBridge` задают generation/owner-hit fencing, не независимое collision proof. Hard limits — `InfiniRuntimeLimits`, authority predicates — `InfiniRuntimeAuthority`.
+- `GeneratedQuickUseSystem` + `GeneratedQuickUtilityActivation` — отдельная QuickHeal/QuickMana effect-entry lane: bounded occurrence admission не воспроизводит native heal/consume повторно и не принадлежит combat/presentation.
+- `GeneratedItem.RootCombat` + `GeneratedRootCombatSystem` используют **выбранный** authored binding и native prefix. ItemCheck query receipt привязан к invocation epoch; shoot-only context временно меняет только damage/knockBack/DamageType. Source/body восстанавливается перед root inheritance и в finally, crit/armor/DTO не переавторяются. Unknown native module/version/signature/pattern — явный refusal, не поздний повторный query/guessed stats.
+- `GeneratedItemRegistryService` хранит world definitions/hydration по exact identity; `GeneratorClient` — snapshots/HTTP `/combine`. `GeneratedAssetSyncService` сверяет registry, PNG/length/hash и final descriptors/chunks; `GeneratedTransferSystem` обслуживает queue на main thread. Это не передача произвольного клиентского файла. `RuntimeSpriteCache` владеет lazy certified PNG selection/load/backoff и bounded deferred GPU retirement. Не переноси definitions или chunks в новый transport facade.
+- Static `Assets/` — bundled textures, runtime PNG живут в cache и приходят по asset sync. Временное отображение до hydration не заменяет обязательный PNG и не делает failed generation успешной.
+- `GeneratedCursorItemPresentationSystem` выбирает exact selected instance только с готовым PNG и guarded native source/tint. Foreign/disabled/missing icon остаётся native; unload снимает hook. `GeneratedPlacedBodyDrawSystem` читает placed-body view. Presentation не меняет material/gameplay authority.
+
+### Tooltip и локализация
+
+`GeneratedItem.Tooltips.cs` даёт read-only localized feedback из exact executable primary/alternate/hold/equipped bindings. Он не гидратирует/нормализует/проецирует Item, не меняет vanilla stats/prefix/craft и не выводит механику из prose. Stack costs раздельны; base mana общая для active use до player discounts, hold/equipped её не берут. Effects показываются только исполняемые; ore sense — boolean, не обещание radius. Длительности — точные ticks и seconds с ≈ при округлении, числа — культура текущего UI. Placement объясняет недоступность вещи до break/return; `realization`/`selfEvaluation` не отображаются.
+
+While-selected запуск разрешён как authored решение, даже если непривычен; `hideUseGraphic` остаётся решением Author. Finite feedback разрешён, authored/generated tooltip prose — нет. Ключи `RuntimeTooltip`, `StationUI`, static command/config help находятся в EN/RU HJSON. `Common/Config` управляет QOL/cache и client VFX presentation, не authored дизайном; defensive defaults при сбое config — не разрешение gameplay fallback.
+
+`Common/Commands` — диагностика, не gameplay authority: `GetInfiniCommand` (`/getinfini`) догружает registry/assets; `InfiniCacheCommand` — stats/clear/reset/warm; `InfiniDumpCommand` — runtime snapshots; `InfiniDumpPictureCommand` — texture/source dump bundle + HTML. `InfiniCoreCommand`, `InfiniItemCommand`, `InfiniDummyCommand` — отдельные dev helpers; multi-dev unlock не выдаёт items.
+
+`InfiniCore` — отдельный station key/ingredient guard: `Assets/InfiniCore.png` — 48×1200 RGBA atlas, 24 кадра по 48 px + 2 padding rows; native `DrawAnimationVertical(5, 24)`/`AnimatesAsSoul`, loop 120 ticks. Только display `Terraria/ItemName` получает 4-секундный amber→gold→ice gradient через chat tags; plain name/save/net/recipe/остальные tooltip строки и готовое markup-имя не меняются. [История и контракт Heart](../archive/FORGE_HEART_0_4_252_RU.md).
+
+<a id="vfx"></a>
+## 6. VFX и sound
+
+`VfxManifestSpec` — exact entityId + event, не интерпретация style/prose. `InfiniVfxRuntime` владеет slot events/draw/budget; `InfiniItemVfxRuntime` — item/material producers; `InfiniDetachedVfxSystem` — bounded detached lifecycle. `VfxSourceBinding` сохраняет attachment identity, `VfxOrderedPeerStream` — bounded ordered peer sequence. `VfxRendererRegistry`/`VfxCanonicalVocabulary` задают finite domains; foundation/particle registry/address — backends, `InfiniVfxClientOptions` — client quality.
+
+Sound samples и explicit volume/pitch/variance заданы [sound contract](../reference/VFX_SOUND_PALETTE_RU.md); общий consumer — `VfxSlotSpec.ResolveSoundStyle`, прежний alpha/phase путь только при saved absence. Пустой `Assets/Sounds/` удалён вместе с его заметкой; bundled sound files отсутствуют, произвольный authored sound ID не разрешён. Нет отдельного `Common/Audio` или `VfxContext.cs`: context type живёт в foundation. [Материалы](../reference/VFX_MATERIAL_ELEMENTS_RU.md) владеют renderer/texture dependencies.
+
+<a id="verification"></a>
+## 7. QA, fixtures, generated evidence и CI
+
+`infini_local/qa/` — offline proof, не production authorship: complete runtime fixtures, per-capability vertical-slice witnesses, library audit, primitive-loss audit и non-archetypal program proof используют production validator/compiler/wire. Запрещены LLM/HTTP/image calls, name rules/classifiers и повторная компиляция смысла. Старый runtimePlan corpus не мигрируется. `tools/replay_generation_case.py` — saved v5 final/delivery validation, wire snapshot/drift и **явный** raw rerun.
+
+- `LocalGenerator/tests/conftest.py` до collection отключает личный config, live LLM/autostart sd.cpp и создаёт private cache; environment меняют через monkeypatch. `INFINI_TEST_USE_PROJECT_CONFIG=1` — отдельно разрешённый эксперимент, не release gate.
+- `tools/run_pytest_shards.py` — оба test roots с process isolation; focused runner с `INFINI_FOCUSED_PYTEST=1` — узкий результат, не full PASS. При недостающих dependencies сначала bounded `validate_sandbox.py`; degraded coverage не подменяет release acceptance.
+- `tools/EngineRuntimeChecks.csproj` и `.cs` задают Compile + invocation roster. Equipment utilities/grounded, quick utility/delayed NPC incarnation, raw numeric, forge readiness, prefix/root combat/tooltips и placed-light/prefix/pool — разные named seams. Registration сама по себе не native GREEN; native socket interception не MP match, LightingEngine CPU queue не GPU/world loop. `InfiniAgentContractSelfTestSystem` — opt-in игровая проверка, не автоматически включённый gate.
+- Cursor fixture `tools/fixtures/current-world-1647275982-cursor.json` — frozen accepted Campfire Twin Wooden Sword из world audit; input сохраняется до sandbox PNG-path projection, live saves не редактируют. Старый folder note называл `EngineRuntimeChecks.CursorInstance.cs`, но этого файла/registration в текущем дереве нет: нельзя приписывать ему исполненный regression.
+- `LocalGenerator/tests/fixtures/projectile_lifetime_initial_author.json` — byte-exact **initial** Author из `live10-luna6-high-post-pr52-20261011/final-quality/authors/ichor_spider_queen-initial.json`. [Frozen replay](../../LocalGenerator/tests/test_repair_frozen_contract.py) проверяет SHA и 36000-tick sentry без Gameplay Repair. Это не позже принятый Visual/VFX/image результат.
+- `toolbox/` — отдельно разрешаемый [no-image Live20 harness](../../toolbox/README.md), не импортируется игрой. Runner находится в `live-generation/`; `infini_toolbox.py` находит worktree/читает config без Git-записи. Frozen `fixtures/items.jsonl` содержит 39 Terraria records, SHA-256 `62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06`; другое evidence задаётся явно через `--runtime-dump`. Harness hard-blocks images, фиксирует case/stage/HTTP retry accounting, использует delivery-only test PNG. Его summary не принимает art/gameplay/MP.
+
+`contracts/schemas/` и `contracts/config_registry.json` — generated machine-readable exports, `docs/reference/generated/` — читаемые проекции, `contracts/reports/` — сохранённые receipts/reports. Owners/refresh — [GENERATED](../reference/GENERATED_RU.md); не правь JSON или Markdown как отдельный registry. `.agent/manifest.json`/`impact_rules.json` — tooling routing metadata, не runtime authority; stale version/path в metadata не превосходит actual source. `bin`, `obj`, cache, build directories и launchSettings — не gameplay source of truth.
+
+[.github/workflows/ci.yml](../../.github/workflows/ci.yml) запускает полный workflow на каждый PR (включая draft/fork), push в main и manual dispatch: без path filters, semantic-corpus сокращений или test skip по cache hit. Branch push не дублирует PR run. Новый run того же PR отменяет прежний; разные PR/main commits/manual runs имеют независимые groups. Оба Python jobs кешируют только pip downloads по dev lock, установка обязательна. tML preflight exit 77 означает явный `notRun`, не успешную сборку; обычная missing-DLL ошибка не является skip protocol. [BUILD](BUILD_RU.md) / [TESTING](TESTING_RU.md) определяют команды и пределы результата.

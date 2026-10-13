@@ -14,7 +14,7 @@
         "tools/mutation_contract_gate.py",
         "tools/check_planner_prompt_usability.py",
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
-        "lowery.md",
+        "docs/reference/generated/LOWERY_RU.md",
         "tools/audit_terraria_standardization.py"
       ],
       "checks": [
@@ -31,12 +31,12 @@
       ],
       "context": [
         "AGENTS.md",
-        "docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md",
-        "docs/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md",
-        "docs/TECHNICAL_LOWERING_POLICY_RU.md",
+        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md",
+        "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md",
+        "docs/development/TECHNICAL_LOWERING_POLICY_RU.md",
         "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
-        "lowery.md",
-        "docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md"
+        "docs/reference/generated/LOWERY_RU.md",
+        "docs/reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md"
       ]
     },
     {
@@ -62,10 +62,10 @@
       ],
       "requiresBuild": true,
       "context": [
-        "docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md",
+        "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md",
         "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
         "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
-        "lowery.md"
+        "docs/reference/generated/LOWERY_RU.md"
       ]
     },
     {
@@ -83,8 +83,8 @@
         "pytest"
       ],
       "context": [
-        "docs/THREE_STAGE_LLM_PIPELINE_RU.md",
-        "docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+        "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md",
+        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
       ]
     },
     {
@@ -103,8 +103,8 @@
       ],
       "requiresBuild": true,
       "context": [
-        "PROJECT_ARCHITECTURE_RU.md",
-        "docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+        "docs/development/ARCHITECTURE_RU.md",
+        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
       ]
     }
   ]

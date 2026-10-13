@@ -1,27 +1,21 @@
-# Документация Infinicraft — 0.5.00
+# Документация Infinicraft — 0.5.02
 
-**Рабочее дерево подготовки к альфе, не опубликованный релиз.** Начни с задачи. Source/registry/schema задают контракт; документация объясняет его, не создаёт второй runtime.
+Для чтения в браузере открой [START_HERE.html](../START_HERE.html). Книга работает без интернета и сервера: все главы уже внутри неё. Markdown-файлы в этой папке — исходники той же книги, а не второй комплект инструкций.
 
-| Тебе нужно | Главный документ-владелец |
-|---|---|
-| Установить, настроить и сделать первый предмет | [Быстрый старт](user/START_RU.md) |
-| Выбрать модели и обработку PNG | [Настройки](user/SETTINGS_RU.md) |
-| Проверить запуск, найти ошибку и логи | [Диагностика](user/DIAGNOSTICS_RU.md) |
-| Играть с друзьями | [Мультиплеер](user/MULTIPLAYER_RU.md) |
-| Обновиться без потери личных данных | [Обновление](user/UPDATING_RU.md) |
-| Найти игровую команду | [Команды](user/COMMANDS_RU.md) |
-| Менять код, собирать и проверять | [Центр разработки](development/README_RU.md) |
-| Найти точный authored/wire/runtime контракт | [Справка](reference/README_RU.md), [generated projections](reference/GENERATED_RU.md) |
-| Проверить старое решение или замер | [Архив](archive/README_RU.md) |
-| Найти замену старому пути | [Миграция и владельцы](development/DOCUMENTATION_RU.md) |
+## Использование
 
-## Структура и ответственность
+[Установка и первый запуск](user/START_RU.md) → [Настройки](user/SETTINGS_RU.md) → [Запуск и остановка](user/OPERATIONS_RU.md).
 
-- `docs/user/` — путь игрока/оператора: один установочный сценарий, эксплуатация, настройки, MP и диагностика.
-- `docs/development/` — архитектура, canonical code owners, изменение контрактов, сборка и границы тестов.
-- `docs/reference/` — тематические технические ограничения и внешние справочники; не руководство по установке.
-- `docs/archive/` — датированные аудиты, эксперименты и прежние release notes. Старый PASS/count не текущая приёмка.
+Если что-то не получилось: [диагностика](user/DIAGNOSTICS_RU.md). Отдельные сценарии: [вход через ChatGPT](user/CODEX_IMAGE_OAUTH_RU.md), [OpenRouter](user/OPENROUTER_ROUTING_RU.md), [мультиплеер](user/MULTIPLAYER_RU.md), [обновление](user/UPDATING_RU.md), [команды](user/COMMANDS_RU.md).
 
-Стабильные generated файлы остаются на прежних путях: [lowery](../lowery.md), [capability inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md), [lowering audit](../TECHNICAL_LOWERING_AUDIT_RU.md), [primitive parity](PRIMITIVE_PARITY_RU.md). Полный каталог не редактируется вручную.
+## Разработка
 
-Корневые и LocalGenerator `PROJECT_*.md`/`QUICK_START_RU.md`, а также точечные legacy входы в `docs/` служат короткими маршрутами. `FOLDER_DOCS_RU.md` объясняют локальные каталоги. Лицензионные тексты остаются на месте: [LICENSE](../LICENSE), [перевод](../LICENSE_RU.md).
+[Руководство разработчика](development/README_RU.md) → [архитектура](development/ARCHITECTURE_RU.md) → [карта модулей](development/MODULES_RU.md).
+
+Для изменения механики нужны [технические контракты](reference/README_RU.md); для сборки и проверки — [сборка](development/BUILD_RU.md) и [тесты](development/TESTING_RU.md). [Архив](archive/README_RU.md) хранит прежние решения и отчёты, не инструкции для первого запуска.
+
+## Как поддерживать документацию
+
+Один вопрос — одна глава. Не создавай копии README, файлы-перенаправления и обязательную заметку в каждой папке исходников. Дополняй действующего владельца темы.
+
+После изменения глав запусти `python tools/build_documentation.py`: он обновляет офлайн-книгу. Полные каталоги контрактов обновляются [отдельными генераторами](reference/GENERATED_RU.md).

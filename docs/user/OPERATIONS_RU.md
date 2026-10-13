@@ -1,95 +1,102 @@
-# Эксплуатация LocalGenerator — 0.5.00
+# Ежедневная работа с генератором
 
-**Рабочее дерево подготовки к альфе, не опубликованная поставка.** Для первого запуска используй [пошаговый сценарий](START_RU.md). Здесь владелец точной операционной семантики: config priority, безопасный restart/stop, effective health, trace/cache и MP transport. История версий — в [архиве](../archive/README_RU.md).
+После [первой установки](START_RU.md) ничего не нужно собирать заново. Studio управляет LocalGenerator; сама ковка происходит в Terraria.
 
-Официальные загрузки — [GitHub Releases](https://github.com/Xipong/InfiniCrafterLocal/releases). Условия использования и распространения — [LICENSE](../../LICENSE) / [русский перевод](../../LICENSE_RU.md); улучшения предпочтительно через [PR](../../CONTRIBUTING.md).
+## Запустить перед игрой
 
-## Установка
+1. Если используются внешние локальные модели, запусти API server текста и сервер изображений. Для управляемого sd.cpp файлы должны быть доступны; его запуск выполнит генератор при необходимости.
+2. Открой **[OPEN_INFINICRAFT.bat](../../OPEN_INFINICRAFT.bat)**.
+3. На **«Рабочем столе»** нажми **«Запустить генератор»**, затем **«Проверить»**.
+4. Когда статус станет **«Сервер отвечает»**, продолжай в Terraria.
 
-Нужны Python 3.11+ (Tk для GUI), Terraria/stable tModLoader с `ParticleLibrary`/`Luminance` (`modReferences`); C# build — [.NET 8 и внешние DLL](../development/BUILD_RU.md#сборка).
+Если генератор уже работает из этой копии с нужными настройками, повторно запускать его не нужно. Не используй несколько распакованных папок одновременно на порту 5055.
 
-Основной Windows-вход — **[OPEN_INFINICRAFT.bat](../../OPEN_INFINICRAFT.bat)**. Он вызывает локальный bootstrap: создаёт проектное `LocalGenerator/.venv`, устанавливает runtime requirements при их изменении и открывает GUI. Он не скачивает модели и не устанавливает мод.
+**Если Studio потеряла соединение:** оставь вкладку с несохранёнными изменениями открытой, проверь окно запуска и нажми **«Повторить»**. Если окно закрыто, открой запускатор заново. Адрес старой сессии может больше не подойти — используй новый адрес из окна запуска.
 
-Сохранённые отдельные входы:
+## Изменить настройки и перезапустить
 
-- `01_INSTALL_MOD_TO_TMODLOADER.bat` заменяет пользовательский `ModSources/InfiniCrafterLocal`: **старая папка удаляется**. Сохрани свои изменения; затем tModLoader → Workshop → Develop Mods → Build + Reload.
-- `02_INSTALL_LOCAL_GENERATOR.bat` — подготовить/обновить runtime environment; `04_OPEN_SETTINGS_GUI.bat` — совместимый GUI-вход.
-- `06_START_SERVER_DIRECT.bat` — видимая консоль без GUI health/identity guard; предварительно освободи порт.
+1. Измени нужные поля и нажми **«Сохранить настройки»**.
+2. Дождись завершения ковки. В **«Диагностика → Соединение»** можно обновить сведения о текущих запросах.
+3. На **«Рабочем столе»** нажми **«Перезапустить безопасно»**.
+4. Нажми **«Проверить»**, затем сверь сводку источников.
 
-Нестандартный ModSources: `TMODLOADER_MODSOURCES` или первый аргумент installer. Ручные действия из корня после подготовки `LocalGenerator/.venv`, пример Windows:
+Запуск сохраняет поля только после принятой проверки; отказ из-за занятой ковки или чужого сервера не применяет черновик. **«Сохранить»** отдельно записывает файл, но не меняет работающий процесс.
+
+**Если перезапуск отказал:**
+
+- есть активная ковка/очередь — дождись результата или отмени ковку в игре;
+- сервер принадлежит другой папке — останови его через её Studio или исходное окно консоли;
+- старый сервер не сообщает достаточно данных — останови его прежним способом и открой новую копию;
+- ответ непонятен или истёк тайм-аут — проверь журнал и владельца порта, не запускай второй процесс.
+
+Проверка применённых настроек сравнивает только часть параметров: папки данных, основные источники/модель, площадку OpenRouter и автозапуск sd.cpp. Ключи и дополнительные линии не сравниваются. Поэтому после любого изменения конфигурации нужен перезапуск, даже если эта частичная проверка не показывает расхождений.
+
+## Остановить после игры
+
+1. Заверши текущие операции или нажми **«Отмена»** в кузне и дождись подтверждения. Если виден ожидающий возврат, освободи место и дождись выдачи материалов.
+2. На **«Рабочем столе»** нажми **«Стоп»**, подтверди остановку.
+3. Проверь сообщение об остановке, затем закрой Studio.
+
+**«Закрыть студию»** и закрытие её вкладки не равны остановке генератора. У него отдельная кнопка **«Стоп»**. Сервер, запущенный вручную в консоли, останавливай **Ctrl+C** в этой консоли после завершения ковки.
+
+**Аварийный вариант:** **«Диагностика → Аварийное управление → Принудительный перезапуск…»** требует подтверждения и может прервать ковку. Используй его только для известной зависшей копии, после сохранения ошибки. Он не заменяет отмену и подтверждённый возврат материалов; защиту от управления неизвестным сервером он не снимает.
+
+## Проверить, какая копия работает
+
+Открой [http://127.0.0.1:5055/health](http://127.0.0.1:5055/health).
+
+| Поле | Что ожидается |
+|---|---|
+| `version` | Версия установленного генератора; для этого релиза `0.5.02` |
+| `serverRoot`, `configPath` | Папка и конфиг той копии, которую ты открыл |
+| `llmProvider`, `imageBackend` | Выбранные источники текста и PNG |
+| `imageBackendConfigError` | Пустое значение; иначе исправь указанный источник |
+| `generationActivity.active`, `.waiting` | Активные и ожидающие запросы на момент проверки |
+| `generationActivity.accepting` | Принимает ли генератор новые запросы |
+| `effectiveConfig.cacheDir`, `.worldRecipesDir` | Фактические папки, которые нужно сохранить при обновлении |
+
+`ok=true` означает, что отвечает LocalGenerator. Для проверки нейросетей нужен реальный крафт. Сведения о живости sd.cpp в health могут быть `null`: здесь его специально не опрашивают.
+
+Обычный адрес мода — **`http://127.0.0.1:5055/combine`**. Смена порта в Studio не перенастраивает готовый мод; для обычной игры не меняй его. Studio слушает свой случайный локальный порт — он не предназначен для подключения игры или друзей.
+
+## Где хранятся твои данные
+
+| Данные | Обычное место |
+|---|---|
+| Рабочие настройки | `LocalGenerator/config.env` |
+| Именованные профили | `LocalGenerator/gui_user_presets.json` |
+| Рецепты, рисунки и журналы генератора | `LocalGenerator/cache/`, включая `world_recipes/` и `sprites/` |
+| Данные мода | `InfiniCrafterLocal/` внутри пользовательской папки сохранений tModLoader |
+| Миры и персонажи | Пользовательские сохранения tModLoader |
+| Сессия ChatGPT | [В профиле пользователя Python](CODEX_IMAGE_OAUTH_RU.md#где-хранится-вход) |
+
+Если заданы `INFINI_CACHE_DIR` или `INFINI_WORLD_RECIPES_DIR`, сохраняй указанные ими папки, а не только стандартный cache. Относительные пути генератора считаются от `LocalGenerator`. **«Диагностика → Кеш»** открывает фактический локальный cache; пути работающего сервера смотри в health.
+
+Не удаляй весь cache для очистки логов: там находятся готовые предметы и рисунки. [Безопасная очистка журналов](DIAGNOSTICS_RU.md#логи-и-место-на-диске), [перенос данных при обновлении](UPDATING_RU.md).
+
+## Дополнительные способы запуска
+
+**Необязательно.** Следующие команды вводятся в Windows-терминале **из корня распакованной папки**, не в чате игры:
+
+```console
+OPEN_INFINICRAFT.bat doctor
+OPEN_INFINICRAFT.bat setup
+OPEN_INFINICRAFT.bat server
+```
+
+- `doctor` печатает Python, папку генератора, путь окружения и наличие конфига. Это проверка сведений, не тест моделей; она ничего не устанавливает.
+- `setup` создаёт/обновляет `LocalGenerator/.venv` и повторно устанавливает runtime-зависимости, не заменяя личный конфиг.
+- `server` запускает LocalGenerator в видимой консоли без Studio. Предварительно убедись, что порт свободен; остановка — Ctrl+C.
+
+После подготовки окружения доступны прямые команды:
 
 ```console
 LocalGenerator\.venv\Scripts\python.exe LocalGenerator\settings_gui.py
-LocalGenerator\.venv\Scripts\python.exe tools\install_to_tmodloader_modsources.py "<ModSources>"
-```
-
-Bootstrap modes `setup` (refresh зависимостей) и `doctor` (read-only проверка среды) описаны в [исходнике](../../LocalGenerator/scripts/bootstrap.py). Не используй системный pip для обычного запуска.
-
-Это не установка мода/моделей. Локальные LLM/image servers и model files готовит оператор.
-
-## Настройки
-
-GUI сохраняет `LocalGenerator/config.env`. [config.example.env](../../LocalGenerator/config.example.env) — шаблон, не рабочий профиль; пути моделей и доступность внешних endpoints задаёшь ты. При ручном запуске process environment имеет приоритет над config.env. GUI **«Запустить генератор»** передаёт копию своего environment, поверх которой накладывает текущие поля `collect()`; для этих полей приоритет у GUI. Не перезаписывай личный конфиг обновлением; после изменений **Save → restart server**.
-
-### Именованные профили и режим отображения
-
-Ручное изменение поля создаёт `Custom` в селекторе. «Сохранить как…» сохраняет текущие значения отдельным именованным профилем, **не меняя `config.env`**. Профили лежат в `LocalGenerator/gui_user_presets.json`; при обновлении сохрани его вместе с `LocalGenerator/config.env` и cache. Выбери `Мой: <название>` → «Применить» для загрузки, затем «Сохранить» для рабочего конфига. API keys/токены остаются текущими и в профиль не входят; лимиты tokens сохраняются. Основной режим скрывает неактивные backend-поля и технические настройки; переключатель «Расширенные настройки» раскрывает всё, не изменяя значения.
-
-LLM и PNG независимы:
-
-| Выбор | Поля маршрута |
-|---|---|
-| `INFINI_LLM_PROVIDER=local` | `INFINI_LMSTUDIO_URL`, `INFINI_LMSTUDIO_MODEL` |
-| `…=openrouter` | `INFINI_OPENROUTER_API_KEY`, `INFINI_OPENROUTER_MODEL`; [upstream pin](OPENROUTER_ROUTING_RU.md) отдельно |
-| `…=openai_compat` | `INFINI_OPENAI_COMPAT_BASE_URL`, `INFINI_OPENAI_COMPAT_API_KEY`, `INFINI_OPENAI_COMPAT_MODEL` |
-| `openai_codex` в LLM и/или Image selector | [Собственный ChatGPT login, models и ограничения](CODEX_IMAGE_OAUTH_RU.md) |
-| `INFINI_IMAGE_BACKEND=sdcpp` | `INFINI_SDCPP_SERVER_URL`; autostart: `INFINI_SDCPP_SERVER_EXE`, `INFINI_SDCPP_MODEL`, нужные `INFINI_SDCPP_VAE`/`INFINI_SDCPP_LLM`, `INFINI_SDCPP_SERVER_AUTOSTART=1` |
-| `…=image_api` | `INFINI_IMAGE_API_BASE_URL`, `INFINI_IMAGE_API_KEY`, `INFINI_IMAGE_API_MODEL` |
-
-Внешний sd.cpp: autostart=0; ему нужны доступный HTTP endpoint и уже работающий сервер, не локальные exe/model. `/visual_doctor.json` различает внешний и управляемый autostart, а при другом выбранном backend не требует sd.cpp. Без `probe=1` этот route не запускает image generation. LoRA GUI принимает конкретный `INFINI_SDCPP_LORA_FILE`, каталог выводит из него. Другие image adapters — в GUI; неизвестный backend не превращается в готовый PNG. Ключи/сессии вне Git.
-
-[Transport settings](../development/LLM_TRANSPORT_REQUEST_SHAPE_RU.md#настройки): `INFINI_LLM_RESPONSE_FORMAT`/`INFINI_LLM_API_MODE` управляют конвертом, не gameplay. Remote presets используют `json_object` + `chat_completions`, без гарантии для любого endpoint/model.
-
-## Запуск и проверка
-
-GUI **«Запустить генератор»** сохраняет настройки при принятом запуске; занятый или непроверенный сервер не останавливает и настройки для такого restart не сохраняет.
-
-`06_START_SERVER_DIRECT.bat` запускает тот же сервер в видимой консоли без GUI-проверки; сообщение об ошибке остаётся в окне. Не запускай второй экземпляр на занятом порту.
-
-```console
 LocalGenerator\.venv\Scripts\python.exe LocalGenerator\server.py
 ```
 
-Default bind `INFINI_HOST=127.0.0.1`, `INFINI_PORT=5055`. [Health](http://127.0.0.1:5055/health): сверить `version`, `serverRoot`, `configPath`, `llmProvider`, `imageBackend`, `imageBackendConfigError`. `ok=true` — ответ сервиса, **не** quota/model/generation proof. [Trace](http://127.0.0.1:5055/trace), `cache/events.ndjson` — stage errors; `INFINI_CONSOLE_EVENT_LEVEL=warn|error|info|debug|off` (default warn). Не публикуй личные raw prompts/config/traces.
+Первая открывает отдельный **настольный Tk-интерфейс** для совместимости, не браузерную Studio. Его названия кнопок могут отличаться.
 
-В текущем дереве `/health` дополнительно возвращает `generationActivity` (`active`, `waiting`, `accepting`) и частичный `effectiveConfig`: cache/world roots, image backend, основной LLM provider/model, exact OpenRouter upstream и sd.cpp autostart. Это явный allowlist без ключей, secret-derived hash или запроса разрешения `auto` model; он не подтверждает равенство всех pool/secret настроек. `/shutdown` атомарно отказывает с 409 при active/queued `/combine`; после согласованного shutdown новые генерации получают 503. `/shutdown?force=1` — явное принудительное прерывание, не resume/recovery protocol. Статус прежних архивов не определяет наличие этих возможностей в твоей локальной копии: сверяй исходники и health.
+Нумерованные BAT для отдельных действий находятся в **`tools/windows/`**. Обычному игроку они не нужны. [Установщик исходников](../../tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat) предназначен для разработки и **удаляет старую одноимённую папку ModSources**; [прямой сервер](../../tools/windows/06_START_SERVER_DIRECT.bat) не проверяет владельца порта через Studio.
 
-В текущем GUI **Start / Stop** работают безопасно по умолчанию. **Force restart…** требует отдельного подтверждения и обходит только busy-проверку, не проверку root/PID и наличия корректного `effectiveConfig`. После HTTP 409 нет скрытого kill или повторного запуска; timeout/непонятный ответ не считаются свободным портом. Если старый сервер не отдаёт нужную projection, останови его прежним владельцем/через `Ctrl+C`, а не принудительным уничтожением неизвестного PID.
-
-**Check applied config** асинхронно сравнивает только семь названных полей с текущими настройками запуска; расхождения показываются именами полей, без значений и ключей. **Save** сам по себе не применяет конфигурацию к работающему серверу. Изменение полей после проверки снимает устаревшее совпадение; `auto` не разрешается дополнительным запросом к модели.
-
-Trace refresh выполняется вне Tk-потока; повторные обновления объединяются до последнего запроса. Отмена/закрытие запрещает показ позднего ответа, но не обещает принудительно прервать системный DNS или файловую блокировку. Offline trace, открытие папки и очистка используют cache root фактического GUI launch environment; относительный путь отсчитывается от `LocalGenerator`. Очистка затрагивает только три trace NDJSON, не recipes/PNG; чужой/непроверенный сервер, другой live cache или символические ссылки вместо trace/lock файлов — отказ без локальной подмены цели.
-
-Мод использует `http://127.0.0.1:5055/combine` (`GeneratorClient.Endpoint`), без публичного GUI/env selector. Смена адреса/порта требует согласования endpoint в исходниках мода; обычную установку оставь на 5055. GUI-owned сервер: **«Остановить»**, ручной: `Ctrl+C`; один процесс на порт.
-
-## Первый craft
-
-1. `InfiniCore`: 20 дерева recipe group Wood + 1 Fallen Star; dev-выдача — `/infinicore`.
-2. Core в inventory → открыть inventory → два явных входа A/B station. Пустые/favorited items и сам Core не подходят.
-3. Craft → ждать deliverable `GeneratedItemData`; progress не таймер выдачи. Не закрывай процесс незавершённой операции.
-
-В MP только host/server генерирует/commit/refund; клиент отправляет intent, получает registry/assets, не готовый authoritative JSON.
-
-## Multiplayer и диагностика
-
-`INFINI_MP_ASSET_TRANSPORT=native` **по умолчанию**: PNG через Terraria packets, без внешнего HTTP для клиентов. При `http`: descriptor-verified `/get_asset?file=...`, достижимый `INFINI_ASSET_PUBLIC_BASE_URL`, bind `INFINI_HOST=0.0.0.0`, firewall только доверенным LAN/Radmin peers. Auto-guess предпочитает Radmin `26.x`; `26.x.x.x` — пример. `INFINI_TERRARIA_PORT` (обычно 7777) не generator port.
-
-| Сбой | Действие |
-|---|---|
-| Нет health / другая копия | Python/requirements/bind/port; сверить root/config с GUI |
-| Auth/quota/schema/timeout | Stage/status/body в trace; [transport boundaries](../development/LLM_TRANSPORT_REQUEST_SHAPE_RU.md#retries-и-границы-ошибок). Смена формата не лечит quota |
-| Existing item без definition/PNG | `/getinfini`, `/infinicache stats`; HTTP URL/firewall или native sync |
-| Missing/invalid texture | Runtime placeholder безопасен для отображения, не разрешает generator обойти обязательный PNG |
-| Нужны числа/рисунки | [Команды и output paths](COMMANDS_RU.md) |
-
-[Offline QA](../../LocalGenerator/QUICK_START_RU.md) не доказывает live craft, качество рисунка, Terraria/GPU/MP.
+При ручном запуске переменные окружения терминала имеют приоритет над `config.env`. Studio запускает сервер со своими текущими полями поверх окружения. Если консольная и обычная копии выбирают разные модели/пути, проверь заданные в терминале `INFINI_…`, а не перезаписывай конфиг случайными значениями.
