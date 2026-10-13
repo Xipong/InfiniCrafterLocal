@@ -1,8 +1,8 @@
 # Gameplay Author — authored shape и construction contract
 
-[Generated boundary](../../lowery.md) · [Source owners](../development/CODE_MAP_RU.md#python) · [Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md) · [Neutral omissions](DECLARED_NEUTRAL_OMISSIONS_RU.md)
+[Generated boundary](generated/LOWERY_RU.md) · [Source owners](../development/CODE_MAP_RU.md#python) · [Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md) · [Neutral omissions](DECLARED_NEUTRAL_OMISSIONS_RU.md)
 
-Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](../PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
+Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](generated/PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
 
 <a id="response"></a>
 ## Author response

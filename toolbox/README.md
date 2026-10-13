@@ -4,7 +4,7 @@
 
 ## Offline checks / preflight
 
-From the repository root, in the prepared [project environment](../LocalGenerator/QUICK_START_RU.md):
+From the repository root, in the prepared [project environment](../docs/user/START_RU.md):
 
 ```bash
 PYTHONPATH=LocalGenerator python -m pytest toolbox/tests -q
@@ -26,4 +26,4 @@ Only after approval for text calls/cost, rerun the same frozen arguments **witho
 
 The example allows ten **case-level** repeats after confirmed network failures, at least 60 seconds apart. It does not retry malformed JSON/gameplay/domain failure at case level. This mode forces the low-level attempt budget to one; `--require-zero-transport-retries` can explicitly reject hidden logical-call retries, not the separately ledgered case repeats. Every attempt/error/scheduled and completed wait stays in the ledger.
 
-Acceptance requires `summary.json` `ok=true`, 20 distinct successful rows, at least 10 first-Author successes, complete image-boundary coverage, no unaccounted transport errors/hidden fast HTTP retries. Report `caseTransportRetryCount` separately, not a blanket “zero infrastructure retries”. Replay all 20 recipes through the [headless C# contract](../docs/TEST_CONTRACT_OWNERS_RU.md#запуск-и-сила-доказательства); neither result replaces in-game acceptance.
+Acceptance requires `summary.json` `ok=true`, 20 distinct successful rows, at least 10 first-Author successes, complete image-boundary coverage, no unaccounted transport errors/hidden fast HTTP retries. Report `caseTransportRetryCount` separately, not a blanket “zero infrastructure retries”. Replay all 20 recipes through the [headless C# contract](../docs/development/TESTING_RU.md#запуск); neither result replaces in-game acceptance.

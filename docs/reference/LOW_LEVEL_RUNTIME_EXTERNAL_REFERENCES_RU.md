@@ -34,4 +34,4 @@
 
 Item/use/alternate/tool/placeable/equipment → ModItem; attached/channel/beam → held-projectile/beam patterns; flail/yoyo/whip → bounded custom AI; child/events/net → hooks + extra AI; collision/AoE → exact collision/event consumers. Последняя группа **не** blanket server collision proof: owner-hit отдельно использует [vanilla owner trust](../development/ARCHITECTURE_RU.md#runtime-trust).
 
-Внешний пример не расширяет executable surface. Mapping/units/ranges/exclusions принадлежат [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#boundary), finite aliases/lowerings — [generated Lowery](../../lowery.md), доказанный новый adapter — [vertical slice](../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice).
+Внешний пример не расширяет executable surface. Mapping/units/ranges/exclusions принадлежат [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#boundary), finite aliases/lowerings — [generated Lowery](generated/LOWERY_RU.md), доказанный новый adapter — [vertical slice](../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice).

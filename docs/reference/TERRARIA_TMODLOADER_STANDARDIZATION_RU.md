@@ -1,6 +1,6 @@
 # Terraria/tModLoader standardization — точная граница 0.4.248
 
-[Generated vocabulary/lowerings](../../lowery.md) · [Primitive parity/units](../PRIMITIVE_PARITY_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
+[Generated vocabulary/lowerings](generated/LOWERY_RU.md) · [Primitive parity/units](generated/PRIMITIVE_PARITY_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
 
 <a id="boundary"></a>
 ## Принцип и canonical owners
@@ -38,7 +38,7 @@ Proxy starts: ignoreWater=false, netImportant=false. Liquid/tile collision, pene
 <a id="units"></a>
 ## Units и exact conversions
 
-[Model-facing units](MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated parity](../PRIMITIVE_PARITY_RU.md) — full roster. Не копировать все ranges/cards сюда.
+[Model-facing units](MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated parity](generated/PRIMITIVE_PARITY_RU.md) — full roster. Не копировать все ranges/cards сюда.
 
 Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Старый DTO остаётся; Author `axePower` не alias. Generated buff `lifeRegenHpPerSecond` — 0..60, шаг .5 → прежний integer lifeRegen 0..120 через ×2; Author `lifeRegen` не alias. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
 

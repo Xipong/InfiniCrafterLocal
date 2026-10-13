@@ -1,6 +1,6 @@
 # Начальная скорость и создание дочерних снарядов вокруг поражённого NPC
 
-[Author contract](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Capability inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [Combat inheritance](CHILD_COMBAT_INHERITANCE_RU.md) · [NPC exclusion](INITIAL_NPC_EXCLUSION_RUNTIME_RU.md)
+[Author contract](LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Capability inventory](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [Combat inheritance](CHILD_COMBAT_INHERITANCE_RU.md) · [NPC exclusion](INITIAL_NPC_EXCLUSION_RUNTIME_RU.md)
 
 Категория A11 возвращает два независимых низкоуровневых выбора: распределение начальной скорости и точные origin/direction дочерних снарядов относительно NPC из `on_hit`/`on_crit`. Author задаёт каждый параметр. Название предмета, семейство оружия и текст запроса не выбирают ветку или формулу.
 

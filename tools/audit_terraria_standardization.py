@@ -155,7 +155,7 @@ def report() -> dict[str, Any]:
     check("range_parity_spawn", "SpeedPxPerTick = Math.Clamp(SpeedPxPerTick, 0f, 80f);" in dto and "OffsetPx = Math.Clamp(OffsetPx, -128, 256);" in dto, "C# spawn clamps must match Author registry")
     check("range_parity_collision", "Pierce = Math.Clamp(Pierce, -1, 100);" in dto and "ExtraUpdates = Math.Clamp(ExtraUpdates, 0, 5);" in dto, "C# collision clamps must match Author registry")
 
-    lowery = ROOT / "lowery.md"
+    lowery = ROOT / "docs/reference/generated/LOWERY_RU.md"
     check("lowery_exists", lowery.is_file(), "root lowery.md must exist")
     if lowery.is_file():
         text = lowery.read_text(encoding="utf-8")

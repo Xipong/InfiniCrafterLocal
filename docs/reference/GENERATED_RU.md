@@ -1,23 +1,39 @@
-# Generated canonical contracts — 0.5.00
+# Автоматически собранные справочники
 
-**Полные generated projections сохранены на исходных путях.** Они читают canonical source, не заменяют его и не копируются в краткие руководства. Ручная правка каталога запрещена: меняй source/producer у его владельца.
+Папка `generated/` содержит полные таблицы из исходного кода. Здесь проверяют точные имена, параметры, единицы и соответствие C#; с неё не начинают установку или изучение архитектуры.
 
-| Полный output | Producer | Запись без `--check` |
+| Нужно проверить | Справочник | Генератор |
 |---|---|---|
-| [lowery.md](../../lowery.md) | [generate_lowery.py](../../tools/generate_lowery.py) | Только root `lowery.md` |
-| [Capability inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [machine-readability audit](../CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md), [lowering audit](../../TECHNICAL_LOWERING_AUDIT_RU.md) | [generate_low_level_runtime_docs.py](../../tools/generate_low_level_runtime_docs.py) | Ровно три Markdown projections |
-| [Primitive parity](../PRIMITIVE_PARITY_RU.md) | [generate_primitive_parity.py](../../tools/generate_primitive_parity.py) | Только `docs/PRIMITIVE_PARITY_RU.md` |
+| Границы авторства модели и технических преобразований | [Lowery](generated/LOWERY_RU.md) | `tools/generate_lowery.py` |
+| Полный набор возможностей и параметров | [Каталог](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) | `tools/generate_low_level_runtime_docs.py` |
+| Проверку полноты и доступности каталога модели | [Аудит каталога](generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) | тот же |
+| Точный перевод авторского описания в исполняемый формат | [Аудит lowering](generated/TECHNICAL_LOWERING_AUDIT_RU.md) | тот же |
+| Соответствие возможностей Terraria/tModLoader | [Parity](generated/PRIMITIVE_PARITY_RU.md) | `tools/generate_primitive_parity.py` |
 
-Из корня в подготовленном dev-окружении:
+## Обновление
+
+Не редактируй сгенерированные таблицы вручную. Измени соответствующий исходник и выполни нужный генератор из корня проекта:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_lowery.py --check
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py --check
-PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
+PYTHONPATH=LocalGenerator python tools/generate_lowery.py
+PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py
+PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py
 ```
 
-Для согласованного обновления Markdown убери `--check` у нужного producer, затем проверь freshness и affected regression. [export_contract_schemas.py](../../tools/export_contract_schemas.py) обслуживает отдельные JSON/schema exports; это **не** Markdown-only команда. `contracts/schemas/`/C# bounds не обновляются при переносе документации.
+Добавь `--check`, чтобы проверить актуальность без записи. Первый и третий генераторы записывают по одному Markdown-файлу, второй — три. JSON-схемы обслуживает `tools/export_contract_schemas.py`; это отдельная операция.
 
-Canonical owners: [registry](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — факты/params; [program_schema](../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py) — authored shape; [technical_lowering](../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py) — projections/receipts; [author_item_contract](../../LocalGenerator/infini_local/pipelines/author_item_contract.py) — model-facing prose. [Vertical slice](../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
+После изменения справочников обнови офлайн-книгу:
 
-Freshness означает совпадение с renderer, **не** свежий benchmark/100% acceptance. Исторические hardcoded числа читаются в рамках своего снимка; live/game/MP проверяются отдельно. Совместимые old-path entrypoints сохраняют anchors для producer/AGENTS/tool consumers.
+```bash
+python tools/build_documentation.py
+python tools/build_documentation.py --check
+```
+
+## Источники
+
+- [capability_registry.py](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — операции, параметры, единицы и ограничения.
+- [program_schema.py](../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py) — формат ответа модели.
+- [technical_lowering.py](../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py) — точные преобразования и записи об их происхождении.
+- [author_item_contract.py](../../LocalGenerator/infini_local/pipelines/author_item_contract.py) — инструкции модели.
+
+Проверка актуальности подтверждает совпадение таблиц с кодом, а не выполнение механики в игре. Статические и игровые проверки описаны в [руководстве по тестированию](../development/TESTING_RU.md).

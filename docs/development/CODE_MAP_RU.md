@@ -1,57 +1,107 @@
-# InfiniCrafterLocal v0.5.00 — карта owners
+# Карта исходников
 
-[Архитектура и trust boundaries](ARCHITECTURE_RU.md) · [Добавить capability](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) · [Generated contract](../../lowery.md) · [Placed PNG source/runtime owners](../reference/PRESENT_PLACED_ITEM_SPRITE_RU.md)
+[Архитектура](ARCHITECTURE_RU.md) объясняет поток, [MODULES](MODULES_RU.md) — рабочие ограничения, [OWNERS](OWNERS_RU.md) — выбор файла по задаче. Ниже реальное дерево, не список предполагаемых слоёв. `GeneratedItemData`, `GeneratedItem`, `GeneratedProjectile` и ledger остаются partial types; перемещение исходника не создаёт API.
+
+<a id="tree"></a>
+## Репозиторий
+
+```text
+LocalGenerator/                 Python приложение, bootstrap, data, tests
+  infini_local/
+    core/runtime_authoring/     canonical gameplay contract
+    pipelines/                  LLM стадии и транспорт
+    services/ + web/            HTTP, assets, backend boundaries
+    storage/                    world recipes, health, traces
+    desktop/ + desktop/webui/   Studio и native controller
+    qa/                         offline witnesses/audits
+ModSources/InfiniCrafterLocal/   tModLoader executor
+  Common/Models/                Contracts / Runtime / Presentation
+  Common/Runtime/               bindings, events, delays, budgets
+  Common/Services/              Generation / Assets / Networking
+  Common/Players/               station и per-player state
+  Common/Systems/               Craft / Placement / Combat / Presentation / Utility
+  Common/VFX/                   finite renderer/lifecycle/peer stream
+  Common/UI/                    station drawing/input
+  Content/Items/ + Projectiles/ shared per-instance proxies
+  Assets/ + Localization/       bundled resources и EN/RU HJSON
+contracts/                      schemas, config registry, saved reports
+tools/                          development gates/build/replay; windows/ BAT helpers
+toolbox/                        отдельно разрешаемый live harness + offline tests
+docs/                           user / development / reference / archive
+.agent/ + .github/               impact metadata и CI, не игровой runtime
+```
+
+`OPEN_INFINICRAFT.bat` — пользовательский launcher. `LocalGenerator/scripts/bootstrap.py` владеет setup/gui/server/doctor; `LocalGenerator/server.py` и `settings_gui.py` не используются как import barrels. Cache, `.venv`, `bin`/`obj`, build logs и workspace indexes не являются canonical source.
 
 <a id="python"></a>
-## LocalGenerator: куда идти за изменением
+## Python
 
-Пользовательский UI: `desktop/webui/` — HTML/CSS/JS, `desktop/web_studio.py` — loopback HTTP bridge. Он передаёт immutable snapshots и очередь действий; существующие desktop callbacks выполняются только в главном Tk-потоке. Tk теперь скрытый контроллер и native dialogs, не основной пользовательский интерфейс. Логика генерации остаётся у прежних owners.
+**Все пути таблицы — относительно `LocalGenerator/infini_local/`.** Когда owner относится к нескольким файлам, directory указан для каждого; не нужно угадывать контекст соседней строки.
 
-Fresh source — только `authoring.v5`: flat independent `action`/`stackCost`/`contactDamage`, exact registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются admission paths. Persisted wire сохраняет `usePolicy` и имеет отдельные readers/retained provenance; retirement Author grammar не удаляет recipes.
-
-Python base: [`LocalGenerator/infini_local/`](../../LocalGenerator/infini_local/FOLDER_DOCS_RU.md). Public imports: `infini_local.core.runtime_authoring`, не deleted legacy compiler/root lowerers. Имена без directory в первых шести строках — `core/runtime_authoring/`; далее соседние bare filenames имеют тот же directory, что предшествующий path.
-
-| Изменение | Canonical owner относительно Python base |
+| Решение | Файлы |
 |---|---|
-| Grammar, units, events, authority | `core/runtime_authoring/capability_registry.py` |
-| Author/Repair shape и scope-derived examples | `program_schema.py` в том же runtime_authoring; `pipelines/author_item_contract.py` строит cards из canonical shapes, real Repair требует non-null realizationReplacement |
-| Dependencies/slots/producers/budgets и advisory report leaves | `validator.py`, `event_producer_validation.py`, `binding_use_policy.py`; diagnosed planVsProgram не блокирует craft, но чужие siblings/gameplay/resource guards остаются strict |
-| Frozen scope/filter | `repair_scope.py`; shared leaf merge — `core/repair_merge.py` |
-| Projection/receipts/final wire | `compiler.py`, `technical_lowering.py`, `wire_validator.py`; scalar fresh names и buff percent units задаёт ParamSpec, retained source names не fresh grammar; exact typed/signed-zero omission и consumer float32 domain проверяются у тех же owners |
-| Terraria mappings | `terraria_vocabulary.py` |
-| Model prose/packet | `pipelines/author_item_contract.py`, `llm_authoring_prompt.py` |
-| Author/Repair/stage orchestration | `pipelines/llm_authoring_pipeline.py`, `combine_pipeline.py` |
-| Numeric parent corridor | `pipelines/combine_balance.py` |
-| `/combine` admission/live health activity и request-local failure response | `services/combine_endpoint.py`, `web/http_response_helpers.py`; stage enter/leave — `pipelines/combine_pipeline.py`, transport waits/network starts — `llm_transport.py`, bounded supplement projection — `storage/failure_state.py`; [диагностика](LLM_PROVIDER_ADMISSION_RU.md#live-диагностика-craft-и-отказов) |
-| Profile lease/provider/Responses | `pipelines/llm_transport.py`, `core/llm_config.py`; complete instruction/data framing — `core/llm_prompt_cache.py`, explicit stage builders (не inference по cacheability) |
-| Visual + PNG delivery | `pipelines/visual_generation_pipeline.py`, `visual_delivery_gate.py`; [image owner](IMAGE_ASSET_LIFECYCLE_RU.md) |
-| VFX slots/PNG dependencies | `core/vfx_manifest.py`, `vfx_material_contract.py`; [точные sound samples/controls](../reference/VFX_SOUND_PALETTE_RU.md) |
-| World recipes/health/traces | `storage/world_recipe_runtime.py`, `world_storage.py`, `trace_runtime.py` |
-| C# executable completeness | `qa/primitive_loss_audit.py`; [QA owners](../../LocalGenerator/infini_local/qa/FOLDER_DOCS_RU.md), [test owners](TESTING_RU.md) |
+| Capability facts, grammar, params/units, events/producers | `core/runtime_authoring/capability_registry.py` |
+| Strict Author/Repair shape | `core/runtime_authoring/program_schema.py` |
+| Exact Repair mutable IDs/indices/create policy | `core/runtime_authoring/repair_scope.py`; shared merge `core/repair_merge.py` |
+| Composition/slots/budgets/binding admission | `core/runtime_authoring/validator.py`, `core/runtime_authoring/event_producer_validation.py`, `core/runtime_authoring/binding_use_policy.py` |
+| Component/opcode projection, receipts, final wire | `core/runtime_authoring/compiler.py`, `core/runtime_authoring/technical_lowering.py`, `core/runtime_authoring/wire_validator.py` |
+| Finite Terraria/tML mappings | `core/runtime_authoring/terraria_vocabulary.py` |
+| Model-facing cards/prompt и Author calls | `pipelines/author_item_contract.py`, `pipelines/llm_authoring_prompt.py`, `pipelines/llm_authoring_pipeline.py` |
+| Whole craft/stage orchestration | `pipelines/combine_pipeline.py`; numeric advice `pipelines/combine_balance.py` |
+| Request-local HTTP admission/response | `services/combine_endpoint.py`, `web/server_handler.py`, `web/http_response_helpers.py` |
+| Provider profile lease, quota, retry, Responses | `pipelines/llm_transport.py`, `core/llm_config.py`, `services/codex_auth.py`, `services/codex_text_backend.py` |
+| Explicit stage/cache packet framing | `core/llm_prompt_cache.py`, `core/llm_stage_messages.py`, соответствующий stage request builder |
+| Visual, image attempts, delivery gate | `pipelines/visual_generation_pipeline.py`, `pipelines/visual_sprite_generation.py`, `pipelines/visual_delivery_gate.py`, `services/visual_asset_pipeline.py` |
+| VFX entity/event contract + materials | `core/vfx_manifest.py`, `core/vfx_material_contract.py` |
+| Asset serving и optional sd.cpp lifecycle | `services/asset_sync_service.py`, `services/sdcpp_service.py`, `services/sdcpp_backend.py`, `web/server_utility_routes.py` |
+| World recipe API/storage, failure/trace evidence | `storage/world_recipe_runtime.py`, `storage/world_storage.py`, `storage/failure_state.py`, `storage/trace_runtime.py`, `storage/trace_tools.py` |
+| Studio shell/browser/native state | `desktop/web_studio.py`, `desktop/webui/index.html`, `desktop/webui/studio.css`, `desktop/webui/studio.js`; [native split](MODULES_RU.md#studio) |
+| Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_gui_trace_state.py`, `desktop/settings_gui_server_controls.py` |
+| Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/runtime_program_proof.py`, `qa/primitive_loss_audit.py` |
+
+Fresh Author принимает только `authoring.v5`: flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Public runtime imports — `infini_local.core.runtime_authoring`, не deleted legacy compiler/root lowerers.
 
 <a id="csharp"></a>
-## ModSources: consumers и persistent state
+## C#
 
-C# base: [`ModSources/InfiniCrafterLocal/`](../../ModSources/InfiniCrafterLocal/FOLDER_DOCS_RU.md); `GeneratedItem*`/`GeneratedProjectile*` включают partials.
+**Все пути таблицы — относительно `ModSources/InfiniCrafterLocal/`.**
 
-| Surface | Canonical source относительно C# base |
+| Решение | Файлы |
 |---|---|
-| Sampled launch / hit-target geometry / physical emission | `Common/Models/Contracts/RuntimeProgramSpec.cs`, `Common/Runtime/RuntimeSpawnVelocity.cs`, `RuntimeProgramExecutor.cs`, `RuntimeHitNpcGeneration.cs`; exact target geometry и authority/refund имеют собственных владельцев |
-| Strict DTO/vocabulary/safety | `Common/Models/Contracts/RuntimeProgramSpec.cs`, `Common/Models/Contracts/TerrariaRuntimeVocabulary.cs`, `Common/Models/Runtime/GeneratedEquipmentBounds.g.cs` |
-| Item projection/hooks | `Common/Models/Runtime/GeneratedItemData.Apply.cs`, `Content/Items/GeneratedItem.cs` |
-| Bindings/events/delays/hit receipt | `Common/Runtime/RuntimeProgramExecutor.cs`, `RuntimeDelayedActionScheduler.cs`, `RuntimeHitPullBridge.cs` |
-| Entity lifecycle/net/visual | `Content/Projectiles/GeneratedProjectile.cs` |
-| Named item effects / exact use selectors | `Common/Models/Contracts/RuntimeItemEffectGroupSpec.cs`, `Content/Items/GeneratedItem.cs` (`EffectsForBinding`); [контракт](../reference/NAMED_ITEM_EFFECT_GROUPS_RU.md) |
-| Weapon ammo / spawn reservation ledger | `Common/Models/Contracts/RuntimeWeaponAmmoSpec.cs`, `Common/Runtime/RuntimeSpawnBudget.cs`; native shot и event child — разные lanes |
-| Hitbox curve / raw JSON numeric admission | `Common/Models/Contracts/RuntimeProgramSpec.cs`, `RawJsonNumericDomain.cs` в том же directory, `Content/Projectiles/GeneratedProjectile.Executors.cs` |
-| VFX DTO/rendering | `Common/Models/Presentation/VfxManifestSpec.cs`; [VFX owners](../../ModSources/InfiniCrafterLocal/Common/VFX/FOLDER_DOCS_RU.md) |
-| Station lanes/world journal | `Common/Players/InfiniCraftPlayer.MultiDev.cs`, `Common/Systems/Craft/GeneratedStationEscrowStateSystem.cs` |
-| Placed-item world returns | `Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs` |
-| Shared limits/packet IDs | `Common/InfiniRuntimeLimits.cs`, `Common/InfiniNetPacketIds.cs` |
+| Strict DTO/JSON/domain/vocabulary | `Common/Models/Contracts/RuntimeProgramSpec.cs`, `Common/Models/Contracts/GeneratedItemData.cs`, `Common/Models/Contracts/GeneratedItemData.Model.cs`, `Common/Models/Contracts/GeneratedItemData.Normalize.cs`, `Common/Models/Contracts/RawJsonNumericDomain.cs`, `Common/Models/Contracts/TerrariaRuntimeVocabulary.cs` |
+| Item projection/debug/generated bounds | `Common/Models/Runtime/GeneratedItemData.Apply.cs`, `Common/Models/Runtime/GeneratedItemData.Debug.cs`, `Common/Models/Runtime/GeneratedEquipmentBounds.g.cs` |
+| Bindings/events/delays | `Common/Runtime/RuntimeProgramExecutor.cs`, `Common/Runtime/RuntimeDelayedActionScheduler.cs` |
+| Child/root spawn, distributions, target geometry | `Common/Runtime/RuntimeSpawnBudget.cs`, `Common/Runtime/RuntimeSpawnVelocity.cs`, `Common/Runtime/RuntimeSpawnTransform.cs`, `Common/Runtime/RuntimeHitTargetSpawn.cs` |
+| Owner-hit/generation fencing | `Common/Runtime/RuntimeHitNpcGeneration.cs`, `Common/Runtime/RuntimeHitPullBridge.cs` |
+| Item use/save/net/equipment + native prefix/root/tooltip | `Content/Items/GeneratedItem.cs`, `Content/Items/GeneratedItem.UseStyle.cs`, `Content/Items/GeneratedItem.PrefixLifecycle.cs`, `Content/Items/GeneratedItem.RootCombat.cs`, `Content/Items/GeneratedItem.Tooltips.cs` |
+| Exact named effect groups / native ammo DTO | `Common/Models/Contracts/RuntimeItemEffectGroupSpec.cs`, `Common/Models/Contracts/RuntimeWeaponAmmoSpec.cs` |
+| Entity bootstrap/controller/events/net/visual | `Content/Projectiles/GeneratedProjectile.cs`, `Content/Projectiles/GeneratedProjectile.Executors.cs`, `Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs`, `Content/Projectiles/GeneratedProjectile.NetSync.cs`, `Content/Projectiles/GeneratedProjectile.Visuals.cs` |
+| Station input/jobs/MP/readiness | `Common/Players/InfiniCraftPlayer.Station.cs`, `Common/Players/InfiniCraftPlayer.CraftState.cs`, `Common/Players/InfiniCraftPlayer.MultiDev.cs`, `Common/Players/InfiniCraftPlayer.Multiplayer.cs` |
+| Durable station escrow и world exit | `Common/Systems/Craft/GeneratedStationEscrowStateSystem.cs`, `Common/Systems/Craft/InfiniCraftWorldExitSystem.cs` |
+| Placement/material claim + native admission | `Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs` и его partials; `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.cs`, `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.Contracts.cs` |
+| Native combat / quick utility | `Common/Systems/Combat/GeneratedRootCombatSystem.cs`, `Common/Systems/Utility/GeneratedQuickUseSystem.cs`, `Common/Runtime/GeneratedQuickUtilityActivation.cs` |
+| Cursor/placed/held draw | `Common/Systems/Presentation/GeneratedCursorItemPresentationSystem.cs`, `Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs`, `Common/Players/GeneratedHeldItemDrawLayer.cs` |
+| Definitions и generator HTTP | `Common/Services/Generation/GeneratedItemRegistryService.cs`, `Common/Services/Generation/GeneratorClient.cs` |
+| PNG validation/chunks/queue/cache | `Common/Services/Assets/GeneratedAssetSyncService.cs`, `Common/Services/Assets/GeneratedTransferSystem.cs`, `Common/Services/Assets/RuntimeSpriteCache.cs` |
+| Authority predicates / HTTP cooldown | `Common/Services/Networking/InfiniRuntimeAuthority.cs`, `Common/Services/Networking/LocalHttpQuietFailure.cs` |
+| Sprite geometry / typed VFX | `Common/Models/Presentation/SpritePresentation.cs`, `Common/Models/Presentation/VfxManifestSpec.cs`; [VFX split](MODULES_RU.md#vfx) |
+| Limits, packet IDs, Terraria sentinels | `Common/InfiniRuntimeLimits.cs`, `Common/InfiniNetPacketIds.cs`, `Common/InfiniTerrariaSentinels.cs` |
+| Station UI и localization | `Common/UI/InfiniCraftStationUISystem.cs`, `Localization/en-US_Mods.InfiniCrafterLocal.hjson`, `Localization/ru-RU_Mods.InfiniCrafterLocal.hjson` |
+| Heart/proxies/config/diagnostics | `Content/Items/InfiniCore.cs`, `Content/Items/GeneratedArmorItems.cs`, `Common/Config/InfiniGameplayQolConfig.cs`, `Common/Config/InfiniVfxClientConfig.cs`, `Common/Commands/`, `Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs` |
 
 <a id="projections"></a>
-## Generated поверхности и gates
+## Generated outputs и проверки
 
-`contracts/schemas/` — provider exports; [lowery.md](../../lowery.md), [inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [lowering audit](../../TECHNICAL_LOWERING_AUDIT_RU.md), [primitive parity](../PRIMITIVE_PARITY_RU.md) — проверяемые проекции, не ручные registries. Генераторы `tools/generate_lowery.py`, `generate_low_level_runtime_docs.py`, `generate_equipment_bounds.py`, `generate_primitive_parity.py` обслуживают соответствующие outputs.
+[GENERATED](../reference/GENERATED_RU.md) связывает outputs с producer/refresh. Главные пары:
 
-Канонический [data flow](THREE_STAGE_LLM_PIPELINE_RU.md#flow) не имеет weapon IR fallback. Новая механика требует [полного vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice), включая consumer и witness; изменение только prompt, schema или C# не завершает capability.
+| Producer в `tools/` | Output |
+|---|---|
+| `generate_lowery.py` | Только [LOWERY](../reference/generated/LOWERY_RU.md) |
+| `generate_low_level_runtime_docs.py` | [capability inventory](../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [machine-readability audit](../reference/generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md), [technical audit](../reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md) |
+| `audit_capability_library.py` | JSON verdict в stdout; optional `--out` записывает выбранный report, не generated Markdown |
+| `generate_primitive_parity.py` | [primitive parity](../reference/generated/PRIMITIVE_PARITY_RU.md) |
+| `generate_equipment_bounds.py` | `Common/Models/Runtime/GeneratedEquipmentBounds.g.cs` относительно C# base |
+| `export_contract_schemas.py` | strict Author/Repair/Visual/VFX schema exports и inventory manifests в `contracts/schemas/` |
+| `config_registry.py` | `contracts/config_registry.json` |
+
+Behavioral owners — [TESTING](TESTING_RU.md); native roster — `tools/EngineRuntimeChecks.cs` + `.csproj`; saved replay — `tools/replay_generation_case.py`; impact/tooling — `tools/agentctl.py`, `.agent/manifest.json`, `.agent/impact_rules.json`. Source path существующего файла не является доказательством native/world/GPU приёмки.

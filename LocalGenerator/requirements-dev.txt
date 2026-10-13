@@ -6,3 +6,4 @@ ruff>=0.15,<1
 pyright>=1.1.411,<2
 tree-sitter>=0.25,<0.26
 tree-sitter-c-sharp==0.23.5
+markdown-it-py>=4.2,<5

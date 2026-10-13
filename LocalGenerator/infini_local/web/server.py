@@ -509,7 +509,7 @@ def main() -> None:
     initialize_trace_storage()
     visual_config.install_sdcpp_cleanup_handlers()
     if visual_config.REQUIRE_PILLOW and Image is None and env_str("INFINI_IMAGE_BACKEND", visual_config.IMAGE_BACKEND).lower() != "off":
-        raise SystemExit("Pillow is required for InfiniCrafterLocal visual generation/postprocess. Run 02_INSTALL_LOCAL_GENERATOR.bat. Import error: " + PILLOW_IMPORT_ERROR)
+        raise SystemExit("Pillow is required for InfiniCrafterLocal visual generation/postprocess. Run OPEN_INFINICRAFT.bat setup. Import error: " + PILLOW_IMPORT_ERROR)
     host = env_str("INFINI_HOST", "127.0.0.1")
     port = env_int("INFINI_PORT", 5055, lo=1, hi=65535)
     print(f"InfiniCrafterLocal v{APP_VERSION} listening on http://{host}:{port}")

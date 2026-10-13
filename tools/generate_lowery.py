@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Generate the root lowery.md technical-mapping and alias inventory."""
+"""Generate the Lowery reference technical-mapping and alias inventory."""
 
 import argparse
 import sys
@@ -35,7 +35,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
 
-OUTPUT = ROOT / "lowery.md"
+OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
 
 
 def table(headers: tuple[str, ...], rows: list[tuple[object, ...]]) -> list[str]:
@@ -52,11 +52,11 @@ def render() -> str:
     lines: list[str] = [
         "# Low-level authoring и Lowery — канонический контракт",
         "",
-        "> Generated: [`tools/generate_lowery.py`](tools/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).",
-        "> Sources: [registry](LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), "
-        "[Author shape](LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
-        "[lowering](LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
-        "[tModLoader vocabulary](LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py).",
+        "> Generated: [`tools/generate_lowery.py`](../../../tools/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).",
+        "> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), "
+        "[Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
+        "[lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
+        "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py).",
         "",
         f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -270,8 +270,8 @@ def render() -> str:
         "",
         "## Обновление и проверка",
         "",
-        "Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `lowery.md`**. "
-        "[Inventory и audit](docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) и [primitive parity](docs/PRIMITIVE_PARITY_RU.md#refresh) обновляются своими generators.",
+        "Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `docs/reference/generated/LOWERY_RU.md`**. "
+        "[Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) обновляются своими generators.",
         "",
         "```bash",
         "PYTHONPATH=LocalGenerator python tools/generate_lowery.py",
@@ -281,7 +281,7 @@ def render() -> str:
         "PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_registry_*.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py LocalGenerator/tests/test_pipeline_repair_contract.py",
         "```",
         "",
-        'Type check: `python tools/run_pyright.py --pythonpath "$(python -c \'import sys; print(sys.executable)\')"`. Полные delivery gates: [AGENTS.md](AGENTS.md).',
+        'Type check: `python tools/run_pyright.py --pythonpath "$(python -c \'import sys; print(sys.executable)\')"`. Полные delivery gates: [AGENTS.md](../../../AGENTS.md).',
         "",
         "Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.",
         "",
@@ -304,6 +304,7 @@ def main() -> int:
             return 1
         print("[OK] lowery.md matches canonical runtime mappings")
         return 0
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(expected, encoding="utf-8")
     print(OUTPUT)
     return 0

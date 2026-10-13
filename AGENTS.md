@@ -1,6 +1,6 @@
 # AGENTS.md — InfiniCrafterLocal
 
-Правила архитектуры и изменений; номер релиза и статус локальных обновлений — в [README_RU.md](README_RU.md).
+Правила архитектуры и изменений; номер релиза и статус локальных обновлений — в [README.md](README.md).
 
 ## Приоритеты проекта
 
@@ -35,12 +35,12 @@ Gameplay Author непосредственно составляет bounded `run
 
 Прочитай:
 
-1. корневой `lowery.md` — generated canonical boundary и owner routing;
-2. `PROJECT_ARCHITECTURE_RU.md` и `PROJECT_MAP_RU.md`;
-3. `docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` и generated `docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`;
-4. `docs/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md`;
-5. generated `TECHNICAL_LOWERING_AUDIT_RU.md`;
-6. `docs/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md`.
+1. `docs/reference/generated/LOWERY_RU.md` — generated canonical boundary и owner routing;
+2. `docs/development/ARCHITECTURE_RU.md` и `docs/development/CODE_MAP_RU.md`;
+3. `docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` и generated `docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`;
+4. `docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md`;
+5. generated `docs/reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md`;
+6. `docs/reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md`.
 
 Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts/repetition threshold — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Нельзя создавать facade/shadow contract или вручную добавлять capability только в prompt/schema/compiler/C#: требуется полный vertical slice.
 

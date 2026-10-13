@@ -21,7 +21,7 @@ def test_new_user_template_has_no_personal_hardware_paths_or_automatic_gpu_launc
 
 def test_windows_launchers_can_run_read_only_doctor_and_have_no_control_bytes():
     for name in ("OPEN_INFINICRAFT.bat", "02_INSTALL_LOCAL_GENERATOR.bat", "04_OPEN_SETTINGS_GUI.bat", "06_START_SERVER_DIRECT.bat"):
-        payload = (ROOT / name).read_bytes()
+        payload = (ROOT / (name if name == "OPEN_INFINICRAFT.bat" else "tools/windows/" + name)).read_bytes()
         assert all(byte >= 32 or byte in (9, 10, 13) for byte in payload), name
     launcher = (ROOT / "OPEN_INFINICRAFT.bat").read_text(encoding="utf-8")
     assert '%~1' in launcher, "Entry point must support doctor without launching the interactive runtime"

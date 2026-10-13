@@ -23,7 +23,7 @@ Split: Chat `text`, Responses `input_text`; concatenation byte-equivalent, varia
 
 ## Наблюдаемость
 
-`LLM usage`/debug: `cachedInputTokens` = сообщённый `cached_tokens`, иначе null; `cacheHit` = positive → true, explicit zero → false, missing → null; `cacheWriteTokens` = сообщённый `cache_write_tokens`, иначе null. Key/marker/readiness ≠ hit. Codex допускает nonnegative integer counters без metadata/credentials. Explicit write может быть платным. [Trace paths](../user/OPERATIONS_RU.md#запуск-и-проверка).
+`LLM usage`/debug: `cachedInputTokens` = сообщённый `cached_tokens`, иначе null; `cacheHit` = positive → true, explicit zero → false, missing → null; `cacheWriteTokens` = сообщённый `cache_write_tokens`, иначе null. Key/marker/readiness ≠ hit. Codex допускает nonnegative integer counters без metadata/credentials. Explicit write может быть платным. [Trace paths](../user/OPERATIONS_RU.md#запустить-перед-игрой).
 
 ## Локальная производительность
 
@@ -77,6 +77,6 @@ Receipt и повторяемый extractor лежат в task artifacts `curren
 
 [Prefix](../../LocalGenerator/infini_local/core/llm_prompt_cache.py): `json_prefix_chars`/`with_prompt_cache_prefix`; [Author/Repair/VFX](../../LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py), [Visual](../../LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py), [VFX ordering](../../LocalGenerator/infini_local/core/vfx_manifest.py); [transport](../../LocalGenerator/infini_local/pipelines/llm_transport.py), [Codex whitelist](../../LocalGenerator/infini_local/services/codex_text_backend.py).
 
-[Request](../../LocalGenerator/tests/test_provider_request_contract.py)/[transport](../../LocalGenerator/tests/test_provider_transport_contract.py) regressions: identity/invalidation/processes/exact split/stripped marker/unknown endpoints/zero-vs-missing usage/continuation. [Offline QA](../../LocalGenerator/QUICK_START_RU.md); HTTP fixtures не GPU cache proof.
+[Request](../../LocalGenerator/tests/test_provider_request_contract.py)/[transport](../../LocalGenerator/tests/test_provider_transport_contract.py) regressions: identity/invalidation/processes/exact split/stripped marker/unknown endpoints/zero-vs-missing usage/continuation. [Offline QA](../user/START_RU.md); HTTP fixtures не GPU cache proof.
 
 [OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching) · [OpenRouter](https://openrouter.ai/docs/guides/best-practices/prompt-caching) · [Gemini](https://ai.google.dev/gemini-api/docs/generate-content/caching) · [Codex upstream key](https://github.com/openai/codex/blob/main/codex-rs/codex-api/src/common.rs).

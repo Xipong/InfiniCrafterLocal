@@ -1,29 +1,76 @@
-# Сборка и runtime QoL — 0.5.00
+# Собрать мод из исходников
 
-Установка и запуск принадлежат [пользовательскому runbook](../user/OPERATIONS_RU.md); здесь — зависимости C# и граница runtime cache.
+Обычному игроку сборка не нужна: установи готовый `.tmod` по [пользовательской инструкции](../user/START_RU.md#2-установи-мод). Этот документ нужен при изменении C#-кода.
 
-## Сборка
+## Что понадобится
 
-[Проект](../../ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj): `Tomat.Terraria.ModLoader.Sdk/2.1.1`, `TmlVersion=stable`, `LangVersion=latest`; требуются .NET 8 и реальные compile-time references `ParticleLibrary.dll`/`Luminance.dll`.
+- .NET SDK **8.0**. `global.json` выбирает установленную стабильную версию этой линии.
+- Stable tModLoader и его сборочные файлы.
+- Настоящие **ParticleLibrary.dll** и **Luminance.dll**. Одних названий модов в конфиге недостаточно: компилятору нужны файлы DLL.
 
-Из корня, пример PowerShell с **заменяемыми** путями:
+[Проект мода](../../ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj) использует `Tomat.Terraria.ModLoader.Sdk/2.1.1`. Зависимости не лежат в исходном архиве. Сборка без них сообщает, какой файл отсутствует.
+
+## Вариант 1: Build + Reload в tModLoader
+
+1. Сохрани свою прежнюю папку `ModSources/InfiniCrafterLocal`, если она содержит изменения.
+2. Запусти [tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat](../../tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat). Он копирует исходники в пользовательский ModSources **с заменой старой одноимённой папки**.
+3. В tModLoader открой **Workshop → Develop Mods → Build + Reload** для InfiniCrafterLocal.
+4. При ошибке сборки сохрани полный журнал. Дополнительный сборщик журнала: [03_COLLECT_TMODLOADER_BUILD_ERRORS.bat](../../tools/windows/03_COLLECT_TMODLOADER_BUILD_ERRORS.bat).
+
+**Результат:** игра собрала и перезагрузила мод. Это запуск tModLoader; не используй данный вариант как автоматическую фоновую проверку в агентской задаче.
+
+## Вариант 2: сборка через .NET
+
+Из корня проекта в PowerShell, подставив пути к своим DLL:
 
 ```powershell
-dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj `
+dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
   /p:InfiniParticleLibraryDll="C:\deps\ParticleLibrary.dll" `
   /p:InfiniLuminanceDll="C:\deps\Luminance.dll"
 ```
 
-Вместо отдельных DLL можно задать `/p:InfiniExternalDepsRoot="C:\deps"` или env `INFINI_TML_DEPS_SRC`. Тогда ожидаются `ParticleLibrary/ParticleLibrary.dll` и `Luminance/bin/Debug/net8.0/Luminance.dll`. Без DLL target `InfiniValidateExternalModReferences` намеренно падает до `ResolveReferences`.
+Или задай один корень:
 
-`tools/build_tml_windows.bat` оборачивает [PowerShell build/log parser](../../tools/build_tml_windows.ps1); параметры: `-Project`, `-Configuration`, `-LogDir`, `-InfiniExternalDepsRoot`, `-InfiniParticleLibraryDll`, `-InfiniLuminanceDll`. Wrapper exit `77` — неполная среда/`notRun`, не успешная сборка; `0` — build без найденных ошибок, `1` — ошибка, `2` — проблема среды/скрипта. [Headless/QA границы](TESTING_RU.md#запуск) не заменяют игровые smoke.
+```powershell
+dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
+  /p:InfiniExternalDepsRoot="C:\deps"
+```
 
-## Runtime QoL
+Во втором варианте должны существовать:
 
-PNG генерируются во время работы, не являются embedded tML assets. `InfiniGameplayQolConfig` ограничивает `RuntimeSpriteCache`; inventory prefetch может прогревать assets. При missing/invalid texture клиент может безопасно показывать placeholder; это **не** разрешение обходить generator delivery gate обязательного PNG.
+```text
+C:\deps\ParticleLibrary\ParticleLibrary.dll
+C:\deps\Luminance\bin\Debug\net8.0\Luminance.dll
+```
 
-Cache clear не удаляет disk PNG/JSON/recipes: [команды и paths](../user/COMMANDS_RU.md#infinicache). MP asset mode теперь default **native**, HTTP требует доступного host endpoint: [настройка MP](../user/OPERATIONS_RU.md#multiplayer-и-диагностика), не обязательный HTTP для всех клиентов.
+Вместо свойства можно задать переменную окружения `INFINI_TML_DEPS_SRC`. Явные пути отдельных DLL имеют приоритет.
 
-HTTP failure messages описывают только generation failure и действия пользователя, не доставку материалов. Terminal lane status читает native owner: deferred return ждёт места, завершённый local return доставлен, remote failure сохраняет inputs в кузне хозяина; неизвестное состояние не обещает возврат. Cold asset metadata snapshot не равен наблюдению `native`: до успешного discovery сохраняется validated accepted route, HTTP discovery идёт только на worker; observed host mode/URL имеет приоритет.
+**Результат:** команда завершается с кодом 0 и без ошибок компилятора. Проверь фактический путь DLL/`.tmod` в выводе SDK: он зависит от режима сборки. Проверка компиляции сама по себе не устанавливает мод и не запускает игру.
 
-Commit/refund server-authoritative: клиенты не присылают готовый `GeneratedItemData`. Fatal craft failure проходит штатный refund path; transient transport/cache races имеют bounded recovery. При world unload pending inputs обрабатываются refund/save, presentation sync caches очищаются. Prompt/prose/script поля не исполняются как gameplay.
+### Сборка с журналом
+
+[tools/build_tml_windows.bat](../../tools/build_tml_windows.bat) запускает PowerShell-обёртку. Ей можно передать `-Project`, `-Configuration`, `-LogDir`, `-InfiniExternalDepsRoot`, `-InfiniParticleLibraryDll`, `-InfiniLuminanceDll`. Пример:
+
+```powershell
+.\tools\build_tml_windows.bat -Configuration Release -InfiniParticleLibraryDll "C:\deps\ParticleLibrary.dll" -InfiniLuminanceDll "C:\deps\Luminance.dll"
+```
+
+Код **77** означает отсутствие необходимой сборочной среды (`notRun`), а не успешную сборку. Если сборка действительно запущена и падает, изучи журнал; не скрывай ошибку отсутствием зависимостей.
+
+## Частые ошибки
+
+| Сообщение | Что проверить |
+|---|---|
+| Не найден .NET SDK | `dotnet --list-sdks`: нужен установленный SDK 8.0, не только runtime |
+| ParticleLibrary.dll / Luminance.dll was not found | Существуют ли файлы по переданным путям; указан ли путь к DLL, а не `.tmod` |
+| Не найден tModLoader / его targets | Stable установка tModLoader и доступность пакетов выбранного SDK |
+| Ошибка C# с файлом и строкой | Исправь исходник; проверь API установленного tModLoader, затем повтори сборку |
+| Wrapper вернул 77 | Подготовь отсутствующую среду; этот запуск ничего не скомпилировал |
+
+## Что проверять после сборки
+
+- [Тесты и их уровни](TESTING_RU.md): Python-контракты, headless native checks и игра — разные проверки.
+- [Архитектура](ARCHITECTURE_RU.md) и [границы модулей](MODULES_RU.md): кто владеет данными и действиями.
+- [Диагностика игры](../user/DIAGNOSTICS_RU.md) и [команды кеша](../user/COMMANDS_RU.md#догрузка-и-кеш).
+
+PNG созданных предметов хранятся отдельно от встроенных ресурсов мода. Очистка runtime-кеша не должна удалять сохранённые рецепты и PNG. Крафт, отмена и возврат материалов принадлежат существующим серверным владельцам; сборочная правка не даёт права менять эти механики.

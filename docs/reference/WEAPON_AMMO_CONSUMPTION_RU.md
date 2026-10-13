@@ -6,7 +6,7 @@
 {"id":"weapon_ammo","fn":"configure_weapon_ammo","target":"item","params":{"ammoCategory":"arrow","speedBasis":"native_shot"}}
 ```
 
-Это фрагмент полного ответа: один explicit active `spawn_entity` binding и все required projectile components должны существовать отдельно. Поля owned [registry](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), provider shape и Repair используют её данные. Полный текущий контракт отражён в [generated inventory](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md). Native ammo projectile AI этой реставрацией не заявляется.
+Это фрагмент полного ответа: один explicit active `spawn_entity` binding и все required projectile components должны существовать отдельно. Поля owned [registry](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), provider shape и Repair используют её данные. Полный текущий контракт отражён в [generated inventory](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md). Native ammo projectile AI этой реставрацией не заявляется.
 
 ## Реальные выборы Author
 

@@ -1,6 +1,6 @@
 # LLM transport: форма запроса и ошибки
 
-[Transport owner](../../LocalGenerator/infini_local/pipelines/llm_transport.py), [GUI presets](../../LocalGenerator/infini_local/desktop/settings_schema.py), [setup/restart](../user/OPERATIONS_RU.md#настройки). Локальный serializer и прежний live probe — не универсальные capabilities provider/model.
+[Transport owner](../../LocalGenerator/infini_local/pipelines/llm_transport.py), [GUI presets](../../LocalGenerator/infini_local/desktop/settings_schema.py), [setup/restart](../user/SETTINGS_RU.md). Локальный serializer и прежний live probe — не универсальные capabilities provider/model.
 
 ## Настройки
 
@@ -13,7 +13,7 @@
 | `INFINI_LLM_API_MODE=chat_completions` | Stateless `/chat/completions` |
 | `…=auto`/`responses` | Пробует `/responses`, допускает same-profile Chat compatibility downgrade |
 
-Remote presets: `json_object` + `chat_completions`; local сохраняют schema. Это starting point, не availability guarantee. Codex — отдельный subscription Responses adapter: [auth/limits](../user/CODEX_IMAGE_OAUTH_RU.md#модели-качество-и-расход).
+Remote presets: `json_object` + `chat_completions`; local сохраняют schema. Это starting point, не availability guarantee. Codex — отдельный subscription Responses adapter: [auth/limits](../user/CODEX_IMAGE_OAUTH_RU.md#качество-размер-и-расход).
 
 `json_object` не semantic fallback: `requiredJsonShape`, `runtimeProgramInvariants`, `selfCheck` остаются в prompt; invalid response → условный Repair/RED. Без constrained grammar синтаксического брака **может стать больше**, но provider schema не gameplay authority.
 
@@ -34,7 +34,7 @@ Debug: `strictSchemaDowngraded=true`, cause `json_schema_to_json_object_fallback
 
 У logical call один абсолютный `time.monotonic()` deadline: rate wait, открытие/headers, body/error reads, negotiation, retry/backoff и разрешённый failover расходуют общий остаток, а не получают новый timeout. Непрерывная выдача малых порций не продлевает budget. Общий [HTTP I/O owner](../../LocalGenerator/infini_local/core/http_io.py) не выбирает provider, не делает retries и не заменяет отдельный Codex/SSE adapter. Отмена блокирующего системного DNS resolver не реализована.
 
-[OpenRouter pin](../user/OPENROUTER_ROUTING_RU.md#строгая-семантика) запрещает другой профиль/legacy fallback, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Unpinned pool/lease/cooldown и legacy резерв — отдельная явно настроенная policy; пустой `INFINI_LLM_FALLBACK_MODEL` выключает резерв.
+[OpenRouter pin](../user/OPENROUTER_ROUTING_RU.md#что-именно-запрещает-этот-выбор) запрещает другой профиль/legacy fallback, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Unpinned pool/lease/cooldown и legacy резерв — отдельная явно настроенная policy; пустой `INFINI_LLM_FALLBACK_MODEL` выключает резерв.
 
 ## Диагностика
 
@@ -69,4 +69,4 @@ Requested и effective API/format/reasoning различаются: effective �
 
 ## Проверка
 
-[Request contracts](../../LocalGenerator/tests/test_provider_request_contract.py), [transport](../../LocalGenerator/tests/test_provider_transport_contract.py), [GUI](../../LocalGenerator/tests/test_settings_gui_contract.py): envelopes/diagnosis/one-time downgrade/profile memory/pin/failure boundaries. [Offline QA](../../LocalGenerator/QUICK_START_RU.md); [Live20](../../toolbox/README.md) — отдельно разрешаемый запуск, не fixture-based billing/availability proof.
+[Request contracts](../../LocalGenerator/tests/test_provider_request_contract.py), [transport](../../LocalGenerator/tests/test_provider_transport_contract.py), [GUI](../../LocalGenerator/tests/test_settings_gui_contract.py): envelopes/diagnosis/one-time downgrade/profile memory/pin/failure boundaries. [Offline QA](../user/START_RU.md); [Live20](../../toolbox/README.md) — отдельно разрешаемый запуск, не fixture-based billing/availability proof.

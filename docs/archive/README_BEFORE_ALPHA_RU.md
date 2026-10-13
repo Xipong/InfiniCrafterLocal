@@ -20,7 +20,7 @@
 - [Команды игрового чата и результаты диагностики](../user/COMMANDS_RU.md).
 - [Сборка мода и внешние DLL](../development/BUILD_RU.md).
 - [Качество контекста родителей, source physics и image brief](../reference/ITEM_QUALITY_CONTEXT_RU.md).
-- [LocalGenerator: файлы, границы сервиса и offline QA](../../LocalGenerator/README_RU.md).
+- [LocalGenerator: файлы, границы сервиса и offline QA](../user/README_RU.md).
 
 ## Версия и обновление
 
@@ -51,6 +51,6 @@
 
 ## Контракты и приёмка
 
-[Архитектура](../development/ARCHITECTURE_RU.md) · [карта кода](../development/CODE_MAP_RU.md) · [правила изменений](../../AGENTS.md) · [generated Author/Repair boundary](../../lowery.md) · [generated capabilities](../LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [lossless lowering](../../TECHNICAL_LOWERING_AUDIT_RU.md) · [tModLoader mappings](../reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md).
+[Архитектура](../development/ARCHITECTURE_RU.md) · [карта кода](../development/CODE_MAP_RU.md) · [правила изменений](../../AGENTS.md) · [generated Author/Repair boundary](../reference/generated/LOWERY_RU.md) · [generated capabilities](../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [lossless lowering](../reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md) · [tModLoader mappings](../reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md).
 
 [Три LLM-стадии](../development/THREE_STAGE_LLM_PIPELINE_RU.md), [image lifecycle](../development/IMAGE_ASSET_LIFECYCLE_RU.md), [VFX](../reference/VFX_MATERIAL_ELEMENTS_RU.md) и [владельцы тестов](../development/TESTING_RU.md) — специализированные контракты. Offline/native gates не доказывают успешный live craft, качество рисунка, Terraria/GPU или multiplayer.
