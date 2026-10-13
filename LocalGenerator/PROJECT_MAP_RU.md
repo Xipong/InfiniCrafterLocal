@@ -1,4 +1,4 @@
-# LocalGenerator 0.4.254 — карта исходников
+# LocalGenerator 0.5.00 — карта исходников
 
 Canonical source — пакет `infini_local/`; `server.py`/`settings_gui.py` лишь launchers. Runtime authoring — `core/runtime_authoring/`, orchestration — `pipelines/`, HTTP — `web/`, файлы/health/traces — `storage/`, UI — `desktop/`.
 

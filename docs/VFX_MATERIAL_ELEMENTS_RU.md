@@ -1,6 +1,6 @@
 # VFX material elements — активный контракт 0.4.249 — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [VFX_MATERIAL_ELEMENTS_RU.md](reference/VFX_MATERIAL_ELEMENTS_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [VFX_MATERIAL_ELEMENTS_RU.md](reference/VFX_MATERIAL_ELEMENTS_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="owners"></a>
 - [owners](reference/VFX_MATERIAL_ELEMENTS_RU.md#owners)

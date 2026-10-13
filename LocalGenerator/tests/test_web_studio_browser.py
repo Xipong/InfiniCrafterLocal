@@ -171,7 +171,7 @@ def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
             health.focus()
             snapshot['home'] = {'state': 'Сервер отвечает'}
             server.publish(snapshot)
-            page.wait_for_function('document.querySelector("#generator-title").textContent === "Сервер отвечает"')
+            page.wait_for_function('() => document.querySelector("#generator-title").textContent === "Сервер отвечает"')
             assert health.evaluate('(element)=>element===document.activeElement'), 'Polling lost action focus'
             page.set_viewport_size({'width': 390, 'height': 844})
             menu = page.locator('.mobile-menu')
@@ -180,7 +180,7 @@ def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
             assert page.locator('.rail').get_attribute('aria-modal') == 'true'
             snapshot['home'] = {'state': 'Идёт генерация'}
             server.publish(snapshot)
-            page.wait_for_function('document.querySelector("#generator-title").textContent === "Идёт генерация"')
+            page.wait_for_function('() => document.querySelector("#generator-title").textContent === "Идёт генерация"')
             assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), 'Polling stole drawer focus'
             assert page.locator('.main-shell').evaluate('(element)=>element.inert')
             page.locator('.mobile-exit').focus()
@@ -195,7 +195,7 @@ def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
             assert page.locator('#workspace').evaluate('(element)=>element===document.activeElement')
             menu.click()
             page.set_viewport_size({'width': 1440, 'height': 1000})
-            page.wait_for_function('!document.querySelector(".main-shell").inert')
+            page.wait_for_function('() => !document.querySelector(".main-shell").inert')
             assert not page.locator('#navigation-backdrop').is_visible()
             assert not errors
         finally:

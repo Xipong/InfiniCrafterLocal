@@ -1,6 +1,6 @@
 # Технические исправления текущего мира — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [CURRENT_WORLD_TECHNICAL_FIXES_RU.md](development/CURRENT_WORLD_TECHNICAL_FIXES_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [CURRENT_WORLD_TECHNICAL_FIXES_RU.md](development/CURRENT_WORLD_TECHNICAL_FIXES_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="технические-исправления-текущего-мира"></a>
 - [Технические исправления текущего мира](development/CURRENT_WORLD_TECHNICAL_FIXES_RU.md#технические-исправления-текущего-мира)

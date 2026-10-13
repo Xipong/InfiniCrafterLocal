@@ -1,4 +1,4 @@
-# InfiniCrafterLocal v0.4.254 — архитектура и границы authority — навигация 0.4.254
+# InfiniCrafterLocal v0.5.00 — архитектура и границы authority — навигация 0.5.00
 
 Gameplay выбирает модель; код проверяет, losslessly проецирует strict wire и исполняет его. Repair leaf-local/frozen-first; скрытого semantic fallback нет.
 

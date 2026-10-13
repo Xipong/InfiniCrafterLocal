@@ -1,6 +1,6 @@
 # Добавление runtime capability — vertical slice — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md](development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md](development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="vertical-slice"></a>
 - [vertical-slice](development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice)

@@ -1,4 +1,4 @@
-# Сборка и runtime QoL InfiniCrafterLocal — навигация 0.4.254
+# Сборка и runtime QoL InfiniCrafterLocal — навигация 0.5.00
 
 C# build требует .NET 8, stable tModLoader и настоящие ParticleLibrary/Luminance DLL. Отсутствующая среда — notRun, не успешная сборка.
 

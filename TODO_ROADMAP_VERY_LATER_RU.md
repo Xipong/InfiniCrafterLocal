@@ -1,4 +1,4 @@
-# Future backlog after low-level runtime refactor — навигация 0.4.254
+# Future backlog after low-level runtime refactor — навигация 0.5.00
 
 Это идеи по отдельному запросу, не обещание реализованных возможностей и не разрешение изменить production architecture.
 

@@ -208,6 +208,7 @@ class StudioController:
         return fields
 
     def snapshot(self):
+        from infini_local.core.config_bootstrap import APP_VERSION
         from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
         from infini_local.desktop.settings_env import parse_env
         from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
@@ -243,7 +244,7 @@ class StudioController:
             'home': {'state': self.app.home_state_var.get(), 'detail': self.app.home_detail_var.get(),
                      'config': self.app.home_config_var.get()},
             'trace': {key: widget.get('1.0', 'end-1c') for key, widget in self.app.trace_texts.items()},
-            'configPath': str(CONFIG_PATH), 'version': '0.4.254', 'lastAction': self.last_action,
+            'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.radmin_enabled.get()),
             'account': {'catalog': self.app.codex_catalog_var.get(), 'images': self.app.codex_image_account_var.get()},
         }

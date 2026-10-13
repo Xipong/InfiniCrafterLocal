@@ -1,6 +1,6 @@
 # Gameplay Author — authored shape и construction contract — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [LOW_LEVEL_RUNTIME_AUTHORING_RU.md](reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [LOW_LEVEL_RUNTIME_AUTHORING_RU.md](reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="response"></a>
 - [response](reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#response)

@@ -162,6 +162,8 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     )
     controller = module.StudioController(app, None)
     initial_snapshot = controller.snapshot()
+    from infini_local.core.config_bootstrap import APP_VERSION
+    assert initial_snapshot['version'] == APP_VERSION
     assert initial_snapshot['values'] == initial_snapshot['savedValues']
     assert config.exists() is not fresh_install
     current.update(INFINI_PROMPT_STYLE='Terraria Like', INFINI_OPENAI_COMPAT_API_KEY='dummy-new')

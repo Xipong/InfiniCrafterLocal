@@ -1,6 +1,6 @@
 # Technical lowering — классификация и proof boundary — навигация
 
-Версия дерева: **0.4.254**. Полное руководство и его ограничения перенесены в [TECHNICAL_LOWERING_POLICY_RU.md](development/TECHNICAL_LOWERING_POLICY_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
+Версия дерева: **0.5.00**. Полное руководство и его ограничения перенесены в [TECHNICAL_LOWERING_POLICY_RU.md](development/TECHNICAL_LOWERING_POLICY_RU.md). Этот путь сохранён для generated-контрактов, AGENTS и инструментов; он не второй владелец правил.
 
 <a id="transformations"></a>
 - [transformations](development/TECHNICAL_LOWERING_POLICY_RU.md#transformations)
