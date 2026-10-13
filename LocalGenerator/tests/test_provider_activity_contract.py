@@ -474,6 +474,19 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
 
 def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, real_route):
     import time
+    from infini_local.core import http_io
+
+    # Only admission sleep spends this test's budget. Real payload preparation
+    # can exceed 40 ms on a busy worker before the rate wait is ever entered.
+    now, sleeps = [time.monotonic()], []
+
+    def advance(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    clock = SimpleNamespace(monotonic=lambda: now[0], sleep=advance, time=time.time)
+    monkeypatch.setattr(transport, "time", clock)
+    monkeypatch.setattr(http_io, "time", clock)
 
     context = {
         "provider": "openai_compat",
@@ -485,12 +498,13 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
     }
     monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
     monkeypatch.setattr(transport, "_remote_rate_key", lambda *_: "fixture-deadline")
-    transport._LLM_RATE_STATE["fixture-deadline"] = {"events": [], "lastRequest": time.monotonic(), "blockedUntil": time.monotonic() + 10}
+    transport._LLM_RATE_STATE["fixture-deadline"] = {"events": [], "lastRequest": now[0], "blockedUntil": now[0] + 10}
     call = author.llm_chat_json
     monkeypatch.setattr(author, "llm_chat_json", lambda payload, timeout=10: call(payload, timeout=0.04))
     monkeypatch.setattr(transport, "urlopen_no_redirect", lambda *_a, **_k: pytest.fail("expired admission must never send"))
     status, body = real_route(dict(PAYLOAD))
     assert status == 504 and body["error"] == "llm_admission_timeout"
+    assert sleeps == pytest.approx([0.04])
     debug = body["lastFailure"]["transportDebug"]
     assert debug["networkStarted"] is False and debug["physicalAttemptCount"] == 0
     assert debug["rateWaitReason"] == "provider_cooldown"
