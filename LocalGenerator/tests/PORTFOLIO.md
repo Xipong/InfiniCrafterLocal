@@ -13,3 +13,10 @@ and source authentication, malformed-output refusal, exact frozen Repair closure
 GUI nonblocking/latest-result behavior, and settings/cache preservation scenarios.
 Archived response fixtures are unchanged. This is a pragmatic portfolio change,
 not a claim that every historical microassertion has an equivalent replacement.
+
+The native portfolio keeps gameplay/authority, craft cancellation and deadlines,
+three-lane output delivery, refund/capacity recovery, world persistence, asset
+ownership/invalidation and representative malformed-input scenarios. Exhaustive
+DTO/shape products, creative pixel/curve details, private UI/storage observers
+and duplicate stress runs are intentionally retired. Native checks run through
+the canonical mod consumers; they are not replaced by source-string assertions.
