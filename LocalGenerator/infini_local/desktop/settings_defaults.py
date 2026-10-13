@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -49,6 +50,22 @@ def _revision(raw: bytes) -> str:
     return hashlib.sha256(raw + DEFAULTS_VERSION.encode() + json.dumps(recommendations, sort_keys=True).encode()).hexdigest()
 
 
+def _matches_recommendation(key: str, value: str, recommended: str) -> bool:
+    if key == 'INFINI_LLM_REASONING_MODE':
+        return value.lower() == recommended.lower()
+    if not value.strip():
+        return True  # Numeric env readers inherit the recommendation for blank.
+    try:
+        actual = float(value)
+        if not math.isfinite(actual):
+            return False
+        if key in {'INFINI_LLM_MAX_TOKENS', 'INFINI_LLM_TIMEOUT'}:
+            return int(actual) == int(recommended)  # Same env_int semantics.
+        return actual == float(recommended)
+    except (ValueError, OverflowError):
+        return False
+
+
 def defaults_offer(path: Path) -> dict:
     try:
         raw = path.read_bytes()
@@ -66,7 +83,7 @@ def defaults_offer(path: Path) -> dict:
             key, value = stripped.split('=', 1)
             explicit.setdefault(key.strip(), value.strip().strip('"').strip("'"))
     for key, recommended in recommendations.items():
-        if key in explicit and (explicit[key].strip() or key == 'INFINI_LLM_REASONING_MODE') and explicit[key] != recommended:
+        if key in explicit and not _matches_recommendation(key, explicit[key], recommended):
             changes.append({'key': key, 'current': explicit[key], 'recommended': recommended, 'reason': UPDATED_DEFAULTS[key]})
     try:
         decision = json.loads(_decision_path(path).read_text(encoding='utf-8'))

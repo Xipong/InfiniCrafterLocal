@@ -210,3 +210,14 @@ def test_blank_reasoning_is_explicit_off_not_numeric_inheritance(tmp_path):
         ('INFINI_LLM_REASONING_MODE', '', 'medium')]
     decide_defaults(config, offer['revision'], accept=True)
     assert config.read_bytes() == original.replace(b'INFINI_LLM_REASONING_MODE=\n', b'INFINI_LLM_REASONING_MODE=medium\n')
+
+
+def test_equivalent_recommendations_keep_original_spelling_and_bytes(tmp_path):
+    from infini_local.desktop.settings_defaults import defaults_offer
+    config = tmp_path / 'config.env'
+    original = (b'INFINI_LLM_MAX_TOKENS="18000.0"\r\nINFINI_LLM_TIMEOUT=0600\r\n'
+                b'INFINI_LLM_TEMPERATURE=.50\r\nINFINI_VISUAL_DIRECTOR_TEMPERATURE=0.450\r\n'
+                b'INFINI_LLM_REASONING_MODE=Medium\r\n')
+    config.write_bytes(original)
+    assert defaults_offer(config)['changes'] == []
+    assert config.read_bytes() == original
