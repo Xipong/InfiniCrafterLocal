@@ -4,7 +4,7 @@ using System.Reflection;
 
 internal static partial class EngineRuntimeChecks
 {
-    // Reflection bridge used by the placed-body ledger check.
+    // Cleanup seam shared by the retained placed-body ledger checks.
     private static Type PlacedNativeAdapterType() => typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).Assembly
         .GetType("InfiniCrafterLocal.Common.Systems.GeneratedPlacedBodyNativeAdapter", false)
         ?? throw new InvalidOperationException("native placed-body final-submission adapter missing");

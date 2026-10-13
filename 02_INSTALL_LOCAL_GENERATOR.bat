@@ -1,14 +1,18 @@
 @echo off
 setlocal
 chcp 65001 >nul
-cd /d "%~dp0"
-echo Installing Python requirements for InfiniCrafterLocal...
+pushd "%~dp0"
+if errorlevel 1 exit /b 2
+echo Preparing an isolated Python environment for Infinicraft...
 where py >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
-  py -3 -m pip install -r LocalGenerator\requirements.txt
+  py -3 LocalGenerator\scripts\bootstrap.py setup
 ) else (
-  python -m pip install -r LocalGenerator\requirements.txt
+  python LocalGenerator\scripts\bootstrap.py setup
 )
+set "RESULT=%ERRORLEVEL%"
 echo.
-echo Done. If there were errors, install Python 3.11+ and tick "Add Python to PATH".
+if not "%RESULT%"=="0" echo Setup failed. Read the error above; dependencies were not marked ready.
 pause
+popd
+exit /b %RESULT%

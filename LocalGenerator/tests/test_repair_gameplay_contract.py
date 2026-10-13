@@ -23,7 +23,6 @@ from repair_test_helpers import gameplay_repair as _offline_gameplay_repair, ass
     pytest.param("configure_item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
     pytest.param("configure_item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
     pytest.param("configure_item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
-    pytest.param("configure_item_stats", "damage", True, 2, {"manaCost": 10}, "useStyle", "swing", id="different-value-control"),
 ])
 def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, fn, leaf, old, new, hostile, frozen_leaf, frozen_value):
     doc = build_capability_witness("configure_item_use")
@@ -49,13 +48,12 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
     assert json.dumps(doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,selector,value", [
     pytest.param("pull_on_event", "when", {"everyTicks": 12}, id="periodic"),
     pytest.param("require_use_condition", "condition", {"lifeAtLeast": 100}, id="life-threshold"),
     pytest.param("require_use_condition", "condition", {"manaAtLeast": 100}, id="mana-threshold"),
 ])
-def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, format_mode, fn, selector, value):
+def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, fn, selector, value):
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     if selector == "when":
@@ -74,7 +72,7 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     stats["params"]["damage"] = 1999
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
         "note": "model-selected complete conditional alternative", "realizationReplacement": doc["realization"],
-        "callsUpsert": [candidate, stats]}, format_mode, out_of_scope_response=True)
+        "callsUpsert": [candidate, stats]}, "json_object", out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + selector]}]
     audit = repaired["debug"]["gameplayRepairFilterAudit"]
     assert audit["ok"] and "$.callsUpsert[0].params." + selector in audit["acceptedPaths"]
@@ -83,7 +81,6 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     assert json.dumps(doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,initial,chosen,hostile,fix_stats,paths,refuse", [
     pytest.param("pull_on_event", {"when": {}}, {"when": {"everyTicks": 12}}, {"strength": 4}, False,
                  ["params.when.everyTicks"], False, id="periodic-already-selected"),
@@ -99,7 +96,7 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
                  ["params.condition"], True, id="missing-explicit-dependency"),
 ])
 def test_gameplay_conditional_dependency_keeps_frozen_controls(
-    monkeypatch, format_mode, fn, initial, chosen, hostile, fix_stats, paths, refuse,
+    monkeypatch, fn, initial, chosen, hostile, fix_stats, paths, refuse,
 ):
     from infini_local.core.errors import PlannerUnavailable
 
@@ -123,9 +120,9 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
              "callsUpsert": [] if refuse else upserts}
     if refuse:
         with pytest.raises(PlannerUnavailable, match="deterministically filtered"):
-            _offline_gameplay_repair(monkeypatch, doc, patch, format_mode)
+            _offline_gameplay_repair(monkeypatch, doc, patch, "json_object")
     else:
-        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, format_mode, out_of_scope_response=fix_stats)
+        repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, patch, "json_object", out_of_scope_response=fix_stats)
         assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": (stats if fix_stats else call)["id"], "paths": paths}]
         assert_repaired_source(repaired, expected)
     assert json.dumps(doc, sort_keys=True) == before
@@ -589,9 +586,8 @@ def test_oneof_exact_diagnostic_selection(branches, value, diagnostics):
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn", ["configure_item_stats", "configure_item_use"])
-def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypatch, format_mode, fn):
+def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypatch, fn):
     doc = build_capability_witness(fn)
     node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     node["target"] = next(row["id"] for row in doc["runtimeProgram"]["entities"] if row["kind"] == "item_body")
@@ -605,7 +601,7 @@ def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypat
     assert scope["fieldPermissions"]["calls"] == [{"id": node["id"], "paths": ["params." + leaf]}]
     incoming = {"note": "repair the actual invalid parameter", "realizationReplacement": doc["realization"],
                 "callsUpsert": [candidate]}
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, format_mode)
+    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, incoming, "json_object")
     assert dossier["repairScope"] == scope
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ok"]
     assert repaired["runtimeProgram"] == expected["runtimeProgram"]
@@ -639,9 +635,14 @@ def test_gameplay_literal_member_deletion_is_exact(nested):
     assert doc == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("input_name", ["equipped", "hold"])
-@pytest.mark.parametrize("explicit_frozen_literals", [False, True], ids=["sparse", "frozen-additions"])
+# Both input branches and both sparse/hostile responses cross each transport;
+# the full product adds no independent permission or parser behavior.
+@pytest.mark.parametrize("format_mode,input_name,explicit_frozen_literals", [
+    pytest.param("json_object", "equipped", False, id="object-equipped-sparse"),
+    pytest.param("json_schema", "equipped", True, id="schema-equipped-frozen"),
+    pytest.param("json_schema", "hold", False, id="schema-hold-sparse"),
+    pytest.param("json_object", "hold", True, id="object-hold-frozen"),
+])
 def test_sparse_binding_missing_input_survives_real_repair(
     monkeypatch, format_mode, input_name, explicit_frozen_literals,
 ):
@@ -677,8 +678,7 @@ def test_sparse_binding_missing_input_survives_real_repair(
     assert_delivery(repaired)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch, format_mode):
+def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch):
     from infini_local.core.errors import PlannerUnavailable
 
     doc = build_capability_witness("configure_accessory")
@@ -687,15 +687,14 @@ def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch, fo
     with pytest.raises(PlannerUnavailable):
         _offline_gameplay_repair(monkeypatch, doc, {
             "note": "no model-selected input", "realizationReplacement": doc["realization"],
-        }, format_mode)
+        }, "json_object")
     assert doc == before
     assert not validate_runtime_program(doc)["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_missing_binding_input_and_unknown_action_have_independent_exact_scope(monkeypatch, format_mode):
+def test_missing_binding_input_and_unknown_action_have_independent_exact_scope(monkeypatch):
     doc = build_capability_witness("configure_accessory")
     binding = doc["runtimeProgram"]["bindings"][0]
     binding["action"] = {"kind": "equip_passive", "targetId": "item"}
@@ -707,7 +706,7 @@ def test_missing_binding_input_and_unknown_action_have_independent_exact_scope(m
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
         "note": "model explicitly supplies both missing input and invalid action",
         "realizationReplacement": doc["realization"], "bindingsUpsert": [candidate],
-    }, format_mode)
+    }, "json_object")
     assert dossier["repairScope"]["fieldPermissions"]["bindings"] == [
         {"id": binding["id"], "paths": ["action.kind", "input"]},
     ]

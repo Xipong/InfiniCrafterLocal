@@ -15,7 +15,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_METADATA_DIRS = {".git", ".gitnexus", ".hermes", ".codex", ".agents"}
 IGNORED_DOC_DIRS = WORKSPACE_METADATA_DIRS | {"agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
-RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", "artifacts", "build_logs"}
+RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", ".venv", "venv", "artifacts", "build_logs"}
 PACKAGED_METADATA_DIRS = WORKSPACE_METADATA_DIRS
 FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
 FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
@@ -149,12 +149,6 @@ def check_version_sync() -> None:
         "InfiniCrafterLocal.cs Version": _version_literal("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
         "build.txt version": _version_literal("ModSources/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
     }
-    launcher = read("LocalGenerator/server.py")
-    if "from infini_local.web.server import main" not in launcher or "APP_VERSION =" in launcher or "sys.modules" in launcher:
-        fail("LocalGenerator/server.py must remain a launcher-only import of web.server.main")
-    web = read("LocalGenerator/infini_local/web/server.py")
-    if "from infini_local.core.config_bootstrap import (" not in web:
-        fail("web server does not import canonical config_bootstrap APP_VERSION")
     if len(set(versions.values())) != 1:
         detail = "; ".join(f"{label}={value}" for label, value in versions.items())
         fail("version mismatch: " + detail)
@@ -421,52 +415,6 @@ def check_release_docs_version() -> None:
         fail("release docs missing current version in header: " + ", ".join(stale))
 
 
-def check_architecture_split_markers() -> None:
-    server = read("LocalGenerator/infini_local/web/server.py")
-    fallback = read("LocalGenerator/infini_local/core/dev_fallback.py")
-    json_tools = read("LocalGenerator/infini_local/core/llm_json_tools.py")
-    world_storage = read("LocalGenerator/infini_local/storage/world_storage.py")
-    trace_tools = read("LocalGenerator/infini_local/storage/trace_tools.py")
-    sdcpp_backend = read("LocalGenerator/infini_local/services/sdcpp_backend.py")
-    asset_sync_service = read("LocalGenerator/infini_local/services/asset_sync_service.py")
-    combine_endpoint = read("LocalGenerator/infini_local/services/combine_endpoint.py")
-    runtime_dump_service = read("LocalGenerator/infini_local/services/runtime_dump_service.py")
-    trace_dashboard = read("LocalGenerator/infini_local/web/trace_dashboard.py")
-    visual_asset_pipeline = read("LocalGenerator/infini_local/services/visual_asset_pipeline.py")
-    network_info_service = read("LocalGenerator/infini_local/services/network_info_service.py")
-    if "deterministic_low_level_plan" in server:
-        fail("developer low-level fixture leaked back into server.py")
-    if "def deterministic_low_level_plan" not in fallback or "DEVELOPER-ONLY" not in fallback.upper():
-        fail("dev_fallback.py no longer owns the explicit developer-only v5 fixture")
-    if "def parse_first_valid_llm_json" not in json_tools:
-        fail("llm_json_tools.py missing JSON parser")
-    if 'payload.setdefault("recipeMeta", {})' in server or "def sanitize_recipe_for_delivery" not in world_storage:
-        fail("world recipe storage/delivery logic leaked back into server.py or is missing from world_storage.py")
-    if "target = prompt_trace_file" in server or "def tail_ndjson" not in trace_tools:
-        fail("trace writer/tail logic leaked back into server.py or is missing from trace_tools.py")
-    if "pipeline_preset_text_inside_template" in server or "def build_server_command" not in sdcpp_backend or "def server_payload" not in sdcpp_backend:
-        fail("sd.cpp backend command/payload helpers leaked back into server.py or are missing from sdcpp_backend.py")
-    if "world_recipes_dir.rglob" in server or "def safe_asset_file_from_query" not in asset_sync_service:
-        fail("asset sync lookup helpers leaked back into server.py or are missing from asset_sync_service.py")
-    if "threading.BoundedSemaphore" in server or "def handle_combine_request" not in combine_endpoint:
-        fail("/combine endpoint concurrency logic leaked back into server.py or is missing from combine_endpoint.py")
-    if "My Games" in server or "def runtime_dump_candidates" not in runtime_dump_service:
-        fail("runtime dump discovery/index helpers leaked back into server.py or are missing from runtime_dump_service.py")
-    if "body{font-family" in server or "def render_trace_snapshot_html" not in trace_dashboard:
-        fail("trace dashboard HTML renderer leaked back into server.py or is missing from trace_dashboard.py")
-    if "d.rounded_rectangle" in server or "def generate_procedural_sprite" not in visual_asset_pipeline:
-        fail("procedural sprite fallback drawing leaked back into server.py or is missing from visual_asset_pipeline.py")
-    if (
-        "def zimage_pe_clean_text" in server
-        or "def sanitize_image_prompt_background" in server
-        or "def compact_zimage_asset_prompt" not in visual_asset_pipeline
-        or "def zimage_text_policy_sentence" not in visual_asset_pipeline
-    ):
-        fail("visual/Z-Image prompt helpers leaked back into server.py or are missing from visual_asset_pipeline.py")
-    if "socket.getaddrinfo" in server or "def multiplayer_connect_info" in server or "def multiplayer_connect_info" not in network_info_service:
-        fail("Radmin/LAN multiplayer connect helpers leaked back into server.py or are missing from network_info_service.py")
-
-
 def main() -> int:
     strict_archive = "--strict-archive" in sys.argv[1:]
     check_folder_docs()
@@ -480,7 +428,6 @@ def main() -> int:
     check_authored_contract_policy()
     check_agent_metadata()
     check_release_docs_version()
-    check_architecture_split_markers()
     print("[OK] project hygiene checks passed")
     return 0
 

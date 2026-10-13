@@ -27,12 +27,15 @@ def compiled_entity(document, call):
     return wire, next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
 
 
-@pytest.mark.parametrize("immunity,mode,cooldown", [
-    ("owner_shared", "owner", -1), ("once_per_npc", "local", -1),
-    ({"localCooldown": 0}, "local", 0), ({"localCooldown": 1}, "local", 1),
-    ({"localCooldown": 37}, "local", 37), ({"localCooldown": 600}, "local", 600),
+# Each immunity branch and the update-rate endpoints have distinct witnesses;
+# crossing every cooldown with every update rate only repeats these projections.
+@pytest.mark.parametrize("immunity,mode,cooldown,updates", [
+    ("owner_shared", "owner", -1, 6),
+    ("once_per_npc", "local", -1, 2),
+    ({"localCooldown": 0}, "local", 0, 1),
+    ({"localCooldown": 37}, "local", 37, 6),
+    ({"localCooldown": 600}, "local", 600, 2),
 ])
-@pytest.mark.parametrize("updates", [1, 2, 6])
 def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, cooldown, updates):
     document = build_capability_witness("set_projectile_collision")
     call = selected(document)
@@ -185,9 +188,18 @@ def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(muta
         assert any("fixed wire literal" in row["reason"] for row in report["violations"])
 
 
-@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event", "pull_owner_to_event_target"])
-@pytest.mark.parametrize("when", [None, {}, "periodic", {"everyTicks": 5}, {"everyTicks": 3601},
-                                 {"everyTicks": 6.5}, {"everyTicks": True}, {"everyTicks": 6, "event": "on_hit"}])
+# The shared event-trigger schema owns malformed interval shapes. Other
+# consumers keep a routed negative sentinel rather than copying the full matrix.
+@pytest.mark.parametrize("fn,when", [
+    *(pytest.param("spawn_entity_on_event", when, id="spawn-" + label) for label, when in (
+        ("null", None), ("empty", {}), ("bare-periodic", "periodic"),
+        ("below", {"everyTicks": 5}), ("above", {"everyTicks": 3601}),
+        ("fractional", {"everyTicks": 6.5}), ("boolean", {"everyTicks": True}),
+        ("extra-field", {"everyTicks": 6, "event": "on_hit"}),
+    )),
+    pytest.param("pull_on_event", {"everyTicks": 5}, id="pull-interval-bound"),
+    pytest.param("pull_owner_to_event_target", {"everyTicks": 6, "event": "on_hit"}, id="owner-pull-extra-field"),
+])
 def test_periodic_trigger_requires_one_explicit_integer_interval(fn, when):
     document = build_capability_witness(fn)
     selected(document)["params"]["when"] = when

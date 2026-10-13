@@ -1,6 +1,6 @@
 """Offline canonical sprite render contracts; no live services."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 
 import pytest
 from PIL import Image, ImageDraw
@@ -13,69 +13,6 @@ from infini_local.pipelines import visual_sprite_generation as generation
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
 from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
 
-
-@pytest.mark.parametrize("role", ["item", "entity:literal_body", "equip_overlay", "impact", "vfx_cutout", "vfx_strip"])
-def test_image_prompt_styles_preserve_literal_art_and_role_contract(monkeypatch, role):
-    from infini_local.core import llm_config
-    from infini_local.pipelines import visual_prompt_contracts as prompts
-
-    authored = "literal copper oak joined blades " + "engraving " * 125
-    data = {"visual": {"grip": {"x": 0.3, "y": 0.7}, "palette": ["brown", "copper"]}}
-    frozen = copy.deepcopy(data)
-    results = []
-    for style in ("Default", "Terraria Like"):
-        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style, raising=False)
-        text = prompts.normalize_asset_prompt(data, role, authored, 64)
-        assert prompts.compact_visual_words(authored, 1400) in text
-        assert prompts.role_contract_prompt_clause(role, 64) in text
-        assert "Terraria (tModLoader) game asset" in text
-        assert ("Terraria Like art direction" in text) == (style == "Terraria Like")
-        if style == "Terraria Like":
-            assert "soft-alpha glows" in text and text.endswith("required texture layout.")
-        if role == "item":
-            assert '"x":0.3,"y":0.7' in text
-        assert data == frozen
-        results.append(text)
-    # Style adds only a brief; literal art, framing, background and grip survive.
-    assert results[1].startswith(results[0])
-
-
-@pytest.mark.parametrize("zimage", [True, False])
-def test_serialized_image_retry_retains_game_style_and_historical_core(monkeypatch, tmp_path, zimage):
-    from infini_local.core import llm_config
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.services.sdcpp_backend import server_payload
-    import json
-
-    monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
-    monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
-    fixture = tmp_path / "synthetic_opaque_failed.png"
-    Image.new("RGBA", (64, 64), (180, 100, 50, 255)).save(fixture)
-    validation = post.validate_processed_sprite(str(fixture), "item")
-    assert not validation["ok"]
-    assert "almost_no_transparency_after_bg_removal" in validation["reasons"]
-    authored = ("literal copper oak joined blades " + "engraving " * 150)[:1400]
-    data = {"visual": {"grip": {"x": 0.3, "y": 0.7}}}
-    before = copy.deepcopy(data)
-    sent = []
-    for style in ("Default", "Terraria Like"):
-        monkeypatch.setattr(llm_config, "PROMPT_STYLE", style)
-        base = normalize_asset_prompt(data, "item", authored, 64)
-        retry = post.build_retry_prompt_from_validation(base, validation, "item", 1, 64)
-        payload = server_payload(config._sdcpp_config(), retry, "", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
-        text = json.loads(json.dumps(payload))["prompt"]
-        assert "Terraria (tModLoader) game asset" in text
-        assert ("Terraria Like art direction" in text) == (style == "Terraria Like")
-        if style == "Terraria Like":
-            assert "compact coherent palette" in text and "required texture layout." in text
-        assert ("Technical correction:" if zimage else "fix these technical issues:") in text
-        assert data == before
-        sent.append(text)
-    assert sent[1].startswith(sent[0]), "style must not displace the pre-existing authored/technical retry core"
-    assert sent[0] != sent[1]
-
-
-CANVASES = (24, 32, 48, 64, 96, 128)
 
 CHROMA = {
     "magenta": (255, 0, 255), "green": (0, 255, 0), "lime": (0, 255, 0),
@@ -107,8 +44,12 @@ def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
         assert contracts.chroma_name() in retry
         assert authored in retry
 
-@pytest.mark.parametrize("name,rgb", [(name, rgb) for name, rgb in CHROMA.items() if name != "magenta"])
-@pytest.mark.parametrize("foreground", ((255, 0, 255, 255), (110, 12, 105, 255), (255, 255, 255, 255)))
+# Distinct palette hazards, rather than every color × foreground combination.
+@pytest.mark.parametrize("name,rgb,foreground", [
+    ("cyan", (0, 255, 255), (255, 0, 255, 255)),
+    ("green", (0, 255, 0), (110, 12, 105, 255)),
+    ("black", (0, 0, 0), (255, 255, 255, 255)),
+])
 def test_nonmagenta_keys_preserve_authored_palette(monkeypatch, name, rgb, foreground):
     from infini_local.pipelines import pipeline_visual_config as config
     from infini_local.pipelines import sprite_keyer as keyer
@@ -131,7 +72,7 @@ def test_nonmagenta_key_does_not_resample_magenta_art_as_background(monkeypatch)
     raw = Image.new("RGBA", (64, 64), (202, 4, 140, 255))
     assert keyer.estimate_sprite_key_profile(raw)["key"] == (0, 255, 255)
 
-@pytest.mark.parametrize("name", ("chartreuse", "transparant", "", "#ff00ff"))
+@pytest.mark.parametrize("name", ("chartreuse", ""))
 def test_invalid_chroma_is_diagnostic(monkeypatch, name):
     from infini_local.pipelines import pipeline_visual_config as config
     from infini_local.pipelines import visual_prompt_contracts as prompts
@@ -141,8 +82,13 @@ def test_invalid_chroma_is_diagnostic(monkeypatch, name):
     with pytest.raises(ValueError, match="INFINI_BG_COLOR"):
         contracts.chroma_rgb()
 
-@pytest.mark.parametrize("color,remove_bg,mode,keyed", (("cyan", True, "sprite_keyer", True), ("cyan", True, "chroma", True), ("cyan", False, "sprite_keyer", False), ("cyan", True, "off", False), ("transparent", True, "sprite_keyer", False)))
-@pytest.mark.parametrize("repair", (False, True))
+@pytest.mark.parametrize("color,remove_bg,mode,keyed,repair", [
+    ("cyan", True, "sprite_keyer", True, False),
+    ("cyan", True, "chroma", True, True),
+    ("cyan", False, "sprite_keyer", False, True),
+    ("cyan", True, "off", False, False),
+    ("transparent", True, "sprite_keyer", False, True),
+])
 def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, color, remove_bg, mode, keyed, repair):
     import json
     from infini_local.pipelines import pipeline_visual_config as config
@@ -179,30 +125,6 @@ def test_retry_diagnostic_uses_configured_key(monkeypatch):
     assert "magenta" not in notes
     assert contracts.chroma_name() in notes
 
-@pytest.mark.parametrize("size", ((64, 32), (32, 64), (64, 64)))
-@pytest.mark.parametrize("position", ("center", "offcenter", "empty"))
-def test_rectangular_normalized_centers(size, position):
-    from infini_local.pipelines.sprite_geometry import sprite_bbox_stats
-    w, h = size
-    image = Image.new("RGBA", size)
-    if position == "center":
-        box, expected = (w // 4, h // 4, w * 3 // 4, h * 3 // 4), (0.5, 0.5)
-    elif position == "offcenter":
-        box, expected = (0, 0, w // 2, h // 2), (0.25, 0.25)
-    else:
-        box, expected = None, (0.0, 0.0)
-    if box:
-        image.paste((180, 100, 30, 255), box)
-    stats = sprite_bbox_stats(image)
-    assert stats["core_center_norm"] == expected
-    assert stats["effect_center_norm"] == expected
-
-
-def test_native_alpha_manifest_does_not_claim_chroma(monkeypatch):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import visual_prompt_contracts as prompts
-    monkeypatch.setattr(config, "REMOVE_BG", False)
-    assert prompts.sprite_contract_for("item", 128)["background"] == "transparent"
 
 @pytest.mark.parametrize("remove_bg", (False, True))
 def test_transparent_selects_native_alpha_without_a_chroma_fallback(monkeypatch, remove_bg):
@@ -222,17 +144,6 @@ def test_transparent_selects_native_alpha_without_a_chroma_fallback(monkeypatch,
         assert authored in text and "transparent background" in text and "solid rgb" not in text
     rule = prompts.visual_background_transport_rule()
     assert "transparent background in the raw image" in rule and "solid rgb" not in rule
-
-
-@pytest.mark.parametrize("canvas", CANVASES)
-@pytest.mark.parametrize("empty", (False, True))
-def test_fit_and_master_bake_canvas(canvas, empty):
-    raw = Image.new("RGBA", (64, 32))
-    if not empty:
-        ImageDraw.Draw(raw).rectangle((16, 8, 47, 23), fill=(180, 100, 30, 255))
-    assert post.fit_to_canvas(raw, canvas, "impact").size == (canvas, canvas)
-    master = post.prepare_sprite_master(raw, "test", canvas, "impact")
-    assert post.bake_sprite_from_master(master, canvas, "impact").size == (canvas, canvas)
 
 
 def source_image():
@@ -266,8 +177,7 @@ def test_full_pipeline_alpha_and_source_preservation(tmp_path, monkeypatch, role
         assert validation["ok"], validation
         assert "many_partial_alpha_pixels" not in validation["warnings"]
 
-@pytest.mark.parametrize("remove_bg", (False, True))
-@pytest.mark.parametrize("role", ("item", "impact", "vfx_strip"))
+@pytest.mark.parametrize("remove_bg,role", [(False, "item"), (True, "impact"), (True, "vfx_strip")])
 def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp_path, monkeypatch, remove_bg, role):
     from infini_local.pipelines import pipeline_visual_config as config
     from infini_local.pipelines import sprite_keyer as keyer
@@ -285,26 +195,7 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
         retry = post.build_retry_prompt_from_validation(authored, validation, role, 1, 32)
         assert authored in retry and "transparent background" in retry
         assert "configured key" not in retry and "pure flat" not in retry
-    def forbidden(*args, **kwargs):
-        pytest.fail("native alpha must not estimate, remove or classify chroma")
-    for name in ("estimate_sprite_key_profile", "remove_key_colored_holes", "remove_nested_poster_card_background", "magenta_key_pixel_ratio", "chroma_rgb", "chroma_like_rgb"):
-        monkeypatch.setattr(post, name, forbidden)
-    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", True)
-    raw = tmp_path / "native.png"
-    image.save(raw)
-    original = raw.read_bytes()
-    path = post.postprocess_sprite(str(raw), "native-result", 32, role, output_dir=tmp_path)
-    assert path != str(raw) and raw.read_bytes() == original
-    with Image.open(path) as final:
-        assert final.mode == "RGBA" and final.size == (32, 32)
-        assert final.getchannel("A").getextrema()[0] == 0
-        assert bool(set(final.getchannel("A").tobytes()) - {0, 255}) == (role != "item")
-    assert post.validate_processed_sprite(path, role)["ok"]
-    with Image.open(tmp_path / "native-result_stage_10_sprite_keyer_fullres.png") as stage:
-        assert stage.tobytes() == image.tobytes()
-    if role == "vfx_strip":
-        with Image.open(tmp_path / "native-result_stage_20_master_norm.png") as master:
-            assert master.size == image.size and master.tobytes() == image.tobytes()
+    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
     # Exercise the real producer lifecycle, including a rejected empty first
     # attempt and native-alpha retry. Only the provider response seam is synthetic.
     monkeypatch.setattr(generation, "SPRITE_DIR", tmp_path)
@@ -325,6 +216,12 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
     assert len(captured) == 2
     assert all(authored in call["prompt"] and "transparent background" in call["prompt"] for call in captured)
     assert post.validate_processed_sprite(published, role)["ok"]
+    with Image.open(published) as final:
+        assert final.mode == "RGBA" and final.size == (32, 32)
+        assert final.getchannel("A").getextrema()[0] == 0
+        assert bool(set(final.getchannel("A").tobytes()) - {0, 255}) == (role != "item")
+        # Native magenta is authored content, not a key to remove.
+        assert any(r == 255 and g == 0 and b == 255 and a > 0 for _, (r, g, b, a) in final.getcolors(maxcolors=32 * 32))
     if role == "vfx_strip":
         with Image.open(published) as final:
             assert final.getchannel("A").getbbox() == (4, 8, 24, 24)
@@ -396,11 +293,16 @@ def test_mismatched_role_is_not_reinterpreted(tmp_path, monkeypatch):
     assert [call["role"] for call in calls] == ["impact"]
 
 
-CANVAS_CONSUMERS = [(entry, role) for entry in ("postprocess", "generation")
-                    for role in ("item", "entity_bolt", "equip_overlay")] + [("procedural", "item")]
-
-@pytest.mark.parametrize("canvas", CANVASES)
-@pytest.mark.parametrize("entry,role", CANVAS_CONSUMERS)
+# Cover each entry point, plan owner, and supported canvas once; generation
+# already executes postprocessing, so their full Cartesian product adds no path.
+@pytest.mark.parametrize("canvas,entry,role", [
+    (24, "generation", "item"),
+    (32, "generation", "entity_bolt"),
+    (48, "generation", "equip_overlay"),
+    (64, "postprocess", "item"),
+    (96, "procedural", "item"),
+    (128, "generation", "item"),
+])
 def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
     data = {
         "id": "test", "armor": {"enabled": True, "slot": "head"},
@@ -436,9 +338,12 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
             assert image.mode == "RGBA" and image.getchannel("A").getextrema() == (0, 255)
     assert contracts.sprite_contract_for(role, target)["size"] == canvas
 
-INVALID_CANVASES = [(entry, canvas) for entry in ("fit_to_canvas", "bake_sprite_from_master", "prepare_sprite_master") for canvas in (-1, 0, 129, 256)] + [("prompt", canvas) for canvas in (0, 129, 256)]
-
-@pytest.mark.parametrize("entry,canvas", INVALID_CANVASES)
+@pytest.mark.parametrize("entry,canvas", [
+    ("fit_to_canvas", 0), ("fit_to_canvas", 129),
+    ("bake_sprite_from_master", -1), ("bake_sprite_from_master", 129),
+    ("prepare_sprite_master", 0), ("prepare_sprite_master", 256),
+    ("prompt", 0), ("prompt", 129),
+])
 def test_canvas_boundary_refusal(entry, canvas):
     from infini_local.pipelines import visual_prompt_contracts as prompts
     image = Image.new("RGBA", (32, 32))

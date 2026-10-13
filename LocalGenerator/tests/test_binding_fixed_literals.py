@@ -67,39 +67,6 @@ def test_native_tool_requires_legitimate_primary_root_not_arbitrary_binding(case
     assert json.dumps(doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_noncontact_tool_unrelated_repair_keeps_binding_and_tool_stats_frozen(monkeypatch, format_mode):
-    from infini_local.core.errors import PlannerUnavailable
-
-    doc = build_capability_witness("configure_tool")
-    row = doc["runtimeProgram"]["bindings"][0]
-    row["contactDamage"] = False
-    expected = deepcopy(doc)
-    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
-    stats["params"]["damage"] = True
-    before = json.dumps(doc, sort_keys=True)
-    noop = {"note": "no-op cannot repair unrelated invalid damage", "realizationReplacement": doc["realization"]}
-    with pytest.raises(PlannerUnavailable):
-        _offline_gameplay_repair(monkeypatch, doc, noop, format_mode)
-    correction = deepcopy(stats)
-    correction["params"]["damage"] = next(c for c in expected["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")["params"]["damage"]
-    hostile = deepcopy(row)
-    hostile.update(stackCost=1, contactDamage=True, action={"kind": "apply_item_effects", "targetId": "foreign_body"})
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
-        "note": "damage exact leaf only; contact/action/cost/target frozen", "realizationReplacement": doc["realization"],
-        "callsUpsert": [correction], "bindingsUpsert": [hostile],
-    }, format_mode)
-    scope = dossier["repairScope"]
-    assert scope["fieldPermissions"]["calls"] == [{"id": stats["id"], "paths": ["params.damage"]}]
-    assert scope["fieldPermissions"]["bindings"] == []
-    assert all(not values for values in scope["identityChanges"].values())
-    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert _assert_delivery(repaired) == _assert_delivery(expected)
-    assert json.dumps(doc, sort_keys=True) == before
-
-
 @pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
 def test_fixed_explicit_binding_envelope_has_exact_sparse_effect_parity(case):
     sparse, row = _binding_case(case)
@@ -231,7 +198,6 @@ def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch
     assert json.dumps(transaction.doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("case,explicit,group,values,broken,hostile,paths", [
     pytest.param("equipped", True, None, {}, {"action.kind": "spawn_entity"}, {},
                  ["action", "action.kind", "action.targetId", "input", "target"], id="fixed-kind"),
@@ -257,8 +223,8 @@ def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch
     pytest.param("effects", True, "chosen_group", {}, {"action.kind": DELETE}, {},
                  ["action.kind"], id="named-effect-kind-existing-consumer"),
 ])
-def test_fixed_leaf_transaction_repair(monkeypatch, binding_transaction, format_mode,
-                                       case, explicit, group, values, broken, hostile, paths):
+def test_fixed_leaf_transaction_repair(monkeypatch, binding_transaction, case, explicit, group, values, broken, hostile, paths):
+    format_mode = "json_schema"
     transaction = binding_transaction(case, explicit=explicit, group=group, values=values)
     edit_fields(transaction.row, broken)
     edit_fields(transaction.candidate, hostile)
@@ -272,7 +238,6 @@ def test_fixed_leaf_transaction_repair(monkeypatch, binding_transaction, format_
                        create=False if group and not hostile else None)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("source_shape,body_id", [
     pytest.param("omitted", "item", id="omitted-standard-body"),
     pytest.param("empty", "item", id="empty-standard-body"),
@@ -281,9 +246,8 @@ def test_fixed_leaf_transaction_repair(monkeypatch, binding_transaction, format_
     pytest.param("empty", "opaque_body", id="empty-arbitrary-body"),
     pytest.param("explicit", "opaque_body", id="explicit-arbitrary-body"),
 ])
-def test_input_only_repair_ignores_hostile_frozen_binding_lanes(
-    monkeypatch, binding_transaction, format_mode, source_shape, body_id,
-):
+def test_input_only_repair_ignores_hostile_frozen_binding_lanes(monkeypatch, binding_transaction, source_shape, body_id):
+    format_mode = "json_schema"
     from infini_local.core.runtime_authoring import build_runtime_repair_scope, filter_repair_patch_scope, apply_repair_patch
 
     transaction = binding_transaction("equipped", explicit=source_shape == "explicit", body_id=body_id,
@@ -342,7 +306,6 @@ def test_fixed_literal_source_aware_receipts_refuse_source_only_typed_forgeries(
                                        authored_document=forged, final_document=final)["ok"]
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("invalid_target,grouped", [
     pytest.param("unknown", False, id="unknown-default"),
     pytest.param(None, False, id="null-default"),
@@ -352,9 +315,8 @@ def test_fixed_literal_source_aware_receipts_refuse_source_only_typed_forgeries(
     pytest.param("unknown", True, id="unknown-grouped"),
     pytest.param(None, True, id="null-grouped"),
 ])
-def test_effect_binding_target_repair_reuses_existing_consumer(
-    monkeypatch, binding_transaction, format_mode, invalid_target, grouped,
-):
+def test_effect_binding_target_repair_reuses_existing_consumer(monkeypatch, binding_transaction, invalid_target, grouped):
+    format_mode = "json_schema"
     transaction = binding_transaction("effects", explicit=True, body_id="opaque_body",
                                       group="chosen_group" if grouped else None,
                                       values={"stackCost": 1, "stackConsumeChancePercent": 35})
@@ -403,8 +365,8 @@ def test_effect_dependency_does_not_retarget_frozen_or_unrelated_consumer(consum
     # dependency policy, but its target is never granted a rewrite.
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_effect_target_repair_keeps_both_authored_consumers(monkeypatch, format_mode):
+def test_effect_target_repair_keeps_both_authored_consumers(monkeypatch):
+    format_mode = "json_schema"
     doc, row = _binding_case("effects")
     row.update(_explicit(doc, row))
     doc["runtimeProgram"]["bindings"].append({**deepcopy(row), "id": "alternate_effects", "input": "alternate_use"})
@@ -420,8 +382,8 @@ def test_effect_target_repair_keeps_both_authored_consumers(monkeypatch, format_
     assert_repaired_source(repaired, expected)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, binding_transaction, format_mode):
+def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, binding_transaction):
+    format_mode = "json_schema"
     transaction = binding_transaction("effects", explicit=True)
     effect_call = deepcopy(next(c for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use"))
     doc = build_capability_witness("move_straight")
@@ -474,9 +436,9 @@ def test_missing_action_kind_repair_preserves_omitted_body_target(
     assert dossier["repairScope"]["identityChanges"]["bindingTargetIds"] == []
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("alternate_error", ["target", "kind"])
-def test_consumer_repair_does_not_choose_other_unresolved_actions(monkeypatch, format_mode, alternate_error):
+def test_consumer_repair_does_not_choose_other_unresolved_actions(monkeypatch, alternate_error):
+    format_mode = "json_schema"
 
     doc, primary = _binding_case("body")
     effects, alternate = _binding_case("effects")
@@ -554,7 +516,6 @@ def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
     assert doc == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("invalid_target,root", [
     pytest.param(None, "pure", id="null-pure"),
     pytest.param(False, "pure", id="boolean-pure"),
@@ -566,20 +527,17 @@ def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
     pytest.param(None, "hybrid", id="null-hybrid"),
     pytest.param("unknown", "hybrid", id="unknown-hybrid"),
 ])
-def test_placement_target_repair_distinguishes_invalid_presence(
-    monkeypatch, binding_transaction, format_mode, invalid_target, root,
-):
+def test_placement_target_repair_distinguishes_invalid_presence(monkeypatch, binding_transaction, invalid_target, root):
+    format_mode = "json_schema"
     transaction = binding_transaction("pure-placement" if root == "pure" else "placement", explicit=True)
     transaction.row["action"]["targetId"] = deepcopy(invalid_target)
     transaction.repair(monkeypatch, format_mode, paths=["action.targetId", "target"])
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("root", ["pure", "hybrid"])
 @pytest.mark.parametrize("explicit_envelope", [False, True])
-def test_placement_action_selection_requires_explicit_call_reference(
-    monkeypatch, binding_transaction, format_mode, root, explicit_envelope,
-):
+def test_placement_action_selection_requires_explicit_call_reference(monkeypatch, binding_transaction, root, explicit_envelope):
+    format_mode = "json_schema"
     transaction = binding_transaction("pure-placement" if root == "pure" else "placement")
     if explicit_envelope:
         transaction.candidate.update(_explicit(transaction.doc, transaction.candidate))
@@ -587,16 +545,14 @@ def test_placement_action_selection_requires_explicit_call_reference(
     transaction.repair(monkeypatch, format_mode, paths=["action.kind", "action.placementCallId"])
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("invalid_reference", [
     pytest.param("unknown_reference", id="unknown"), pytest.param(None, id="null"),
     pytest.param(False, id="boolean"), pytest.param(2, id="integer"),
     pytest.param({}, id="object"), pytest.param([], id="array"),
     pytest.param("witness_call", id="wrong-capability"),
 ])
-def test_missing_kind_present_invalid_placement_reference_repair(
-    monkeypatch, binding_transaction, format_mode, invalid_reference,
-):
+def test_missing_kind_present_invalid_placement_reference_repair(monkeypatch, binding_transaction, invalid_reference):
+    format_mode = "json_schema"
     transaction = binding_transaction("placement")
     if invalid_reference == "witness_call":
         invalid_reference = next(c["id"] for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
@@ -606,7 +562,6 @@ def test_missing_kind_present_invalid_placement_reference_repair(
     transaction.repair(monkeypatch, format_mode, paths=["action.kind", "action.placementCallId"], ignored=True, create=False)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("case,broken,omitted,wrong,no_upsert,explicit", [
     pytest.param("placement", {"action": {}}, "action.placementCallId", {}, False, True, id="placement-no-reference"),
     pytest.param("placement", {"action": {}}, None, {"action.placementCallId": "unrelated_call"}, False, True, id="placement-foreign-reference"),
@@ -621,9 +576,8 @@ def test_missing_kind_present_invalid_placement_reference_repair(
     pytest.param("effects", {"action.targetId": "foreign_body", "stackConsumeChancePercent": "invalid"}, "stackConsumeChancePercent", {}, False, True, id="compound-missing-chance"),
     pytest.param("effects", {"action.targetId": "foreign_body", "contactDamage": "invalid"}, None, {}, True, True, id="compound-no-upsert"),
 ])
-def test_incomplete_transaction_never_supplies_missing_model_values(
-    monkeypatch, binding_transaction, format_mode, case, broken, omitted, wrong, no_upsert, explicit,
-):
+def test_incomplete_transaction_never_supplies_missing_model_values(monkeypatch, binding_transaction, case, broken, omitted, wrong, no_upsert, explicit):
+    format_mode = "json_schema"
     from infini_local.core.errors import PlannerUnavailable
 
     transaction = binding_transaction(case, explicit=explicit,

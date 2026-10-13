@@ -147,7 +147,7 @@ def _declared(group: str) -> set[str]:
 
 
 def equipment_surface_audit(dto: bytes | None = None, executor: bytes | None = None) -> dict[str, Any]:
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/GeneratedItemData.Model.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
     executor = executor if executor is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.cs").read_bytes()
     accessory = _class_properties(dto, "AccessorySpec")
     armor = _class_properties(dto, "ArmorSpec")
@@ -195,7 +195,7 @@ def event_surface_audit(
     projectile_events: bytes | None = None,
 ) -> dict[str, Any]:
     """Check event actions in executor, delayed queue, item and projectile producers."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     executor = executor if executor is not None else (_MODEL_ROOT / "Common/Runtime/RuntimeProgramExecutor.cs").read_bytes()
     scheduler = scheduler if scheduler is not None else (_MODEL_ROOT / "Common/Runtime/RuntimeDelayedActionScheduler.cs").read_bytes()
     item_events = item_events if item_events is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.cs").read_bytes()
@@ -235,7 +235,7 @@ def event_surface_audit(
 
 def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Require explicit Author projection or a reason for every component DTO field."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     components: dict[str, tuple[str, ...]] = {
         "RuntimeSpawnSpec": ("runtimeProgram.entities[].spawn.",),
@@ -286,7 +286,7 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Ensure every gameplay/utility-buff DTO field is Author-facing or classified."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/GeneratedItemData.Model.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     groups = {
         "GameplaySpec": "gameplay.",
@@ -330,7 +330,7 @@ def placed_light_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 def _placed_component_surface_audit(fn: str, class_name: str, dto: bytes | None) -> dict[str, Any]:
     """Classify nested placed DTO storage/bounds, not GPU execution."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     cap = CAPABILITY_REGISTRY[fn]
     expected = {(spec.wire_name or name)[0].upper() + (spec.wire_name or name)[1:]:
                 ("double" if spec.consumer_storage == "float64" else "float") if spec.kind == "number"
@@ -388,7 +388,7 @@ def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """A named container cannot grow item stats or a second undocumented effect slot."""
     from infini_local.core.runtime_authoring.wire_validator import _item_effect_group_wire_schema
 
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeItemEffectGroupSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeItemEffectGroupSpec.cs").read_bytes()
     prefix = "runtimeProgram.effectGroups[]."
     fields = {path[len(prefix):].split(".", 1)[0].replace("[]", "")
               for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths if path.startswith(prefix)}
@@ -403,7 +403,7 @@ def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Exact typed native-ammo choices, without an unregistered weapon profile."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeWeaponAmmoSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeWeaponAmmoSpec.cs").read_bytes()
     expected = {name[0].upper() + name[1:] for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params}
     actual = _class_properties(dto, "RuntimeWeaponAmmoSpec")
     return {"ok": actual == expected, "unclassifiedDtoFields": sorted(actual - expected),
@@ -416,7 +416,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     from infini_local.core.runtime_authoring import wire_validator as wire
     from infini_local.pipelines.visual_generation_pipeline import visual_response_schema
 
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     pascal = lambda names: {name[0].upper() + name[1:] for name in names}
     program = author.runtime_program_author_schema()
     binding_variants = program["properties"]["bindings"]["items"]["oneOf"]

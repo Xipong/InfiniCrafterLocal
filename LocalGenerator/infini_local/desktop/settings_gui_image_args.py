@@ -20,24 +20,8 @@ from infini_local.desktop.settings_sdcpp_args import (
 
 class SettingsGuiImageArgsMixin:
     def _build_lora_buttons(self, parent):
-        frame = ttk.Frame(parent, padding=(10, 2))
-        frame.pack(fill="x")
-        ttk.Label(frame, text="", width=30).pack(side="left")
-        specs = [
-            ("Use selected LoRA", self.use_selected_lora, "Взять LoRA file, вывести папку из файла и подготовить безопасный структурированный lora[] payload с выбранным весом."),
-            ("Browse + use", self.browse_and_use_lora_file, "Выбрать LoRA файл и сразу подключить его: hidden --lora-model-dir + структурированный HTTP payload."),
-            ("Clear LoRA", self.clear_lora_settings, "Очистить LoRA file, prompt tags и скрытый LoRA dir."),
-        ]
-        for text, command, help_text in specs:
-            btn = ttk.Button(frame, text=text, command=command)
-            btn.pack(side="left", padx=2)
-            self.extra_arg_buttons.append(btn)
-            self._attach_static_help(btn, help_text)
-        ttk.Label(
-            frame,
-            text="sd.cpp: GUI сам выводит --lora-model-dir из LoRA file; активная LoRA передаётся через структурированный HTTP payload.",
-            foreground="#666",
-        ).pack(side="left", padx=8)
+        from infini_local.desktop.settings_page_images import ImagesPageMixin
+        return ImagesPageMixin._build_lora_buttons(self, parent)
 
     def _get_lora_tags_widget(self):
         return self.text_widgets.get("INFINI_SDCPP_LORA_PROMPT_TAGS")
@@ -111,94 +95,16 @@ class SettingsGuiImageArgsMixin:
         self.status_var.set("LoRA file, prompt tags и скрытый LoRA dir очищены.")
 
     def _build_sdcpp_extra_buttons(self, parent):
-        frame = ttk.Frame(parent, padding=(10, 2))
-        frame.pack(fill="x")
-        ttk.Label(frame, text="", width=30).pack(side="left")
-        ttk.Label(frame, text="Пресеты:", foreground="#666").pack(side="left", padx=(0, 4))
-        preset_specs = [
-            ("FLUX hybrid", lambda: self.set_extra_profile("flux2_klein4b_rx6800xt_hybrid"), SDCPP_EXTRA_PROFILE_HELP["flux2_klein4b_rx6800xt_hybrid"]),
-            ("AMD safe", lambda: self.set_extra_profile("zimage_amd_safe"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_safe"]),
-            ("AMD low VRAM", lambda: self.set_extra_profile("zimage_amd_low_vram"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_low_vram"]),
-            ("AMD full GPU", lambda: self.set_extra_profile("zimage_amd_full_gpu"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_full_gpu"]),
-            ("Disk params", lambda: self.set_extra_profile("zimage_amd_disk_params"), SDCPP_EXTRA_PROFILE_HELP["zimage_amd_disk_params"]),
-            ("CPU compat", lambda: self.set_extra_profile("zimage_cpu_compat"), SDCPP_EXTRA_PROFILE_HELP["zimage_cpu_compat"]),
-            ("Compat offload", lambda: self.set_extra_profile("compat_offload"), SDCPP_EXTRA_PROFILE_HELP["compat_offload"]),
-            ("DBCache split", lambda: self.set_extra_profile("vulkan_te_vae_cpu_dbcache"), SDCPP_EXTRA_PROFILE_HELP["vulkan_te_vae_cpu_dbcache"]),
-            ("Basic", lambda: self.set_extra_profile("basic_verbose"), SDCPP_EXTRA_PROFILE_HELP["basic_verbose"]),
-        ]
-        frame2 = ttk.Frame(parent, padding=(10, 2))
-        frame2.pack(fill="x")
-        ttk.Label(frame2, text="", width=30).pack(side="left")
-        ttk.Label(frame2, text="", foreground="#666").pack(side="left", padx=(0, 4))
-        for i, (text, command, help_text) in enumerate(preset_specs):
-            target = frame if i < 5 else frame2
-            btn = ttk.Button(target, text=text, command=command)
-            btn.pack(side="left", padx=2)
-            self.extra_arg_buttons.append(btn)
-            self._attach_static_help(btn, help_text)
-
-        flag_specs = SDCPP_EXTRA_FLAG_SPECS
-        for row_index in range(0, len(flag_specs), 6):
-            flag_frame = ttk.Frame(parent, padding=(10, 2))
-            flag_frame.pack(fill="x")
-            ttk.Label(flag_frame, text="", width=30).pack(side="left")
-            ttk.Label(flag_frame, text="Добавить флаг:" if row_index == 0 else "", foreground="#666").pack(side="left", padx=(0, 4))
-            for text, fragment, help_text in flag_specs[row_index:row_index + 6]:
-                btn = ttk.Button(flag_frame, text=text, command=lambda fragment=fragment: self.append_extra_args(fragment))
-                btn.pack(side="left", padx=2)
-                self.extra_arg_buttons.append(btn)
-                self._attach_static_help(btn, help_text)
-
-        frame4 = ttk.Frame(parent, padding=(10, 2))
-        frame4.pack(fill="x")
-        ttk.Label(frame4, text="", width=30).pack(side="left")
-        for text, command, help_text in [
-            ("Repair command", self.repair_command_template, "Вернуть safe_args и безопасный reference command template."),
-            ("Clear extra", self.clear_extra_args, "Очистить manual extra args. Пути модели/VAE/Qwen/LoRA не трогает."),
-        ]:
-            btn = ttk.Button(frame4, text=text, command=command)
-            btn.pack(side="left", padx=2)
-            self.extra_arg_buttons.append(btn)
-            self._attach_static_help(btn, help_text)
-        self._build_sdcpp_extra_help(parent)
+        from infini_local.desktop.settings_page_images import ImagesPageMixin
+        return ImagesPageMixin._build_sdcpp_extra_buttons(self, parent)
 
     def _build_sdcpp_extra_help(self, parent):
-        help_box = ttk.LabelFrame(parent, text="Что делают пресеты и флаги sd.cpp", padding=(10, 6))
-        help_box.pack(fill="x", padx=10, pady=(4, 8))
-        profiles = "\n".join("• " + text for text in SDCPP_EXTRA_PROFILE_HELP.values())
-        flags = "\n".join(f"• {name}: {desc}" for name, _fragment, desc in SDCPP_EXTRA_FLAG_SPECS)
-        msg = tk.Message(
-            help_box,
-            text=(
-                "Пресеты заменяют всю строку sd.cpp extra args. Кнопки флагов только добавляют фрагмент к текущей строке.\n"
-                "Одинаковые backend-строки больше не дублируются: если --params-backend не указан, sd.cpp сам держит параметры на backend соответствующего модуля.\n\n"
-                "Flow-shift — параметр Flow/DiT расписания, то есть не качество сам по себе, а сдвиг распределения timesteps/noise. 3 = дефолтный/резкий Z-Image вариант; 2 = более мягкий эксперимент.\n\n"
-                "Пресеты:\n" + profiles + "\n\n"
-                "Флаги:\n" + flags
-            ),
-            width=980,
-            foreground="#444",
-        )
-        msg.pack(fill="x", anchor="w")
+        from infini_local.desktop.settings_page_images import ImagesPageMixin
+        return ImagesPageMixin._build_sdcpp_extra_help(self, parent)
 
     def _build_sdcpp_debug_buttons(self, parent):
-        frame = ttk.Frame(parent, padding=(10, 2))
-        frame.pack(fill="x")
-        ttk.Label(frame, text="", width=30).pack(side="left")
-        start_btn = ttk.Button(frame, text="Start / check Image Gen", command=self.open_sdcpp_start)
-        start_btn.pack(side="left", padx=2)
-        debug_btn = ttk.Button(frame, text="Open sd.cpp debug", command=self.open_sdcpp_debug)
-        debug_btn.pack(side="left", padx=2)
-        doctor_btn = ttk.Button(frame, text="Visual Doctor", command=self.open_visual_doctor)
-        doctor_btn.pack(side="left", padx=2)
-        probe_btn = ttk.Button(frame, text="Live sprite probe", command=self.open_visual_doctor_probe)
-        probe_btn.pack(side="left", padx=2)
-        self.sdcpp_debug_buttons.extend([start_btn, debug_btn, doctor_btn, probe_btn])
-        self._attach_static_help(start_btn, "Сохранить config.env и открыть /sdcpp_start: server.py попробует поднять sd.cpp до крафта.")
-        self._attach_static_help(debug_btn, "Открыть /sdcpp_debug: команда запуска, активный backend и хвост лога sd.cpp.")
-        self._attach_static_help(doctor_btn, "Открыть /visual_doctor: проверка полного пути FLUX/Z-Image -> postprocess -> asset delivery.")
-        self._attach_static_help(probe_btn, "Открыть /visual_doctor.json?probe=1: реальная тестовая генерация item sprite без крафта в игре.")
-        ttk.Label(frame, text="/sdcpp_start запускает sd-server; Visual Doctor проверяет Image Gen и обязательный sprite delivery.", foreground="#666").pack(side="left", padx=8)
+        from infini_local.desktop.settings_page_images import ImagesPageMixin
+        return ImagesPageMixin._build_sdcpp_debug_buttons(self, parent)
 
     def _extra_text(self):
         return self.text_widgets.get("INFINI_SDCPP_SERVER_EXTRA_ARGS")
@@ -267,31 +173,5 @@ class SettingsGuiImageArgsMixin:
         self.status_var.set("Base resize: BOX, premultiplied RGBA=1. Нажми Save, чтобы сохранить.")
         self._refresh_visibility()
 
-    def _build_visual(self, parent):
-        ttk.Label(parent, text="VFX / качество / авторство", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 4))
-        self.row(parent, "Visual asset mode", "INFINI_VISUAL_ASSET_MODE", values=["full", "projectile", "off"])
-        self.row(parent, "Visual director LLM", "INFINI_VISUAL_DIRECTOR_LLM", values=["1", "0"])
-        self.row(parent, "Visual director max tokens", "INFINI_VISUAL_DIRECTOR_MAX_TOKENS", width=16, hint="Пусто = взять общий Max answer tokens. Если хочешь отдельно ограничить visual-kit шаг, задай число здесь.")
-        self.row(parent, "VFX LLM director", "INFINI_VFX_LLM_DIRECTOR", values=["1", "0"])
-        self.row(parent, "Remove BG", "INFINI_REMOVE_BG", values=["1", "0"])
-        self.row(parent, "BG remove mode", "INFINI_BG_REMOVE_MODE", values=["sprite_keyer"], hint="Оставлен только sprite_keyer: Photoshop-like Magic Wand от краёв + refine/spill cleanup под Terraria sprites.")
-        self.row(parent, "BG color", "INFINI_BG_COLOR", values=["magenta", "transparent", "white", "black"], hint="transparent = модель запрашивается с alpha; локальный keyer не применяется. Chroma-цвет используется только при локальном удалении фона.")
-        self.row(parent, "Chroma tolerance", "INFINI_CHROMA_TOLERANCE", width=16, hint="Допуск key-color удаления. Если белое/серое уносит — не повышать; обычно 34.")
-        self.row(parent, "Alpha threshold", "INFINI_ALPHA_THRESHOLD", width=16, hint="Порог отсечения полупрозрачной альфы. Если края худеют — снизить до 20-24.")
-        self.row(parent, "Sprite keyer spill radius", "INFINI_SPRITE_KEYER_SPILL_RADIUS", width=16, hint="sprite_keyer: radius узкой refine-edge зоны для подавления magenta spill. Обычно 3.")
-        self.row(parent, "Sprite keyer residue steps", "INFINI_SPRITE_KEYER_RESIDUE_STEPS", width=16, hint="sprite_keyer: сколько шагов проходить по connected magenta/dark-key residue от выбранного фона. Обычно 8.")
-        self.row(parent, "Sprite retries", "INFINI_SPRITE_RETRIES", width=16)
-        self.row(parent, "Save sprite stages", "INFINI_SAVE_SPRITE_STAGES", values=["1", "0"], hint="1 = сохранять 00_raw / 10_bg_removed_fullres / 20_master_norm / 30_baked_final в cache\\sprites для дебага.")
-        self.row(parent, "Master canvas", "INFINI_SPRITE_MASTER_CANVAS", width=16, hint="Большой промежуточный RGBA-canvas перед финальным 32/48/64 bake. Нужен для master-first нормализации: вырезали фон, вписали объект в 256x256, потом уже уменьшили в 32/48/64.")
-        resize_row = self.row(parent, "Downscale filter", "INFINI_SPRITE_DOWNSCALE_FILTER", values=["box", "bilinear", "bicubic", "lanczos"], hint="box — базовый фильтр; pipeline preset сохраняет выбранный фильтр. Reset BOX вернёт box и premultiplied=1.")
-        reset_resize = ttk.Button(resize_row, text="Reset BOX", command=self.reset_sprite_resize)
-        reset_resize.pack(side="left", padx=4)
-        self.field_widgets["INFINI_SPRITE_DOWNSCALE_FILTER"].append(reset_resize)
-        self.row(parent, "Premultiplied resize", "INFINI_SPRITE_PREMULTIPLIED_RESIZE", values=["1", "0"], hint="Убирает magenta bleed по краям при resize RGBA.")
-        self.row(parent, "Chroma defringe", "INFINI_SPRITE_CHROMA_DEFRINGE", values=["1", "0"], hint="Консервативно удаляет остатки magenta-key только на краях alpha.")
-        self.row(parent, "Posterize", "INFINI_PIXEL_POSTERIZE", values=["1", "0"])
-        self.row(parent, "Max colors", "INFINI_MAX_COLORS", width=16)
-        self.row(parent, "Strict AI authorship", "INFINI_VISUAL_STRICT_AI_AUTHORSHIP", values=["1", "0"], hint="1 = код не рисует за нейронку, только валидирует/ретраит.")
-        self.row(parent, "Allow procedural fallback", "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK", values=["0", "1"])
 
 __all__ = ["SettingsGuiImageArgsMixin"]

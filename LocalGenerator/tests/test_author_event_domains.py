@@ -34,9 +34,14 @@ def compile_and_check(document):
     return wire, next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
 
 
-@pytest.mark.parametrize("when", ["on_hit", "on_crit"])
-@pytest.mark.parametrize("count", [1, 3, 12])
-@pytest.mark.parametrize("item_body", [False, True])
+# Owner routes and event discriminators each retain a witness; target-count
+# bounds do not require a Cartesian product with both routing dimensions.
+@pytest.mark.parametrize("when,count,item_body", [
+    ("on_hit", 1, False),
+    ("on_crit", 12, False),
+    ("on_hit", 12, True),
+    ("on_crit", 1, True),
+])
 def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(when, count, item_body):
     document = build_capability_witness(NEW)
     call = witness(document)

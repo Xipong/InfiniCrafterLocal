@@ -1,18 +1,21 @@
-# LocalGenerator v0.4.254
+# LocalGenerator — 0.4.254
 
-Python HTTP-сервис генерации и Tk GUI настроек. [Единый setup/runbook](../QUICK_START_RU.md) владеет установкой, providers, запуском и MP; [offline QA](QUICK_START_RU.md) — проверкой checkout. Парная поставка 0.4.254 включает явную placed-body capability и полную sanitized stage-request diagnostics, а также OpenRouter upstream pin, safe restart/effective-config diagnostics и Codex effective-wire cache/prefix refinements; старый опубликованный ZIP 0.4.246 их не содержит. Обновляй генератор вместе с модом, сохраняя `config.env`, cache, recipes/PNG и данные миров. Новая held-body/collision guidance относится к будущей генерации, а не к исправлению старых рисунков.
+Python HTTP-сервис генерации и локальный браузерный **Infinicraft Studio**. Для обычного запуска открой **`OPEN_INFINICRAFT.bat` в корне проекта**: [пошаговая инструкция](../docs/user/START_RU.md). Мод и image/text servers устанавливаются отдельно; готовые модели не скачиваются автоматически.
 
 ## Граница сервиса
 
-`server.py` — launcher; `infini_local/web/server.py` — HTTP wiring, `settings_gui.py` — GUI launcher. Baseline: Gameplay Author → Visual Director → VFX Director, затем PNG/delivery. Repair условен для собственного отвергнутого domain; никакого classifier pass, whole-weapon macro или импорта legacy cache.
+`server.py` и `settings_gui.py` — launcher entrypoints. HTTP wiring живёт в `infini_local/web/server.py`, GUI — в `infini_local/desktop/`. Baseline: Gameplay Author → Visual Director → VFX Director → обязательные PNG/delivery; Repair условен и frozen-first. Семантического classifier/family router/legacy cache importer нет.
 
-Author получает полный компактный каталог один раз. `runtimeProgram` v5 ограничен 12 entities, 8 bindings, 48 calls и child depth 3; текущая grammar/catalog принадлежит [generated inventory](../docs/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), авторские правила — [lowery](../lowery.md). Числа capabilities не являются настройкой сервера.
+## Владельцы
 
-## Данные и настройки
+- [Настройки и эксплуатация](../docs/user/SETTINGS_RU.md), [точный runbook](../docs/user/OPERATIONS_RU.md): `config.env`, environment priority и restart.
+- [Карта кода](../docs/development/CODE_MAP_RU.md#python), [архитектура](../docs/development/ARCHITECTURE_RU.md), [offline QA](QUICK_START_RU.md).
+- [Generated grammar/catalog](../docs/reference/GENERATED_RU.md): bounds берутся из source, не ручного списка в README.
+- `data/` — входные rows; `/infinidump` даёт реальные loaded Terraria данные. Overrides — `INFINI_ITEMS_RUNTIME_DUMP`/`INFINI_PROJECTILES_RUNTIME_DUMP`.
+- `cache/` (`INFINI_CACHE_DIR`) — traces/PNG; world-scoped recipes — `INFINI_WORLD_RECIPES_DIR`. Не подменяй world scope глобальным importer.
+- OAuth хранится в пользовательском Python profile, не `config.env`: [сессия и ограничения](../docs/user/CODEX_IMAGE_OAUTH_RU.md).
 
-- `config.env` — личный GUI/manual конфиг; [example](config.example.env) содержит примеры путей. Process environment имеет приоритет; настройки перечитываются при старте.
-- `data/` — входные данные. `/infinidump` даёт реальные loaded Terraria rows; explicit overrides — `INFINI_ITEMS_RUNTIME_DUMP` и `INFINI_PROJECTILES_RUNTIME_DUMP`.
-- `cache/` (`INFINI_CACHE_DIR`) — traces и PNG `sprites/`; `world_recipes/` (`INFINI_WORLD_RECIPES_DIR`) — world-scoped рецепты. Не коммить личный cache и не подменять world scope глобальным importer.
-- OAuth принадлежит профилю пользователя Python, не `config.env`: [Codex auth](../docs/CODEX_IMAGE_OAUTH_RU.md).
+Обновляй мод/генератор вместе и сохраняй личные данные. Старые PNG не перерисовываются автоматически. [Лицензия](../LICENSE).
 
-[Транспорт/лимиты](../docs/LLM_TRANSPORT_REQUEST_SHAPE_RU.md) · [prompt cache/latency](../docs/LLM_PROMPT_CACHE_AND_LATENCY_RU.md) · [OpenRouter pin](../docs/OPENROUTER_ROUTING_RU.md) · [image lifecycle](../docs/IMAGE_ASSET_LIFECYCLE_RU.md).
+<a id="данные-и-настройки"></a>
+- [Данные и настройки](../docs/user/SETTINGS_RU.md).

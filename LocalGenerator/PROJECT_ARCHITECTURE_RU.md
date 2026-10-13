@@ -1,9 +1,9 @@
 # LocalGenerator 0.4.254 — архитектурная навигация
 
-LocalGenerator авторит/валидирует данные; Terraria исполняет accepted typed wire. Единственный общий обзор — [корневая архитектура](../PROJECT_ARCHITECTURE_RU.md), без локального дубликата контрактов.
+Python не принимает gameplay-решения вместо Author: он владеет validation, leaf-local frozen-first Repair, lossless projections, assets и strict world storage.
 
-- [Gameplay Author и primary/use](../docs/LOW_LEVEL_RUNTIME_AUTHORING_RU.md)
-- [Visual/VFX handoffs и image-pass порядок](../docs/THREE_STAGE_LLM_PIPELINE_RU.md#flow)
-- [Leaf-local frozen Repair](../docs/TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first)
-- [Strict world storage/health](../docs/RECIPE_HEALTH_AND_CONTRACTS_RU.md#storage)
-- [Source-of-truth и generated boundaries](../PROJECT_MAP_RU.md#projections)
+- [Общая архитектура](../docs/development/ARCHITECTURE_RU.md), [canonical Python owners](../docs/development/CODE_MAP_RU.md#python).
+- [Три стадии](../docs/development/THREE_STAGE_LLM_PIPELINE_RU.md), [Repair](../docs/development/TARGETED_REPAIR_PROTOCOL_RU.md).
+- [Generated boundary](../lowery.md), [image lifecycle](../docs/development/IMAGE_ASSET_LIFECYCLE_RU.md), [world recipe contract](../docs/reference/RECIPE_HEALTH_AND_CONTRACTS_RU.md).
+
+Новая механика требует [полного vertical slice](../docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md), не prompt-only изменения. [Developer hub](../docs/development/README_RU.md).

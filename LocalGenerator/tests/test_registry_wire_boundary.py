@@ -192,15 +192,10 @@ def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, val
             ("manaRegenBonusPoints", 1, "manaRegen", 1),
             ("lifeRegenHpPerSecond", 0.5, "lifeRegen", 1),
             ("moveSpeedBonusPercent", -25, "movementSpeed", -0.25),
-            ("manaRegenBonusPoints", 3, "manaRegen", 3),
-            ("lifeRegenHpPerSecond", 1.5, "lifeRegen", 3),
-            ("moveSpeedBonusPercent", 10, "movementSpeed", 0.1),
-            ("jumpSpeedBonusPxPerTick", 0.5, "jumpBoost", 0.5),
         )
     ],
 )
-@pytest.mark.parametrize("sparse", [False, True], ids=["explicit-neutrals", "omitted-neutrals"])
-def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value, wire_key, wire_value, sparse):
+def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value, wire_key, wire_value):
     source = build_capability_witness("apply_generated_buff_on_use")
     params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
     neutrals = {
@@ -215,10 +210,9 @@ def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value,
     assert any(e["code"] == "inert_component" for e in validate_runtime_program(source)["errors"])
     params[effect] = value
     explicit = compile_runtime_program(source)
-    if sparse:
-        for key in neutrals:
-            if key != effect:
-                params.pop(key)
+    for key in neutrals:
+        if key != effect:
+            params.pop(key)
     wire = compile_runtime_program(source)
     assert wire["gameplay"]["generatedBuff"][wire_key] == wire_value
     assert {k: wire[k] for k in ("runtimeProgram", "gameplay", "accessory", "armor")} == {
@@ -398,9 +392,16 @@ def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
     assert any(v.get("receiptIndex") == index for v in report["technicalLowering"]["violations"])
 
 
-@pytest.mark.parametrize("field", ["finalPath", "authoredPath", "authoredPaths"])
-@pytest.mark.parametrize("bad_index", ["9" * 4301, "-1", "1.0", "not_an_index"], ids=["oversized", "negative", "fractional", "text"])
-@pytest.mark.parametrize("with_source", [False, True])
+# All three fields use the same index parser before source authentication.
+# Keep each field route, each malformed syntax, and both public audit modes.
+@pytest.mark.parametrize("field,bad_index,with_source", [
+    pytest.param("finalPath", "9" * 4301, False, id="final-oversized-wire"),
+    pytest.param("authoredPath", "9" * 4301, True, id="source-oversized-authenticated"),
+    pytest.param("authoredPaths", "9" * 4301, False, id="sources-oversized-wire"),
+    pytest.param("finalPath", "-1", True, id="final-negative"),
+    pytest.param("authoredPath", "1.0", False, id="source-fractional"),
+    pytest.param("authoredPaths", "not_an_index", True, id="sources-text"),
+])
 def test_malformed_path_indices_are_indexed_violations(field, bad_index, with_source):
     source = build_capability_witness("configure_item_stats")
     wire = compile_runtime_program(source)

@@ -137,83 +137,65 @@ def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omi
         assert _wire_payload(source)["gameplay"]["manaCost"] == 7
 
 
-@pytest.mark.parametrize("fn,params,label", [
-    pytest.param(fn, names, label, id=f"{fn}-{label}")
-    for fn, names in DECLARED.items() for label in ("null", "text", "wrong-json-type")
+# Null, text and JSON-kind rejection share the same shape owner. Exercise each
+# capability's indexed error routing once rather than crossing every bad type.
+@pytest.mark.parametrize("fn,label", [
+    ("configure_spawn", "null"),
+    ("set_projectile_collision", "text"),
+    ("channel_beam", "wrong-json-type"),
+    ("configure_item_stats", "wrong-json-type"),
+    ("configure_item_use", "null"),
+    ("target_and_fire", "text"),
+    ("apply_generated_buff_on_use", "wrong-json-type"),
 ])
-def test_optional_shape_owner_reports_every_broken_indexed_leaf(fn, params, label):
+def test_optional_shape_owner_reports_every_broken_indexed_leaf(fn, label):
     doc = build_capability_witness(fn)
     index, call = next((i, row) for i, row in enumerate(doc["runtimeProgram"]["calls"]) if row["fn"] == fn)
-    for name in params:
+    for name in DECLARED[fn]:
         spec = CAPABILITY_REGISTRY[fn].params[name]
         call["params"][name] = None if label == "null" else "missing" if label == "text" else False if spec.kind != "boolean" else 0
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     paths = {e["path"] for e in report["errors"]}
-    assert not report["ok"] and {f"$.runtimeProgram.calls[{index}].params.{name}" for name in params} <= paths, report
+    assert not report["ok"] and {f"$.runtimeProgram.calls[{index}].params.{name}" for name in DECLARED[fn]} <= paths, report
     with pytest.raises(ValueError, match="runtime program rejected"):
         compile_runtime_program(doc)
     assert doc == before
 
 
-@pytest.mark.parametrize("fn,param,value,accepted", [
-    pytest.param(fn, name, value, True, id=f"{fn}-{name}-{label}")
-    for fn, names in DECLARED.items() for name in names
-    for spec in (CAPABILITY_REGISTRY[fn].params[name],)
-    for label, value in (("minimum", False if spec.kind == "boolean" else spec.enum[0] if spec.enum else spec.minimum),
-                         ("maximum", True if spec.kind == "boolean" else spec.enum[-1] if spec.enum else spec.maximum))
-] + [pytest.param("configure_item_stats", "manaCost", value, False, id="mana-present-" + label)
-     for label, value in (("numeric-text", "0"), ("negative", -1), ("overflow", 501))])
-def test_present_optional_parameter_keeps_type_bounds_and_projection(fn, param, value, accepted):
-    doc = build_capability_witness(fn)
-    call = _call(doc, fn)
-    call["params"][param] = value
+# Numeric units/projections belong to test_registry_author_units. Here the
+# optional leaf must distinguish absence from a present invalid or boundary value.
+@pytest.mark.parametrize("value,accepted", [(0, True), (500, True), ("0", False), (-1, False), (501, False)])
+def test_present_optional_mana_keeps_bounds_and_literal_projection(value, accepted):
+    doc = _stats(omit=False)
+    _call(doc, "configure_item_stats")["params"]["manaCost"] = value
     before = deepcopy(doc)
-    if not accepted:
+    if accepted:
+        wire = compile_runtime_program(doc)
+        assert wire["gameplay"]["manaCost"] == value
+        row = _receipt(wire["runtimeContract"]["finalWireReceipts"], "gameplay.manaCost")
+        assert row["value"] == value and row["status"] == "delivered"
+        assert validate_runtime_wire(wire)["ok"]
+    else:
         report = validate_runtime_program(doc)
-        assert not report["ok"] and any(e["path"].endswith(".params." + param) for e in report["errors"]), report
+        assert not report["ok"] and any(e["path"].endswith(".params.manaCost") for e in report["errors"])
         with pytest.raises(ValueError, match="runtime program rejected"):
             compile_runtime_program(doc)
-    else:
-        wire = compile_runtime_program(doc)
-        assert validate_runtime_wire(wire)["ok"]
-        rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
-                if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param)]
-        assert rows and all(r["status"] == "delivered" and r["value"] == CAPABILITY_REGISTRY[fn].params[param].to_wire(value) for r in rows)
     assert doc == before
 
 
-# Optional neutral leaves are independent; all 64 masks repeat the same two
-# activation branches. Keep both complete endpoints, each singly present/absent
-# leaf, and both halves together. Single-leaf projection is covered above.
-BUFF_PRESENCE = (
-    pytest.param((False,) * len(BUFF_NEUTRALS), id="all-omitted"),
-    pytest.param((True,) * len(BUFF_NEUTRALS), id="all-present"),
-    *(
-        pytest.param(tuple(j == i for j in range(len(BUFF_NEUTRALS))), id="only-" + name)
-        for i, name in enumerate(BUFF_NEUTRALS)
-    ),
-    *(
-        pytest.param(tuple(j != i for j in range(len(BUFF_NEUTRALS))), id="without-" + name)
-        for i, name in enumerate(BUFF_NEUTRALS)
-    ),
-    pytest.param((True, True, True, False, False, False), id="mining-sense-speed"),
-    pytest.param((False, False, False, True, True, True), id="jump-mana-life"),
-)
-
-
 @pytest.mark.parametrize("active", [False, True], ids=["inert", "selected-light"])
-@pytest.mark.parametrize("present", BUFF_PRESENCE)
-def test_joint_buff_omissions_preserve_light_or_reject_inert(present, active):
+def test_joint_buff_omissions_preserve_light_or_reject_inert(active):
+    # Complete joint omission is the composition boundary. Individual omissions
+    # have exact receipt ownership above; each sole effect is exercised in wire tests.
     explicit = build_capability_witness("apply_generated_buff_on_use")
     params = _call(explicit, "apply_generated_buff_on_use")["params"]
     params.update(BUFF_NEUTRALS)
     if not active:
         params["lightStrength"] = 0
     sparse = deepcopy(explicit)
-    for n, keep in zip(BUFF_NEUTRALS, present):
-        if not keep:
-            _call(sparse, "apply_generated_buff_on_use")["params"].pop(n)
+    for name in BUFF_NEUTRALS:
+        _call(sparse, "apply_generated_buff_on_use")["params"].pop(name)
     if active:
         assert _wire_payload(sparse) == _wire_payload(explicit)
     else:

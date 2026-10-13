@@ -5,7 +5,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_item_stats",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "gameplay.damageClass",
         "gameplay.damage",
@@ -63,7 +63,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_weapon_ammo",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
       "outputs": [
         "runtimeProgram.weaponAmmo",
         "runtimeProgram.weaponAmmo.ammoCategory",
@@ -78,7 +78,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_vanilla_ammo_item",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Contracts/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "gameplay.ammoCategory",
         "gameplay.ammoProjectileId",
@@ -91,7 +91,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "restore_resources_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "gameplay.healLife",
         "gameplay.healMana",
@@ -159,7 +159,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_tool",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "gameplay.pickPower",
         "gameplay.axePower",
@@ -172,7 +172,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_placeable",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
         "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
@@ -184,7 +184,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_tile_placement",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
         "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
@@ -196,7 +196,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_wall_placement",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
         "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
@@ -208,7 +208,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "present_placed_item_sprite",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
+      "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
@@ -236,7 +236,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "add_placed_light",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
+      "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
       "outputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.strength",

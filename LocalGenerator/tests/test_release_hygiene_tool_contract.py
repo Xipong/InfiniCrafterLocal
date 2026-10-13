@@ -15,7 +15,7 @@ PYTEST_RUNNER = ROOT / "tools" / "run_pytest_shards.py"
 RELEASE_RENDERER = ROOT / "tools" / "render_validation_report.py"
 SELFTEST_CHECKER = ROOT / "tools" / "check_tml_selftest_report.py"
 SELFTEST_EMITTER = (
-    ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Systems" / "InfiniAgentContractSelfTestSystem.cs"
+    ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Systems" / "Diagnostics" / "InfiniAgentContractSelfTestSystem.cs"
 )
 
 
@@ -43,6 +43,7 @@ def _contract_check_strict_archive_runtime_junk_patterns_are_recognized() -> Non
     assert hygiene._is_runtime_junk(Path("LocalGenerator/tests/.pytest_cache/v/cache/nodeids"), Path("nodeids"))
     assert hygiene._is_runtime_junk(Path(".codex/session.json"), Path("session.json"))
     assert hygiene._is_runtime_junk(Path(".agents/worker.json"), Path("worker.json"))
+    assert hygiene._is_runtime_junk(Path("LocalGenerator/.venv/pyvenv.cfg"), Path("pyvenv.cfg"))
     assert not hygiene._is_runtime_junk(Path("LocalGenerator/infini_local/web/server.py"), Path("server.py"))
 
 

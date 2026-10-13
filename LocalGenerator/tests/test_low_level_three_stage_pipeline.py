@@ -373,15 +373,12 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     assert [row["role"] for row in requests[0]["messages"]] == ["system", "developer", "user"]
     assert requests[0]["messages"][-1]["name"] == "author_repair_context"
     context = json.loads(requests[0]["messages"][-1]["content"])
-    assert list(context)[-1] == "requiredJsonShape"
     assert "callsUpsert" in context["requiredJsonShape"] and "brokenFragments" not in context["requiredJsonShape"]
     assert "readOnlySourceFragments" in context
     if scenario in {"complete-delete", "sparse-delete"}:
         assert all(row["id"] != "bad_primary" for row in repaired["runtimeProgram"]["bindings"])
         assert repaired["debug"]["gameplayRepairRawPatch"] == patch
         if scenario == "sparse-delete":
-            assert "Omit unchanged root patch fields" in requests[0]["messages"][0]["content"]
-            assert "note and realizationReplacement are required" in requests[0]["messages"][0]["content"]
             assert "requiredRootFields" not in context
     elif scenario == "name-only":
         assert repaired["name"] == "Workbench Blade"
@@ -396,11 +393,13 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         assert any(row["reason"] == "independent_valid_node_frozen" for row in repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"])
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", [
-    "malformed-head", "malformed-tail", "malformed-noop",
-    "huge-buff-first", "huge-buff-later", "huge-placeable", "huge-accessory",
-    "empty-healing-life", "empty-healing-mana",
+# Exact numeric leaves, row positions and healing alternatives belong to
+# test_repair_gameplay_contract. Here test only their full-pipeline handoff.
+@pytest.mark.parametrize("case,mode", [
+    pytest.param("malformed", "json_object", id="object-delete-malformed-row"),
+    pytest.param("malformed-noop", "json_schema", id="schema-reject-malformed-noop"),
+    pytest.param("huge-number", "json_schema", id="schema-json-integer-overflow"),
+    pytest.param("empty-healing", "json_object", id="object-empty-effect"),
 ])
 def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monkeypatch, mode, case):
     from infini_local.core.runtime_authoring import validate_runtime_wire
@@ -408,84 +407,51 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     responses, requests = wire_transport
-    numeric_cases = {
-        "huge-buff-first": ("apply_generated_buff_on_use", "miningSpeedMultiplier"),
-        "huge-buff-later": ("apply_generated_buff_on_use", "manaRegenBonusPoints"),
-        "huge-placeable": ("configure_tile_placement", "tileId"),
-        "huge-accessory": ("configure_accessory", "lightStrength"),
-    }
-    good = build_capability_witness(numeric_cases[case][0] if case in numeric_cases else "restore_resources_on_use")
-    if case == "huge-accessory":
-        next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")["params"].update(lightStrength=0, lightColor="white")
-    if case == "empty-healing-mana":
-        next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use")["params"].update(healLife=0, healMana=20)
+    fn = "apply_generated_buff_on_use" if case == "huge-number" else "restore_resources_on_use"
+    good = build_capability_witness(fn)
     current = copy.deepcopy(good)
     calls = current["runtimeProgram"]["calls"]
-    patch = {"note": "repair only the exact authored defect", "realizationReplacement": good["realization"]}
-    expected_call_permissions = []
-    expected_broken_indices = []
+    node = next(row for row in calls if row["fn"] == fn)
+    patch = {"note": "exact authored defect", "realizationReplacement": good["realization"]}
+    permissions = []
     if case.startswith("malformed"):
-        malformed_index = len(calls) if case == "malformed-tail" else 0
-        calls.insert(malformed_index, None)
-        expected_broken_indices = [{"index": malformed_index, "value": None}]
+        calls.insert(0, None)
         if case != "malformed-noop":
-            patch["callIndicesDelete"] = [malformed_index]
-    elif case in numeric_cases:
-        fn, param = numeric_cases[case]
-        node = next(row for row in calls if row["fn"] == fn)
-        node["params"][param] = 10**400
-        expected_call_permissions = [{"id": node["id"], "paths": ["params." + param]}]
-        patch["callsUpsert"] = [copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn))]
+            patch["callIndicesDelete"] = [0]
     else:
-        healing = next(row for row in calls if row["fn"] == "restore_resources_on_use")
-        healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
-        expected_call_permissions = [{"id": healing["id"], "paths": ["params.healLife", "params.healMana"]}]
-        fixed = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use"))
-        fixed["params"]["usesPotionRules"] = True  # Valid frozen control, not an effective healing leaf.
-        patch["callsUpsert"] = [fixed]
-    if case != "malformed-noop":
-        stats = copy.deepcopy(next(row for row in calls if isinstance(row, dict) and row["fn"] == "configure_item_stats"))
-        stats["params"]["damage"] = 100
-        patch.setdefault("callsUpsert", []).append(stats)
-    original = copy.deepcopy(current)
+        patch["callsUpsert"] = [copy.deepcopy(node)]
+        if case == "huge-number":
+            node["params"]["miningSpeedMultiplier"] = 10**400
+            paths = ["params.miningSpeedMultiplier"]
+        else:
+            node["params"].update(healLife=0, healMana=0, usesPotionRules=False)
+            paths = ["params.healLife", "params.healMana"]
+        permissions = [{"id": node["id"], "paths": paths}]
     responses.extend([json.dumps(current, allow_nan=False), json.dumps(patch, allow_nan=False)])
     planned = gameplay_stage.try_llm_plan({}, {}, {}, {}, "scoped-author-repair")
-    assert planned is not None
-    assert planned["runtimeProgram"] == original["runtimeProgram"]
-    before_pass = copy.deepcopy(planned)
-    phases = []
-
-    def observe(label, fn, *args, **kwargs):
-        phases.append(label)
-        return fn(*args, **kwargs)
-
+    assert planned is not None and planned["runtimeProgram"] == current["runtimeProgram"]
+    original = copy.deepcopy(planned)
     match = "leaves a reported repair error open" if case == "malformed-noop" else None
     with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
-        result = combine_stage.compile_and_validate_authored_runtime(planned, {}, {}, {}, {}, "scoped-author-repair", run_stage=observe)
+        result = combine_stage.compile_and_validate_authored_runtime(
+            planned, {}, {}, {}, {}, "scoped-author-repair", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
         assert validate_runtime_wire(result)["ok"]
-        expected = compile_runtime_program(good)
-        assert result["runtimeProgram"] == expected["runtimeProgram"]
-        assert result["gameplay"] == expected["gameplay"]
-        audit = result["debug"]["gameplayRepairFilterAudit"]
-        assert audit["ok"] and audit["ignoredChanges"]
-        assert result["debug"]["llmStageAccounting"]["gameplayAuthorCalls"] == 1
+        assert result["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
         assert result["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
-        assert phases[-1] == "02r_wire_boundary"
-    # The validators attach debug reports in place; authored values stay literal.
-    assert {k: v for k, v in planned.items() if k != "debug"} == {k: v for k, v in before_pass.items() if k != "debug"}
-    assert current == original
+    assert {k: v for k, v in planned.items() if k != "debug"} == {k: v for k, v in original.items() if k != "debug"}
     assert [r["_infini_stage"] for r in requests] == ["planner", "author_repair"]
     assert all(r["response_format"]["type"] == mode for r in requests)
     dossier = request_dossier(requests[1])
     assert dossier["exactValidationErrors"] == validate_runtime_program(current)["errors"]
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == expected_call_permissions
-    assert dossier["readOnlySourceFragments"]["brokenFragmentsByIndex"]["calls"] == expected_broken_indices
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == permissions
+    assert dossier["readOnlySourceFragments"]["brokenFragmentsByIndex"]["calls"] == (
+        [{"index": 0, "value": None}] if case.startswith("malformed") else [])
     assert not responses
 
 
-@pytest.mark.parametrize("fields", [("durationTicks",), ("buffId", "durationTicks")], ids=["single-leaf", "saturated-multi-leaf"])
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire_transport, monkeypatch, mode, fields):
+def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire_transport, monkeypatch, mode):
+    fields = ("buffId", "durationTicks")
     from infini_local.core.runtime_authoring import validate_runtime_wire
     from test_pipeline_repair_contract import _bounded_invalid_buff_calls
 

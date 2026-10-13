@@ -9,12 +9,12 @@
 
 1. Для значительного изменения сначала открой issue с задачей и предлагаемой
    границей. Небольшое исправление можно отправить непосредственно PR.
-2. Прочитай [AGENTS.md](AGENTS.md) и [архитектуру](PROJECT_ARCHITECTURE_RU.md).
+2. Прочитай [AGENTS.md](AGENTS.md) и [архитектуру](docs/development/ARCHITECTURE_RU.md).
    Gameplay-решения принадлежат модели; не добавляй semantic/name routers,
    weapon presets, скрытые fallback или переавторство сохранённых рецептов.
 3. Делай узкий diff: опиши исходную проблему, изменение и реально выполненные
    проверки. Команды — [AGENTS.md](AGENTS.md#обязательный-vertical-slice),
-   сборка — [BUILD_QOL_RU.md](BUILD_QOL_RU.md). Не объявляй offline checks
+   сборка — [BUILD_QOL_RU.md](docs/development/BUILD_RU.md). Не объявляй offline checks
    доказательством world/GPU/MP или live-модели.
 4. Не включай личные config.env, OAuth/API credentials, cache, модели и saves.
    Новые сторонние материалы обозначь вместе с оригинальной лицензией.

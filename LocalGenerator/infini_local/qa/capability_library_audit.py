@@ -193,7 +193,7 @@ def _numeric_parameter_leaves(spec: ParamSpec, name: str) -> list[tuple[str, Par
 
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     root = _repo_root()
-    dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "RuntimeProgramSpec.cs"
+    dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "Contracts" / "RuntimeProgramSpec.cs"
     text = dto_path.read_text("utf-8", errors="ignore")
     constants = _csharp_constants(root)
     class_bounds = {

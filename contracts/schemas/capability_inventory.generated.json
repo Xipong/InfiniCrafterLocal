@@ -5,7 +5,7 @@
       "capability": "configure_item_stats",
       "componentSlot": "item_stats",
       "conflicts": [],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -422,7 +422,7 @@
       "conflicts": [
         "exclusive_group:ammo_role"
       ],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -508,7 +508,7 @@
       "conflicts": [
         "exclusive_group:ammo_role"
       ],
-      "csharpOwner": "Common/Models/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Contracts/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -598,7 +598,7 @@
       "capability": "restore_resources_on_use",
       "componentSlot": "resource_restore",
       "conflicts": [],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -1012,7 +1012,7 @@
       "capability": "configure_tool",
       "componentSlot": "tool",
       "conflicts": [],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [
         "configure_item_use"
@@ -1118,7 +1118,7 @@
       "capability": "configure_placeable",
       "componentSlot": "placeable",
       "conflicts": [],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "internal",
       "dependencies": [],
       "emittedEvents": [],
@@ -1199,7 +1199,7 @@
       "conflicts": [
         "exclusive_group:placeable"
       ],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -1263,7 +1263,7 @@
       "conflicts": [
         "exclusive_group:placeable"
       ],
-      "csharpOwner": "Common/Models/GeneratedItemData.Apply.cs::ApplyToItem",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "decision": "expose",
       "dependencies": [],
       "emittedEvents": [],
@@ -1325,7 +1325,7 @@
       "capability": "present_placed_item_sprite",
       "componentSlot": "placed_body",
       "conflicts": [],
-      "csharpOwner": "Common/Models/RuntimeProgramSpec.cs::Validate",
+      "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",
       "decision": "expose",
       "dependencies": [
         "configure_tile_placement"
@@ -1509,7 +1509,7 @@
       "capability": "add_placed_light",
       "componentSlot": "placed_light",
       "conflicts": [],
-      "csharpOwner": "Common/Systems/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
+      "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
       "decision": "expose",
       "dependencies": [
         "configure_tile_placement"

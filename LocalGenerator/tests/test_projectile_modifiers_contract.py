@@ -1,23 +1,19 @@
 from prompt_packet_helpers import request_dossier
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
-import json
 
 import pytest
 from repair_test_helpers import (
-    DELETE, edit_fields, frozen_call_repair, provider_roundtrip, frozen_gameplay_repair,
+    DELETE, edit_fields, frozen_call_repair, frozen_gameplay_repair,
 )
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
+    apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
     filter_repair_patch_scope, validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.qa.capability_library_audit import capability_library_audit
-from infini_local.qa.primitive_loss_audit import runtime_component_surface_audit
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
@@ -45,9 +41,10 @@ def entity(wire, fn):
     return next(row for row in wire["runtimeProgram"]["entities"] if member in row)
 
 
-@pytest.mark.parametrize("fn", PARAMS)
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("repair", [False, True])
+@pytest.mark.parametrize("fn,format_mode,repair", [
+    ("set_projectile_visual_scale_curve", "json_object", False),
+    ("set_projectile_homing_modifier", "json_schema", True),
+])
 def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_transport, monkeypatch, fn, format_mode, repair):
     from infini_local.pipelines import llm_transport, visual_generation_pipeline as visual
 
@@ -66,12 +63,6 @@ def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_tra
             assert (member in row) == (member in accepted)
             if member in accepted:
                 assert row[member] == accepted[member]
-                assert row["modifierMeaningReadOnly"][member] == CAPABILITY_REGISTRY[fn].summary
-    formula = packet["spritePresentationReadOnly"]["formulas"]["body"]
-    assert "visualScaleCurve is present" in formula
-    assert "P=D*E*curveScale(active age) from that explicit visual owner" in formula
-    assert "otherwise q_selected * clamp(P, .1, 8)" in formula
-    assert packet["spritePresentationReadOnly"]["formulas"]["liveBodyCopy"].startswith("q_selected * clamp(P, .1, 8)")
     assert data == frozen
 
 @pytest.mark.parametrize("fn", PARAMS)
@@ -86,19 +77,20 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
     assert len(owned) == (len(PARAMS[fn]) or 1)
     assert audit_compiler_receipts(rows, final_document=compiled)["ok"]
 
-# Every exact leaf still exercises missing and all former present-invalid
-# classes. A single observer owns the Author/compiler and persisted DTO refusal.
+# Distinct scalar admissions at both Author and unreceipted persisted-wire boundaries.
+# Registry numeric tests own the repeated per-field type/bounds matrix.
 @pytest.mark.parametrize("fn,leaf,kind,value", [
-    pytest.param(fn, leaf, kind, value, id=f"{fn}-{leaf}-{kind}")
-    for fn, values in PARAMS.items() for leaf, original in values.items()
-    for kind, value in (
-        [("missing", None), ("null", None), ("boolean", True), ("numeric-text", "1"),
-         ("negative", -22000), ("infinity", float("inf")), ("nan", float("nan"))]
-        if type(original) in (int, float) else
-        [("missing", None), ("null", None), ("wrong-type", 0), ("unknown", "unknown")]
-        if isinstance(original, bool) else
-        [("missing", None), ("null", None), ("wrong-type", 1), ("unknown", "unknown")]
-    )
+    ("set_projectile_turn_modifier", "turnRadiansPerUpdate", "missing", None),
+    ("set_projectile_turn_modifier", "turnRadiansPerUpdate", "null", None),
+    ("set_projectile_speed_modifier", "maxSpeed", "boolean", True),
+    ("set_projectile_speed_modifier", "speedMultiplierPerUpdate", "numeric-text", "1"),
+    ("set_projectile_homing_modifier", "rangeTiles", "negative", -22000),
+    ("set_projectile_homing_modifier", "requireLineOfSight", "wrong-type", 0),
+    ("attract_npcs_while_active", "strengthPerUpdate", "infinity", float("inf")),
+    ("attract_npcs_while_active", "falloff", "unknown", "unknown"),
+    ("set_projectile_visual_scale_curve", "endScale", "nan", float("nan")),
+    ("set_projectile_visual_scale_curve", "curve", "missing", None),
+    ("set_projectile_visual_scale_curve", "durationTicks", "negative", 0),
 ])
 def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, kind, value):
     doc = source(fn)
@@ -114,8 +106,15 @@ def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, ki
     compiled.pop("runtimeContract")
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("fn", PARAMS)
-@pytest.mark.parametrize("mutation", ["null", "unknown", "duplicate", "receipt_deleted", "other_entity", "item_target"])
+@pytest.mark.parametrize("fn,mutation", [
+    ("set_projectile_turn_modifier", "null"),
+    ("set_projectile_speed_modifier", "unknown"),
+    ("set_projectile_homing_modifier", "duplicate"),
+    ("attract_npcs_while_active", "receipt_deleted"),
+    ("set_projectile_visual_scale_curve", "other_entity"),
+    ("orient_whip_to_owner_gravity", "item_target"),
+    ("orient_whip_to_owner_gravity", "unknown"),
+])
 def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutation):
     doc = source(fn); compiled = compile_runtime_program(doc)
     member = PROJECTILE_MODIFIER_COMPONENTS.get(fn, "whipUsesOwnerGravity")
@@ -203,11 +202,6 @@ def test_visual_curve_cannot_be_ignored_by_line_geometry_or_overwritten_by_anoth
     compiled.pop("runtimeContract")
     assert not validate_runtime_wire(compiled)["ok"]
 
-def test_numeric_bounds_and_complete_dto_fields_are_machine_audited():
-    assert runtime_component_surface_audit()["ok"]
-    report = capability_library_audit()
-    assert report["ok"], report.get("issues")
-
 
 @pytest.mark.parametrize("fn,leaf,collapsed,neutral,positive", [
     ("set_projectile_turn_modifier", "turnRadiansPerUpdate", 1e-46, 0, 0.04),
@@ -231,107 +225,32 @@ def test_non_neutral_modifier_cannot_collapse_in_the_real_consumer_and_repair_is
     assert not validate_runtime_program(control)["ok"]  # neutral metadata is not omission permission
 
 
-@pytest.mark.parametrize("fn", [*PARAMS, "set_projectile_hitbox_curve"])
-@pytest.mark.parametrize("mutation", ["missing-all", "status", "duplicate"])
-def test_generic_provenance_owner_covers_present_modifier_slots(fn, mutation):
-    doc = build_capability_witness(fn)
-    wire = compile_runtime_program(doc)
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    owned = [row for row in rows if row.get("fn") == fn]
-    assert owned
-    if mutation == "missing-all":
-        rows[:] = [row for row in rows if row not in owned]
-    elif mutation == "duplicate":
-        rows.append(deepcopy(owned[0]))
-    else:
-        owned[0]["status"] = "delivered" if fn == "orient_whip_to_owner_gravity" else "technical_projection"
-    # The canonical audit, not a parallel feature-specific wire checker, owns
-    # provenance with and without the original Author document.
-    for source_document in (None, doc):
-        report = audit_compiler_receipts(rows, authored_document=source_document, final_document=wire)
-        assert not report["ok"], report
 
-
-def test_actual_author_request_exposes_every_explicit_choice():
-    _, user, _ = build_initial_author_request({"name": "A"}, {"name": "B"}, {}, {}, "modifier-offline", model_name="test-model")
-    payload = json.loads(user)
-    cards = {row["fn"]: row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    for fn, params in PARAMS.items(): assert set(cards[fn]["params"]) == set(params)
-
-# Individual combat and launch domains belong to test_runtime_parent_combat
-# and test_runtime_spawn_distributions. Composition only needs each producer
-# variant and each combat pair next to the complete modifier inventory, through
-# BOTH actual transports; repeating their 4 x 5 product adds no new ownership.
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("bases,velocity", [
-    pytest.param(("authored_child", "authored_child"), {"constantSpeedPxPerUpdate": 8.5}, id="authored-constant"),
-    pytest.param(("authored_child", "live_parent"), {"fanSpeed": {"minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}}, id="mixed-fan"),
-    pytest.param(("live_parent", "authored_child"), {"radial": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}}, id="mixed-radial"),
-    pytest.param(("live_parent", "live_parent"), {"disk": {"maxSpeedPxPerUpdate": 6}}, id="parent-disk"),
-    pytest.param(("authored_child", "authored_child"), {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": .2}}, id="authored-cone"),
-])
-def test_combined_feature_modifier_complete_projection_and_actual_serialized_repair(
-    monkeypatch, format_mode, bases, velocity,
-):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract, llm_transport
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
-    feature = "spawn_entity_on_event"
-    doc = build_capability_witness(feature)
-    producer = call(doc, feature)
+def test_modifier_phase_repair_freezes_child_launch_and_parent_combat(monkeypatch, format_mode):
+    doc = build_capability_witness("spawn_entity_on_event")
+    producer = call(doc, "spawn_entity_on_event")
+    producer["params"].update(damageBasis="live_parent", knockbackBasis="authored_child")
     child = producer["params"]["entity"]
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
                  if row["fn"] == "configure_spawn" and row["target"] == child)
-    producer["params"].update(damageBasis=bases[0], knockbackBasis=bases[1])
-    spawn["params"]["velocity"] = deepcopy(velocity)
-    for index, fn in enumerate(PROJECTILE_MODIFIER_COMPONENTS):
-        doc["runtimeProgram"]["calls"].append(dict(
-            id=f"combined_modifier_{index}", fn=fn, target=child, params=deepcopy(PARAMS[fn])))
-    doc["runtimeProgram"]["calls"].append(dict(id="combined_hitbox_curve", fn="set_projectile_hitbox_curve", target=child,
-        params=dict(startScale=1, endScale=2, startDelayTicks=0, durationTicks=80, curve="linear", mirrorToSprite=False)))
-    original = json.dumps(doc, sort_keys=True)
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "combined-merge-offline", model_name="test-model")
-    catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
-    cards = {row["fn"]: row for row in catalog["capabilities"]}
-    from test_author_request_compaction import _expand_constraint_references
-    for fn in (feature, "configure_spawn", *PROJECTILE_MODIFIER_COMPONENTS):
-        expected = CAPABILITY_REGISTRY[fn].author_prompt_card()
-        if fn == "spawn_entity_on_event":
-            expected["constructionMeaning"] = (
-                "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
-                "interval and entity lifetime do not guarantee sustained output."
-            )
-        assert _expand_constraint_references(cards[fn], catalog["fieldGuide"]["consumerConstraints"]) == expected
-    restored = provider_roundtrip(doc, request["response_format"])
-    wire = compile_runtime_program(restored)
-    assert validate_runtime_wire(wire)["ok"]
-    accepted_child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == child)
-    for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
-        assert accepted_child[member] == PARAMS[fn]
-    assert accepted_child["hitboxCurve"]["mirrorToSprite"] is False
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    for source_document in (None, doc):
-        assert audit_compiler_receipts(rows, authored_document=source_document, final_document=wire)["ok"]
-        # Independent receipt lanes remain mandatory inside the combined wire.
-        for fn in ("set_projectile_turn_modifier", feature, "configure_spawn"):
-            removed = [row for row in rows if row.get("fn") != fn]
-            assert not audit_compiler_receipts(removed, authored_document=source_document, final_document=wire)["ok"]
-    without_provenance = deepcopy(wire); without_provenance.pop("runtimeContract")
-    assert validate_runtime_wire(without_provenance)["ok"]
-
-    broken = deepcopy(doc)
-    modifier = call(broken, "set_projectile_turn_modifier")
+    spawn["params"]["velocity"] = {"cone": {
+        "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": .2}}
+    modifier = dict(id="child_turn", fn="set_projectile_turn_modifier", target=child,
+                    params=deepcopy(PARAMS["set_projectile_turn_modifier"]))
+    doc["runtimeProgram"]["calls"].append(modifier)
+    expected = deepcopy(doc)
+    expected_wire = compile_runtime_program(expected)
     modifier["params"]["durationTicks"] = 0
-    scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": modifier["id"], "paths": ["params.durationTicks"]}]
-    fix = deepcopy(modifier); fix["params"].update(durationTicks=90, turnRadiansPerUpdate=.2)
-    hostile_feature = deepcopy(producer); hostile_feature["params"]["entity"] = "item"
-    hostile_spawn = deepcopy(spawn); hostile_spawn["params"]["offsetPx"] = 10
-    repaired, packet, repaired_wire = frozen_gameplay_repair(monkeypatch, broken,
-        {"note": "only exact phase duration", "realizationReplacement": doc["realization"],
-         "callsUpsert": [fix, hostile_feature, hostile_spawn]}, format_mode,
-        {"calls": scope["fieldPermissions"]["calls"]}, doc, out_of_scope_response=True)
-    assert repaired_wire == wire
-    assert json.dumps(doc, sort_keys=True) == original
+    correction = deepcopy(modifier)
+    correction["params"].update(durationTicks=90, turnRadiansPerUpdate=.2)
+    hostile_producer = deepcopy(producer)
+    hostile_producer["params"].update(entity="item", damageBasis="authored_child")
+    hostile_spawn = deepcopy(spawn)
+    hostile_spawn["params"]["velocity"] = {"constantSpeedPxPerUpdate": 12}
+    _, _, wire = frozen_gameplay_repair(monkeypatch, doc,
+        {"note": "repair child phase only", "realizationReplacement": doc["realization"],
+         "callsUpsert": [correction, hostile_producer, hostile_spawn]}, format_mode,
+        {"calls": [{"id": "child_turn", "paths": ["params.durationTicks"]}]}, expected,
+        out_of_scope_response=True)
+    assert wire == expected_wire

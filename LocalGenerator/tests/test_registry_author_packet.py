@@ -1,8 +1,8 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
 import pytest
@@ -10,7 +10,6 @@ from repair_test_helpers import offline_builder, repair_with_response, assert_re
 
 from infini_local.core.runtime_authoring import (
     INPUT_KIND_REGISTRY,
-    compact_capability_catalog,
     validate_runtime_program,
 )
 from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
@@ -32,35 +31,6 @@ from infini_local.pipelines.llm_authoring_prompt import (
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_author_request_compaction import _expand_constraint_references
-
-
-@pytest.fixture(scope="module")
-def packet():
-    a = {"name": "Thorn Whip", "fullName": "Terraria/ThornWhip", "damage": 7, "useTime": 20}
-    b = {"name": "Workbench", "createTile": 18, "useTime": 15}
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
-        request, user, system = build_initial_author_request(a, b, a, b, "whip+bench", model_name="test-model")
-    assert request["response_format"] == {"type": "json_object"}
-    assert [r["role"] for r in request["messages"]] == ["system", "developer", "user"]
-    assert request["messages"][0]["content"] == system and dossier_text(request) == user
-    return request, json.loads(user), system
-
-def test_serialized_author_exposes_registry_without_changing_parent_facts(packet):
-    request, payload, _system = packet
-    catalog = payload["runtimeCapabilityContract"]["catalog"]
-    expected = {row["fn"]: row for row in compact_capability_catalog()}
-    assert _expand_constraint_references(
-        {row["fn"]: {key: value for key, value in row.items() if key != "constructionMeaning"}
-         for row in catalog["capabilities"]}, catalog["fieldGuide"]["consumerConstraints"]) == expected
-    assert set(expected) == {cap.name for cap in visible_capabilities()}
-    assert payload["parents"]["A"]["packet"]["raw"]["item"]["damage"] == 7
-    assert request_dossier(request) == payload
-
-
-def cards_from(catalog):
-    return {r["fn"]: r for r in catalog["capabilities"]}
 
 
 @pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])

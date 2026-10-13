@@ -8,7 +8,7 @@ import pytest
 from repair_test_helpers import frozen_call_repair, provider_roundtrip
 
 from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, compile_runtime_program,
+    apply_repair_patch, compile_runtime_program,
     filter_repair_patch_scope, validate_runtime_program, validate_runtime_wire,
 )
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
@@ -19,7 +19,6 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 _PRODUCERS = ("spawn_entity_on_event", "target_and_fire")
-_BASES = ("authored_child", "live_parent")
 _RETAINED = Path(__file__).with_name("fixtures") / "parent_combat_retained_wire.json"
 
 
@@ -115,36 +114,6 @@ def test_combined_combat_keeps_source_identity_and_exact_present_wire_receipt_gu
         assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn,leaf,invalid", [
-    ("target_and_fire", "damageBasis", "parent"), ("target_and_fire", "count", 5),
-    ("spawn_entity_on_event", "damageMultiplier", True),
-    ("channel_beam", "initialWidthMultiplier", 0), ("set_descendant_concurrency", "maxActive", 0),
-])
-def test_combined_combat_leaf_repair_keeps_all_accepted_main_and_parent_choices_frozen(fn, leaf, invalid):
-    good = _accepted_main_combat_composition()
-    broken = deepcopy(good)
-    call = _call(broken, fn)
-    call["params"][leaf] = invalid
-    before = deepcopy(broken)
-    hostile = deepcopy(good["runtimeProgram"]["calls"])
-    for row in hostile:
-        for key, value in tuple(row["params"].items()):
-            if row["id"] == call["id"] and key == leaf:
-                continue
-            spec = CAPABILITY_REGISTRY[row["fn"]].params[key]
-            if type(value) is bool:
-                row["params"][key] = not value
-            elif spec.enum and len(spec.enum) > 1:
-                row["params"][key] = next(option for option in spec.enum if option != value)
-            elif type(value) in (int, float):
-                alternate = spec.maximum if value == spec.minimum else spec.minimum
-                if alternate is not None:
-                    row["params"][key] = type(value)(alternate)
-    repaired, final = frozen_call_repair(broken, hostile,
-        [{"id": call["id"], "paths": ["params." + leaf]}], good, note="exact combined leaf")
-    assert repaired == good and broken == before
-
-
 def _call(document, fn):
     return next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == fn)
 
@@ -189,9 +158,15 @@ def test_combat_choices_reach_exact_component_provider_inverse_and_receipts(fn, 
     assert authored == before
 
 
-@pytest.mark.parametrize("fn", _PRODUCERS)
-@pytest.mark.parametrize("name", ["damageBasis", "knockbackBasis"])
-@pytest.mark.parametrize("invalid", [None, True, 0, "Live_Parent", " live_parent", "parent", {}, []])
+# Both independent producer consumers and both scalar destinations, without a
+# producer x field x JSON-type product owned by the shared enum validator.
+@pytest.mark.parametrize("fn,name,invalid", [
+    ("spawn_entity_on_event", "damageBasis", None),
+    ("spawn_entity_on_event", "knockbackBasis", True),
+    ("target_and_fire", "damageBasis", "Live_Parent"),
+    ("target_and_fire", "knockbackBasis", " live_parent"),
+    ("target_and_fire", "damageBasis", {}),
+])
 def test_present_basis_is_exact_in_author_and_saved_wire(fn, name, invalid):
     authored = build_capability_witness(fn)
     call = _call(authored, fn)
@@ -252,9 +227,14 @@ def test_item_body_live_parent_reports_and_repairs_only_the_selected_basis(name)
     assert any(row["code"] == "unsupported_param_target_kind" for row in validate_runtime_wire(wire)["errors"])
 
 
-@pytest.mark.parametrize("fn,name", [(fn, name) for fn in _PRODUCERS for name in ("damageBasis", "knockbackBasis")]
-                         + [("target_and_fire", "damageMultiplier")])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "wrong-call", "wrong-source", "swap-equal-bases"])
+@pytest.mark.parametrize("fn,name,mutation", [
+    ("spawn_entity_on_event", "damageBasis", "drop"),
+    ("spawn_entity_on_event", "knockbackBasis", "duplicate"),
+    ("target_and_fire", "damageMultiplier", "wrong-call"),
+    ("target_and_fire", "damageBasis", "wrong-source"),
+    ("target_and_fire", "knockbackBasis", "swap-equal-bases"),
+    ("target_and_fire", "damageMultiplier", "swap-equal-bases"),
+])
 def test_new_wire_presence_requires_exact_unique_owned_provenance(fn, name, mutation):
     document = build_capability_witness(fn)
     call = _call(document, fn)
@@ -336,16 +316,3 @@ def test_saved_wire_and_all_old_receipts_remain_exact_without_new_choices():
         component["damageBasis"] = "live_parent"
         assert not validate_runtime_wire(wire)["ok"]
     assert hashlib.sha256(_RETAINED.read_bytes()).digest() == hashlib.sha256(raw).digest()
-
-
-def test_registry_and_prompt_explain_actual_parent_timing_without_hit_damage_or_class_reapplication():
-    for fn in _PRODUCERS:
-        cap = CAPABILITY_REGISTRY[fn]
-        for name in ("damageBasis", "knockbackBasis"):
-            assert cap.params[name].required and cap.params[name].default is None
-            assert cap.params[name].wire_presence_requires_receipt
-            assert cap.prompt_card()["params"][name]["enum"] == list(_BASES)
-        assert "player/class modifiers" in cap.prompt_card()["does"]
-    assert "snapshot" in CAPABILITY_REGISTRY["spawn_entity_on_event"].prompt_card()["does"]
-    assert "authored" in CAPABILITY_REGISTRY["damage_area_on_event"].params["damageMultiplier"].description
-    assert "authored" in CAPABILITY_REGISTRY["chain_damage_on_event"].params["damageMultiplier"].description

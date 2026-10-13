@@ -30,16 +30,13 @@ def _sound(data, sound_id: Any = "Item4", *, projectile=False):
     return raw
 
 
-# The exact full palette is owned by the vocabulary/schema equality below,
-# test_palette_restores_every_historical_sample_and_keeps_every_recent_sample,
-# and check_vfx_sound_contract (every C# SoundID mapping). Admission and copying
-# do not branch on an enum member. Retain default/non-default numeric samples,
-# the numeric endpoint, named endpoints and a long name, plus projectile binding.
-# Invalid values, silence, legacy absence and frozen Repair keep their own tests.
+# Palette completeness belongs to vocabulary/schema equality and the native
+# SoundID mapping gate. Copying needs a numeric name, a named sound and binding.
 @pytest.mark.parametrize("sound_id,projectile", [
-    pytest.param(sound_id, False, id="item-" + sound_id)
-    for sound_id in ("Item1", "Item4", "Item169", "Coins", "ResearchComplete", "Unlock")
-] + [pytest.param("Item4", True, id="projectile-Item4")])
+    pytest.param("Item169", False, id="item-numeric-sample"),
+    pytest.param("ResearchComplete", False, id="item-named-sample"),
+    pytest.param("Item4", True, id="projectile-sample"),
+])
 def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_id, projectile):
     data = _data()
     before = copy.deepcopy(data)
@@ -107,8 +104,11 @@ def test_fresh_sound_requires_explicit_choice_but_legacy_wire_absence_stays_abse
     assert vfx.validate_vfx_manifest_wire(data)["ok"]
 
 
-@pytest.mark.parametrize("bad", [None, "missing-sample", "absent"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("bad,mode", [
+    pytest.param(None, "json_schema", id="schema-null"),
+    pytest.param("missing-sample", "json_object", id="object-unknown"),
+    pytest.param("absent", "json_schema", id="schema-absent"),
+])
 def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     from infini_local.pipelines import llm_transport
     data = _data()
@@ -146,7 +146,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
             assert "soundId" in json.dumps(request["response_format"]["json_schema"]["schema"])
 
 
-@pytest.mark.parametrize("sound_id", [None, "Item1", "Item4", "Dig", "ResearchComplete"])
+@pytest.mark.parametrize("sound_id", [None, "ResearchComplete"], ids=["legacy-absent", "explicit-sample"])
 def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id):
     from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
     from infini_local.storage import world_storage

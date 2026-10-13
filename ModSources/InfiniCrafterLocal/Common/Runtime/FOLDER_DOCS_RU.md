@@ -7,4 +7,4 @@
 - [RuntimeHitNpcGeneration.cs](RuntimeHitNpcGeneration.cs), [RuntimeHitPullBridge.cs](RuntimeHitPullBridge.cs) — generation fence и owner-hit/server мост.
 - [GeneratedQuickUtilityActivation.cs](GeneratedQuickUtilityActivation.cs) — bounded QuickHeal/QuickMana occurrence admission с canonical utility effects; native heal/consume не воспроизводится.
 
-Hard bounds принадлежат [InfiniRuntimeLimits.cs](../InfiniRuntimeLimits.cs), authority — [InfiniRuntimeAuthority.cs](../Services/InfiniRuntimeAuthority.cs). Lifecycle/peer details применяет runtime, не модель. Unknown opcode — fail-closed; name/category/tooltip не выбирают механику.
+Hard bounds принадлежат [InfiniRuntimeLimits.cs](../InfiniRuntimeLimits.cs), authority — [InfiniRuntimeAuthority.cs](../Services/Networking/InfiniRuntimeAuthority.cs). Lifecycle/peer details применяет runtime, не модель. Unknown opcode — fail-closed; name/category/tooltip не выбирают механику.

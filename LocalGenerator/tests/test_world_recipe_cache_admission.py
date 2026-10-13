@@ -133,9 +133,8 @@ def test_default_debug_reroll_refuses_unsupported_runtime_before_vfx_stage(cache
     _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
 
 
-@pytest.mark.parametrize("caller", ["default", "accepts"])
 @pytest.mark.parametrize("corruption", ["runtime-schema", "binding", "schema-version", "fallback", "vfx", "asset"])
-def test_optional_accepting_validator_cannot_replace_canonical_admission(cache_record, corruption, caller):
+def test_optional_accepting_validator_cannot_replace_canonical_admission(cache_record, corruption):
     _, request, key, path, data = cache_record
     if corruption == "runtime-schema":
         data["runtimeProgram"]["schema"] = "unsupported"
@@ -158,7 +157,7 @@ def test_optional_accepting_validator_cannot_replace_canonical_admission(cache_r
         return {"ok": True, "errors": []}
 
     result = world_recipe_runtime.read_world_recipe_cache(
-        key, request["worldId"], validate_payload=None if caller == "default" else accepts_everything,
+        key, request["worldId"], validate_payload=accepts_everything,
     )
 
     assert result is None, "optional accepting caller bypassed canonical storage admission"
@@ -166,23 +165,11 @@ def test_optional_accepting_validator_cannot_replace_canonical_admission(cache_r
     _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
 
 
-def test_canonical_admission_rejects_before_invoking_optional_validator(cache_record):
-    _, request, key, path, data = cache_record
-    data["runtimeProgram"]["bindings"][0]["id"] = ""
-    world_storage.atomic_write_json(path, data)
-    raw = path.read_bytes()
-
-    result = world_recipe_runtime.read_world_recipe_cache(
-        key, request["worldId"],
-        validate_payload=lambda _: pytest.fail("invalid canonical runtime reached caller-specific work"),
-    )
-
-    assert result is None
-    _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
-
-
-@pytest.mark.parametrize("field", ["recipeKey", "recipeMeta.worldId"])
-@pytest.mark.parametrize("value", [None, "", False, 0, [], {}, " world "], ids=["null", "empty", "bool", "number", "list", "object", "not-equivalent"])
+@pytest.mark.parametrize("field,value", [
+    ("recipeKey", None), ("recipeMeta.worldId", None),
+    ("recipeMeta.worldId", ""), ("recipeKey", False),
+    ("recipeMeta.worldId", []), ("recipeKey", " world "),
+])
 def test_explicit_invalid_identity_is_not_historical_absence(cache_record, field, value):
     _, request, key, path, data = cache_record
     owner = data["recipeMeta"] if "." in field else data

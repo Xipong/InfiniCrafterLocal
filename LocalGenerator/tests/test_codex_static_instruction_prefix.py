@@ -162,7 +162,6 @@ def malformed(case):
     return source
 
 
-@pytest.mark.parametrize("entry", ["native", "prepare-dispatch"])
 @pytest.mark.parametrize("case", [
     "marker-null", "marker-list", "marker-string", "authority-false", "authority-null",
     "authority-int", "authority-string", "authority-list", "index-bool", "index-negative",
@@ -174,14 +173,25 @@ def malformed(case):
     "array-prefix", "bad-tail", "duplicate-static", "duplicate-dynamic", "nested-duplicate",
     "nonfinite-static", "nonfinite-dynamic",
 ])
-def test_malformed_explicit_contract_refuses_before_native_post(native_wire, case, entry):
+def test_malformed_explicit_contract_refuses_before_native_post(native_wire, case):
     source = malformed(case)
     before = copy.deepcopy(source)
     with pytest.raises((ValueError, auth.CodexError)):
-        if entry == "native":
-            backend.generate_chat(source, timeout=3)
-        else:
-            llm._llm_json_single_context(source, 3, CONTEXT)
+        llm._llm_json_single_context(source, 3, CONTEXT)
+    assert not native_wire and source == before
+
+
+# Direct adapter callers bypass preparation. Keep controls for authority type,
+# role escalation, boundary parsing, duplicate ownership, and nonfinite JSON;
+# the complete malformed corpus above owns the shared validator's remaining cases.
+@pytest.mark.parametrize("case", [
+    "authority-int", "role-system", "inside-string", "escaped-overlap", "nonfinite-static",
+])
+def test_direct_native_adapter_cannot_bypass_instruction_authority(native_wire, case):
+    source = malformed(case)
+    before = copy.deepcopy(source)
+    with pytest.raises(auth.CodexError):
+        backend.generate_chat(source, timeout=3)
     assert not native_wire and source == before
 
 
