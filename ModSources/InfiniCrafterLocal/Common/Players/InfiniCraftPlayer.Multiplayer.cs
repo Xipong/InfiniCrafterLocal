@@ -24,7 +24,8 @@ namespace InfiniCrafterLocal.Common.Players;
 // Never add a client-authored GeneratedItemData commit path here.
 public sealed partial class InfiniCraftPlayer
 {
-    private const int RemoteStationProtocolVersion = 1;
+    // Version 2 adds the stable owner token to cancellation replay after reconnect.
+    private const int RemoteStationProtocolVersion = 2;
 
     private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
     {
@@ -858,14 +859,11 @@ public sealed partial class InfiniCraftPlayer
 
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
         clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
-        if (clientId.Length == 0 || !GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
+        if (!modPlayer.RestoreServerCraftOwner(clientId, scope))
         {
             SendCraftCommitResult(whoAmI, requestId, false, "", "server escrow state недоступен");
             return;
         }
-        modPlayer._stationEscrowClientId = clientId;
-        modPlayer._stationEscrowOriginScope = scope;
-        modPlayer._stationEscrowUsesRemoteAuthority = true;
         if (GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out GeneratedStationEscrowStateSystem.CraftReplayOutcome replay))
         {
             LogServerCraftTransaction(whoAmI, requestId, "replayed", $"success={replay.Success}");
@@ -948,6 +946,16 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
+    private bool RestoreServerCraftOwner(string clientId, string scope)
+    {
+        if (clientId.Length == 0 || !GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, this))
+            return false;
+        _stationEscrowClientId = clientId;
+        _stationEscrowOriginScope = scope;
+        _stationEscrowUsesRemoteAuthority = true;
+        return true;
+    }
+
     public static void HandleCancelServerCraftPacket(System.IO.BinaryReader reader, int whoAmI)
     {
         if (Main.netMode != NetmodeID.Server)
@@ -957,6 +965,7 @@ public sealed partial class InfiniCraftPlayer
 
         string scope = ReadRemoteStationScope(reader);
         if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)) return;
+        string clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(reader.ReadString());
         string requestId = reader.ReadString();
         _ = reader.ReadString();
         if (!HasCraftRequestId(requestId))
@@ -966,17 +975,27 @@ public sealed partial class InfiniCraftPlayer
         if (player is null || !player.active)
             return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        if (!GeneratedStationEscrowStateSystem.IsBoundOwner(modPlayer._stationEscrowClientId, modPlayer)) return;
-        if (GeneratedStationEscrowStateSystem.TryReplayCraft(modPlayer._stationEscrowClientId, requestId, out var replay))
+        // A cancel carries the same bearer claim as a craft request, but cannot
+        // create a new transaction (or start generation) for an unknown request.
+        bool completed = GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out var replay);
+        if (!completed && !GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId)) return;
+        if (!modPlayer.RestoreServerCraftOwner(clientId, scope)) return;
+        if (completed)
         {
             SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
+            return;
+        }
+        if (!modPlayer.HasActiveServerCraftRequest(requestId))
+        {
+            const string cancelled = "client cancelled/timeout; inputs remain in station";
+            if (GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", cancelled))
+                SendCraftCommitResult(whoAmI, requestId, false, "", cancelled);
             return;
         }
         if (modPlayer.IsServerAuthoritativeCraft && string.Equals(modPlayer._serverRequestId, requestId, StringComparison.Ordinal))
             modPlayer.CancelActiveServerAuthoritativeCraft("client cancelled/timeout");
         else
             modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout");
-        // Unknown or retired owners cannot manufacture a terminal/refund outcome.
     }
 
     private void SendRemoteServerCraftCancel(string reason)
@@ -988,6 +1007,7 @@ public sealed partial class InfiniCraftPlayer
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketCancelServerCraft);
             WriteRemoteStationScope(packet);
+            packet.Write(_stationEscrowClientId);
             packet.Write(_serverRequestId);
             packet.Write(reason ?? "client_cancel");
             packet.Send();

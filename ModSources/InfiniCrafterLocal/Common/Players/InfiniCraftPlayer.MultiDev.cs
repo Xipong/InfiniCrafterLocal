@@ -489,6 +489,7 @@ public sealed partial class InfiniCraftPlayer
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(PacketCancelServerCraft);
             WriteRemoteStationScope(packet);
+            packet.Write(_stationEscrowClientId);
             packet.Write(job.RequestId);
             packet.Write(reason ?? "client_cancel");
             packet.Send();
