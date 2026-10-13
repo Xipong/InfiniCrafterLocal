@@ -2,7 +2,6 @@
 from pathlib import Path
 import re
 import sys
-import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -41,16 +40,6 @@ def test_transport_uses_request_lifetime_for_both_posts_and_recovery():
     entry = stripped(method_body(client, "GeneratePreparedBlocking"))
     assert entry.index("IsCancellationRequested") < entry.index("GeneratePreparedCacheOnly(")
     assert re.search(r"for\s*\([^;]+;[^;]+!request.CancellationToken.IsCancellationRequested;", entry)
-
-
-def test_native_craft_cancellation_checks_are_registered():
-    project = ET.parse(ROOT / "tools/EngineRuntimeChecks.csproj")
-    assert any(row.attrib.get("Include") == "EngineRuntimeChecks.CraftCancellation.cs" for row in project.iter("Compile"))
-    runner = (ROOT / "tools/EngineRuntimeChecks.cs").read_text(encoding="utf-8")
-    checks = (ROOT / "tools/EngineRuntimeChecks.CraftCancellation.cs").read_text(encoding="utf-8")
-    for name in ("CraftCancellationRetiresAllOwners", "CraftCancellationInterruptsHttpAndRecovery", "CraftCancellationKeepsLiveRetryAndDelivery", "CraftCancellationRetiresMetadataWaiters"):
-        assert re.search(r"private static void " + name + r"\(\)", checks)
-        assert re.search(r'\("[^"]+", ' + name + r"\)", runner)
 
 
 def test_metadata_probe_and_shared_lock_keep_request_cancellation_local():

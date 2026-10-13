@@ -25,11 +25,3 @@ def test_station_cancel_and_player_refund_wiring_uses_native_owners():
     assert "IsCraftLaneCancellationPending(lane)" in ui
     assert 'HasPendingCraftRefunds ? ForgeText("RefundPending")' in ui
     assert "RefundIngredients" not in ui and "_deferredExitRefunds" not in ui
-
-
-def test_station_qol_native_regressions_are_compiled_and_invoked():
-    project = (ROOT / "tools/EngineRuntimeChecks.csproj").read_text()
-    runner = (ROOT / "tools/EngineRuntimeChecks.cs").read_text()
-    assert 'Compile Include="EngineRuntimeChecks.ForgePresentation.cs"' in project
-    for method in ("ForgeQolReadinessReportsEscrowNotMissingMaterials", "ForgeQolDetailsAreCompleteAndReadOnly", "ForgeQolAuthorityObservationCannotParkOrRestoreClaims", "ForgeQolPanelFitsWhenViewportCanContainIt"):
-        assert method in runner

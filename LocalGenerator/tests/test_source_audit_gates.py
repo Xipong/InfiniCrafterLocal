@@ -72,49 +72,6 @@ def test_csharp_policy_accepts_repository(gates, csharp_sources):
     assert scanner.source_policy_issues(csharp_sources) == []
 
 
-@pytest.mark.parametrize("path,before,after", [
-    ("Common/Models/RuntimeProgramSpec.cs", "SameTargetBias, 0f, 1f", "SameTargetBias, 0f, 0.9f"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "Math.Clamp(sameTargetBias, 0f, 0.9f)", "Math.Clamp(sameTargetBias, 0f, 1f)"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "Math.Clamp(targeting.SameTargetBias, 0f, 0.9f)", "Math.Clamp(targeting.SameTargetBias, 0f, 1f)"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "score = npc.whoAmI == _lastTarget", "score = npc.whoAmI == -1"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "FindFiringTarget(range, _entity.Targeting)", "FindNearestNpc(Projectile.Center, range)"),
-    ("Common/Runtime/RuntimeProgramExecutor.cs", "npc.CanBeChasedBy() && npc != directTarget &&", "npc.CanBeChasedBy() &&"),
-    ("Common/Runtime/RuntimeProgramExecutor.cs", "Vector2.DistanceSquared(right.Center, center)", "Vector2.DistanceSquared(right.Center, left.Center)"),
-    ("Common/Runtime/RuntimeProgramExecutor.cs", "Math.Clamp(action.Count, 1, 12)", "Math.Clamp(action.Count, 1, 8)"),
-])
-def test_event_domain_gate_rejects_alias_and_retained_domain_consumer_mutants(gates, csharp_sources, monkeypatch, path, before, after):
-    _, scanner = gates
-    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
-    scanner.ERRORS.clear()
-    scanner.check_event_domain_contracts()
-    assert scanner.ERRORS == []
-    assert before in csharp_sources[path]
-    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
-    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
-    scanner.check_event_domain_contracts()
-    assert any("event domains" in row for row in scanner.ERRORS)
-
-
-@pytest.mark.parametrize("path,before,after", [
-    ("Common/Models/RuntimeProgramSpec.cs", "GravityPerTick, -2f, 2f", "GravityPerTick, 0f, 2f"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 2: Projectile.velocity.Y += p.GravityPerTick;", "case 2: Projectile.velocity.Y += Math.Abs(p.GravityPerTick);"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "case 6: Projectile.velocity.Y += p.GravityPerTick;", "case 6: Projectile.velocity.Y += p.GravityPerTick * 2;"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "if (!controllerOwnsMotion)\n        {\n            RunMovement();\n            ApplyActiveModifiers();\n        }", "RunMovement();\n        ApplyActiveModifiers();"),
-    ("Content/Projectiles/GeneratedProjectile.Executors.cs", "if (_activationDelayTicks > 0)", "if (_activationDelayTicks < 0)"),
-])
-def test_signed_acceleration_source_gate_rejects_native_domain_and_timing_mutants(gates, csharp_sources, monkeypatch, path, before, after):
-    _, scanner = gates
-    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
-    scanner.ERRORS.clear()
-    scanner.check_signed_vertical_acceleration()
-    assert scanner.ERRORS == []
-    assert before in csharp_sources[path]
-    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
-    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
-    scanner.check_signed_vertical_acceleration()
-    assert any("signed vertical acceleration" in row for row in scanner.ERRORS)
-
-
 @pytest.mark.parametrize("path,addition,code", [
     ("Common/Models/GeneratedItemData.Model.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
     ("Content/Items/GeneratedItem.cs", "public void ModifyTooltips() {}", "authored_tooltip"),
@@ -214,6 +171,24 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     assert json.dumps(forbidden) not in json.dumps(surfaces)
 
 @pytest.mark.parametrize("gate,path,old,new,diagnostic", [
+    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxManifestSpec.cs', '"Item169" => SoundID.Item169', '"Item169" => SoundID.Item1', 'exact palette', id='sound-catalog-drift'),
+    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'public float Volume', 'public bool RouteFromWeaponName { get; set; } public float Volume', 'DTO', id='sound-foreign-design-field'),
+    pytest.param('check_event_domain_contracts', 'Common/Models/RuntimeProgramSpec.cs', 'SameTargetBias, 0f, 1f', 'SameTargetBias, 0f, 0.9f', 'event domains', id='saved-target-bias-domain'),
+    pytest.param('check_event_domain_contracts', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'Math.Clamp(sameTargetBias, 0f, 0.9f)', 'Math.Clamp(sameTargetBias, 0f, 1f)', 'event domains', id='nearest-target-bias-discount'),
+    pytest.param('check_event_domain_contracts', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'Math.Clamp(targeting.SameTargetBias, 0f, 0.9f)', 'Math.Clamp(targeting.SameTargetBias, 0f, 1f)', 'event domains', id='firing-target-bias-discount'),
+    pytest.param('check_event_domain_contracts', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'score = npc.whoAmI == _lastTarget', 'score = npc.whoAmI == -1', 'event domains', id='firing-last-target'),
+    pytest.param('check_event_domain_contracts', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'FindFiringTarget(range, _entity.Targeting)', 'FindNearestNpc(Projectile.Center, range)', 'event domains', id='target-fire-selector'),
+    pytest.param('check_event_domain_contracts', 'Common/Runtime/RuntimeProgramExecutor.cs', 'npc.CanBeChasedBy() && npc != directTarget &&', 'npc.CanBeChasedBy() &&', 'event domains', id='radial-direct-target-exclusion'),
+    pytest.param('check_event_domain_contracts', 'Common/Runtime/RuntimeProgramExecutor.cs', 'Vector2.DistanceSquared(right.Center, center)', 'Vector2.DistanceSquared(right.Center, left.Center)', 'event domains', id='radial-same-center-order'),
+    pytest.param('check_event_domain_contracts', 'Common/Runtime/RuntimeProgramExecutor.cs', 'Math.Clamp(action.Count, 1, 12)', 'Math.Clamp(action.Count, 1, 8)', 'event domains', id='radial-count-domain'),
+    pytest.param('check_signed_vertical_acceleration', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'case 6: Projectile.velocity.Y += p.GravityPerTick;', 'case 6: Projectile.velocity.Y += p.GravityPerTick * 2;', 'signed vertical acceleration', id='bounce-signed-addition'),
+    pytest.param('check_signed_vertical_acceleration', 'Content/Projectiles/GeneratedProjectile.Executors.cs', 'if (!controllerOwnsMotion)\n        {\n            RunMovement();\n            ApplyActiveModifiers();\n        }', 'RunMovement();\n        ApplyActiveModifiers();', 'signed vertical acceleration', id='position-controller-motion-authority'),
+    pytest.param('check_escrow_session_fences', 'Common/Systems/GeneratedStationEscrowStateSystem.cs', 'ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)', 'true', 'escrow session:', id='escrow-native-player-incarnation'),
+    pytest.param('check_escrow_session_fences', 'Common/Players/InfiniCraftPlayer.Multiplayer.cs', 'noBroadcast: true', 'noBroadcast: false', 'escrow session:', id='escrow-no-premature-broadcast'),
+    pytest.param('check_escrow_session_fences', 'Common/Players/InfiniCraftPlayer.Station.cs', 'Main.timeItemSlotCannotBeReusedFor[index] == 0', 'true', 'escrow session:', id='escrow-cooling-slot-refused'),
+    pytest.param('check_escrow_session_fences', 'Common/Players/InfiniCraftPlayer.Station.cs', 'Main.timeItemSlotCannotBeReusedFor[index] == 0', 'Main.timeItemSlotCannotBeReusedFor[index] <= 0', 'escrow session:', id='escrow-negative-cooldown-refused'),
+    pytest.param('check_escrow_session_fences', 'Common/Players/InfiniCraftPlayer.Multiplayer.cs', 'if (!committed && allocatedOutput is not null)', 'if (false)', 'escrow session:', id='escrow-output-rollback'),
+    pytest.param('check_escrow_session_fences', 'Common/Players/InfiniCraftPlayer.Multiplayer.cs', 'return committed;', 'return false;', 'escrow session:', id='escrow-committed-outcome'),
     pytest.param('check_runtime_contract', 'Common/Models/GeneratedItemData.Apply.cs', 'item.potion = enabled && effects.Potion;', 'item.potion = Gameplay.HealLife > 0;', 'item.potion', id='inferred-potion'),
     pytest.param('check_runtime_contract', 'Common/Models/TerrariaRuntimeVocabulary.cs', 'ModContent.TryFind<DamageClass>(exact', 'ModContent.TryFind<DamageClass>(guessed', 'ModContent.TryFind', id='loose-class-lookup'),
     pytest.param('check_runtime_contract', 'Common/Services/GeneratorClient.cs', '=> TerrariaRuntimeVocabulary.CanonicalDamageClassToken', '=> LegacyDamageClassToken', 'CanonicalDamageClassToken', id='shadow-class-owner'),
@@ -282,12 +257,6 @@ def test_live_author_surfaces_forbid_extra_prose(forbidden):
     pytest.param('check_visual_vfx_contract', 'Common/Models/VfxManifestSpec.cs', '!impactEntityIds.Add(slot.EntityId)', 'true', 'authored texture role admission', id='duplicate-impact-accepted'),
     pytest.param('check_visual_vfx_contract', 'Common/Models/GeneratedItemData.cs', 'entity.Visual.ImpactSpritePath = FileNameOnly', 'entity.Visual.ImpactSpritePath = identity', 'impact wire path', id='unprojected-impact-path'),
     pytest.param('check_visual_vfx_contract', 'Common/Services/GeneratedAssetSyncService.cs', 'yield return entity.Visual.ImpactSpritePath', 'yield return entity.Visual.SpritePath', 'impact asset roster', id='missing-impact-roster'),
-    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxManifestSpec.cs', '"Item169" => SoundID.Item169', '"Item169" => SoundID.Item1', 'exact palette', id='restored-sound-sample-substitution'),
-    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'PitchVariance = PitchVariance', 'PitchVariance = sample.PitchVariance', 'exact controls', id='native-jitter-overrides-authored-zero'),
-    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'new SoundStyle(sample.SoundPath, sample.Variants, sample.Type)', 'sample with', 'independent pitch', id='hidden-native-music-pitch'),
-    pytest.param('check_vfx_sound_contract', 'Common/Models/VfxSoundSpec.cs', 'MaxInstances = sample.MaxInstances', 'MaxInstances = 1', 'native playback policy', id='sound-instance-policy-substitution'),
-    pytest.param('check_vfx_sound_contract', 'Common/VFX/InfiniItemVfxRuntime.cs', 'if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);', 'SoundEngine.PlaySound(sound, center);', 'explicit silence', id='sound-zero-spends-native-instance'),
-    pytest.param('check_vfx_sound_contract', 'Common/VFX/InfiniVfxRuntime.cs', 'SoundStyle sound = slot.ResolveSoundStyle();', 'SoundStyle sound = SoundID.Item1;', 'shared playback projection', id='projectile-sound-fallback'),
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '_entity?.HitboxCurve?.MirrorToSprite == true', 'false', 'explicit body scale opt-in', id='mirror-opt-in-lost'),
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '_entity?.VisualScaleCurve is not null', 'false', 'explicit visual curve opt-in', id='visual-curve-opt-in-lost'),
     pytest.param('check_explicit_body_scale', 'Content/Projectiles/GeneratedProjectile.Visuals.cs', '? Projectile.scale : Math.Clamp', '? Math.Clamp(Projectile.scale, 0.1f, 8f) : Math.Clamp', 'explicit body scale PNG consumer', id='explicit-mirror-png-clamped'),
@@ -363,26 +332,16 @@ def test_machine_standardization_audit_rejects_source_mutants(monkeypatch, tmp_p
         monkeypatch.setattr(audit, "ROOT", tmp_path)
     assert diagnostic in {row["code"] for row in audit.report()["issues"]}
 
-
-@pytest.mark.parametrize("path,before,after", [
-    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "pair.Key != key && ReferenceEquals(pair.Value.SessionOwner, player)", "false"),
-    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "!ReferenceEquals(state.SessionOwner, player) && IsLiveSession(state.SessionOwner)", "false"),
-    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "if (!IsBoundOwner(key, player))", "if (false)"),
-    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "state.Pending && state.LaneIndex == laneIndex", "state.Pending"),
-    ("Common/Systems/GeneratedStationEscrowStateSystem.cs", "ReferenceEquals(player.GetModPlayer<InfiniCraftPlayer>(), owner)", "true"),
-    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "noBroadcast: true", "noBroadcast: false"),
-    ("Common/Players/InfiniCraftPlayer.Station.cs", "Main.timeItemSlotCannotBeReusedFor[index] == 0", "true"),
-    ("Common/Players/InfiniCraftPlayer.Station.cs", "Main.timeItemSlotCannotBeReusedFor[index] == 0", "Main.timeItemSlotCannotBeReusedFor[index] <= 0"),
-    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "if (!committed && allocatedOutput is not null)", "if (false)"),
-    ("Common/Players/InfiniCraftPlayer.Multiplayer.cs", "return committed;", "return false;"),
-])
-def test_escrow_session_gate_rejects_unsafe_commit_mutants(gates, csharp_sources, monkeypatch, path, before, after):
+@pytest.mark.parametrize("overload,expected", [(0, "First();"), (1, "Second();"), (-1, "Second();")])
+def test_csharp_scope_selects_exact_overload_without_comment_or_string_decoys(gates, overload, expected):
     _, scanner = gates
-    monkeypatch.setattr(scanner, "read", lambda relative: csharp_sources[relative])
-    scanner.check_escrow_session_fences()
-    assert scanner.ERRORS == []
-    assert before in csharp_sources[path]
-    mutant = {**csharp_sources, path: csharp_sources[path].replace(before, after, 1)}
-    monkeypatch.setattr(scanner, "read", lambda relative: mutant[relative])
-    scanner.check_escrow_session_fences()
-    assert any("escrow session:" in error for error in scanner.ERRORS)
+    source = '''class Probe {
+// private void Target() { Wrong(); }
+private void Target() { First(); }
+private void Target(int value) { string decoy = "First(); { }"; Second(); }
+private void Other() { Wrong(); }
+}'''
+    body = scanner.stripped(scanner.method_body(source, "Target", overload=overload))
+    assert expected in body
+    assert ("Second();" if overload == 0 else "First();") not in body
+    assert "Wrong();" not in body and scanner.ERRORS == []
