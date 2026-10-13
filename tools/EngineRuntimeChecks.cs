@@ -170,6 +170,7 @@ internal static partial class EngineRuntimeChecks
             ("legacy detached VFX client cleanup does not require Draw", DetachedVfxClientCleanupDoesNotRequireDraw),
             ("cache-only flag preserves request", CacheOnlyFlagPreservesRequest),
             ("generator delivery requires identity", GeneratorDeliveryRequiresIdentity),
+            ("parent summary unicode roundtrip", ParentSummaryUnicodeRoundtrip),
             ("generated parent prefix is request-only", GeneratedParentPrefixIsRequestOnly),
             ("parent native sprite reference reaches prepared request", ParentNativeSpriteReferenceReachesPreparedRequest),
             ("parent native sprite reference absence is honest", ParentNativeSpriteReferenceAbsenceIsHonest),
