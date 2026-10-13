@@ -8,7 +8,7 @@
 - **[OPEN_INFINICRAFT.bat](OPEN_INFINICRAFT.bat)** — приложение настроек и управления генератором для Windows.
 - Читаешь на GitHub? Начни с **[установки и первого крафта](docs/user/START_RU.md)**.
 
-Для игры скачай готовый **`InfiniCrafterLocal.tmod`** и архив **`Source_and_LocalGenerator.zip`** одного релиза из [официальных загрузок](https://github.com/Xipong/InfiniCrafterLocal/releases). Собрать мод из исходников не требуется. Оригинальный ZIP 0.5.00 ещё не содержит `START_HERE.html`; книга поставляется с этим исправлением документации, отдельно от прежнего release snapshot. Релиз **[0.5.00](https://github.com/Xipong/InfiniCrafterLocal/releases/tag/v0.5.00)** опубликован; в tModLoader его номер может отображаться как `0.5.0`.
+Для игры скачай готовый **`InfiniCrafterLocal.tmod`** и архив **`Source_and_LocalGenerator.zip`** одного релиза из [официальных загрузок](https://github.com/Xipong/InfiniCrafterLocal/releases). Собрать мод из исходников не требуется. Опубликованный релиз — **[0.5.02](https://github.com/Xipong/InfiniCrafterLocal/releases/tag/v0.5.02)**; в tModLoader его номер может отображаться как `0.5.2`. Прежние опубликованные ZIP 0.5.00 и 0.5.02 не содержат `START_HERE.html`: книга добавлена этим исправлением документации и доступна в текущих исходниках отдельно от неизменённых release assets.
 
 Игроку в одиночной игре или хозяину мира нужны stable tModLoader, ParticleLibrary, Luminance, Python 3.11+ с Tcl/Tk и выбранные сервисы текста и изображений. Другу, подключающемуся к хозяину, нужны только мод и игровые зависимости. Модели и аккаунты в поставку не входят; облачные запросы используют твои квоты или оплачиваются твоим провайдером.
 

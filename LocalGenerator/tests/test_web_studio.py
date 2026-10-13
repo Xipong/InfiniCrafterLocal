@@ -82,6 +82,20 @@ def test_foreign_origin_unknown_actions_and_path_traversal_are_rejected(bridge):
     assert bridge.commands.empty()
 
 
+@pytest.mark.parametrize('action', ['acceptDefaults', 'declineDefaults'])
+def test_defaults_decision_is_queued_as_a_dedicated_action(bridge, action):
+    payload = {'action': action, 'values': {}, 'extra': {'revision': 'opaque-offer'}}
+    request = urllib.request.Request(
+        bridge.base_url + '/api/action', data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json', 'X-Infini-Token': bridge.token}, method='POST')
+    response = json.load(urllib.request.urlopen(request, timeout=3))
+    assert response['ok'] is True
+    command = bridge.commands.get_nowait()
+    assert command['action'] == action
+    assert command['values'] == {}
+    assert command['extra'] == {'revision': 'opaque-offer'}
+
+
 def test_published_state_is_a_snapshot_not_an_alias_to_mutable_ui_state(bridge):
     state = {'values': {'a': 'before'}}
     bridge.publish(state)
@@ -131,6 +145,66 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         app.destroy()
 
 
+def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monkeypatch):
+    from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk
+    if not TKINTER_AVAILABLE:
+        pytest.skip('Defaults controller integration needs native Tk')
+    try:
+        probe = tk.Tk()
+        probe.destroy()
+    except tk.TclError:
+        pytest.skip('Defaults controller integration needs a display')
+    from infini_local.desktop import settings_gui, settings_gui_trace_state, settings_gui_server_controls
+    from infini_local.desktop.settings_schema import DEFAULTS
+    from infini_local.desktop.settings_env import parse_env
+    monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
+    config = tmp_path / 'config.env'
+    original = (b'# isolated consent proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
+                b'INFINI_USE_LLM=0\r\nINFINI_IMAGE_BACKEND=off\r\n'
+                b'INFINI_SDCPP_SERVER_AUTOSTART=0\r\nINFINI_LLM_PROVIDER=local\r\n'
+                b'INFINI_OPENAI_COMPAT_API_KEY=opaque-fixture\r\nINFINI_PRIVATE_UNKNOWN=keep\r\n'
+                b'INFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\nINFINI_PROMPT_STYLE=Default\r\n'
+                b'INFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n')
+    config.write_bytes(original)
+    for owner in (settings_gui, settings_gui_trace_state, settings_gui_server_controls):
+        monkeypatch.setattr(owner, 'CONFIG_PATH', config)
+    app = settings_gui.SettingsGui()
+    app.withdraw()
+    server = bridge_module().StudioServer(tmp_path)
+    try:
+        controller = bridge_module().StudioController(app, server)
+        before = controller.snapshot()
+        assert 'defaultsUpdate' in before, 'Studio snapshots must carry the consent offer'
+        offer = before['defaultsUpdate']
+        assert {row['key'] for row in offer['changes']} == {'INFINI_LLM_MAX_TOKENS'}
+        assert config.read_bytes() == original
+        app.vars['INFINI_PROMPT_STYLE'].set('Unsaved native draft')
+        preset = app.preset_var.get()
+        baseline = dict(app._profile_baseline)
+        def forbidden(*_args, **_kwargs):
+            pytest.fail('Defaults decisions must not save/collect/capture the entire draft')
+        monkeypatch.setattr(app, 'save', forbidden)
+        monkeypatch.setattr(app, 'collect', forbidden)
+        monkeypatch.setattr(app, '_capture_profile_baseline', forbidden)
+        app.radmin_enabled.set(False)
+        controller.apply({'id': 'accept-offer', 'action': 'acceptDefaults',
+                          'values': {'INFINI_PRIVATE_UNKNOWN': 'malicious-draft', 'INFINI_PROMPT_STYLE': 'sent-draft'},
+                          'extra': {'revision': offer['revision'], 'lanEnabled': True}})
+        assert config.read_bytes() == original.replace(b'9000', b'18000')
+        assert app.vars['INFINI_LLM_MAX_TOKENS'].get() == '18000'
+        assert app.data['INFINI_LLM_MAX_TOKENS'] == '18000'
+        assert app.vars['INFINI_PROMPT_STYLE'].get() == 'Unsaved native draft'
+        assert app.data['INFINI_PRIVATE_UNKNOWN'] == 'keep'
+        assert app.radmin_enabled.get() is False
+        assert app.preset_var.get() == preset
+        assert app._profile_baseline == baseline
+        assert parse_env(config)['INFINI_PROMPT_STYLE'] == 'Default'
+        assert controller.last_action['ok'] is True
+    finally:
+        server.close()
+        app.destroy()
+
+
 @pytest.mark.parametrize('fresh_install', [False, True])
 def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_path, monkeypatch, fresh_install):
     """No Tk/display needed: use the actual bridge and settings file owner."""
@@ -164,6 +238,8 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     initial_snapshot = controller.snapshot()
     from infini_local.core.config_bootstrap import APP_VERSION
     assert initial_snapshot['version'] == APP_VERSION
+    assert initial_snapshot['fieldHelp']['INFINI_LLM_TIMEOUT']
+    assert initial_snapshot['fieldHelp']['INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS']
     assert initial_snapshot['values'] == initial_snapshot['savedValues']
     assert config.exists() is not fresh_install
     current.update(INFINI_PROMPT_STYLE='Terraria Like', INFINI_OPENAI_COMPAT_API_KEY='dummy-new')
@@ -187,3 +263,9 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     failed_read = controller.snapshot()
     assert failed_read['savedValues'] == saved['savedValues']
     assert 'temporarily unreadable' in failed_read['status']
+    from infini_local.desktop import settings_defaults
+    monkeypatch.setattr(settings_defaults, 'defaults_offer', unreadable)
+    failed_offer = controller.snapshot()
+    assert failed_offer['savedValues'] == saved['savedValues']
+    assert failed_offer['defaultsUpdate']['changes'] == []
+    assert 'temporarily unreadable' in failed_offer['status']

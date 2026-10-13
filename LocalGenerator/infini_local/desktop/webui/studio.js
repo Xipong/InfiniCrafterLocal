@@ -16,7 +16,7 @@
     diagnostics: ['Диагностика', '', 'Диагностика', 'Состояние соединения, события и реальные этапы генерации.']
   };
   const names = {
-    INFINI_USE_LLM:'Авторство нейросети', INFINI_PROMPT_STYLE:'Художественное направление', INFINI_BALANCE_MODE:'Баланс предметов', INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK:'Технический запасной генератор', INFINI_GUI_PIPELINE_PRESET:'Профиль настроек', INFINI_LLM_PROVIDER:'Источник идей и механики', INFINI_CODEX_LLM_MODEL:'Текстовая модель Codex', INFINI_LMSTUDIO_URL:'Адрес LM Studio', INFINI_LMSTUDIO_MODEL:'Локальная текстовая модель', INFINI_OPENROUTER_API_KEY:'Ключ OpenRouter', INFINI_OPENROUTER_MODEL:'Модель OpenRouter', INFINI_OPENROUTER_PROVIDER:'Площадка OpenRouter', INFINI_OPENROUTER_HTTP_REFERER:'Источник запросов', INFINI_OPENROUTER_APP_TITLE:'Имя приложения в OpenRouter', INFINI_OPENAI_COMPAT_BASE_URL:'Адрес совместимого API', INFINI_OPENAI_COMPAT_API_KEY:'Ключ совместимого API', INFINI_OPENAI_COMPAT_MODEL:'Модель совместимого API', INFINI_LLM_API_MODE:'Формат запроса к модели', INFINI_LLM_RESPONSE_FORMAT:'Формат ответа', INFINI_LLM_TEMPERATURE:'Вариативность идеи', INFINI_LLM_REAUTHOR_TEMPERATURE:'Вариативность исправления', INFINI_VISUAL_DIRECTOR_TEMPERATURE:'Вариативность арт-директора', INFINI_LLM_MAX_TOKENS:'Лимит ответа, токены', INFINI_LLM_REASONING_MODE:'Глубина рассуждения', INFINI_LLM_REASONING_MAX_TOKENS:'Бюджет рассуждения, токены', INFINI_LLM_REASONING_EXCLUDE:'Не возвращать рассуждение в ответ', INFINI_LLM_LOCAL_REASONING_PROMPT:'Приватная самопроверка', INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS:'Пауза после сбоя, секунды', INFINI_LLM_FALLBACK_PROVIDER:'Запасной источник', INFINI_LLM_FALLBACK_MODEL:'Запасная модель', INFINI_LLM_FALLBACK_BASE_URL:'Адрес запасного API', INFINI_LLM_FALLBACK_API_KEY:'Ключ запасного API', INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER:'Запасная площадка OpenRouter', INFINI_LLM_FALLBACK_NETWORK_FAILS:'Сетевых сбоев до переключения',
+    INFINI_USE_LLM:'Авторство нейросети', INFINI_PROMPT_STYLE:'Художественное направление', INFINI_BALANCE_MODE:'Баланс предметов', INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK:'Технический запасной генератор', INFINI_GUI_PIPELINE_PRESET:'Профиль настроек', INFINI_LLM_PROVIDER:'Источник идей и механики', INFINI_CODEX_LLM_MODEL:'Текстовая модель Codex', INFINI_LMSTUDIO_URL:'Адрес LM Studio', INFINI_LMSTUDIO_MODEL:'Локальная текстовая модель', INFINI_OPENROUTER_API_KEY:'Ключ OpenRouter', INFINI_OPENROUTER_MODEL:'Модель OpenRouter', INFINI_OPENROUTER_PROVIDER:'Площадка OpenRouter', INFINI_OPENROUTER_HTTP_REFERER:'Источник запросов', INFINI_OPENROUTER_APP_TITLE:'Имя приложения в OpenRouter', INFINI_OPENAI_COMPAT_BASE_URL:'Адрес совместимого API', INFINI_OPENAI_COMPAT_API_KEY:'Ключ совместимого API', INFINI_OPENAI_COMPAT_MODEL:'Модель совместимого API', INFINI_LLM_API_MODE:'Формат запроса к модели', INFINI_LLM_RESPONSE_FORMAT:'Формат ответа', INFINI_LLM_TEMPERATURE:'Вариативность идеи', INFINI_LLM_REAUTHOR_TEMPERATURE:'Вариативность исправления', INFINI_VISUAL_DIRECTOR_TEMPERATURE:'Вариативность арт-директора', INFINI_LLM_MAX_TOKENS:'Лимит ответа, токены', INFINI_LLM_TIMEOUT:'Ожидание LLM-стадии, секунды', INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS:'Лимит VFX, токены', INFINI_VFX_LLM_DIRECTOR_TIMEOUT:'Ожидание VFX, секунды', INFINI_LLM_REASONING_MODE:'Глубина рассуждения', INFINI_LLM_REASONING_MAX_TOKENS:'Бюджет рассуждения, токены', INFINI_LLM_REASONING_EXCLUDE:'Не возвращать рассуждение в ответ', INFINI_LLM_LOCAL_REASONING_PROMPT:'Приватная самопроверка', INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS:'Пауза после сбоя, секунды', INFINI_LLM_FALLBACK_PROVIDER:'Запасной источник', INFINI_LLM_FALLBACK_MODEL:'Запасная модель', INFINI_LLM_FALLBACK_BASE_URL:'Адрес запасного API', INFINI_LLM_FALLBACK_API_KEY:'Ключ запасного API', INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER:'Запасная площадка OpenRouter', INFINI_LLM_FALLBACK_NETWORK_FAILS:'Сетевых сбоев до переключения',
     INFINI_IMAGE_BACKEND:'Источник изображений', INFINI_IMAGE_MAX_CONCURRENCY:'Параллельных изображений', INFINI_SDCPP_SERVER_EXE:'Программа sd.cpp', INFINI_SDCPP_ROCM_COMPAT_ROOT:'Папка совместимости ROCm', INFINI_SDCPP_MODEL:'Диффузионная модель', INFINI_SDCPP_VAE:'Модель VAE / AE', INFINI_SDCPP_LLM:'Текстовый энкодер', INFINI_SDCPP_LORA_DIR:'Папка LoRA', INFINI_SDCPP_LORA_FILE:'Файл LoRA', INFINI_SDCPP_LORA_WEIGHT:'Сила LoRA', INFINI_SDCPP_LORA_PROMPT_TAGS:'Теги LoRA', INFINI_SDCPP_SERVER_URL:'Адрес sd.cpp', INFINI_SDCPP_SERVER_AUTOSTART:'Способ запуска sd.cpp', INFINI_SDCPP_SERVER_COMMAND_MODE:'Способ запуска sd.cpp', INFINI_SDCPP_SERVER_COMMAND_TEMPLATE:'Шаблон команды запуска', INFINI_SDCPP_SERVER_EXTRA_ARGS:'Дополнительные аргументы', INFINI_SDCPP_SERVER_SHOW_CONSOLE:'Показывать консоль sd.cpp', INFINI_SDCPP_SERVER_LOG_FILE:'Файл журнала sd.cpp', INFINI_SDCPP_WIDTH:'Ширина исходника, px', INFINI_SDCPP_HEIGHT:'Высота исходника, px', INFINI_SDCPP_STEPS:'Шаги генерации', INFINI_SDCPP_CFG:'Влияние промпта / CFG', INFINI_SDCPP_SAMPLER:'Сэмплер', INFINI_SDCPP_SEED:'Seed изображения', INFINI_ZIMAGE_PROMPT_CONTRACT:'Правила промпта Z-Image', INFINI_ZIMAGE_POSITIVE_ONLY:'Только позитивный промпт', INFINI_CODEX_IMAGE_MODEL:'Модель изображений Codex', INFINI_CODEX_IMAGE_QUALITY:'Качество изображения', INFINI_CODEX_IMAGE_SIZE:'Размер изображения', INFINI_CODEX_IMAGE_TIMEOUT:'Ожидание Codex, секунды', INFINI_CODEX_VISUAL_REASONING:'Рассуждение арт-директора Codex', INFINI_IMAGE_API_BASE_URL:'Адрес API изображений', INFINI_IMAGE_API_KEY:'Ключ API изображений', INFINI_IMAGE_API_MODEL:'Модель изображений API', INFINI_IMAGE_API_PATH:'Путь API генерации', INFINI_IMAGE_API_SIZE:'Размер исходного изображения', INFINI_IMAGE_API_TIMEOUT:'Ожидание API, секунды', INFINI_A1111_URL:'Адрес Automatic1111', INFINI_COMFYUI_URL:'Адрес ComfyUI',
     INFINI_VISUAL_ASSET_MODE:'Состав визуальных ассетов', INFINI_VISUAL_DIRECTOR_LLM:'Нейросетевой арт-директор', INFINI_VISUAL_DIRECTOR_MAX_TOKENS:'Лимит арт-директора, токены', INFINI_VFX_LLM_DIRECTOR:'Нейросетевые визуальные эффекты', INFINI_REMOVE_BG:'Удалять фон', INFINI_BG_REMOVE_MODE:'Метод удаления фона', INFINI_BG_COLOR:'Фон исходного рисунка', INFINI_CHROMA_TOLERANCE:'Допуск цвета фона', INFINI_ALPHA_THRESHOLD:'Порог прозрачности', INFINI_SPRITE_KEYER_SPILL_RADIUS:'Радиус очистки краёв', INFINI_SPRITE_KEYER_RESIDUE_STEPS:'Шаги очистки остаточного цвета', INFINI_SPRITE_RETRIES:'Повторы при дефекте спрайта', INFINI_SAVE_SPRITE_STAGES:'Сохранять промежуточные спрайты', INFINI_PIXEL_POSTERIZE:'Ограничивать палитру', INFINI_MAX_COLORS:'Количество цветов', INFINI_SPRITE_MASTER_CANVAS:'Промежуточный холст, px', INFINI_SPRITE_DOWNSCALE_FILTER:'Фильтр уменьшения', INFINI_SPRITE_CHROMA_DEFRINGE:'Очищать цветные ореолы', INFINI_SPRITE_PREMULTIPLIED_RESIZE:'Учитывать прозрачность при resize', INFINI_VISUAL_STRICT_AI_AUTHORSHIP:'Строгое авторство модели', INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK:'Запасное процедурное изображение', INFINI_VISUAL_REQUIRE_ITEM_SPRITE:'Требовать спрайт предмета',
     INFINI_HOST:'Интерфейс генератора', INFINI_PORT:'Порт генератора', INFINI_MP_ASSET_TRANSPORT:'Доставка спрайтов друзьям', INFINI_ASSET_PUBLIC_BASE_URL:'Публичный адрес ассетов', INFINI_TERRARIA_PORT:'Порт Terraria', INFINI_CRAFT_HTTP_TIMEOUT_SECONDS:'Ожидание крафта, секунды', INFINI_CRAFT_HTTP_ATTEMPTS:'Попытки соединения', INFINI_COMBINE_BUSY_WAIT_SECONDS:'Ожидание очереди, секунды', INFINI_MULTIDEV_CONCURRENCY:'Параллельные окна разработчика', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED:'Отладочная выдача расходников', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD:'Минимальная выдача расходников', INFINI_TRACE_PROMPTS:'Записывать промпты и этапы', INFINI_TRACE_MAX_PROMPT_CHARS:'Лимит предпросмотра, символы', INFINI_TRACE_EVENTS_TAIL:'Событий в журнале', INFINI_CONSOLE_EVENT_LEVEL:'Подробность консоли'
@@ -62,7 +62,7 @@
   function makeFields(remote) {
     const map = new Map((remote.fields || []).map(field => [field.key,{...field}]));
     Object.keys({...remote.defaults,...remote.values}).filter(key => key.startsWith('INFINI_')).forEach(key => {
-      if (!map.has(key)) map.set(key,{key,label:names[key],help:'',options:[],secret:isCredentialKey(key),advanced:!basicKeys.has(key),synthetic:true});
+      if (!map.has(key)) map.set(key,{key,label:names[key],help:remote.fieldHelp?.[key] || '',options:[],secret:isCredentialKey(key),advanced:!basicKeys.has(key),synthetic:true});
     });
     return [...map.values()].map(field => ({...field,secret:field.secret || isCredentialKey(field.key),route:pageFor(field.key,field.page)}));
   }
@@ -139,7 +139,15 @@
         if (transforming) Object.entries({...remote.defaults,...remote.values}).forEach(([key,val]) => {
           if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = val;
         });
-        if ((state.lanEdit || 0) <= pending.clock) state.lan = !!remote.lanEnabled;
+        const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(pending.action);
+        if (defaultsDecision) {
+          if (pending.action === 'acceptDefaults') Object.entries(pending.sent).forEach(([key,val]) => {
+            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = saved[key] ?? val;
+          });
+          if ($('#utility-dialog').dataset.kind === 'defaults') $('#utility-dialog').close();
+          toast(pending.action === 'acceptDefaults' ? 'Записаны только показанные рекомендации. Остальной черновик не сохранён.' : 'Рекомендации отклонены. config.env не изменён.');
+        }
+        if (!defaultsDecision && (state.lanEdit || 0) <= pending.clock) state.lan = !!remote.lanEnabled;
         // A handled callback is not proof of a disk write or a running generator.
         if (pending.action === 'start') state.startSubmission = pending;
         if (pending.action === 'save' && /^saved:/i.test(remote.status || '')) {
@@ -150,8 +158,12 @@
           toast('Настройки записаны в config.env.');
         } else if (transforming) toast('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.');
         else if (pending.action === 'savePreset') toast('Профиль сохранён отдельно. config.env не изменён.');
-        else if (pending.action !== 'exitStudio') toast(({start:'Запуск передан генератору. Его состояние — на рабочем столе.',stop:'Проверяем возможность безопасной остановки.',health:'Проверка соединения запущена.',validate:'Проверка путей выполнена. Результат — в диагностике.',trace:'Журнал запрошен.',codexLogin:'Вход открыт в отдельном окне.',codexStatus:'Статус аккаунта запрошен.',codexCatalog:'Каталог моделей запрошен.',codexPing:'Проверка аккаунта запрошена.',codexLogout:'Выход из аккаунта обработан.',cancelTrace:'Обновление журнала отменено.',openConfig:'Открываем файл конфигурации.',openCache:'Открываем папку кеша.',clearTrace:'Запрос очистки обработан.'})[pending.action] || 'Действие обработано.');
-      } else toast(remote.lastAction.message || 'Действие не выполнено. Изменения сохранены в этой вкладке.',true);
+        else if (pending.action !== 'exitStudio' && !defaultsDecision) toast(({start:'Запуск передан генератору. Его состояние — на рабочем столе.',stop:'Проверяем возможность безопасной остановки.',health:'Проверка соединения запущена.',validate:'Проверка путей выполнена. Результат — в диагностике.',trace:'Журнал запрошен.',codexLogin:'Вход открыт в отдельном окне.',codexStatus:'Статус аккаунта запрошен.',codexCatalog:'Каталог моделей запрошен.',codexPing:'Проверка аккаунта запрошена.',codexLogout:'Выход из аккаунта обработан.',cancelTrace:'Обновление журнала отменено.',openConfig:'Открываем файл конфигурации.',openCache:'Открываем папку кеша.',clearTrace:'Запрос очистки обработан.'})[pending.action] || 'Действие обработано.');
+      } else {
+        const message = remote.lastAction.message || 'Действие не выполнено. Изменения сохранены в этой вкладке.';
+        if (['acceptDefaults','declineDefaults'].includes(pending.action)) defaultsError(message);
+        toast(message,true);
+      }
       state.pending = null; clearTimeout(pending.timer);
       if (['applyPreset','browse','clearLora','useLora','resetSprite'].includes(pending.action)) render();
     }
@@ -173,6 +185,10 @@
     syncInputs();
     if ($('#account-status')) $('#account-status').textContent = remote.account?.[state.page === 'providers' ? 'catalog':'images'] || 'Статус аккаунта ещё не запрошен.';
     $('#version').textContent = `Версия ${remote.version || 'α'}`;
+    const offer = remote.defaultsUpdate;
+    if (offer?.changes?.length && !offer.dismissed && !state.defaultsPrompted) {
+      state.defaultsPrompted = true; showDefaultsUpdate();
+    }
     return true;
   }
   async function poll() {
@@ -199,11 +215,13 @@
   async function action(name, extra={}) {
     if (!state.connected || state.pending || state.posting) {toast('Дождись ответа текущего действия или восстанови соединение.',true);return;}
     state.posting = true; updateActionButtons();
-    const sent = editableValues(), clock = state.editClock, sentLan = state.lan;
+    const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(name);
+    const sent = defaultsDecision ? (name === 'acceptDefaults' ? Object.fromEntries((state.defaultsPreview?.changes || []).map(row => [row.key,row.recommended])) : {}) : editableValues();
+    const clock = state.editClock, sentLan = state.lan;
     // Protect the submission from the first byte sent, not only after its id arrives.
     state.submission = {action:name,sent,clock,lan:sentLan};
     try {
-      const queued = await api('/api/action',{action:name,values:sent,extra:{lanEnabled:sentLan,...extra}});
+      const queued = await api('/api/action',{action:name,values:defaultsDecision ? {} : sent,extra:defaultsDecision ? {revision:extra.revision} : {lanEnabled:sentLan,...extra}});
       if (!queued.ok || !queued.id) throw new Error('Локальный сервер не подтвердил очередь действия.');
       if (name === 'exitStudio') {state.shutdown = true; clearTimeout(state.pollTimer); $('#utility-dialog').close(); $('#connection').innerHTML = '<span class="status-dot"></span><span>Студия закрыта</span>'; $('#workspace').innerHTML = `<div class="initial-loading"><h1>Студия закрыта</h1><p>Закрыта только студия. Генератор не остановлен этим действием.<br>Эту вкладку можно закрыть.</p></div>`;return;}
       const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,timer:null};
@@ -215,7 +233,7 @@
         toast('Подтверждение задерживается. Изменения защищены; действие может ещё завершиться.',true);
       },name === 'browse' ? 180000 : 30000);
       poll();
-    } catch (error) {toast(error.message,true);}
+    } catch (error) {if (defaultsDecision) defaultsError(error.message); toast(error.message,true);}
     finally {state.submission = null; state.posting = false; updateActionButtons();}
   }
   function updateActionButtons() {
@@ -224,6 +242,8 @@
     const serverBusy = state.remote?.busy?.includes('server-action');
     $$('[data-action="start"], [data-action="stop"]').forEach(button => {button.disabled = !!(locked || serverBusy);});
     $$('[data-ui="apply-preset"], [data-ui="save-preset"], [data-ui="stop"], [data-ui="reset-sprite"], [data-ui="clear-lora"], [data-ui="clear-trace"], [data-ui="force-restart"]').forEach(button => {button.disabled = !!locked;});
+    $$('[data-ui="defaults-update"], [data-ui="defaults-refresh"]').forEach(button=>{button.disabled=!!locked;});
+    if ($('#utility-dialog').dataset.kind === 'defaults') $$('[data-ui="close-dialog"]', $('#utility-dialog')).forEach(button=>{button.disabled=!!(state.pending || state.posting);});
     const save = $('[data-action="save"]', $('#save-tray'));
     if (save) save.innerHTML = `${icon(state.pending?.action === 'save' ? 'refresh':'save')}${state.pending?.action === 'save' ? 'Сохраняем…':'Сохранить'}`;
   }
@@ -348,7 +368,7 @@
     const selected = value('INFINI_GUI_PIPELINE_PRESET');
     const presetEntries = [...Object.keys(state.remote.presets || {}),...Object.keys(state.remote.userPresets || {}).map(name => `Мой: ${name}`)];
     const full = state.fields;
-    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} ПАРАМЕТРОВ</span></div><div class="configure-index">${[
+    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet"><h2>Рекомендованные настройки</h2><p>Обновление меняет только показанные устаревшие значения в config.env. Черновик, ключи, источники моделей и пути не сохраняются этим действием.</p><button class="button" data-ui="defaults-update">Проверить рекомендации</button></section><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} ПАРАМЕТРОВ</span></div><div class="configure-index">${[
       ['01','providers','Автор и механика','Источник текста, направление и вариативность.'],['02','images','Источник изображения','Локальный движок, подписка или API.'],['03','sprites','Спрайт и цвет','Прозрачность, края, холст и палитра.'],['04','models','Модели и LoRA','Файлы моделей и художественные адаптеры.'],['05','multiplayer','Соединение с игрой','Адрес генератора и совместный крафт.'],['06','diagnostics','Диагностика','Журнал, события и технические параметры.']
     ].map(([n,route,title,description]) => `<a class="index-row" href="#${route}"><span class="index-number">${n}</span><div><h3>${title}</h3><p>${description}</p></div><span class="index-tail"><span>${counts(route)}</span>${icon('arrow')}</span></a>`).join('')}</div>${disclosure('all-settings','Все параметры одним списком',full,'Полный доступ ко всем настройкам, включая параметры других источников и служебные поля. Значения не скрываются при смене профиля.')}<p class="settings-path">${esc(state.remote.configPath)}</p></div>${aside()}</div>`;
   }
@@ -448,7 +468,25 @@
       window.scrollTo({top:Math.max(0,top),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant':'smooth'});
     });
   }
-  function utility(title,body) {setMenu(false);$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
+  function utility(title,body) {setMenu(false);$('#utility-dialog').dataset.kind='';$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
+  function defaultsError(message) {
+    if ($('#defaults-error')) {$('#defaults-error').textContent=message;$('#defaults-error').hidden=false;}
+  }
+  function showDefaultsUpdate() {
+    const offer = state.remote?.defaultsUpdate;
+    state.defaultsPreview = offer ? {...offer,changes:(offer.changes || []).map(row=>({...row}))} : null;
+    const changes = state.defaultsPreview?.changes || [];
+    utility(`Рекомендации ${offer?.version || ''}`,`<p class="dialog-copy">Будут записаны только перечисленные изменения из сохранённого config.env. Несохранённые настройки, ключи, источники моделей и пути остаются без изменений. Работающий генератор применит изменения после безопасного перезапуска.</p><div id="defaults-changes" class="defaults-changes">${changes.length ? changes.map(row=>`<div data-defaults-key="${esc(row.key)}"><code>${esc(row.key)}</code><p class="defaults-values"><span>${esc(row.current || "Пусто (off)")}</span> → <strong>${esc(row.recommended)}</strong></p><p>${esc(row.reason)}</p></div>`).join('') : 'Обновлений рекомендованных значений нет.'}</div><p id="defaults-error" class="defaults-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Позже</button><button class="button" id="defaults-refresh" data-ui="defaults-refresh">Обновить список</button>${changes.length ? '<button class="button" id="defaults-decline" data-submit-action>Оставить текущие</button><button class="button button-primary" id="defaults-accept" data-submit-action>Применить рекомендации</button>' : ''}</div>`);
+    $('#utility-dialog').dataset.kind='defaults';
+    const decide = name => action(name,{revision:state.defaultsPreview.revision});
+    if ($('#defaults-accept')) $('#defaults-accept').onclick=()=>decide('acceptDefaults');
+    if ($('#defaults-decline')) $('#defaults-decline').onclick=()=>decide('declineDefaults');
+  }
+  async function refreshDefaultsUpdate() {
+    if (state.pending || state.posting) return;
+    try {const remote=await api('/api/state');if(acceptSnapshot(remote)) showDefaultsUpdate();}
+    catch(error) {defaultsError(error.message);}
+  }
   function confirm(title,description,actionName,extra={},labelText='Подтвердить') {
     utility(title,`<p class="dialog-copy">${esc(description)}</p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Отмена</button><button class="button ${actionName === 'stop' || actionName === 'clearTrace' ? 'button-danger':'button-primary'}" id="confirm-submit" data-submit-action>${esc(labelText)}</button></div>`);
     $('#confirm-submit').onclick=() => {$('#utility-dialog').close();action(actionName,extra);};
@@ -508,9 +546,11 @@
     if(button.dataset.searchKey) {focusField(button.dataset.searchKey);return;}
     if(button.dataset.traceTab) {state.traceTab=button.dataset.traceTab;$$('[data-trace-tab]').forEach(tab => {tab.classList.toggle('active',tab === button);tab.setAttribute('aria-selected',String(tab === button));tab.tabIndex=tab === button?0:-1;});$('#trace-view').setAttribute('aria-labelledby',button.id);updateDiagnostics();return;}
     switch(button.dataset.ui) {
+      case 'defaults-update':showDefaultsUpdate();break;
+      case 'defaults-refresh':refreshDefaultsUpdate();break;
       case 'search':showSearch();break;
       case 'retry':poll();break;
-      case 'close-dialog':button.closest('dialog')?.close();break;
+      case 'close-dialog':if (button.closest('dialog')?.dataset.kind !== 'defaults' || !(state.pending || state.posting)) button.closest('dialog')?.close();break;
       case 'menu':setMenu(!$('.rail').classList.contains('is-open'));break;
       case 'close-menu':setMenu(false);break;
       case 'help':showHelp();break;
@@ -546,7 +586,10 @@
       else if(!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
     }
   });
-  $$('dialog').forEach(dialog => dialog.addEventListener('click',event => {if(event.target === dialog) {const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) dialog.close();}}));
+  $$('dialog').forEach(dialog => {
+    dialog.addEventListener('cancel',event=>{if(dialog.dataset.kind === 'defaults' && (state.pending || state.posting)) event.preventDefault();});
+    dialog.addEventListener('click',event => {if(event.target === dialog && !(dialog.dataset.kind === 'defaults' && (state.pending || state.posting))) {const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) dialog.close();}});
+  });
   window.addEventListener('hashchange',navigate);
   window.addEventListener('resize',() => {if(innerWidth > 720) setMenu(false,false);});
   document.addEventListener('visibilitychange',() => {if(!document.hidden) poll();});

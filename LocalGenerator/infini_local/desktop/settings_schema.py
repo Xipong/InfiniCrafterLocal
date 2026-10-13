@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -260,12 +262,15 @@ DEFAULTS = {
     "INFINI_LLM_FALLBACK_API_KEY": "",
     "INFINI_LLM_FALLBACK_NETWORK_FAILS": "2",
     "INFINI_LLM_RESPONSE_FORMAT": "auto",
-    "INFINI_LLM_TEMPERATURE": "0.38",
+    "INFINI_LLM_TEMPERATURE": GENERATION_DEFAULTS["INFINI_LLM_TEMPERATURE"],
     "INFINI_LLM_REAUTHOR_TEMPERATURE": "",
-    "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "0.42",
+    "INFINI_VISUAL_DIRECTOR_TEMPERATURE": GENERATION_DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"],
     "INFINI_CODEX_VISUAL_REASONING": "inherit",
-    "INFINI_LLM_MAX_TOKENS": "9000",
-    "INFINI_LLM_REASONING_MODE": "off",
+    "INFINI_LLM_MAX_TOKENS": GENERATION_DEFAULTS["INFINI_LLM_MAX_TOKENS"],
+    "INFINI_LLM_TIMEOUT": GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"],
+    "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS": "",
+    "INFINI_VFX_LLM_DIRECTOR_TIMEOUT": "",
+    "INFINI_LLM_REASONING_MODE": GENERATION_DEFAULTS["INFINI_LLM_REASONING_MODE"],
     "INFINI_LLM_REASONING_MAX_TOKENS": "1500",
     "INFINI_LLM_REASONING_EXCLUDE": "1",
     "INFINI_LLM_LOCAL_REASONING_PROMPT": "1",
@@ -334,7 +339,7 @@ DEFAULTS = {
     "INFINI_MP_ASSET_TRANSPORT": "native",
     "INFINI_ASSET_PUBLIC_BASE_URL": "",
     "INFINI_TERRARIA_PORT": "7777",
-    "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS": "240",
+    "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS": "900",
     "INFINI_CRAFT_HTTP_ATTEMPTS": "2",
     "INFINI_COMBINE_BUSY_WAIT_SECONDS": "210",
     "INFINI_MULTIDEV_CONCURRENCY": "3",
@@ -509,9 +514,12 @@ FIELD_HELP = {
     "INFINI_LLM_FALLBACK_NETWORK_FAILS": "Сколько сетевых/timeout сбоев подряд терпеть на primary, прежде чем переключаться на fallback. По умолчанию 2.",
     "INFINI_LLM_RESPONSE_FORMAT": "Как просить JSON у модели. json_object — проверенный рабочий выбор для Gemini/OpenRouter. json_schema отклоняется Google Gemini (400 INVALID_ARGUMENT на большой схеме Author) и оставлен опционально; auto для удалённых API тоже разворачивается в json_schema.",
     "INFINI_LLM_TEMPERATURE": "Температура основного LLM planner: выше = больше вариативности/риска, ниже = стабильнее/однообразнее. Это не Z-Image; картинки регулируются seed/CFG/steps/flow-shift.",
-    "INFINI_LLM_REAUTHOR_TEMPERATURE": "Температура единственного scoped repair. Пусто = наследовать Planner temperature. Это не verifier и не полный reauthor: модель возвращает только разрешённые repair-поля.",
+    "INFINI_LLM_REAUTHOR_TEMPERATURE": "Температура единственного scoped repair. Пусто = 0.12; явно заданный INFINI_LLM_REPAIR_TEMPERATURE имеет приоритет. Это не verifier и не полный reauthor: модель возвращает только разрешённые repair-поля.",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "Температура LLM Visual Director, который пишет visual kit/prompt-ы для Z-Image. Выше = больше художественной вариативности, но больше риск ухода от предмета.",
     "INFINI_LLM_MAX_TOKENS": "Лимит ответа LLM. Для reasoning-моделей нужен запас, иначе модель может не успеть вернуть JSON.",
+    "INFINI_LLM_TIMEOUT": "Общее ожидание каждой LLM-стадии и её условного Repair, секунды; по умолчанию 600. Не HTTP-дедлайн игрового клиента.",
+    "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS": "Лимит ответа VFX Director/Repair. Пусто = общий INFINI_LLM_MAX_TOKENS; явный лимит сохраняется.",
+    "INFINI_VFX_LLM_DIRECTOR_TIMEOUT": "Ожидание VFX Director/Repair. Пусто = общий INFINI_LLM_TIMEOUT; явное значение сохраняется.",
     "INFINI_BALANCE_MODE": "Режим пост-авторского баланса: safety сохраняет authored значения и применяет только технические guards; normalize включает старую мягкую нормализацию; report оставляет рекомендации и C# hard clamps.",
     "INFINI_LLM_REASONING_MODE": "Управляет reasoning/thinking API у OpenRouter или prompt-only приватной проверкой для локалок.",
     "INFINI_LLM_REASONING_MAX_TOKENS": "Бюджет thinking-токенов. Работает только когда reasoning mode = tokens и провайдер поддерживает reasoning object.",

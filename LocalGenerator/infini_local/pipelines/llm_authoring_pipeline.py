@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from typing import Any, Mapping
 
-from infini_local.core.env_utils import env_float, env_int
+from infini_local.core.env_utils import env_first_allow_empty, env_float, env_int
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
@@ -141,6 +143,22 @@ def validate_final_runtime_wire_boundary(data: dict[str, Any]) -> dict[str, Any]
     return report
 
 
+def _gameplay_repair_temperature() -> float:
+    """Canonical key wins by presence; the GUI spelling is a legacy alias.
+
+    Blank/invalid values use the scoped Repair default, never planner temperature.
+    """
+    default = 0.12
+    raw = env_first_allow_empty(("INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE"))
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(value):
+        return default
+    return max(0.0, min(0.8, value))
+
+
 def build_initial_author_request(
     a: dict[str, Any],
     b: dict[str, Any],
@@ -160,7 +178,7 @@ def build_initial_author_request(
             stage_chat_message("system", "item_author_contract", system),
             stage_chat_message("user", "recipe_context", user_content),
         ],
-        "temperature": env_float("INFINI_LLM_TEMPERATURE", 0.38, lo=0.0, hi=1.2),
+        "temperature": env_float("INFINI_LLM_TEMPERATURE", float(GENERATION_DEFAULTS["INFINI_LLM_TEMPERATURE"]), lo=0.0, hi=1.2),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author",
             schema=author_item_provider_response_schema,
@@ -225,7 +243,7 @@ def _repair_malformed_author_json(
     request = apply_llm_common_options({
         "model": model_name,
         "messages": messages,
-        "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
+        "temperature": _gameplay_repair_temperature(),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author_format_repair",
             schema=author_item_provider_response_schema,
@@ -246,7 +264,7 @@ def _repair_malformed_author_json(
         # Let the recorder explicitly refuse a missing join without blocking Repair.
         trace_key = recipe_key if recipe_key is not None else repair_context["originalRecipeContext"].get("recipeKey")
         trace_stage_request("gameplay_format_repair", trace_key, request)
-        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = str(raw["choices"][0]["message"]["content"])
         trace_event(
             "response", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair response",
@@ -301,7 +319,7 @@ def try_llm_plan(
             prompt=user_content,
         )
         trace_stage_request("gameplay_author", key, request)
-        raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
             "response",
@@ -539,7 +557,7 @@ def repair_author_item_after_failure(
     request = apply_llm_common_options({
         "model": model_name,
         "messages": messages,
-        "temperature": env_float("INFINI_LLM_REPAIR_TEMPERATURE", 0.12, lo=0.0, hi=0.8),
+        "temperature": _gameplay_repair_temperature(),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_repair",
             schema=lambda: author_item_provider_repair_response_schema(local_schema=local_repair_schema),
@@ -563,7 +581,7 @@ def repair_author_item_after_failure(
     )
     try:
         trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"))
-        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", 95))
+        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
             "response",

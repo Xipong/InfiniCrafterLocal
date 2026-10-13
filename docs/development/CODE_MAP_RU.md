@@ -56,6 +56,7 @@ docs/                           user / development / reference / archive
 | Asset serving и optional sd.cpp lifecycle | `services/asset_sync_service.py`, `services/sdcpp_service.py`, `services/sdcpp_backend.py`, `web/server_utility_routes.py` |
 | World recipe API/storage, failure/trace evidence | `storage/world_recipe_runtime.py`, `storage/world_storage.py`, `storage/failure_state.py`, `storage/trace_runtime.py`, `storage/trace_tools.py` |
 | Studio shell/browser/native state | `desktop/web_studio.py`, `desktop/webui/index.html`, `desktop/webui/studio.css`, `desktop/webui/studio.js`; [native split](MODULES_RU.md#studio) |
+| Canonical generation recommendations / selective consent | `core/generation_defaults.py`, `core/llm_config.py`, `core/vfx_manifest_config.py`; `desktop/settings_defaults.py` → `web_studio.py`/`webui/studio.js` |
 | Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_gui_trace_state.py`, `desktop/settings_gui_server_controls.py` |
 | Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/runtime_program_proof.py`, `qa/primitive_loss_audit.py` |
 

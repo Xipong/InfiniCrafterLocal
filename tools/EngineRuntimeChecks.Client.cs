@@ -454,6 +454,49 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    // Observe the real linked HTTP deadline without waiting fifteen minutes.
+    // The public CTS observer forwards unchanged; loopback HTTP and owner cancel run normally.
+    private static async System.Threading.Tasks.Task CraftHttpTimeoutUsesNativeEnvironmentAsync()
+    {
+        const string timeoutKey = "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS";
+        string? oldTimeout = Environment.GetEnvironmentVariable(timeoutKey);
+        var deadlines = new System.Collections.Concurrent.ConcurrentQueue<TimeSpan>();
+        Action<Action<System.Threading.CancellationTokenSource, TimeSpan>, System.Threading.CancellationTokenSource, TimeSpan> observe =
+            (original, source, deadline) => { deadlines.Enqueue(deadline); original(source, deadline); };
+        using var observer = new MonoMod.RuntimeDetour.Hook(
+            typeof(System.Threading.CancellationTokenSource).GetMethod("CancelAfter", new[] { typeof(TimeSpan) })!, observe);
+        try
+        {
+            foreach (var (configured, expected) in new (string?, int)[] {
+                (null, 900), ("invalid", 900), (" 600 ", 600), ("1200", 1200),
+                ("15", 15), ("1", 15), ("0", 15), ("-1", 15),
+            })
+            {
+                Environment.SetEnvironmentVariable(timeoutKey, configured);
+                deadlines.Clear();
+                await using var server = new CraftHttpFixture(2); // Cache miss, then hold generation.
+                var client = new GeneratorClient { Endpoint = server.Endpoint };
+                var request = new GeneratorClient.PreparedGenerationRequest();
+                var worker = System.Threading.Tasks.Task.Run(() => client.GeneratePreparedBlocking(request));
+                try
+                {
+                    await server.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                    Equal("cache,generate", string.Join(",", server.Requests), "cache-first HTTP topology retained");
+                    Equal(2, deadlines.Count, "cache and generation each arm one actual deadline");
+                    Equal(TimeSpan.FromSeconds(expected), deadlines.Last(), "native craft deadline for " + (configured ?? "unset"));
+                    request.Cancel();
+                    Equal(true, await worker.WaitAsync(TimeSpan.FromSeconds(1)) is null, "owner cancel interrupts held HTTP");
+                    Equal(2, server.Requests.Count, "cancel adds no recovery poll or retry");
+                    Equal(false, client.IsEndpointCoolingDown, "cancel does not cool down independent crafts");
+                    Equal(false, request.FailureIsFatal, "cancel creates no fatal material outcome");
+                    Equal(0, request.FailureStatusCode, "cancel creates no recipe failure status");
+                }
+                finally { request.Cancel(); server.Release(); await worker.WaitAsync(TimeSpan.FromSeconds(5)); }
+            }
+        }
+        finally { Environment.SetEnvironmentVariable(timeoutKey, oldTimeout); }
+    }
+
     private static void CacheOnlyFlagPreservesRequest()
     {
         var method = typeof(GeneratorClient).GetMethod("WithCacheOnlyFlag", BindingFlags.Static | BindingFlags.NonPublic)!;
