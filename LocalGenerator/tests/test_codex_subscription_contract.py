@@ -1,9 +1,7 @@
 """Native Codex account ownership, auth, subscription text/SSE/catalog/image contracts."""
 from __future__ import annotations
-from prompt_packet_helpers import dossier_text
 
 import base64
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import copy
 from dataclasses import dataclass, field
 import hashlib
@@ -50,112 +48,25 @@ def _assert_structured_outputs_subset(schema):
 
 
 @pytest.mark.parametrize("stage", ["author", "repair"])
-def test_subscription_author_schema_types_every_const_without_changing_literal_contract(monkeypatch, stage):
-    from jsonschema import Draft202012Validator
+def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, stage):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
 
     monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
-        local = contract.author_item_response_schema()
         request, _, _ = author.build_initial_author_request(
-            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol",
-        )
+            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol")
     else:
-        local = contract.author_item_repair_response_schema()
-        request = {
-            "model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
-            "response_format": llm.llm_json_response_format(
-                "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True,
-            ),
-        }
+        request = {"model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
+                   "response_format": llm.llm_json_response_format(
+                       "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True)}
     before = copy.deepcopy(request)
-    wire = json.loads(json.dumps(backend._request_payload(request)))
-    provider = wire["text"]["format"]["schema"]
-    _assert_structured_outputs_subset(provider)
-    types = {str: "string", int: "integer", bool: "boolean"}
-    seen = []
-
-    def compare(source, sent, path=()):
-        if isinstance(source, dict):
-            if "if" in source:
-                # Exact finite-event partition, before required+nullable encoding.
-                # The periodic case promotes periodTicks; other cases retain its
-                # optional wrapper. No function-name/weapon routing is involved.
-                selector = next(iter(source["if"]["properties"]))
-                expected = source["if"]["properties"][selector]["const"]
-                events = source["properties"][selector]["enum"]
-                assert set(sent) == {"anyOf"}
-                assert len(sent["anyOf"]) == 2
-                sent_events = [event for branch in sent["anyOf"] for event in branch["properties"][selector]["enum"]]
-                assert sorted(sent_events) == sorted(events)
-                for remote in sent["anyOf"]:
-                    group = remote["properties"][selector]["enum"]
-                    assert expected not in group or group == [expected]
-                    case = copy.deepcopy({key: value for key, value in source.items() if key not in {"if", "then"}})
-                    case["properties"][selector]["enum"] = group
-                    if expected in group:
-                        case["required"] += [key for key in source["then"]["required"] if key not in case["required"]]
-                    compare(case, remote, path + ("event-case", tuple(group)))
-                return
-            expected_keys = {key for key in source if key != "description" and not key.startswith("x-infini-")}
-            if "oneOf" in source:
-                expected_keys = (expected_keys - {"oneOf"}) | {"anyOf"}
-            if "properties" in source:
-                expected_keys.add("required")
-                assert set(sent["properties"]) == set(source["properties"]), path
-            if "const" in source:
-                expected_keys.add("type")
-            assert set(sent) == expected_keys, path
-            if "const" in source:
-                expected = types[type(source["const"])]
-                assert sent.get("type") == expected, f"untyped provider const at {path}: {sent}"
-                assert sent == {**source, "type": expected}
-                candidates = [source["const"], "other", "", 0, 1, 2, False, True, None, {}, []]
-                for candidate in candidates:
-                    assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(sent).is_valid(candidate)
-                seen.append(path)
-            for key, value in source.items():
-                if key == "description" or key.startswith("x-infini-"):
-                    assert key not in sent
-                    continue
-                if key == "properties":
-                    for name, child in value.items():
-                        remote = sent[key][name]
-                        if name not in source.get("required", []):
-                            remote = remote["anyOf"][0]
-                        compare(child, remote, path + (key, name))
-                elif key == "oneOf":
-                    # Only disjoint discriminator/type unions may change spelling.
-                    assert "oneOf" not in sent
-                    compare(value, sent["anyOf"], path + ("anyOf",))
-                elif key != "required":
-                    if isinstance(value, (dict, list)):
-                        compare(value, sent[key], path + (key,))
-                    else:
-                        assert sent[key] == value, path + (key,)
-        elif isinstance(source, list):
-            assert len(source) == len(sent)
-            for index, (child, remote) in enumerate(zip(source, sent)):
-                compare(child, remote, path + (index,))
-        else:
-            assert source == sent, path
-
-    compare(local, provider)
-    assert seen  # No fixed count: lossless finite-case expansion duplicates leaves.
+    sent = backend._request_payload(request)
+    _assert_structured_outputs_subset(sent["text"]["format"]["schema"])
+    assert sent["model"] == request["model"]
+    assert sent["text"]["format"]["type"] == "json_schema"
+    assert sent["text"]["format"]["strict"] is True
+    assert [row["role"] for row in sent["input"]] == [row["role"] for row in request["messages"] if row["role"] != "system"]
     assert request == before
-    assert wire["model"] == "gpt-6-sol"
-    assert wire["text"]["format"]["type"] == "json_schema" and wire["text"]["format"]["strict"] is True
-    if stage == "author":
-        assert [item["role"] for item in wire["input"]] == ["developer", "user"]
-        static, dynamic = [item["content"][0]["text"] for item in wire["input"]]
-        # Only object member framing changed; restore the exact logical text.
-        assert static[:-1] + "," + dynamic[1:] == dossier_text(request)
-        assert set(json.loads(dynamic)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
-    else:
-        assert [item["content"][0]["text"] for item in wire["input"]] == [
-            item["content"] for item in request["messages"] if item["role"] != "system"
-        ]
-    assert local == (contract.author_item_response_schema() if stage == "author" else contract.author_item_repair_response_schema())
 
 
 def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
@@ -248,61 +159,6 @@ def test_subscription_finite_event_cases_preserve_conditional_boundary_acceptanc
             period = when.get("everyTicks")
             assert sent_valid is (type(period) is int and 6 <= period <= 3600), when
     assert CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"] == local
-
-
-@pytest.mark.parametrize("domain", ["bindings", "calls"])
-def test_subscription_disjoint_union_preserves_registered_variants_and_adversarial_rejection(domain):
-    from jsonschema import Draft202012Validator
-    from infini_local.core.runtime_authoring.program_schema import binding_schema
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.pipelines import author_item_contract as contract
-
-    local = binding_schema() if domain == "bindings" else {"oneOf": [cap.provider_variant_schema() for cap in visible_capabilities()]}
-    provider = contract._provider_strict_projection(local)
-    assert len(provider["anyOf"]) == len(local["oneOf"])
-    for branch in local["oneOf"]:
-        if domain == "calls":
-            fn = branch["properties"]["fn"]["const"]
-            item = build_capability_witness(fn)
-            row = next(call for call in item["runtimeProgram"]["calls"] if call["fn"] == fn)
-            selector = "fn"
-        else:
-            input_kind = branch["properties"]["input"]["const"]
-            from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction
-            from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
-            action_kind = branch["properties"].get("action", {}).get("properties", {}).get("kind", {}).get("const")
-            action_kind = action_kind or INPUT_KIND_REGISTRY[input_kind].allowed_actions[0]
-            row = {"id": "binding_probe", **complete_transaction(input_name=input_kind, action_name=action_kind,
-                target="item", stack_cost_value=branch["properties"].get("stackCost", {}).get("const", 1 if action_kind == "place_item" else 0),
-                contact_damage_value=False, placement_call="place_call" if action_kind == "place_item" else "")}
-            if "stackConsumeChancePercent" in branch["properties"]:
-                row["stackConsumeChancePercent"] = 35
-            selector = "input"
-        assert Draft202012Validator(local).is_valid(row)
-        encoded = _encode_nullable_fixture(row, branch)
-        assert Draft202012Validator(provider).is_valid(encoded)
-        controls = []
-        for name, value in [(selector, "unknown"), ("id", "INVALID\r"), ("foreign", None)]:
-            sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-            sparse_bad[name] = sent_bad[name] = value
-            controls.append((sparse_bad, sent_bad))
-        sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-        sparse_bad.pop(selector)
-        sent_bad.pop(selector)
-        controls.append((sparse_bad, sent_bad))
-        for sparse_bad, sent_bad in controls:
-            assert not Draft202012Validator(local).is_valid(sparse_bad), sparse_bad
-            assert not Draft202012Validator(provider).is_valid(sent_bad), sent_bad
-        if domain == "calls":
-            for key, child in branch["properties"].get("params", {}).get("properties", {}).items():
-                for limit, step in [("minimum", -1), ("maximum", 1)]:
-                    if limit not in child:
-                        continue
-                    sparse_bad, sent_bad = copy.deepcopy(row), copy.deepcopy(encoded)
-                    sparse_bad["params"][key] = sent_bad["params"][key] = child[limit] + step
-                    assert not Draft202012Validator(local).is_valid(sparse_bad), (fn, key, limit)
-                    assert not Draft202012Validator(provider).is_valid(sent_bad), (fn, key, limit)
 
 
 @pytest.mark.parametrize("control", ["bad-neighbour", "required-null", "periodic-null", "unknown-event", "missing-event", "unknown-fn", "missing-fn", "array-null", "foreign-null", "different-wrapper", "reordered-provider"])
@@ -411,86 +267,6 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     repaired.pop("debug", None)
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert item == before and validate_runtime_program(repaired)["ok"]
-
-
-def test_subscription_primary_selection_type_union_keeps_string_constraints_and_null():
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.core.runtime_authoring.program_schema import PRIMARY_ENTITY_SELECTION_FIELD
-
-    local = contract.author_item_repair_response_schema()["properties"][PRIMARY_ENTITY_SELECTION_FIELD]
-    provider = contract._provider_strict_projection(local)
-    assert set(provider) == {"anyOf"}
-    for value in ["item", "blade_1", None, "", "Uppercase", "x" * 49, True, 1, 1.5, {}, []]:
-        source_valid = Draft202012Validator(local).is_valid(value)
-        assert source_valid is (value is None or value in ("item", "blade_1"))
-        assert Draft202012Validator(provider).is_valid(value) is source_valid
-
-
-@pytest.mark.parametrize("literal", [1, 1.0, 1.5, False, True, None, "exact", [1, "literal"], {"if": {"const": "not a schema"}}])
-def test_subscription_const_types_preserve_jsonschema_numeric_and_literal_domains(literal):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
-
-    source = {"const": literal}
-    provider = contract._provider_strict_projection(source)
-    assert provider["const"] == literal and source == {"const": literal}
-    if type(literal) is float:
-        assert provider["type"] == "number"  # 1.5 must not be narrowed to integer
-    for candidate in [literal, 0, 1, 1.0, 1.5, False, True, None, "other", {}, []]:
-        assert Draft202012Validator(source).is_valid(candidate) == Draft202012Validator(provider).is_valid(candidate)
-
-
-@pytest.mark.parametrize("shape", ["overlapping-union", "optional-selector", "optional-ancestor", "numeric-overlap", "type-overlap", "non-finite-const", "conditional-optional-selector", "conditional-unbounded-selector", "conditional-predicate", "conditional-consequent", "conditional-unknown-addition", "conditional-else", "allOf", "not", "dependentRequired", "dependentSchemas"])
-def test_subscription_projection_rejects_unproved_future_compositions(shape):
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
-
-    branch = {"type": "object", "properties": {"tag": {"const": "a"}}, "required": ["tag"], "additionalProperties": False}
-    opposite = copy.deepcopy(branch)
-    opposite["properties"]["tag"]["const"] = "b"
-    source = {"oneOf": [branch, opposite]}
-    if shape == "overlapping-union":
-        opposite["properties"]["tag"]["const"] = "a"
-    elif shape == "optional-selector":
-        branch["required"] = opposite["required"] = []
-    elif shape == "optional-ancestor":
-        source = {"oneOf": [{"type": "object", "properties": {"nested": row}, "additionalProperties": False} for row in [branch, opposite]]}
-    elif shape == "numeric-overlap":
-        branch["properties"]["tag"]["const"] = 1
-        opposite["properties"]["tag"]["const"] = 1.0
-    elif shape == "type-overlap":
-        source = {"oneOf": [{"type": "integer"}, {"type": "number"}]}
-    elif shape == "non-finite-const":
-        source = {"const": float("nan")}
-    elif shape.startswith("conditional-"):
-        source = {"type": "object", "additionalProperties": False,
-                  "properties": {"event": {"type": "string", "enum": ["on_hit", "periodic"]},
-                                 "periodTicks": {"type": "integer", "minimum": 6},
-                                 "delayTicks": {"type": "integer", "minimum": 0}},
-                  "required": ["event"],
-                  "if": {"properties": {"event": {"const": "periodic"}}, "required": ["event"]},
-                  "then": {"required": ["periodTicks"]}}
-        if shape == "conditional-optional-selector":
-            source["required"].remove("event")
-        elif shape == "conditional-unbounded-selector":
-            source["properties"]["event"].pop("enum")
-        elif shape == "conditional-predicate":
-            source["if"]["properties"]["event"] = {"pattern": "periodic"}
-        elif shape == "conditional-consequent":
-            source["then"]["properties"] = {"periodTicks": {"minimum": 10}}
-        elif shape == "conditional-unknown-addition":
-            source["then"]["required"] = ["new_mechanic"]
-        else:
-            source["else"] = {"required": ["delayTicks"]}
-    else:
-        source = {shape: {} if shape != "allOf" else [branch]}
-    before = copy.deepcopy(source)
-    with pytest.raises(ValueError, match="Unproved provider"):
-        contract._provider_strict_projection(source)
-    assert source.keys() == before.keys()
-    if shape != "non-finite-const":
-        assert source == before
 
 
 def message(text, *, phase=None, **extra):

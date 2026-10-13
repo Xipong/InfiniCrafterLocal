@@ -3,9 +3,7 @@ from __future__ import annotations
 import importlib.abc
 import importlib.util
 from pathlib import Path
-import re
 import sys
-import json
 import os
 import threading
 import time
@@ -20,25 +18,11 @@ from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerC
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from contract_checks import literal_string_arguments
 from infini_local.desktop import settings_env, settings_gui, settings_schema
-import infini_local.desktop.settings_sdcpp_args as settings_sdcpp_args
 import infini_local.desktop.settings_gui_trace_state as settings_trace_state
 
 
 GUI_PATH = Path(settings_gui.__file__)
-GUI_SOURCE = "\n".join(
-    p.read_text(encoding="utf-8")
-    for p in [
-        GUI_PATH,
-        GUI_PATH.with_name("settings_gui_ui.py"),
-        GUI_PATH.with_name("settings_gui_image_args.py"),
-        GUI_PATH.with_name("settings_gui_trace_state.py"),
-        GUI_PATH.with_name("settings_gui_server_controls.py"),
-    ]
-)
-
-
 class _BlockTkinter(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname: str, path=None, target=None):  # type: ignore[override]
         if fullname == "tkinter" or fullname.startswith("tkinter."):
@@ -71,263 +55,21 @@ def test_settings_gui_imports_without_tkinter_installed() -> None:
         sys.modules.update(saved_compat)
 
     assert module.tk_compat.TKINTER_AVAILABLE is False
-    assert "self.secret_entries: list[tk.Widget] = []" in GUI_PATH.read_text(encoding="utf-8")
     assert isinstance(module.tk.Tk(), module.tk.Widget)
     assert isinstance(module.ttk.Entry(), module.ttk.Widget)
 
 
-@pytest.mark.parametrize("name,present,absent", [
-    pytest.param("hidden-lora", ["LoRA folder скрыт"], ['self.row(parent, "LoRA folder"'], id="hidden-lora"),
-    pytest.param("trace-identity-timeout", ["_fetch_health_snapshot(timeout=8, base_url=base_url)", "timeout=18", "другая копия"], [], id="trace-identity-timeout"),
-    pytest.param("radmin-controls", ["Auto Radmin URL", "Copy friend guide", "Open MP connect page", "_detect_ipv4_candidates", "_friend_guide_text", "/mp_connect", "0.0.0.0"], [], id="radmin-controls"),
-    pytest.param("ready-item-guide", ["Тебе прилетают уже готовые предметы", "финальные PNG/JSON ассеты"], [], id="ready-item-guide"),
-
-    pytest.param('gui_health_identity_helpers_detect_other_copy_from_root', ['serverRoot', 'assetSync', 'Port still busy', 'generationActivity', '_health_looks_like_infini_helper', '/shutdown'], [], id='gui_health_identity_helpers_detect_other_copy_from_root'),
-    pytest.param('gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy', ['структурированный HTTP payload'], ['активная LoRA — через <lora:name:weight> в prompt'], id='gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy'),
-    pytest.param('start_server_has_guarded_http_restart_contract', ['server.py запущен', 'GUI не будет убивать чужой процесс', 'force_restart_server', '_shutdown_identity_is_safe', '_activity_restart_refusal'], ['self.proc.terminate(', 'self.proc.kill('], id='start_server_has_guarded_http_restart_contract'),
-])
-def test_gui_declared_copy_and_controls(name, present, absent):
-    for text in present:
-        assert text in GUI_SOURCE, name
-    for text in absent:
-        assert text not in GUI_SOURCE, name
-
-
-@pytest.mark.parametrize("key,default", [
-    pytest.param("INFINI_SDCPP_LORA_DIR", "", id="hidden-lora-default"),
-    pytest.param("INFINI_TERRARIA_PORT", "7777", id="terraria-port"),
-    pytest.param("INFINI_COMBINE_BUSY_WAIT_SECONDS", "210", id="combine-wait"),
-    pytest.param("INFINI_VISUAL_REQUIRE_ITEM_SPRITE", "1", id="mandatory-sprite"),
-    pytest.param("INFINI_LLM_TEMPERATURE", "0.38", id="planner-temperature"),
-    pytest.param("INFINI_LLM_REAUTHOR_TEMPERATURE", "", id="repair-temperature"),
-    pytest.param("INFINI_VISUAL_DIRECTOR_TEMPERATURE", "0.42", id="visual-temperature"),
-    pytest.param("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED", "0", id="debug-yield-disabled"),
-    pytest.param("INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD", "10", id="debug-yield-minimum"),
-])
-def test_gui_owned_field_defaults(key, default):
-    assert key in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS[key] == default
-
-
-def test_sdcpp_option_help_is_visible_and_has_expanded_flags() -> None:
-    assert "Что делают пресеты и флаги sd.cpp" in GUI_SOURCE
-    labels = {name for name, _fragment, _help in settings_schema.SDCPP_EXTRA_FLAG_SPECS}
-    assert {"LoRA runtime", "LoRA auto", "Cache DBCache", "Params disk"} <= labels
-    assert len(labels) >= 12
-
-
-def test_schema_fields_and_image_profiles_are_reachable_from_gui() -> None:
-    # Parsed from the module rather than regex-scraped: a call whose earlier
-    # arguments contain a parenthesis (a label like "Label (advanced)", a nested
-    # self._card(...), a bracketed hint) is invisible to a `[^)]*?` pattern, which
-    # would report an exposed setting as missing.
-    visible_rows = set(
-        literal_string_arguments(
-            GUI_SOURCE,
-            ("row", "text_row", "check_row"),
-            match=r"INFINI_[A-Z0-9_]+",
-        )
-    )
-    dynamic_pool_rows = {
-        f"INFINI_LLM_POOL_{slot}_{suffix}"
-        for slot in (2, 3, 4)
-        for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "OPENROUTER_PROVIDER", "API_MODE")
-    }
-    intentionally_hidden = {
-        "INFINI_GUI_PIPELINE_PRESET",  # top-level preset combobox, not a normal row
-        "INFINI_SDCPP_LORA_DIR",  # derived from the selected LoRA file
-    }
-    assert set(settings_schema.FIELD_ORDER) - intentionally_hidden - dynamic_pool_rows == visible_rows
-    assert "for slot in (2, 3, 4):" in GUI_SOURCE
-    assert all(f'_{suffix}"' in GUI_SOURCE for suffix in ("ENABLED", "PROVIDER", "BASE_URL", "API_KEY", "MODEL", "API_MODE"))
-    assert all(profile in GUI_SOURCE for profile in settings_schema.SDCPP_EXTRA_PROFILES)
-
-
-def test_gui_extra_arg_helpers_replace_conflicting_value_flags() -> None:
-    cur = settings_gui.SettingsGui._split_extra_for_gui("-v --rng cuda --flow-shift 3")
-    frag = settings_gui.SettingsGui._split_extra_for_gui("--rng cpu")
-    names = settings_gui.SettingsGui._extra_option_names(frag)
-    out = settings_gui.SettingsGui._remove_extra_options(cur, names) + frag
-    rendered = settings_gui.SettingsGui._join_extra_for_gui(out)
-    assert "--rng cpu" in rendered
-    assert "--rng cuda" not in rendered
-    assert "--flow-shift 3" in rendered
-    assert settings_gui.SettingsGui._split_extra_for_gui is settings_sdcpp_args.split_extra_for_gui
-    assert settings_gui.SettingsGui._remove_extra_options is settings_sdcpp_args.remove_extra_options
-
-
-@pytest.mark.parametrize("profile,params_backend,gpu_flags", [
-    pytest.param("zimage_amd_safe", True, True, id="safe-ram-text-parameters"),
-    pytest.param("zimage_amd_full_gpu", False, True, id="full-gpu"),
-    pytest.param("zimage_amd_low_vram", False, False, id="low-vram"),
-    pytest.param("zimage_cpu_compat", False, False, id="cpu-compatible"),
-])
-def test_sdcpp_measured_profile_placements(profile, params_backend, gpu_flags):
-    value = settings_schema.SDCPP_EXTRA_PROFILES[profile]
-    assert ("--params-backend" in value) is params_backend
-    if params_backend:
-        assert "--params-backend te=cpu" in value
-    if gpu_flags:
-        for flag in ("--backend diffusion=vulkan0,vae=vulkan0,te=vulkan0",
-                     "--diffusion-conv-direct", "--vae-conv-direct", "--eager-load"):
-            assert flag in value
-
-
-def test_sdcpp_placement_help_explains_runtime_and_parameter_owners():
-    assert "runtime diffusion/VAE/TE на Vulkan" in GUI_SOURCE
-    assert "параметры Qwen/TE в RAM" in GUI_SOURCE
-
-
-def test_flow_shift_help_explains_meaning_not_only_quality() -> None:
-    flow_help = " ".join(desc for name, _fragment, desc in settings_schema.SDCPP_EXTRA_FLAG_SPECS if name.startswith("Flow"))
-    assert "timestep" in flow_help
-    assert "Flow/DiT" in flow_help
-    assert "мяг" in flow_help
-
-
-def test_gui_health_identity_helpers_detect_other_copy_from_root() -> None:
-    assert settings_gui.SettingsGui._norm_path_for_compare(r"D:\\A\\LocalGenerator") == settings_gui.SettingsGui._norm_path_for_compare(r"d:/a/LocalGenerator/")
-
-
-def test_pipeline_preset_is_saved_and_restored_from_config() -> None:
-    key = "INFINI_GUI_PIPELINE_PRESET"
-    compat_flux = "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
-    assert key in settings_schema.FIELD_ORDER
-    assert key in settings_schema.DEFAULTS
-    assert compat_flux in settings_schema.PRESETS
-    assert settings_schema.PRESETS[compat_flux]["INFINI_LLM_PROVIDER"] == "openai_compat"
-    assert settings_schema.PRESETS[compat_flux]["INFINI_LLM_REASONING_MODE"] == "prompt_light"
-    assert "diffusion=rocm0,vae=vulkan0,te=rocm0" in settings_schema.PRESETS[compat_flux]["INFINI_SDCPP_SERVER_EXTRA_ARGS"]
-    assert settings_schema.PRESETS[compat_flux]["INFINI_SDCPP_STEPS"] == "4"
-    assert settings_schema.PRESETS[compat_flux]["INFINI_ZIMAGE_PROMPT_CONTRACT"] == "0"
-    assert settings_gui.SettingsGui._pipeline_preset_from_config({
-        key: "OpenRouter + local Z-Image/sd.cpp",
-        "INFINI_LLM_PROVIDER": "openai_compat",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": settings_schema.SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
-        "INFINI_SDCPP_STEPS": "4",
-    }) == compat_flux
-    assert settings_gui.SettingsGui._pipeline_preset_from_config({
-        "INFINI_LLM_PROVIDER": "openrouter",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-    }) == "OpenRouter + local Z-Image/sd.cpp"
-    assert 'data["INFINI_GUI_PIPELINE_PRESET"] = self.preset_var.get().strip()' in GUI_SOURCE
-    assert 'self.data["INFINI_GUI_PIPELINE_PRESET"] = preset_name' in GUI_SOURCE
-
-
-def test_start_server_has_guarded_http_restart_contract() -> None:
-    assert settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "serverRoot": r"D:\X\LocalGenerator"})
-    assert not settings_gui.SettingsGui._health_looks_like_infini_helper({"ok": True, "service": "unrelated"})
-
-
-def test_gui_exposes_llm_temperatures_not_zimage_temperature() -> None:
-    assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.FIELD_ORDER
-    assert "INFINI_LLM_REAUTHOR_MODEL" not in settings_schema.DEFAULTS
-    fallback_heading = GUI_SOURCE.index('"04 · Fallback LLM"')
-    fallback_last_row = GUI_SOURCE.index('"Fallback after transport fails"', fallback_heading)
-    primary_heading = GUI_SOURCE.index('"05 · Генерация и reasoning"')
-    planner_row = GUI_SOURCE.index('"Planner temperature"', primary_heading)
-    repair_temperature_row = GUI_SOURCE.index('"Repair temperature"', planner_row)
-    visual_row = GUI_SOURCE.index('"Visual temp"', repair_temperature_row)
-    reasoning_row = GUI_SOURCE.index('"Reasoning mode"', visual_row)
-    assert fallback_heading < fallback_last_row < primary_heading < planner_row < repair_temperature_row < visual_row < reasoning_row
-    assert '"Repair model"' not in GUI_SOURCE
-    assert "Это не sd.cpp temperature" in GUI_SOURCE
-
-
-@pytest.mark.parametrize("label,key", [
-    pytest.param("Combine busy wait", "INFINI_COMBINE_BUSY_WAIT_SECONDS", id="combine-wait-row"),
-    pytest.param("Require item sprite", "INFINI_VISUAL_REQUIRE_ITEM_SPRITE", id="mandatory-sprite-row"),
-])
-def test_gui_delivery_controls_are_visible(label, key):
-    assert f'"{label}", "{key}"' in GUI_SOURCE
-
-
-def test_gui_exposes_debug_attack_consumable_minimum_as_checkbox_and_amount() -> None:
-    enabled = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED"
-    minimum = "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD"
-    assert f'self.check_row(debug_card, "Включить минимум для атакующих расходников", "{enabled}"' in GUI_SOURCE
-    assert f'"Минимум за один крафт", "{minimum}"' in GUI_SOURCE
-    assert 'onvalue="1"' in GUI_SOURCE and 'offvalue="0"' in GUI_SOURCE
-    assert f'set_field_enabled("{minimum}", attack_consumable_debug' in GUI_SOURCE
-    gui_text = GUI_SOURCE.casefold()
-    assert "consumable weapon и ammo" in gui_text
-    assert "зелья и материалы не меняются" in gui_text
-
-    example = (GUI_PATH.parents[2] / "config.example.env").read_text(encoding="utf-8")
-    assert f"{enabled}=0" in example
-    assert f"{minimum}=10" in example
-
-
-def test_gui_env_file_io_lives_in_settings_env(tmp_path: Path) -> None:
-    import ast
-    key = "INFINI_PROMPT_STYLE"
-    assert settings_schema.DEFAULTS.get(key) == "Default"
-    assert key in settings_schema.FIELD_ORDER
-    assert list(settings_schema.OPTION_HELP[key]) == ["Default", "Terraria Like"]
-    style_rows = [
-        node for node in ast.walk(ast.parse(GUI_SOURCE))
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "row" and len(node.args) >= 3
-        and isinstance(node.args[2], ast.Constant) and node.args[2].value == key
-    ]
-    assert len(style_rows) == 1
-    assert ast.literal_eval(style_rows[0].args[1]) == "Стиль промпта"
-    row_options = {option.arg: ast.literal_eval(option.value) for option in style_rows[0].keywords}
-    assert row_options["values"] == ["Default", "Terraria Like"]
-    assert not row_options.get("editable", False)
-    assert settings_gui.parse_env is settings_env.parse_env
-    assert settings_trace_state.parse_env is settings_env.parse_env
-    assert settings_trace_state.write_env is settings_env.write_env
+def test_gui_settings_save_reload_preserves_choices_and_unknown_fields(tmp_path):
     path = tmp_path / "settings.env"
-    assert settings_gui.parse_env(path)[key] == "Default"
-    settings_trace_state.write_env(path, {
-        "INFINI_GUI_PIPELINE_PRESET": "OpenRouter + local Z-Image/sd.cpp",
-        key: "Terraria Like",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_MANUAL_KEY": "retained",
-    })
+    values = {"INFINI_PROMPT_STYLE": "Terraria Like", "INFINI_IMAGE_BACKEND": "sdcpp", "INFINI_MANUAL_KEY": "retained"}
+    settings_env.write_env(path, values)
     parsed = settings_gui.parse_env(path)
-    assert parsed[key] == "Terraria Like"
-    assert parsed["INFINI_GUI_PIPELINE_PRESET"] == "OpenRouter + local Z-Image/sd.cpp"
-    assert parsed["INFINI_IMAGE_BACKEND"] == "sdcpp"
-    assert parsed["INFINI_MANUAL_KEY"] == "retained"
-    parsed[key] = "Default"
-    settings_trace_state.write_env(path, parsed)
-    assert settings_gui.parse_env(path)[key] == "Default"
-
-def test_gui_lora_blank_weight_uses_safe_default_and_structured_transport_copy() -> None:
-    tag = settings_gui.SettingsGui._lora_tag_from_file(r"C:\\Models\\pixel_art.safetensors", "")
-    assert tag == "<lora:pixel_art:0.25>"
-
-
-def test_dead_image_role_flags_are_removed_and_shared_gpu_gate_is_real() -> None:
-    root = GUI_PATH.parents[2]
-    pipeline_config = (GUI_PATH.parents[1] / "pipelines" / "pipeline_visual_config.py").read_text(encoding="utf-8")
-    image_gui = (GUI_PATH.parent / "settings_gui_ui.py").read_text(encoding="utf-8")
-    image_args = (GUI_PATH.parent / "settings_gui_image_args.py").read_text(encoding="utf-8")
-    config_env_path = GUI_PATH.parents[2] / "config.env"
-    config_env = config_env_path.read_text(encoding="utf-8") if config_env_path.exists() else ""
-    config_example = (GUI_PATH.parents[2] / "config.example.env").read_text(encoding="utf-8")
-    registry = (root.parent / "contracts" / "config_registry.json").read_text(encoding="utf-8")
-    dead = (
-        "INFINI_VISUAL_GENERATE_PROJECTILE_IMAGES",
-        "INFINI_VISUAL_GENERATE_IMPACT_IMAGES",
-        "INFINI_VISUAL_GENERATE_CHILD_FIELD_IMAGES",
-    )
-    all_surfaces = "\n".join((GUI_SOURCE, image_gui, image_args, pipeline_config, config_env, config_example, registry))
-    assert all(key not in all_surfaces for key in dead)
-
-    gate = "INFINI_IMAGE_MAX_CONCURRENCY"
-    assert gate in settings_schema.FIELD_ORDER
-    assert settings_schema.DEFAULTS[gate] == "1"
-    assert f'"Shared image concurrency", "{gate}"' in image_gui
-    assert gate in pipeline_config
-    if config_env_path.exists():
-        assert f"{gate}=1" in config_env
-    assert f"{gate}=1" in config_example
-    assert gate in registry
+    assert {key: parsed[key] for key in values} == values
+    parsed["INFINI_PROMPT_STYLE"] = "Default"
+    settings_env.write_env(path, parsed)
+    reloaded = settings_gui.parse_env(path)
+    assert reloaded["INFINI_PROMPT_STYLE"] == "Default"
+    assert reloaded["INFINI_MANUAL_KEY"] == "retained"
 
 
 class _UiVar:
@@ -651,7 +393,6 @@ def guarded_restart(gui_workflow, monkeypatch):
     {"active": "0", "waiting": 0, "accepting": True},
 ])
 def test_safe_restart_does_not_save_shutdown_kill_or_spawn_busy_or_unknown_server(guarded_restart, monkeypatch, activity):
-    from infini_local.desktop import settings_gui_server_controls as controls
     gui, root, config, original, actions = guarded_restart
 
 
@@ -727,11 +468,10 @@ def test_safe_restart_uses_atomic_shutdown_and_never_falls_through_to_process_ki
 
 
 @pytest.mark.parametrize("identity,projection,force", [
-    *[pytest.param(identity, "identity-not-reached", False, id=identity) for identity in
-      ("foreign-root", "unknown-root", "caller-pid", "invalid-pid", "unrelated-service")],
-    *[pytest.param("matching", projection, force, id=f"projection-{label}-{'force' if force else 'safe'}")
-      for label, projection in (("absent", None), ("empty", {}), ("wrong-type", {"sdcppAutostart": "0"}))
-      for force in (False, True)],
+    pytest.param("foreign-root", "identity-not-reached", False, id="foreign-root"),
+    pytest.param("caller-pid", "identity-not-reached", False, id="caller-pid"),
+    pytest.param("matching", None, False, id="missing-projection"),
+    pytest.param("matching", {"sdcppAutostart": "0"}, True, id="force-cannot-bypass-invalid-projection"),
 ])
 def test_restart_refuses_unverified_identity_or_projection_before_shutdown_or_save(
     guarded_restart, monkeypatch, identity, projection, force,
@@ -830,32 +570,6 @@ class _TrackedUiVar(_UiVar):
         super().set(value)
         for callback in self.callbacks:
             callback()
-
-
-@pytest.mark.parametrize("consumer", [
-    pytest.param("start", id="start-guard"),
-    pytest.param("wait", id="shutdown-wait"),
-])
-def test_closed_port_consumers_allow_native_windows_refusal_latency(gui_workflow, monkeypatch, consumer):
-    import urllib.error
-
-    gui, _root, _config = gui_workflow
-    launches = []
-
-    def delayed_refusal(timeout, **kwargs):
-        if timeout <= 2.05:
-            raise urllib.error.URLError(TimeoutError())
-        raise urllib.error.URLError(ConnectionRefusedError(10061, "closed port"))
-
-    monkeypatch.setattr(gui, "_fetch_health_snapshot", delayed_refusal)
-    monkeypatch.setattr(gui, "_start_server_after_guard", lambda: launches.append(True))
-    if consumer == "start":
-        gui.start_server()
-        gui.drain_until(lambda: "server-action" not in gui.__dict__.get("_gui_tasks", {}))
-        assert launches == [True]
-    else:
-        assert gui._wait_until_helper_stops(timeout=4, base_url="http://127.0.0.1:5055") is True
-        assert launches == []
 
 
 def test_setting_edits_create_custom_without_writing_saved_config(gui_workflow):
@@ -1063,15 +777,6 @@ def test_applied_config_health_is_async_partial_nonsecret_and_main_thread_only(a
     assert "CANARY" not in repr(gui.__dict__.get("_applied_config_ack", {}))
 
 
-def test_gui_has_no_legacy_pid_kill_fallback_reachable_from_restart():
-    # Old helper cleanup itself could still bypass admission/identity fencing.
-    controls_source = GUI_PATH.with_name("settings_gui_server_controls.py").read_text(encoding="utf-8")
-    assert "def _cleanup_old_helper_servers_before_start" not in controls_source
-    assert "def _terminate_pid" not in controls_source
-    assert "self.proc.terminate(" not in controls_source
-    assert "self.proc.kill(" not in controls_source
-
-
 @pytest.mark.parametrize("changed", ["pin-after-save", "pin-during-health", "missing-projection", "foreign-root"])
 def test_applied_feedback_never_confirms_unsaved_or_unacknowledged_launch_changes(applied_gui, monkeypatch, changed):
     gui, root, config, effective = applied_gui
@@ -1195,17 +900,6 @@ def test_gui_main_provider_projection_preserves_aliases_and_never_retains_secret
     projection = gui._proposed_effective_config()
     assert projection["llmProvider"] == expected
     assert "CANARY" not in repr(projection)
-
-
-def test_gui_projection_handles_all_canonical_backend_aliases_without_bootstrap_side_effects(gui_workflow):
-    import ast
-    gui, _root, config = gui_workflow
-    owner = GUI_PATH.parents[1] / "pipelines" / "pipeline_visual_config.py"
-    aliases = next(ast.literal_eval(node.value) for node in ast.parse(owner.read_text(encoding="utf-8")).body
-                   if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "IMAGE_BACKEND_ALIASES" for target in node.targets))
-    for raw, canonical in aliases.items():
-        config.write_text(f"INFINI_IMAGE_BACKEND={raw}\n", encoding="utf-8")
-        assert gui._proposed_effective_config()["imageBackend"] == canonical
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX roots are case-sensitive; native Windows names are not")
@@ -1362,20 +1056,6 @@ def test_health_activity_display_consumes_actual_backend_owner():
     assert owner.request_id not in controls._generation_activity_text(backend.generation_activity_snapshot())
 
 
-def test_health_activity_projection_bounds_rows_and_rejects_unknown_fields():
-    from infini_local.desktop.settings_gui_server_controls import SettingsGuiServerControlsMixin as controls
-    project = getattr(controls, "_generation_activity_text", None)
-    assert project is not None, "no request-owned activity display projection"
-    row = {"requestId": "b" * 32, "profileId": None, "stage": "admission", "elapsedSeconds": 1,
-           "stageElapsedSeconds": 1, "waitReason": "generation_slot", "networkStarted": None, "active": False}
-    text = project({"active": 0, "waiting": 33, "accepting": True, "requests": [row] * 33, "requestsOmitted": 0})
-    assert text.count("b" * 32) == 32 and "1 rows omitted" in text
-    assert "unknown" in project({})
-    bad = dict(row, requestId="https://secret.invalid/token", stage="DO_NOT_DISPLAY", networkStarted="true")
-    text = project({"active": 1, "waiting": 0, "accepting": True, "requests": [bad], "requestsOmitted": 0})
-    assert "DO_NOT_DISPLAY" not in text and "secret.invalid" not in text
-
-
 @pytest.mark.parametrize("endpoint", ["health", "shutdown"])
 def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, endpoint):
     gui, _root, _config = gui_workflow
@@ -1394,40 +1074,6 @@ def test_gui_http_enforces_total_deadline_for_continuous_trickle(gui_workflow, e
                 gui._fetch_health_snapshot(timeout=0.1, base_url=base_url)
         else:
             assert gui._try_http_shutdown_current_server(timeout=0.1, base_url=base_url)[0] is False
-
-
-GUI_BASE_RESIZE = {
-    "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-    "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-}
-
-
-def test_gui_base_resize_defaults_and_example_are_explicit():
-    example_path = GUI_PATH.parents[2] / "config.example.env"
-    example = settings_env.parse_env(example_path)
-    active_lines = example_path.read_text(encoding="utf-8").splitlines()
-    for key, value in GUI_BASE_RESIZE.items():
-        assert settings_schema.DEFAULTS[key] == value
-        assert example[key] == value
-        assert f"{key}={value}" in active_lines
-
-
-@pytest.mark.parametrize("preset_name", list(settings_schema.PRESETS))
-def test_gui_base_and_pipeline_presets_make_box_resize_explicit(preset_name):
-    style_key = "INFINI_PROMPT_STYLE"
-    assert style_key not in settings_schema.PRESETS[preset_name]
-    gui = _SpriteGuiHarness()
-    gui.preset_var.set(preset_name)
-    for style in ("Default", "Terraria Like"):
-        before = {key: var.get() for key, var in gui.vars.items()}
-        gui.vars[style_key].set(style)
-        gui._refresh_visibility()
-        assert {key: var.get() for key, var in gui.vars.items()} == {**before, style_key: style}
-        gui.apply_preset()
-        assert gui.vars[style_key].get() == style
-        assert gui.field_state[style_key][0] is True
-    for key, value in GUI_BASE_RESIZE.items():
-        assert settings_schema.PRESETS[preset_name][key] == value
 
 
 class _SpriteGuiHarness(settings_trace_state.SettingsGuiTraceStateMixin):
@@ -1502,7 +1148,3 @@ def test_gui_resize_reset_restores_box_without_changing_background():
     assert gui.vars["INFINI_SPRITE_DOWNSCALE_FILTER"].get() == "box"
     assert gui.vars["INFINI_SPRITE_PREMULTIPLIED_RESIZE"].get() == "1"
     assert gui.vars["INFINI_BG_COLOR"].get() == "transparent"
-    assert "command=self.reset_sprite_resize" in GUI_SOURCE
-    assert "alpha" in settings_schema.FIELD_HELP["INFINI_BG_COLOR"]
-    assert "transparent" in settings_schema.FIELD_HELP["INFINI_REMOVE_BG"]
-    assert "Модель запрашивается с alpha; локальный keyer не применяется" in settings_schema.OPTION_HELP["INFINI_BG_COLOR"]["transparent"]

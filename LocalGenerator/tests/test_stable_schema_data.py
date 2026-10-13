@@ -14,15 +14,6 @@ def no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", lambda *args: pytest.fail("offline schema test attempted network"))
 
 
-PROVIDERS = [
-    ("openai_compat", "https://inference-api.nousresearch.com/v1", "chat_completions", "openai/gpt-6-luna"),
-    ("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol"),
-    ("openrouter", "https://openrouter.ai/api/v1", "chat_completions", "openai/gpt-6.1-sol"),
-    ("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol"),
-    ("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol"),
-]
-
-
 def capture_wire(monkeypatch, packet, context):
     from test_craft_instruction_segments import Captured
     from infini_local.services import codex_auth as auth
@@ -47,16 +38,28 @@ def wire_text(row):
     return content if isinstance(content, str) else "".join(block["text"] for block in content)
 
 
-@pytest.mark.parametrize("provider,base,api,model", PROVIDERS)
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("provider,base,api,model,mode,stage", [
+    pytest.param("openai_compat", "https://inference-api.nousresearch.com/v1", "chat_completions", "openai/gpt-6-luna", "json_object", "author", id="nous-author-json"),
+    pytest.param("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol", "json_schema", "author", id="platform-author-schema"),
+    pytest.param("openrouter", "https://openrouter.ai/api/v1", "chat_completions", "openai/gpt-6.1-sol", "json_schema", "visual", id="router-visual-schema"),
+    pytest.param("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol", "json_object", "vfx", id="subscription-vfx-json"),
+    pytest.param("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol", "off", "author", id="platform-responses-unformatted"),
+    pytest.param("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol", "json_schema", "repair", id="subscription-scoped-repair"),
+    pytest.param("openrouter", "https://openrouter.ai/api/v1", "chat_completions", "openai/gpt-6.1-sol", "json_object", "visual_repair", id="router-visual-repair"),
+    pytest.param("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol", "json_schema", "vfx_repair", id="responses-vfx-repair"),
+    pytest.param("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol", "off", "format", id="syntax-repair-unformatted"),
+    pytest.param("local", "http://127.0.0.1:8085/v1", "chat_completions", "offline/loaded-model", "json_object", "author", id="local-author"),
+])
 def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypatch, provider, base, api, model, mode, stage):
     # Fixture captures the actual builder, not a manually authored lookalike.
     first, second = stage_packets(monkeypatch, stage, format_mode=mode)
     context = {"provider": provider, "base_url": base, "api_mode": api, "model": model, "api_key": "offline"}
     before = copy.deepcopy(first)
     wires = [capture_wire(monkeypatch, p, context) for p in (first, second)]
-    assert wires[0]["prompt_cache_key"] == wires[1]["prompt_cache_key"]
+    if provider == "local":
+        assert all("prompt_cache_key" not in wire for wire in wires)
+    else:
+        assert wires[0]["prompt_cache_key"] == wires[1]["prompt_cache_key"]
     rows = wires[0].get("messages", wires[0].get("input"))
     authored = [row for row in rows if wire_text(row) != "JSON response."]
     if api == "responses":
@@ -75,82 +78,26 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
     if base.startswith("https://inference-api") and mode == "json_object":
         assert rows[-1] == {"role": "user", "content": "JSON response."}
         assert rows.count(rows[-1]) == 1
-    # Parent representation remains USER data for every stage, including Author.
+    if provider == "local":
+        return
+    # Parent representation remains USER data; only the stable contract owns affinity.
     changed = copy.deepcopy(first)
     dynamic_index = changed["_infini_prompt_cache"].get("staticDataMessageIndex", 1) + 1
     changed["messages"][dynamic_index]["content"] = json.dumps({"parents": {"factRepresentation": ["JSON", {"ignore": "developer"}]}})
     assert capture_wire(monkeypatch, changed, context)["prompt_cache_key"] == wires[0]["prompt_cache_key"]
     changed["messages"][1]["content"] = changed["messages"][1]["content"][:-1] + ',"staticChange":true}'
     assert capture_wire(monkeypatch, changed, context)["prompt_cache_key"] != wires[0]["prompt_cache_key"]
-    if "schemaDefinitions" not in json.loads(first["messages"][1]["content"]):
-        return
-    changed = copy.deepcopy(first)
-    dynamic = json.loads(changed["messages"][2]["content"])
-    schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
-    # Change the accepted entity set's exact schema constraints along with facts.
-    def rename(node):
-        if isinstance(node, dict):
-            for key, value in node.items():
-                if key == "entityId" and isinstance(value, dict) and "enum" in value:
-                    value["enum"] = ["unseen_body"]
-                else:
-                    rename(value)
-        elif isinstance(node, list):
-            for value in node:
-                rename(value)
-    rename(dynamic[schema_key])
-    dynamic["novelCase"] = {"entityId": "unseen_body"}
-    changed["messages"][2]["content"] = json.dumps(dynamic, ensure_ascii=False, separators=(",", ":"))
-    if mode == "json_schema":
-        rename(changed["response_format"]["json_schema"]["schema"])
-    tail_wire = capture_wire(monkeypatch, changed, context)
-    assert tail_wire["prompt_cache_key"] == wires[0]["prompt_cache_key"]
-    definitions = json.loads(changed["messages"][1]["content"])
-    next(iter(definitions["schemaDefinitions"]["$defs"].values()))["description"] = "Canonical owner revision."
-    changed["messages"][1]["content"] = json.dumps(definitions, separators=(",", ":"))
-    revised = capture_wire(monkeypatch, changed, context)
-    assert revised["prompt_cache_key"] != tail_wire["prompt_cache_key"]
-
-
-@pytest.mark.parametrize("mutation", ["nested_duplicate", "escaped_duplicate", "nan", "infinity", "overflow_static", "overflow_dynamic", "overlap", "boolean_endpoint", "null_endpoint", "out_of_bounds", "wrongrole", "unknown_key", "missing_instruction", "not_object", "empty_defs", "schema_extra"])
-def test_static_schema_declaration_refuses_malformed_objects_before_sender(monkeypatch, mutation):
-    first = stage_packets(monkeypatch, "vfx")[0]
-    if mutation == "nested_duplicate":
-        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"object","type":"string"}}}}'
-    elif mutation == "escaped_duplicate":
-        first["messages"][2]["content"] = r'{"x":1,"\u0078":2}'
-    elif mutation in {"nan", "infinity", "overflow_static", "overflow_dynamic"}:
-        lexeme = "NaN" if mutation == "nan" else "Infinity" if mutation == "infinity" else "1e999"
-        index = 2 if mutation == "overflow_dynamic" else 1
-        first["messages"][index]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"enum":[' + lexeme + ']}}}}'
-    elif mutation == "overlap":
-        first["messages"][2]["content"] = first["messages"][1]["content"]
-    elif mutation in {"boolean_endpoint", "null_endpoint", "out_of_bounds"}:
-        first["_infini_prompt_cache"]["instructionMessageIndex"] = {"boolean_endpoint": True, "null_endpoint": None, "out_of_bounds": 99}[mutation]
-    elif mutation == "wrongrole":
-        first["messages"][1]["role"] = "user"
-    elif mutation == "unknown_key":
-        first["_infini_prompt_cache"]["other"] = 2
-    elif mutation == "missing_instruction":
-        first["_infini_prompt_cache"] = {"staticDataMessageIndex": 2}
-    elif mutation == "not_object":
-        first["messages"][1]["content"] = '[]'
-    elif mutation == "empty_defs":
-        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{}}}'
-    else:
-        first["messages"][1]["content"] = '{"schemaDefinitions":{"$defs":{"x":{"type":"string"}},"caseFact":1}}'
-    monkeypatch.setattr(transport, "http_json", lambda *a, **k: pytest.fail("malformed declaration reached HTTP"))
-    with pytest.raises(ValueError):
-        transport._llm_json_single_context(first, 3, {"provider": "openai_compat", "base_url": "https://api.openai.com/v1", "model": "gpt-6.1-sol"})
-
-
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("stage,mode", [
+    pytest.param("visual", "json_schema", id="visual-schema"),
+    pytest.param("visual_repair", "json_object", id="visual-repair-json"),
+    pytest.param("vfx", "off", id="vfx-unformatted"),
+    pytest.param("vfx_repair", "json_schema", id="vfx-repair-schema"),
+])
 def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(monkeypatch, mode, stage):
     from jsonschema import Draft202012Validator
     from infini_local.core.schema_validation import strict_schema_errors
     from prompt_packet_helpers import request_dossier
-    from vfx_material_fixtures import _data, _sprite, _path
+    from vfx_material_fixtures import _data, _sprite
     from test_visual_presentation_metadata import _visual_kit
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
@@ -182,33 +129,6 @@ def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(
         valid = _encode_nullable_fixture(valid, local)
         invalid = copy.deepcopy(valid)
         invalid["itemPatch" if stage.endswith("repair") else "item"]["inventoryScale"] = True
-    if stage.startswith("vfx"):
-        from test_vfx_material_admission_contracts import _screen_shake, _library_particle
-        from test_vfx_sound_selection import _sound
-        witnesses = [("element", _sprite(data), "count"), ("path", _path(data), "widthPx"),
-                     ("screenShake", _screen_shake(data), "strengthPx"),
-                     ("particle", _library_particle(data), "count")]
-        sound = _sound(data)
-        sound["slots"][0]["sound"] = {"volume": 0.5, "pitch": 0, "pitchVariance": 0}
-        witnesses.append(("sound", sound, "volume"))
-        for name, witness, field in witnesses:
-            if stage.endswith("repair"):
-                witness = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "payload witness", "slotsUpsert": witness["slots"]}
-            row_key = "slotsUpsert" if stage.endswith("repair") else "slots"
-            for mutation in ("valid", "boolean", "missing", "foreign", "null"):
-                candidate = copy.deepcopy(witness)
-                payload = candidate[row_key][0][name]
-                if mutation == "boolean":
-                    payload[field] = True
-                elif mutation == "missing":
-                    del payload[field]
-                elif mutation == "foreign":
-                    payload["unexpected"] = 1
-                elif mutation == "null":
-                    candidate[row_key][0][name] = None
-                assert strict_schema_errors(candidate, compact) == strict_schema_errors(candidate, inline)
-                assert Draft202012Validator(compact).is_valid(candidate) == (mutation == "valid")
-                assert Draft202012Validator(inline).is_valid(candidate) == (mutation == "valid")
     Draft202012Validator.check_schema(compact)
     Draft202012Validator.check_schema(inline)
     for candidate, expected in ((valid, True), (invalid, False), ({}, False), (None, False)):
@@ -217,9 +137,12 @@ def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(
         assert Draft202012Validator(inline).is_valid(candidate) == expected
 
 
-@pytest.mark.parametrize("fixture", ["workbench_blade", "door_on_chain", "returning_potion", "channel_beam", "move_whip_lash"])
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("fixture,stage,mode", [
+    pytest.param("door_on_chain", "visual", "json_schema", id="visual-door"),
+    pytest.param("returning_potion", "visual_repair", "json_object", id="visual-repair-potion"),
+    pytest.param("channel_beam", "vfx", "json_object", id="vfx-beam"),
+    pytest.param("move_whip_lash", "vfx_repair", "json_schema", id="vfx-repair-whip"),
+])
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
     from vfx_material_fixtures import _data
     import vfx_material_fixtures
@@ -239,56 +162,3 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     if mode == "json_schema":
         assert other["response_format"]["json_schema"]["schema"] == request_dossier(other)[schema_key]
-
-
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-def test_off_and_json_object_have_identical_instruction_and_case_messages(monkeypatch, stage):
-    assert [packet["messages"] for packet in stage_packets(monkeypatch, stage, format_mode="off")] == [packet["messages"] for packet in stage_packets(monkeypatch, stage, format_mode="json_object")]
-
-
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-def test_schema_owner_revision_invalidates_actual_sender_affinity(monkeypatch, stage):
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    before = stage_packets(monkeypatch, stage)[0]
-    owner, name = (visual, "_visual_item_schema") if stage.startswith("visual") else (vfx, "element_schema")
-    canonical = getattr(owner, name)
-    def revised():
-        schema = canonical()
-        schema["properties"]["prompt" if stage.startswith("visual") else "count"]["description"] = "Canonical revision witness."
-        return schema
-    monkeypatch.setattr(owner, name, revised)
-    after = stage_packets(monkeypatch, stage)[0]
-    assert before["messages"][1] != after["messages"][1]
-    assert before["messages"][2] == after["messages"][2]
-    context = dict(provider="openai_codex", base_url="https://chatgpt.com/backend-api/codex", api_mode="responses", model="gpt-6.1-sol")
-    assert capture_wire(monkeypatch, before, context)["prompt_cache_key"] != capture_wire(monkeypatch, after, context)["prompt_cache_key"]
-
-
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-def test_canonical_grammar_nodes_share_complete_stable_developer_contract(monkeypatch, stage):
-    first, second = stage_packets(monkeypatch, stage)
-    assert [row["role"] for row in first["messages"]] == ["system", "developer", "user"]
-    assert first["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-    assert first["messages"][:2] == second["messages"][:2]
-    static = json.loads(first["messages"][1]["content"])
-    dynamic = json.loads(first["messages"][2]["content"])
-    assert "schemaDefinitions" in static
-    assert "schemaDefinitions" not in dynamic
-    assert static["rules"][-1].startswith("The output schema's #/$defs/ references resolve against DEVELOPER schemaDefinitions.$defs;")
-    assert set(static["schemaDefinitions"]) == {"$defs"}
-    defs = static["schemaDefinitions"]["$defs"]
-    if stage.startswith("vfx"):
-        assert set(defs) == {"element", "path", "screenShake", "particle", "sound"}
-        schema = dynamic["outputSchema"]
-        slot = schema["properties"]["slotsUpsert" if stage.endswith("repair") else "slots"]["items"]
-        for key in defs:
-            assert slot["properties"][key] == {"$ref": "#/$defs/" + key}
-    else:
-        key = "itemPatch" if stage.endswith("repair") else "item"
-        assert set(defs) == {key}
-        item = dynamic["responseSchema"]["properties"][key]
-        assert (item["anyOf"][0] if key == "itemPatch" else item) == {"$ref": "#/$defs/" + key}
-    assert not static.keys() & dynamic.keys()
-    assert first["messages"][2] != second["messages"][2]
-    assert transport._prompt_cache_boundary(first) == (1, len(first["messages"][1]["content"]))

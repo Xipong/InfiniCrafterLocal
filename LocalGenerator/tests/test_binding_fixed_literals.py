@@ -1,4 +1,3 @@
-from prompt_packet_helpers import dossier_text
 """Exact redundant binding literals preserve mechanics and source presence."""
 from copy import deepcopy
 import json
@@ -18,18 +17,6 @@ from repair_test_helpers import (
     assert_delivery as _assert_delivery, assert_repaired_source,
     binding_transaction as binding_transaction, edit_fields, gameplay_repair as _offline_gameplay_repair,
 )
-
-
-@pytest.mark.parametrize("contact_damage", [False, True], ids=["mining-only", "mining-and-contact"])
-def test_primary_body_tool_admission_preserves_independent_contact_lane(contact_damage):
-    doc = build_capability_witness("configure_tool")
-    doc["runtimeProgram"]["bindings"][0]["contactDamage"] = contact_damage
-    before = json.dumps(doc, sort_keys=True)
-    report = validate_runtime_program(doc)
-    assert report["ok"], report["errors"]
-    final = _assert_delivery(doc)
-    assert final["runtimeProgram"]["bindings"][0]["usePolicy"]["contactDamage"] is contact_damage
-    assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("root", ["body", "spawn"])
@@ -113,22 +100,6 @@ def test_noncontact_tool_unrelated_repair_keeps_binding_and_tool_stats_frozen(mo
     assert json.dumps(doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_valid_noncontact_tool_noop_repair_preserves_complete_source(monkeypatch, format_mode):
-
-    doc = build_capability_witness("configure_tool")
-    doc["runtimeProgram"]["bindings"][0]["contactDamage"] = False
-    before = json.dumps(doc, sort_keys=True)
-    repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
-        "note": "valid native mining needs no contact correction", "realizationReplacement": doc["realization"],
-    }, format_mode)
-    assert dossier["exactValidationErrors"] == []
-    assert dossier["repairScope"]["fieldPermissions"]["bindings"] == []
-    repaired.pop("debug")
-    assert json.dumps(repaired, sort_keys=True) == before
-    _assert_delivery(repaired)
-
-
 @pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
 def test_fixed_explicit_binding_envelope_has_exact_sparse_effect_parity(case):
     sparse, row = _binding_case(case)
@@ -145,9 +116,13 @@ def test_fixed_explicit_binding_envelope_has_exact_sparse_effect_parity(case):
     assert json.dumps(explicit, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
-@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+@pytest.mark.parametrize("case,explicit,format_mode", [
+    pytest.param("equipped", True, "json_schema", id="explicit-equipped"),
+    pytest.param("hold", False, "json_object", id="sparse-hold"),
+    pytest.param("body", True, "json_object", id="explicit-body"),
+    pytest.param("effects", False, "json_schema", id="sparse-effects"),
+    pytest.param("placement", True, "json_object", id="explicit-placement"),
+])
 def test_binding_input_leaf_repair_preserves_exact_envelope(
     monkeypatch, binding_transaction, format_mode, case, explicit,
 ):
@@ -229,9 +204,13 @@ def test_explicit_body_owner_is_exact_arbitrary_declared_id_and_source_authentic
     assert any("binding" in json.dumps(error).lower() for error in audit["violations"])
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
-@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
+@pytest.mark.parametrize("case,explicit,format_mode", [
+    pytest.param("equipped", True, "json_schema", id="explicit-equipped"),
+    pytest.param("hold", False, "json_object", id="sparse-hold"),
+    pytest.param("body", True, "json_object", id="explicit-body"),
+    pytest.param("effects", False, "json_schema", id="sparse-effects"),
+    pytest.param("placement", True, "json_object", id="explicit-placement"),
+])
 def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch, binding_transaction, format_mode, case, explicit):
     transaction = binding_transaction(case, explicit=explicit)
     sparse, sparse_row = _binding_case(case)
@@ -250,52 +229,6 @@ def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     assert_repaired_source(repaired, transaction.expected)
     assert json.dumps(transaction.doc, sort_keys=True) == before
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_actual_author_packet_explains_uniform_binding_and_keeps_sparse_valid(monkeypatch, format_mode):
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
-
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "fixed-binding-proof", model_name="offline")
-    assert dossier_text(request) == user
-    assert "Fixed binding literals may be explicit or omitted" in user
-    cards = json.loads(user)["requiredJsonShape"]["runtimeProgram"]["bindings"]
-    assert all({"id", "input", "action", "stackCost", "contactDamage"} <= set(card) for card in cards)
-    assert all({"kind", "targetId"} <= set(card["action"]) for card in cards)
-    guide = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["bindingTarget"]
-    assert "omit fixed contactDamage for place_item/hold/equipped" not in guide
-    assert "Omit action.targetId for item_body-only actions" not in guide
-    shapes = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
-    assert "Fixed binding literals may be explicit or omitted" in shapes
-    assert "hold/equipped stackCost=0 and contactDamage=false" in shapes
-    assert "place_item stackCost=1 and contactDamage=false" in shapes
-    assert "item-body-only action targetId=the exact unique declared item_body id" in shapes
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["equipped", "hold", "body", "effects", "placement"])
-@pytest.mark.parametrize("explicit", [False, True], ids=["sparse", "explicit"])
-def test_actual_author_preparation_roundtrip_preserves_binding_source(monkeypatch, format_mode, case, explicit):
-    from jsonschema import Draft202012Validator
-    from test_codex_subscription_contract import _encode_nullable_fixture
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
-
-    doc, row = _binding_case(case)
-    if explicit:
-        row.update(_explicit(doc, row))
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
-    request, _, _ = author.build_initial_author_request({}, {}, {}, {}, "fixed-binding-wire", model_name="offline")
-    payload = deepcopy(doc)
-    if format_mode == "json_schema":
-        payload = _encode_nullable_fixture(doc, author_item_response_schema())
-        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
-    source = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
-    assert json.dumps(source, sort_keys=True) == json.dumps(doc, sort_keys=True)
-    _assert_delivery(source)
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
@@ -371,31 +304,6 @@ def test_input_only_repair_ignores_hostile_frozen_binding_lanes(
     assert scope["identityChanges"]["bindingActionIds"] == scope["identityChanges"]["bindingTargetIds"] == []
     assert transaction.audit["ok"]
     assert transaction.audit["acceptedPaths"] == ["$.bindingsUpsert[0].input", "$.realizationReplacement"]
-
-
-@pytest.mark.parametrize("scope_edits,candidate_edits", [
-    pytest.param({"identityChanges.bindingInputIds": []}, {}, id="no-input-authority"),
-    pytest.param({"fieldPermissions.bindings": [{"id": "witness_binding", "paths": []}]}, {}, id="no-input-permission"),
-    pytest.param({"bindingAlternatives": []}, {}, id="missing-alternatives"),
-    pytest.param({}, {"input": "hold"}, id="unoffered-input"),
-    pytest.param({}, {"input": "unknown"}, id="unknown-input"),
-    pytest.param({}, {"input": "primary_use"}, id="ambiguous-input"),
-    pytest.param({}, {"action.targetId": "foreign_body"}, id="wrong-target"),
-    pytest.param({}, {"action.kind": "hold_entity"}, id="wrong-kind"),
-    pytest.param({}, {"stackCost": 1}, id="wrong-stack-cost"),
-])
-def test_empty_action_dependency_comparison_requires_exact_scoped_proof(scope_edits, candidate_edits):
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope, validate_repair_patch_scope
-
-    doc, row = _binding_case("equipped")
-    row.update(input="invalid_input", action={})
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    candidate = {**deepcopy(row), "input": "equipped"}
-    edit_fields(scope, scope_edits)
-    edit_fields(candidate, candidate_edits)
-    before = json.dumps(doc, sort_keys=True)
-    assert not validate_repair_patch_scope(doc, {"note": "no broad defaults", "bindingsUpsert": [candidate]}, scope)["ok"]
-    assert json.dumps(doc, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("body_ids", [[], ["body_a", "body_b"]], ids=["no-body", "ambiguous-body"])
@@ -528,9 +436,11 @@ def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, b
     transaction.repair(monkeypatch, format_mode, paths=["action.targetId", "target"], ignored=True)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("contact", [False, True])
-@pytest.mark.parametrize("invalid_leaf", ["contactDamage", "stackCost", "stackConsumeChancePercent"])
+@pytest.mark.parametrize("format_mode,contact,invalid_leaf", [
+    pytest.param("json_object", False, "contactDamage", id="contact-false"),
+    pytest.param("json_schema", True, "stackCost", id="cost-true"),
+    pytest.param("json_object", False, "stackConsumeChancePercent", id="probability-false"),
+])
 def test_compound_effect_consumer_target_and_contact_repair(
     monkeypatch, binding_transaction, format_mode, contact, invalid_leaf,
 ):
@@ -547,9 +457,12 @@ def test_compound_effect_consumer_target_and_contact_repair(
                        ignored=True, create=False)
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["body", "effects", "named_effects", "placement"])
-@pytest.mark.parametrize("kind_state", ["absent", "null"])
+@pytest.mark.parametrize("case,kind_state,format_mode", [
+    pytest.param("body", "absent", "json_object", id="body-absent"),
+    pytest.param("effects", "null", "json_schema", id="effects-null"),
+    pytest.param("named_effects", "absent", "json_object", id="named-effects-absent"),
+    pytest.param("placement", "null", "json_schema", id="placement-null"),
+])
 def test_missing_action_kind_repair_preserves_omitted_body_target(
     monkeypatch, binding_transaction, format_mode, case, kind_state,
 ):

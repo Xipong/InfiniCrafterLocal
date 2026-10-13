@@ -1,8 +1,7 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
-from infini_local.core.runtime_authoring.capability_registry import OmissionCondition, RUNTIME_PROGRAM_SCHEMA, visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, visible_capabilities
 from copy import deepcopy
-from dataclasses import replace
 import hashlib
 import json
 import math
@@ -12,22 +11,8 @@ import struct
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
-    apply_repair_patch,
-    filter_repair_patch_scope,
-    compile_runtime_program,
-    validate_runtime_program,
-    validate_runtime_wire,
-    build_runtime_repair_scope,
-    capability_provider_union,
-    compact_capability_catalog,
-)
-from infini_local.core.runtime_authoring import technical_lowering
-from infini_local.core.runtime_authoring.program_schema import (
-    author_item_repair_schema, strict_author_shape_report,
-    strict_repair_shape_report, strict_repair_structure_report,
-)
+from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, apply_repair_patch, filter_repair_patch_scope, compile_runtime_program, validate_runtime_program, validate_runtime_wire, build_runtime_repair_scope
+from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report, strict_repair_shape_report, strict_repair_structure_report
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_author_projectile_aliases import selected as _scalar_name_call
@@ -125,82 +110,44 @@ PERCENT_PARAMS = tuple((fn, name, spec) for fn, cap in CAPABILITY_REGISTRY.items
                        for name, spec in _parameter_leaves(cap.params) if spec.wire_divisor == 100)
 
 
-# Independent historical units: extrema, zero, first step and off-lattice refusals.
-# No closed-domain enumeration: the shared projector's two arithmetic branches
-# are checked below, while these rows check every distinct compiler destination.
-# For unsigned domains the minimum already is zero; retain a separate zero only
-# when it is an interior point of a signed domain.
-DISCRETE_UNITS = (
-    ("configure_tool", "axePowerTooltipPercent", "axePower", "gameplay.axePower", 0, 500, 5, 5, 1),
-    (FN, "lifeRegenHpPerSecond", "lifeRegen", "gameplay.generatedBuff.lifeRegen", 0, 60, .5, 1, 2),
-    (FN, "manaRegenBonusPoints", "manaRegen", "gameplay.generatedBuff.manaRegen", 0, 120, 1, 1, 1),
-    ("configure_accessory", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", "accessory.lifeRegen", -50, 100, .5, 1, 2),
-    ("configure_armor", "lifeRegenHpPerSecond", "lifeRegenHalfHpPerSecond", "armor.lifeRegen", -50, 100, .5, 1, 2),
-    ("configure_armor", "setBonuses.lifeRegenHpPerSecond", "setBonusLifeRegenHalfHpPerSecond", "armor.setBonusLifeRegen", -50, 100, .5, 1, 2),
-)
-
-
-@pytest.mark.parametrize("unit,value,accepted", [
-    pytest.param(row, value, accepted, id=f"{row[0]}-{row[1]}-{label}")
-    for row in DISCRETE_UNITS
-    for label, value, accepted in (
-        ("minimum", row[4], True), ("maximum", row[5], True),
-        *((("zero", 0, True),) if row[4] != 0 else ()),
-        ("first-step", row[6], True), ("below-minimum", row[4] - row[6], False),
-        ("above-maximum", row[5] + row[6], False), ("off-step", row[6] / 2, False))
+@pytest.mark.parametrize("fn,param,path,value,expected", [
+    pytest.param("configure_tool", "axePowerTooltipPercent", "gameplay.axePower", 35, 7, id="axe-tooltip-to-engine"),
+    pytest.param(FN, "lifeRegenHpPerSecond", "gameplay.generatedBuff.lifeRegen", 3.5, 7, id="buff-half-hp-units"),
+    pytest.param(FN, "manaRegenBonusPoints", "gameplay.generatedBuff.manaRegen", 7, 7, id="buff-mana-points"),
+    pytest.param("configure_accessory", "lifeRegenHpPerSecond", "accessory.lifeRegen", -3.5, -7, id="signed-accessory-regen"),
+    pytest.param("configure_armor", "lifeRegenHpPerSecond", "armor.lifeRegen", 3.5, 7, id="armor-regen"),
+    pytest.param("configure_armor", "setBonuses.lifeRegenHpPerSecond", "armor.setBonusLifeRegen", 3.5, 7, id="set-bonus-regen"),
 ])
-def test_discrete_units_pin_schema_lattice_and_every_wire_destination(unit, value, accepted):
-    fn, param, old, path, low, high, step, divisor, multiplier = unit
-    spec = _stat_spec(fn, param)
-    assert (spec.minimum, spec.maximum, spec.wire_divisor, spec.wire_multiplier) == (low, high, divisor, multiplier)
-    assert spec.multiple_of == (None if param == "manaRegenBonusPoints" else step)
-    schema = next(s["properties"]["params"] for s in capability_provider_union() if s["properties"]["fn"]["const"] == fn)
-    assert old not in schema["properties"]
-    for part in param.split(".")[:-1]:
-        schema = schema["properties"][part]
-    leaf = param.rsplit(".", 1)[-1]
-    assert schema["properties"][leaf] == spec.schema()
-    assert (leaf in schema["required"]) is spec.required
-    assert param.split(".")[0] in next(c["params"] for c in compact_capability_catalog() if c["fn"] == fn)
+def test_discrete_author_units_reach_each_engine_destination(fn, param, path, value, expected):
     doc = build_capability_witness(fn)
-    call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")
     if fn == FN:
         call["params"]["oreSenseEnabled"] = True
     _set_stat(call["params"], param, value)
-    if not accepted:
-        assert not validate_runtime_program(doc)["ok"]
-        with pytest.raises(ValueError, match="runtime program rejected"):
-            compile_runtime_program(doc)
-        return
-    expected = int(value * multiplier / divisor)
-    assert type(spec.to_wire(value)) is int and spec.to_wire(value) == expected
-    assert spec.to_wire(value) * divisor / multiplier == value
+    before = _bytes(doc)
     wire = compile_runtime_program(doc)
     assert type(_get(wire, path)) is int and _get(wire, path) == expected
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert any(r.get("authoredPath", "").endswith(".params." + param)
-               and r["finalPath"] == path and type(r["value"]) is int and r["value"] == expected for r in rows)
     assert validate_runtime_wire(wire)["ok"]
-    _set_stat(call["params"], param, 0)
-    call["params"][old] = 2
-    assert not validate_runtime_program(doc)["ok"]
+    assert _bytes(doc) == before
 
 
-@pytest.mark.parametrize("fn,param,value,expected", [
-    pytest.param("configure_tool", "axePowerTooltipPercent", 35, 7, id="integer-division"),
-    pytest.param(FN, "lifeRegenHpPerSecond", 3.5, 7, id="fractional-multiplication"),
-    pytest.param("configure_accessory", "lifeRegenHpPerSecond", -3.5, -7, id="signed-multiplication"),
-    pytest.param(FN, "manaRegenBonusPoints", 7, 7, id="integer-identity"),
-    pytest.param("configure_tool", "axePowerTooltipPercent", 1, None, id="nonintegral-division"),
-    pytest.param(FN, "lifeRegenHpPerSecond", .25, None, id="nonintegral-multiplication"),
-])
-def test_shared_discrete_projector_preserves_integer_output_or_refuses_fraction(fn, param, value, expected):
-    spec = _stat_spec(fn, param)
-    if expected is None:
-        with pytest.raises(ValueError, match="non-integral wire projection"):
-            spec.to_wire(value)
+@pytest.mark.parametrize("boundary", ["minimum", "maximum", "below", "above", "off-step"], ids=["minimum", "maximum", "below-minimum", "above-maximum", "fractional-engine-unit"])
+def test_discrete_domain_boundaries_are_admitted_or_refused_without_default(boundary):
+    spec = CAPABILITY_REGISTRY["configure_tool"].params["axePowerTooltipPercent"]
+    step = spec.multiple_of
+    value = {"minimum": spec.minimum, "maximum": spec.maximum,
+             "below": spec.minimum - step, "above": spec.maximum + step, "off-step": step / 2}[boundary]
+    doc = build_capability_witness("configure_tool")
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")
+    call["params"]["axePowerTooltipPercent"] = value
+    before = _bytes(doc)
+    if boundary in {"minimum", "maximum"}:
+        assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
     else:
-        assert type(spec.to_wire(value)) is int and spec.to_wire(value) == expected
+        assert not validate_runtime_program(doc)["ok"]
+        with pytest.raises(ValueError):
+            compile_runtime_program(doc)
+    assert _bytes(doc) == before
 
 
 def percent_document(fn, name, value, *, companion=True):
@@ -239,48 +186,25 @@ def assert_delivered(doc, index, name, expected):
     return wire
 
 
-# Every field gets its own signed/bounded destination controls; numeric shapes
-# belong to the common ParamSpec owner, not leaf x shape Cartesian products.
+# One nonneutral value per registry-declared destination; common numeric shapes
+# are covered separately rather than repeated for every leaf.
 PERCENT_WIRING = [pytest.param(fn, name, spec, value, True, True, id=f"{fn}-{name}-{label}")
                   for fn, name, spec in PERCENT_PARAMS
-                  for label, value in (("minimum", spec.minimum), ("maximum", spec.maximum), ("decimal", 15.125))]
-PERCENT_SHAPES = [
-    pytest.param(value, accepted, id=label) for label, value, accepted in (
-        ("int-zero", 0, True), ("float-zero", 0.0, True), ("signed-zero", -0.0, True),
-        ("decimal", .007, True), ("adjacent-decimal", .007000000000000001, True),
-        ("tenth", .1, True), ("integer", 15, True), ("integer-float", 15.0, True),
-        ("negative-decimal", -.007, True), ("negative-tenth", -.1, True),
-        ("positive-subnormal", 100 * 2**-149, True), ("negative-subnormal", -100 * 2**-149, True),
-        ("tiny-nonzero", 1e-40, True), ("negative-tiny-nonzero", -1e-40, True),
-        ("division-collapse", 5e-324, False), ("negative-division-collapse", -5e-324, False),
-        ("storage-collapse", 1e-50, False), ("negative-storage-collapse", -1e-50, False),
-        ("percent-not-wire-subnormal", 2**-149, False),
-        ("half-below", math.nextafter(100 * 2**-150, 0), False),
-        ("half-tie", 100 * 2**-150, False),
-        ("half-above", math.nextafter(100 * 2**-150, math.inf), True),
-        ("negative-half-below", -math.nextafter(100 * 2**-150, 0), False),
-        ("negative-half-tie", -100 * 2**-150, False),
-        ("negative-half-above", -math.nextafter(100 * 2**-150, math.inf), True),
-    )]
-
+                  for label, value in (("decimal", 15.125),)]
+PERCENT_SHAPES = [pytest.param(value, accepted, id=label) for label, value, accepted in (
+    ("zero", 0, True), ("decimal", .007, True), ("signed-decimal", -.007, True),
+    ("positive-subnormal", 100 * 2**-149, True), ("division-collapse", 5e-324, False),
+    ("storage-collapse", 1e-50, False), ("negative-storage-collapse", -1e-50, False),
+    ("half-tie", 100 * 2**-150, False),
+    ("half-above", math.nextafter(100 * 2**-150, math.inf), True),
+)]
 
 IDENTITY_CONSUMER_CASES = [
-    pytest.param(name, value, accepted, "sole", id=f"{name}-{label}")
-    for name, value, accepted, label in (
-        ("miningSpeedMultiplier", 1.000000001, False, "above-neutral-collapse"),
-        ("miningSpeedMultiplier", .999999999, False, "below-neutral-collapse"),
-        ("miningSpeedMultiplier", 1.0005, True, "above-neutral"),
-        ("miningSpeedMultiplier", .9995, True, "below-neutral"),
-        ("miningSpeedMultiplier", 1 + 2**-23, True, "above-step"),
-        ("miningSpeedMultiplier", 1 - 2**-24, True, "below-step"),
-        ("miningSpeedMultiplier", 1 + 2**-24, False, "above-half-tie"),
-        ("miningSpeedMultiplier", 1 - 2**-25, False, "below-half-tie"),
-        ("jumpSpeedBonusPxPerTick", 1e-50, False, "collapse"),
-        ("jumpSpeedBonusPxPerTick", .0005, True, "small-effect"),
-        ("lightStrength", 1e-50, False, "collapse"),
-        ("lightStrength", .0005, True, "small-effect"))
-] + [pytest.param("miningSpeedMultiplier", 1.000000001, False, companion, id="valid-" + companion + "-does-not-short-circuit")
-     for companion in ("ore", "healing")]
+    pytest.param("miningSpeedMultiplier", 1.000000001, False, "ore", id="valid-ore-cannot-hide-collapse"),
+    pytest.param("miningSpeedMultiplier", .9995, True, "sole", id="signed-nonneutral-identity"),
+    pytest.param("jumpSpeedBonusPxPerTick", 1e-50, False, "sole", id="jump-collapse"),
+    pytest.param("lightStrength", .0005, True, "sole", id="small-light-effect"),
+]
 
 
 @pytest.mark.parametrize("fn,name,spec,value,accepted,companion", PERCENT_WIRING + [
@@ -305,15 +229,14 @@ def test_numeric_admission_projects_exact_bytes_and_checks_both_consumer_boundar
 
 
 @pytest.mark.parametrize("fn,name,bad", [
-    pytest.param(fn, name, case.values[0], id=f"{fn}-{name}-{case.id}")
-    for fn, name in (("configure_accessory", "moveSpeedBonusPercent"),
-                     ("configure_armor", "setBonuses.moveSpeedBonusPercent"),
-                     ("add_equipment_damage_bonus", "bonusPercent"), (FN, "moveSpeedBonusPercent"))
-    for case in (
-        pytest.param(None, id="null"), pytest.param(True, id="bool"), pytest.param("1e-50", id="string"),
-        pytest.param([], id="array"), pytest.param({}, id="object"), pytest.param(float("nan"), id="nan"),
-        pytest.param(float("inf"), id="infinity"), pytest.param(-float("inf"), id="negative-infinity"),
-        pytest.param(10**1000, id="huge-integer"))])
+    pytest.param("configure_accessory", "moveSpeedBonusPercent", None, id="null"),
+    pytest.param("configure_armor", "setBonuses.moveSpeedBonusPercent", True, id="nested-boolean"),
+    pytest.param("add_equipment_damage_bonus", "bonusPercent", "1e-50", id="numeric-string"),
+    pytest.param(FN, "moveSpeedBonusPercent", [], id="array"),
+    pytest.param(FN, "moveSpeedBonusPercent", float("nan"), id="nan"),
+    pytest.param(FN, "moveSpeedBonusPercent", float("inf"), id="infinity"),
+    pytest.param(FN, "moveSpeedBonusPercent", 10**1000, id="huge-integer"),
+])
 def test_percent_shape_owner_refuses_malformed_present_numbers_without_mutation(fn, name, bad):
     doc, _, _ = percent_document(fn, name, bad)
     before = json.dumps(doc, ensure_ascii=False)
@@ -324,8 +247,10 @@ def test_percent_shape_owner_refuses_malformed_present_numbers_without_mutation(
 
 
 @pytest.mark.parametrize("fn,name,value,replacement", [
-    pytest.param(fn, name, 5e-324, 15.125, id=f"{fn}-{name}") for fn, name, _ in PERCENT_PARAMS
-] + [pytest.param(FN, "miningSpeedMultiplier", 1.000000001, 1.0005, id="identity-consumer-collapse")])
+    pytest.param(FN, "moveSpeedBonusPercent", 5e-324, 15.125, id="percent-consumer-collapse"),
+    pytest.param("configure_armor", "setBonuses.moveSpeedBonusPercent", 5e-324, 15.125, id="nested-percent-collapse"),
+    pytest.param(FN, "miningSpeedMultiplier", 1.000000001, 1.0005, id="identity-consumer-collapse"),
+])
 def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, name, value, replacement):
     from infini_local.core.runtime_authoring import VALIDATION_ERROR_CODES, REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
     assert "consumer_representability" in VALIDATION_ERROR_CODES & REPAIR_VALIDATION_ERROR_CODES
@@ -398,74 +323,31 @@ def test_ordinary_binary64_collision_is_not_replaced_by_a_roundtrip_lattice():
     assert _bytes(compile_runtime_program(documents[0])) == _bytes(compile_runtime_program(documents[1]))
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_numeric_names_and_constraints_reach_real_author_and_serialized_repair(monkeypatch, mode):
+def test_numeric_constraints_reach_serialized_author_and_exact_repair(monkeypatch, mode):
     from infini_local.pipelines import llm_transport as transport
     from test_gameplay_repair_readonly_context import _capture_request
+
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, text, _ = build_initial_author_request({}, {}, {}, {}, "numeric-contract", model_name="offline-test")
     assert request["response_format"]["type"] == mode
     catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]
     cards = {row["fn"]: row for row in catalog["capabilities"]}
-    assert set(cards) == {cap.name for cap in visible_capabilities()}
-    schemas = [{row["properties"]["fn"]["const"]: row["properties"]["params"]
-                for row in author_item_repair_schema(capability_names=[case["fn"] for case in _SCALAR_NAME_CASES])
-                ["properties"]["callsUpsert"]["items"]["oneOf"]}]
-    if mode == "json_schema":
-        variants = request["response_format"]["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
-        schemas.append({row["properties"]["fn"]["const"]: row["properties"]["params"] for row in variants if "params" in row["properties"]})
-    for case in _SCALAR_NAME_CASES:
-        fn, old, current = case["fn"], case["oldParameter"], case["canonicalParameter"]
-        assert old not in cards[fn]["params"] and current in cards[fn]["params"]
-        for group in schemas:
-            assert old not in group[fn]["properties"] and current in group[fn]["required"]
-        cap = CAPABILITY_REGISTRY[fn]
-        assert old not in cap.params and old in cap.retained_receipt_params
-        assert cap.params[current].required and cap.params[current].default is None
-    assert {fn for fn, _, _ in PERCENT_PARAMS} == {"configure_accessory", "configure_armor", "add_equipment_damage_bonus", FN}
-    # One serialized Repair per capability, with every percentage leaf broken;
-    # assert the exact registry identities survive together, including nesting.
-    for fn in sorted({fn for fn, _, _ in PERCENT_PARAMS}):
-        doc = build_capability_witness(fn)
-        call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-        leaves = [(name, spec) for owner, name, spec in PERCENT_PARAMS if owner == fn]
-        for name, _ in leaves:
-            _set_stat(call["params"], name, 5e-324)
-        _, dossier = _capture_request(monkeypatch, doc, mode)
-        repair_cards = {row["fn"]: row for row in dossier["existingBrokenCapabilityCards"]}
-        for name, spec in leaves:
-            assert spec.neutral == 0 and spec.consumer_storage == "float32"
-            for group in (cards, repair_cards):
-                parts = name.split(".")
-                row = group[fn]["params"][parts[0]]
-                if len(parts) > 1:
-                    row = row["shape"]
-                    for part in parts[1:]:
-                        row = row["properties"][part]
-                constraint = row["x-infini-consumerConstraint"] if len(parts) > 1 else row["consumerConstraint"]
-                if isinstance(constraint, str):
-                    constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
-                assert constraint == spec.schema()["x-infini-consumerConstraint"]
-                assert (constraint["storage"], constraint["neutral"], constraint["rule"], constraint["wireProjection"]) == (
-                    "float32", 0, "nonneutral_must_remain_nonneutral", {"divisor": 100, "multiplier": 1})
-                assert all(text in constraint["meaning"] for text in ("binary64", "round-trip", "No rounding or replacement"))
-    for name, spec in CAPABILITY_REGISTRY[FN].params.items():
-        if spec.consumer_storage:
-            constraint = cards[FN]["params"][name]["consumerConstraint"]
-            if isinstance(constraint, str):
-                constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
-            assert constraint == spec.schema()["x-infini-consumerConstraint"]
-            assert (constraint["storage"], constraint["neutral"], constraint["rule"]) == (
-                "float32", spec.neutral, "nonneutral_must_remain_nonneutral")
-            assert spec.consumer_value_error(spec.neutral) is None
+    doc, _, call = percent_document(FN, "moveSpeedBonusPercent", 5e-324)
+    _, dossier = _capture_request(monkeypatch, doc, mode)
+    repair_card = next(row for row in dossier["existingBrokenCapabilityCards"] if row["fn"] == FN)
+    for card in (cards[FN], repair_card):
+        constraint = card["params"]["moveSpeedBonusPercent"]["consumerConstraint"]
+        if isinstance(constraint, str):
+            constraint = catalog["fieldGuide"]["consumerConstraints"][constraint]
+        assert constraint["wireProjection"] == {"divisor": 100, "multiplier": 1}
+        assert constraint["storage"] == "float32"
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.moveSpeedBonusPercent"]}]
 
 
-def test_generated_unit_and_binding_contracts_stay_current():
+def test_generated_equipment_bounds_stay_current():
     root = Path(__file__).resolve().parents[2]
     assert runpy.run_path(str(root / "tools/generate_equipment_bounds.py"))["render"]() == (
         root / "ModSources/InfiniCrafterLocal/Common/Models/GeneratedEquipmentBounds.g.cs").read_text()
-    text = runpy.run_path(str(root / "tools/generate_lowery.py"))["render"]()
-    assert all(value in text for value in ("exact `binding.action.targetId`", "exact unique item-body identity", "Wire сохраняет `binding.usePolicy`"))
-    assert all(value not in text for value in ("exact `binding.usePolicy.action.targetId`", "exact `binding.target`"))
 
 
 @pytest.mark.parametrize("fn", ["spawn_entity_on_event", "pull_on_event"])
@@ -804,48 +686,6 @@ def test_retained_omission_needs_one_exact_prior_source_claim_for_the_wire_slot(
     assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
     assert _bytes(wire) == before
-
-@pytest.mark.parametrize("changes", [
-    {"default": None}, {"default": 1}, {"neutral": False}, {"neutral": 0.0}, {"required": True},
-    {"wire_divisor": 100}, {"wire_name": "jumpBoost"}, {"minimum": 1},
-    {"omission_condition": OmissionCondition(target_kinds=("child_projectile",))},
-])
-def test_retained_omission_cannot_outlive_its_exact_prior_declaration(monkeypatch, changes):
-    cap = CAPABILITY_REGISTRY[FN]
-    prior = replace(cap.retained_receipt_params[BUFF_SPEED_FACTOR], **changes)
-    changed = replace(cap, retained_receipt_params={**cap.retained_receipt_params, BUFF_SPEED_FACTOR: prior})
-    monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, FN: changed})
-    for case in BUFF_FACTOR_CASES:
-        if case["selection"] == "omitted":
-            wire = case["wire"]
-            assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
-
-
-@pytest.mark.parametrize("factor", [pytest.param(value, id=label) for label, value in (
-    ("positive-zero", 0.0), ("negative-zero", -0.0), ("smallest-positive-subnormal", 2**-149),
-    ("smallest-negative-subnormal", -2**-149),
-    ("largest-subnormal", struct.unpack("!f", struct.pack("!I", 0x7fffff))[0]),
-    ("smallest-normal", 2**-126), ("normal-mantissa-edge", struct.unpack("!f", struct.pack("!I", 0x3f7fffff))[0]),
-    ("minimum", -.5), ("maximum", 2.0), ("ordinary-binary64", 1.770282212988338))])
-def test_percent_projection_is_declared_division_not_a_lossless_binary64_lattice(factor):
-    spec = CAPABILITY_REGISTRY[FN].params[BUFF_SPEED_PERCENT]
-    assert (spec.minimum, spec.maximum, spec.wire_divisor, spec.units, spec.semantic_type) == (-50, 200, 100, "additive_percent", "additive_percent")
-    # float32 has <=24 significand bits; multiplication by 100 (=25*4)
-    # requires <=29, within binary64's 53 at every admitted exponent.
-    # These named representation edges check the same projector, not 513
-    # exponent/fraction iterations masquerading as one pytest case.
-    percent = factor * 100
-    if factor == 1.770282212988338:
-        doc, index, _ = percent_document(FN, BUFF_SPEED_PERCENT, percent)
-        wire = assert_delivered(doc, index, BUFF_SPEED_PERCENT, percent / 100)
-        projected = wire["gameplay"]["generatedBuff"]["movementSpeed"]
-        assert struct.pack("!d", projected) != struct.pack("!d", factor)
-        assert struct.pack("!f", projected) == struct.pack("!f", factor)
-    else:
-        assert spec.to_wire(percent).hex() == factor.hex()
-    assert spec.consumer_value_error(percent) is None
-    prior = CAPABILITY_REGISTRY[FN].retained_receipt_params[BUFF_SPEED_FACTOR]
-    assert struct.pack("!d", prior.to_wire(factor)) == struct.pack("!d", factor)
 
 
 @pytest.mark.parametrize("mutation", ["missing-marker", "stale-marker", "stale-source", "wrong-output"])

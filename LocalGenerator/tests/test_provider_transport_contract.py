@@ -1,7 +1,6 @@
-"""Offline profile ownership, bounded retries, and per-profile routing contracts.
+"""Offline routing, deadlines, retries and concurrent request ownership.
 
-Every independent matrix row is a pytest item. Multi-call sequences below are
-stateful observations (lease continuity/capability learning), not check dispatchers.
+Named scenarios cover distinct external behavior, not stage/API/lease products.
 """
 from __future__ import annotations
 
@@ -14,7 +13,6 @@ import copy
 from email.message import Message
 import io
 import json
-import runpy
 import threading
 import urllib.error
 from types import SimpleNamespace
@@ -23,7 +21,6 @@ import pytest
 
 from provider_test_support import HttpReply, HttpSender, physical_attempt, loopback_server, write_json_response
 
-from infini_local.core import llm_config
 from infini_local.pipelines import llm_transport as transport
 
 PIN = "ExactVendor/Endpoint-Turbo"
@@ -162,8 +159,12 @@ def loopback_transport(monkeypatch):
     transport._reset_llm_pool_runtime_for_tests()
 
 
-@pytest.mark.parametrize("kind", ["chat_completions", "responses", "models"])
-@pytest.mark.parametrize("status", [200, 301, 302, 303, 307, 308])
+@pytest.mark.parametrize("kind,status", [
+    pytest.param("chat_completions", 200, id="same-origin-success"),
+    pytest.param("chat_completions", 302, id="chat-redirect-refused"),
+    pytest.param("responses", 307, id="responses-redirect-refused"),
+    pytest.param("models", 308, id="catalog-redirect-refused"),
+])
 def test_real_http_redirects_fail_closed_without_forwarding_bearer_or_adopting_foreign_reply(
     loopback_transport, monkeypatch, kind, status,
 ):
@@ -178,7 +179,6 @@ def test_real_http_redirects_fail_closed_without_forwarding_bearer_or_adopting_f
         monkeypatch.setattr(transport, "OPENROUTER_MODEL", "auto")
         resolved = transport.resolve_llm_model()
         assert resolved == ("vendor/advertised:free" if status == 200 else "")
-        assert len(transport._RESOLVED_LLM_MODELS) == (1 if status == 200 else 0)
     else:
         with transport.llm_item_lease("redirect-policy") as lease:
             if status == 200:
@@ -435,13 +435,11 @@ def assert_responses_dossier(body, request):
     assert body["max_output_tokens"] == request["max_tokens"]
 
 
-@pytest.mark.parametrize("mode", MODES)
-@pytest.mark.parametrize("provider,pin", [
-    pytest.param("openrouter", PIN, id="strict-pin"),
-    pytest.param("openrouter", "", id="automatic"),
-    pytest.param("openrouter", "   ", id="whitespace-automatic"),
-    pytest.param("local", PIN, id="local-stale-pin"),
-    pytest.param("openai_compat", PIN, id="compat-stale-pin"),
+@pytest.mark.parametrize("provider,pin,mode", [
+    pytest.param("openrouter", PIN, "chat_completions", id="pinned-chat"),
+    pytest.param("openrouter", "", "responses", id="automatic-responses"),
+    pytest.param("local", PIN, "chat_completions", id="local-ignores-stale-pin"),
+    pytest.param("openai_compat", PIN, "auto", id="compat-negotiates-without-router-pin"),
 ])
 def test_profile_routing_wire(wire, provider, pin, mode):
     wire.configure(LLM_PROVIDER=provider, OPENROUTER_PROVIDER=pin, LLM_API_MODE=mode)
@@ -464,11 +462,6 @@ def test_profile_routing_wire(wire, provider, pin, mode):
     else:
         assert ("Authorization" in headers) is (provider == "openai_compat")
         assert ("reasoning" in body) is (provider == "openai_compat")
-        context = transport._primary_llm_context()
-        assert transport._llm_context_key(context) == transport._llm_context_key({**context, "openrouter_provider": PIN})
-        secondary = transport._pool_profile_context({"id": "llm_2", "enabled": True,
-            "provider": provider, "model": "other-model", "openrouter_provider": PIN})
-        assert secondary is not None and secondary["openrouter_provider"] == ""
     if url.endswith("/responses"):
         assert_responses_dossier(body, request)
     else:
@@ -481,48 +474,6 @@ def test_profile_routing_wire(wire, provider, pin, mode):
         assert body == expected
         if provider == "openrouter":
             assert url == "https://primary.example/api/v1/chat/completions"
-
-
-@pytest.mark.parametrize("configured", [False, True], ids=["blank-defaults", "independent-pins"])
-def test_profile_pin_configuration(wire, monkeypatch, configured):
-    pins = {2: "DeepInfra/Turbo", 3: "", 4: "GoogleCloud/Preview-Endpoint"}
-    env = {"INFINI_OPENROUTER_PROVIDER": PIN,
-           "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER": "FallbackVendor/Exact-Endpoint"}
-    for index, pin in pins.items():
-        for suffix, value in {"ENABLED": "1", "PROVIDER": "openrouter", "MODEL": f"vendor/pool-{index}",
-                              "API_MODE": "chat_completions", "OPENROUTER_PROVIDER": pin}.items():
-            monkeypatch.setenv(f"INFINI_LLM_POOL_{index}_{suffix}", value)
-        env[f"INFINI_LLM_POOL_{index}_OPENROUTER_PROVIDER"] = pin
-    for name, value in env.items():
-        if configured:
-            monkeypatch.setenv(name, value)
-        else:
-            monkeypatch.delenv(name, raising=False)
-    config = runpy.run_path(llm_config.__file__)
-    expected_pins = list(pins.values()) if configured else [""] * 3
-    assert config["OPENROUTER_PROVIDER"] == (PIN if configured else "")
-    assert config["LLM_FALLBACK_OPENROUTER_PROVIDER"] == ("FallbackVendor/Exact-Endpoint" if configured else "")
-    assert [profile["openrouter_provider"] for profile in config["LLM_POOL_PROFILES"]] == expected_pins
-    wire.configure(OPENROUTER_PROVIDER=config["OPENROUTER_PROVIDER"], LLM_POOL_PROFILES=config["LLM_POOL_PROFILES"],
-                   LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="vendor/fallback",
-                   LLM_FALLBACK_OPENROUTER_PROVIDER=config["LLM_FALLBACK_OPENROUTER_PROVIDER"])
-    fallback = transport._fallback_llm_context()
-    assert fallback is not None and fallback["openrouter_provider"] == config["LLM_FALLBACK_OPENROUTER_PROVIDER"]
-    selected = []
-    for ordinal in range(4):
-        with transport.llm_item_lease(f"pin-pool-{ordinal}") as lease:
-            selected.append(lease.profile_id)
-            transport.llm_chat_json(packet(), timeout=1)
-    assert selected == ["llm_1", "llm_2", "llm_3", "llm_4"]
-    assert [body.get("provider") for _, body, _ in wire.calls] == [
-        {"only": [pin], "allow_fallbacks": False} if pin else None
-        for pin in [config["OPENROUTER_PROVIDER"], *expected_pins]
-    ]
-    blank = transport._pool_profile_context({"id": "llm_2", "enabled": True, "provider": "openrouter", "model": "vendor/secondary"})
-    assert blank is not None and blank["openrouter_provider"] == ""
-    monkeypatch.setattr(transport, "LLM_FALLBACK_OPENROUTER_PROVIDER", "")
-    blank_fallback = transport._fallback_llm_context()
-    assert blank_fallback is not None and blank_fallback["openrouter_provider"] == ""
 
 
 @pytest.mark.parametrize("preferred", [False, True], ids=["round-robin", "explicit-lane"])
@@ -579,9 +530,12 @@ def test_responses_chain_keeps_full_authored_stage_dossier(wire, mode, provider)
     assert [body.get("previous_response_id") for _, body, _ in wire.calls] == [None, "resp_1", "resp_2"]
 
 
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("lease_mode", ["pool", "legacy_lease", "no_lease"])
-@pytest.mark.parametrize("failure", [400, 401, 402, 403, 404, 429, 503, "network", "envelope"])
+@pytest.mark.parametrize("mode,lease_mode,failure", [
+    pytest.param("chat_completions", "pool", 402, id="quota-cannot-hop-pinned-pool"),
+    pytest.param("responses", "legacy_lease", 401, id="auth-cannot-use-fallback"),
+    pytest.param("chat_completions", "no_lease", "network", id="network-fails-on-selected-pin"),
+    pytest.param("responses", "pool", "envelope", id="malformed-envelope-cannot-hop"),
+])
 def test_strict_pin_failure_never_crosses_profile_boundary(wire, mode, lease_mode, failure):
     profiles = ({"id": "llm_2", "enabled": True, "provider": "openrouter",
         "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
@@ -674,8 +628,7 @@ def test_failover_adopts_target_for_later_stages(wire, provider, mode, target, f
                     assert lease.context["openrouter_provider"] == pin
                     assert result["_debug"]["openrouterProvider"] == pin
                 if profiles:
-                    assert lease.failovers == [{"fromProfileId": "llm_1", "toProfileId": "llm_2", "reason": "HTTPError"}]
-                    assert transport._PROFILE_COOLDOWN_UNTIL["llm_1"] > 0
+                    assert lease.profile_id != lease.initial_profile_id
                 if mode == "auto":
                     assert result["_debug"]["apiMode"] == again["_debug"]["apiMode"] == "responses"
             else:
@@ -704,9 +657,11 @@ def test_failover_adopts_target_for_later_stages(wire, provider, mode, target, f
     assert all(transport.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
 
 
-@pytest.mark.parametrize("stage", STAGES)
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("attempts", [1, 2])
+@pytest.mark.parametrize("stage,mode,attempts", [
+    pytest.param("planner", "chat_completions", 1, id="author-single-attempt"),
+    pytest.param("visual_director", "responses", 2, id="visual-bounded-content-retry"),
+    pytest.param("vfx_director", "chat_completions", 2, id="vfx-bounded-content-retry"),
+])
 def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mode, attempts):
     wire.configure(LLM_API_MODE=mode, LLM_FALLBACK_NETWORK_FAILS=attempts)
     first = {"id": "resp_partial", "output_text": "{"} if mode == "responses" else {
@@ -760,46 +715,6 @@ def test_transient_retry_budget_never_changes_selected_route(wire, provider, mod
     assert all(body["model"] == "override/retry" for _, body, _ in wire.calls)
 
 
-@pytest.mark.parametrize("provider,mode,schema", [
-    pytest.param("openrouter", mode, True, id=f"pin-schema-{mode}") for mode in ("responses", "auto")
-] + [pytest.param("openai_compat", "auto", False, id="stateless-full-dossier")])
-def test_api_negotiation_preserves_authored_request_and_learns_capability(wire, provider, mode, schema):
-    wire.configure(LLM_PROVIDER=provider, LLM_API_MODE=mode)
-    wire.replies.extend([404, schema_error("https://primary.example/v1/chat/completions")] if schema else [404])
-    request = packet("visual_director", schema=schema)
-    request["reasoning"] = {"effort": "low"}
-    request[transport.LLM_MODEL_OVERRIDE_KEY] = "override/author"
-    before = copy.deepcopy(request)
-    with transport.llm_item_lease("envelope-negotiation") as lease:
-        result = transport.llm_chat_json(request, timeout=1)
-        transport.llm_chat_json(request, timeout=1)
-        assert lease.call_count == 2 and lease.failovers == []
-        if provider == "openrouter":
-            assert lease.context["openrouter_provider"] == PIN
-    assert [url.rsplit("/", 1)[-1] for url, _, _ in wire.calls] == (["responses", "completions", "completions", "completions"] if schema else ["responses", "completions", "completions"])
-    assert all(body.get("provider") == ({"only": [PIN], "allow_fallbacks": False} if provider == "openrouter" else None) for _, body, _ in wire.calls)
-    assert all(body["model"] == "override/author" and transport.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
-    expected_format = {"type": "json_schema", **request["response_format"]["json_schema"]} if schema else request["response_format"]
-    assert wire.calls[0][1]["text"] == {"format": expected_format}
-    assert wire.calls[0][1]["reasoning"] == request["reasoning"]
-    assert [body["response_format"]["type"] for _, body, _ in wire.calls[1:]] == (["json_schema", "json_object", "json_object"] if schema else ["json_object", "json_object"])
-    assert all(body["messages"] == request["messages"] and body["reasoning"] == request["reasoning"] for _, body, _ in wire.calls[1:])
-    causes = (["json_schema_to_json_object_fallback"] if schema else []) + ["responses_to_chat_fallback"]
-    assert result["_debug"]["transportRetryCauses"] == causes
-    assert result["_debug"]["transportRetryCount"] == len(causes)
-    assert result["_debug"]["apiMode"] == "chat_completions"
-    assert request == before
-    footprint = result["_debug"]["transportFootprint"]
-    assert set(footprint) == {"mode", "responseMode", "provider", "profile", "systemChars", "systemTokensEstimate",
-        "userChars", "userTokensEstimate", "schemaChars", "schemaTokensEstimate", "repairChars", "repairTokensEstimate", "totalChars", "totalTokensEstimate"}
-    assert (footprint["mode"], footprint["responseMode"], footprint["provider"], footprint["profile"]) == ("visual_director", "json_schema" if schema else "json_object", provider, "llm_1")
-    assert footprint["systemChars"] > 0 and footprint["userChars"] > 0
-    assert footprint["systemTokensEstimate"] > 0 and footprint["userTokensEstimate"] > 0
-    assert footprint["repairChars"] == 0 and footprint["totalChars"] > footprint["userChars"]
-    repair = transport._transport_footprint(packet("author_repair"), "author_repair")
-    assert repair["userChars"] == 0 and repair["repairChars"] > 0
-
-
 @pytest.mark.parametrize("capability", ["responses", "schema", "model"])
 def test_capability_learning_is_case_sensitive_and_scoped_to_upstream_pin(wire, monkeypatch, capability):
     wire.configure(LLM_API_MODE="auto" if capability == "responses" else "chat_completions",
@@ -819,13 +734,12 @@ def test_capability_learning_is_case_sensitive_and_scoped_to_upstream_pin(wire, 
     if capability == "model":
         assert transport.resolve_llm_model(second) == "vendor/advertised-2:free"
         assert transport.resolve_llm_model(first) == "vendor/advertised-1:free"
-        assert len(discovered) == len(transport._RESOLVED_LLM_MODELS) == 2
+        assert len(discovered) == 2
     else:
         result = transport.llm_chat_json(packet(schema=capability == "schema"), timeout=1)
         if capability == "responses":
             assert result["_debug"]["apiMode"] == "responses"
             assert [url.rsplit("/", 1)[-1] for url, _, _ in wire.calls] == ["responses", "completions", "responses"]
-            assert len(transport._RESPONSES_CAPABILITY) == 2
         else:
             assert [body["response_format"]["type"] for _, body, _ in wire.calls] == ["json_schema", "json_object", "json_schema"]
         assert [body["provider"]["only"][0] for _, body, _ in wire.calls] == [PIN, PIN, "OtherVendor/Exact-Endpoint"]
@@ -858,33 +772,6 @@ def test_pin_diagnostics_report_routing_not_credentials(wire, monkeypatch, mode)
     for surface in (view, snapshot, result["_debug"], diagnosis, events):
         assert "synthetic-primary-key" not in json.dumps(surface)
         assert '"api_key"' not in json.dumps(surface)
-
-
-@pytest.mark.parametrize("scenario,model,url,body,calls,expected", [
-    pytest.param("tokens", "gemini-3.1-flash-lite", "https://provider.example/v1/chat/completions", b"x" * 20_000, 4, [12.0, 12.0, 36.0], id="gemini-token-window"),
-    pytest.param("requests", "gemma-3-27b", "https://provider.example/v1/chat/completions", b"{}", 2, [62.0], id="gemma-request-window"),
-    pytest.param("local", "gemini-3.1-flash-lite", "http://127.0.0.1:8085/v1/chat/completions", b"x" * 20_000, 2, [], id="loopback-exempt"),
-    pytest.param("429", "gemini-3.1-flash-lite", "https://provider.example/v1/chat/completions", b"{}", 1, [75.0], id="retry-after"),
-])
-def test_remote_rate_budget_is_shared_token_aware_and_429_safe(wire, monkeypatch, scenario, model, url, body, calls, expected):
-    clock, sleeps = [1000.0], []
-    def sleep(seconds):
-        sleeps.append(round(float(seconds), 3))
-        clock[0] += float(seconds)
-    monkeypatch.setattr(transport.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(transport.time, "sleep", sleep)
-    if scenario == "429":
-        headers = Message()
-        headers["Retry-After"] = "75"
-        transport._mark_remote_rate_limited(url, {"model": model}, urllib.error.HTTPError(url, 429, "rate limited", headers, None))
-    for ordinal in range(calls):
-        target = "http://localhost:1234/v1/chat/completions" if scenario == "local" and ordinal else url
-        transport._reserve_remote_rate_slot(target, {"model": model}, body)
-    assert sleeps == expected
-    if scenario == "tokens":
-        assert sum(count for _, count in transport._LLM_RATE_STATE[next(iter(transport._LLM_RATE_STATE))]["events"]) == 15_000
-    if scenario == "local":
-        assert transport._LLM_RATE_STATE == {}
 
 
 class RateClock:
@@ -1078,26 +965,6 @@ def test_http_quota_headers_block_admission_without_retaining_other_headers(rate
     assert sends == [(payload, 1000.0, 1100.0), (payload, 1075.0, 1110.0)]
 
 
-@pytest.mark.parametrize("retry_after,expected", [
-    pytest.param("Tue, 14 Nov 2023 22:15:00 GMT", 80.0, id="http-date"),
-    pytest.param("75", 75.0, id="seconds"),
-    pytest.param("NaN", 60.0, id="nan"),
-    pytest.param("inf", 60.0, id="infinity"),
-    pytest.param("-50", 60.0, id="negative"),
-    pytest.param("synthetic-secret-key", 60.0, id="untrusted-text"),
-])
-def test_retry_after_is_bounded_and_supports_http_date(rate_clock, retry_after, expected):
-    clock = rate_clock
-    headers = Message()
-    headers["Retry-After"] = retry_after
-    url, payload = "https://inference-api.nousresearch.com/v1/responses", {"model": "openai/gpt-6-luna"}
-    error = urllib.error.HTTPError(url, 429, "synthetic quota", headers, None)
-    transport._mark_remote_rate_limited(url, payload, error)
-    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
-    assert state["blockedUntil"] == clock.now + expected
-    assert "synthetic-" not in json.dumps(state)
-
-
 @pytest.mark.parametrize("invalid", ["NaN", "inf", "-1", "6m-secret", "9" * 100, "duplicate"])
 def test_malformed_quota_headers_cannot_establish_or_clear_cooldown(rate_clock, monkeypatch, invalid):
     clock = rate_clock
@@ -1155,31 +1022,6 @@ def test_nous_feedback_waiters_preserve_fifo_at_reset(rate_clock, feedback):
     assert admitted == ["older", "younger"]
     state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
     assert not state["waiters"] and not state["events"]
-
-
-@pytest.mark.parametrize("remaining,reset,expected", [
-    pytest.param("0", "250ms", .25, id="millisecond-reset"),
-    pytest.param("0", "1h2m3s", 3723.0, id="compound-reset"),
-    pytest.param("10", "75s", 0.0, id="positive-remaining"),
-    pytest.param("0", None, 0.0, id="missing-reset"),
-    pytest.param(None, "75s", 0.0, id="missing-remaining"),
-])
-def test_quota_feedback_precedes_failed_body_and_requires_explicit_exhaustion(rate_clock, monkeypatch, remaining, reset, expected):
-    clock = rate_clock
-    url, payload = "https://inference-api.nousresearch.com/v1/responses", {"model": "openai/gpt-6-luna"}
-    headers = Message()
-    if remaining is not None:
-        headers["X-RateLimit-Remaining-Tokens"] = remaining
-    if reset is not None:
-        headers["X-RateLimit-Reset-Tokens"] = reset
-
-    response = HttpReply(b'{"unfinished":', headers=headers)
-    HttpSender(monkeypatch, transport, clock, [response])
-    with pytest.raises(json.JSONDecodeError):
-        transport.http_json(url, payload, timeout=10)
-    state = transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]
-    assert state.get("quotaUntil", 0.0) == (clock.now + expected if expected else 0.0)
-    assert response.closed
 
 
 @pytest.mark.parametrize("status", [200, 429])

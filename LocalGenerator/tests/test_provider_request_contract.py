@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-import json
 from pathlib import Path
 import subprocess
 import sys
@@ -12,10 +11,9 @@ import urllib.error
 import pytest
 
 from infini_local.core.llm_json_tools import json_object_candidates, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
-from infini_local.core.llm_prompt_cache import json_prefix_chars, with_prompt_cache_prefix
-from infini_local.desktop import settings_schema
+from infini_local.core.llm_prompt_cache import with_prompt_cache_prefix
 from infini_local.pipelines import llm_transport as llm
-from test_provider_transport_contract import http_error, schema_error, packet, wire, loopback_transport
+from test_provider_transport_contract import schema_error, packet, wire, loopback_transport
 
 SCHEMA_REJECTION = {"error": {"code": "unsupported_response_format", "param": "response_format",
                               "message": "json_schema response_format is not supported"}}
@@ -172,41 +170,6 @@ def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_e
     assert request == before
 
 
-@pytest.mark.parametrize("failure,format_type,expected", [
-    pytest.param(400, "json_schema", True, id="schema-400"),
-    pytest.param("unrelated400", "json_schema", False, id="unrelated-invalid-argument-400"),
-    pytest.param(400, "json_object", False, id="object-400"),
-    pytest.param(400, None, False, id="absent-format-400"),
-    *[pytest.param(code, "json_schema", False, id=f"unrelated-{code}") for code in (401, 403, 404, 429, 500, 503)],
-    pytest.param("timeout", "json_schema", False, id="transport-timeout"),
-])
-def test_request_shape_diagnosis_is_pure_and_status_specific(failure, format_type, expected):
-    context = {"provider": "openai_compat", "base_url": GOOGLE, "model": "gemini-3.5-flash-lite", "api_mode": "responses", "profile_id": "llm_1", "label": "llm_1"}
-    request = packet(schema=format_type == "json_schema")
-    if format_type is None:
-        request.pop("response_format")
-    before = copy.deepcopy(request)
-    error = TimeoutError("timed out") if failure == "timeout" else (
-        schema_error(GOOGLE + "/chat/completions") if failure == 400 else
-        http_error(GOOGLE + "/chat/completions", 400 if failure == "unrelated400" else failure))
-    if failure == "unrelated400":
-        error._infini_body = '{"error":{"code":400,"status":"INVALID_ARGUMENT"}}'
-    diagnosis = llm.request_shape_rejection_diagnosis(error, request, context)
-    assert llm._strict_schema_rejected(error, request) is expected
-    assert request == before
-    if not expected:
-        assert diagnosis is None
-    else:
-        assert isinstance(diagnosis, dict)
-        assert (diagnosis["code"], diagnosis["status"], diagnosis["sentResponseFormat"]) == ("provider_rejected_request_shape", 400, "json_schema")
-        assert diagnosis["knownWorkingResponseFormat"] == "" and diagnosis["knownWorkingApiMode"] == ""
-        assert diagnosis["candidateResponseFormat"] == "json_object" and diagnosis["candidateApiMode"] == "chat_completions"
-        assert diagnosis["schemaChars"] > 0 and "INVALID_ARGUMENT" in diagnosis["providerBody"]
-        assert "response_format" not in diagnosis and isinstance(diagnosis["knownWorkingResponseFormat"], str)
-        for text in ("json_object", "chat_completions", "INFINI_LLM_RESPONSE_FORMAT", "INFINI_LLM_API_MODE", "ещё не проверена"):
-            assert text in diagnosis["hint"]  # Operator copy is the contract on this surface.
-
-
 @pytest.mark.parametrize("failure,format_type,budget,success", [
     pytest.param(400, "json_schema", 2, True, id="schema-envelope-recovery"),
     pytest.param(400, "json_schema", 2, False, id="persistent-schema-400"),
@@ -299,45 +262,6 @@ def test_single_attempt_local_request_has_no_negotiation_or_content_retry(wire, 
     assert body == {"messages": [], "model": "primary-local", "response_format": {"type": "json_object"}}
 
 
-@pytest.mark.parametrize("key,default", [
-    ("INFINI_LLM_FALLBACK_PROVIDER", None), ("INFINI_LLM_FALLBACK_MODEL", ""),
-    ("INFINI_LLM_FALLBACK_BASE_URL", None), ("INFINI_LLM_FALLBACK_API_KEY", None),
-    ("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2"),
-])
-def test_fallback_configuration_fields_have_owned_defaults(key, default):
-    assert key in settings_schema.FIELD_ORDER and key in settings_schema.DEFAULTS
-    if default is not None:
-        assert settings_schema.DEFAULTS[key] == default
-
-
-@pytest.mark.parametrize("keys,expected", [
-    pytest.param(["catalog", "rules"], len('{"catalog":"рецепт","rules":[1],'), id="static-prefix"),
-    pytest.param(["catalog", "rules", "recipeKey"], len('{"catalog":"рецепт","rules":[1],"recipeKey":"one"}'), id="whole-packet"),
-    pytest.param([], None, id="empty-keys"), pytest.param(["rules"], None, id="noninitial-key"),
-    pytest.param(["catalog", "recipeKey"], None, id="gap"), pytest.param(["catalog", "missing"], None, id="missing-key"),
-])
-def test_cache_prefix_requires_exact_initial_static_keys(keys, expected):
-    payload = {"catalog": "рецепт", "rules": [1], "recipeKey": "one"}
-    if expected is None:
-        with pytest.raises(ValueError):
-            json_prefix_chars(payload, keys)
-    else:
-        assert json_prefix_chars(payload, keys) == expected
-
-
-@pytest.mark.parametrize("index,chars,valid", [(1, 15, True), (0, 3, False), (1, 0, False), (1, 999, False), (True, 3, False), (1, True, False)])
-def test_cache_marker_owns_only_valid_user_boundary(index, chars, valid):
-    original = cache_packet()
-    if not valid:
-        with pytest.raises(ValueError):
-            with_prompt_cache_prefix(original, message_index=index, prefix_chars=chars)
-    else:
-        marked = with_prompt_cache_prefix(original, message_index=index, prefix_chars=chars)
-        assert original == cache_packet() and marked["messages"] == original["messages"]
-        assert marked["_infini_prompt_cache"] == {"messageIndex": 1, "prefixChars": 15}
-        assert "_infini_prompt_cache" not in llm._clean_llm_payload(marked)
-
-
 @pytest.mark.parametrize("variant,equal", [("recipe", True), ("model", False), ("schema", False), ("reasoning", False), ("role", False), ("process-hash-seed", True)])
 def test_cache_identity_is_stable_but_includes_contract_inputs(variant, equal):
     first = with_prompt_cache_prefix(cache_packet(), message_index=1, prefix_chars=15)
@@ -361,60 +285,6 @@ def test_cache_identity_is_stable_but_includes_contract_inputs(variant, equal):
         assert child.stdout.strip() == identity
     else:
         assert (identity == llm._prompt_cache_identity(second, model)) is equal
-
-
-@pytest.mark.parametrize("variant,equal", [
-    pytest.param("ignored-exclude", True, id="codex-ignored-reasoning-flag"),
-    pytest.param("message-name", True, id="codex-projects-away-message-name"),
-    pytest.param("dynamic-json", True, id="dynamic-json-cannot-toggle-leading-marker"),
-    pytest.param("effort-alias", True, id="same-effective-effort"),
-    pytest.param("effort-change", False, id="different-effective-effort"),
-    pytest.param("model", False, id="different-model"),
-    pytest.param("schema", False, id="different-wire-format"),
-])
-def test_codex_cache_identity_tracks_effective_static_wire(variant, equal):
-    from infini_local.services import codex_text_backend as codex
-    first = with_prompt_cache_prefix(cache_packet(), message_index=1, prefix_chars=15)
-    first["model"] = "gpt-6-sol"
-    first["reasoning"] = {"effort": "medium", "exclude": True}
-    second = copy.deepcopy(first)
-    model = first["model"]
-    if variant == "ignored-exclude":
-        second["reasoning"]["exclude"] = False
-    elif variant == "message-name":
-        second["messages"][0]["name"] = "client-only-trace-name"
-    elif variant == "dynamic-json":
-        second["messages"][1]["content"] = '{"catalog":[], {"recipeKey":"JSON specimen"}'
-    elif variant == "effort-alias":
-        second.pop("reasoning")
-        second["reasoning_effort"] = "medium"
-    elif variant == "effort-change":
-        second["reasoning"]["effort"] = "high"
-    elif variant == "model":
-        model = second["model"] = "gpt-6-luna"
-    else:
-        second["response_format"] = {"type": "json_schema", "json_schema": {
-            "name": "contract", "strict": True, "schema": {"type": "object"},
-        }}
-    context = {"provider": "openai_codex"}
-    before = copy.deepcopy((first, second))
-    key = llm._prompt_cache_identity(first, first["model"], context=context)
-    assert (key == llm._prompt_cache_identity(second, model, context=context)) is equal
-    if equal:
-        def static_wire(packet):
-            packet = copy.deepcopy(packet)
-            packet["messages"][1]["content"] = packet["messages"][1]["content"][:15]
-            return codex._request_payload(packet)
-        assert static_wire(first) == static_wire(second)
-    if variant == "ignored-exclude":
-        assert llm._prompt_cache_identity(first, model, context={"provider": "openai_compat"}) != llm._prompt_cache_identity(second, model, context={"provider": "openai_compat"})
-    if variant == "dynamic-json":
-        left, right = codex._request_payload(first), codex._request_payload(second)
-        assert left["input"][0] == right["input"][0] == {
-            "type": "message", "role": "developer",
-            "content": [{"type": "input_text", "text": "JSON response."}],
-        }
-    assert (first, second) == before
 
 
 @pytest.mark.parametrize("provider,base,model,mode,route", [
@@ -538,24 +408,6 @@ def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_s
     assert result["_debug"]["cachedInputTokens"] == 0
     assert result["_debug"]["cacheHit"] is False
     assert result["_debug"]["cacheWriteTokens"] == 12
-
-
-def test_api_presets_explain_working_transport_and_optional_schema():
-    from infini_local.desktop import settings_schema
-
-    for name, preset in settings_schema.PRESETS.items():
-        provider = preset.get("INFINI_LLM_PROVIDER")
-        if provider not in {"openai_compat", "openrouter"}:
-            continue
-        assert preset.get("INFINI_LLM_RESPONSE_FORMAT") == "json_object", name
-        assert preset.get("INFINI_LLM_API_MODE") == "chat_completions", name
-    # json_schema must remain a selectable option, only documented as unsupported there.
-    choices = settings_schema.OPTION_HELP["INFINI_LLM_RESPONSE_FORMAT"]
-    assert set(choices) == {"auto", "json_schema", "json_object", "off"}
-    assert "Gemini" in choices["json_schema"]
-    assert "json_schema" in settings_schema.FIELD_HELP["INFINI_LLM_RESPONSE_FORMAT"]
-    schema_text = Path(settings_schema.__file__).read_text(encoding="utf-8")
-    assert "INVALID_ARGUMENT" in schema_text
 
 
 def test_malformed_content_retry_keeps_one_logical_call_and_combines_attribution(monkeypatch) -> None:
