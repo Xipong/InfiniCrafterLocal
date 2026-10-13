@@ -13,6 +13,54 @@ using Terraria.DataStructures;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void NpcHitPullPreservesProjectileOrigin()
+    {
+        using var actors = new NativeActorState();
+        using var clock = new RuntimeWorldClockScope();
+        RuntimeDelayedActionScheduler.Clear();
+        Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
+        var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
+        owner.Center = new Vector2(0, 100);
+        var data = GeneratedItemData.Placeholder();
+        var entity = Entity(); entity.Id = "pull_entity"; entity.Kind = RuntimeEntityKind.FreeProjectile;
+        var action = new RuntimeEventActionSpec { Id = "pull", Action = "pull_on_event",
+            ActionCode = RuntimeEventActionCode.Pull, Event = RuntimeEventKind.OnHit,
+            Mode = "target_to_entity", Strength = 2f, RadiusTiles = 10f };
+        entity.Events = new[] { action }; data.RuntimeProgram.Entities = new[] { entity };
+        var target = Terraria.Main.npc[0] = new NPC { whoAmI = 0, active = true, width = 20, height = 20, knockBackResist = 1f };
+        target.Center = new Vector2(100, 100);
+        var projectile = Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, identity = 11, owner = 0, active = true };
+        var generated = Attach(projectile);
+        typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generated);
+        generated.Configure(data, entity, 0, 0, Vector2.UnitX);
+        foreach (int delay in new[] { 0, 2 })
+        {
+            action.DelayTicks = delay;
+            projectile.Center = new Vector2(90, 100); target.velocity = Vector2.Zero;
+            generated.OnHitNPC(target, new NPC.HitInfo(), 20);
+            if (delay > 0)
+            {
+                Equal(1, PendingActions(), "delayed entity pull admitted");
+                Equal(Vector2.Zero, target.velocity, "delay does not pull early");
+                projectile.Center = new Vector2(110, 100); // A live lookup would pull in the opposite direction.
+                AdvanceRuntimeWorldTick(); AdvanceRuntimeWorldTick();
+            }
+            Equal(new Vector2(-2, 0), target.velocity, "hit pull uses admission-time projectile center");
+        }
+        action.DelayTicks = 0; action.Mode = "target_to_owner"; target.velocity = Vector2.Zero;
+        generated.OnHitNPC(target, new NPC.HitInfo(), 20);
+        Equal(new Vector2(-2, 0), target.velocity, "target-to-owner still selects the player");
+        action.Mode = "owner_to_target";
+        generated.OnHitNPC(target, new NPC.HitInfo(), 20);
+        Equal(new Vector2(2, 0), owner.velocity, "owner-to-target still selects the struck NPC");
+        action.Mode = "target_to_entity";
+        action.ActionCode = RuntimeEventActionCode.SpawnEntity;
+        Equal(target.Center, RuntimeProgramExecutor.ProjectileEventPosition(action, projectile.Center, target),
+            "non-pull hit action retains NPC-centered origin");
+        Equal(projectile.Center, RuntimeProgramExecutor.ProjectileEventPosition(action, projectile.Center, null),
+            "targetless action retains projectile-centered origin");
+    }
+
     private static void EventSpawnZeroMultiplierIsNotReplacedByOne()
     {
         Equal(0f, RuntimeProgramExecutor.EventSpawnDamageMultiplier(

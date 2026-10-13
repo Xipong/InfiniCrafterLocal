@@ -190,6 +190,54 @@ internal static partial class EngineRuntimeChecks
             Equal(true, RuntimeHitPullBridge.TryWriteProjectileReceipt(writer, projectile, target, true),
                 "crit-only authored action is eligible");
         entity.Events = new[] { hitAction };
+        using var pullClock = new RuntimeWorldClockScope();
+        RuntimeDelayedActionScheduler.Clear();
+        hitAction.Mode = "target_to_entity";
+        foreach (int delay in new[] { 0, 2 })
+        {
+            hitAction.DelayTicks = delay; target.velocity = Vector2.Zero;
+            // Client and server positions deliberately disagree. No position is on the wire.
+            projectile.Center = target.Center - Vector2.UnitX * 10f;
+            receiver.Center = target.Center + Vector2.UnitX * 10f;
+            Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            using var entityReceipt = new MemoryStream();
+            using (var writer = new BinaryWriter(entityReceipt, System.Text.Encoding.UTF8, true))
+                Equal(true, RuntimeHitPullBridge.TryWriteProjectileReceipt(writer, projectile, target, false), "entity pull receipt written");
+            Terraria.Main.netMode = NetmodeID.Server;
+            entityReceipt.Position = 0;
+            using (var reader = new BinaryReader(entityReceipt, System.Text.Encoding.UTF8, true))
+                RuntimeHitPullBridge.HandlePacket(reader, 1);
+            Equal(Vector2.Zero, target.velocity, "foreign sender cannot select entity origin");
+            Equal(0, PendingActions(), "foreign receipt cannot enqueue entity pull");
+            entityReceipt.Position = 0;
+            using (var reader = new BinaryReader(entityReceipt, System.Text.Encoding.UTF8, true))
+                RuntimeHitPullBridge.HandlePacket(reader, 0);
+            if (delay > 0)
+            {
+                Equal(1, PendingActions(), "server delayed entity pull admitted");
+                receiver.Center = target.Center - Vector2.UnitX * 20f;
+                AdvanceRuntimeWorldTick(); AdvanceRuntimeWorldTick();
+            }
+            Equal(new Vector2(2f, 0f), target.velocity, "server pull uses validated source center at receipt admission");
+        }
+        hitAction.DelayTicks = 0; target.velocity = Vector2.Zero;
+        receiver.Center = target.Center + Vector2.UnitX * 10f;
+        RuntimeHitPullBridge.RememberRetired(receiver); receiver.active = false;
+        Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+        using var retiredReceipt = new MemoryStream();
+        using (var writer = new BinaryWriter(retiredReceipt, System.Text.Encoding.UTF8, true))
+            Equal(true, RuntimeHitPullBridge.TryWriteProjectileReceipt(writer, projectile, target, false), "late terminal-hit receipt written");
+        Terraria.Main.netMode = NetmodeID.Server;
+        typeof(Projectile).GetProperty("ModProjectile")!.SetValue(receiver, Attach(receiver));
+        retiredReceipt.Position = 0;
+        using (var reader = new BinaryReader(retiredReceipt, System.Text.Encoding.UTF8, true))
+            RuntimeHitPullBridge.HandlePacket(reader, 0);
+        Equal(Vector2.Zero, target.velocity, "retired source with replaced generation cannot supply pull origin");
+        typeof(Projectile).GetProperty("ModProjectile")!.SetValue(receiver, receiverGenerated);
+        retiredReceipt.Position = 0;
+        using (var reader = new BinaryReader(retiredReceipt, System.Text.Encoding.UTF8, true))
+            RuntimeHitPullBridge.HandlePacket(reader, 0);
+        Equal(new Vector2(2f, 0f), target.velocity, "exact retired source still supplies its server center");
     }
 
     private static void ItemHitCannotSwitchAuthoredSource()

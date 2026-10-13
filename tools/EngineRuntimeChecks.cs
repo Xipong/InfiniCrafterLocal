@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("NPC hit pull preserves projectile origin", NpcHitPullPreservesProjectileOrigin),
             ("nearest event damage retains radial native selection and direct-target exclusion", NearestDamageRetainsTheSingleCenterNativeAction),
             ("target bias saved DTO range and native distance-score discount", TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount),
             ("signed vertical acceleration native DTO active updates and hydration", SignedVerticalAccelerationUsesNativeDtoAndEveryActiveUpdate),

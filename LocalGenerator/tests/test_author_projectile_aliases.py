@@ -466,3 +466,17 @@ def test_retained_spawn_outputs_keep_their_separate_exact_capability_owner(missi
     before = deepcopy(wire)
     assert audit_compiler_receipts(receipts, final_document=wire)["ok"] is not missing
     assert wire == before
+
+
+@pytest.mark.parametrize("delay", [0, 2])
+def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
+    document = build_capability_witness("pull_on_event")
+    call = selected(document)
+    call["params"].update(when="on_hit", mode="target_to_entity", strength=2, radiusTiles=10, delayTicks=delay)
+    assert validate_runtime_program(document)["ok"]
+    wire, entity = compiled_entity(document, call)
+    event = entity["events"][0]
+    assert event["event"] == "on_hit" and event["mode"] == "target_to_entity"
+    assert event["strength"] == 2 and event["radiusTiles"] == 10 and event["delayTicks"] == delay
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=document, final_document=wire)["ok"]
