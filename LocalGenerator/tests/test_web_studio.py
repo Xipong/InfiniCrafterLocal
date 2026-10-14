@@ -139,7 +139,27 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
         assert parse_env(config)['INFINI_PRIVATE_UNKNOWN'] == 'edited-explicitly'
         controller.apply({'id':'reset-proof','action':'resetSprite','values':{},'extra':{}})
-        assert app.vars['INFINI_SPRITE_DOWNSCALE_FILTER'].get() == 'box'
+        assert controller.action_results['reset-proof']['values']['INFINI_SPRITE_DOWNSCALE_FILTER'] == 'box'
+        # Browser drafts intentionally allow editing inactive provider settings.
+        # Their hidden Tk Text widgets are disabled and must not drop those edits.
+        key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
+        widget = app.text_widgets[key]
+        for index, backend in enumerate(('off', 'sdcpp', 'off', 'off')):
+            app.vars['INFINI_IMAGE_BACKEND'].set(backend)
+            app._refresh_visibility()
+            expected_state = 'normal' if backend == 'sdcpp' else 'disabled'
+            assert str(widget.cget('state')) == expected_state
+            tags = f'<lora:a:{index}.2>\n<lora:b:{index}.3>' if index != 3 else ''
+            identifier = f'inactive-text-{index}'
+            controller.apply({'id': identifier, 'action': 'save',
+                              'values': {key: tags}, 'extra': {}})
+            receipt = controller.action_results[identifier]
+            assert receipt['ok'] is True
+            assert widget.get('1.0', 'end-1c') == tags
+            assert str(widget.cget('state')) == expected_state
+            assert parse_env(config)[key] == tags
+            assert receipt['savedValues'][key] == tags
+            assert controller.snapshot()['savedValues'][key] == tags
     finally:
         server.close()
         app.destroy()
@@ -230,7 +250,7 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
         _current_profile_settings=lambda: dict(current), preset_var=value(SettingsGui._pipeline_preset_from_config(current, {})),
         status_var=value('Ready'), activity_var=value(), applied_config_var=value(),
         home_state_var=value(), home_detail_var=value(), home_config_var=value(),
-        trace_texts={}, _gui_tasks={}, radmin_enabled=value(False),
+        trace_texts={}, trace_status_var=value(), _gui_tasks={}, radmin_enabled=value(False),
         codex_catalog_var=value(), codex_image_account_var=value(),
         _pipeline_preset_from_config=SettingsGui._pipeline_preset_from_config,
     )

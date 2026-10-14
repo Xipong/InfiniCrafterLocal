@@ -359,7 +359,7 @@ def test_open_and_clear_use_selected_cache_and_preserve_recipes_pngs_and_other_r
         return {"ok": True, "serverRoot": str(root), "pid": os.getpid() + 1000, "cacheDir": str(selected)}
 
     monkeypatch.setattr(gui, "_fetch_health_snapshot", health)
-    monkeypatch.setattr(gui, "refresh_trace", lambda: None)
+    monkeypatch.setattr(gui, "refresh_trace", lambda **_kwargs: None)
     monkeypatch.setattr(gui, "_read_gui_json", read_gui_json)
     gui.open_cache_folder()
     assert opened == [selected.as_uri()], "Open cache ignored selected launch root"
@@ -401,7 +401,7 @@ def test_offline_clear_refuses_symlinked_trace_before_touching_cache_bytes(gui_w
     originals = {path: path.read_bytes() for path in (foreign, cache / "events.ndjson", cache / "pipeline_trace.ndjson")}
     monkeypatch.setattr(settings_trace_state.messagebox, "askyesno", lambda *a, **k: True)
     monkeypatch.setattr(gui, "_fetch_health_snapshot", lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError()))
-    monkeypatch.setattr(gui, "refresh_trace", lambda: None)
+    monkeypatch.setattr(gui, "refresh_trace", lambda **_kwargs: None)
     gui.clear_trace_files()
     gui.drain_until(lambda: "refused" in gui.trace_status_var.get().lower())
     assert all(path.read_bytes() == value for path, value in originals.items()), "clear followed a trace/lock symlink or partially truncated the selected cache"
@@ -662,3 +662,43 @@ def test_visibility_preserves_background_choice_and_only_enables_applicable_cont
     assert gui.field_state["INFINI_ALPHA_THRESHOLD"][0] is (backend != "off")
     assert gui.vars["INFINI_BG_COLOR"].get() == background
     assert gui.vars["INFINI_BG_REMOVE_MODE"].get() == "sprite_keyer"
+
+
+@pytest.mark.parametrize('transient', [ConnectionResetError(), TimeoutError(), ValueError('partial shutdown response')])
+def test_shutdown_wait_retries_transient_failures_until_connection_refusal(gui_workflow, monkeypatch, transient):
+    gui, _root, _config = gui_workflow
+    observed = []
+    ticks = [0.0]
+    monkeypatch.setattr(controls.time, 'monotonic', lambda: ticks[0])
+    monkeypatch.setattr(controls.time, 'sleep', lambda delay: ticks.__setitem__(0, ticks[0] + delay))
+    replies = iter([transient, ConnectionRefusedError()])
+    def probe(**kwargs):
+        observed.append(kwargs['timeout'])
+        raise next(replies)
+    monkeypatch.setattr(gui, '_fetch_health_snapshot', probe)
+    assert gui._wait_until_helper_stops(timeout=4, base_url='http://127.0.0.1:5055') is True
+    assert len(observed) == 2
+    assert observed[1] < observed[0]
+
+
+@pytest.mark.parametrize('transient', [ConnectionResetError(), TimeoutError(), ValueError('bad JSON')])
+def test_shutdown_wait_never_certifies_unknown_failures_as_free_port(gui_workflow, monkeypatch, transient):
+    gui, _root, _config = gui_workflow
+    ticks = [0.0]
+    monkeypatch.setattr(controls.time, 'monotonic', lambda: ticks[0])
+    monkeypatch.setattr(controls.time, 'sleep', lambda delay: ticks.__setitem__(0, ticks[0] + delay))
+    def probe(**kwargs):
+        raise transient
+    monkeypatch.setattr(gui, '_fetch_health_snapshot', probe)
+    assert gui._wait_until_helper_stops(timeout=1, base_url='http://127.0.0.1:5055') is False
+    assert ticks[0] == pytest.approx(1)
+
+
+def test_shutdown_wait_honors_cancellation(gui_workflow, monkeypatch):
+    gui, _root, _config = gui_workflow
+    cancel = threading.Event()
+    def probe(**kwargs):
+        cancel.set()
+        raise ConnectionResetError()
+    monkeypatch.setattr(gui, '_fetch_health_snapshot', probe)
+    assert gui._wait_until_helper_stops(timeout=4, cancel=cancel) is False

@@ -45,15 +45,20 @@ const snapshot = (values=disk,savedValues=disk,extra={}) => ({
 const prepared = snapshot({[key]:'Terraria Like',[secret]:'dummy-new'});
 acceptSnapshot(prepared);
 assert.equal(state.baseline[key],'Default');
-assert.equal(state.draft[key],'Terraria Like');
-assert(state.dirty.has(key)); assert(state.dirty.has(secret));
-assert.equal(document.querySelector('#save-tray').hidden,false);
+assert.equal(state.draft[key],'Default');
+assert.equal(state.draft[secret],'dummy-old');
+assert.equal(state.dirty.size,0);
+assert.equal(document.querySelector('#save-tray').hidden,true);
 // Discard to disk must survive subsequent identical controller snapshots.
 state.draft={...state.baseline};state.lan=state.baselineLan;recomputeDirty();
 acceptSnapshot(prepared);acceptSnapshot(prepared);
 assert.equal(state.draft[key],'Default');assert.equal(state.dirty.size,0);
-// A newly prepared remote transformation is still dirty, never a disk baseline.
+// Another tab's prepared profile never leaks into this tab.
 acceptSnapshot(snapshot({[key]:'Another style',[secret]:'dummy-new'}));
+assert.equal(state.draft[key],'Default');assert.equal(state.dirty.size,0);
+// Only this tab's own transformation receipt can create a local draft.
+state.pending={id:'my-preset',action:'applyPreset',sent:{},clock:0,lan:false};
+acceptSnapshot(snapshot({},disk,{actionResults:[{id:'my-preset',ok:true,status:'succeeded',values:{[key]:'Another style',[secret]:'dummy-new'}}]}));
 assert.equal(state.draft[key],'Another style');assert(state.dirty.has(key));
 // Save has already reached disk, but acknowledgement is delayed. Preserve a
 // newer local edit both before and after the matching acknowledgement arrives.
@@ -80,4 +85,13 @@ acceptSnapshot(snapshot({[key]:'unsaved backend', [secret]:'dummy-new'},submitte
 assert.equal(state.draft[key],'Another style');assert.equal(state.dirty.size,0);
 ''', encoding='utf-8')
     result = subprocess.run([node, str(harness), str(source)], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_browser_workflow_regressions():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Frontend workflow regression needs Node.js')
+    harness = Path(__file__).with_name('studio_frontend.cjs')
+    result = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stdout + result.stderr

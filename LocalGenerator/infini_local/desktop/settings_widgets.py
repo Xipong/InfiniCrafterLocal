@@ -7,6 +7,20 @@ from infini_local.desktop.settings_gui_theme import APP_BG, CARD_BG, TEXT_FG, BO
 # AGENT MAP: small reusable Tk widgets for settings_gui.py.
 # Keep generic widget mechanics here; app-specific layout/state remains in SettingsGui.
 
+def write_text_value(widget, value):
+    # Browser drafts and their rollback may touch inactive provider fields.
+    # Tk silently ignores writes while the hidden Text widget is disabled.
+    previous_state = str(widget.cget('state'))
+    try:
+        if previous_state == 'disabled':
+            widget.configure(state='normal')
+        widget.delete('1.0', 'end')
+        widget.insert('1.0', value)
+    finally:
+        if previous_state == 'disabled':
+            widget.configure(state=previous_state)
+
+
 class ToolTip:
     """Small delayed tooltip for Tk/ttk widgets.
 

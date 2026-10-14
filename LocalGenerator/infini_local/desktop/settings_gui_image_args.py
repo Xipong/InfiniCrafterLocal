@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path, PureWindowsPath
 
+from infini_local.desktop.settings_widgets import write_text_value
 from infini_local.desktop.tk_compat import messagebox, tk, ttk
+from infini_local.desktop.settings_interactions import notify
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
     SDCPP_DEFAULT_COMMAND_TEMPLATE,
@@ -35,8 +37,7 @@ class SettingsGuiImageArgsMixin:
     def _set_lora_tags(self, value: str):
         widget = self._get_lora_tags_widget()
         if widget is not None:
-            widget.delete("1.0", "end")
-            widget.insert("1.0", value.strip())
+            write_text_value(widget, value.strip())
         elif "INFINI_SDCPP_LORA_PROMPT_TAGS" in self.vars:
             self.vars["INFINI_SDCPP_LORA_PROMPT_TAGS"].set(value.strip())
 
@@ -67,15 +68,17 @@ class SettingsGuiImageArgsMixin:
         self._set_lora_tags(cur)
 
     def use_selected_lora(self):
-        path = self.vars.get("INFINI_SDCPP_LORA_FILE", tk.StringVar(value="")).get().strip()
+        variable = self.vars.get("INFINI_SDCPP_LORA_FILE")
+        path = variable.get().strip() if variable is not None else ""
         if not path:
-            messagebox.showwarning("LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
-            return
+            notify(self, "warning", "LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
+            return {"ok": False, "message": "Сначала выбери файл LoRA."}
         lora_dir = self._lora_dir_from_file(path)
         if "INFINI_SDCPP_LORA_DIR" in self.vars and lora_dir:
             self.vars["INFINI_SDCPP_LORA_DIR"].set(lora_dir)
         p = Path(path)
-        weight = self.vars.get("INFINI_SDCPP_LORA_WEIGHT", tk.StringVar(value="0.25")).get().strip() or "0.25"
+        weight_var = self.vars.get("INFINI_SDCPP_LORA_WEIGHT")
+        weight = (weight_var.get().strip() if weight_var is not None else "") or "0.25"
         tag = self._lora_tag_from_file(path, weight)
         self._append_lora_tag(tag)
         self.data["INFINI_SDCPP_LORA_DIR"] = lora_dir or str(p.parent)
@@ -118,8 +121,7 @@ class SettingsGuiImageArgsMixin:
     def _set_extra_args(self, value: str):
         text = self._extra_text()
         if text is not None:
-            text.delete("1.0", "end")
-            text.insert("1.0", value.strip())
+            write_text_value(text, value.strip())
 
     def append_extra_arg(self, arg: str):
         self.append_extra_args(arg)
