@@ -52,6 +52,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private int _lastTarget = -1;
     private RuntimeInitialNpcExclusion _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
     private int _lastOwnerVectorSyncAge = -1000;
+    private Vector2? _lastPublishedOwnerVector;
     private Vector2 _initialDirection = Vector2.UnitX;
     private Vector2? _sampledInitialVelocity;
     private Vector2? _nativeShotInitialVelocity;
@@ -184,6 +185,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
             _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
+            _lastPublishedOwnerVector = null;
+            _lastOwnerVectorSyncAge = -1000;
             _frontHandPublishedAxis = null;
             _frontHandAxisSyncAge = -1000;
             _beamManaClockStarted = false;

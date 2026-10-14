@@ -17,6 +17,7 @@ from infini_local.core.visual_contract_schema import front_hand_sprite_requireme
 
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
+from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
 
 
 def asset_negative_prompt(role: str = "item") -> str:
@@ -102,8 +103,54 @@ def image_generation_prompt_suffix() -> str:
     return ". Terraria (tModLoader) game asset." + (f" {direction}" if direction else "")
 
 
+def _image_equipment_frame_prompt_clause(data: Mapping[str, Any], canvas: int) -> str:
+    """Forward the accepted overlay design and existing single-PNG draw budget."""
+    raw_kit = data.get("visualKit")
+    kit = raw_kit if isinstance(raw_kit, Mapping) else {}
+    overlay = kit.get("equipOverlay")
+    requirement = equipment_overlay_requirement(data)
+    # Missing authored designs still belong to Visual validation/Repair. Do not
+    # borrow the inventory silhouette or infer a wearable from its name/category.
+    if not requirement["required"] or not isinstance(overlay, Mapping):
+        return ""
+    if not all(isinstance(overlay.get(field), str) and overlay[field].strip()
+               for field in ("prompt", "silhouette", "visualIdentity")):
+        return ""
+    # Read-only projection of GeneratedEquipOverlayDrawLayer.Draw's whole-texture
+    # fit, not a new authored size/anchor or a guarantee about visible alpha size.
+    placement = {
+        "head": ("head", 25),
+        "body": ("torso", 31),
+        "legs": ("legs", 27),
+        "accessory": ("body", 18),
+    }.get(requirement["slot"])
+    if placement is None:
+        return ""
+    body_part, fit = placement
+    facts = {
+        "equipmentSlot": requirement["slot"],
+        "canvasSizePx": final_sprite_canvas(canvas),
+        "wholeTextureFitMaxPx": fit,
+        "silhouette": overlay["silhouette"],
+        "visualIdentity": overlay["visualIdentity"],
+    }
+    raw_visual = data.get("visual")
+    visual = raw_visual if isinstance(raw_visual, Mapping) else {}
+    if requirement["slot"] == "accessory" and "accessoryMount" in visual:
+        facts["accessoryMount"] = visual["accessoryMount"]
+    mount_placement = "; its authored accessoryMount selects body-local placement" if "accessoryMount" in facts else ""
+    return (
+        ". Read-only equipment overlay facts: " + json.dumps(facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        + f". One static centered PNG badge attached to the player's {body_part}{mount_placement}. "
+        "The renderer fits the whole final PNG within wholeTextureFitMaxPx world pixels on its longest side; "
+        "padding makes the visible silhouette smaller, so keep the authored silhouette, parts, arrangement and identity readable at that size."
+    )
+
+
 def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: int, *, entity_id: str = "") -> str:
-    """Read-only selected main-PNG facts; no guesses from hitboxes or prose."""
+    """Read-only selected PNG facts; no guesses from hitboxes or prose."""
+    if role == "equip_overlay":
+        return _image_equipment_frame_prompt_clause(data, canvas)
     raw_runtime = data.get("runtimeProgram")
     runtime: Mapping[str, Any] = raw_runtime if isinstance(raw_runtime, Mapping) else {}
     entities = [row for row in runtime.get("entities") or [] if isinstance(row, Mapping)]
@@ -122,7 +169,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             return ""
         owner = root if root_project else entity_visual
     else:
-        # Dedicated impacts, UV ingredients and overlays do not use main-body R.
+        # Dedicated impacts and UV ingredients do not use main-body R.
         return ""
     if not any(field in owner for field in ("renderSizePx", "forwardAngleDegrees")):
         # Retain delivered legacy prompts and metadata absence; do not give a

@@ -83,6 +83,22 @@ studio.showSaveConflict();document.querySelector('#reconcile-draft').onclick();
 assert.equal(state.savedRevision,'disk-B');assert.equal(state.draft[x],'my-x');assert.equal(state.draft[y],'other-y');
 assert.deepEqual([...state.dirty],[x]);
 
+// Conflict review includes externally removed fields, without exposing credentials.
+state.revisionValues={INFINI_REMOVED:'old',INFINI_API_KEY:'old-secret'};
+state.remote=snapshot({}, {savedRevision:'disk-C'});
+state.draft={INFINI_REMOVED:'my-restored-value',INFINI_API_KEY:'new-secret'};
+state.baseline={};recomputeDirty();
+studio.showSaveConflict();
+const removedReview=document.querySelector('#utility-body').innerHTML;
+assert(removedReview.includes('INFINI_REMOVED'),'externally removed fields appear in conflict review');
+assert(removedReview.includes('my-restored-value'));
+assert(removedReview.includes('Не задано'));
+assert(!removedReview.includes('old-secret') && !removedReview.includes('new-secret'));
+document.querySelector('#reconcile-draft').onclick();
+assert.equal(state.draft.INFINI_REMOVED,'my-restored-value');
+assert.equal(state.savedRevision,'disk-C');
+assert(state.dirty.has('INFINI_REMOVED'));
+
 // Recommendations never interrupt loading, polling, or a deliberate custom edit.
 document.querySelector('#utility-dialog').open=false;
 const offer={version:'0.5.02',changes:[{key:x,current:'0.55',recommended:'0.5',reason:'Optional recommendation'}],dismissed:false,revision:'offer-1'};

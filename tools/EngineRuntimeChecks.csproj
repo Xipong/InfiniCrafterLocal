@@ -53,6 +53,7 @@
     <Compile Include="EngineRuntimeChecks.VfxPreview.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
     <Compile Include="EngineRuntimeChecks.AccessoryIdentity.cs" />
+    <Compile Include="EngineRuntimeChecks.EquipmentPresentation.cs" />
     <Compile Include="EngineRuntimeChecks.EquipmentUtilities.cs" />
     <Compile Include="EngineRuntimeChecks.Ammo.cs" />
     <Compile Include="EngineRuntimeChecks.WeaponAmmo.cs" />

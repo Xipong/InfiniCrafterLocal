@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),
+            ("equipment presentation front back native layer tree", EquipmentAccessoryLayersKeepMountsDyesAndVisibility),
+            ("equipment presentation native displayed carrier selection", EquipmentNeutralCarrierUsesNativeDisplayedSelection),
+            ("equipment presentation native clothes hair and source rectangles", EquipmentNeutralBaseDrawsNativeClothesAndHair),
             ("VFX descriptive text bound and Unicode roundtrip", VfxDescriptiveTextRoundtrip),
             ("Visual descriptive palette Unicode roundtrip", VisualDescriptivePaletteRoundtrip),
             ("descriptive parent behavior Unicode roundtrip", DescriptiveParentBehaviorRoundtrip),
@@ -165,6 +169,7 @@ internal static partial class EngineRuntimeChecks
             ("individual material live source periodic final pose and generation", MaterialElementLiveSourcePeriodicUsesFinalPoseAndGeneration),
             ("individual material world delay versus source generation fence", MaterialElementDelayFreezesWorldButFencesSource),
             ("individual material item attachment uses instance identity", MaterialElementItemAttachmentUsesInstanceNotDefinition),
+            ("individual material item periodic equipment slot transitions", MaterialItemPeriodicSurvivesEquipmentSlotTransitions),
             ("individual material owner hit validated relay remote delivery", MaterialOwnerHitReachesValidatedServerRelayAndRemote),
             ("individual material item snapshot relay immutable pose and instance", MaterialItemSnapshotRelayPreservesPoseAndInstance),
             ("individual material budgets share legacy active detached costs", MaterialBudgetsShareLegacyActiveAndDetachedCosts),
@@ -288,7 +293,9 @@ internal static partial class EngineRuntimeChecks
             ("front_hand observer counterproofs", FrontHandObserverCounterproofs),
             ("front_hand cursor eventually publishes stationary aim", FrontHandCursorEventuallyPublishesStationaryAim),
             ("front_hand event direction and delayed snapshot", FrontHandGameplayEventsRetainSelectedAxis),
-            ("front_hand legacy cursor throttle control", FrontHandLegacyCursorThrottleControl),
+            ("owner cursor stationary beam", () => OwnerCursorEventuallyPublishesStationaryAim("beam")),
+            ("owner cursor stationary yoyo", () => OwnerCursorEventuallyPublishesStationaryAim("yoyo")),
+            ("owner cursor stationary forward retract", () => OwnerCursorEventuallyPublishesStationaryAim("forward_retract")),
             ("front_hand detached exact body scale", FrontHandDetachedExactBodyScale),
             ("item VFX preserves world-clock cadence", ItemVfxPeriodicUsesWorldClockAndIgnoresProjectileStartTick),
             ("item VFX hit positions relay and event budgets", ItemVfxEventPositionsRelayAndBudgets),
