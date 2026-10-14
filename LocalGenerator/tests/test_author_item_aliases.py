@@ -39,7 +39,7 @@ def test_old_or_invalid_visibility_tokens_are_not_new_author_values(bad):
 
 
 @pytest.mark.parametrize("old", ["", "immediate", "on_release", "after_charge"])
-def test_persisted_visibility_receipts_keep_their_original_wire_token(old):
+def test_retired_visibility_receipts_are_refused_without_rewriting_tokens(old):
     source, call = _source("configure_item_use")
     call["params"]["customHeldSprite"] = "inherit"
     wire = compile_runtime_program(source)
@@ -50,9 +50,9 @@ def test_persisted_visibility_receipts_keep_their_original_wire_token(old):
         if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".customHeldSprite"):
             row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
             row["value"] = old
-    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
-    assert validate_runtime_wire(wire)["ok"]
+    assert not validate_runtime_wire(wire)["ok"]
 
 
 @pytest.mark.parametrize("layer,inactive", [("tile", "wall"), ("wall", "tile")])
@@ -129,13 +129,12 @@ def test_all_eleven_set_bonuses_keep_their_previous_fields_units_and_receipts():
         receipt = next(row for row in rows if row.get("fn") == "configure_armor" and row["finalPath"] == "armor." + field)
         assert receipt["authoredPath"].endswith(".params.setBonuses." + name)
     assert validate_runtime_wire(wire)["ok"]
-    # Source-free old provenance remains inspectable without accepting an old
-    # Author document or rewriting any persisted wire field.
+    # Retired flat parameter receipts are refused without rewriting wire fields.
     for row in rows:
         if row.get("fn") == "configure_armor" and ".params.setBonuses." in row["authoredPath"]:
             stem, name = row["authoredPath"].split(".params.setBonuses.")
             row["authoredPath"] = stem + ".params.setBonus" + name[0].upper() + name[1:]
-    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
 
 
@@ -239,10 +238,9 @@ def test_grouped_armor_receipts_refuse_coherent_wrong_json_types(bad, source_ava
                                        final_document=wire)["ok"]
 
 
-def test_prior_recall_mode_domain_is_explicit_and_wire_only():
+def test_prior_recall_receipt_is_refused_with_dedicated_current_recall_preserved():
     cap = CAPABILITY_REGISTRY["move_player_on_use"]
     assert cap.params["mode"].enum == ("blink_to_cursor",)
-    assert cap.retained_receipt_params["mode"].enum == ("blink_to_cursor", "recall_home")
     source, call = _source("move_player_on_use")
     call["params"]["mode"] = "blink_to_cursor"
     wire = compile_runtime_program(source)
@@ -251,7 +249,7 @@ def test_prior_recall_mode_domain_is_explicit_and_wire_only():
     next(r for r in rows if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params.mode"))["value"] = "recall_home"
     call["params"]["mode"] = "recall_home"
     before = deepcopy(wire)
-    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     assert not validate_runtime_program(source)["ok"]
     assert wire == before

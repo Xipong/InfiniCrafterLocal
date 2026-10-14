@@ -9,14 +9,12 @@ using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Models;
 
-/// <summary>The fields consumed by both the legacy default and explicit named groups.</summary>
+/// <summary>The fields consumed by both default and explicit named effect groups.</summary>
 public interface IItemEffectsSpec
 {
     int HealLife { get; }
     int HealMana { get; }
     bool Potion { get; }
-    int BuffCode { get; }
-    int BuffTime { get; }
     BuffEntrySpec[] ExtraBuffs { get; }
     GeneratedBuffSpec? GeneratedBuff { get; }
     string MobilityMode { get; }
@@ -50,9 +48,6 @@ public sealed class RuntimeItemEffectGroupSpec : IItemEffectsSpec
     public int MobilityRangeTiles { get; set; }
     public int MobilityCooldownTicks { get; set; }
     public bool MobilitySafeTileOnly { get; set; } = true;
-    // Named native buffs are an explicit append component, never a second hidden slot.
-    int IItemEffectsSpec.BuffCode => 0;
-    int IItemEffectsSpec.BuffTime => 0;
 
     internal static string RequireId(string? value)
         => value is not null && Regex.IsMatch(value, @"\A[a-z][a-z0-9_]{0,47}\z") ? value

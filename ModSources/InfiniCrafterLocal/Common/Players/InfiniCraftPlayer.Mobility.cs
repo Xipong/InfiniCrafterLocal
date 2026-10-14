@@ -72,11 +72,17 @@ public sealed partial class InfiniCraftPlayer
         _generatedMobilityCooldownTicks = Math.Clamp(cooldownTicks, 0, 36000);
     }
 
-    public void ApplyGeneratedUtilityBuff(GeneratedBuffSpec? buff, bool syncNetwork = false)
+    public bool ApplyGeneratedUtilityBuff(GeneratedBuffSpec? buff, bool syncNetwork = false,
+        GeneratedItemData? source = null, uint? activationTick = null)
     {
-        if (buff is null) return;
+        if (buff is null) return false;
         buff.Normalize();
-        if (!buff.HasAnyEffect) return;
+        if (!buff.HasAnyEffect) return false;
+        if (!CanApplyGeneratedBuff(buff, source, activationTick, out var exhaustion))
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
         var incoming = ActiveGeneratedUtilityBuff.From(buff);
         var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
         if (existing is not null)
@@ -94,8 +100,10 @@ public sealed partial class InfiniCraftPlayer
             _activeGeneratedUtilityBuffs.Add(incoming);
         }
         RebuildGeneratedUtilityBuffAggregate();
-        if (syncNetwork && Main.netMode == NetmodeID.Server)
+        if (exhaustion is not null) _generatedItemExhaustion.Add(exhaustion);
+        if ((syncNetwork || exhaustion is not null) && Main.netMode == NetmodeID.Server)
             SendGeneratedBuffState();
+        return true;
     }
 
     private void RebuildGeneratedUtilityBuffAggregate()
@@ -322,6 +330,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
+        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
         if (_generatedMobilityCooldownTicks > 0)
             _generatedMobilityCooldownTicks--;
 

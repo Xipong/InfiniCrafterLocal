@@ -4,15 +4,25 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace InfiniCrafterLocal.Common.Models;
 
 // Technical execution of explicitly authored final-frame units, not gameplay
 // normalization. No alpha/PCA/name inference and no physics or pose mutation.
-internal readonly record struct SpritePresentationSelection(string Path, int? RenderSizePx, float? ForwardAngleDegrees)
+internal readonly record struct SpritePresentationSelection(string Path, int? RenderSizePx, float? ForwardAngleDegrees, ItemGripSpec? Grip = null, bool FrontHandBody = false)
 {
     internal float FrameScale(int width, int height) => SpritePresentation.FrameScale(RenderSizePx, width, height);
+    internal Vector2 ProjectileOrigin(RuntimeEntitySpec? entity, int width, int height, float scale, SpriteEffects effects)
+    {
+        if (!FrontHandBody || entity?.Movement.Code != 20) return new(width * .5f, height * .5f);
+        if (Grip is null || !RenderSizePx.HasValue || !ForwardAngleDegrees.HasValue || !float.IsFinite(scale) || scale <= 0f)
+            throw new InvalidDataException("front-hand sprite pose has no admitted selected grip/size/axis/scale");
+        Grip.Validate();
+        return new InfiniCrafterLocal.Common.VFX.InfiniVfxSpriteAnchor((float)Grip.NormalizedX, (float)Grip.NormalizedY,
+            ForwardAngleDegrees.Value, entity.Movement.Params.HitboxOffsetPx!.Value).Origin(width, height, scale, effects);
+    }
     internal float ProjectileRotation(RuntimeEntitySpec? entity, float rotation, SpriteEffects effects)
     {
         // Explicit spinning poses and whip are native, not motion-aimed sprites.
@@ -92,20 +102,21 @@ internal static class SpritePresentation
         return bodyAngle - MathF.Atan2(y, x);
     }
     internal static SpritePresentationSelection Root(GeneratedItemData data)
-        => new(data.Visual.SpritePath ?? "", data.Visual.RenderSizePx, data.Visual.ForwardAngleDegrees);
+        => new(data.Visual.SpritePath ?? "", data.Visual.RenderSizePx, data.Visual.ForwardAngleDegrees, data.Visual.Grip);
     internal static SpritePresentationSelection Entity(GeneratedItemData data, RuntimeEntitySpec entity)
         => entity.Visual.AssetMode switch {
-            "reuse_item_icon" => Root(data),
+            "reuse_item_icon" => Root(data) with { FrontHandBody = entity.Movement.Code == 20 },
             "baked_sprite" when entity.Kind == RuntimeEntityKind.ItemBody => Root(data),
-            "baked_sprite" => new(entity.Visual.SpritePath ?? "", entity.Visual.RenderSizePx, entity.Visual.ForwardAngleDegrees),
+            "baked_sprite" => new(entity.Visual.SpritePath ?? "", entity.Visual.RenderSizePx, entity.Visual.ForwardAngleDegrees, entity.Visual.Grip, entity.Movement.Code == 20),
             _ => new("", null, null),
         };
     internal static SpritePresentationSelection Resolve(GeneratedItemData data, string entityId, string textureRole)
     {
         string role = (textureRole ?? "").Trim().ToLowerInvariant();
         if (role == "none") return new("", null, null);
-        if (role == "item") return Root(data);
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(entityId);
+        if (role == "item") return entity?.Movement.Code == 20 && entity.Visual.AssetMode == "reuse_item_icon"
+            ? Entity(data, entity) : Root(data);
         if (entity is null) return new("", null, null);
         if (role == "impact") return new(entity.Visual.ImpactSpritePath ?? "", null, null);
         if (role != "entity" && !string.Equals(entity.VisualRole, role, StringComparison.Ordinal)) return new("", null, null);

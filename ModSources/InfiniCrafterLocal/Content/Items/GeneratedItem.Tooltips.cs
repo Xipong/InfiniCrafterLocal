@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.Services;
 using Terraria;
 using Terraria.Localization;
 using Terraria.ModLoader;
@@ -31,6 +33,27 @@ public partial class GeneratedItem
             tooltips.Add(new TooltipLine(Mod, "Infini" + name, RuntimeTooltipText(key, args)));
             added++;
         }
+        // Exact live player table + existing registry definition identity. Never
+        // infer a global block from any other item, slot, name or buff texture.
+        if (!Main.dedServ && !Main.gameMenu && GeneratedItemRegistryService.IsCurrentWorldData(data)
+            && Main.LocalPlayer is { active: true } player)
+        {
+            IReadOnlyList<GeneratedItemExhaustionStatus> exhausted = player.GetModPlayer<InfiniCraftPlayer>()
+                .CaptureGeneratedItemExhaustion();
+            if (exhausted.Count > 0)
+            {
+                string definition = GeneratedItemRegistryService.DefinitionIdentity(data);
+                foreach (GeneratedItemExhaustionStatus entry in exhausted)
+                {
+                    if (entry.RemainingTicks <= 0 || !string.Equals(entry.ItemId, data.Id, StringComparison.Ordinal)
+                        || !string.Equals(entry.DefinitionIdentity, definition, StringComparison.Ordinal)) continue;
+                    Add("ExhaustionRemaining", "ExhaustionRemaining", RuntimeTooltipTime(entry.RemainingTicks));
+                    break;
+                }
+            }
+        }
+        if (program.TryGetEffectGroup(program.HeldEffectGroupId)?.GeneratedBuff is { } held)
+            AddRuntimeExhaustion(held, "Hold", RuntimeTooltipText("InputHold"), Add);
         // This is display order, not a chooser: BindingForInput is the canonical
         // consumer, including its first-owner semantics for equipped bindings.
         foreach (string input in new[] { RuntimeInputKind.PrimaryUse, RuntimeInputKind.AlternateUse, RuntimeInputKind.Hold, RuntimeInputKind.Equipped })
@@ -90,7 +113,7 @@ public partial class GeneratedItem
             if (action.Kind == RuntimeBindingAction.PlaceItem)
                 Add("Placement" + suffix, "PlacementAvailability", label);
             if (active && action.Kind == RuntimeBindingAction.ApplyItemEffects)
-                AddRuntimeUseEffects(data.Gameplay, suffix, label, Add);
+                AddRuntimeUseEffects(data.EffectsForBinding(binding), suffix, label, Add);
         }
     }
 
@@ -105,8 +128,18 @@ public partial class GeneratedItem
         }
     }
 
-    private static void AddRuntimeUseEffects(GameplaySpec gp, string suffix, string input, Action<string, string, object[]> add)
+    private static void AddRuntimeExhaustion(GeneratedBuffSpec? buff, string suffix, string input,
+        Action<string, string, object[]> add)
     {
+        if (buff?.HasAnyEffect == true && buff.DurationTicks is > 0 and <= 21600
+            && buff.ExhaustionTicks is > 0 and <= 21600)
+            add("Exhaustion" + suffix, "ExhaustionDeclared",
+                new object[] { input, RuntimeTooltipTime(buff.ExhaustionTicks.Value) });
+    }
+
+    private static void AddRuntimeUseEffects(IItemEffectsSpec gp, string suffix, string input, Action<string, string, object[]> add)
+    {
+        AddRuntimeExhaustion(gp.GeneratedBuff, suffix, input, add);
         if (gp.HealLife > 0) add("HealLife" + suffix, "HealLife", new object[] { input, RuntimeTooltipNumber(gp.HealLife) });
         if (gp.HealMana > 0) add("HealMana" + suffix, "HealMana", new object[] { input, RuntimeTooltipNumber(gp.HealMana) });
         void Buff(string name, int id, int ticks)
@@ -126,7 +159,6 @@ public partial class GeneratedItem
             if (safeName.Length == 0) return;
             add(name, "Buff", new object[] { input, safeName.ToString(), RuntimeTooltipTime(ticks) });
         }
-        Buff("VanillaBuff" + suffix, gp.BuffCode, gp.BuffTime);
         BuffEntrySpec[] buffs = gp.ExtraBuffs ?? Array.Empty<BuffEntrySpec>();
         for (int i = 0; i < Math.Min(16, buffs.Length); i++)
             if (buffs[i] is { } buff) Buff("Buff" + suffix + i.ToString(CultureInfo.InvariantCulture), buff.BuffCode, buff.BuffTime);

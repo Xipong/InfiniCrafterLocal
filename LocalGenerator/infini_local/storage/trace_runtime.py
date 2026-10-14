@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import atexit
+import copy
+import json
+import queue
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +100,65 @@ def trace_stage_request(stage: str, recipe_key: str, request: dict[str, Any], *,
     receipt = trace_tools.persist_stage_request(CACHE_DIR, stage, recipe_key, request, recipe_id=recipe_id)
     trace_event("request_artifact", stage, "Exact sanitized stage request", receipt)
     return receipt
+
+
+_CODEX_TRACE_QUEUE: queue.SimpleQueue = queue.SimpleQueue()
+_CODEX_TRACE_START_LOCK = threading.Lock()
+_CODEX_TRACE_WORKER: threading.Thread | None = None
+
+
+def _write_codex_transport(payload, raw, secrets, cache_dir, trace_file, prompt_trace_file, max_chars, body_reader):
+    try:
+        if body_reader is not None:
+            raw, payload["bodyComplete"], payload["bodyReadErrorType"], partial = body_reader()
+            if partial:
+                exception_payload = {**payload, "event": "reader_exception_partial",
+                                     "byteScope": "reader_exception_partial_unclassified"}
+                _write_codex_transport(exception_payload, partial, secrets, cache_dir, trace_file, prompt_trace_file, max_chars, None)
+        from infini_local.services.codex_auth import redact_credentials
+        safe = json.loads(redact_credentials(json.dumps(payload, ensure_ascii=False), secrets))
+        if raw is not None:
+            safe["artifact"] = trace_tools.persist_transport_artifact(cache_dir, raw, secrets=secrets)
+        trace_tools.trace_event(cache_dir=cache_dir, trace_prompts_enabled=True,
+            trace_max_prompt_chars=max_chars, trace_file=trace_file, prompt_trace_file=prompt_trace_file,
+            kind="codex_transport", stage="transport", title="Codex generation HTTP observation", payload=safe)
+    except Exception:
+        pass
+
+
+def _codex_trace_worker() -> None:
+    while True:
+        item = _CODEX_TRACE_QUEUE.get()
+        if isinstance(item, threading.Event):
+            item.set()
+        else:
+            _write_codex_transport(*item)
+
+
+def trace_codex_transport(payload: dict[str, Any], *, raw: bytes | None = None, secrets: tuple[str, ...] = (), body_reader=None) -> bool:
+    """Detach observations; disk locks/fsync never occupy the generation deadline."""
+    if not TRACE_PROMPTS_ENABLED:
+        return False
+    try:
+        global _CODEX_TRACE_WORKER
+        with _CODEX_TRACE_START_LOCK:
+            if _CODEX_TRACE_WORKER is None:
+                _CODEX_TRACE_WORKER = threading.Thread(target=_codex_trace_worker, daemon=True, name="codex-transport-trace")
+                _CODEX_TRACE_WORKER.start()
+                atexit.register(flush_codex_transport)
+        _CODEX_TRACE_QUEUE.put((copy.deepcopy(payload), raw, secrets, CACHE_DIR, TRACE_FILE, PROMPT_TRACE_FILE, TRACE_MAX_PROMPT_CHARS, body_reader))
+        return True
+    except Exception:
+        return False
+
+
+def flush_codex_transport(timeout: float = 2) -> bool:
+    """Explicit bounded drain for diagnostic readback; generation never waits here."""
+    if _CODEX_TRACE_WORKER is None:
+        return True
+    done = threading.Event()
+    _CODEX_TRACE_QUEUE.put(done)
+    return done.wait(timeout)
 
 
 def _tail_text_file(path: str | Path, max_chars: int = 16000) -> str:

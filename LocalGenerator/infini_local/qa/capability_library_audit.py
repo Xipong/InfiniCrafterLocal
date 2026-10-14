@@ -36,6 +36,8 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
     "ordered_params",
+    "primary_target",
+    "capability_param_absent",
     "present_param_requires_target_kind",
     "present_param_requires_param_value",
     "present_param_forbids_capability",
@@ -219,7 +221,6 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "attract_npcs_while_active": ("RuntimeNpcAttractionSpec", ""),
         "set_projectile_visual_scale_curve": ("RuntimeVisualScaleCurveSpec", ""),
         "set_projectile_collision": ("RuntimeCollisionSpec", ""),
-        "spawn_over_target": ("RuntimeOverTargetSpec", ""),
         "emit_light_while_active": ("RuntimeLightSpec", ""),
         "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
     }

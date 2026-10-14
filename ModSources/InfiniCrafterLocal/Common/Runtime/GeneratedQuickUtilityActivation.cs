@@ -212,15 +212,22 @@ internal static class GeneratedQuickUtilityActivation
             GeneratedBuffSpec authored = data.PrimaryUseEffects.GeneratedBuff!;
             int elapsed = (int)unchecked((uint)(Main.GameUpdateCount - (uint)pending.Tick));
             int remaining = authored.DurationTicks - elapsed;
-            if (remaining <= 0) return;
+            if (remaining <= 0)
+            {
+                if (authored.ExhaustionTicks is > 0) modPlayer.CorrectGeneratedBuffPrediction();
+                return;
+            }
             // Anchor expiry at server admission, not the later Commit arrival.
             // Never mutate a registry-owned definition to carry remaining time.
             modPlayer.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec {
-                DurationTicks = remaining, MiningSpeedMultiplier = authored.MiningSpeedMultiplier,
+                DurationTicks = remaining, ExhaustionTicks = authored.ExhaustionTicks,
+                MiningSpeedMultiplier = authored.MiningSpeedMultiplier,
                 EmitLightStrength = authored.EmitLightStrength, LightColorName = authored.LightColorName,
                 OreSenseRadiusTiles = authored.OreSenseRadiusTiles, MovementSpeed = authored.MovementSpeed,
                 JumpBoost = authored.JumpBoost, ManaRegen = authored.ManaRegen, LifeRegen = authored.LifeRegen,
-            }, syncNetwork: true);
+            }, syncNetwork: true, source: data, activationTick: (uint)pending.Tick);
+            // The post-use Commit never refunds/replays native heal or debit.
+            // The consumer sends the owner correction on a well-formed refusal.
         }
     }
     internal static void Prune()

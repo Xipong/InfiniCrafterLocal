@@ -143,7 +143,9 @@ def generate_chat(packet: dict[str, Any], *, timeout: int) -> dict[str, Any]:
         # Generated keys are ASCII; encode arbitrary keys without header injection
         # while preserving the authoritative body value and stable affinity.
         headers["session-id"] = quote(request["prompt_cache_key"], safe="")
-    response = codex_auth.post_sse(RESPONSES_URL, request, headers=headers, timeout=timeout)
+    from infini_local.storage.trace_runtime import trace_codex_transport
+    with codex_auth.generation_credentials(credentials, trace_codex_transport):
+        response = codex_auth.post_sse(RESPONSES_URL, request, headers=headers, timeout=timeout)
     content = _output_text(response)
     decoded_content = codex_auth._decode_unicode_runs(content)
     if any(secret and len(secret) >= 8 and secret in decoded_content

@@ -132,7 +132,13 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "non-empty string: describe coherent, purposeful mechanics with simple, immediately useful play. "
                 "A clear central purpose can include multiple complementary actions; this is not a single-loop rule "
                 "or a capability restriction. Let complexity serve player value. Use supplied progression facts "
-                "when present; do not invent an acquisition tier from rarity, value or identity alone."
+                "when present; do not invent an acquisition tier from rarity, value or identity alone. "
+                "Balance repeatable utility by effective uptime and ongoing resource economy, not just "
+                "strength, duration or one-time crafting cost: duration is not a cooldown, and free repeated refresh "
+                "can make a brief effect permanent. Choose a meaningful recurring cost, supported reuse limit "
+                "or deliberately weaker effect; intentional free sustained utility remains a design choice "
+                "but must be valued as sustained, not sold as a limited burst. Use only supported mechanics; "
+                "never invent charges, cooldowns or resource payments that the catalog cannot execute."
             ),
             "parentAContribution": (
                 "non-empty string: explain this actual parent's appearance/identity and purposeful "

@@ -164,6 +164,10 @@ def test_actual_vfx_scale_descriptions_separate_frame_legacy_impact_and_material
         "P=projectile.scale", "initial P=D*E", "not another E or gameplay.itemScale",
         "declared R: clamp(P,0.1,8)*scale*q_selected", "absent R: max(0.05,P*scale)",
         "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected",
+        "Exception only for explicit move_front_hand (opcode 20)",
+        "hitboxCurve.mirrorToSprite=true or a present visualScaleCurve",
+        "declared-R periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P",
+        "Other drivers and front-hand without either scale owner keep the formulas above",
         "Directional item body stamp: clamp(scale,0.05,8)*q_selected",
         "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion",
         "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected",
@@ -199,3 +203,45 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
     assert final["runtimeProgram"] == before["runtimeProgram"]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     assert raw["slots"][0]["alpha"] == 2.0 and candidate["scale"] == 4.75
+
+
+@pytest.mark.parametrize("mode", ["selected", "representative"])
+def test_old_ammo_keys_are_not_promoted(mode):
+    from infini_local.pipelines.parent_context_pipeline import compact_ammo_profile, effective_projectile_profile_of
+    raw = {"selectedPlayerAmmoRaw": {"type": 97}, "selectedPlayerProjectileRaw": {"type": 1}} if mode == "selected" else {
+        "representativeAmmoRaw": [{"type": 97}], "representativeProjectileRaw": [{"type": 1}]}
+    item = {"ammoRaw": raw}
+    assert compact_ammo_profile(item) == {"mode": "legacy_profile"}
+    assert effective_projectile_profile_of(item) == {}
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    raw = raw_parent_card_for_llm(item)["raw"]
+    assert "effectiveProjectile" not in raw and "directProjectile" not in raw
+    assert raw["ammo"] == {"mode": "legacy_profile"}
+
+
+def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
+    from infini_local.pipelines import parent_context_pipeline as parents
+    item = {"ammoRaw": {"mode": "weapon_uses_ammo", "ammoId": 97,
+        "playerInventoryAmmoRaw": [{"type": 97, "damage": 5}], "playerInventoryProjectileRaw": [{"type": 1}],
+        "fallbackAmmoRaw": [{"type": 97}], "fallbackProjectileRaw": [{"type": 1}]}}
+    compact = parents.compact_ammo_profile(item)
+    assert compact["playerInventoryAmmoRaw"][0]["type"] == 97
+    assert compact["fallbackProjectileRaw"][0]["type"] == 1
+    assert parents.effective_projectile_profile_of(item)["type"] == 1
+    monkeypatch.setattr(parents, "RUNTIME_ITEMS", [{"ammo": 97, "shoot": 1, "type": 97, "internalName": "CurrentAmmo"}])
+    monkeypatch.setattr(parents, "runtime_projectile_lookup", lambda _: {"type": 1, "tileCollide": True})
+    dump = {"useAmmo": 97}
+    assert parents.compact_ammo_profile(dump)["exampleAmmo"] == "CurrentAmmo"
+    assert parents.effective_projectile_profile_of(dump)["type"] == 1
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    live = {"name": "Weapon identity", "directProjectileRaw": {"type": 42, "damage": 11},
+            "ammoRaw": {**item["ammoRaw"], "ammoItemRaw": {"type": 97, "damage": 5},
+                        "projectileRaw": {"type": 42, "damage": 11},
+                        "weaponShootFieldProjectileRaw": {"type": 42, "damage": 11}}}
+    before = copy.deepcopy(live)
+    raw = raw_parent_card_for_llm(live)["raw"]
+    assert raw["directProjectile"]["type"] == 42
+    assert raw["ammo"]["ammoItemRaw"]["type"] == 97
+    assert all(key not in raw["ammo"] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
+                                                  "fallbackAmmoRaw", "fallbackProjectileRaw", "exampleAmmo", "exampleProjectile"))
+    assert live == before

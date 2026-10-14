@@ -514,7 +514,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)4); // state version
+        writer.Write((byte)5); // includes per-source session exhaustion
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -529,48 +529,60 @@ public sealed partial class InfiniCraftPlayer
         writer.Write((byte)buffCount);
         for (int index = 0; index < buffCount; index++)
             WriteGeneratedUtilityBuffEntry(writer, _activeGeneratedUtilityBuffs[index]);
+        WriteGeneratedItemExhaustion(writer);
     }
+
+    // A received authority correction is not a new local resync request.
+    private uint _generatedBuffSnapshotRevision;
 
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 4)
+        if (version != 5)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
-        _generatedBuffTicks = reader.ReadInt32();
-        _generatedMiningSpeedMultiplier = reader.ReadSingle();
-        _generatedLightStrength = reader.ReadSingle();
-        _generatedLightColorName = reader.ReadString();
-        _generatedOreSenseRadiusTiles = reader.ReadInt32();
-        _generatedMovementSpeed = reader.ReadSingle();
-        _generatedJumpBoost = reader.ReadSingle();
-        _generatedManaRegen = reader.ReadInt32();
-        _generatedLifeRegen = reader.ReadInt32();
-        _generatedMobilityCooldownTicks = reader.ReadInt32();
+        // Decode before replacing owner prediction; malformed packets do not
+        // erase a valid timer table or leave half-read buff state behind.
+        int ticks = reader.ReadInt32();
+        float mining = reader.ReadSingle(), light = reader.ReadSingle();
+        string color = ReadGeneratedBuffText(reader, 128);
+        int ore = reader.ReadInt32();
+        float movement = reader.ReadSingle(), jump = reader.ReadSingle();
+        int mana = reader.ReadInt32(), life = reader.ReadInt32(), mobility = reader.ReadInt32();
+        int count = reader.ReadByte();
+        if (count > 32) throw new System.IO.InvalidDataException("generated utility row limit");
+        var buffs = new List<ActiveGeneratedUtilityBuff>(count);
+        for (int i = 0; i < count; i++) buffs.Add(ReadGeneratedUtilityBuffEntry(reader));
+        var exhaustion = ReadGeneratedItemExhaustion(reader);
+        _generatedBuffTicks = ticks; _generatedMiningSpeedMultiplier = mining;
+        _generatedLightStrength = light; _generatedLightColorName = color;
+        _generatedOreSenseRadiusTiles = ore; _generatedMovementSpeed = movement;
+        _generatedJumpBoost = jump; _generatedManaRegen = mana; _generatedLifeRegen = life;
+        _generatedMobilityCooldownTicks = mobility;
         ClampGeneratedBuffState();
-        _activeGeneratedUtilityBuffs.Clear();
-        int buffCount = Math.Min(32, (int)reader.ReadByte());
-        for (int index = 0; index < buffCount; index++)
-            _activeGeneratedUtilityBuffs.Add(ReadGeneratedUtilityBuffEntry(reader));
+        _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
+        _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
+        _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
     }
 
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 4)
+        if (version != 5)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
-        _ = reader.ReadString();
+        _ = ReadGeneratedBuffText(reader, 128);
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
         _ = reader.ReadInt32();
         _ = reader.ReadInt32();
         _ = reader.ReadInt32();
-        int buffCount = Math.Min(32, (int)reader.ReadByte());
-        for (int index = 0; index < buffCount; index++)
-            DiscardGeneratedUtilityBuffEntry(reader);
+        int count = reader.ReadByte();
+        if (count > 32) throw new System.IO.InvalidDataException("generated utility row limit");
+        for (int i = 0; i < count; i++) DiscardGeneratedUtilityBuffEntry(reader);
+        _ = ReadGeneratedItemExhaustion(reader); // consume, never apply client timers
     }
 
     private static void WriteGeneratedUtilityBuffEntry(System.IO.BinaryWriter writer, ActiveGeneratedUtilityBuff buff)
@@ -591,7 +603,7 @@ public sealed partial class InfiniCraftPlayer
         int ticks = reader.ReadInt32();
         float miningSpeedMultiplier = reader.ReadSingle();
         float lightStrength = reader.ReadSingle();
-        string lightColor = reader.ReadString().Trim();
+        string lightColor = ReadGeneratedBuffText(reader, 128).Trim();
         return new ActiveGeneratedUtilityBuff
         {
             Ticks = Math.Clamp(ticks, 1, 21600),
@@ -611,7 +623,7 @@ public sealed partial class InfiniCraftPlayer
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
-        _ = reader.ReadString();
+        _ = ReadGeneratedBuffText(reader, 128);
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
@@ -636,6 +648,8 @@ public sealed partial class InfiniCraftPlayer
     private bool GeneratedBuffStateDiffers(InfiniCraftPlayer other)
     {
         if (other is null) return true;
+        // Compare starts/ends/definition changes, not the numeric countdown.
+        if (!_generatedItemExhaustion.SequenceEqual(other._generatedItemExhaustion)) return true;
 
         bool activeNow = _generatedBuffTicks > 0;
         bool activeOld = other._generatedBuffTicks > 0;
@@ -688,12 +702,17 @@ public sealed partial class InfiniCraftPlayer
             clone._generatedManaRegen = _generatedManaRegen;
             clone._generatedLifeRegen = _generatedLifeRegen;
             clone._generatedMobilityCooldownTicks = _generatedMobilityCooldownTicks;
+            clone._generatedBuffSnapshotRevision = _generatedBuffSnapshotRevision;
+            clone._generatedItemExhaustion.Clear();
+            clone._generatedItemExhaustion.AddRange(_generatedItemExhaustion);
         }
     }
 
     public override void SendClientChanges(ModPlayer clientPlayer)
     {
-        if (clientPlayer is InfiniCraftPlayer oldState && GeneratedBuffStateDiffers(oldState))
+        if (clientPlayer is InfiniCraftPlayer oldState
+            && _generatedBuffSnapshotRevision == oldState._generatedBuffSnapshotRevision
+            && GeneratedBuffStateDiffers(oldState))
             SendGeneratedBuffState();
     }
 
@@ -723,10 +742,13 @@ public sealed partial class InfiniCraftPlayer
             // but none of its numbers are authoritative. Consume the packet and
             // rebroadcast the server-owned state built from canonical item data.
             DiscardGeneratedBuffState(reader);
-            modPlayer.SendGeneratedBuffState(-1, whoAmI);
+            modPlayer.SendGeneratedBuffState(); // owner also needs refusal/prediction correction
             return;
         }
-        modPlayer.ReadGeneratedBuffState(reader);
+        if (Main.netMode == NetmodeID.MultiplayerClient && whoAmI == 256)
+            modPlayer.ReadGeneratedBuffState(reader);
+        else
+            DiscardGeneratedBuffState(reader);
     }
 
     private bool IsServerAuthoritativeCraft => Main.netMode == NetmodeID.Server && !_awaitingServerCommit && !string.IsNullOrWhiteSpace(_serverRequestId);

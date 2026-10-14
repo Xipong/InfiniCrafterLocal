@@ -108,9 +108,8 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert validate_runtime_program(repaired)["ok"]
 
 
-def test_only_gravity_arc_domain_expands_and_retained_bounce_stays_hidden():
-    assert CAPABILITY_REGISTRY["move_bounce"].decision == "internal"
-    assert CAPABILITY_REGISTRY["move_bounce"].params["gravityVelocityPerUpdate"].minimum == 0.001
+def test_only_gravity_arc_domain_expands_and_obsolete_bounce_is_retired():
+    assert "move_bounce" not in CAPABILITY_REGISTRY
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["scaleGrowthPerUpdate"].minimum == 0.001
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["maxScale"].maximum == 4
     for fn, speed in (("move_boomerang", "returnSpeed"), ("move_returning_glaive", "returnSpeed"),

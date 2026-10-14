@@ -331,35 +331,24 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == TRANSFORM
 
 
-def test_absent_member_keeps_complete_historical_wire_bytes():
-    """Keep the original cec64b6 complete-wire oracle, including provenance."""
-    from captured_parent_combat_author import historical_child_combat_wire
-    from captured_item_alias_wire import historical_equipment_inventory_wire, historical_item_alias_wire
-    from beam_contract_checks import without_declared_beam_neutrals
-    from tests.captured_projectile_author import without_captured_projectile_alias_delta
-
+def test_absent_placed_member_preserves_current_wire_without_migrating_archive():
     fixture = Path(__file__).parent / "fixtures/placed_body_legacy_wire_sha256.json"
     assert hashlib.sha256(fixture.read_bytes()).hexdigest() == "41c670ba3fd12a44a2436bc6226bf815628e3d4c64d04f4efd3cc586b628a43a"
     baseline = json.loads(fixture.read_text())
-    actual = {}
     for name in baseline:
         authored = build_runtime_fixture(name)
+        before = copy.deepcopy(authored)
         compiled = compile_runtime_program(authored)
+        assert authored == before
         assert validate_runtime_wire(compiled)["ok"]
-        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=authored, final_document=compiled)["ok"]
-        final = historical_item_alias_wire(without_declared_targeting_neutrals(
-            without_declared_beam_neutrals(without_captured_projectile_alias_delta(
-                historical_child_combat_wire(historical_equipment_inventory_wire(compiled))))))
-        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        added_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
-                      "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
-        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_caps)
-        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
-        checks["requirements"] = 28
-        checks["exclusiveGroups"] = ["controller", "movement"]
-        actual[name] = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    assert actual == baseline
+        rows = compiled["runtimeContract"]["finalWireReceipts"]
+        for source in (None, authored):
+            assert audit_compiler_receipts(rows, authored_document=source, final_document=compiled)["ok"]
+        assert not any(row.get("fn") == FN for row in rows)
+        for binding in compiled["runtimeProgram"]["bindings"]:
+            placed = binding["usePolicy"]["action"].get("placement", {})
+            assert "placedBody" not in placed
+
 
 def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
     from captured_spawn_velocity_author import captured_spawn_velocity_author

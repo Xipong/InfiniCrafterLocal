@@ -106,7 +106,7 @@ While-selected запуск разрешён как authored решение, д�
 
 `VfxManifestSpec` — exact entityId + event, не интерпретация style/prose. `InfiniVfxRuntime` владеет slot events/draw/budget; `InfiniItemVfxRuntime` — item/material producers; `InfiniDetachedVfxSystem` — bounded detached lifecycle. `VfxSourceBinding` сохраняет attachment identity, `VfxOrderedPeerStream` — bounded ordered peer sequence. `VfxRendererRegistry`/`VfxCanonicalVocabulary` задают finite domains; foundation/particle registry/address — backends, `InfiniVfxClientOptions` — client quality.
 
-Sound samples и explicit volume/pitch/variance заданы [sound contract](../reference/VFX_SOUND_PALETTE_RU.md); общий consumer — `VfxSlotSpec.ResolveSoundStyle`, прежний alpha/phase путь только при saved absence. Пустой `Assets/Sounds/` удалён вместе с его заметкой; bundled sound files отсутствуют, произвольный authored sound ID не разрешён. Нет отдельного `Common/Audio` или `VfxContext.cs`: context type живёт в foundation. [Материалы](../reference/VFX_MATERIAL_ELEMENTS_RU.md) владеют renderer/texture dependencies.
+Sound samples и explicit volume/pitch/variance заданы [sound contract](../reference/VFX_SOUND_PALETTE_RU.md); общий consumer — `VfxSlotSpec.ResolveSoundStyle`. Каждый soundCue в Director output и saved wire требует явные soundId и sound controls; Item1/alpha/phase fallback отсутствует. Пустой `Assets/Sounds/` удалён вместе с его заметкой; bundled sound files отсутствуют, произвольный authored sound ID не разрешён. Нет отдельного `Common/Audio` или `VfxContext.cs`: context type живёт в foundation. [Материалы](../reference/VFX_MATERIAL_ELEMENTS_RU.md) владеют renderer/texture dependencies.
 
 <a id="verification"></a>
 ## 7. QA, fixtures, generated evidence и CI

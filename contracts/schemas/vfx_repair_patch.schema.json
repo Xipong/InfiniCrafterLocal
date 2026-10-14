@@ -1104,24 +1104,6 @@
             "if": {
               "properties": {
                 "rendererKind": {
-                  "const": "soundCue"
-                }
-              },
-              "required": [
-                "rendererKind",
-                "sound"
-              ]
-            },
-            "then": {
-              "required": [
-                "soundId"
-              ]
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "rendererKind": {
                   "const": "libraryParticle"
                 }
               },
@@ -1356,7 +1338,7 @@
         ],
         "properties": {
           "alpha": {
-            "description": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; legacy sound without sound payload uses volume clamp(alpha,0.05,1); explicit sound.volume alone owns new audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+            "description": "Engine units: Draw opacity coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
@@ -2500,7 +2482,7 @@
             "type": "integer"
           },
           "scale": {
-            "description": "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. For projectileAfterimage/spriteStampTrail/actorAfterimage, R=selected renderSizePx from acceptedVisualKit; q_selected=R/max(actual final PNG frame width, height), not canvas, alpha-bbox or hitbox. item/reuse_item_icon selects root item R; a distinct baked entity selects its own R; absent R gives q_selected=1. P=projectile.scale, initial P=D*E (D=hitbox.drawScale, E=accepted entity visual scale); current P already includes growth, not another E or gameplay.itemScale. Periodic sprite trail with declared R: clamp(P,0.1,8)*scale*q_selected; absent R: max(0.05,P*scale). Projectile event body copy: clamp(P,0.1,8)*scale*q_selected, using captured P. Directional item body stamp: clamp(scale,0.05,8)*q_selected, not a held-pose copy. Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion. spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected; common scale is neutral=1. Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. Dust size clamp(scale,0.2,3). Not a universal pixel size.",
+            "description": "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. For projectileAfterimage/spriteStampTrail/actorAfterimage, R=selected renderSizePx from acceptedVisualKit; q_selected=R/max(actual final PNG frame width, height), not canvas, alpha-bbox or hitbox. item/reuse_item_icon selects root item R; a distinct baked entity selects its own R; absent R gives q_selected=1. P=projectile.scale, initial P=D*E (D=hitbox.drawScale, E=accepted entity visual scale); current P already includes growth, not another E or gameplay.itemScale. Periodic sprite trail with declared R: clamp(P,0.1,8)*scale*q_selected; absent R: max(0.05,P*scale). Projectile event body copy: clamp(P,0.1,8)*scale*q_selected, using captured P. Exception only for explicit move_front_hand (opcode 20) with hitboxCurve.mirrorToSprite=true or a present visualScaleCurve: declared-R periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P. Other drivers and front-hand without either scale owner keep the formulas above; absent-R periodic trails still use max(0.05,P*scale). Directional item body stamp: clamp(scale,0.05,8)*q_selected, not a held-pose copy. Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion. spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected; common scale is neutral=1. Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. Dust size clamp(scale,0.2,3). Not a universal pixel size.",
             "maximum": 5.0,
             "minimum": 0.15,
             "type": "number"
@@ -2591,7 +2573,7 @@
             "type": "object"
           },
           "soundId": {
-            "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement.",
+            "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; every soundCue requires an explicit selection and complete sound playback controls in Director output and persisted wire. No absent/unknown/null replacement.",
             "enum": [
               "Item1",
               "Item2",

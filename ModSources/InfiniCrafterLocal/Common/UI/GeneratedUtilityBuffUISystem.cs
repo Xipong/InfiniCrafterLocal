@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using InfiniCrafterLocal.Common.Players;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using ReLogic.Content;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.GameInput;
@@ -22,6 +23,16 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
     // Inventory can mutate later in the same frame. Bind once; no reflection in Draw.
     private static readonly Func<int> NativeInventoryTopOffset =
         Expression.Lambda<Func<int>>(Expression.Field(null, typeof(Main), "mH")).Compile();
+    private static Asset<Texture2D>? _exhaustionIcon;
+
+    public override void Load()
+    {
+        if (!Main.dedServ)
+            _exhaustionIcon = ModContent.Request<Texture2D>(GeneratedItemExhaustionStatusView.IconPath);
+    }
+
+    public override void Unload() => _exhaustionIcon = null; // ModContent owns disposal.
+
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
         // Installed tML has no Vanilla: Buffs layer. Its native producers are
@@ -40,39 +51,49 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         Player player = Main.LocalPlayer;
         if (player is null || !player.active || (Main.playerInventory && Main.EquipPage != 2))
             return true;
-        GeneratedUtilityBuffPresentation snapshot = player.GetModPlayer<InfiniCraftPlayer>()
-            .CaptureGeneratedUtilityBuffPresentation();
+        InfiniCraftPlayer owner = player.GetModPlayer<InfiniCraftPlayer>();
+        GeneratedUtilityBuffPresentation snapshot = owner.CaptureGeneratedUtilityBuffPresentation();
         IReadOnlyList<GeneratedUtilityBuffStatus> statuses = GeneratedUtilityBuffStatusView.Build(
             snapshot, Language.ActiveCulture.CultureInfo);
+        IReadOnlyList<GeneratedItemExhaustionStatusRow> exhausted = GeneratedItemExhaustionStatusView.Build(
+            owner.CaptureGeneratedItemExhaustion(), Language.ActiveCulture.CultureInfo);
         int append = GeneratedUtilityBuffStatusView.GetAppendIndex(player.buffType, Main.playerInventory);
         int inventoryOffset = Main.playerInventory ? NativeInventoryTopOffset() : 0;
         foreach (GeneratedUtilityBuffStatus status in statuses)
-        {
-            var asset = TextureAssets.Buff[status.IconBuffType];
-            if (asset is null || !asset.IsLoaded) { append++; continue; }
-            Texture2D texture = asset.Value;
-            Point point = GeneratedUtilityBuffStatusView.IconPosition(append++, Main.playerInventory,
-                Main.screenWidth, Main.screenHeight, inventoryOffset, Main.mapStyle);
-            var bounds = new Rectangle(point.X, point.Y, texture.Width, texture.Height);
-            bool hovered = !PlayerInput.IgnoreMouseInterface && bounds.Contains(Main.mouseX, Main.mouseY);
-            Color color = Color.White * (hovered ? 1f : (Main.playerInventory ? 0.65f : 0.4f));
-            // GameInterfaceLayer owns Begin/End and UIScaleMatrix. Borrow only the
-            // native texture; DrawBuffIcon would read gameplay slots and allow removal.
-            Main.spriteBatch.Draw(texture, point.ToVector2(), color);
-            if (status.RemainingTicks > 2)
-            {
-                string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, status.RemainingTicks / 60),
-                    abbreviated: true, showAllAvailableUnits: false);
-                Utils.DrawBorderString(Main.spriteBatch, duration,
-                    new Vector2(point.X, point.Y + texture.Height), color, 0.8f);
-            }
-            if (!hovered) continue;
-            player.mouseInterface = true;
-            Main.hoverItemName = "";
-            Main.HoverItem = new Item();
-            // Same native buff hover path, with this adapter's own mechanical label.
-            Main.instance.MouseText(status.Label, status.Tooltip);
-        }
+            DrawStatus(player, TextureAssets.Buff[status.IconBuffType], status.Label,
+                status.Tooltip, status.RemainingTicks, append++, inventoryOffset);
+        foreach (GeneratedItemExhaustionStatusRow status in exhausted)
+            DrawStatus(player, _exhaustionIcon, status.Label,
+                status.Tooltip, status.RemainingTicks, append++, inventoryOffset);
         return true;
+    }
+
+    // Shared native loading/drawing boundary: preserve the original utility rows,
+    // alpha, duration/hover and native HUD/equipment geometry for appended rows.
+    private static void DrawStatus(Player player, Asset<Texture2D>? asset, string label,
+        string tooltip, int remainingTicks, int index, int inventoryOffset)
+    {
+        if (asset is null || !asset.IsLoaded) return;
+        Texture2D texture = asset.Value;
+        Point point = GeneratedUtilityBuffStatusView.IconPosition(index, Main.playerInventory,
+            Main.screenWidth, Main.screenHeight, inventoryOffset, Main.mapStyle);
+        var bounds = new Rectangle(point.X, point.Y, texture.Width, texture.Height);
+        bool hovered = !PlayerInput.IgnoreMouseInterface && bounds.Contains(Main.mouseX, Main.mouseY);
+        Color color = Color.White * (hovered ? 1f : (Main.playerInventory ? 0.65f : 0.4f));
+        // GameInterfaceLayer owns Begin/End and UIScaleMatrix. No gameplay slots,
+        // DrawBuffIcon, HasBuff gate, timer advancement or click-to-remove behavior.
+        Main.spriteBatch.Draw(texture, point.ToVector2(), color);
+        if (remainingTicks > 2)
+        {
+            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, remainingTicks / 60),
+                abbreviated: true, showAllAvailableUnits: false);
+            Utils.DrawBorderString(Main.spriteBatch, duration,
+                new Vector2(point.X, point.Y + texture.Height), color, 0.8f);
+        }
+        if (!hovered) return;
+        player.mouseInterface = true;
+        Main.hoverItemName = "";
+        Main.HoverItem = new Item();
+        Main.instance.MouseText(label, tooltip);
     }
 }

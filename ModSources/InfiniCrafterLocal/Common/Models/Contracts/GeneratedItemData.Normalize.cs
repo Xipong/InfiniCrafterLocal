@@ -93,6 +93,14 @@ public sealed partial class GeneratedItemData
         NormalizeEquipment();
         NormalizeVisual();
         RuntimeProgram.NormalizeAndValidate();
+        foreach (RuntimeEntitySpec entity in RuntimeProgram.Entities)
+        {
+            if (entity.Movement.Code != 20 || entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon")) continue;
+            SpritePresentationSelection selected = SpritePresentation.Entity(this, entity);
+            if (selected.Grip is null || !selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)
+                throw new InvalidDataException("move_front_hand selected sprite owner requires exact grip/renderSizePx/forwardAngleDegrees");
+            selected.Grip.Validate();
+        }
         ValidateBindingCapabilityProjection();
         if (!string.Equals(RuntimeProgram.ApiVersion, RuntimeApiVersion, StringComparison.Ordinal))
             throw new InvalidDataException("top-level runtimeApiVersion does not match runtimeProgram.apiVersion");
@@ -174,9 +182,6 @@ public sealed partial class GeneratedItemData
         Gameplay.HandPose = SafeText(Gameplay.HandPose, 32).ToLowerInvariant();
         Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500);
         Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500);
-        if (Gameplay.BuffCode < 0 || Gameplay.BuffCode >= BuffLoader.BuffCount)
-            throw new InvalidDataException($"buff ID {Gameplay.BuffCode} is not loaded");
-        Gameplay.BuffTime = ClampInt(Gameplay.BuffTime, 0, 21600);
         Gameplay.ExtraBuffs = (Gameplay.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
             .Select(x =>
             {

@@ -145,8 +145,10 @@ public sealed partial class GeneratedItemData
         item.healLife = enabled ? Math.Max(0, effects.HealLife) : 0;
         item.healMana = enabled ? Math.Max(0, effects.HealMana) : 0;
         item.potion = enabled && effects.Potion;
-        item.buffType = enabled ? Math.Max(0, effects.BuffCode) : 0;
-        item.buffTime = enabled ? Math.Max(0, effects.BuffTime) : 0;
+        // Current native buffs execute only through explicit ExtraBuffs entries.
+        // Clear the native slot even when this Item previously carried a buff.
+        item.buffType = 0;
+        item.buffTime = 0;
     }
 
     private static void ConfigureNonUsableEquipmentItem(Item item)

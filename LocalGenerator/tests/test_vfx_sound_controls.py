@@ -110,7 +110,7 @@ def test_each_control_is_required_inside_both_fresh_and_persisted_presence(missi
     assert not vfx.validate_vfx_manifest_wire(data)["ok"]
 
 
-def test_fresh_absence_requires_sound_but_saved_selector_and_phase_stay_unchanged():
+def test_saved_selector_and_phase_cannot_replace_explicit_sound_controls():
     data = _data()
     raw = _sound(data, "Item169")
     del raw["slots"][0]["sound"]
@@ -120,9 +120,14 @@ def test_fresh_absence_requires_sound_but_saved_selector_and_phase_stay_unchange
     slot = data["vfxManifest"]["slots"][0]
     slot["phaseOffset"] = -0.75
     before = copy.deepcopy(data)
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    report = vfx.validate_vfx_manifest_wire(data)
+    assert not report["ok"]
+    assert {row["path"] for row in report["errors"]} == {"$.vfxManifest.slots[0].sound"}
     assert data == before and "sound" not in slot
     slot["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
+    current = copy.deepcopy(data)
+    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert data == current and slot["phaseOffset"] == -0.75
     del slot["soundId"]
     assert not vfx.validate_vfx_manifest_wire(data)["ok"]
 

@@ -25,7 +25,7 @@ Author request и Repair inverse, проверяет границы и отка�
 
 Compiler сохраняет точные nested source paths в receipts. Source-aware audit проверяет текущие schema/type/domain через `ParamSpec.projected_fields`, связывает final entity ID с точным target исходного call и final event ID с его callId независимо от сортировки arrays. Требуется единственное полное покрытие outputs. Подмена source-only target, согласованная подмена wire+receipt owner, bool/int/float, исчезновение или дублирование receipts дают RED.
 
-Wire-only audit удостоверяет только согласованность заявленных source/output paths с wire, не происхождение отсутствующего Author (`authoredSourceChecked=false`). `ParamSpec.matches_projection_records` требует ровно один полный registered variant: нельзя собрать discriminator одной ветви с domain/outputs другой. Проверяются и текущие scalar domains; прежние domains допустимы лишь через явный `retained_receipt_params`, включая прежний domain параметра с сохранившимся именем. Ни одна проверка не меняет принятые wire/receipt bytes.
+Wire-only audit удостоверяет только согласованность текущих declared source/output paths с wire, не происхождение отсутствующего Author (`authoredSourceChecked=false`). `ParamSpec.matches_projection_records` требует ровно один полный registered variant: нельзя собрать discriminator одной ветви с domain/outputs другой. Прежние parameter receipts и widened domains больше не принимаются. Проверка не меняет wire/receipt bytes.
 
 Numeric/consumer validation идёт по присутствующим реальным leaves. Neutral omission остаётся отдельным контрактом: object grouping не объявляет новые defaults.
 
@@ -35,11 +35,7 @@ Numeric/consumer validation идёт по присутствующим реал�
 
 ## Сохранённые receipts
 
-При замене canonical Author поля его прежняя scalar projection может быть явно зарегистрирована в `CapabilitySpec.retained_receipt_params`. Это внутренний конечный список прежних source paths, wire paths, типов, domains и conversions. Он не экспортируется в Author/Repair schema, cards или compiler и не позволяет новую генерацию по прежнему spelling.
-
-Только audit без исходного Author принимает такую запись: проверяет прежнюю exact пару и фактическое wire значение, не переписывая документ, IDs, hashes и receipts. При наличии Author всегда действует текущий canonical source contract. Неизвестный прежний path остаётся RED. Отсутствие исходного Author никогда не превращается в `authoredSourceChecked=true`.
-
-Для integer/lattice projections проверяется точное преобразование; для небиективного binary64 деления — прежний wire domain без выдуманного восстановления исходного float. Это предел wire-only проверки, а не миграция и не разрешение approximate Author conversion.
+Прежние parameter source paths и четыре retired internal capability owners удалены из executable audit. Source-aware и source-free проверки принимают только текущие registry projections; отсутствие Author не превращается в `authoredSourceChecked=true`. Неизменённые архивные JSON/hashes остаются отрицательными fixtures. Stored recipes и saves не удаляются и не мигрируются. Current typed aliases, neutral omissions и точное полное покрытие receipts сохраняются.
 
 `CapabilitySpec.fixed_wire_literals` описывает constants, выбранные самим canonical `fn`, например неиспользуемый радиус конкретного owner-only pull. Keys — пути относительно component prefix. Compiler обязан писать их через `write_derived`, source — точный `.fn`, status — `technical_projection`. Audit проверяет значение, конечный declared output, originating call id/fn и уникальную полную coverage. Этот механизм не определяет новые constants автоматически.
 

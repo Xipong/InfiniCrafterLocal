@@ -2009,14 +2009,31 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]), context=context)
         state = _CURRENT_LLM_DIAGNOSTICS.get()
         if state is not None:
-            state["physicalAttemptCount"] = None  # Subscription/auth network I/O belongs to the Codex owner.
+            state["physicalAttemptCount"] = None  # Unknown until the generation owner reports; excludes auth I/O.
             codex_wire = _request_payload(prepared)
             state["lastAttempt"] = {
                 "effectiveApiMode": "codex_subscription_sse",
                 "effectiveResponseFormat": _format_diagnostic(codex_wire),
                 "effectiveReasoning": _reasoning_diagnostic(codex_wire),
             }
-        result = generate_chat(prepared, timeout=remaining_seconds(_request_deadline(timeout)))
+        from infini_local.services.codex_auth import generation_observations
+        join = {name: state[name] for name in ("logicalCallId", "stage", "leaseId")} if state is not None else {}
+        def observe_codex(observation):
+            if state is None:
+                return
+            if observation["event"] == "request" and state["physicalAttemptCount"] is None:
+                state["physicalAttemptCount"] = 0
+            if observation["event"] == "post_start":
+                state["physicalAttemptCount"] = (state["physicalAttemptCount"] or 0) + 1
+            if observation["event"] == "attempt_end" and observation["networkStarted"]:
+                row = {**state["lastAttempt"], **observation, "provider": "openai_codex", "profileId": _profile_id(context)}
+                state["lastAttempt"] = row
+                if len(state["physicalAttempts"]) < _LLM_MAX_DIAGNOSTIC_ATTEMPTS:
+                    state["physicalAttempts"].append(copy.deepcopy(row))
+                else:
+                    state["physicalAttemptsDropped"] += 1
+        with generation_observations(join, observe_codex):
+            result = generate_chat(prepared, timeout=remaining_seconds(_request_deadline(timeout)))
         usage = _usage_fields(result)
         result["_debug"] = {**(result.get("_debug") or {}), **usage}
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})

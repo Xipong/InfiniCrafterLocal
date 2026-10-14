@@ -43,12 +43,12 @@ public sealed partial class GeneratedProjectile
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(path);
         if (texture is null) return;
         Rectangle source = texture.Bounds;
-        Vector2 origin = source.Size() * 0.5f;
         // An explicit mirror or visual curve owns the complete bounded product.
         // Legacy live sprite scale retains its old clamp without either owner.
         float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
             * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+        Vector2 origin = selected.ProjectileOrigin(_entity, source.Width, source.Height, scale, effects);
         Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), selected.ProjectileRotation(_entity, Projectile.rotation, effects), origin, scale, effects, 0f);
     }
 
@@ -75,6 +75,7 @@ public sealed partial class GeneratedProjectile
         // movement's pose rather than re-aiming a spinning body by velocity.
         Vector2 direction = _entity.Movement.Code is 14 or 16 or 17
             ? Projectile.rotation.ToRotationVector2()
+            : _entity.Movement.Code == 20 ? (Projectile.rotation - MathHelper.PiOver2).ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);
         bool exactScale = PreservesExplicitBodyScale();
         float length = exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);

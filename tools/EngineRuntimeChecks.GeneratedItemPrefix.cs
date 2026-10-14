@@ -160,8 +160,7 @@ internal static partial class EngineRuntimeChecks
             foreach (int version in new[] { 5, 6 })
             {
                 var legacyReceiver = GeneratedPrefixHost(GeneratedPrefixFixture());
-                Equal(true, legacyReceiver.Item.Prefix(PrefixID.Legendary), "legacy full native host accepts prefix");
-                string oldStats = GeneratedPrefixStats(legacyReceiver.Item);
+                Equal(true, legacyReceiver.Item.Prefix(PrefixID.Legendary), "control host accepts native prefix");
                 var fullData = legacyReceiver.Data;
                 using var stream = new MemoryStream();
                 using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
@@ -171,9 +170,7 @@ internal static partial class EngineRuntimeChecks
                 }
                 stream.Position = 0;
                 legacyReceiver.NetReceive(new BinaryReader(stream));
-                Equal(true, GeneratedItemData.IsPlayerSaveReferenceOnly(legacyReceiver.Data), "old payload admitted without definition migration");
-                GeneratedPrefixSetData(legacyReceiver, fullData);
-                Equal(oldStats, GeneratedPrefixStats(legacyReceiver.Item), "legacy v" + version + " keeps existing native token");
+                Equal("placeholder", legacyReceiver.Data.Id, "retired v" + version + " item payload is refused");
             }
             if (failures.Count != 0) throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
         });

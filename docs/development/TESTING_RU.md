@@ -13,6 +13,7 @@
 | Exact permissions → filter → apply → validator | [Gameplay Repair](../../LocalGenerator/tests/test_repair_gameplay_contract.py), [VFX Repair](../../LocalGenerator/tests/test_repair_vfx_contract.py) |
 | Identity/binding/producer transactions и три реальные LLM-стадии | [pipeline Repair](../../LocalGenerator/tests/test_pipeline_repair_contract.py), [stage ordering/budgets](../../LocalGenerator/tests/test_low_level_three_stage_pipeline.py) |
 | Visual metadata и serialized prompt/cache boundary | [presentation](../../LocalGenerator/tests/test_visual_presentation_metadata.py), [prompt prefix](../../LocalGenerator/tests/test_visual_vfx_prompt_prefix.py) |
+| Explicit hand movement → frozen Repair → Visual grip → delivered DTO | `test_front_hand_movement.py`, `test_front_hand_visual_contract.py`, `test_front_hand_wire_integration.py`; native `EngineRuntimeChecks.FrontHand.cs` использует fresh compiler fixture `tools/fixtures/front-hand-compiled.json`, не исторический игровой предмет |
 | VFX packet/material/frozen/selected PNG producer | `test_vfx_*`; [dependency/delivery](../../LocalGenerator/tests/test_vfx_dependency_delivery_contracts.py) |
 | Image attempts, adapters, ingredients, pixels/UV | `test_image_*`, [ingredients](../../LocalGenerator/tests/test_vfx_ingredient_generation_contracts.py), [sprite render](../../LocalGenerator/tests/test_sprite_render_contracts.py) |
 | Transfer byte authority и cache/quarantine | [asset transfer/cache](../../LocalGenerator/tests/test_asset_transfer_cache_contracts.py) |

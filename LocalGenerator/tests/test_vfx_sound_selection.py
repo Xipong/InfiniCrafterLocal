@@ -87,27 +87,66 @@ def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, r
     assert data == wire_before and raw == before
 
 
-def test_fresh_sound_requires_explicit_choice_but_legacy_wire_absence_stays_absent():
+@pytest.mark.parametrize("missing", [
+    pytest.param(("soundId", "sound"), id="old-item1-alpha-phase-absence"),
+    pytest.param(("soundId",), id="selector-absence"),
+    pytest.param(("sound",), id="old-alpha-phase-controls-absence"),
+])
+def test_sound_absence_refuses_director_persisted_wire_and_cache_without_defaults(missing, tmp_path):
+    from infini_local.storage import world_storage
     data = _data()
     raw = _sound(data)
-    raw["slots"][0].pop("soundId")
-    raw["slots"][0].pop("sound")
+    for field in missing:
+        raw["slots"][0].pop(field)
+    raw_before = copy.deepcopy(raw)
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId", "$.slots[0].sound"}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "legacy-sound")
-    before = copy.deepcopy(data)
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
-    assert data == before and "soundId" not in data["vfxManifest"]["slots"][0]
-    # Native DTO serialization has always carried this legacy pitch input.
-    data["vfxManifest"]["slots"][0]["phaseOffset"] = -0.75
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert {e["path"] for e in report["errors"]} == {"$.slots[0]." + field for field in missing}
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "retired-sound-absence")
+    # Historical alpha/phase values must not make missing audio choices valid.
+    data["vfxManifest"]["slots"][0].update(alpha=0.61, phaseOffset=-0.75)
+    persisted = json.loads(json.dumps(data))
+    before = copy.deepcopy(persisted)
+    report = vfx.validate_vfx_manifest_wire(persisted)
+    assert not report["ok"], report
+    assert {e["path"] for e in report["errors"]} == {"$.vfxManifest.slots[0]." + field for field in missing}
+    assert not world_storage.is_deliverable_recipe_payload(persisted, check_assets=False)
+    assert persisted == before and raw == raw_before
+    assert all(field not in persisted["vfxManifest"]["slots"][0] for field in missing)
+    # Exercise the actual file reader with a valid current cache record whose
+    # only mutations are the retired audio absences and old alpha/phase inputs.
+    current = _data()
+    current["vfxManifest"] = vfx._compile_manifest(current, _sound(current), "current-cache-sound")
+    from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+    current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
+                   sourceMode="offline_contract_fixture")
+    world_storage.write_world_recipe_cache(tmp_path, "sound-test", "sound", "world", current)
+    cached = world_storage.read_world_recipe_cache(tmp_path, "sound-test", "v5", "sound", "world")
+    assert cached is not None and cached["vfxManifest"]["slots"] == current["vfxManifest"]["slots"]
+    path = world_storage.world_recipe_file(tmp_path, "world", "sound")
+    stored = json.loads(path.read_text())
+    slot = stored["vfxManifest"]["slots"][0]
+    for field in missing:
+        slot.pop(field)
+    slot.update(alpha=0.61, phaseOffset=-0.75)
+    old_bytes = json.dumps(stored).encode()
+    path.write_bytes(old_bytes)
+    assert world_storage.read_world_recipe_cache(tmp_path, "sound-test", "v5", "sound", "world") is None
+    assert not path.exists()
+    invalid = world_storage.world_recipe_dir(tmp_path, "world") / "invalid"
+    originals = [p for p in invalid.glob("*.json") if not p.name.endswith(".reason.json")]
+    assert len(originals) == 1 and originals[0].read_bytes() == old_bytes
+    reason = json.loads(originals[0].with_suffix(".reason.json").read_text())
+    assert {row["path"] for row in reason["details"]["vfx"]["errors"]} == {
+        "$.vfxManifest.slots[0]." + field for field in missing}
 
 
 @pytest.mark.parametrize("bad,mode", [
     pytest.param(None, "json_schema", id="schema-null"),
     pytest.param("missing-sample", "json_object", id="object-unknown"),
     pytest.param("absent", "json_schema", id="schema-absent"),
+    pytest.param("both-absent", "json_schema", id="schema-both-absent"),
+    pytest.param("both-absent", "json_object", id="object-both-absent"),
 ])
 def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     from infini_local.pipelines import llm_transport
@@ -115,14 +154,18 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     before = copy.deepcopy(data)
     accepted = _sound(data, "Splash")
     raw = copy.deepcopy(accepted)
-    if bad == "absent":
+    paths = ["soundId"]
+    if bad == "both-absent":
+        raw["slots"][0].pop("sound")
+        paths = ["sound", "soundId"]
+    if bad in {"absent", "both-absent"}:
         raw["slots"][0].pop("soundId")
     else:
         raw["slots"][0]["soundId"] = bad
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
-    assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "explicit_sound", "paths": ["soundId"]}], "assets": []}
+    assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "explicit_sound", "paths": paths}], "assets": []}
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate.update(alpha=0.1, rendererKind="lightCue", channel="light", lane="support", entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
@@ -133,12 +176,12 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert raw == raw_before
     assert final["gameplay"] == before["gameplay"] and final["runtimeProgram"] == before["runtimeProgram"]
-    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].soundId"]
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0]." + path for path in paths]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == 2
     director, repair = [request_dossier(r) for r in sent]
     assert repair["runtimeVocabularyReadOnly"]["soundId"] == director["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
-    assert "fresh soundCue requires an explicit soundId" in director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
+    assert "soundCue requires an explicit soundId" in director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
     assert repair["repairScope"] == scope
     for request in sent:
         assert request["response_format"]["type"] == mode
@@ -146,29 +189,46 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
             assert "soundId" in json.dumps(request["response_format"]["json_schema"]["schema"])
 
 
-@pytest.mark.parametrize("sound_id", [None, "ResearchComplete"], ids=["legacy-absent", "explicit-sample"])
-def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id):
+@pytest.mark.parametrize("sound_id", ["Item1", "ResearchComplete"], ids=["explicit-item1", "explicit-named-sample"])
+def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id, tmp_path):
     from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
     from infini_local.storage import world_storage
     data = _data()
     data.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                 sourceMode="offline_contract_fixture")
     raw = _sound(data, sound_id)
-    if sound_id is None:
-        raw["slots"][0].pop("soundId")
-        raw["slots"][0].pop("sound")
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "cache-sound")
+    data = json.loads(json.dumps(data))
     before = copy.deepcopy(data)
     assert world_storage.is_deliverable_recipe_payload(data, check_assets=False)
     delivered = world_storage.sanitize_recipe_for_delivery(data)
     assert delivered["vfxManifest"]["slots"] == data["vfxManifest"]["slots"]
     assert world_storage.is_deliverable_recipe_payload(delivered, check_assets=False)
-    assert ("soundId" in delivered["vfxManifest"]["slots"][0]) is (sound_id is not None)
+    assert delivered["vfxManifest"]["slots"][0]["soundId"] == sound_id
+    assert delivered["vfxManifest"]["slots"][0]["sound"] == raw["slots"][0]["sound"]
+    world_storage.write_world_recipe_cache(tmp_path, "sound-test", "sound", "world", data)
+    cached = world_storage.read_world_recipe_cache(tmp_path, "sound-test", "v5", "sound", "world")
+    assert cached is not None and cached["vfxManifest"]["slots"] == delivered["vfxManifest"]["slots"]
     for invalid in (None, "missing", "frozenRepair"):
         corrupted = copy.deepcopy(delivered)
         corrupted["vfxManifest"]["slots"][0]["soundId"] = invalid
         assert not world_storage.is_deliverable_recipe_payload(corrupted, check_assets=False)
     assert data == before
+
+
+@pytest.mark.parametrize("silent", [False, True], ids=["non-sound-renderer", "empty-slots"])
+def test_non_sound_wire_omission_remains_valid_without_audio_materialization(silent):
+    data = _data()
+    raw = _legacy(data)
+    if silent:
+        raw["slots"] = []
+    assert vfx.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "non-sound-omission")
+    persisted = json.loads(json.dumps(data))
+    before = copy.deepcopy(persisted)
+    assert vfx.validate_vfx_manifest_wire(persisted)["ok"]
+    assert persisted == before
+    assert all("soundId" not in slot and "sound" not in slot for slot in persisted["vfxManifest"]["slots"])
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

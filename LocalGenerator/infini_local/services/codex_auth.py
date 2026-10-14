@@ -8,6 +8,8 @@ from __future__ import annotations
 import base64
 from http.client import IncompleteRead, RemoteDisconnected
 from contextlib import contextmanager
+from contextvars import ContextVar
+import uuid
 import re
 import secrets
 import ssl
@@ -243,6 +245,33 @@ def _decode_unicode_runs(message: str) -> str:
 
 def redact_credentials(message: str, secrets: tuple[str, ...] = (), *, decode_unicode: bool = True) -> str:
     """Reuse OAuth credential redaction without clipping or changing clean text."""
+    # Scan every JSON string token, not a decoded dict: duplicate members must
+    # remain observable and clean wire formatting must remain byte-identical.
+    # A nested JSON literal is shorter after decoding, so recursion terminates.
+    def sanitize_literal(match: re.Match) -> str:
+        token = match.group(0)
+        closed = match.group(2) == '"'
+        fragment, remainder = match.group(1), match.group(2)
+        def sanitize_run(run: re.Match) -> str:
+            original = run.group(0)
+            value = json.loads('"' + original + '"')
+            clean = redact_credentials(value, secrets, decode_unicode=decode_unicode)
+            return original if clean == value else json.dumps(clean, ensure_ascii=False)[1:-1]
+        try:
+            value = json.loads('"' + fragment + '"')
+        except (ValueError, UnicodeError):
+            # Malformed/partial strings can still contain complete escaped secrets.
+            # Decode valid runs independently, retaining each invalid escape as
+            # received rather than adopting a repaired JSON response.
+            clean_fragment = re.sub(r'(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))+', sanitize_run, fragment)
+            return '"' + clean_fragment + remainder
+        clean = redact_credentials(value, secrets, decode_unicode=decode_unicode)
+        if clean == value:
+            return token
+        encoded = json.dumps(clean, ensure_ascii=False)
+        return encoded if closed else encoded[:-1] + remainder
+
+    message = re.sub(r'"((?:[^"\\]|\\.)*)("|\\?$)', sanitize_literal, message)
     decoded = _decode_unicode_runs(message) if decode_unicode else message
     sanitized = decoded
     for secret in sorted(secrets, key=len, reverse=True):
@@ -258,16 +287,41 @@ def redact_credentials(message: str, secrets: tuple[str, ...] = (), *, decode_un
 
 def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict, *, deadline: float | None = None) -> CodexError:
     # Decode first so JSON escapes cannot hide an echoed credential.
+    body_error = None
+    chunks = []
+    row = _GENERATION_ATTEMPT.get()
+    diagnostic_reader: Callable | None = None
     if deadline is None:
         raw = exc.read(65536)
     else:
         try:
-            raw = read_with_deadline(exc, deadline=deadline, max_bytes=65536)
+            raw = read_with_deadline(exc, deadline=deadline, max_bytes=65536,
+                                     on_chunk=chunks.append if row is not None else None)
         except HttpDeadlineExceeded:
             raise
-        except (HttpResponseTooLarge, OSError, IncompleteRead):
+        except (HttpResponseTooLarge, OSError, IncompleteRead) as read_error:
+            body_error = type(read_error).__name__
             remaining_seconds(deadline)
-            raw = b""  # Incomplete diagnostics must not replace the HTTP status.
+            raw = b""  # Preserve the original parser projection/status and retry timing.
+            if isinstance(read_error, HttpResponseTooLarge) and row is not None:
+                prefix = b"".join(chunks)
+                def read_diagnostic_tail(stream=exc, prefix=prefix, deadline=deadline):
+                    tail = []
+                    try:
+                        read_with_deadline(stream, deadline=deadline, on_chunk=tail.append)
+                        return prefix + b"".join(tail), True, None, None
+                    except Exception as error:
+                        partial = error.partial if isinstance(error, IncompleteRead) and isinstance(error.partial, bytes) else None
+                        return prefix + b"".join(tail), False, type(error).__name__, partial
+                    finally:
+                        stream.close()
+                diagnostic_reader = read_diagnostic_tail
+    if row is not None:
+        owned = _observe_generation(row, "http_error_body", raw=raw if body_error is None else None,
+                            bodyComplete=body_error is None, bodyReadErrorType=body_error,
+                            body_reader=diagnostic_reader)
+        if diagnostic_reader is not None and owned:
+            setattr(exc, "_infini_diagnostic_body_owned", True)
     try:
         data = json.loads(raw)
         error = data.get("error", data) if isinstance(data, dict) else {}
@@ -280,7 +334,7 @@ def _http_failure(exc: urlerror.HTTPError, payload: dict, headers: dict, *, dead
     for key, value in headers.items():
         if key.lower() in {"authorization", "chatgpt-account-id"}:
             sensitive.extend([value, value.removeprefix("Bearer ")])
-    message = redact_credentials(message, tuple(sensitive), decode_unicode=False)
+    message = redact_credentials(message, tuple(sensitive) + _GENERATION_SECRETS.get(), decode_unicode=False)
     message = " ".join(message.split())[:500]
     return CodexError(f"OpenAI HTTP {exc.code}: {message or 'request rejected'}")
 
@@ -292,6 +346,51 @@ _TRANSIENT_HTTP_STATUSES = frozenset({408, 409, 425, 500, 502, 503, 504})
 _ResponseValue = TypeVar("_ResponseValue")
 
 
+_GENERATION_SECRETS: ContextVar[tuple[str, ...]] = ContextVar("codex_generation_secrets", default=())
+_GENERATION_ATTEMPT: ContextVar[dict | None] = ContextVar("codex_generation_attempt", default=None)
+_GENERATION_TRACE: ContextVar[Any] = ContextVar("codex_generation_trace", default=None)
+_GENERATION_OBSERVATIONS: ContextVar[tuple[dict, Any]] = ContextVar("codex_generation_observations", default=({}, None))
+
+
+@contextmanager
+def generation_observations(join: dict, observer):
+    token = _GENERATION_OBSERVATIONS.set((join, observer))
+    try:
+        yield
+    finally:
+        _GENERATION_OBSERVATIONS.reset(token)
+
+
+@contextmanager
+def generation_credentials(credentials: Credentials, trace=None):
+    # Memory-only echo redaction, never authentication/session persistence.
+    token = _GENERATION_SECRETS.set((credentials.access_token, getattr(credentials, "refresh_token", ""), credentials.account_id))
+    trace_token = _GENERATION_TRACE.set(trace)
+    try:
+        yield
+    finally:
+        _GENERATION_TRACE.reset(trace_token)
+        _GENERATION_SECRETS.reset(token)
+
+
+def _observe_generation(row: dict, event: str, *, raw: bytes | None = None, body_reader=None, **fields) -> bool:
+    join, observer = _GENERATION_OBSERVATIONS.get()
+    observation = {**join, **{key: value for key, value in row.items() if key != "startedMonotonic"}, "event": event, **fields}
+    try:
+        if observer is not None:
+            observer(observation)
+    except Exception:
+        pass
+    try:
+        trace = _GENERATION_TRACE.get()
+        if trace is not None:
+            args = {"body_reader": body_reader} if body_reader is not None else {}
+            return trace(observation, raw=raw, secrets=_GENERATION_SECRETS.get(), **args) is True
+    except Exception:
+        pass
+    return False
+
+
 def _generation_request(req, *, deadline: float, attempts: int, payload: dict, headers: dict,
                         read_response: Callable[[Any], _ResponseValue]) -> _ResponseValue:
     """One transport owner: exact request, bounded sends and one shared deadline.
@@ -299,26 +398,83 @@ def _generation_request(req, *, deadline: float, attempts: int, payload: dict, h
     Auth/quota (including 429) and request-shape rejections remain terminal.
     The image lifecycle must not multiply this budget with semantic retries.
     """
+    identity = {"transportCallId": uuid.uuid4().hex, "endpoint": req.full_url, "method": "POST", "physicalAttemptCount": 0}
+    _observe_generation(identity, "request", raw=req.data)
+    started = time.monotonic()
+    try:
+        result = _generation_attempts(req, deadline=deadline, attempts=attempts, payload=payload,
+                                      headers=headers, read_response=read_response, identity=identity)
+    except Exception as exc:
+        _observe_generation(identity, "call_end", terminal=True, outcome="failure", errorType=type(exc).__name__,
+                            elapsedMs=round((time.monotonic() - started) * 1000, 3))
+        raise
+    _observe_generation(identity, "call_end", terminal=True, outcome="success",
+                        elapsedMs=round((time.monotonic() - started) * 1000, 3))
+    return result
+
+
+def _generation_attempts(req, *, deadline: float, attempts: int, payload: dict, headers: dict,
+                         read_response: Callable[[Any], _ResponseValue], identity: dict) -> _ResponseValue:
     for attempt in range(attempts):
         remaining_seconds(deadline)
+        started = time.monotonic()
+        row = {**identity, "physicalAttemptIndex": attempt + 1, "networkStarted": False,
+               "reason": "initial" if attempt == 0 else "transport_retry",
+               "httpStatus": None, "openMs": 0.0, "readMs": 0.0, "terminal": True, "outcome": "failure"}
+        attempt_token = _GENERATION_ATTEMPT.set(row)
+        row["startedMonotonic"] = started
+        def post_started():
+            identity["physicalAttemptCount"] += 1
+            row.update(physicalAttemptCount=identity["physicalAttemptCount"], networkStarted=True, startedAt=time.time())
+            _observe_generation(row, "post_start")
+        read_started = None
         try:
-            with urlopen_no_redirect(req, deadline=deadline) as response:
-                return read_response(response)
+            try:
+                response = urlopen_no_redirect(req, deadline=deadline, on_open=post_started)
+            finally:
+                row["openMs"] = round((time.monotonic() - started) * 1000, 3)
+            with response:
+                row["httpStatus"] = getattr(response, "status", None)
+                _observe_generation(row, "http_response")
+                read_started = time.monotonic()
+                result = read_response(response)
+                if isinstance(result, bytes):
+                    _observe_generation(row, "http_body", raw=result)
+                row["outcome"] = "success"
+                return result
         except HttpDeadlineExceeded:
+            row["errorType"] = "HttpDeadlineExceeded"
             raise
         except urlerror.HTTPError as exc:
+            row["httpStatus"] = exc.code
+            row["errorType"] = "HTTPError"
+            _observe_generation(row, "http_response")
+            read_started = time.monotonic()
             try:
                 failure = _http_failure(exc, payload, headers, deadline=deadline)
             finally:
-                exc.close()
+                if not getattr(exc, "_infini_diagnostic_body_owned", False):
+                    exc.close()
             if exc.code not in _TRANSIENT_HTTP_STATUSES or attempt + 1 == attempts:
                 raise failure from None
+            row["terminal"] = False
         except (urlerror.URLError, OSError, IncompleteRead, RemoteDisconnected) as exc:
+            row["errorType"] = type(exc).__name__
             remaining_seconds(deadline)
             if isinstance(getattr(exc, "reason", exc), ssl.SSLError):
                 raise CodexError("OpenAI TLS connection was rejected") from None
             if attempt + 1 == attempts:
                 raise CodexError("OpenAI connection failed or timed out") from None
+            row["terminal"] = False
+        except Exception as exc:
+            row["errorType"] = type(exc).__name__
+            raise
+        finally:
+            ended = time.monotonic()
+            row["readMs"] = round((ended - read_started) * 1000, 3) if read_started is not None else 0.0
+            row["elapsedMs"] = round((ended - started) * 1000, 3)
+            _observe_generation(row, "attempt_end")
+            _GENERATION_ATTEMPT.reset(attempt_token)
         delay = min(1.5, 0.2 * (2 ** attempt))
         time.sleep(min(delay, remaining_seconds(deadline)))
         remaining_seconds(deadline)
@@ -393,8 +549,37 @@ def post_sse(url: str, payload: dict, *, headers: dict | None = None, timeout: f
                                read_response=lambda response: _read_sse_response(response, deadline=deadline, limit=limit))
 
 
+def _observe_sse(raw: bytes) -> None:
+    """Observe original event bytes before parser projection/mutation, fail-open."""
+    try:
+        row = _GENERATION_ATTEMPT.get()
+        if row is None:
+            return
+        elapsed = round((time.monotonic() - row["startedMonotonic"]) * 1000, 3)
+        row["sseEventCount"] = row.get("sseEventCount", 0) + 1
+        event = None
+        try:
+            event = json.loads(raw)
+            kind = event.get("type") if isinstance(event, dict) else None
+        except (ValueError, UnicodeError):
+            kind = None
+        if kind == "response.output_text.delta" and isinstance(event, dict) and isinstance(event.get("delta"), str):
+            row["textDeltaCount"] = row.get("textDeltaCount", 0) + 1
+            if row.get("firstTextDeltaMs") is None:
+                row["firstTextDeltaMs"] = elapsed
+            row["lastTextDeltaMs"] = elapsed
+        if isinstance(kind, str) and kind in {"response.completed", "response.failed", "response.incomplete", "error"}:
+            row["terminalEventType"] = kind
+        _observe_generation(row, "sse_event", raw=raw, eventType=kind, arrivalMs=elapsed)
+    except Exception:
+        pass
+
+
 def _read_sse_response(response, *, deadline: float, limit: int) -> dict:
     """Each transport attempt owns its partial stream; never combine attempts."""
+    row = _GENERATION_ATTEMPT.get()
+    if row is not None:
+        row.update(sseEventCount=0, textDeltaCount=0, firstTextDeltaMs=None, lastTextDeltaMs=None)
     total = 0
     data_lines: list[bytes] = []
     completed_items: list[dict] = []
@@ -410,11 +595,17 @@ def _read_sse_response(response, *, deadline: float, limit: int) -> dict:
             sock.settimeout(max(0.001, remaining))
         line = response.readline(256 * 1024 + 1)
         if time.monotonic() > deadline:
+            row = _GENERATION_ATTEMPT.get()
+            if row is not None:
+                _observe_generation(row, "sse_late_read", raw=b"\n".join(data_lines + [line]),
+                                    arrivalMs=round((time.monotonic() - row["startedMonotonic"]) * 1000, 3), accepted=False)
             raise CodexError("Codex text stream timed out")
         total += len(line)
         if total > limit or len(line) > 256 * 1024:
             raise CodexError("Codex text stream exceeded its size limit")
         if not line:
+            if data_lines and row is not None:
+                _observe_generation(row, "sse_unframed_tail", raw=b"\n".join(data_lines), accepted=False)
             break
         if line.startswith(b"data:"):
             data_lines.append(line[5:].strip())
@@ -423,6 +614,7 @@ def _read_sse_response(response, *, deadline: float, limit: int) -> dict:
             continue
         raw = b"\n".join(data_lines)
         data_lines.clear()
+        _observe_sse(raw)
         if raw == b"[DONE]":
             break
         try:

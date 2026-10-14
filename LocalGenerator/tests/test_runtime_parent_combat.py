@@ -293,7 +293,7 @@ def test_present_combat_selector_requires_the_exact_runtime_consumer_even_with_a
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_saved_wire_and_all_old_receipts_remain_exact_without_new_choices():
+def test_archived_old_receipts_refuse_without_mutating_frozen_saved_wire():
     raw = _RETAINED.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == "cfddf2ae287f30d5bbe6dfb2a30f3c5db4fec72e65e304315e811905912e3ced"
     archive = json.loads(raw)
@@ -301,18 +301,26 @@ def test_saved_wire_and_all_old_receipts_remain_exact_without_new_choices():
     for case in archive["cases"]:
         wire = case["wire"]
         before = deepcopy(wire)
-        assert validate_runtime_wire(wire)["ok"]
-        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
+        report = validate_runtime_wire(wire)
+        assert not report["ok"]
+        assert any(row["code"] == "undeclared_technical_lowering" for row in report["errors"])
+        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
         assert wire == before
         for entity in wire["runtimeProgram"]["entities"]:
             assert "damageBasis" not in entity.get("targeting", {})
             for event in entity["events"]:
                 assert "damageBasis" not in event and "knockbackBasis" not in event
-        # An unreceipted live-parent selector is not a saved-wire default.
+        # Current equivalents still compile with accepted provenance; a live-parent
+        # selector cannot be injected without its own modern receipt.
+        authored = build_capability_witness(case["capability"])
+        current = compile_runtime_program(authored)
+        assert validate_runtime_wire(current)["ok"]
+        assert audit_compiler_receipts(current["runtimeContract"]["finalWireReceipts"],
+                                       authored_document=authored, final_document=current)["ok"]
         if case["capability"] == "target_and_fire":
-            component = next(entity["targeting"] for entity in wire["runtimeProgram"]["entities"] if entity.get("targeting"))
+            component = next(entity["targeting"] for entity in current["runtimeProgram"]["entities"] if entity.get("targeting"))
         else:
-            component = next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"] if event["action"] == "spawn_entity_on_event")
+            component = next(event for entity in current["runtimeProgram"]["entities"] for event in entity["events"] if event["action"] == "spawn_entity_on_event")
         component["damageBasis"] = "live_parent"
-        assert not validate_runtime_wire(wire)["ok"]
+        assert not validate_runtime_wire(current)["ok"]
     assert hashlib.sha256(_RETAINED.read_bytes()).digest() == hashlib.sha256(raw).digest()

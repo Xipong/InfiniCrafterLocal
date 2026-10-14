@@ -507,6 +507,7 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
     return False
 
 def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
+    from infini_local.services import codex_auth
     from infini_local.services.codex_image_backend import generate_image
     from infini_local.pipelines import pipeline_visual_config as config
     from infini_local.pipelines.sprite_contracts import uses_key_background
@@ -514,14 +515,27 @@ def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_
     paths = []
     for variant in range(max(1, int(GENERATE_VARIANTS))):
         path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
+        inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()
+        join = {**inherited_join, "attemptId": sprite_id, "variant": variant}
+        # Callback metadata is synchronous even when diagnostic persistence is
+        # asynchronous. Keep only this variant's observed HTTP identity.
+        transport: dict[str, str] = {}
+
+        def observe_image(observation):
+            if observation["event"] == "request":
+                transport["transportCallId"] = observation["transportCallId"]
+            if inherited_observer is not None:
+                inherited_observer(observation)
+
         try:
-            generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
-                           quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
-                           timeout=config.CODEX_IMAGE_TIMEOUT, **background_args)
+            with codex_auth.generation_observations(join, observe_image):
+                generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
+                               quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
+                               timeout=config.CODEX_IMAGE_TIMEOUT, **background_args)
         except OSError as exc:
             raise ImageOutputIOError("Codex raw image write failed") from exc
         paths.append(str(path))
-        log_event("info", "Codex OAuth generated sprite", {"spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
+        log_event("info", "Codex OAuth generated sprite", {**join, **transport, "spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
     return paths
 
 

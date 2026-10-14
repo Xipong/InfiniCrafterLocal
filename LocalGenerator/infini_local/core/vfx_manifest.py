@@ -96,9 +96,9 @@ _RENDERER_SEMANTICS = {
     "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt and impact texture; no inventory/dust substitute.",
     "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
     "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
-    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: fresh soundCue requires an explicit soundId from the general palette. Persisted legacy absence keeps SoundID.Item1. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Fresh soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and legacy phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Persisted absence of sound alone retains volume=clamp(alpha,0.05,1), pitch=clamp(phaseOffset*0.25,-0.5,0.5), native variance and native instrument policy unchanged. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
+    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: soundCue requires an explicit soundId from the general palette in both Director output and persisted wire. Item1 is valid only as an explicit selection. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Every soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Missing soundId or sound is invalid and never selects a sample or derives playback controls from alpha/phaseOffset. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
-    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. If the intended body covers that path, an explicit compatible source=whip/beam slot can coexist with a baked tip/body; runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
+    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. Path coverage is independent of PNG-body presentation; source=whip/beam uses that exact accepted geometry. runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
@@ -151,6 +151,9 @@ _VFX_NUMERIC_DESCRIPTIONS = {
         "current P already includes growth, not another E or gameplay.itemScale. "
         "Periodic sprite trail with declared R: clamp(P,0.1,8)*scale*q_selected; absent R: max(0.05,P*scale). "
         "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected, using captured P. "
+        "Exception only for explicit move_front_hand (opcode 20) with hitboxCurve.mirrorToSprite=true or a present visualScaleCurve: "
+        "declared-R periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P. "
+        "Other drivers and front-hand without either scale owner keep the formulas above; absent-R periodic trails still use max(0.05,P*scale). "
         "Directional item body stamp: clamp(scale,0.05,8)*q_selected, not a held-pose copy. "
         "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion. "
         "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected; common scale is neutral=1. "
@@ -159,7 +162,7 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     ),
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
     "duration": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
-    "alpha": "Engine units: Legacy draw opacity/volume coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; legacy sound without sound payload uses volume clamp(alpha,0.05,1); explicit sound.volume alone owns new audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+    "alpha": "Engine units: Draw opacity coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
     "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
     "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
@@ -335,7 +338,7 @@ def _sound_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any
     return errors
 
 
-def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool = True) -> dict[str, Any]:
+def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     pairs = _allowed_pairs(data)
     entity_ids = sorted({row["entityId"] for row in pairs})
     events = sorted({row["event"] for row in pairs})
@@ -390,7 +393,7 @@ def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool =
             "screenShake": screen_shake_schema(),
             "particle": library_particle_schema(),
             "sound": _sound_schema(),
-            "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; fresh soundCue requires an explicit selection. Persisted legacy absence keeps SoundID.Item1, never an unknown/null replacement."},
+            "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; every soundCue requires an explicit selection and complete sound playback controls in Director output and persisted wire. No absent/unknown/null replacement."},
         },
         "required": [
             "id", "entityId", "event", "rendererKind", "backend", "textureRole",
@@ -412,20 +415,14 @@ def _director_schema(data: Mapping[str, Any], *, require_sound_selection: bool =
     item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
     slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, list(_CHANNELS), _textured_path_sources(data)))
     slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data)))
-    # Fresh model output must choose explicitly; persisted legacy soundCue
-    # absence is compatibility-only and is never materialized in Python.
-    if require_sound_selection:
-        slot["allOf"].append({
-            "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind"]},
-            "then": {"required": ["soundId", "sound"]},
-        })
+    # Director and persisted wire require the same explicit audio choices.
+    slot["allOf"].append({
+        "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind"]},
+        "then": {"required": ["soundId", "sound"]},
+    })
     slot["allOf"].append({
         "if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "soundCue"]}}, "required": ["rendererKind"]},
         "then": {"properties": {field: {"enum": []} for field in ("soundId", "sound")}},
-    })
-    slot["allOf"].append({
-        "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind", "sound"]},
-        "then": {"required": ["soundId"]},
     })
     slot["allOf"].extend([
         {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}}, "required": ["rendererKind"]},
@@ -792,7 +789,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         errors.append({"path": "$.vfxManifest.slots", "message": "array required"})
     slots = raw_slots if isinstance(raw_slots, list) else []
     # Runtime carries technical fields instead of Director-only image captions.
-    slots_schema = _director_schema(data, require_sound_selection=False)["properties"]["slots"]
+    slots_schema = _director_schema(data)["properties"]["slots"]
     if len(slots) > slots_schema["maxItems"]:
         errors.append({"path": "$.vfxManifest.slots", "message": f"at most {slots_schema['maxItems']} slots"})
     slot_schema = slots_schema["items"]

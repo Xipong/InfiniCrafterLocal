@@ -230,6 +230,7 @@ def _compile_item_call(
         generated = gameplay.setdefault("generatedBuff", {})
         project(generated, effect_prefix + ".generatedBuff", {
             "durationTicks": "durationTicks",
+            "exhaustionTicks": "exhaustionTicks",
             "miningSpeedMultiplier": "miningSpeedMultiplier",
             "lightStrength": "emitLightStrength",
             "lightColor": "lightColorName",
@@ -379,11 +380,6 @@ def _compile_entity_call(
             controller_params = controller.setdefault("params", {})
             for key, value in p.items():
                 ctx.write(call=call, path=f"{base}.controller.params.{key}", value=value, target=controller_params, key=key)
-        return
-    if fn == "spawn_over_target":
-        spawn = component("spawn")
-        over_target = spawn.setdefault("overTarget", {})
-        project(over_target, f"{base}.spawn.overTarget", p)
         return
     if fn == "emit_light_while_active":
         project(component("light"), f"{base}.light", p)

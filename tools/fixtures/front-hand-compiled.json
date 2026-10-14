@@ -1,0 +1,228 @@
+{
+  "name": "Capability Witness move_front_hand",
+  "category": "generic",
+  "concept": {
+    "literalSynthesis": "A minimal literal test object.",
+    "coreMechanic": "Execute move_front_hand through its public typed contract.",
+    "parentAContribution": "test body",
+    "parentBContribution": "test mechanism",
+    "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute move_front_hand through its public typed contract."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A minimal runtime witness executing move_front_hand.",
+    "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+    "selfEvaluation": {
+      "planVsProgram": {
+        "verdict": "aligned",
+        "summary": "The witness draft selects the same public capability emitted by the program.",
+        "actionChecks": [
+          {
+            "plannedIntent": "Execute move_front_hand through its public typed contract.",
+            "implementedBehavior": "The runtime program contains the move_front_hand capability call.",
+            "runtimeRefs": [
+              "witness_call"
+            ],
+            "result": "aligned",
+            "intentionality": "intentional",
+            "reason": "The witness directly emits the selected public capability."
+          }
+        ]
+      },
+      "programVsReport": {
+        "verdict": "aligned",
+        "summary": "The witness report names the exact emitted capability.",
+        "behaviorChecks": [
+          {
+            "runtimeRefs": [
+              "witness_call"
+            ],
+            "programBehavior": "The runtime executes move_front_hand.",
+            "reportedBehavior": "The report says that the runtime executes move_front_hand.",
+            "result": "aligned",
+            "reason": "The report names the exact cited capability."
+          }
+        ]
+      }
+    }
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.wire.v3",
+    "itemEntityId": "item",
+    "primaryEntityId": "witness_entity",
+    "primaryOwner": "projectile",
+    "limits": {
+      "maxEntityCount": 12,
+      "maxChildDepth": 3,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body",
+        "visualRole": "inventory_item",
+        "events": [],
+        "visual": {
+          "role": "inventory_item",
+          "assetMode": "baked_sprite",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "fixture_front_hand_root.png",
+          "spriteUrl": "",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0
+        }
+      },
+      {
+        "id": "witness_entity",
+        "kind": "owner_attached_projectile",
+        "visualRole": "held_body",
+        "events": [],
+        "visual": {
+          "role": "held_body",
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "",
+          "spriteUrl": "",
+          "spriteStatus": "not_required",
+          "spriteTechnicalScore": 0.0
+        },
+        "spawn": {
+          "speedPxPerTick": 0,
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetPx": 0,
+          "aim": "cursor",
+          "overTarget": {
+            "heightTiles": 0,
+            "delayTicks": 0
+          },
+          "placement": "item_use_origin",
+          "enabled": true,
+          "maxActive": 1
+        },
+        "damage": {
+          "damageClass": "generic",
+          "damage": 20,
+          "knockback": 3.0,
+          "ownerHitCheck": false,
+          "enabled": true
+        },
+        "lifetimeTicks": 120,
+        "hitbox": {
+          "widthPx": 24,
+          "heightPx": 8,
+          "drawScale": 1.0,
+          "hitboxScale": 1.0
+        },
+        "collision": {
+          "tileCollide": false,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "extraUpdates": 0,
+          "npcImmunityMode": "local",
+          "localNpcHitCooldownTicks": 10
+        },
+        "movement": {
+          "name": "move_front_hand",
+          "code": 20,
+          "params": {
+            "aimMode": "initial",
+            "durationTicks": 12,
+            "startStretch": "quarter",
+            "peakStretch": "full",
+            "hitboxOffsetPx": 17
+          }
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "witness_binding",
+        "input": "primary_use",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "witness_entity"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        },
+        "role": "primary"
+      }
+    ],
+    "itemUse": {
+      "configured": true,
+      "useStyle": "rapier",
+      "hideUseGraphic": true,
+      "disableMeleeHitbox": true,
+      "channel": false,
+      "releaseTiming": "immediate",
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    }
+  },
+  "gameplay": {
+    "kind": "generic",
+    "damageClass": "generic",
+    "damage": 20,
+    "knockback": 3.0,
+    "useTime": 60,
+    "useAnimation": 60,
+    "manaCost": 0,
+    "rarity": 1,
+    "value": 1000,
+    "maxStack": 1,
+    "craftYield": 1,
+    "width": 24,
+    "height": 24,
+    "itemScale": 1.0,
+    "useStyleName": "rapier",
+    "autoReuse": false,
+    "useTurn": true,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "releaseTiming": "immediate"
+  },
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  },
+  "visual": {
+    "imagePrompt": "literal Terraria item",
+    "negativePrompt": "placeholder",
+    "palette": [
+      "brown",
+      "steel"
+    ],
+    "preferredCanvasSize": 32,
+    "inventoryScale": 1.0,
+    "worldScale": 1.0,
+    "grip": {
+      "normalizedX": 0.15625,
+      "normalizedY": 0.5
+    },
+    "renderSizePx": 32,
+    "forwardAngleDegrees": 23,
+    "spritePath": "fixture_front_hand_root.png",
+    "spriteStatus": "generated"
+  },
+  "id": "fixture_front_hand",
+  "schemaVersion": 5,
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "debug": {}
+}

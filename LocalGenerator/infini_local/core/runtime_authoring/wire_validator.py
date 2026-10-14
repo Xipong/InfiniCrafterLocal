@@ -22,6 +22,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KINDS,
     EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
+    MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
@@ -33,7 +34,7 @@ from infini_local.core.runtime_authoring.validator import (
     _graph_cycle, _has_non_neutral_generated_buff, _max_depth,
 )
 
-_MAX_MOVEMENT_CODE = 19
+_MAX_MOVEMENT_CODE = max(MOVEMENT_OPCODE.values())
 _MAX_CONTROLLER_CODE = 3
 _MAX_EVENT_ACTION_CODE = max(EVENT_ACTION_OPCODE.values())
 _TARGET_EMISSION = "select_targets_and_emit_on_event"
@@ -67,7 +68,7 @@ _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
-    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees",
+    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
     spec.wire_name or name for fn in ("set_projectile_concurrency", "set_descendant_concurrency")
@@ -82,8 +83,11 @@ _PARAMS_KEYS = frozenset({
     "rangeTiles", "homingStrength", "gravityPerTick", "velocityRetention", "returnAfterTicks", "returnSpeed",
     "waveAmplitude", "phaseStrength", "acceleration", "maxSpeed", "turnRadiansPerTick", "pullStrength",
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
-    "chargeTicks", "powerMultiplier", "shotEntity", "intervalTicks", "sameTargetBias",
-}) | frozenset(CAPABILITY_REGISTRY["channel_beam"].params)
+    "chargeTicks", "powerMultiplier",
+}) | frozenset(CAPABILITY_REGISTRY["channel_beam"].params) | frozenset(
+    field for cap in CAPABILITY_REGISTRY.values() if cap.category == "movement"
+    for name, spec in cap.params.items() for field in spec.wire_field_names(name)
+)
 _TARGETING_KEYS = frozenset(spec.wire_name or name for name, spec in CAPABILITY_REGISTRY["target_and_fire"].params.items())
 _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
@@ -376,10 +380,12 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
 
 def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
     """Additive DTO compatibility: omission stays omitted, present choices are strict."""
-    from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
+    from infini_local.core.visual_contract_schema import grip_schema, sprite_presentation_properties
     from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-    fields = ("renderSizePx", "forwardAngleDegrees") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize")
-    properties = _visual_item_schema()["properties"]
+    from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
+    fields = ("renderSizePx", "forwardAngleDegrees", "grip") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize", "grip")
+    properties = {**sprite_presentation_properties(), "grip": grip_schema(),
+                  "preferredCanvasSize": _visual_item_schema()["properties"]["preferredCanvasSize"]}
     for field in fields:
         if field not in visual:
             continue
@@ -442,11 +448,6 @@ def _validate_target_emission(event: Mapping[str, Any], entities: list[Mapping[s
                         same_type = (type(value) is type(projected.value)
                                      or type(value) in (int, float) and type(projected.value) in (int, float))
                         valid = valid and same_type and value == projected.value
-            elif requirement.kind == "referenced_entity_without_capability" and requirement.capability == "spawn_over_target":
-                over = spawn.get("overTarget", {})
-                valid = valid and isinstance(over, Mapping) and all(
-                    key not in over or type(over[key]) in (int, float) and over[key] == 0
-                    for key in ("heightTiles", "delayTicks"))
     if not valid:
         errors.append({"path": f"{path}.entityId", "code": "reference_requirements_unsatisfied",
                        "message": "Target emission needs the exact independent projectile spawn contract declared by its registry reference requirements."})
@@ -632,13 +633,41 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             errors.append({"path": path, "code": "invalid_projectile_concurrency",
                                            "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
                 if "placement" in component:
-                    for issue in strict_schema_errors(component["placement"], CAPABILITY_REGISTRY["configure_spawn"].retained_receipt_params["placement"].schema(), path=f"{entity_path}.spawn.placement"):
-                        errors.append(issue)
+                    anchor = CAPABILITY_REGISTRY["configure_spawn"].params["position"].alternatives[0].properties["at"]
+                    if not anchor.matches_scalar_projection(component["placement"]):
+                        errors.append({"path": f"{entity_path}.spawn.placement", "code": "invalid_spawn_anchor",
+                                       "message": "Spawn anchor must be an exact current position projection."})
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
                 _validate_spawn_velocity(component, entity, f"{entity_path}.spawn", errors)
-            if component_name in {"movement", "controller"} and component is not None and "params" in component:
-                params = _validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+            if component_name in {"movement", "controller"} and component is not None:
+                params = (_validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
+                          if "params" in component else None)
+                for cap in CAPABILITY_REGISTRY.values():
+                    if cap.category != "movement" or not any(p.wire_presence_requires_receipt for p in cap.params.values()):
+                        continue
+                    selected = (component_name == "movement" and component.get("name") == cap.name
+                                and type(component.get("code")) is int and component["code"] == MOVEMENT_OPCODE[cap.name])
+                    fields = set(cap.params)
+                    # Shared historical fields do not activate this new driver.
+                    foreign = fields - {name for other in CAPABILITY_REGISTRY.values() if other.name != cap.name
+                                        and other.category in {"movement", "controller"} for name in other.params}
+                    active = selected or component.get("name") == cap.name or component.get("code") == MOVEMENT_OPCODE[cap.name]
+                    if active:
+                        if not selected or kind not in cap.target_kinds:
+                            errors.append({"path": f"{entity_path}.{component_name}", "code": "driver_name_opcode_mismatch",
+                                           "message": "New movement requires its exact name, opcode, slot and target kind."})
+                        schema = cap.provider_variant_schema()["properties"]["params"]
+                        errors.extend(strict_schema_errors(component.get("params"), schema, path=f"{entity_path}.{component_name}.params"))
+                        if params is not None:
+                            for requirement in cap.requirements:
+                                if requirement.kind == "ordered_params" and not requirement.ordered_values(params.get(requirement.param), params.get(requirement.other_param)):
+                                    errors.append({"path": f"{entity_path}.{component_name}.params.{requirement.param}",
+                                                   "code": "unordered_param_range", "message": requirement.message})
+                    elif params is not None:
+                        for name in foreign.intersection(params):
+                            errors.append({"path": f"{entity_path}.{component_name}.params.{name}", "code": "inactive_movement_param",
+                                           "message": "This present parameter belongs only to its exact registered movement."})
                 beam = CAPABILITY_REGISTRY["channel_beam"]
                 for name, spec in beam.params.items():
                     if spec.default is None or params is None or name not in params:
@@ -711,8 +740,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         movement = entity.get("movement")
         if isinstance(movement, Mapping):
             code = movement.get("code")
-            if not isinstance(code, int) or isinstance(code, bool) or not 0 <= code <= _MAX_MOVEMENT_CODE:
-                errors.append({"path": f"$.runtimeProgram.entities[{index}].movement.code", "code": "unsupported_opcode", "message": f"Movement opcode must be 0..{_MAX_MOVEMENT_CODE}."})
+            if not isinstance(code, int) or isinstance(code, bool) or code not in MOVEMENT_OPCODE.values():
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].movement.code", "code": "unsupported_opcode", "message": f"Movement opcode must be current 0..{_MAX_MOVEMENT_CODE}; 6 is retired/reserved."})
         controller = entity.get("controller")
         if isinstance(controller, Mapping):
             code = controller.get("code")
@@ -723,15 +752,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
         if isinstance(targeting, Mapping):
-            # Fresh Author and persisted wire deliberately have different
-            # domains for this existing native selector. Registry owns both;
-            # a delivery without provenance still obeys the retained wire type.
-            bias_spec = CAPABILITY_REGISTRY["target_and_fire"].retained_receipt_params["sameTargetBias"]
+            # Delivery without provenance still obeys the current scalar domain.
+            bias_spec = CAPABILITY_REGISTRY["target_and_fire"].params["sameTargetBias"]
             bias_key = bias_spec.wire_name or "sameTargetBias"
             if bias_key in targeting and not bias_spec.matches_scalar_projection(targeting[bias_key]):
                 errors.append({"path": f"{entity_path}.targeting.{bias_key}",
-                               "code": "invalid_retained_target_bias",
-                               "message": "Present target bias must match its declared persisted 0..1 domain without coercion or rewriting."})
+                               "code": "invalid_target_bias",
+                               "message": "Present target bias must match its current declared domain without coercion or rewriting."})
             _validate_child_combat(targeting, "target_and_fire", kind,
                                    isinstance(controller, Mapping) and type(controller.get("code")) is int
                                    and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
@@ -1062,6 +1089,93 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             "code": "dual_use_placeable_input_contract",
             "message": placeable_role_message,
         })
+
+    # New movement dependencies are projected from the same RequirementSpec
+    # owners as Author admission; no inverse Author or inferred design is built.
+    for index, entity in enumerate(entities):
+        if not isinstance(entity, Mapping):
+            continue
+        movement = entity.get("movement")
+        if not isinstance(movement, Mapping):
+            continue
+        name = movement.get("name")
+        cap = CAPABILITY_REGISTRY.get(name) if isinstance(name, str) else None
+        if cap is None or cap.category != "movement" or not any(p.wire_presence_requires_receipt for p in cap.params.values()):
+            continue
+        path = f"$.runtimeProgram.entities[{index}].movement"
+        for requirement in cap.requirements:
+            valid = True
+            if requirement.kind == "primary_target":
+                valid = entity.get("id") == runtime.get("primaryEntityId")
+            elif requirement.kind == "binding_tuple_present":
+                valid = any(isinstance(binding, Mapping) and binding_target_id(binding) == entity.get("id")
+                            and f"{binding.get('input')}|{action_kind(binding)}" in requirement.any_of for binding in bindings)
+            elif requirement.kind == "item_capability_param":
+                owner = CAPABILITY_REGISTRY[requirement.capability]
+                spec = owner.params[requirement.param]
+                enabled_paths = [output.removeprefix("runtimeProgram.entities[].")
+                                 for output in owner.final_wire_paths
+                                 if output.startswith("runtimeProgram.entities[].") and output.endswith(".enabled")]
+                enabled = True
+                for field in enabled_paths:
+                    value: Any = entity
+                    for part in field.split("."):
+                        value = value.get(part) if isinstance(value, Mapping) else None
+                    enabled = enabled and value is True
+                if requirement.target == "item_body":
+                    fields = [output.removeprefix("runtimeProgram.") for output in owner.final_wire_paths
+                              if output.startswith("runtimeProgram.") and output.endswith("." + (spec.wire_name or requirement.param))]
+                    missing = object()
+                    values = []
+                    for field in fields:
+                        value: Any = runtime
+                        for part in field.split("."):
+                            value = value.get(part, missing) if isinstance(value, Mapping) else missing
+                        values.append(value)
+                    valid = bool(values) and all((requirement.allow_absent and value is missing)
+                        or (type(value) is type(requirement.equals) and value == requirement.equals) for value in values)
+                elif requirement.any_of:
+                    # Finite scalar alternatives remain model choices; compare
+                    # their declared projections, never choose a default axis.
+                    prefixes = {output.removeprefix("runtimeProgram.entities[].").removesuffix("." + (spec.wire_name or requirement.param))
+                                for output in owner.final_wire_paths
+                                if output.startswith("runtimeProgram.entities[].")
+                                and output.endswith("." + (spec.wire_name or requirement.param))}
+                    valid = enabled and any(
+                        len(actual := _wire_projection_witness(spec, requirement.param, prefix, entity)) == 1
+                        and any(type(actual[0].value) is type(spec.to_wire(value))
+                                and actual[0].value == spec.to_wire(value) for value in requirement.any_of)
+                        for prefix in prefixes)
+                else:
+                    expected_rows = spec.projected_fields(requirement.equals, requirement.param)
+                    prefixes = {output.removeprefix("runtimeProgram.entities[].").removesuffix("." + row.wire_path)
+                                for row in expected_rows for output in owner.final_wire_paths
+                                if output.startswith("runtimeProgram.entities[].") and output.endswith("." + row.wire_path)}
+                    valid = False
+                    for prefix in prefixes:
+                        actual = _wire_projection_witness(spec, requirement.param, prefix, entity)
+                        if (len(actual) == len(expected_rows) and actual
+                                and all(a.wire_path == b.wire_path and type(a.value) is not bool
+                                        and a.value == b.value for a, b in zip(actual, expected_rows))):
+                            valid = True
+                        # Boolean constraints must not compare False to numeric 0.
+                        if spec.kind == "boolean" and len(actual) == 1:
+                            valid = type(actual[0].value) is bool and actual[0].value is requirement.equals
+                    valid = valid and enabled
+            elif requirement.kind == "capability_absent":
+                controller = entity.get("controller")
+                valid = not isinstance(controller, Mapping) or not any(
+                    controller.get("name") == name
+                    or (type(controller.get("code")) is int and controller["code"] == CONTROLLER_OPCODE.get(name))
+                    for name in requirement.any_of)
+            elif requirement.kind == "capability_param_absent":
+                owner = CAPABILITY_REGISTRY[requirement.capability]
+                root = requirement.param.split(".", 1)[0]
+                rows = _wire_projection_witness(owner.params[root], root, owner.component_slot, entity)
+                valid = bool(rows) and not any(row.authored_path == requirement.param
+                    or row.authored_path.startswith(requirement.param + ".") for row in rows)
+            if not valid:
+                errors.append({"path": path, "code": "movement_dependency", "message": requirement.message})
 
     errors.extend(_walk_forbidden({"runtimeProgram": runtime}))
 

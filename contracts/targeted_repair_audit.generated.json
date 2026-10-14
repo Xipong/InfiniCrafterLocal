@@ -87,7 +87,7 @@
         "move_whip_lash",
         "move_yoyo_hover"
       ],
-      "dossierChars": 54836,
+      "dossierChars": 55170,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -155,8 +155,8 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 163949,
-  "fullCapabilityCatalogCount": 69,
+  "fullAuthorPayloadChars": 170854,
+  "fullCapabilityCatalogCount": 70,
   "ok": true,
   "policyCoverage": {
     "declaredCodes": 53,

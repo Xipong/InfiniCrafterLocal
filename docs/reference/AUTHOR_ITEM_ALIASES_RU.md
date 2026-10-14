@@ -15,7 +15,7 @@
 
 Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamage=false` и прежнюю транзакцию accepted placement/возврата из ledger. `present_placed_item_sprite` ссылается только на `configure_tile_placement`. Wall operation не приобретает tile presentation.
 
-Неактивный ID — зарегистрированная `CapabilitySpec.fixed_wire_literals` константа. Receipt ссылается на реальный `.fn`, имеет статус `technical_projection` и проверяется по точному значению, output и originating call. Старый `configure_placeable` остаётся внутренним владельцем сохранённой wire provenance; новый provider catalog его не предлагает.
+Неактивный ID — зарегистрированная `CapabilitySpec.fixed_wire_literals` константа. Receipt ссылается на реальный `.fn`, имеет статус `technical_projection` и проверяется по точному значению, output и originating call. Старый receipt owner `configure_placeable` удалён; обе текущие tile/wall операции и placement ledger сохраняются.
 
 ## Видимость собственного held sprite
 
@@ -26,7 +26,7 @@ Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamag
 | `inherit` | пустая строка | Существующее поведение по presentation metadata |
 | поле отсутствует | поле отсутствует | Существующее поведение отсутствующего hint |
 
-Это только собственный held root. `hideUseGraphic` отдельно управляет vanilla sprite. Для presentation с `visual.renderSizePx` inherit следует этому флагу; без такой metadata сохраняется историческое поведение. Новый Author не выбирает между `on_release` и `after_charge`: они не задавали разное scheduling. Старые сохранённые значения, включая `after_charge`, остаются неизменными при wire-only проверке.
+Это только собственный held root. `hideUseGraphic` отдельно управляет vanilla sprite. `customHeldSprite` явно выбирает visible/hidden/inherit; current presentation semantics остаются прежними. Retired `heldSpriteVisibilityHint` receipts больше не проходят аудит, включая `after_charge`; wire tokens не переписываются.
 
 ## Recall без параметров blink
 
@@ -67,6 +67,6 @@ Resource thresholds — целые 0…1000; сравнение сохраняе
 
 Canonical owners: `capability_registry.py`, `program_schema.py`, `compiler.py`, `technical_lowering.py`, `validator.py`, `repair_scope.py`. Их generated schema/cards обновляются штатными generators. Provider получает ту же взаимоисключающую форму через доказанное disjoint-union преобразование, а nullable inverse использует тот же контракт.
 
-`retained_receipt_params` разрешает проверять только конечный список прежних сохранённых путей. При наличии исходного Author проверка требует новую canonical форму; неизвестный параметр, изменённый output, потерянный literal receipt и неверное значение остаются RED. Production migration/importer не добавлен.
+Retired parameter receipts больше не поддерживаются ни source-aware, ни source-free audit. Проверки требуют текущую canonical projection, exact source owner и полную уникальную coverage. Stored data не удаляется и не мигрируется; архивные fixtures сохраняются как отрицательная evidence.
 
-Frozen seed/replay JSON и исторические hashes сохранены. Только тестовые helpers выражают исторический Author sample новой формой перед повторным compile; delivery wire сравнивается с прежним без изменения mechanics или metadata. Отдельные regressions проверяют все visibility states, placement limits, recall constants, 11 set projections, отрицательные варианты и frozen nested Repair. Native build/game smoke в текущей среде — `notRun`.
+Frozen seed/replay JSON и исторические hashes сохранены. Test-only helpers выражают известные authored choices текущей формой для current Repair/projection controls; архивные receipts больше не обещают admission. Regressions сохраняют current visibility, placement, recall, grouped set bonuses и frozen nested Repair.

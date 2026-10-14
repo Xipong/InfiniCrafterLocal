@@ -417,22 +417,21 @@ def _scalar_name_restored_wire(case):
 
 @pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
 def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(case):
-    from captured_item_alias_wire import historical_equipment_inventory_wire
-
     assert _SCALAR_NAME_CAPTURE["originCommit"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
     source = _scalar_name_current_source(case)
     wire = compile_runtime_program(source)
     assert validate_runtime_wire(wire)["ok"]
 
     retained, receipt = _scalar_name_restored_wire(case)
-    retained = historical_equipment_inventory_wire(retained)
-    assert hashlib.sha256(_bytes(retained)).hexdigest() == case["compiledSha256"]
-    assert validate_runtime_wire(retained)["ok"]
+    retained_before = _bytes(retained)
+    assert receipt == case["receipt"]  # Preserve archived claim, not old diagnostic compatibility.
+    assert not validate_runtime_wire(retained)["ok"]
     saved = retained["runtimeContract"]["finalWireReceipts"]
     report = audit_compiler_receipts(saved, final_document=retained)
-    assert report["ok"] and report["authoredSourceChecked"] is False
+    assert not report["ok"] and report["authoredSourceChecked"] is False
     report = audit_compiler_receipts(saved, authored_document=source, final_document=retained)
     assert not report["ok"] and any(row["reason"] == "compiler receipt used an undeclared authored parameter" for row in report["violations"])
+    assert _bytes(retained) == retained_before
     assert not validate_runtime_program(case["authored"])["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(case["authored"])
@@ -476,7 +475,7 @@ def test_scalar_name_retained_receipt_cannot_widen_domain_or_forge_projection(ca
         value = True if mutation == "boolean" else CAPABILITY_REGISTRY[case["fn"]].params[case["canonicalParameter"]].maximum + 1
         _get(wire, owner)[key] = receipt["value"] = value
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
-    assert not report["ok"] and any(row["reason"] == "retained wire provenance has no exact declared prior projection" for row in report["violations"])
+    assert not report["ok"] and any(row["reason"] == "compiler receipt used an undeclared authored parameter" for row in report["violations"])
 
 
 BUFF_SPEED_PERCENT = "moveSpeedBonusPercent"
@@ -509,8 +508,8 @@ def test_buff_capture_keeps_prior_bytes_but_only_current_names_authenticate_fres
     assert hashlib.sha256(before).hexdigest() == case["wireSha256"]
     rows = prior_wire["runtimeContract"]["finalWireReceipts"]
     report = audit_compiler_receipts(rows, final_document=prior_wire)
-    assert report["ok"] and report["authoredSourceChecked"] is False, report
-    assert validate_runtime_wire(prior_wire)["ok"]
+    assert not report["ok"] and report["authoredSourceChecked"] is False, report
+    assert not validate_runtime_wire(prior_wire)["ok"]
     prior = _buff_speed_receipt(prior_wire)
     value = case["authoredFactor"]
     if value is None:
@@ -620,9 +619,10 @@ def test_buff_wire_domain_authenticates_representation_without_redividing(scope,
         name, reason = BUFF_SPEED_PERCENT, "scalar receipt is outside its exact declared wire domain"
     else:
         wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary"))
-        name, reason = BUFF_SPEED_FACTOR, "retained wire provenance has no exact declared prior projection"
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
-    assert validate_runtime_wire(wire)["ok"]
+        name, reason = BUFF_SPEED_FACTOR, "compiler receipt used an undeclared authored parameter"
+        accepted = False
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"] is (version == "current")
+    assert validate_runtime_wire(wire)["ok"] is (version == "current")
     receipt = _buff_speed_receipt(wire, name)
     receipt.update(status=status, value=value)
     owner, _, key = receipt["finalPath"].rpartition(".")
@@ -637,10 +637,6 @@ def test_buff_wire_domain_authenticates_representation_without_redividing(scope,
         assert _bytes(document) == source_before
     if not accepted:
         assert any(row["reason"] == reason and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
-    elif version == "prior" and status == "delivered":
-        bare = deepcopy(wire)
-        bare.pop("runtimeContract")
-        assert validate_runtime_wire(bare)["ok"]
     assert _bytes(wire) == before
 
 

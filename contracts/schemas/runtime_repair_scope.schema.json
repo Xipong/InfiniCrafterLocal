@@ -2326,6 +2326,7 @@
                           "move_yoyo_hover",
                           "move_whip_lash",
                           "move_forward_then_retract",
+                          "move_front_hand",
                           "channel_beam",
                           "charge_then_release",
                           "target_and_fire",

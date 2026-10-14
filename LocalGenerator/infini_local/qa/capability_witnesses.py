@@ -269,6 +269,14 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             if not any(row["id"] == "witness_call" for row in calls):
                 calls.append(_call("witness_call", fn, witness_target))
 
+    if fn == "move_front_hand":
+        # An explicit test composition, not compiler-created dependencies.
+        next(row for row in calls if row["fn"] == "configure_item_use")["params"].pop("handPose", None)
+        next(row for row in calls if row["fn"] == "configure_spawn")["params"].update(
+            velocity={"constantSpeedPxPerUpdate": 0}, count=1, spreadRadians=0)
+        next(row for row in calls if row["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
+        calls.append(_call("hand_singleton", "set_projectile_concurrency", witness_target, {"maxActive": 1}))
+
     if fn == "orient_whip_to_owner_gravity":
         base_motion = next(row for row in calls if row["id"] == "base_motion")
         base_motion.update(fn="move_whip_lash", params={"rangeTiles": 8, "segments": 12})
