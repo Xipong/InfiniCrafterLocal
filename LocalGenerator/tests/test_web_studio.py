@@ -283,9 +283,36 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     failed_read = controller.snapshot()
     assert failed_read['savedValues'] == saved['savedValues']
     assert 'temporarily unreadable' in failed_read['status']
+    for parse_error in (ValueError('Invalid config.env JSON at line 2'), UnicodeError('Invalid UTF-8 config.env')):
+        def malformed(_path, error=parse_error):
+            raise error
+        monkeypatch.setattr(settings_env, 'parse_env', malformed)
+        bad_snapshot = controller.snapshot()
+        assert bad_snapshot['savedValues'] == saved['savedValues']
+        assert str(parse_error) in bad_snapshot['status']
+    monkeypatch.setattr(settings_env, 'parse_env', unreadable)
     from infini_local.desktop import settings_defaults
     monkeypatch.setattr(settings_defaults, 'defaults_offer', unreadable)
     failed_offer = controller.snapshot()
     assert failed_offer['savedValues'] == saved['savedValues']
     assert failed_offer['defaultsUpdate']['changes'] == []
     assert 'temporarily unreadable' in failed_offer['status']
+
+
+@pytest.mark.parametrize('error', [ValueError('Invalid config.env JSON at line 2'), UnicodeError('Invalid UTF-8 config.env')])
+def test_studio_startup_reports_malformed_config_without_starting_server(monkeypatch, error):
+    module = bridge_module()
+    from infini_local.desktop import settings_gui
+
+    def malformed():
+        raise error
+
+    def unexpected_server(*args, **kwargs):
+        pytest.fail('Studio must not start with fabricated settings after a parse error')
+
+    monkeypatch.setattr(settings_gui, 'SettingsGui', malformed)
+    monkeypatch.setattr(module, 'StudioServer', unexpected_server)
+    with pytest.raises(SystemExit, match='config.env') as failure:
+        module.main(['--no-browser'])
+    assert str(error) in str(failure.value)
+    assert 'редакторе' in str(failure.value)
