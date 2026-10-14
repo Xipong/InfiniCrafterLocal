@@ -14,6 +14,33 @@ from infini_local.desktop.web_studio import StudioController, StudioServer
 from test_settings_gui_contract import _GuiWorkflowHarness, _UiVar
 
 
+class DisabledText:
+    def __init__(self, value='<lora:shared:0.1>'):
+        self.state = 'disabled'
+        self.value = value
+
+    def edit_modified(self, value):
+        pass
+
+    def cget(self, name):
+        assert name == 'state'
+        return self.state
+
+    def configure(self, *, state):
+        self.state = state
+
+    def get(self, *args):
+        return self.value
+
+    def delete(self, *args):
+        if self.state != 'disabled':
+            self.value = ''
+
+    def insert(self, index, value):
+        if self.state != 'disabled':
+            self.value = value
+
+
 class StudioHarness(_GuiWorkflowHarness, SettingsGuiImageArgsMixin):
     def __init__(self):
         super().__init__()
@@ -622,28 +649,6 @@ def test_browser_text_updates_restore_widget_state(studio, initial_state, fail_i
 def test_validate_restores_disabled_text_draft(studio, monkeypatch, validation_fails):
     app, controller, _server, config = studio
 
-    class DisabledText:
-        state = 'disabled'
-        value = '<lora:shared:0.1>'
-
-        def cget(self, name):
-            assert name == 'state'
-            return self.state
-
-        def configure(self, *, state):
-            self.state = state
-
-        def get(self, *args):
-            return self.value
-
-        def delete(self, *args):
-            if self.state != 'disabled':
-                self.value = ''
-
-        def insert(self, index, value):
-            if self.state != 'disabled':
-                self.value = value
-
     key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
     widget = DisabledText()
     app.vars.pop(key, None)
@@ -669,3 +674,37 @@ def test_validate_restores_disabled_text_draft(studio, monkeypatch, validation_f
     assert widget.state == 'disabled'
     assert app._current_profile_settings()[key] == original
     assert not config.exists()
+
+
+@pytest.mark.parametrize('action', ['clearLora', 'useLora', 'applyPreset'])
+def test_inactive_text_transform_receipts_and_rollback(studio, action):
+    app, controller, _server, config = studio
+    key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
+    widget = DisabledText()
+    app.vars.pop(key, None)
+    app.text_widgets[key] = widget
+    app.vars['INFINI_IMAGE_BACKEND'] = _UiVar('off')
+    app.vars['INFINI_SDCPP_LORA_FILE'] = _UiVar('/models/chosen.safetensors')
+    app.vars['INFINI_SDCPP_LORA_WEIGHT'] = _UiVar('0.2')
+    original = widget.value
+    draft = '<lora:draft:0.3>'
+    preset_value = '<lora:preset:0.4>\n<lora:other:0.5>'
+    app.user_presets['Inactive text'] = {key: preset_value, 'INFINI_IMAGE_BACKEND': 'off'}
+    extra = {'name': 'Мой: Inactive text'} if action == 'applyPreset' else {}
+    result = command(controller, action, values={key: draft}, extra=extra)
+    expected = {'clearLora': '', 'useLora': draft + ' <lora:chosen:0.2>',
+                'applyPreset': preset_value}[action]
+    assert result['ok'] is True
+    assert result['values'][key] == expected
+    assert widget.value == original
+    assert widget.state == 'disabled'
+    assert not config.exists()
+
+
+def test_inactive_extra_arguments_setter_restores_state(studio):
+    app, _controller, _server, _config = studio
+    widget = DisabledText('--old')
+    app.text_widgets['INFINI_SDCPP_SERVER_EXTRA_ARGS'] = widget
+    app._set_extra_args('--new value')
+    assert widget.value == '--new value'
+    assert widget.state == 'disabled'
