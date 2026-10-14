@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),
+            ("equipment presentation front back native layer tree", EquipmentAccessoryLayersKeepMountsDyesAndVisibility),
+            ("equipment presentation native displayed carrier selection", EquipmentNeutralCarrierUsesNativeDisplayedSelection),
+            ("equipment presentation native clothes hair and source rectangles", EquipmentNeutralBaseDrawsNativeClothesAndHair),
             ("VFX descriptive text bound and Unicode roundtrip", VfxDescriptiveTextRoundtrip),
             ("Visual descriptive palette Unicode roundtrip", VisualDescriptivePaletteRoundtrip),
             ("descriptive parent behavior Unicode roundtrip", DescriptiveParentBehaviorRoundtrip),

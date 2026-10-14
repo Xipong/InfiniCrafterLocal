@@ -26,6 +26,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
     private static readonly Dictionary<string, int> EquipCatchupTicks = new(StringComparer.Ordinal);
 
     protected abstract string SlotKind { get; }
+    protected virtual bool FrontAccessoryLayer => false;
 
     public static void ClearNetCaches()
     {
@@ -67,6 +68,12 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
         int accessoryOrdinal = 0;
         foreach (OverlayEntry entry in entries)
         {
+            // Count in the complete visible accessory set before splitting layers.
+            // Moving a chest badge to the front must not move the other orbit badges.
+            int ordinal = entry.Slot == "accessory" ? accessoryOrdinal++ : 0;
+            bool frontMount = entry.Data.Visual?.AccessoryMount is "chest" or "waist" or "shoulder";
+            if (entry.Slot == "accessory" && frontMount != FrontAccessoryLayer)
+                continue;
             string path = entry.Data.Visual?.EquipOverlayPath ?? "";
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -112,7 +119,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                     rotation = player.legRotation;
                     break;
                 case "accessory":
-                    float angle = MathHelper.PiOver2 + accessoryOrdinal * MathHelper.TwoPi / Math.Max(1, accessoryCount);
+                    float angle = MathHelper.PiOver2 + ordinal * MathHelper.TwoPi / Math.Max(1, accessoryCount);
                     offset = new Vector2(16f, 0f).RotatedBy(angle);
                     offset.Y *= grav;
                     // One explicit token selects one body-local badge offset. No name,
@@ -136,7 +143,6 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                     pivot = drawInfo.bodyVect;
                     frame = player.bodyFrame;
                     rotation = player.bodyRotation;
-                    accessoryOrdinal++;
                     break;
                 default:
                     offset = new Vector2(0f, -2f * grav);
@@ -282,6 +288,14 @@ public sealed class GeneratedEquipOverlayAccessoryDrawLayer : GeneratedEquipOver
 {
     protected override string SlotKind => "accessory";
     public override Position GetDefaultPosition() => new AfterParent(PlayerDrawLayers.Wings);
+}
+
+public sealed class GeneratedEquipOverlayFrontAccessoryDrawLayer : GeneratedEquipOverlayDrawLayerBase
+{
+    protected override string SlotKind => "accessory";
+    protected override bool FrontAccessoryLayer => true;
+    // After the torso and its generated armor badge, before hands/held items.
+    public override Position GetDefaultPosition() => new BeforeParent(PlayerDrawLayers.OffhandAcc);
 }
 
 public sealed class GeneratedEquipmentPresentationPlayer : ModPlayer
