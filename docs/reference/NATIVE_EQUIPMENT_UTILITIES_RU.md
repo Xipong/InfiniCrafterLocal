@@ -42,6 +42,37 @@ moveSpeed+=0.08, iceSkate=true. Obsidian shield задаёт noKnockback/fireWal
 
 ## Проверено и не проверено
 
+### Identity generated-аксессуаров
+
+`GeneratedAccessoryIdentitySystem` исправляет техническую границу общего proxy
+`Item.type`/`netID`: два разрешённых generated-аксессуара сравниваются по точному
+`GeneratedItemData.Id` (ordinal), независимо от prefix. Разные ID можно надеть
+вместе; повтор одного ID остаётся duplicate. Имя, recipe metadata и параметры
+эффектов не создают новую identity. Непустой разрешённый accessory definition нужен
+с обеих сторон; пустые предметы, пустой ID, reference-only hydration, обычные
+предметы и чужие ModItem сохраняют исходный native comparator.
+
+Это узкий **Fix** с audit reason `fix:generated_accessory_definition_identity`:
+при установке он записывается в mod log. Изменяются только четыре callsite
+`Item.IsTheSameAs` в `ItemSlot.AccCheck_ForPlayer` и `ItemSlot.AccessorySwap`.
+Первый владеет ручной установкой в обычные/vanity/modded slots, второй — выбором
+слота при right-click/quick equip. Глобальная identity, stacking, type registry,
+save/network format и authored gameplay не меняются. Native wing exclusions,
+`CanAccessoryBeEquippedWith`, `CanEquipAccessory`, slot acceptance и unlock rules
+остаются на исходном пути. В каждом методе оба callsite проверяются до изменения; несовместимая
+форма IL даёт явную ошибку и снимает уже установленный соседний hook. Unload
+восстанавливает оба метода.
+
+`EngineRuntimeChecks.AccessoryIdentity.cs` исполняет реальные native entrypoints:
+разные/одинаковые ID и prefixes; normal/vanity/modded collections; замена занятого
+слота при duplicate в другом; vanilla/foreign controls, pair/equip/slot vetoes,
+wings, Demon Heart unlock; quick equip/replacement и reload/unload/failure rollback.
+Это CPU/headless проверка на официальном tML `2026.08.3.0`, source commit
+[`c9545cf`](https://github.com/tModLoader/tModLoader/blob/c9545cf27d56c456321e1896274c02adf67d0140/patches/tModLoader/Terraria/UI/ItemSlot.TML.cs).
+Реальный UI/game loop и multiplayer match этим не подтверждены.
+
+### Equipment effects
+
 Headless checks используют real installed tModLoader/FNA DLL и canonical mod sources:
 FromJson → ApplyToItem → network DTO roundtrip → real ApplyEquipFunctional/ItemLoader.UpdateAccessory → PlayerLoader.PostUpdateEquips → native ResetEffects dispatch,
 реальные WiresUI.Settings.DrawWires (eligibility, не GPU), HorizontalMovement, RefreshMovementAbilities, HurtModifiers.ToHurtInfo и Collision.CanTileHurt.
