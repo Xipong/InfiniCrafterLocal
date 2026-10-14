@@ -62,8 +62,6 @@ def _accepted_appearance_parent():
         inventoryScale=1.25, worldScale=0.75,
     )
     for entity in kit["entities"]:
-        if entity["visualProjectRef"] == "item":
-            entity.update({key: kit["item"][key] for key in ("prompt", "silhouette", "visualIdentity")})
         if entity["entityId"] != data["runtimeProgram"]["itemEntityId"]:
             entity.update(
                 assetMode="baked_sprite", visualProjectRef="entity", scale=1.5,

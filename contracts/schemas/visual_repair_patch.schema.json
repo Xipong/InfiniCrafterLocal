@@ -30,26 +30,11 @@
                 ],
                 "type": "string"
               },
-              "prompt": {
-                "maxLength": 1400,
-                "minLength": 1,
-                "type": "string"
-              },
               "scale": {
                 "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
                 "minimum": 0.25,
                 "type": "number"
-              },
-              "silhouette": {
-                "maxLength": 700,
-                "minLength": 1,
-                "type": "string"
-              },
-              "visualIdentity": {
-                "maxLength": 700,
-                "minLength": 1,
-                "type": "string"
               },
               "visualProjectRef": {
                 "const": "item"
@@ -59,9 +44,6 @@
               "entityId",
               "assetMode",
               "visualProjectRef",
-              "prompt",
-              "silhouette",
-              "visualIdentity",
               "scale"
             ],
             "type": "object"
@@ -132,10 +114,10 @@
               "entityId",
               "assetMode",
               "visualProjectRef",
+              "scale",
               "prompt",
               "silhouette",
               "visualIdentity",
-              "scale",
               "preferredCanvasSize",
               "renderSizePx",
               "forwardAngleDegrees"

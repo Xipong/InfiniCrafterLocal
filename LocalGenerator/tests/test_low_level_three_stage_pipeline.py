@@ -83,8 +83,7 @@ def _visual_kit(data: dict) -> dict:
         "entities": [
             ({
                 "entityId": row["id"], "assetMode": "baked_sprite", "visualProjectRef": "item",
-                "prompt": item["prompt"], "silhouette": item["silhouette"],
-                "visualIdentity": item["visualIdentity"], "scale": 1.0,
+                "scale": 1.0,
             } if row["id"] == item_id else {
                 "entityId": row["id"], "assetMode": "reuse_item_icon", "visualProjectRef": "item", "scale": 1.0,
             })

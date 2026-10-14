@@ -239,6 +239,16 @@ def test_captured_visual_repair_replay(case, monkeypatch):
             schema["required"].remove(field)
         return schema
     monkeypatch.setattr(visual, "_visual_item_schema", historical_item_schema)
+    current_entity_schema = visual._visual_entity_schema
+    def historical_entity_schema(entity_ids, item_body_id=None):
+        schema = current_entity_schema(entity_ids, item_body_id)
+        root = (schema.get("oneOf") or [schema])[0]
+        for field, limit in (("prompt", 1400), ("silhouette", 700), ("visualIdentity", 700)):
+            root["properties"][field] = {"type": "string", "minLength": 1, "maxLength": limit}
+            root["required"].append(field)
+        return schema
+    # Preserve the captured v1 grammar; this is not a production legacy reader.
+    monkeypatch.setattr(visual, "_visual_entity_schema", historical_entity_schema)
     monkeypatch.setattr(visual, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
     monkeypatch.setattr(visual, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
     replay = copy.deepcopy(_REPLAY["visualApplyCases"][case])

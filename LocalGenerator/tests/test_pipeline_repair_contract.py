@@ -479,7 +479,6 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     previous["entities"][1]["prompt"] = ""
     del previous["entities"][1]["scale"]
     previous["item"]["prompt"] = "KEEP_VALID_ITEM_PROMPT"
-    previous["entities"][0]["prompt"] = "KEEP_VALID_ITEM_PROMPT"
     old_silhouette = previous["entities"][1]["silhouette"]
     entity_ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
     item_id = data["runtimeProgram"]["itemEntityId"]
@@ -490,14 +489,15 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     fixed_row["scale"] = 1.25
     fixed_row["silhouette"] = "SHOULD_BE_FROZEN"
     unrelated_row = copy.deepcopy(previous["entities"][0])
-    unrelated_row["prompt"] = "SHOULD_BE_IGNORED"
+    unrelated_row["scale"] = 4
     patch = {
         "schema": visual_stage.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
         "entitiesUpsert": [fixed_row, unrelated_row], "entityIdsDelete": [], "entityIndicesDelete": [],
         "animationPlan": "SHOULD_BE_IGNORED", "note": "repair one entity row",
     }
     repaired, audit = visual_stage._apply_visual_repair_patch(previous, patch, scope, entity_ids, return_audit=True)
-    assert repaired["entities"][0]["prompt"] == "KEEP_VALID_ITEM_PROMPT"
+    assert repaired["item"]["prompt"] == "KEEP_VALID_ITEM_PROMPT"
+    assert repaired["entities"][0] == previous["entities"][0]
     assert repaired["entities"][1]["scale"] == 1.25
     assert repaired["entities"][1]["silhouette"] == old_silhouette
     assert repaired["animationPlan"] != "SHOULD_BE_IGNORED"

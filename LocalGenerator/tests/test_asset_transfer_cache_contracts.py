@@ -312,7 +312,7 @@ def _equipment_kit(*, include_overlay: bool) -> dict:
         "schema": "infini.visual-kit.runtime-entities.v2", "item": item,
         "entities": [
             {"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
-             **{key: item[key] for key in ("prompt", "silhouette", "visualIdentity")}, "scale": 1.0},
+             "scale": 1.0},
             {"entityId": "shot", "assetMode": "baked_sprite", "visualProjectRef": "entity",
              "prompt": "literal projectile", "silhouette": "compact projectile", "visualIdentity": "literal shot",
              "preferredCanvasSize": 64, "renderSizePx": 32, "forwardAngleDegrees": 0, "scale": 1.0},

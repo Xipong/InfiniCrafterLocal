@@ -194,12 +194,9 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
             "entityId": copy.deepcopy(entity_id),
             "assetMode": {"const": "baked_sprite"},
             "visualProjectRef": {"const": "item"},
-            "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
-            "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
-            "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "scale": copy.deepcopy(scale),
         },
-        "required": ["entityId", "assetMode", "visualProjectRef", "prompt", "silhouette", "visualIdentity", "scale"],
+        "required": ["entityId", "assetMode", "visualProjectRef", "scale"],
     }
     if item_body_id is not None:
         authored["properties"]["entityId"]["enum"] = [item_body_id]
@@ -207,10 +204,13 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
     distinct["properties"]["visualProjectRef"] = {"const": "entity"}
     distinct["properties"]["entityId"]["enum"] = [value for value in entity_ids if value != item_body_id]
     distinct["properties"].update({
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
+        "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
+        "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
         "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION.replace("item PNG", "independent entity PNG")},
         **_sprite_presentation_properties(),
     })
-    distinct["required"].extend(["preferredCanvasSize", "renderSizePx", "forwardAngleDegrees"])
+    distinct["required"].extend(["prompt", "silhouette", "visualIdentity", "preferredCanvasSize", "renderSizePx", "forwardAngleDegrees"])
     nonitem_id = {"type": "string", "enum": [value for value in entity_ids if value != item_body_id]}
     reuse = {
         "type": "object",
@@ -422,7 +422,7 @@ def _validate_kit(
         return None, [{"path": "$", "message": "Visual Director response must be an object"}]
     # Declared lossless normalization: the exact asset mode plus exact entity id
     # uniquely determines project ownership. The only missing-mode Fix remains
-    # the complete item-body design -> baked inventory project case.
+    # the complete root item design -> baked inventory project case.
     source_rows_raw = raw.get("entities")
     source_rows = source_rows_raw if isinstance(source_rows_raw, list) else []
     candidate = copy.deepcopy(raw)
@@ -433,7 +433,8 @@ def _validate_kit(
             continue
         entity_id = str(row.get("entityId") or "")
         mode = str(row.get("assetMode") or "").strip().lower()
-        complete = all(str(row.get(field) or "").strip() for field in ("prompt", "silhouette", "visualIdentity"))
+        design = candidate.get("item") if entity_id == item_body_id else row
+        complete = isinstance(design, Mapping) and all(str(design.get(field) or "").strip() for field in ("prompt", "silhouette", "visualIdentity"))
         if not mode and entity_id == item_body_id and complete:
             mode = "baked_sprite"
             row["assetMode"] = mode
@@ -508,10 +509,6 @@ def _validate_kit(
                 errors.append({"path": path + ".assetMode", "message": f"item entity {item_body_id!r} must use baked_sprite"})
             if project_ref != "item":
                 errors.append({"path": path + ".visualProjectRef", "message": "item body must reference the single item visual project"})
-            if isinstance(item, dict):
-                for field in ("prompt", "silhouette", "visualIdentity"):
-                    if row.get(field) != item.get(field):
-                        errors.append({"path": path + "." + field, "message": "item body must copy the exact item visual project field"})
         elif mode == "baked_sprite" and project_ref != "entity":
             errors.append({"path": path + ".visualProjectRef", "message": "distinct baked entity must own the entity visual project"})
         elif mode == "reuse_item_icon" and project_ref != "item":
@@ -571,17 +568,6 @@ def _build_visual_repair_scope(
         if relative_item_path is not None:
             item_mutable = True
             item_paths.add(relative_item_path)
-            # visualProjectRef=item rows mirror the item visual project verbatim.
-            # A permission on a mirrored item field deterministically extends to the
-            # same field in those entity rows, otherwise Repair could not fix one
-            # broken copy without re-emitting frozen context it must not touch.
-            if relative_item_path in {"prompt", "silhouette", "visualIdentity"}:
-                for row_index, row in enumerate(rows):
-                    if not isinstance(row, Mapping):
-                        continue
-                    entity_id = str(row.get("entityId") or "")
-                    if entity_id in entity_ids and str(row.get("visualProjectRef") or "") == "item":
-                        grant_entity(entity_id, relative_item_path)
         relative_overlay_path = json_path_relative(path, "$.equipOverlay")
         if equipment_overlay_required and relative_overlay_path is not None:
             overlay_mutable = True
@@ -1017,7 +1003,7 @@ def _request_visual_kit(
             "You are the conditional Visual Repair. Return only a narrow patch for exact invalid visual fields/rows. "
             "You may return a complete broken row; deterministic merge freezes every already-valid old field and keeps "
             "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
-            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item. "
+            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design. "
             "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
             "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. Return JSON only."
         )
@@ -1051,7 +1037,7 @@ def _request_visual_kit(
                 visual_background_transport_rule(),
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
                 "preserve valid literal parent composition and accepted runtime entity set",
-                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
+                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
             ],
@@ -1062,9 +1048,8 @@ def _request_visual_kit(
             "You are Visual Director for InfiniCrafterLocal. Design appearance only for the accepted runtime entities. "
             "Do not add, remove, merge, rename or reinterpret gameplay entities/events. Do not classify the item as a weapon family. "
             "Preserve literal parent objects and their physical relationships. For each exact entityId choose one finite assetMode: "
-            "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. item_body must be baked_sprite with visualProjectRef=item and exact copies of item prompt/silhouette/visualIdentity. "
+            "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. The entity with kind=item_body, regardless of its entityId, uses baked_sprite with visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; root item owns its prompt/silhouette/visualIdentity. "
             "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
-            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item. "
             "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
             "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. "
             "A baked sprite is mandatory delivery: never request or accept a placeholder. Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions."
@@ -1093,7 +1078,7 @@ def _request_visual_kit(
                 "baked_sprite requires a real generated PNG; no placeholder",
                 visual_background_transport_rule(),
                 "never author impact sprite prompts here; VFX owns them only when it selects rendererKind=impactSprite",
-                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; copy item prompt/silhouette/visualIdentity exactly and set visualProjectRef=item",
+                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "reuse_item_icon carries only entityId, assetMode, visualProjectRef=item and scale; do not duplicate prompt or identity fields",
                 "runtime_geometry/no_asset carry only entityId, assetMode, visualProjectRef=none and scale",
@@ -1144,10 +1129,12 @@ def _request_visual_kit(
     branch_paths = [entity_path + (union, index) for index in range(len(branches))] if union in entity_schema else [entity_path]
     definition_paths["entityScale"] = tuple(path + ("properties", "scale") for path in branch_paths)
     for field in ("prompt", "silhouette", "visualIdentity"):
-        definition_paths["entity_" + field] = tuple(
+        paths = tuple(
             path + ("properties", field) for path, branch in zip(branch_paths, branches)
             if field in branch["properties"]
         )
+        if paths:
+            definition_paths["entity_" + field] = paths
     request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
     stage_name = "visual_repair" if repair else "visual_director"
     trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
@@ -1278,9 +1265,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
                     "entityId": entity_id,
                     "assetMode": "baked_sprite",
                     "visualProjectRef": "item",
-                    "prompt": dev_item["prompt"],
-                    "silhouette": dev_item["silhouette"],
-                    "visualIdentity": dev_item["visualIdentity"],
                     "scale": 1.0,
                 } if entity_id == item_body_id else {
                     "entityId": entity_id,

@@ -5,11 +5,11 @@
 
 Visual Director выбирает внешний вид принятого gameplay, не mechanics/classifier outputs. Одна физическая вещь имеет один visual project; отдельный объект — отдельный. `item_body` всегда требует отдельный inventory PNG: единственный missing-mode Fix допускается только при уже непустых `prompt`, `silhouette`, `visualIdentity` и добавляет `baked_sprite` с audit. Без описания — Visual Repair/RED, не artwork из кода.
 
-Источник ordinary/Repair schema и dispatch — [visual_generation_pipeline.py](../../LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py); projects/processing role — [visual_asset_plan.py](../../LocalGenerator/infini_local/pipelines/visual_asset_plan.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, текстовый `animationPlan`; `equipOverlay` обязателен только для объявленной equipment потребности.
+Источник ordinary/Repair schema и dispatch — [visual_generation_pipeline.py](../../LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py); projects/processing role — [visual_asset_plan.py](../../LocalGenerator/infini_local/pipelines/visual_asset_plan.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, текстовый `animationPlan`; `equipOverlay` обязателен только для объявленной equipment потребности. Root `item` — единственный автор внешности тела предмета: его `prompt`, `silhouette`, `visualIdentity` не дублируются в `entities`. Существующий projector выбирает этот root по `visualProjectRef=item`, не восстанавливает копии в `visualKit`. Поэтому Repair root-текста не открывает permissions на entity rows. Отдельный baked entity по-прежнему обязан полностью описать собственный проект; missing/invalid root-дизайн остаётся RED. Сохранённые delivered DTO и их presentation не мигрируются.
 
 | Entity branch | Обязательная Visual запись |
 |---|---|
-| item-body `baked_sprite` | `entityId`, `assetMode`, `visualProjectRef=item`, exact `prompt`, `silhouette`, `visualIdentity`, `scale`; размер/canvas/ось принадлежат только root item |
+| item-body `baked_sprite` | `entityId`, `assetMode`, `visualProjectRef=item`, `scale`; дизайн, размер/canvas/ось принадлежат только root item; повторные `prompt`/`silhouette`/`visualIdentity` запрещены |
 | distinct `baked_sprite` | `entityId`, `assetMode`, `visualProjectRef=entity`, `prompt`, `silhouette`, `visualIdentity`, `scale`, собственные `renderSizePx`, `preferredCanvasSize`, `forwardAngleDegrees` |
 | `reuse_item_icon` | `entityId`, `assetMode`, `visualProjectRef=item`, `scale`; exact root PNG, base size, canvas и ось; свои prompt/size/canvas/axis запрещены |
 | `runtime_geometry`, `no_asset` | `entityId`, `assetMode`, `visualProjectRef=none`, `scale`; не authored sprite prompts |
