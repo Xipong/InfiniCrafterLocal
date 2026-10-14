@@ -165,6 +165,7 @@ internal static partial class EngineRuntimeChecks
             ("individual material live source periodic final pose and generation", MaterialElementLiveSourcePeriodicUsesFinalPoseAndGeneration),
             ("individual material world delay versus source generation fence", MaterialElementDelayFreezesWorldButFencesSource),
             ("individual material item attachment uses instance identity", MaterialElementItemAttachmentUsesInstanceNotDefinition),
+            ("individual material item periodic equipment slot transitions", MaterialItemPeriodicSurvivesEquipmentSlotTransitions),
             ("individual material owner hit validated relay remote delivery", MaterialOwnerHitReachesValidatedServerRelayAndRemote),
             ("individual material item snapshot relay immutable pose and instance", MaterialItemSnapshotRelayPreservesPoseAndInstance),
             ("individual material budgets share legacy active detached costs", MaterialBudgetsShareLegacyActiveAndDetachedCosts),

@@ -144,6 +144,8 @@ Technical transport: projectile event v5, material item event v5, compact materi
 
 `VfxSourceBinding.ItemBinding.IsLive` требует живого игрока. После смерти periodic-регистрация и source-attached effects завершаются без нового Draw/producer; captured world events сохраняют delay/duration. Respawn допускает новую регистрацию только через настоящий producer, без ослабления instance/generation fences.
 
+При переносе того же Item между functional/vanity/held slots старая slot-bound periodic-регистрация удаляется до проверки дубликатов новой. Поэтому перенос на due tick не пропускает emission; cadence остаётся привязан к world clock. Старые source-attached instances завершаются по прежнему slot fence, world instances сохраняют authored duration. Повторные hooks не создают дубликаты; правила видимости не меняются.
+
 <a id="verification"></a>
 ## Проверка и доказательные границы
 

@@ -88,6 +88,10 @@ public sealed partial class InfiniDetachedVfxSystem
     internal static void RegisterPeriodicElements(GeneratedItemData data,string entityId,string sourceKey,VfxSourceBinding? binding,bool item=false)
     {
         if(Main.dedServ||binding is null||!binding.IsLive)return;
+        // Moving the same Item keeps its generation but invalidates the old slot
+        // binding. Retire that registration before deduplication, so it cannot
+        // suppress the new producer on an authored due tick.
+        PeriodicElements.RemoveAll(e=>!e.Binding.IsLive);
         foreach(var slot in data.VfxManifest.Slots) {
             if(slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null))continue;
             if(PeriodicElements.Any(e=>ReferenceEquals(e.Binding.Generation,binding.Generation)&&e.SlotId==slot.Id))continue;
