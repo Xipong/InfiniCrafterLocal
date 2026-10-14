@@ -39,7 +39,7 @@
   const modelKeys = new Set(['INFINI_SDCPP_MODEL','INFINI_SDCPP_VAE','INFINI_SDCPP_LLM']);
   const materialKeys = new Set([...modelKeys,'INFINI_SDCPP_LORA_DIR','INFINI_SDCPP_LORA_FILE','INFINI_SDCPP_LORA_WEIGHT','INFINI_SDCPP_LORA_PROMPT_TAGS','INFINI_SDCPP_SERVER_EXE','INFINI_SDCPP_ROCM_COMPAT_ROOT']);
   const basicKeys = new Set(Object.keys(shortHelp).concat(['INFINI_USE_LLM','INFINI_LLM_TEMPERATURE','INFINI_LLM_MAX_TOKENS','INFINI_OPENROUTER_MODEL','INFINI_OPENROUTER_PROVIDER','INFINI_OPENAI_COMPAT_BASE_URL','INFINI_OPENAI_COMPAT_MODEL','INFINI_CODEX_LLM_MODEL','INFINI_SDCPP_STEPS','INFINI_SDCPP_CFG','INFINI_SDCPP_SAMPLER','INFINI_SDCPP_WIDTH','INFINI_SDCPP_HEIGHT','INFINI_CODEX_IMAGE_MODEL','INFINI_CODEX_IMAGE_SIZE','INFINI_CODEX_IMAGE_QUALITY','INFINI_IMAGE_API_BASE_URL','INFINI_IMAGE_API_KEY','INFINI_IMAGE_API_MODEL','INFINI_IMAGE_API_SIZE','INFINI_A1111_URL','INFINI_COMFYUI_URL','INFINI_REMOVE_BG','INFINI_PIXEL_POSTERIZE','INFINI_MAX_COLORS','INFINI_SPRITE_MASTER_CANVAS','INFINI_PORT','INFINI_TERRARIA_PORT','INFINI_ASSET_PUBLIC_BASE_URL']));
-  const state = {remote:null, draft:{}, baseline:{}, fields:[], dirty:new Set(), edits:{}, editClock:0, lan:false, baselineLan:false, lanEdit:0, page:'operate', connected:false, pending:null, submission:null, posting:false, pollTimer:null, fetching:false, filter:'', searchIndex:0, searchMatches:[], traceTab:'summary', openDetails:new Set(), helpFields:new Set(), shutdown:false};
+  const state = {remote:null, draft:{}, baseline:{}, fields:[], dirty:new Set(), edits:{}, editClock:0, lan:false, baselineLan:false, lanEdit:0, page:'operate', connected:false, pending:null, submission:null, posting:false, pollTimer:null, fetching:false, filter:'', searchIndex:0, searchMatches:[], traceTab:'summary', openDetails:new Set(), helpFields:new Set(), shutdown:false, seenNotifications:new Set(), notifications:[], picker:null};
   const token = window.INFINI_BOOTSTRAP?.token || '';
   // Keep the launcher's bootstrap query for authenticated refresh. Never render or log it.
   function label(field) {
@@ -72,10 +72,21 @@
     $('#save-tray').hidden = !state.dirty.size && state.lan === state.baselineLan;
     const total = state.dirty.size + Number(state.lan !== state.baselineLan);
     $('#dirty-label').textContent = `${total} ${total === 1 ? 'изменение' : total < 5 ? 'изменения' : 'изменений'} в настройках`;
+    const conflict=$('#draft-conflict');
+    if(conflict) conflict.hidden=!(state.remote?.savedRevision && state.savedRevision && state.remote.savedRevision !== state.savedRevision && total);
     updateActionButtons();
   }
   function inactiveReason(field) {
     const key = field.key, provider = value('INFINI_LLM_PROVIDER','local'), backend = value('INFINI_IMAGE_BACKEND','sdcpp');
+    const pool=key.match(/^INFINI_LLM_POOL_([234])_(.+)$/);
+    if(pool && pool[2] !== 'ENABLED' && value(`INFINI_LLM_POOL_${pool[1]}_ENABLED`) !== '1') return 'Дополнительная линия выключена';
+    if (pool && pool[2] === 'OPENROUTER_PROVIDER' && value(`INFINI_LLM_POOL_${pool[1]}_PROVIDER`) !== 'openrouter') return 'Для линии OpenRouter';
+    if (['INFINI_LLM_TEMPERATURE','INFINI_LLM_REAUTHOR_TEMPERATURE','INFINI_VISUAL_DIRECTOR_TEMPERATURE','INFINI_LLM_MAX_TOKENS','INFINI_LLM_REASONING_MAX_TOKENS','INFINI_LLM_REASONING_EXCLUDE'].includes(key) && provider === 'openai_codex') return 'Codex не принимает этот параметр';
+    if (key === 'INFINI_CODEX_VISUAL_REASONING' && provider !== 'openai_codex') return 'Для текстового Codex';
+    if (key === 'INFINI_LLM_REASONING_MAX_TOKENS' && (provider === 'local' || !['tokens','token_budget','max_tokens','budget'].includes(value('INFINI_LLM_REASONING_MODE')))) return 'Для API с режимом бюджета токенов';
+    if (key === 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD' && value('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED') !== '1') return 'Отладочная выдача выключена';
+    if (['INFINI_REMOVE_BG','INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_BG_COLOR') === 'transparent') return 'Нативная прозрачность: локальный keyer не используется';
+    if (['INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_REMOVE_BG') === '0') return 'Удаление фона выключено';
     if (/^INFINI_LMSTUDIO_/.test(key) && provider !== 'local') return 'Для локального источника текста';
     if (/^INFINI_OPENROUTER_/.test(key) && provider !== 'openrouter') return 'Для источника OpenRouter';
     if (/^INFINI_OPENAI_COMPAT_/.test(key) && provider !== 'openai_compat') return 'Для совместимого API';
@@ -90,6 +101,8 @@
     if (key === 'INFINI_MAX_COLORS' && value('INFINI_PIXEL_POSTERIZE') !== '1') return 'Палитра не ограничена';
     if (key === 'INFINI_ASSET_PUBLIC_BASE_URL' && value('INFINI_MP_ASSET_TRANSPORT') !== 'http') return 'Доставка идёт внутри Terraria';
     if (key === 'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE' && value('INFINI_SDCPP_SERVER_COMMAND_MODE') !== 'template') return 'Запуск использует автоматический argv';
+    // Native metadata describes the controller values, not unsaved browser edits.
+    if (field.disabled && !state.dirty.size && state.lan === state.baselineLan && Object.entries(state.remote?.values || {}).every(([name,val])=>value(name) === val)) return field.disabled;
     return '';
   }
   async function api(path, payload) {
@@ -118,54 +131,71 @@
     const previousPresets = JSON.stringify([state.remote?.presets,state.remote?.userPresets]);
     state.fields = makeFields(remote);
     const saved = {...remote.defaults,...(remote.savedValues || remote.values)};
+    const wasDirty=state.dirty.size || state.lan !== state.baselineLan;
     if (first) {
-      state.draft = {...remote.defaults,...remote.values}; state.lan = !!remote.lanEnabled;
+      // Browser drafts belong to this tab. A controller may hold another tab's
+      // prepared profile; only persisted values initialize a fresh tab.
+      state.draft={...saved};state.lan=!!remote.savedLanEnabled;
     } else {
-      Object.entries({...remote.defaults,...remote.values}).forEach(([key,val]) => {
-        if (!state.dirty.has(key) && !((state.pending || state.submission)?.sent && Object.hasOwn((state.pending || state.submission).sent,key))) {
-          // A local discard must survive repeated snapshots of the same unsaved
-          // controller state. Only import a newly changed remote value.
-          if (state.remote.values[key] !== val) state.draft[key] = val;
-        }
+      Object.entries(saved).forEach(([key,val])=>{
+        const submission=state.pending || state.submission;
+        const protectedKeys=submission?.dirtyKeys || Object.keys(submission?.sent || {});
+        if(!state.dirty.has(key) && !protectedKeys.includes(key)) state.draft[key]=val;
       });
-      if (state.lan === state.baselineLan && !state.pending && !state.submission && state.remote.lanEnabled !== remote.lanEnabled) state.lan = !!remote.lanEnabled;
+      if(state.lan === state.baselineLan && !state.pending && !state.submission) state.lan=!!remote.savedLanEnabled;
+    }
+    if(first || !wasDirty && !state.pending && !state.submission && !state.posting) {
+      state.savedRevision=remote.savedRevision;state.revisionValues={...saved};
     }
     state.baseline = saved; state.baselineLan = !!remote.savedLanEnabled;
     state.remote = remote;
     const pending = state.pending;
-    if (pending && remote.lastAction?.id === pending.id) {
-      if (remote.lastAction.ok) {
-        const transforming = ['applyPreset','browse','clearLora','useLora','resetSprite'].includes(pending.action);
-        if (transforming) Object.entries({...remote.defaults,...remote.values}).forEach(([key,val]) => {
+    const receipt = pending && ((remote.actionResults || []).find(result => result.id === pending.id) || (remote.lastAction?.id === pending.id ? remote.lastAction : null));
+    if (pending && receipt && receipt.status !== 'running') {
+      state.suppressToast=(remote.notifications || []).some(notice=>notice.actionId === pending.id || notice.message === receipt.message);
+      if (receipt.ok && receipt.status !== 'cancelled') {
+        const transforming = ['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action);
+        if (transforming) Object.entries({...remote.defaults,...(receipt.values || remote.values)}).forEach(([key,val]) => {
           if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = val;
         });
         const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(pending.action);
         if (defaultsDecision) {
-          if (pending.action === 'acceptDefaults') Object.entries(pending.sent).forEach(([key,val]) => {
-            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = saved[key] ?? val;
-          });
+          if (pending.action === 'acceptDefaults') {
+            if(receipt.savedRevision) {state.savedRevision=receipt.savedRevision;state.revisionValues={...remote.defaults,...receipt.savedValues};}
+            Object.entries(pending.sent).forEach(([key,val])=>{if((state.edits[key] || 0) <= pending.clock) state.draft[key]=(receipt.savedValues || saved)[key] ?? val;});
+          }
           if ($('#utility-dialog').dataset.kind === 'defaults') $('#utility-dialog').close();
           toast(pending.action === 'acceptDefaults' ? 'Записаны только показанные рекомендации. Остальной черновик не сохранён.' : 'Рекомендации отклонены. config.env не изменён.');
         }
-        if (!defaultsDecision && (state.lanEdit || 0) <= pending.clock) state.lan = !!remote.lanEnabled;
+        if (transforming && (state.lanEdit || 0) <= pending.clock) state.lan = !!(receipt.lanEnabled ?? pending.lan);
         // A handled callback is not proof of a disk write or a running generator.
-        if (pending.action === 'start') state.startSubmission = pending;
-        if (pending.action === 'save' && /^saved:/i.test(remote.status || '')) {
+        if (pending.action === 'start' && !receipt.status) state.startSubmission = pending;
+        if (['save','start','forceRestart'].includes(pending.action) && (receipt.status === 'succeeded' || /^saved:/i.test(remote.status || ''))) {
+          state.savedRevision=receipt.savedRevision || state.savedRevision;state.revisionValues={...remote.defaults,...(receipt.savedValues || saved)};
           Object.entries(pending.sent).forEach(([key,val]) => {
-            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = saved[key] ?? val;
+            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = (receipt.savedValues || saved)[key] ?? val;
           });
-          if ((state.lanEdit || 0) <= pending.clock) state.lan = state.baselineLan;
-          toast('Настройки записаны в config.env.');
-        } else if (transforming) toast('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.');
-        else if (pending.action === 'savePreset') toast('Профиль сохранён отдельно. config.env не изменён.');
-        else if (pending.action !== 'exitStudio' && !defaultsDecision) toast(({start:'Запуск передан генератору. Его состояние — на рабочем столе.',stop:'Проверяем возможность безопасной остановки.',health:'Проверка соединения запущена.',validate:'Проверка путей выполнена. Результат — в диагностике.',trace:'Журнал запрошен.',codexLogin:'Вход открыт в отдельном окне.',codexStatus:'Статус аккаунта запрошен.',codexCatalog:'Каталог моделей запрошен.',codexPing:'Проверка аккаунта запрошена.',codexLogout:'Выход из аккаунта обработан.',cancelTrace:'Обновление журнала отменено.',openConfig:'Открываем файл конфигурации.',openCache:'Открываем папку кеша.',clearTrace:'Запрос очистки обработан.'})[pending.action] || 'Действие обработано.');
+          if ((state.lanEdit || 0) <= pending.clock) state.lan = receipt.savedValues ? receipt.savedValues.INFINI_HOST === '0.0.0.0' || !!receipt.savedValues.INFINI_ASSET_PUBLIC_BASE_URL : state.baselineLan;
+          toast(pending.action !== 'save' ? (receipt.message || 'Процесс генератора запущен. Проверь соединение, чтобы подтвердить готовность.') : 'Настройки записаны в config.env.');
+        } else if (pending.action === 'savePreset') toast('Профиль сохранён отдельно. config.env не изменён.');
+        else if (transforming) toast('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.');
+        else if (pending.action !== 'exitStudio' && !defaultsDecision) toast(({start:'Запуск передан генератору. Его состояние — на рабочем столе.',stop:'Безопасная остановка завершена.',health:'Проверка соединения завершена. Состояние — на рабочем столе.',validate:'Проверка путей завершена.',trace:'Журнал обновлён. Источник и статус показаны над записями.',codexLogin:'Результат входа показан в статусе аккаунта.',codexStatus:'Статус аккаунта обновлён.',codexCatalog:'Каталог моделей обновлён.',codexPing:'Проверка аккаунта завершена.',codexLogout:'Выход из аккаунта обработан.',cancelTrace:'Обновление журнала отменено.',openConfig:'Сохранённая конфигурация открыта для просмотра.',openCache:'Открываем папку кеша.',clearTrace:'Очистка журнала завершена.'})[pending.action] || 'Действие обработано.');
       } else {
-        const message = remote.lastAction.message || 'Действие не выполнено. Изменения сохранены в этой вкладке.';
+        const message = receipt.message || 'Действие не выполнено. Изменения сохранены в этой вкладке.';
         if (['acceptDefaults','declineDefaults'].includes(pending.action)) defaultsError(message);
         toast(message,true);
       }
-      state.pending = null; clearTimeout(pending.timer);
-      if (['applyPreset','browse','clearLora','useLora','resetSprite'].includes(pending.action)) render();
+      state.suppressToast=false;state.pending = null; clearTimeout(pending.timer);
+      if(receipt.ok && ['applyPreset','savePreset'].includes(pending.action)) state.presetChoice=null;
+      if (pending.action === 'exitStudio' && receipt.ok && receipt.status === 'succeeded') {
+        state.shutdown=true;clearTimeout(state.pollTimer);$('#utility-dialog').close();
+        $('#connection').innerHTML='<span class="status-dot"></span><span>Студия закрыта</span>';
+        $('#workspace').innerHTML='<div class="initial-loading"><h1>Студия закрыта</h1><p>Закрыта только студия. Генератор не остановлен этим действием.<br>Эту вкладку можно закрыть.</p></div>';
+        updateActionButtons();return true;
+      }
+      if (receipt.result?.kind === 'document') showDocument(receipt.result);
+      if (receipt.result?.kind === 'guide' && receipt.result.url?.startsWith('/guide?')) utility(receipt.result.title || 'Инструкция', `<p class="dialog-copy">Интерактивное руководство открывается в отдельной вкладке.</p><a class="button button-primary" href="${esc(receipt.result.url)}" target="_blank" rel="noopener">Открыть руководство ↗</a>`);
+      if (['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) render();
     }
     if (state.startSubmission && !remote.busy?.includes('server-action')) {
       // The guarded start saves only after its activity/identity check succeeds.
@@ -177,18 +207,20 @@
       }
       state.startSubmission = null;
     }
+    for (const notice of remote.notifications || []) {
+      if (state.seenNotifications.has(notice.id)) continue;
+      state.seenNotifications.add(notice.id);
+      toast([notice.title,notice.message].filter(Boolean).join(' · '), notice.level !== 'info');
+    }
     recomputeDirty();
-    if (state.page === 'configure' && $('#preset-select') && document.activeElement !== $('#preset-select')) $('#preset-select').value = value('INFINI_GUI_PIPELINE_PRESET');
+    if (state.page === 'configure' && $('#preset-select') && document.activeElement !== $('#preset-select')) $('#preset-select').value = state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
     if (first || previousFields !== JSON.stringify(state.fields.map(f => [f.key,f.options])) || previousPresets !== JSON.stringify([remote.presets,remote.userPresets])) render();
     else if (state.page === 'operate') renderOperate();
     else if (state.page === 'diagnostics') updateDiagnostics();
     syncInputs();
-    if ($('#account-status')) $('#account-status').textContent = remote.account?.[state.page === 'providers' ? 'catalog':'images'] || 'Статус аккаунта ещё не запрошен.';
+    if ($('#account-status')) $('#account-status').textContent = [remote.account?.status, remote.account?.[state.page === 'providers' ? 'catalog':'images']].filter(Boolean).join('\n') || 'Статус аккаунта ещё не запрошен.';
     $('#version').textContent = `Версия ${remote.version || 'α'}`;
-    const offer = remote.defaultsUpdate;
-    if (offer?.changes?.length && !offer.dismissed && !state.defaultsPrompted) {
-      state.defaultsPrompted = true; showDefaultsUpdate();
-    }
+    if($('#defaults-summary')) $('#defaults-summary').textContent=defaultsSummary();
     return true;
   }
   async function poll() {
@@ -197,7 +229,7 @@
     state.fetching = true;
     try {
       const remote = await api('/api/state');
-      if (acceptSnapshot(remote)) setConnection(true);
+      if (acceptSnapshot(remote)) {if(!state.shutdown) setConnection(true);}
       else setConnection(false,'Мастерская ещё загружается.');
     } catch (error) {
       setConnection(false,error.name === 'AbortError' ? 'Локальный сервер не ответил вовремя.' : error.message);
@@ -213,18 +245,26 @@
   }
   const editableValues = () => Object.fromEntries(Object.entries(state.draft).filter(([key,val]) => key.startsWith('INFINI_') && typeof val === 'string'));
   async function action(name, extra={}) {
+    if (name === 'cancelTrace' && state.pending?.action === 'trace' && state.connected && !state.posting) {
+      state.posting=true;updateActionButtons();
+      try {await api('/api/action',{action:name,values:{},extra:{}});poll();}
+      catch(error) {toast(error.message,true);}
+      finally {state.posting=false;updateActionButtons();}
+      return;
+    }
+    if(state.pending?.action === name || state.submission?.action === name) return;
     if (!state.connected || state.pending || state.posting) {toast('Дождись ответа текущего действия или восстанови соединение.',true);return;}
-    state.posting = true; updateActionButtons();
+    state.posting = true;
     const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(name);
     const sent = defaultsDecision ? (name === 'acceptDefaults' ? Object.fromEntries((state.defaultsPreview?.changes || []).map(row => [row.key,row.recommended])) : {}) : editableValues();
-    const clock = state.editClock, sentLan = state.lan;
+    const clock = state.editClock, sentLan = state.lan, dirtyKeys=[...state.dirty];
     // Protect the submission from the first byte sent, not only after its id arrives.
-    state.submission = {action:name,sent,clock,lan:sentLan};
+    state.submission = {action:name,sent,clock,lan:sentLan,dirtyKeys};
+    updateActionButtons();
     try {
-      const queued = await api('/api/action',{action:name,values:defaultsDecision ? {} : sent,extra:defaultsDecision ? {revision:extra.revision} : {lanEnabled:sentLan,...extra}});
+      const queued = await api('/api/action',{action:name,values:defaultsDecision ? {} : sent,extra:defaultsDecision ? {revision:extra.revision} : {lanEnabled:sentLan,...(['save','start','forceRestart'].includes(name) ? {savedRevision:state.savedRevision} : {}),...extra}});
       if (!queued.ok || !queued.id) throw new Error('Локальный сервер не подтвердил очередь действия.');
-      if (name === 'exitStudio') {state.shutdown = true; clearTimeout(state.pollTimer); $('#utility-dialog').close(); $('#connection').innerHTML = '<span class="status-dot"></span><span>Студия закрыта</span>'; $('#workspace').innerHTML = `<div class="initial-loading"><h1>Студия закрыта</h1><p>Закрыта только студия. Генератор не остановлен этим действием.<br>Эту вкладку можно закрыть.</p></div>`;return;}
-      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,timer:null};
+      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,dirtyKeys,timer:null};
       state.pending = pending;
       state.submission = null;
       pending.timer = setTimeout(() => {
@@ -239,20 +279,38 @@
   function updateActionButtons() {
     const locked = !state.connected || state.pending || state.posting || state.shutdown;
     $$('[data-action], [data-browse], [data-submit-action]').forEach(button => {button.disabled = !!locked;});
+    const pendingAction=state.pending?.action || state.submission?.action;
+    const progressLabels={save:'Сохраняем…',start:'Проверяем и запускаем…',health:'Проверяем соединение…',validate:'Проверяем пути…',trace:'Читаем журнал…',codexStatus:'Проверяем аккаунт…',codexCatalog:'Обновляем модели…',codexLogin:'Ожидаем вход…',codexPing:'Проверяем аккаунт…'};
+    $$('[data-action]').forEach(button=>{
+      if(button.dataset.action === pendingAction && progressLabels[pendingAction]) {
+        if(!button.dataset.idleHtml) button.dataset.idleHtml=button.innerHTML;
+        button.innerHTML=`${icon('refresh')}${progressLabels[pendingAction]}`;button.setAttribute('aria-busy','true');
+      } else if(button.dataset.idleHtml) {button.innerHTML=button.dataset.idleHtml;delete button.dataset.idleHtml;button.removeAttribute('aria-busy');}
+    });
     const serverBusy = state.remote?.busy?.includes('server-action');
     $$('[data-action="start"], [data-action="stop"]').forEach(button => {button.disabled = !!(locked || serverBusy);});
     $$('[data-ui="apply-preset"], [data-ui="save-preset"], [data-ui="stop"], [data-ui="reset-sprite"], [data-ui="clear-lora"], [data-ui="clear-trace"], [data-ui="force-restart"]').forEach(button => {button.disabled = !!locked;});
+    $$('[data-ui="stop"], [data-ui="force-restart"]').forEach(button=>{button.disabled=!!(locked || serverBusy);});
     $$('[data-ui="defaults-update"], [data-ui="defaults-refresh"]').forEach(button=>{button.disabled=!!locked;});
     if ($('#utility-dialog').dataset.kind === 'defaults') $$('[data-ui="close-dialog"]', $('#utility-dialog')).forEach(button=>{button.disabled=!!(state.pending || state.posting);});
+    $$('[data-action="cancelTrace"]').forEach(button=>{button.disabled=!state.connected || state.posting || state.shutdown || !(state.remote?.busy?.includes('trace') || state.pending?.action === 'trace') || !!(state.pending && state.pending.action !== 'trace');});
     const save = $('[data-action="save"]', $('#save-tray'));
-    if (save) save.innerHTML = `${icon(state.pending?.action === 'save' ? 'refresh':'save')}${state.pending?.action === 'save' ? 'Сохраняем…':'Сохранить'}`;
+    if (save) save.innerHTML = `${icon((state.pending || state.submission)?.action === 'save' ? 'refresh':'save')}${(state.pending || state.submission)?.action === 'save' ? 'Сохраняем…':'Сохранить'}`;
   }
   function toast(message,error=false) {
-    const div = document.createElement('div'); div.className = `toast${error ? ' error':''}`;
+    if(state.suppressToast) return;
+    state.notifications.push({message,error});
+    if(state.notifications.length > 100) state.notifications.shift();
+    if($('#notice-count')) $('#notice-count').textContent=String(state.notifications.length);
+    if ($('#utility-dialog').open) {
+      let feedback=$('#utility-feedback');
+      if(!feedback) {feedback=document.createElement('p');feedback.id='utility-feedback';feedback.className='dialog-feedback';feedback.setAttribute('role','status');$('#utility-body').append(feedback);}
+      feedback.textContent=message;feedback.classList.toggle('is-error',error);
+    }
+    const div = document.createElement('div'); div.setAttribute('role',error ? 'alert':'status'); div.className = `toast${error ? ' error':''}`;
     div.innerHTML = `${icon(error ? 'alert':'check')}<span class="toast-copy">${esc(message)}</span><button aria-label="Закрыть уведомление">×</button>`;
-    div.querySelector('button').onclick = () => div.remove(); $('#toasts').append(div);
-    setTimeout(() => div.remove(),error ? 13000 : 6500);
-    if ($('#toasts').children.length > 4) $('#toasts').firstElementChild.remove();
+    div.querySelector('button').onclick = () => div.remove(); $('#toasts').replaceChildren(div);
+    if (!error) setTimeout(() => div.remove(),9000);
   }
   function heading(page) {
     const [,eyebrow,title,subtitle] = routes[page];
@@ -305,7 +363,7 @@
     const focused = document.activeElement;
     const focusIdentity = focused?.closest('#workspace') ? ['data-action','data-ui','href'].map(name => [name,focused.getAttribute(name)]).find(([,val]) => val) : null;
     $('#workspace').innerHTML = `${heading('operate')}
-      <div class="operate-grid"><section class="station" aria-labelledby="generator-title"><div class="station-top"><span class="serial">Состояние генератора</span><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>${esc(value('INFINI_HOST','127.0.0.1'))}:${esc(value('INFINI_PORT','5055'))}</span></div><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить соединение с генератором">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки.<br>Активный крафт защищён от случайного перезапуска.</p></section>
+      <div class="operate-grid"><section class="station" aria-labelledby="generator-title"><div class="station-top"><span class="serial">Состояние генератора</span><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>Сохранено: ${esc(state.remote.savedValues?.INFINI_HOST || '127.0.0.1')}:${esc(state.remote.savedValues?.INFINI_PORT || '5055')}</span></div><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить сохранённый или запущенный генератор">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки. Проверка использует сохранённый адрес или сервер, запущенный этой студией. Новые адреса сначала сохрани.</p></section>
       <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Выбранные источники</h2><span class="meta">${state.dirty.size ? 'ЧЕРНОВИК':'КОНФИГУРАЦИЯ'}</span></div><ol class="pipeline-list">${[
         ['01','Идея и механика',provider.name,provider.detail,'providers'],
         ['02','Изображение',image.name,image.detail,'images'],
@@ -323,12 +381,23 @@
     if (/(SERVER_EXE|LOG_FILE)$/.test(field.key)) return 'file';
     return '';
   }
+  function derivedField(key) {
+    if(key === 'INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK' && value('INFINI_VISUAL_STRICT_AI_AUTHORSHIP','1') === '1') return {value:'0 · Выключено',note:'Строгое авторство модели принудительно выключает процедурную подмену.'};
+    if(key === 'INFINI_SDCPP_LORA_DIR') {
+      const file=value('INFINI_SDCPP_LORA_FILE').trim(), slash=Math.max(file.lastIndexOf('/'),file.lastIndexOf('\\'));
+      const dir=!file ? 'Не задано' : slash < 0 ? '.' : slash === 0 ? file[0] : slash === 2 && file[1] === ':' ? file.slice(0,3) : file.slice(0,slash);
+      return {value:dir,note:'Вычисляется из выбранного файла LoRA при сохранении. Без файла папка очищается.'};
+    }
+    if(key === 'INFINI_HOST' && state.lan && value('INFINI_MP_ASSET_TRANSPORT') === 'http') return {value:'0.0.0.0',note:'LAN с HTTP требует сетевой интерфейс. Изменить режим можно переключателем LAN выше.'};
+    return null;
+  }
   function fieldHTML(field,forceDetails=false) {
     const key = field.key, id = `field-${key}`, val = value(key), options = field.options || [], inactive = inactiveReason(field);
     const isBool = options.length === 2 && options.includes('1') && options.includes('0') && ['0','1'].includes(val);
-    const browse = browseType(field), help = forceDetails || state.helpFields.has(key), title = label(field);
+    const derived=derivedField(key), browse = derived ? '' : browseType(field), help = forceDetails || state.helpFields.has(key), title = label(field);
     let control;
-    if (field.secret) control = `<input id="${id}" data-field="${key}" type="password" value="${esc(val)}" autocomplete="off" spellcheck="false" data-secret="true" aria-describedby="help-${key}"><button class="reveal" data-reveal="${key}" type="button" aria-label="Показать ключ" aria-pressed="false">${icon('eye')}</button>`;
+    if (derived) control=`<output id="${id}" data-derived="${key}" tabindex="0" aria-describedby="help-${key}">${esc(derived.value)}</output><span class="field-note">${esc(derived.note)}</span>`;
+    else if (field.secret) control = `<input id="${id}" data-field="${key}" type="password" value="${esc(val)}" autocomplete="off" spellcheck="false" data-secret="true" aria-describedby="help-${key}"><button class="reveal" data-reveal="${key}" type="button" aria-label="Показать ключ" aria-pressed="false">${icon('eye')}</button>`;
     else if (key === 'INFINI_SDCPP_SERVER_AUTOSTART') control = `<select id="${id}" data-field="${key}" aria-describedby="help-${key}"><option value="0" ${val === '0' ? 'selected':''}>Внешний · уже запущен</option><option value="1" ${val === '1' ? 'selected':''}>Управляемый · запускать здесь</option>${!['0','1'].includes(val) ? `<option selected value="${esc(val)}">${esc(val)}</option>`:''}</select>`;
     else if (isBool) control = `<label class="toggle-control"><input id="${id}" type="checkbox" data-field="${esc(key)}" ${val === '1' ? 'checked':''} aria-describedby="help-${key}"><span class="toggle-track"></span><span class="toggle-label">${val === '1' ? 'Включено':'Выключено'}</span></label>`;
     else if (field.multiline || /COMMAND_TEMPLATE|EXTRA_ARGS/.test(key)) control = `<textarea id="${id}" data-field="${key}" spellcheck="false" aria-describedby="help-${key}">${esc(val)}</textarea>`;
@@ -340,7 +409,7 @@
       if (field.secret) control += `<button class="reveal" data-reveal="${key}" type="button" aria-label="Показать ключ" aria-pressed="false">${icon('eye')}</button>`;
       if (browse && !field.synthetic) control += `<button class="browse" data-browse="${key}" data-browse-type="${browse}" type="button" title="Выбрать на этом компьютере" aria-label="Выбрать файл: ${esc(title)}">${icon('folder')}</button>`;
     }
-    return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="Подробности: ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(help ? field.help || shortHelp[key] || 'Параметр локального генератора. Значение сохраняется без преобразования.' : shortHelp[key] || '')}</p></div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive ? `<span class="field-note">${esc(inactive)} · значение сохранится</span>`:''}</div></div>`;
+    return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="Подробности: ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(help ? field.help || shortHelp[key] || 'Параметр локального генератора. Значение сохраняется без преобразования.' : shortHelp[key] || '')}</p></div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive && !derived ? `<span class="field-note">${esc(inactive)} · значение сохранится</span>`:''}</div></div>`;
   }
   function disclosure(id,title,fields,reason='',force=false) {
     if (!fields.length) return '';
@@ -352,7 +421,7 @@
     if (force) return `<div class="section-fields">${fields.map(field => fieldHTML(field,true)).join('')}</div>`;
     const active = fields.filter(field => !inactiveReason(field)), inactive = fields.filter(field => inactiveReason(field));
     const loRAKeys = new Set(['INFINI_SDCPP_LORA_DIR','INFINI_SDCPP_LORA_FILE','INFINI_SDCPP_LORA_WEIGHT','INFINI_SDCPP_LORA_PROMPT_TAGS']);
-    const primary = active.filter(field => !loRAKeys.has(field.key) && (basicKeys.has(field.key) || field.advanced === false && !/POOL|FALLBACK/.test(field.key)));
+    const primary = active.filter(field => !loRAKeys.has(field.key) && (basicKeys.has(field.key)));
     const ordering = state.page === 'images' ? ['INFINI_IMAGE_BACKEND','INFINI_SDCPP_SERVER_AUTOSTART','INFINI_SDCPP_SERVER_URL'] : [];
     primary.sort((a,b) => (ordering.includes(a.key) ? ordering.indexOf(a.key) : 100) - (ordering.includes(b.key) ? ordering.indexOf(b.key) : 100));
     const advanced = active.filter(field => !primary.includes(field));
@@ -363,36 +432,44 @@
   function aside() {
     return `<aside class="settings-aside"><h2>Сохранение</h2><p>Изменения остаются в этой вкладке до сохранения. Для работающего генератора нужен безопасный перезапуск.</p><button class="button button-primary" data-action="save">${icon('save')}Сохранить настройки</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button><a class="button" href="#operate">К рабочему столу ${icon('arrow')}</a><div class="aside-meta"><strong>Локальный файл</strong>${esc(state.remote.configPath || 'config.env')}<br><button class="text-button" data-action="openConfig">Открыть файл ${icon('arrow')}</button></div></aside>`;
   }
+  function defaultsSummary() {
+    const offer=state.remote?.defaultsUpdate,count=offer?.changes?.length || 0;
+    if(!count) return 'Новых рекомендаций нет. Текущие настройки можно менять вручную.';
+    if(offer.dismissed) return `Рекомендации ${offer.version || ''} отложены. Можно вернуться к ним в любое время.`;
+    const unit=count % 10 === 1 && count % 100 !== 11 ? 'параметр' : [2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100) ? 'параметра':'параметров';
+    return `Рекомендации ${offer.version || ''}: ${count} ${unit} для сравнения. Это необязательные значения; твои собственные настройки допустимы.`;
+  }
   function renderConfigure() {
     const counts = route => state.fields.filter(field => field.route === route).length;
-    const selected = value('INFINI_GUI_PIPELINE_PRESET');
+    const selected = state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
     const presetEntries = [...Object.keys(state.remote.presets || {}),...Object.keys(state.remote.userPresets || {}).map(name => `Мой: ${name}`)];
     const full = state.fields;
-    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet"><h2>Рекомендованные настройки</h2><p>Обновление меняет только показанные устаревшие значения в config.env. Черновик, ключи, источники моделей и пути не сохраняются этим действием.</p><button class="button" data-ui="defaults-update">Проверить рекомендации</button></section><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} ПАРАМЕТРОВ</span></div><div class="configure-index">${[
+    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet"><h2>Рекомендованные настройки</h2><p id="defaults-summary">${esc(defaultsSummary())}</p><button class="button" data-ui="defaults-update">Проверить рекомендации</button></section><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} ПАРАМЕТРОВ</span></div><div class="configure-index">${[
       ['01','providers','Автор и механика','Источник текста, направление и вариативность.'],['02','images','Источник изображения','Локальный движок, подписка или API.'],['03','sprites','Спрайт и цвет','Прозрачность, края, холст и палитра.'],['04','models','Модели и LoRA','Файлы моделей и художественные адаптеры.'],['05','multiplayer','Соединение с игрой','Адрес генератора и совместный крафт.'],['06','diagnostics','Диагностика','Журнал, события и технические параметры.']
     ].map(([n,route,title,description]) => `<a class="index-row" href="#${route}"><span class="index-number">${n}</span><div><h3>${title}</h3><p>${description}</p></div><span class="index-tail"><span>${counts(route)}</span>${icon('arrow')}</span></a>`).join('')}</div>${disclosure('all-settings','Все параметры одним списком',full,'Полный доступ ко всем настройкам, включая параметры других источников и служебные поля. Значения не скрываются при смене профиля.')}<p class="settings-path">${esc(state.remote.configPath)}</p></div>${aside()}</div>`;
   }
   function pageExtras(page) {
-    if (page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<div class="notice">Codex использует вход по подписке, не API-ключ. Модель текста и модель изображения настраиваются независимо.</div><div class="page-actions"><button class="button" data-action="codexLogin">Войти в Codex ${icon('arrow')}</button><button class="button" data-action="codexStatus">Статус аккаунта</button><button class="button" data-action="codexLogout">Выйти</button>${page === 'providers' ? '<button class="button" data-action="codexCatalog">Обновить модели</button>' : '<button class="button" data-action="codexPing">Проверить аккаунт</button>'}</div><details class="advanced"><summary>Что известно об аккаунте</summary><p class="details-note"><span id="account-status">${esc(state.remote.account?.[page === 'providers' ? 'catalog':'images'] || 'Статус аккаунта ещё не запрошен.')}</span><br>Обновление каталога не запускает крафт. У изображений нет отдельного API списка моделей.</p></details>`;
+    if (page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<div class="notice">Codex использует вход по подписке, не API-ключ. Модель текста и модель изображения настраиваются независимо.</div><div class="page-actions"><button class="button" data-action="codexLogin">Войти в Codex ${icon('arrow')}</button><button class="button" data-action="codexStatus">Статус аккаунта</button><button class="button" data-action="codexLogout">Выйти</button>${page === 'providers' ? '<button class="button" data-action="codexCatalog">Обновить модели</button>' : '<button class="button" data-action="codexPing">Проверить аккаунт</button>'}</div><div class="account-status-panel"><p><span id="account-status">${esc([state.remote.account?.status,state.remote.account?.[page === 'providers' ? 'catalog':'images']].filter(Boolean).join('\n') || 'Статус аккаунта ещё не запрошен.')}</span><br>Обновление каталога не запускает крафт. У изображений нет отдельного API списка моделей.</p></div>`;
     if (page === 'images' && value('INFINI_IMAGE_BACKEND') === 'sdcpp') return `<div class="notice">${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? 'Управляемый запуск: генератор поднимет sd.cpp. Программа и веса — в разделе «Модели и LoRA».' : 'Внешний запуск: sd.cpp уже работает отдельно. Здесь достаточно его URL; файлы моделей выбираются на стороне sd.cpp.'}<br><a class="text-button" href="#models">${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? 'Открыть модели':'LoRA и дополнительные материалы'} ${icon('arrow')}</a></div>`;
-    if (page === 'sprites') return `${value('INFINI_IMAGE_BACKEND') === 'off' ? '<div class="notice">Изображения сейчас выключены. Параметры обработки доступны ниже и сохранятся до включения изображений.</div>':''}<div class="page-actions"><button class="button" data-ui="reset-sprite">${icon('refresh')}Вернуть базовый BOX</button><button class="button" data-action="openCache">${icon('folder')}Папка спрайтов и кеша</button></div>`;
-    if (page === 'models') return `<div class="page-actions"><button class="button" data-action="useLora">Применить выбранную LoRA</button><button class="button" data-ui="clear-lora">Отключить LoRA</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button></div>`;
+    if (page === 'sprites') return `${value('INFINI_IMAGE_BACKEND') === 'off' ? '<div class="notice">Изображения сейчас выключены. Параметры обработки доступны ниже и сохранятся до включения изображений.</div>':''}<div class="page-actions"><button class="button" data-ui="reset-sprite">${icon('refresh')}Вернуть базовый BOX</button><button class="button" data-action="openCache" title="Открыть папку кеша на компьютере генератора">${icon('folder')}Кеш в файловом менеджере</button></div>`;
+    if (page === 'models') return `${value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? '<div class="notice">Локальные модели нужны только для sd.cpp. Для текущего источника настрой модель в разделе «Изображения».</div>' : value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1' ? '<div class="notice">Внешний sd.cpp выбирает основные модели при собственном запуске. Для запуска из студии включи управляемый режим в разделе «Изображения».</div>' : ''}<a class="text-button" href="#images">К источнику изображений ${icon('arrow')}</a><div class="page-actions"><button class="button" data-action="useLora">Применить выбранную LoRA</button><button class="button" data-ui="clear-lora">Отключить LoRA</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button></div>`;
     if (page === 'multiplayer') return `<div class="notice">Эта студия работает только на текущем компьютере. Доступ друзей настраивается для генератора, а не для веб-интерфейса.</div><div class="field-row"><div class="field-copy"><label for="lan-enabled">Режим LAN / Radmin</label><p class="field-help">Сетевая надстройка над текущим профилем. Адреса ниже не меняют модель.</p></div><div class="field-control"><label class="toggle-control"><input id="lan-enabled" type="checkbox" data-lan ${state.lan ? 'checked':''}><span class="toggle-track"></span><span class="toggle-label">${state.lan ? 'Включено':'Выключено'}</span></label></div></div>`;
     return '';
   }
   function renderSettings(page) {
     let fields = state.fields.filter(field => field.route === page);
     if (state.filter) fields = fields.filter(field => matches(field,state.filter));
-    $('#workspace').innerHTML = `${heading(page)}<div class="settings-layout"><div class="settings-main">${pageExtras(page)}<div class="settings-toolbar"><label class="inline-search">${icon('search')}<input id="page-search" placeholder="Найти в этом разделе…" value="${esc(state.filter)}" autocomplete="off" aria-label="Поиск в разделе"></label><span class="field-counter">${fields.length} параметров</span></div><section class="field-section">${fieldGroups(fields,!!state.filter)}</section>${page === 'diagnostics' ? diagnosticsMarkup():''}</div>${aside()}</div>`;
+    $('#workspace').innerHTML = `${heading(page)}<div class="settings-layout"><div class="settings-main">${pageExtras(page)}${page === 'diagnostics' ? diagnosticsMarkup():''}<div class="settings-toolbar"><label class="inline-search">${icon('search')}<input id="page-search" placeholder="Найти в этом разделе…" value="${esc(state.filter)}" autocomplete="off" aria-label="Поиск в разделе"></label><span class="field-counter">${fields.length} параметров</span></div><section class="field-section">${page === 'diagnostics' && !state.filter ? disclosure('diagnostic-settings','Параметры журнала и отладки',fields,'Настройки записи; сам журнал показан выше.') : fieldGroups(fields,!!state.filter)}</section></div>${aside()}</div>`;
     if (page === 'diagnostics') updateDiagnostics();
   }
   function diagnosticsMarkup() {
     const tabs = {summary:'Сводка',events:'События',prompts:'Промпты',pipeline:'Этапы',sdcpp:'sd.cpp',failure:'Ошибка'};
-    return `<details class="advanced"><summary>Аварийное управление</summary><p class="details-note">Обычный запуск защищает активный крафт. Здесь доступен принудительный перезапуск только после подтверждения.</p><div class="page-actions" style="padding:0 16px"><button class="button button-danger" data-ui="force-restart">Принудительный перезапуск…</button></div></details><section><div class="section-heading"><h2>Локальный журнал</h2></div><div class="page-actions"><button class="button" data-action="health">${icon('pulse')}Соединение</button><button class="button" data-action="trace">${icon('refresh')}Обновить журнал</button><button class="button" data-action="openCache">${icon('folder')}Кеш</button><button class="button" data-action="cancelTrace">Отменить обновление</button><button class="button button-danger" data-ui="clear-trace">Очистить…</button></div><div class="diagnostic-status"><span class="eyebrow">ИСХОДНЫЙ СТАТУС ГЕНЕРАТОРА</span><p id="diagnostic-status"></p></div><div class="trace-tabs" role="tablist" aria-label="Разделы журнала">${Object.entries(tabs).map(([key,name]) => `<button id="tab-${key}" role="tab" aria-controls="trace-view" aria-selected="${key === state.traceTab}" tabindex="${key === state.traceTab ? '0':'-1'}" class="${key === state.traceTab ? 'active':''}" data-trace-tab="${key}">${name}</button>`).join('')}</div><div id="trace-view" class="trace-view" role="tabpanel" aria-labelledby="tab-${state.traceTab}" tabindex="0"></div></section>`;
+    return `<details class="advanced"><summary>Аварийное управление</summary><p class="details-note">Обычный запуск защищает активный крафт. Здесь доступен принудительный перезапуск только после подтверждения.</p><div class="page-actions" style="padding:0 16px"><button class="button button-danger" data-ui="force-restart">Принудительный перезапуск…</button></div></details><section><div class="section-heading"><h2>Локальный журнал</h2></div><p class="dialog-copy">Соединение, журнал, очистка и папка кеша используют сохранённую конфигурацию или сервер, запущенный этой студией. Для новых адресов сначала сохрани настройки.</p><div class="page-actions"><button class="button" data-action="health">${icon('pulse')}Соединение</button><button class="button" data-action="trace">${icon('refresh')}Обновить журнал</button><button class="button" data-action="openCache" title="Открыть папку кеша на компьютере генератора">${icon('folder')}Открыть папку кеша</button><button class="button" data-action="cancelTrace">Отменить обновление</button><button class="button button-danger" data-ui="clear-trace">Очистить…</button></div><div class="diagnostic-status"><span class="eyebrow">ИСХОДНЫЙ СТАТУС ГЕНЕРАТОРА</span><p id="diagnostic-status"></p></div><p id="trace-status" class="trace-status" role="status"></p><div class="trace-tabs" role="tablist" aria-label="Разделы журнала">${Object.entries(tabs).map(([key,name]) => `<button id="tab-${key}" role="tab" aria-controls="trace-view" aria-selected="${key === state.traceTab}" tabindex="${key === state.traceTab ? '0':'-1'}" class="${key === state.traceTab ? 'active':''}" data-trace-tab="${key}">${name}</button>`).join('')}</div><div id="trace-view" class="trace-view" role="tabpanel" aria-labelledby="tab-${state.traceTab}" tabindex="0"></div></section>`;
   }
   function updateDiagnostics() {
     if (!$('#diagnostic-status')) return;
     $('#diagnostic-status').textContent = [state.remote.status,state.remote.appliedConfig,state.remote.activity].filter(Boolean).join('\n\n');
+    $('#trace-status').textContent = state.remote.traceStatus || 'Журнал ещё не запрошен.';
     const raw = state.remote.trace?.[state.traceTab] ?? (state.traceTab === 'failure' ? state.remote.trace?.last_failure : null);
     const view = $('#trace-view');
     if (!raw || typeof raw === 'string' && !raw.trim()) {view.classList.add('is-empty');view.innerHTML = '<h3>Пока нет записей.</h3><span>Обнови журнал. Записи появятся после реального крафта.</span>';}
@@ -440,7 +517,8 @@
     $('#crumb').textContent = routes[state.page][0];document.title = `${routes[state.page][0]} — Infinicraft`;
     const fromMenu = $('.rail').classList.contains('is-open');
     setMenu(false,false);
-    render();if (fromMenu) $('#workspace').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+    render();if (fromMenu) $('#workspace').focus({preventScroll:true});
+    if(state.focusKey) {const key=state.focusKey;state.focusKey=null;focusFieldRow(key);} else window.scrollTo({top:0,behavior:'instant'});
   }
   function matches(field,query) {
     const haystack = `${label(field)} ${field.key} ${field.help || ''} ${routes[field.route][0]}`.toLocaleLowerCase();
@@ -456,19 +534,77 @@
   function focusField(key) {
     const field = state.fields.find(field => field.key === key);if (!field) return;
     $('#search-dialog').close();state.filter = '';state.helpFields.add(key);
-    if (state.page !== field.route) {location.hash = field.route;state.page = field.route;navigate();} else render();
+    state.focusKey=key;
+    // hashchange owns the single route render; a second render would erase focus.
+    if(location.hash.slice(1) !== field.route) location.hash=field.route;else navigate();
+  }
+  function focusFieldRow(key) {
     requestAnimationFrame(() => {
       const row = $(`[data-field-row="${key}"]`);
       if (!row) return;
       let parent = row.parentElement;
       while(parent) {if(parent.tagName === 'DETAILS') {parent.open = true;state.openDetails.add(parent.dataset.details);}parent=parent.parentElement;}
       row.classList.add('field-highlight');
-      row.querySelector('[data-field]')?.focus({preventScroll:true});
+      row.querySelector('[data-field],[data-derived]')?.focus({preventScroll:true});
       const top = row.getBoundingClientRect().top + window.scrollY - 94;
       window.scrollTo({top:Math.max(0,top),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant':'smooth'});
     });
   }
   function utility(title,body) {setMenu(false);$('#utility-dialog').dataset.kind='';$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
+  function showSaveConflict() {
+    const disk={...state.remote.defaults,...state.remote.savedValues};
+    const changed=Object.keys(disk).filter(key=>disk[key] !== state.revisionValues?.[key]);
+    const display=(key,val)=>isCredentialKey(key) ? (val ? '••••••••':'Не задано') : val || 'Не задано';
+    utility('Конфигурация изменилась на диске', `<p class="dialog-copy">Другой процесс или вкладка сохранили настройки после начала твоего черновика. Проверь изменения ниже. Твои правки останутся в этой вкладке; сохранение потребует отдельного нажатия.</p><div class="confirm-list">${changed.map(key=>`<div><span>${esc(names[key] || key)}<small>На диске: ${esc(display(key,disk[key]))}</small></span><span>Черновик: ${esc(display(key,value(key)))}</span></div>`).join('')}</div><div class="dialog-actions"><button class="button" data-ui="close-dialog">Вернуться</button><button class="button button-primary" id="reconcile-draft">Продолжить с моими правками</button></div>`);
+    const revision=state.remote.savedRevision;
+    $('#reconcile-draft').onclick=()=>{const edits=Object.fromEntries([...state.dirty].map(key=>[key,state.draft[key]]));state.draft={...disk,...edits};state.baseline={...disk};state.savedRevision=revision;state.revisionValues={...disk};$('#utility-dialog').close();recomputeDirty();render();toast('Черновик сохранён в этой вкладке. Проверь его и нажми «Сохранить», когда будешь готов.');};
+  }
+  function showDocument(result) {
+    utility(result.title || 'Локальный документ', `<p class="dialog-copy">${esc(result.path || '')}</p><pre class="document-view">${esc(result.content || '')}</pre><div class="dialog-actions"><button class="button" data-ui="close-dialog">Закрыть</button></div>`);
+  }
+  async function showFilePicker(key,kind='file') {
+    state.picker={key,kind,request:0};
+    utility('Выбрать на компьютере генератора', `<p class="dialog-copy">${esc(names[key] || key)}. Выбор изменит только черновик; файлы не загружаются и не изменяются.</p><form id="file-location"><label class="dialog-field-label" for="file-path">Папка или полный путь</label><div class="file-location"><input class="dialog-input" id="file-path" autocomplete="off" spellcheck="false"><button class="button" type="submit">Открыть</button></div></form><p id="file-error" role="alert" class="defaults-error" hidden></p><div id="file-entries" class="file-entries" aria-live="polite"></div><p id="file-selection" class="dialog-copy" aria-live="polite"></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Отмена</button><button class="button button-primary" id="file-select" disabled>${kind === 'folder' ? 'Выбрать папку':'Выбрать файл'}</button></div>`);
+    $('#utility-dialog').dataset.kind='files';
+    $('#file-location').onsubmit=event=>{event.preventDefault();loadFiles($('#file-path').value);};
+    $('#file-select').onclick=()=>selectFile(state.picker?.selection);
+    await loadFiles(value(key));
+  }
+  function selectFile(path) {
+    if (!path || !state.picker) return;
+    const key=state.picker.key;
+    state.draft[key]=path;state.edits[key]=++state.editClock;
+    state.picker=null;$('#utility-dialog').close();recomputeDirty();render();
+    toast('Путь выбран. Сохрани настройки, чтобы записать его в config.env.');
+  }
+  async function loadFiles(path) {
+    const picker=state.picker;if (!picker) return;
+    const request=++picker.request;
+    $('#file-select').disabled=true;$('#file-error').hidden=true;
+    $('#file-entries').textContent='Читаем папку…';
+    try {
+      const listing=await api(`/api/files?path=${encodeURIComponent(path)}&kind=${encodeURIComponent(picker.kind)}`);
+      if(state.picker !== picker || picker.request !== request || !$('#utility-dialog').open || $('#utility-dialog').dataset.kind !== 'files') return;
+      $('#file-path').value=listing.path;
+      if(listing.warning) {$('#file-error').hidden=false;$('#file-error').textContent=listing.warning;}
+      picker.selection=picker.kind === 'folder' ? listing.path : listing.selected?.path || (listing.entries || []).find(entry=>!entry.directory && entry.path === path)?.path || null;
+      $('#file-select').disabled=!picker.selection;
+      $('#file-selection').textContent=picker.selection ? `Выбрано: ${picker.selection}` : 'Выбери файл из списка или открой полный путь.';
+      const entries=listing.entries || [];
+      $('#file-entries').innerHTML=`${listing.parent ? '<button class="file-entry" data-file-parent>↑ На уровень выше</button>':''}${entries.map((entry,index)=>`<button class="file-entry" data-file-index="${index}">${icon(entry.directory ? 'folder':'text')}<span>${esc(entry.name)}</span>${entry.directory ? icon('arrow'):''}</button>`).join('')}${!entries.length ? '<p class="dialog-copy">Подходящих файлов здесь нет.</p>':''}${listing.truncated ? '<p class="dialog-copy">Показана часть папки. Укажи более точный путь.</p>':''}`;
+      $('[data-file-parent]')?.addEventListener('click',()=>loadFiles(listing.parent));
+      $$('[data-file-index]').forEach(button=>button.onclick=()=>{
+        const entry=entries[Number(button.dataset.fileIndex)];
+        if(entry.directory) {loadFiles(entry.path);return;}
+        picker.selection=entry.path;$('#file-select').disabled=false;$('#file-selection').textContent=`Выбрано: ${entry.path}`;
+        $$('[data-file-index]').forEach(row=>row.classList.toggle('selected',row === button));
+      });
+    } catch(error) {
+      if(state.picker !== picker || picker.request !== request || $('#utility-dialog').dataset.kind !== 'files') return;
+      $('#file-error').hidden=false;$('#file-error').textContent=error.message;
+      $('#file-entries').textContent='Проверь путь и попробуй снова.';
+    }
+  }
   function defaultsError(message) {
     if ($('#defaults-error')) {$('#defaults-error').textContent=message;$('#defaults-error').hidden=false;}
   }
@@ -476,7 +612,7 @@
     const offer = state.remote?.defaultsUpdate;
     state.defaultsPreview = offer ? {...offer,changes:(offer.changes || []).map(row=>({...row}))} : null;
     const changes = state.defaultsPreview?.changes || [];
-    utility(`Рекомендации ${offer?.version || ''}`,`<p class="dialog-copy">Будут записаны только перечисленные изменения из сохранённого config.env. Несохранённые настройки, ключи, источники моделей и пути остаются без изменений. Работающий генератор применит изменения после безопасного перезапуска.</p><div id="defaults-changes" class="defaults-changes">${changes.length ? changes.map(row=>`<div data-defaults-key="${esc(row.key)}"><code>${esc(row.key)}</code><p class="defaults-values"><span>${esc(row.current || "Пусто (off)")}</span> → <strong>${esc(row.recommended)}</strong></p><p>${esc(row.reason)}</p></div>`).join('') : 'Обновлений рекомендованных значений нет.'}</div><p id="defaults-error" class="defaults-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Позже</button><button class="button" id="defaults-refresh" data-ui="defaults-refresh">Обновить список</button>${changes.length ? '<button class="button" id="defaults-decline" data-submit-action>Оставить текущие</button><button class="button button-primary" id="defaults-accept" data-submit-action>Применить рекомендации</button>' : ''}</div>`);
+    utility(`Рекомендации ${offer?.version || ''}`,`<p class="dialog-copy">Необязательные рекомендации для сравнения с сохранённым config.env. Личные настройки могут отличаться; применять рекомендации не обязательно. Будут записаны только перечисленные изменения. Несохранённые настройки, ключи, источники моделей и пути остаются без изменений. Работающий генератор применит изменения после безопасного перезапуска.</p><div id="defaults-changes" class="defaults-changes">${changes.length ? changes.map(row=>`<div data-defaults-key="${esc(row.key)}"><code>${esc(row.key)}</code><p class="defaults-values"><span>${esc(row.current || "Пусто (off)")}</span> → <strong>${esc(row.recommended)}</strong></p><p>${esc(row.reason)}</p></div>`).join('') : 'Обновлений рекомендованных значений нет.'}</div><p id="defaults-error" class="defaults-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Позже</button><button class="button" id="defaults-refresh" data-ui="defaults-refresh">Обновить список</button>${changes.length ? '<button class="button" id="defaults-decline" data-submit-action>Оставить текущие</button><button class="button button-primary" id="defaults-accept" data-submit-action>Применить рекомендации</button>' : ''}</div>`);
     $('#utility-dialog').dataset.kind='defaults';
     const decide = name => action(name,{revision:state.defaultsPreview.revision});
     if ($('#defaults-accept')) $('#defaults-accept').onclick=()=>decide('acceptDefaults');
@@ -494,7 +630,7 @@
   function showHelp() {
     utility('Как начать крафт',`<p class="dialog-copy">Студия настраивает генератор. Сам крафт происходит в Terraria с модом InfiniCrafterLocal.</p>${[
       ['01','Выбери автора','Подключи локальную текстовую модель или API. Автор отвечает за свойства и механику.'],['02','Настрой изображение','Выбери источник рисунка. Для sd.cpp укажи существующие файлы моделей; для API — адрес и ключ.'],['03','Запусти генератор','Сохрани настройки и запусти генератор. «Проверить» показывает реальное соединение, не готовность всех моделей.'],['04','Продолжи в игре','Открой Terraria с модом. Предметы создаются через игровой крафт. Студия не запускает пробную платную генерацию.']
-    ].map(([n,title,text]) => `<div class="help-step"><span>${n}</span><div><h3>${title}</h3><p>${text}</p></div></div>`).join('')}<div class="dialog-actions"><button class="button" data-action="help">Локальная инструкция</button><button class="button button-primary" data-ui="close-dialog">К работе ${icon('arrow')}</button></div>`);
+    ].map(([n,title,text]) => `<div class="help-step"><span>${n}</span><div><h3>${title}</h3><p>${text}</p></div></div>`).join('')}<div class="dialog-actions"><a class="button" href="/guide?token=${encodeURIComponent(token)}#/docs/user/START_RU.md" target="_blank" rel="noopener">Локальная инструкция ↗</a><button class="button button-primary" data-ui="close-dialog">К работе ${icon('arrow')}</button></div>`);
   }
   function showPresetPreview() {
     const name = $('#preset-select').value;
@@ -525,10 +661,13 @@
     if (target.matches('[data-field]')) {
       const key=target.dataset.field;state.draft[key]=target.type === 'checkbox' ? target.checked ? '1':'0':target.value;
       state.edits[key]=++state.editClock;recomputeDirty();target.closest('.field-row').classList.toggle('is-dirty',state.dirty.has(key));
+      $$('[data-derived]').forEach(output=>{const derived=derivedField(output.dataset.derived);if(derived) output.textContent=derived.value;});
       if(target.type === 'checkbox') target.parentElement.querySelector('.toggle-label').textContent=target.checked ? 'Включено':'Выключено';
-      if(['INFINI_LLM_PROVIDER','INFINI_IMAGE_BACKEND','INFINI_MP_ASSET_TRANSPORT','INFINI_PIXEL_POSTERIZE','INFINI_SDCPP_SERVER_COMMAND_MODE','INFINI_SDCPP_SERVER_AUTOSTART'].includes(key)) {const selection=key;render();$(`[data-field="${selection}"]`)?.focus({preventScroll:true});}
+      if(target.tagName === 'SELECT' || target.type === 'checkbox') {const selection=key;render();$(`[data-field="${selection}"]`)?.focus({preventScroll:true});}
     }
-    if(target.matches('[data-lan]')) {state.lan=target.checked;state.lanEdit=++state.editClock;target.parentElement.querySelector('.toggle-label').textContent=target.checked?'Включено':'Выключено';recomputeDirty();}
+    if(target.matches('[data-lan]')) {state.lan=target.checked;state.lanEdit=++state.editClock;target.parentElement.querySelector('.toggle-label').textContent=target.checked?'Включено':'Выключено';recomputeDirty();render();$('#lan-enabled')?.focus({preventScroll:true});}
+    if(target.id === 'file-path' && state.picker) {state.picker.request++;state.picker.selection=null;$('#file-select').disabled=true;$('#file-selection').textContent='Нажми «Открыть», чтобы проверить новый путь.';$$('[data-file-index]').forEach(row=>row.classList.remove('selected'));}
+    if(target.id === 'preset-select') state.presetChoice=target.value;
     if(target.id === 'global-search') {state.searchIndex=0;renderSearch();}
     if(target.id === 'page-search') {const start=target.selectionStart;state.filter=target.value;render();$('#page-search').focus({preventScroll:true});$('#page-search').setSelectionRange(start,start);}
   });
@@ -540,7 +679,7 @@
     const button=event.target.closest('button,[data-ui],[data-search-key]');if(!button) return;
     if (button.tagName === 'A' && button.dataset.ui) event.preventDefault();
     if(button.dataset.action) {action(button.dataset.action);return;}
-    if(button.dataset.browse) {action('browse',{key:button.dataset.browse,type:button.dataset.browseType});return;}
+    if(button.dataset.browse) {showFilePicker(button.dataset.browse,button.dataset.browseType);return;}
     if(button.dataset.reveal) {const input=$(`[data-field="${button.dataset.reveal}"]`);input.type=input.type === 'password'?'text':'password';button.setAttribute('aria-pressed',String(input.type === 'text'));button.setAttribute('aria-label',input.type === 'text'?'Скрыть ключ':'Показать ключ');return;}
     if(button.dataset.helpField) {event.preventDefault();const key=button.dataset.helpField;state.helpFields.has(key)?state.helpFields.delete(key):state.helpFields.add(key);const y=window.scrollY;render();window.scrollTo(0,y);$(`[data-help-field="${key}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.searchKey) {focusField(button.dataset.searchKey);return;}
@@ -549,22 +688,25 @@
       case 'defaults-update':showDefaultsUpdate();break;
       case 'defaults-refresh':refreshDefaultsUpdate();break;
       case 'search':showSearch();break;
+      case 'review-conflict':showSaveConflict();break;
+      case 'notifications':utility('Уведомления',state.notifications.length ? `<div class="notification-history">${[...state.notifications].reverse().map(notice=>`<article class="notification-entry${notice.error ? ' is-error':''}"><span>${icon(notice.error ? 'alert':'check')}</span><p>${esc(notice.message)}</p></article>`).join('')}</div>` : '<p class="dialog-copy">Уведомлений пока нет.</p>');break;
       case 'retry':poll();break;
       case 'close-dialog':if (button.closest('dialog')?.dataset.kind !== 'defaults' || !(state.pending || state.posting)) button.closest('dialog')?.close();break;
       case 'menu':setMenu(!$('.rail').classList.contains('is-open'));break;
       case 'close-menu':setMenu(false);break;
       case 'help':showHelp();break;
       case 'force-restart':confirm('Прервать крафт и перезапустить?','Активный и ожидающий крафт будет прерван. Это не подтверждает возврат материалов в игре. Используй только если безопасный перезапуск недоступен.','forceRestart',{confirm:true},'Прервать и перезапустить');break;
-      case 'stop':confirm('Остановить генератор?','Проверим активный крафт перед остановкой. Чужие процессы не изменяются.','stop',{},'Остановить безопасно');break;
+      case 'stop':confirm('Остановить генератор?','Проверим активный крафт перед остановкой собственного запущенного сервера. Черновик адреса не меняет цель; чужие процессы не изменяются.','stop',{},'Остановить безопасно');break;
       case 'exit':confirm('Закрыть студию?','Закроется только локальный интерфейс. Это действие не останавливает генератор. Несохранённые изменения в этой вкладке будут потеряны.','exitStudio',{},'Закрыть студию');break;
-      case 'clear-trace':confirm('Очистить локальный журнал?','Будут удалены диагностические записи генерации. Готовые игровые предметы и рецепты не меняются. Это действие нельзя отменить.','clearTrace',{},'Очистить журнал');break;
+      case 'clear-trace':confirm('Очистить локальный журнал?','Будут удалены диагностические записи сохранённой конфигурации. Черновик пути не меняет цель. Готовые игровые предметы и рецепты не меняются. Это действие нельзя отменить.','clearTrace',{confirm:true},'Очистить журнал');break;
       case 'clear-lora':confirm('Отключить адаптер?','Сбросим настройки LoRA. Сам файл на диске не удаляется.','clearLora',{},'Отключить LoRA');break;
       case 'reset-sprite':confirm('Вернуть базовый resize?','Фильтр станет BOX, premultiplied resize будет включён. Остальные параметры спрайта остаются.','resetSprite',{},'Вернуть BOX');break;
       case 'apply-preset':showPresetPreview();break;
       case 'save-preset':showSavePreset();break;
       case 'discard':{
         if(state.pending || state.posting) {toast('Дождись подтверждения перед отменой.',true);break;}
-        if(window.confirm('Отменить все несохранённые изменения в этой вкладке?')) {state.draft={...state.baseline};state.lan=state.baselineLan;state.editClock++;Object.keys(state.draft).forEach(key=>state.edits[key]=state.editClock);state.lanEdit=state.editClock;recomputeDirty();render();}break;
+        utility('Отменить изменения?', '<p class="dialog-copy">Все несохранённые изменения в этой вкладке будут заменены значениями из config.env.</p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Продолжить редактирование</button><button class="button button-danger" id="confirm-submit">Отменить изменения</button></div>');
+        $('#confirm-submit').onclick=()=>{state.draft={...state.remote.defaults,...state.remote.savedValues};state.baseline={...state.draft};state.lan=state.baselineLan=!!state.remote.savedLanEnabled;state.savedRevision=state.remote.savedRevision;state.revisionValues={...state.draft};state.presetChoice=null;state.editClock++;Object.keys(state.draft).forEach(key=>state.edits[key]=state.editClock);state.lanEdit=state.editClock;recomputeDirty();$('#utility-dialog').close();render();};break;
       }
     }
   });

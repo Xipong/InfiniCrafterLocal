@@ -5,6 +5,7 @@ integration while HTTP/controller coverage remains in test_web_studio.py.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
@@ -17,10 +18,10 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
     if not TKINTER_AVAILABLE:
         pytest.skip('Browser integration needs native Tk and a display')
     browser_api = pytest.importorskip('playwright.sync_api')
-    browser_executable = None
+    browser_executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE')
     with browser_api.sync_playwright() as browser_probe:
         from pathlib import Path
-        if not Path(browser_probe.chromium.executable_path).exists():
+        if not Path(browser_executable or browser_probe.chromium.executable_path).exists():
             candidates = sorted((Path.home() / '.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
             if not candidates:
                 pytest.skip('Browser integration needs installed Playwright Chromium')
@@ -130,7 +131,7 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
         pytest.skip('Defaults integration needs native Tk')
     browser_api = pytest.importorskip('playwright.sync_api')
     with browser_api.sync_playwright() as probe_browser:
-        executable = probe_browser.chromium.executable_path
+        executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE') or probe_browser.chromium.executable_path
         if not Path(executable).exists():
             candidates = sorted((Path.home() / '.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
             if not candidates:

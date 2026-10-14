@@ -92,18 +92,19 @@ class OperatePageMixin:
         applied_text = applied.get().lower() if applied is not None else ""
         busy = "server-action" in self.__dict__.get("_gui_tasks", {}) or "checking" in raw or "checking" in applied_text
         ack = self.__dict__.get("_applied_config_ack")
+        lifecycle = self.__dict__.get("_server_lifecycle", "unknown")
         if busy:
             title, detail = "Проверяем состояние…", "Перед действием проверяем сервер и текущую генерацию. Интерфейс остаётся доступным."
-        elif any(word in raw for word in ("refused", "failed", "unavailable", "ошиб", "не удалось")):
+        elif any(word in raw for word in ("refused", "failed", "unavailable", "unconfirmed", "not stopped", "ошиб", "не удалось")):
             title, detail = "Нужно внимание", "Действие не выполнено. Подробности и исходное сообщение доступны в разделе «Диагностика»."
-        elif "unconfirmed" in applied_text:
-            title, detail = "Соединение не подтверждено", "Сервер недоступен или его принадлежность этой копии не подтверждена. Проверь диагностику; чужие процессы не изменяются."
-        elif "stopped" in raw:
+        elif lifecycle == "stopped":
             title, detail = "Сервер остановлен", "Можно изменить настройки или запустить генератор снова."
+        elif lifecycle == "starting":
+            title, detail = "Сервер запускается", "Процесс запущен. Ждём подтверждения соединения; готовность ещё не проверена."
         elif ack:
             title, detail = "Сервер отвечает", "Получен ответ от сервера этой копии генератора. Полная проверка всех настроек и ключей не выполнялась."
-        elif "запущен" in raw:
-            title, detail = "Сервер запускается", "Процесс запущен. Ждём подтверждения соединения; готовность ещё не проверена."
+        elif "unconfirmed" in applied_text:
+            title, detail = "Соединение не подтверждено", "Сервер недоступен или его принадлежность этой копии не подтверждена. Проверь диагностику; чужие процессы не изменяются."
         else:
             title, detail = "Состояние ещё не проверено", "Настройки готовы к редактированию. Нажми «Проверить соединение» или запусти сервер."
         activity = self.__dict__.get("activity_var")

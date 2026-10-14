@@ -215,6 +215,28 @@ def test_home_health_feedback_is_honest_when_check_failed_or_stale():
     assert "Настройки изменены" in home.home_config_var.get()
     assert "перезапуск" in home.home_config_var.get()
 
+    # A negative status phrase must never certify a successful stop.
+    home.status_var.set("Port still busy: helper has not stopped; no new server launched.")
+    home._refresh_operate_summary()
+    assert home.home_state_var.get() == "Нужно внимание"
+    home._applied_config_ack = None
+    home._server_lifecycle = "stopped"
+    home.applied_config_var.set("Stopped; Runtime config unconfirmed")
+    for unrelated in ("Server stopped through guarded /shutdown.", "Saved: config.env", "Codex OAuth: сессия готова"):
+        home.status_var.set(unrelated)
+        home._refresh_operate_summary()
+        assert home.home_state_var.get() == "Сервер остановлен"
+    home._server_lifecycle = "starting"
+    home.status_var.set("Saved: config.env")
+    home._refresh_operate_summary()
+    assert home.home_state_var.get() == "Сервер запускается"
+    home._server_lifecycle = "responding"
+    home._applied_config_ack = {"pid": 1234}
+    home.activity_var.set("Backend activity unknown")
+    home.status_var.set("Codex OAuth: сессия готова")
+    home._refresh_operate_summary()
+    assert home.home_state_var.get() == "Сервер отвечает"
+
 
 def test_real_tk_shell_navigation_save_and_secret_regression(tmp_path, monkeypatch):
     from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk

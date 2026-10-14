@@ -63,9 +63,10 @@
     <header class="topbar">
       <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-controls="navigation-panel" aria-expanded="false"><svg><use href="#i-sliders"/></svg></button>
       <div class="breadcrumb"><span>Студия</span><span class="slash">/</span><span id="crumb">Рабочий стол</span></div>
-      <div class="top-actions"><button class="search-trigger" data-ui="search"><svg><use href="#i-search"/></svg><span>Найти настройку</span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span>Подключение…</span></span><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
+      <div class="top-actions"><button class="notification-trigger icon-button" data-ui="notifications" aria-label="История уведомлений" title="История уведомлений"><svg><use href="#i-alert"/></svg><span id="notice-count">0</span></button><button class="search-trigger" data-ui="search"><svg><use href="#i-search"/></svg><span>Найти настройку</span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span>Подключение…</span></span><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
     </header>
     <div id="connection-banner" class="connection-banner" role="status" hidden></div>
+    <div id="draft-conflict" class="connection-banner" role="status" hidden><span>Конфигурация на диске изменилась. Твой черновик сохранён в этой вкладке.</span><button data-ui="review-conflict">Проверить изменения</button></div>
     <main id="workspace" tabindex="-1"><div class="initial-loading"><h1>Подключение к студии</h1><div class="loading-line"></div><p>Получаем настройки локального генератора.</p><button class="button" data-ui="retry" hidden>Повторить подключение</button></div></main>
     <footer class="workspace-footer"><span>Локальный генератор</span><span>Крафт происходит в Terraria<span class="footer-square"></span></span></footer>
   </div>

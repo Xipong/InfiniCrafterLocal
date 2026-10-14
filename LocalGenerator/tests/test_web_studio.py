@@ -139,7 +139,7 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
         assert parse_env(config)['INFINI_PRIVATE_UNKNOWN'] == 'edited-explicitly'
         controller.apply({'id':'reset-proof','action':'resetSprite','values':{},'extra':{}})
-        assert app.vars['INFINI_SPRITE_DOWNSCALE_FILTER'].get() == 'box'
+        assert controller.action_results['reset-proof']['values']['INFINI_SPRITE_DOWNSCALE_FILTER'] == 'box'
     finally:
         server.close()
         app.destroy()
@@ -230,7 +230,7 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
         _current_profile_settings=lambda: dict(current), preset_var=value(SettingsGui._pipeline_preset_from_config(current, {})),
         status_var=value('Ready'), activity_var=value(), applied_config_var=value(),
         home_state_var=value(), home_detail_var=value(), home_config_var=value(),
-        trace_texts={}, _gui_tasks={}, radmin_enabled=value(False),
+        trace_texts={}, trace_status_var=value(), _gui_tasks={}, radmin_enabled=value(False),
         codex_catalog_var=value(), codex_image_account_var=value(),
         _pipeline_preset_from_config=SettingsGui._pipeline_preset_from_config,
     )

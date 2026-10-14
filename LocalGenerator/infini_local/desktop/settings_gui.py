@@ -40,6 +40,7 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
         self._gui_closed = False
         self._gui_tasks = {}
         self._applied_config_ack = None
+        self._server_lifecycle = "unknown"
         self._health_after_id = None
         self.data = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
         self.vars: dict[str, tk.StringVar] = {}
@@ -126,9 +127,9 @@ class SettingsGui(SettingsGuiServerControlsMixin, SettingsGuiTraceStateMixin, Se
 
 
 def main():
-    app = SettingsGui()
-    app.protocol("WM_DELETE_WINDOW", app.on_close)
-    app.mainloop()
+    # Keep this legacy module entrypoint compatible without exposing a second UI.
+    from importlib import import_module
+    return import_module("infini_local.desktop.web_studio").main()
 
 
 if __name__ == "__main__":
