@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import importlib.util
 import os
 from pathlib import Path
 
@@ -37,14 +38,17 @@ def load_config_env(project: Path) -> None:
     path = project / "LocalGenerator/config.env"
     if not path.exists():
         return
-    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
-        line = raw.strip().rstrip("\r")
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key:
-            os.environ.setdefault(key, value.strip())
+    # Load the canonical dependency-free codec from this toolbox distribution.
+    # The selected project may be elsewhere; never import its runtime bootstrap
+    # or create caches merely to inspect its configuration.
+    source = BASE_ROOT / 'LocalGenerator/infini_local/core/env_file.py'
+    spec = importlib.util.spec_from_file_location('_infini_toolbox_env_codec', source)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Cannot load the config.env codec from this toolbox installation.')
+    codec = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(codec)
+    for key, value in codec.read_env_file(path).items():
+        os.environ.setdefault(key, value)
 
 
 def new_run_dir(label: str) -> Path:

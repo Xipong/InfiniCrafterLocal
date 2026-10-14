@@ -634,7 +634,11 @@ def main(argv=None):
     parser.add_argument('--port', type=int, default=0)
     args = parser.parse_args(argv)
     from infini_local.desktop.settings_gui import SettingsGui
-    app = SettingsGui()
+    try:
+        app = SettingsGui()
+    except (ValueError, UnicodeError) as exc:
+        raise SystemExit(f'Не удалось прочитать config.env: {exc} '
+                         'Исправь указанную строку в редакторе или восстанови резервную копию, затем открой Studio снова.') from None
     app.withdraw()
     server = StudioServer(Path(__file__).with_name('webui'), port=args.port)
     controller = StudioController(app, server)
