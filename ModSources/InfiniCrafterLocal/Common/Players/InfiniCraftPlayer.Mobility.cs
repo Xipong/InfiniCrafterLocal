@@ -72,30 +72,53 @@ public sealed partial class InfiniCraftPlayer
         _generatedMobilityCooldownTicks = Math.Clamp(cooldownTicks, 0, 36000);
     }
 
-    public void ApplyGeneratedUtilityBuff(GeneratedBuffSpec? buff, bool syncNetwork = false)
+    public bool ApplyGeneratedUtilityBuff(GeneratedBuffSpec? buff, bool syncNetwork = false,
+        GeneratedItemData? source = null, uint? activationTick = null)
     {
-        if (buff is null) return;
+        if (buff is null) return false;
         buff.Normalize();
-        if (!buff.HasAnyEffect) return;
-        var incoming = ActiveGeneratedUtilityBuff.From(buff);
-        var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
-        if (existing is not null)
-            existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
-        else
+        if (!buff.HasAnyEffect) return false;
+        uint elapsed = activationTick.HasValue
+            ? unchecked(Main.GameUpdateCount - activationTick.Value) : 0;
+        if (elapsed > int.MaxValue)
         {
-            // Bound pathological repeated authoring while preserving independent
-            // durations for distinct explicit effects. HoldItem refreshes an equal
-            // entry instead of allocating one entry per tick.
-            if (_activeGeneratedUtilityBuffs.Count >= 32)
-            {
-                var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
-                _activeGeneratedUtilityBuffs.Remove(shortest);
-            }
-            _activeGeneratedUtilityBuffs.Add(incoming);
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
         }
-        RebuildGeneratedUtilityBuffAggregate();
-        if (syncNetwork && Main.netMode == NetmodeID.Server)
+        if (!CanApplyGeneratedBuff(buff, source, activationTick, out var exhaustion))
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
+        // A confirmed delayed occurrence can have no buff time left while its
+        // independent exhaustion is still live. Do not replay even one buff tick
+        // or remove another active contribution merely to retain that lockout.
+        int remaining = buff.DurationTicks - (int)elapsed;
+        if (remaining > 0)
+        {
+            var incoming = ActiveGeneratedUtilityBuff.From(buff);
+            incoming.Ticks = remaining;
+            var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
+            if (existing is not null)
+                existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
+            else
+            {
+                // Bound pathological repeated authoring while preserving independent
+                // durations for distinct explicit effects. HoldItem refreshes an equal
+                // entry instead of allocating one entry per tick.
+                if (_activeGeneratedUtilityBuffs.Count >= 32)
+                {
+                    var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
+                    _activeGeneratedUtilityBuffs.Remove(shortest);
+                }
+                _activeGeneratedUtilityBuffs.Add(incoming);
+            }
+            RebuildGeneratedUtilityBuffAggregate();
+        }
+        if (exhaustion is not null) _generatedItemExhaustion.Add(exhaustion);
+        if ((syncNetwork || exhaustion is not null) && Main.netMode == NetmodeID.Server)
             SendGeneratedBuffState();
+        return true;
     }
 
     private void RebuildGeneratedUtilityBuffAggregate()
@@ -322,6 +345,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
+        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
         if (_generatedMobilityCooldownTicks > 0)
             _generatedMobilityCooldownTicks--;
 

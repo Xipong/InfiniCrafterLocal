@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable, Mapping
 
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.binding_use_policy import (
     ACTIVE_USE_INPUTS,
     action_kind,
@@ -316,6 +318,8 @@ def _validate_requirement(
     calls_by_target: Mapping[str, list[dict[str, Any]]],
     entities_by_id: Mapping[str, dict[str, Any]],
     bindings: list[dict[str, Any]],
+    primary_entity_id: str,
+    calls: list[dict[str, Any]] | None = None,
 ) -> ValidationIssue | None:
     target_id = str(call.get("target") or "")
     raw_params = call.get("params")
@@ -343,7 +347,7 @@ def _validate_requirement(
 
     if requirement.kind == "ordered_params":
         minimum, maximum = nested_param(requirement.param), nested_param(requirement.other_param)
-        if type(minimum) in (int, float) and type(maximum) in (int, float) and minimum > maximum:
+        if not requirement.ordered_values(minimum, maximum):
             return ValidationIssue(f"{path}.params.{requirement.param}", "unordered_param_range",
                 requirement.message, related_ids=(str(call.get("id") or ""),))
         return None
@@ -468,13 +472,51 @@ def _validate_requirement(
         if not fns.intersection(requirement.any_of):
             return ValidationIssue(path, "missing_capability_group", requirement.message, requirement.any_of, (target_id,))
         return None
+    if requirement.kind == "primary_target":
+        if target_id != primary_entity_id:
+            return ValidationIssue(path + ".target", "wrong_target_kind", requirement.message,
+                                   (primary_entity_id,), (str(call.get("id") or ""), target_id))
+        return None
+    if requirement.kind == "capability_param_absent":
+        for row in target_calls:
+            if row.get("fn") == requirement.capability and nested_param(requirement.param, row.get("params", {})) is not None:
+                return ValidationIssue(path, "exclusive_component_conflict", requirement.message,
+                                       related_ids=(str(call.get("id") or ""), str(row.get("id") or "")))
+        return None
     if requirement.kind == "item_capability_param":
         dependency = next((row for row in target_calls if row.get("fn") == requirement.capability), None)
         raw_dependency_params = (dependency or {}).get("params")
         dependency_params: Mapping[str, Any] = raw_dependency_params if isinstance(raw_dependency_params, Mapping) else {}
         actual = dependency_params.get(requirement.param)
-        if dependency is None or actual != requirement.equals:
-            return ValidationIssue(path, "missing_item_capability_param", requirement.message, (f"{requirement.capability}.{requirement.param}={requirement.equals}",), (item_id,))
+        expected = requirement.equals
+        spec = CAPABILITY_REGISTRY[requirement.capability].params[requirement.param]
+        if requirement.any_of:
+            valid = any(type(actual) is type(value) and actual == value for value in requirement.any_of)
+        elif spec.structured and isinstance(expected, Mapping):
+            valid = not strict_schema_errors(actual, spec.schema())
+            if valid:
+                actual_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(actual, requirement.param))
+                expected_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(expected, requirement.param))
+                valid = len(actual_rows) == len(expected_rows) and all(
+                    a[0] == b[0] and a[1] == b[1] and type(a[1]) is not bool for a, b in zip(actual_rows, expected_rows))
+        elif spec.kind == "number":
+            valid = type(actual) in (int, float) and actual == expected
+        else:
+            valid = type(actual) is type(expected) and actual == expected
+        valid = valid or (requirement.allow_absent and requirement.param not in dependency_params)
+        if dependency is None or not valid:
+            owner_id = item_id if requirement.target == "item_body" else target_id
+            if requirement.any_of:
+                if dependency is None:
+                    return ValidationIssue(path, "missing_capability_dependency", requirement.message,
+                                           (requirement.capability,), (owner_id,))
+                dependency_index = next((index for index, row in enumerate(calls or []) if row is dependency), call_index)
+                return ValidationIssue(f"$.runtimeProgram.calls[{dependency_index}].params.{requirement.param}",
+                                       "missing_dependency_param", requirement.message, requirement.any_of,
+                                       (str(dependency.get("id") or ""), owner_id))
+            encoded = json.dumps(expected, separators=(",", ":"))
+            return ValidationIssue(path, "missing_item_capability_param", requirement.message,
+                                   (f"{requirement.capability}.{requirement.param}={encoded}",), (owner_id,))
         return None
     if requirement.kind == "at_least_one_param_nonnegative":
         names = requirement.param.split("|")
@@ -917,6 +959,8 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 calls_by_target=calls_by_target,
                 entities_by_id=entities_by_id,
                 bindings=bindings,
+                primary_entity_id=primary_entity_id,
+                calls=calls,
             )
             if issue is not None:
                 issues.append(issue)
@@ -1105,7 +1149,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     # opt-in reference adapters contribute when selected; old programs keep
     # their exact diagnostic bytes as well as their gameplay wire.
     counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
-                            if cap.name not in {"present_placed_item_sprite", "add_placed_light", "select_targets_and_emit_on_event"}
+                            if cap.name not in {"present_placed_item_sprite", "add_placed_light", "select_targets_and_emit_on_event", "move_front_hand"}
                             or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),

@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from infini_local.core.llm_stage_messages import generation_art_direction
 from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
+from infini_local.core.visual_contract_schema import front_hand_sprite_requirement
 
 from infini_local.pipelines import pipeline_visual_config as visual_config
 from infini_local.pipelines.sprite_contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
@@ -130,7 +131,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
     facts: dict[str, Any] = {"canvasSizePx": final_sprite_canvas(canvas)}
     if entity is not None:
         facts["entityId"] = entity["id"]
-    for field in ("renderSizePx", "forwardAngleDegrees", "silhouette", "visualIdentity"):
+    for field in ("renderSizePx", "forwardAngleDegrees", "silhouette", "visualIdentity", "grip"):
         if field in owner:
             facts[field] = owner[field]
     multipliers: dict[str, Any] = {}
@@ -142,8 +143,6 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         for field in ("inventoryScale", "worldScale"):
             if field in root:
                 multipliers["visual." + field] = root[field]
-        if "grip" in root:
-            facts["grip"] = root["grip"]
         shared = []
         for row in entities:
             raw_visual = row.get("visual")
@@ -160,6 +159,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
                 if field in row:
                     scale_row[field] = copy.deepcopy(row[field])
+            if front_hand_sprite_requirement(row) is not None:
+                scale_row["movementReadOnly"] = copy.deepcopy(row["movement"])
             shared.append(scale_row)
         if shared:
             facts["sharedEntityMultipliers"] = shared
@@ -173,6 +174,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
             if field in entity:
                 facts[field] = copy.deepcopy(entity[field])
+    if entity is not None and front_hand_sprite_requirement(entity) is not None:
+        facts["movementReadOnly"] = copy.deepcopy(entity["movement"])
     if multipliers:
         facts["multipliers"] = multipliers
     grip_instruction = (

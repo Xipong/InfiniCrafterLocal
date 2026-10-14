@@ -184,6 +184,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
             _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
+            _frontHandPublishedAxis = null;
+            _frontHandAxisSyncAge = -1000;
             _beamManaClockStarted = false;
             _beamLastManaTick = 0;
             _vfxSourceToken=0;

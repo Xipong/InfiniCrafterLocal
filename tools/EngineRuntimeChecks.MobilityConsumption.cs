@@ -97,7 +97,7 @@ internal static partial class EngineRuntimeChecks
     {
         using var scope = new MobilityConsumptionNativeScope();
         var failures = new List<string>();
-        foreach (string companion in new[] { "heal-life", "heal-mana", "native-buff", "extra-buff", "generated-buff", "all" })
+        foreach (string companion in new[] { "heal-life", "heal-mana", "extra-buff", "generated-buff", "all" })
         {
             try
             {
@@ -106,12 +106,10 @@ internal static partial class EngineRuntimeChecks
                     PrepareMobilityConsumptionPlayer(player);
                     var data = MobilityConsumptionFixture("recall_home", 1);
                     bool life = companion is "heal-life" or "all", mana = companion is "heal-mana" or "all";
-                    bool native = companion is "native-buff" or "all", extra = companion is "extra-buff" or "all";
+                    bool extra = companion is "extra-buff" or "all";
                     bool utility = companion is "generated-buff" or "all";
                     data.Gameplay.HealLife = life ? 7 : 0;
                     data.Gameplay.HealMana = mana ? 5 : 0;
-                    data.Gameplay.BuffCode = native ? BuffID.Ironskin : 0;
-                    data.Gameplay.BuffTime = native ? 60 : 0;
                     data.Gameplay.ExtraBuffs = extra ? new[] { new BuffEntrySpec { BuffCode = BuffID.Swiftness, BuffTime = 60 } } : Array.Empty<BuffEntrySpec>();
                     data.Gameplay.GeneratedBuff = utility ? new GeneratedBuffSpec { DurationTicks = 60, MovementSpeed = .25f } : new GeneratedBuffSpec();
                     var host = MobilityConsumptionHost(data);
@@ -124,15 +122,15 @@ internal static partial class EngineRuntimeChecks
                     Equal(30, generated.GeneratedMobilityCooldownTicks, companion + " no second cooldown");
                     Equal(57 + (life ? 7 : 0), player.statLife, companion + " real native healing exactly once");
                     Equal(20 + (mana ? 5 : 0), player.statMana, companion + " real native mana exactly once");
-                    Equal(native, player.HasBuff(BuffID.Ironskin), companion + " independent native buff retained");
+                    Equal(false, player.HasBuff(BuffID.Ironskin), companion + " no removed single native buff slot");
                     Equal(extra, player.HasBuff(BuffID.Swiftness), companion + " independent extra buff retained");
                     generated.PostUpdateEquips();
                     Equal(utility ? 1.25f : 1f, player.moveSpeed, companion + " actual generated buff player hook retained");
                     Equal(1, host.UseCalls, companion + " no false-return native retry duplicates");
                     Equal("use,consume", string.Join(",", host.Trace), companion + " real native hooks, not assumed order");
-                    // Native applies timing again for its heal/mana block and
-                    // separately for buffType; that counter is not a UseItem count.
-                    Equal(1 + (life || mana ? 1 : 0) + (native ? 1 : 0), player.ItemUsesThisAnimation,
+                    // Current ExtraBuffs execute in UseItem, not the native single-slot lane.
+                    // Native heal/mana timing remains distinct from UseItem count.
+                    Equal(1 + (life || mana ? 1 : 0), player.ItemUsesThisAnimation,
                         companion + " native timing follows retained effect lanes");
                     Equal(0, host.Item.stack, companion + " successful companion keeps authored stack cost");
                 });

@@ -76,13 +76,11 @@ internal static partial class EngineRuntimeChecks
             var entity = data.RuntimeProgram.TryGetEntity("root")!;
             entity.Targeting.RangeTiles = 1.25f;
             entity.Targeting.SameTargetBias = bias;
-            entity.Controller.Params.SameTargetBias = bias; // retained shared DTO field, independently unchanged
             data = GeneratedItemData.FromJson(JsonSerializer.Serialize(data,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
                 ?? throw new InvalidOperationException("saved target-bias DTO fixture rejected");
             entity = data.RuntimeProgram.TryGetEntity("root")!;
             Equal(bias, entity.Targeting.SameTargetBias, "strict reader preserves saved targeting 0..1");
-            Equal(bias, entity.Controller.Params.SameTargetBias, "shared parameter DTO retains its old 0..1 clamp");
             var generated = SwarmHost(data, entity);
             Vector2 center = new(1600, 1600);
             var previous = Terraria.Main.npc[0] = EventDomainNpc(0, center, 100);

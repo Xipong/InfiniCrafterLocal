@@ -28,7 +28,7 @@ internal static class GeneratedQuickUtilityActivation
         string ItemId, string Definition, string BindingId, ulong Sequence);
     private sealed record Local(Identity Id, Player Owner, object? Socket, ulong Tick);
     private sealed record Pending(Identity Id, Player Owner, object? Socket,
-        ulong Ticket, ulong Tick);
+        ulong Ticket, ulong Tick, bool BuffExhausted);
     private sealed class OwnerState
     {
         internal readonly Player Owner;
@@ -191,7 +191,11 @@ internal static class GeneratedQuickUtilityActivation
                 || generated.Data.Id != id.ItemId || !GeneratedItemRegistryService.IsCurrentWorldData(generated.Data)
                 || GeneratedItemRegistryService.DefinitionIdentity(generated.Data) != id.Definition) return;
             ulong nonce = checked(++nextTicket);
-            state.Pending.Add(id.Sequence, new(id, player, socket, nonce, Main.GameUpdateCount));
+            // Preserve this occurrence's refusal across the asynchronous Commit.
+            // A timer expiring in transit cannot turn an exhausted use into a
+            // successful generated buff. Native heal/consume remain independent.
+            bool exhausted = player.GetModPlayer<InfiniCraftPlayer>().HasGeneratedItemExhaustion(data);
+            state.Pending.Add(id.Sequence, new(id, player, socket, nonce, Main.GameUpdateCount, exhausted));
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
             if (packet is null) { state.Pending.Remove(id.Sequence); return; }
             packet.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.GeneratedQuickUtilityActivation);
@@ -209,18 +213,30 @@ internal static class GeneratedQuickUtilityActivation
             // now would cancel legitimate native final-stack consumption. A ticket
             // is a short-lived authorization for that occurrence, not a new Item.
             var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-            GeneratedBuffSpec authored = data.PrimaryUseEffects.GeneratedBuff!;
-            int elapsed = (int)unchecked((uint)(Main.GameUpdateCount - (uint)pending.Tick));
-            int remaining = authored.DurationTicks - elapsed;
-            if (remaining <= 0) return;
-            // Anchor expiry at server admission, not the later Commit arrival.
+            if (pending.BuffExhausted)
+            {
+                modPlayer.CorrectGeneratedBuffPrediction();
+                return;
+            }
+            // The canonical consumer subtracts elapsed time independently for
+            // buff and exhaustion, including a buff already expired in transit.
             // Never mutate a registry-owned definition to carry remaining time.
-            modPlayer.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec {
-                DurationTicks = remaining, MiningSpeedMultiplier = authored.MiningSpeedMultiplier,
-                EmitLightStrength = authored.EmitLightStrength, LightColorName = authored.LightColorName,
-                OreSenseRadiusTiles = authored.OreSenseRadiusTiles, MovementSpeed = authored.MovementSpeed,
-                JumpBoost = authored.JumpBoost, ManaRegen = authored.ManaRegen, LifeRegen = authored.LifeRegen,
-            }, syncNetwork: true);
+            GeneratedBuffSpec authored = data.PrimaryUseEffects.GeneratedBuff!;
+            bool applied = modPlayer.ApplyGeneratedUtilityBuff(authored,
+                syncNetwork: true, source: data, activationTick: (uint)pending.Tick);
+            if (applied && authored.ExhaustionTicks is > 0)
+            {
+                // A later Prepare may have arrived before this first Commit,
+                // when no authoritative timer existed yet. Bind those already
+                // queued occurrences to the now-confirmed exhaustion interval,
+                // even if that interval expires before their own Commit arrives.
+                foreach (var queued in new List<KeyValuePair<ulong, Pending>>(state.Pending))
+                    if (queued.Value.Id.ItemId == id.ItemId && queued.Value.Id.Definition == id.Definition
+                        && unchecked((uint)(queued.Value.Tick - pending.Tick)) < authored.ExhaustionTicks.Value)
+                        state.Pending[queued.Key] = queued.Value with { BuffExhausted = true };
+            }
+            // The post-use Commit never refunds/replays native heal or debit.
+            // The consumer sends the owner correction on a well-formed refusal.
         }
     }
     internal static void Prune()

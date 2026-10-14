@@ -30,6 +30,31 @@ def test_object_keeps_exact_leaf_units_and_rejects_empty_group():
     assert strict_schema_errors({"radiusTiles": 0.6}, spec.schema())
 
 
+@pytest.mark.parametrize("mutation", ["old-primary-path", "old-group-path", "six-inputs", "six-use-policy-inputs"])
+def test_retired_global_source_paths_are_refused(mutation):
+    document = build_capability_witness("present_placed_item_sprite" if mutation != "old-group-path" else "apply_generated_buff_on_use")
+    if mutation == "old-group-path":
+        next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")["params"]["effectGroupId"] = "utility"
+        document["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "utility"
+    wire = compiler.compile_runtime_program(document)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    assert technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
+    if mutation == "old-primary-path":
+        row = next(r for r in receipts if r.get("lowererId") == "primary_entity_to_binding_role")
+        row["authoredPaths"] = [row["authoredPaths"][0], "runtimeProgram.bindings[0].usePolicy.action.targetId"]
+    elif mutation == "old-group-path":
+        row = next(r for r in receipts if r.get("lowererId") == "binding_effect_group_identity")
+        row["authoredPaths"] = [p.replace(".action.", ".usePolicy.action.") for p in row["authoredPaths"]]
+    else:
+        row = next(r for r in receipts if r.get("fn") == "present_placed_item_sprite" and r["status"] == "technical_projection")
+        paths = row["authoredPaths"]
+        binding = paths[3].removesuffix(".id")
+        row["authoredPaths"] = paths[:3] + [binding + ".action.kind", binding + ".action.targetId", binding + ".action.placementCallId"]
+        if mutation == "six-use-policy-inputs":
+            row["authoredPaths"] = [p.replace(".action.", ".usePolicy.action.") for p in row["authoredPaths"]]
+    assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
+
+
 def test_ambiguous_union_fails_closed():
     spec = ParamSpec("union", "Invalid duplicate branches", alternatives=(
         ParamSpec("string", "One", enum=("x",), wire_literals={"field": 1}),
@@ -39,7 +64,7 @@ def test_ambiguous_union_fails_closed():
         spec.projected_fields("x", "choice")
 
 
-def test_retained_provenance_preserves_old_wire_without_accepting_old_author():
+def test_retired_provenance_refuses_old_wire_and_old_author():
     old_author = build_capability_witness("set_projectile_collision")
     corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
     old_wire = next(row["wire"] for row in corpus["cases"] if row["fn"] == "set_projectile_collision")
@@ -48,7 +73,7 @@ def test_retained_provenance_preserves_old_wire_without_accepting_old_author():
     old_call["params"].pop("updatesPerTick")
     old_call["params"].update(npcImmunityMode="owner", localNpcHitCooldownEngineUnits=37, extraUpdates=5)
     old_receipts = deepcopy(old_wire["runtimeContract"]["finalWireReceipts"])
-    assert technical_lowering.audit_compiler_receipts(old_receipts, final_document=old_wire)["ok"]
+    assert not technical_lowering.audit_compiler_receipts(old_receipts, final_document=old_wire)["ok"]
     assert not technical_lowering.audit_compiler_receipts(
         old_receipts, authored_document=old_author, final_document=old_wire,
     )["ok"]
@@ -63,42 +88,19 @@ def test_retained_provenance_preserves_old_wire_without_accepting_old_author():
     assert not technical_lowering.audit_compiler_receipts(changed)["ok"]
 
 
-def _scalar_collision(monkeypatch):
-    """Isolated prior scalar contract, not a production grammar/importer."""
-    import infini_local.qa.capability_witnesses as witnesses
-    monkeypatch.setattr(witnesses, "_COLLISION", {
-        "tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1,
-        "extraUpdates": 0, "npcImmunityMode": "local", "localNpcHitCooldownEngineUnits": 10,
-    })
-    cap = registry.CAPABILITY_REGISTRY["set_projectile_collision"]
-    params = dict(cap.params)
-    params.pop("immunity")
-    params.pop("updatesPerTick")
-    params.update(cap.retained_receipt_params)
-    changed = replace(cap, params=params, retained_receipt_params={})
-    modified = dict(registry.CAPABILITY_REGISTRY)
-    modified[cap.name] = replace(changed, final_wire_paths=registry._exact_wire_paths(changed))
-    for name, module in tuple(sys.modules.items()):
-        if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
-            monkeypatch.setattr(module, "CAPABILITY_REGISTRY", modified)
-
-
-def _two_collision_calls(monkeypatch, typed):
-    if not typed:
-        _scalar_collision(monkeypatch)
+def _two_collision_calls():
     document = build_capability_witness("spawn_entity_on_event")
     calls = [c for c in document["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision"]
     assert len(calls) == 2
     for i, call in enumerate(calls):
-        call["params"]["immunity" if typed else "localNpcHitCooldownEngineUnits"] = {"localCooldown": 10 + i} if typed else 10 + i
+        call["params"]["immunity"] = {"localCooldown": 10 + i}
     return document, calls
 
 
-@pytest.mark.parametrize("typed", [False, True], ids=["legacy-scalar", "typed-immunity"])
 @pytest.mark.parametrize("attack", ["source-targets", "final-owners"])
-def test_call_projection_authenticates_exact_entity_owner(monkeypatch, typed, attack):
+def test_call_projection_authenticates_exact_entity_owner(attack):
     from infini_local.core.runtime_authoring import validate_runtime_program
-    document, calls = _two_collision_calls(monkeypatch, typed)
+    document, calls = _two_collision_calls()
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     assert technical_lowering.audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
@@ -122,9 +124,8 @@ def test_call_projection_authenticates_exact_entity_owner(monkeypatch, typed, at
     )["ok"]
 
 
-@pytest.mark.parametrize("alias", [False, True], ids=["legacy-chain", "pr26-nearest"])
 @pytest.mark.parametrize("attack", ["id-only", "coordinated-events"])
-def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, attack):
+def test_event_projection_authenticates_exact_call_identity(attack):
     document = build_capability_witness("damage_nearest_on_event")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     another = deepcopy(call)
@@ -133,14 +134,7 @@ def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, 
     document["runtimeProgram"]["calls"].append(another)
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    if not alias:
-        # The same action-4 wire retains old scalar provenance without accepting
-        # that retired grammar as a fresh Author or inventing a source.
-        for row in receipts:
-            if row.get("fn") == "damage_nearest_on_event":
-                row["fn"] = "chain_damage_on_event"
-                row["authoredPath"] = row["authoredPath"].replace(".params.maxTargets", ".params.count").replace(".params.when", ".params.event")
-    checked_source = document if alias else None
+    checked_source = document
     assert technical_lowering.audit_compiler_receipts(receipts, authored_document=checked_source, final_document=wire)["ok"]
     entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
     events = entity["events"]
@@ -159,13 +153,12 @@ def test_event_projection_authenticates_exact_call_identity(monkeypatch, alias, 
         assert not technical_lowering.audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("typed", [False, True], ids=["legacy-scalar", "typed-immunity"])
 @pytest.mark.parametrize("attack", ["duplicate", "missing-all", "source-index"])
-def test_projection_coverage_is_unique_and_complete(monkeypatch, typed, attack):
-    document, calls = _two_collision_calls(monkeypatch, typed)
+def test_projection_coverage_is_unique_and_complete(attack):
+    document, calls = _two_collision_calls()
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    source_tail = ".params.immunity" if typed else ".params.localNpcHitCooldownEngineUnits"
+    source_tail = ".params.immunity"
     relevant = [r for r in receipts if r.get("callId") == calls[0]["id"]
                 and source_tail in r.get("authoredPath", "")]
     if attack == "duplicate":
@@ -196,9 +189,8 @@ def test_legacy_scalar_domain_is_not_authenticated_by_coherent_receipts(bad, sou
     )["ok"]
 
 
-@pytest.mark.parametrize("typed", [False, True], ids=["legacy-scalar", "typed-immunity"])
-def test_wire_claim_cannot_split_one_call_across_entity_owners(monkeypatch, typed):
-    document, calls = _two_collision_calls(monkeypatch, typed)
+def test_wire_claim_cannot_split_one_call_across_entity_owners():
+    document, calls = _two_collision_calls()
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     entities = wire["runtimeProgram"]["entities"]
@@ -209,31 +201,23 @@ def test_wire_claim_cannot_split_one_call_across_entity_owners(monkeypatch, type
     assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
 
 
-def test_unrelated_retained_parameter_cannot_excuse_missing_typed_outputs(monkeypatch):
+def test_missing_typed_outputs_have_no_receipt_excuse():
     document = build_capability_witness("set_projectile_collision")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     call["params"]["immunity"] = {"localCooldown": 19}
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    cap = technical_lowering.CAPABILITY_REGISTRY["set_projectile_collision"]
-    retained = dict(cap.retained_receipt_params)
-    retained["extraUpdates"] = cap.retained_receipt_params["extraUpdates"]
-    modified = dict(technical_lowering.CAPABILITY_REGISTRY)
-    modified[cap.name] = replace(cap, retained_receipt_params=retained)
-    monkeypatch.setattr(technical_lowering, "CAPABILITY_REGISTRY", modified)
     receipts[:] = [r for r in receipts if ".params.immunity" not in r.get("authoredPath", "")]
     assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("missing", ["npcImmunityMode", "localNpcHitCooldownEngineUnits"])
-def test_retained_scalar_variant_outputs_still_require_complete_coverage(monkeypatch, missing):
-    _scalar_collision(monkeypatch)
+@pytest.mark.parametrize("missing", ["npcImmunityMode", "localNpcHitCooldownTicks"])
+def test_typed_variant_outputs_require_complete_coverage(missing):
     document = build_capability_witness("set_projectile_collision")
     wire = compiler.compile_runtime_program(document)
-    monkeypatch.undo()  # Restore the current typed registry; old receipts are wire-only.
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     receipts[:] = [r for r in receipts if not (r.get("callId") == "witness_call"
-                                             and r["authoredPath"].endswith(".params." + missing))]
+                                             and r["finalPath"].endswith("." + missing))]
     assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
 
 
@@ -265,3 +249,24 @@ def test_fn_literal_provenance_requires_value_source_and_complete_coverage(monke
         forged[receipts.index(literal)][key] = value
         assert not technical_lowering.audit_compiler_receipts(forged, authored_document=document, final_document=wire)["ok"]
     assert not technical_lowering.audit_compiler_receipts([r for r in receipts if r is not literal], final_document=wire)["ok"]
+
+
+def test_policy_absence_preserves_buff_and_receipts_but_not_obsolete_audit_roster():
+    document = build_capability_witness("apply_generated_buff_on_use")
+    call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    call["params"].pop("exhaustionTicks", None)
+    wire = compiler.compile_runtime_program(document)
+    assert "exhaustionTicks" not in wire["gameplay"]["generatedBuff"]
+    assert not any(r.get("authoredPath", "").endswith(".exhaustionTicks") for r in wire["runtimeContract"]["finalWireReceipts"])
+    lowerer = next(r for r in wire["runtimeContract"]["technicalLoweringAudit"]["lowerers"] if r["id"] == "item_fields_to_tml_projection")
+    assert "gameplay.generatedBuff.exhaustionTicks" in lowerer["outputs"]
+
+
+@pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalTicks", 60), ("sameTargetBias", 0.5)])
+def test_obsolete_controller_bag_fields_are_refused_without_provenance(key, value):
+    from infini_local.core.runtime_authoring import validate_runtime_wire
+    wire = compiler.compile_runtime_program(build_capability_witness("target_and_fire"))
+    wire.pop("runtimeContract")
+    controller = next(e["controller"] for e in wire["runtimeProgram"]["entities"] if "controller" in e)
+    controller.setdefault("params", {})[key] = value
+    assert not validate_runtime_wire(wire)["ok"]

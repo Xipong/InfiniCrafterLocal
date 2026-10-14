@@ -9,6 +9,7 @@ from typing import Any
 
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.vfx_manifest import validate_vfx_manifest_wire, vfx_png_dependencies
+from infini_local.core.visual_contract_schema import front_hand_sprite_errors
 from infini_local.pipelines.pipeline_visual_config import (
     IMAGE_BACKEND,
     IMAGE_BACKEND_CONFIG_ERROR,
@@ -234,7 +235,7 @@ def visual_delivery_report(data: dict[str, Any], *, check_backend_config: bool =
     data = copy.deepcopy(data)
     raw_visual = data.get("visual")
     visual: dict[str, Any] = raw_visual if isinstance(raw_visual, dict) else {}
-    problems: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = front_hand_sprite_errors(data)
     warnings: list[dict[str, Any]] = []
     vfx_report = validate_vfx_manifest_wire(data) if "vfxManifest" in data else {"ok": True, "errors": []}
     png_dependencies = vfx_png_dependencies(data)["dependencies"] if vfx_report["ok"] else []

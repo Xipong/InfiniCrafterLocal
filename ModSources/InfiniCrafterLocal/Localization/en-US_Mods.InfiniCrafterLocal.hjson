@@ -142,6 +142,9 @@ StationUI: {
 }
 
 RuntimeTooltip: {
+	ExhaustionStatus: "Item exhaustion: {0}"
+	ExhaustionDeclared: "{0}: successful generated-buff application or refresh starts item exhaustion for {1}, independently of buff duration. All copies and groups of this item share the timer; other items are independent. Blocks only reapplication of its generated buff; current buffs and other use effects are unchanged."
+	ExhaustionRemaining: "Item exhaustion remaining: {0}; blocks only reapplication of this item's generated buff. All copies and groups share this timer; other items are independent. Current buffs and other use effects are unchanged."
 	InputPrimary: "Use (left-click)"
 	InputAlternate: "Alternate use (right-click)"
 	InputHold: "While selected (no use-button press)"

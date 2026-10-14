@@ -97,7 +97,7 @@ class _HTTPSConnection(_HTTPConnection, http.client.HTTPSConnection):
     pass
 
 
-def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float, use_proxy: bool = True):
+def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float, use_proxy: bool = True, on_open=None):
     """Open only the original request; preserve HTTPError for ALL redirects."""
     class HTTPHandler(urlrequest.HTTPHandler):
         def http_open(self, req):
@@ -110,11 +110,14 @@ def urlopen_no_redirect(req: urlrequest.Request, *, deadline: float, use_proxy: 
     handlers = [_NoRedirect(), HTTPHandler(), HTTPSHandler()]
     if not use_proxy:
         handlers.append(urlrequest.ProxyHandler({}))
-    return urlrequest.build_opener(*handlers).open(
-        req, timeout=remaining_seconds(deadline))
+    opener = urlrequest.build_opener(*handlers)
+    remaining = remaining_seconds(deadline)
+    if on_open is not None:
+        on_open()
+    return opener.open(req, timeout=remaining)
 
 
-def read_with_deadline(response, *, deadline: float, max_bytes: int | None = None) -> bytes:
+def read_with_deadline(response, *, deadline: float, max_bytes: int | None = None, on_chunk=None) -> bytes:
     """Return the complete exact body, never an adopted truncated success."""
     chunks, size = [], 0
     reader = getattr(response, "read1", None) or response.read
@@ -122,6 +125,8 @@ def read_with_deadline(response, *, deadline: float, max_bytes: int | None = Non
         remaining_seconds(deadline)
         amount = 64 * 1024 if max_bytes is None else min(64 * 1024, max_bytes + 1 - size)
         chunk = reader(amount)
+        if on_chunk is not None and chunk:
+            on_chunk(chunk)
         remaining_seconds(deadline)
         if not chunk:
             return b"".join(chunks)

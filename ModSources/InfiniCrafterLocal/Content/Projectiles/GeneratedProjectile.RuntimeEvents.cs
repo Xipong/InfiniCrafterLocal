@@ -13,10 +13,15 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
+    // The explicit hand driver has zero translational velocity. Its authored
+    // initial/cursor axis still owns event direction, including delayed captures.
+    private Vector2 GameplayEventDirection()
+        => _entity?.Movement.Code == 20 ? FrontHandAxis() : Projectile.velocity.SafeNormalize(_initialDirection);
+
     private void RunRuntimeEvent(string eventName, NPC? target, int damageDone)
     {
         if (_data is null || _entity is null) return;
-        Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
+        Vector2 direction = GameplayEventDirection();
         foreach (RuntimeEventActionSpec action in _entity.ActionsFor(eventName))
         {
             Vector2 eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, Projectile.Center, target);
@@ -69,7 +74,7 @@ public sealed partial class GeneratedProjectile
             if (_age % period != 0) continue;
             if (dueActions++ >= InfiniRuntimeLimits.MaxRuntimePeriodicActionsPerTick)
                 break;
-            Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
+            Vector2 direction = GameplayEventDirection();
             if (action.DelayTicks > 0)
             {
                 if (RuntimeDelayedActionScheduler.TrySchedule(

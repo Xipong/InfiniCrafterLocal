@@ -264,21 +264,9 @@ def effective_projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
         out["fromAmmoProfile"] = True
         out["fromPlayerInventoryAmmoCandidate"] = True
         return out
-    selected_ep = ammo.get("selectedPlayerProjectileRaw") if isinstance(ammo, dict) else None
-    if isinstance(selected_ep, dict) and selected_ep:
-        out = dict(selected_ep)
-        out["fromAmmoProfile"] = True
-        out["fromPlayerInventoryAmmoCandidate"] = True
-        return out
     fb_eps = ammo.get("fallbackProjectileRaw") if isinstance(ammo, dict) else None
     if isinstance(fb_eps, list) and fb_eps and isinstance(fb_eps[0], dict):
         out = dict(fb_eps[0])
-        out["fromAmmoProfile"] = True
-        out["fromFallbackAmmoCandidate"] = True
-        return out
-    rep_eps = ammo.get("representativeProjectileRaw") if isinstance(ammo, dict) else None
-    if isinstance(rep_eps, list) and rep_eps and isinstance(rep_eps[0], dict):
-        out = dict(rep_eps[0])
         out["fromAmmoProfile"] = True
         out["fromFallbackAmmoCandidate"] = True
         return out
@@ -697,18 +685,6 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
     fb_proj = ap.get("fallbackProjectileRaw")
     if isinstance(fb_proj, list):
         out["fallbackProjectileRaw"] = [compact_projectile_profile(x) for x in fb_proj if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-
-    # Backward-compatible readers for older dumps.
-    if isinstance(ap.get("selectedPlayerAmmoRaw"), dict):
-        out["playerInventoryAmmoRaw"] = [_select_raw_keys(ap["selectedPlayerAmmoRaw"], LLM_AMMO_ITEM_KEYS)]
-    if isinstance(ap.get("selectedPlayerProjectileRaw"), dict):
-        out["playerInventoryProjectileRaw"] = [compact_projectile_profile(ap["selectedPlayerProjectileRaw"])]
-    reps = ap.get("representativeAmmoRaw")
-    if isinstance(reps, list) and "fallbackAmmoRaw" not in out:
-        out["fallbackAmmoRaw"] = [_select_raw_keys(x, LLM_AMMO_ITEM_KEYS) for x in reps if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-    preps = ap.get("representativeProjectileRaw")
-    if isinstance(preps, list) and "fallbackProjectileRaw" not in out:
-        out["fallbackProjectileRaw"] = [compact_projectile_profile(x) for x in preps if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
 
     # Legacy runtime dump fallback.
     if not out or mode == "legacy_profile":

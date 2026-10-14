@@ -43,6 +43,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
 from infini_local.core.schema_validation import strict_schema_errors
+from infini_local.core.strict_json import loads as strict_json_loads
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
@@ -55,6 +56,7 @@ from infini_local.core.runtime_authoring.program_schema import (
 )
 from infini_local.core.runtime_authoring.validator import (
     VALIDATION_ERROR_CODES,
+    _validate_requirement,
     validate_runtime_program,
 )
 
@@ -275,6 +277,11 @@ def _capability_names(values: Iterable[Any]) -> set[str]:
 
 def _decode_constraint_value(raw: str) -> Any:
     text = raw.strip()
+    if text.startswith(("{", "[")):
+        try:
+            return strict_json_loads(text)
+        except ValueError:
+            return text  # Malformed descriptors never become partial constraints.
     if text.lower() == "true":
         return True
     if text.lower() == "false":
@@ -318,7 +325,7 @@ def _capability_dependency_closure(names: Iterable[str]) -> set[str]:
         pending.extend(value for value in cap.dependencies if value in CAPABILITY_REGISTRY)
         for requirement in cap.requirements:
             if requirement.capability in CAPABILITY_REGISTRY and requirement.kind not in {
-                "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value",
+                "capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value",
             }:
                 pending.append(requirement.capability)
             if requirement.kind == "capability_group_present":
@@ -353,24 +360,27 @@ def _candidate_capability_viable(
         return False
 
     calls = rows.get("calls", [])
-    item_ids = {
-        str(row.get("id") or "")
-        for row in rows.get("entities", [])
-        if row.get("kind") == "item_body"
-    }
+    item_id = _body_id(rows)
+    calls_by_target: dict[str, list[dict[str, Any]]] = {}
+    for call in calls:
+        calls_by_target.setdefault(_call_target(call, rows), []).append(call)
     for requirement in cap.requirements:
-        if requirement.kind == "item_capability_param" and requirement.capability:
-            matching = [
-                row for row in calls
-                if str(row.get("fn") or "") == requirement.capability
-                and str(row.get("target") or "") in item_ids
-            ]
-            if matching:
-                if not any(
-                    isinstance(row.get("params"), Mapping)
-                    and row["params"].get(requirement.param) == requirement.equals
-                    for row in matching
+        if (requirement.kind in {"item_capability_param", "capability_param_absent"}
+                or (requirement.kind == "capability_absent" and not requirement.param)):
+            # Author owns typed equality, accepted absence and frozen conflicts.
+            # Do not invent a looser matcher or guess a candidate selector.
+            for target_id in target_ids:
+                owner_id = item_id if requirement.target == "item_body" else target_id
+                if requirement.kind == "item_capability_param" and not any(
+                    row.get("fn") == requirement.capability
+                    for row in calls_by_target.get(owner_id, [])
                 ):
+                    continue  # Missing support may be explicitly created.
+                if _validate_requirement(
+                    requirement, call={"target": target_id}, call_index=0, cap=cap,
+                    item_id=item_id, calls_by_target=calls_by_target,
+                    entities_by_id={}, bindings=[], primary_entity_id="",
+                ) is not None:
                     return False
         elif requirement.kind == "capability_group_present" and requirement.any_of:
             # A candidate which still needs another missing member of the same
@@ -1708,7 +1718,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     call_reference_param_changes.add(f"{node_id}:{param_match.group(1)}")
                 else:
                     call_target_change_ids.add(node_id)
-                retarget_call_ids.update(_matching_entity_ids(rows, _call_target_kinds(node_row, param_name=param_match.group(1) if param_match else "")))
+                candidates = _matching_entity_ids(rows, _call_target_kinds(node_row, param_name=param_match.group(1) if param_match else ""))
+                cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+                if not param_match and cap is not None and any(r.kind == "primary_target" for r in cap.requirements):
+                    primary = _mapping(current.get("runtimeProgram")).get("primaryEntityId")
+                    candidates = [entity_id for entity_id in candidates if entity_id == primary]
+                retarget_call_ids.update(candidates)
         elif code == "capability_event_incompatible":
             if node_namespace == "calls":
                 cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))

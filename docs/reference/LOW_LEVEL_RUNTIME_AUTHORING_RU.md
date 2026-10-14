@@ -44,7 +44,7 @@ Author выдаёт один immutable JSON в причинном порядке
 
 Construction facts живут у своих owners, а не в повторных глобальных checklist. Порядок ответа задают system и `requiredJsonShape`; отдельные повторные `gameplayAuthoringStages`, `principle`/`reportEvidenceRule`/`literalSynthesisRule` и `forbidden` не передаются. Полные catalog cards, shape examples и диагностический selfEvaluation сохраняются во всех response modes, включая `json_object`/off: provider schema их не заменяет.
 
-Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Полные 68 capability cards и executable schema/grammar не меняются.
+Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Актуальный полный набор cards и executable grammar берётся из canonical registry; число capabilities — в generated inventory.
 
 | Место в packet | Правило построения |
 |---|---|
@@ -77,6 +77,17 @@ Event producer alternatives берутся только из `EVENT_KIND_REGISTR
 Terminal meaning: `on_hit` требует collision; proximity detonation не hit. `on_expire` испускается при natural expiry и proximity detonation, не при любом early kill. `on_kill` покрывает terminal paths, включая collision/penetration/natural expiry/detonation; `on_tile_collision` — каждую collision. Bounce + только on_expire не обещает эффект на последнем ударе. [Runtime truth](../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py#L229) и consumer остаются источниками этих различий.
 
 Числовые units/точные conversions и отсутствующие wire aliases — [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#units), не semantic repair. [Frozen-first Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) не расширяет accepted design.
+
+<a id="front-hand"></a>
+## Независимое движение передней кисти
+
+`move_front_hand` (opcode20) — явная низкоуровневая операция, не оружейный preset. Author выбирает её и все пять параметров; damage class, event graph, lifetime, item-use, contact lane и внешний вид остаются отдельными решениями. Точные dependencies/диапазоны принадлежат [registry catalog](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), а не этой навигационной заметке. Код не добавляет singleton, launch, motion или grip за модель.
+
+Native pose использует руку H и collision center C = H + aimedAxis * authored hitboxOffsetPx. Hitbox остаётся штатным axis-aligned rectangle, не pixel blade/OBB; coherent art/offset требует согласованного authored дизайна. Поза проходит extension/retraction по завершённым active world ticks `floor(activeAIUpdates/(extraUpdates+1))`, выбирая ближайшую native stretch length, ties shorter. Duration не продлевает lifetime или itemAnimation. Initial axis и synced cursor mode выбираются явно.
+
+Gameplay events этой entity используют ту же выбранную ось, хотя translational velocity равна нулю. Это относится к направлению дочернего `aim=velocity` и hit-target geometry; delayed action сохраняет ось при постановке события в очередь, а не перечитывает последующее положение курсора. Periodic dispatch сохраняет существующий порядок до очередного movement update.
+
+Для sprite presentation Visual Director передаёт size/forward axis/atomic grip выбранного финального PNG: `reuse_item_icon` использует только root metadata; distinct `baked_sprite` — только entity metadata. `no_asset`/`runtime_geometry` не требуют этих PNG dependencies. Missing selected leaves идут в точный frozen Visual Repair, не выводятся из art/hitbox/названия. Старый `move_forward_then_retract` (code19) остаётся owner-center18px + triangular displacement, не управляет кистью и не превращается в новый driver; сохранённые рецепты не мигрируются.
 
 <a id="visual-vfx"></a>
 ## Visual/VFX boundary и headless replay

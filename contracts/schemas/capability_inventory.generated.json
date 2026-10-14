@@ -336,23 +336,6 @@
       "purpose": "Set exact item use/draw/input affordances.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "heldSpriteVisibilityHint": {
-          "priorAuthorSchema": {
-            "description": "Retained saved-wire visibility provenance",
-            "enum": [
-              "",
-              "immediate",
-              "on_release",
-              "after_charge"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "releaseTiming"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -782,6 +765,7 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "gameplay.generatedBuff.durationTicks",
+        "gameplay.generatedBuff.exhaustionTicks",
         "gameplay.generatedBuff.miningSpeedMultiplier",
         "gameplay.generatedBuff.emitLightStrength",
         "gameplay.generatedBuff.lightColorName",
@@ -792,6 +776,7 @@
         "gameplay.generatedBuff.lifeRegen",
         "runtimeProgram.effectGroups[].id",
         "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.exhaustionTicks",
         "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
         "runtimeProgram.effectGroups[].generatedBuff.emitLightStrength",
         "runtimeProgram.effectGroups[].generatedBuff.lightColorName",
@@ -823,6 +808,16 @@
           "required": false,
           "semanticType": "item_effect_group_identity",
           "units": ""
+        },
+        "exhaustionTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 21600,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "ticks",
+          "units": "world ticks"
         },
         "jumpSpeedBonusPxPerTick": {
           "enum": [],
@@ -920,7 +915,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing generated-buff executor",
-      "purpose": "Apply a bounded generated stat/light/ore-sense buff.",
+      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionTicks starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -937,28 +932,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "moveSpeedBonusFactor": {
-          "priorAuthorSchema": {
-            "default": 0,
-            "description": "Retained prior additive Player.moveSpeed factor provenance",
-            "maximum": 2,
-            "minimum": -0.5,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32"
-            },
-            "x-infini-neutral": 0,
-            "x-infini-units": "engine units: additive moveSpeed factor"
-          },
-          "wireFields": [
-            "movementSpeed"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -997,7 +970,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "restored explicit held generated utility buff refresh",
-      "purpose": "Refresh the one named generated utility buff group every world tick while this exact item is held. Its explicit duration controls lingering after release. The group may contain only apply_generated_buff_on_use; no healing, teleport, native buff or invisible projectile is inferred.",
+      "purpose": "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionTicks policy still applies. durationTicks controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1090,99 +1063,6 @@
           "kind": "binding_tuple_present",
           "message": "A configured tool requires one explicit primary-use root matching one listed binding transaction. Tool power remains on the item body; the action root is authored explicitly and no ownership is inferred.",
           "target": "any_entity"
-        }
-      ],
-      "retainedWireProvenance": {
-        "miningSpeedScale": {
-          "priorAuthorSchema": {
-            "description": "Retained mining-speed divisor provenance",
-            "maximum": 4,
-            "minimum": 0.1,
-            "type": "number",
-            "x-infini-units": "engine units: pickSpeed divisor"
-          },
-          "wireFields": [
-            "miningSpeedScale"
-          ]
-        }
-      },
-      "safetyLimits": "bounded by runtime program limits",
-      "status": "refactored",
-      "targetKinds": [
-        "item_body"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "configure_placeable",
-      "componentSlot": "placeable",
-      "conflicts": [],
-      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
-      "decision": "internal",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
-        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
-        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_request_server_execute",
-      "parameters": {
-        "placeStyle": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 255,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "terraria_place_style",
-          "units": ""
-        },
-        "tileId": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 65535,
-          "minimum": -1,
-          "reference": null,
-          "required": true,
-          "semanticType": "terraria_tile_id_or_disabled",
-          "units": ""
-        },
-        "wallId": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 65535,
-          "minimum": -1,
-          "reference": null,
-          "required": true,
-          "semanticType": "terraria_wall_id_or_disabled",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "promptVisibility": false,
-      "provenance": "placement payload referenced by one exact binding transaction",
-      "purpose": "Retained saved-wire provenance for the previous combined placement vocabulary; fresh Author selects one exact tile or wall operation.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "equals": null,
-          "kind": "at_least_one_param_nonnegative",
-          "message": "at least one of tileId/wallId must be enabled",
-          "param": "tileId|wallId",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "place_item"
-          ],
-          "kind": "binding_action_reference",
-          "message": "configure_placeable must be referenced by exactly one binding action.placementCallId.",
-          "target": "item_body"
         }
       ],
       "safetyLimits": "bounded by runtime program limits",
@@ -1645,45 +1525,6 @@
       "purpose": "Gate use on one explicit runtime condition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "minLife": {
-          "priorAuthorSchema": {
-            "description": "Current HP (Player.statLife >= minLife) required for life_above; equality allowed",
-            "maximum": 1000,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "wireFields": [
-            "useConditionMinLife"
-          ]
-        },
-        "minMana": {
-          "priorAuthorSchema": {
-            "description": "Current mana points (Player.statMana >= minMana) required for mana_above; equality allowed",
-            "maximum": 1000,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "wireFields": [
-            "useConditionMinMana"
-          ]
-        },
-        "mode": {
-          "priorAuthorSchema": {
-            "description": "Use condition",
-            "enum": [
-              "grounded",
-              "not_wet",
-              "life_above",
-              "mana_above"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "useConditionMode"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -1850,21 +1691,6 @@
           "target": "item_body"
         }
       ],
-      "retainedWireProvenance": {
-        "mode": {
-          "priorAuthorSchema": {
-            "description": "Prior saved mobility executor domain",
-            "enum": [
-              "blink_to_cursor",
-              "recall_home"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "mobilityMode"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -2768,203 +2594,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "setBonusAggroPoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
-            "maximum": 1000,
-            "minimum": -1000,
-            "type": "integer",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "engine units: aggro points",
-            "x-infini-units": "engine units: aggro points"
-          },
-          "wireFields": [
-            "setBonusAggro"
-          ]
-        },
-        "setBonusAmmoSaveChancePercent": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
-            "maximum": 99,
-            "minimum": 0,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32",
-              "wireProjection": {
-                "divisor": 100,
-                "multiplier": 1
-              }
-            },
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "probability_percent",
-            "x-infini-units": "probability_percent"
-          },
-          "wireFields": [
-            "setBonusAmmoSaveChance"
-          ]
-        },
-        "setBonusDamageReductionPercentagePoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
-            "maximum": 75,
-            "minimum": 0,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32",
-              "wireProjection": {
-                "divisor": 100,
-                "multiplier": 1
-              }
-            },
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "percentage_points",
-            "x-infini-units": "percentage_points"
-          },
-          "wireFields": [
-            "setBonusEndurance"
-          ]
-        },
-        "setBonusGenericArmorPenetrationPoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add flat armor penetration points to DamageClass.Generic; not damage percent",
-            "maximum": 100,
-            "minimum": 0,
-            "type": "number",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "armor_points",
-            "x-infini-units": "armor_points"
-          },
-          "wireFields": [
-            "setBonusArmorPenetration"
-          ]
-        },
-        "setBonusGenericCritChancePercentagePoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points to generic critical chance",
-            "maximum": 100,
-            "minimum": -100,
-            "type": "number",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "percentage_points",
-            "x-infini-units": "percentage_points"
-          },
-          "wireFields": [
-            "setBonusGenericCrit"
-          ]
-        },
-        "setBonusLifeRegenHpPerSecond": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
-            "maximum": 100,
-            "minimum": -50,
-            "multipleOf": 0.5,
-            "type": "number",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "HP/s",
-            "x-infini-units": "HP/s"
-          },
-          "wireFields": [
-            "setBonusLifeRegen"
-          ]
-        },
-        "setBonusManaCostReductionPercentagePoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
-            "maximum": 90,
-            "minimum": 0,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32",
-              "wireProjection": {
-                "divisor": 100,
-                "multiplier": 1
-              }
-            },
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "percentage_points",
-            "x-infini-units": "percentage_points"
-          },
-          "wireFields": [
-            "setBonusManaCostReduction"
-          ]
-        },
-        "setBonusManaRegenBonusPoints": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
-            "maximum": 200,
-            "minimum": -100,
-            "type": "integer",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "engine units: manaRegenBonus points",
-            "x-infini-units": "engine units: manaRegenBonus points"
-          },
-          "wireFields": [
-            "setBonusManaRegen"
-          ]
-        },
-        "setBonusMinionSlotsBonus": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add minion slots",
-            "maximum": 20,
-            "minimum": 0,
-            "type": "integer",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "slots",
-            "x-infini-units": "slots"
-          },
-          "wireFields": [
-            "setBonusMinionSlots"
-          ]
-        },
-        "setBonusMoveSpeedBonusPercent": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
-            "maximum": 300,
-            "minimum": -90,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32",
-              "wireProjection": {
-                "divisor": 100,
-                "multiplier": 1
-              }
-            },
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "additive_percent",
-            "x-infini-units": "additive_percent"
-          },
-          "wireFields": [
-            "setBonusMovementSpeed"
-          ]
-        },
-        "setBonusSentrySlotsBonus": {
-          "priorAuthorSchema": {
-            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add sentry slots",
-            "maximum": 20,
-            "minimum": 0,
-            "type": "integer",
-            "x-infini-neutral": 0,
-            "x-infini-semanticType": "slots",
-            "x-infini-units": "slots"
-          },
-          "wireFields": [
-            "setBonusSentrySlots"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -3379,36 +3008,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "placement": {
-          "priorAuthorSchema": {
-            "description": "Retained old spawn anchor provenance",
-            "enum": [
-              "item_use_origin",
-              "owner_center",
-              "cursor",
-              "ground_at_cursor",
-              "above_cursor",
-              "native_resting_spot"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "placement"
-          ]
-        },
-        "speedPxPerUpdate": {
-          "priorAuthorSchema": {
-            "description": "Retained constant-speed wire-only provenance.",
-            "maximum": 80,
-            "minimum": 0,
-            "type": "number"
-          },
-          "wireFields": [
-            "speedPxPerTick"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4517,43 +4116,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "extraUpdates": {
-          "priorAuthorSchema": {
-            "description": "Retained extra AI update provenance",
-            "maximum": 5,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "wireFields": [
-            "extraUpdates"
-          ]
-        },
-        "localNpcHitCooldownEngineUnits": {
-          "priorAuthorSchema": {
-            "description": "Retained raw immunity cooldown provenance",
-            "maximum": 600,
-            "minimum": -1,
-            "type": "integer"
-          },
-          "wireFields": [
-            "localNpcHitCooldownTicks"
-          ]
-        },
-        "npcImmunityMode": {
-          "priorAuthorSchema": {
-            "description": "Retained immunity mode provenance",
-            "enum": [
-              "owner",
-              "local"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "npcImmunityMode"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4709,27 +4271,6 @@
       "purpose": "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "gravityVelocityPerUpdate": {
-          "priorAuthorSchema": {
-            "description": "Retained signed vertical acceleration provenance",
-            "maximum": 2,
-            "minimum": -2,
-            "type": "number",
-            "x-infini-consumerConstraint": {
-              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-              "neutral": 0,
-              "rule": "nonneutral_must_remain_nonneutral",
-              "storage": "float32"
-            },
-            "x-infini-neutral": 0,
-            "x-infini-units": "engine units: vertical velocity increment per update"
-          },
-          "wireFields": [
-            "gravityPerTick"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4836,20 +4377,6 @@
       "purpose": "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "rangeTiles": {
-          "priorAuthorSchema": {
-            "description": "Retained orbit radius provenance",
-            "maximum": 80,
-            "minimum": 1,
-            "type": "number",
-            "x-infini-units": "tiles"
-          },
-          "wireFields": [
-            "rangeTiles"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -4912,59 +4439,6 @@
       "promptVisibility": true,
       "provenance": "existing movement code 5",
       "purpose": "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "status": "refactored",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_bounce",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
-      "decision": "internal",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.gravityPerTick"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "gravityVelocityPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 2,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: vertical velocity increment per update"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "promptVisibility": false,
-      "provenance": "existing movement code 6; retained wire provenance only, fresh Author uses move_gravity_arc",
-      "purpose": "Movement adds gravity per projectile update with no horizontal friction; tile collision uses the separate authored bounceCount. Bounces reflect collided axes with 0.78 retained velocity; this does not guarantee rolling, resting or an explosion.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5415,19 +4889,6 @@
       "purpose": "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "proximityRadiusPx": {
-          "priorAuthorSchema": {
-            "description": "Retained integer pixel radius provenance",
-            "maximum": 512,
-            "minimum": 4,
-            "type": "integer"
-          },
-          "wireFields": [
-            "proximityRadiusPx"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5679,20 +5140,6 @@
       "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "returnSpeed": {
-          "priorAuthorSchema": {
-            "description": "Retained cursor-tracking and return speed provenance",
-            "maximum": 80,
-            "minimum": 1,
-            "type": "number",
-            "x-infini-units": "pixels/projectile update"
-          },
-          "wireFields": [
-            "returnSpeed"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5808,9 +5255,229 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "held thrust logic extracted from spear root",
-      "purpose": "Move an owner-attached body forward and retract during one use animation.",
+      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "status": "refactored",
+      "targetKinds": [
+        "owner_attached_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_front_hand",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "decision": "expose",
+      "dependencies": [
+        "set_projectile_concurrency",
+        "configure_spawn",
+        "set_projectile_collision",
+        "configure_item_use"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.aimMode",
+        "runtimeProgram.entities[].movement.params.durationTicks",
+        "runtimeProgram.entities[].movement.params.startStretch",
+        "runtimeProgram.entities[].movement.params.peakStretch",
+        "runtimeProgram.entities[].movement.params.hitboxOffsetPx"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "aimMode": {
+          "enum": [
+            "initial",
+            "cursor"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "durationTicks": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 240,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "ticks",
+          "units": "active world ticks"
+        },
+        "hitboxOffsetPx": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 192,
+          "minimum": -192,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "peakStretch": {
+          "enum": [
+            "none",
+            "quarter",
+            "three_quarters",
+            "full"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "startStretch": {
+          "enum": [
+            "none",
+            "quarter",
+            "three_quarters",
+            "full"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "promptVisibility": true,
+      "provenance": "explicit native front-hand pose and hand-relative rectangular collision center",
+      "purpose": "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "none",
+            "quarter",
+            "three_quarters",
+            "full"
+          ],
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Native startStretch must not exceed peakStretch.",
+          "otherParam": "peakStretch",
+          "param": "startStretch",
+          "target": "same_target"
+        },
+        {
+          "kind": "primary_target",
+          "message": "This shared native front hand may be owned only by the exact primary entity.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "primary_use|spawn_entity",
+            "alternate_use|spawn_entity"
+          ],
+          "kind": "binding_tuple_present",
+          "message": "The hand owner requires an active spawn binding on this exact target, not a hold lane or another entity's active binding.",
+          "target": "same_target"
+        },
+        {
+          "capability": "set_projectile_concurrency",
+          "equals": 1,
+          "kind": "item_capability_param",
+          "message": "The hand owner requires explicit same-item/entity maxActive=1; count=1 is not a concurrency cap.",
+          "param": "maxActive",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "capability": "configure_spawn",
+          "kind": "item_capability_param",
+          "message": "The hand owner requires an explicit launch axis: configure_spawn aim must be cursor, facing or velocity, never none, even when aimMode=cursor.",
+          "param": "aim",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": 1,
+          "kind": "item_capability_param",
+          "message": "The hand owner requires explicit spawn count=1.",
+          "param": "count",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": 0,
+          "kind": "item_capability_param",
+          "message": "The hand owner requires explicit zero spawn fan spread.",
+          "param": "spreadRadians",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": {
+            "constantSpeedPxPerUpdate": 0
+          },
+          "kind": "item_capability_param",
+          "message": "The hand owner requires constant zero translational launch speed, not a sampled distribution.",
+          "param": "velocity",
+          "target": "same_target"
+        },
+        {
+          "capability": "set_projectile_collision",
+          "equals": false,
+          "kind": "item_capability_param",
+          "message": "The hand-driven body requires explicit tileCollide=false.",
+          "param": "tileCollide",
+          "target": "same_target"
+        },
+        {
+          "allowAbsent": true,
+          "capability": "configure_item_use",
+          "equals": "",
+          "kind": "item_capability_param",
+          "message": "Another item handPose cannot own the same arm; leave handPose empty or absent.",
+          "param": "handPose",
+          "target": "item_body"
+        },
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release",
+            "target_and_fire"
+          ],
+          "kind": "capability_absent",
+          "message": "Another position controller or over-target transform cannot own this hand-driven body.",
+          "target": "same_target"
+        },
+        {
+          "capability": "configure_spawn",
+          "equals": null,
+          "kind": "capability_param_absent",
+          "message": "The hand-driven body cannot use an over-target spawn displacement.",
+          "param": "position.above",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -6035,6 +5702,7 @@
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
+            "move_front_hand",
             "move_gravity_arc",
             "move_orbit",
             "move_phase",
@@ -6244,19 +5912,6 @@
       "purpose": "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
-      "retainedWireProvenance": {
-        "sameTargetBias": {
-          "priorAuthorSchema": {
-            "description": "Persisted bias domain remains 0..1; the native selector saturates 0.9..1 at 0.9. Wire-only provenance does not admit these values to fresh Author",
-            "maximum": 1,
-            "minimum": 0,
-            "type": "number"
-          },
-          "wireFields": [
-            "sameTargetBias"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -6267,72 +5922,6 @@
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code"
       ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "spawn_over_target",
-      "componentSlot": "spawn_over_target",
-      "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
-      "decision": "internal",
-      "dependencies": [
-        "configure_spawn"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].spawn.overTarget.heightTiles",
-        "runtimeProgram.entities[].spawn.overTarget.delayTicks"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "delayTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "heightTiles": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "tiles"
-        }
-      },
-      "positionOwnership": "none",
-      "promptVisibility": false,
-      "provenance": "overhead barrage placement extracted from root family",
-      "purpose": "Spawn this entity above the cursor/target with an explicit telegraph delay.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "configure_spawn",
-          "kind": "capability_present",
-          "message": "spawn_over_target extends the same entity's explicit spawn component",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "status": "refactored",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
     },
     {
       "authorityByEffect": {},
@@ -6528,40 +6117,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_use",
-              "on_spawn",
-              "on_hit",
-              "on_crit",
-              "on_tile_collision",
-              "on_expire",
-              "on_kill",
-              "periodic",
-              "on_release",
-              "channel_complete"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        },
-        "periodTicks": {
-          "priorAuthorSchema": {
-            "description": "Retained prior periodic interval provenance",
-            "maximum": 3600,
-            "minimum": 6,
-            "type": "integer"
-          },
-          "wireFields": [
-            "periodTicks"
-          ]
-        }
-      },
       "safetyLimits": "max 12 per action, program child depth <= 3, total event spawn budget <= 32",
       "status": "refactored",
       "targetKinds": [
@@ -6733,14 +6288,6 @@
           },
           "kind": "referenced_entity_capability_params",
           "message": "Exact hit-target geometry requires a child configured for event origin/direction without another position transform.",
-          "param": "entity",
-          "target": "same_target"
-        },
-        {
-          "capability": "spawn_over_target",
-          "equals": null,
-          "kind": "referenced_entity_without_capability",
-          "message": "Exact hit-target geometry cannot coexist with the child's over-target displacement or telegraph.",
           "param": "entity",
           "target": "same_target"
         }
@@ -6921,31 +6468,8 @@
           "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
           "param": "entity",
           "target": "same_target"
-        },
-        {
-          "capability": "spawn_over_target",
-          "equals": null,
-          "kind": "referenced_entity_without_capability",
-          "message": "The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter.",
-          "param": "entity",
-          "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_crit"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        }
-      },
       "safetyLimits": "at most 12 planned physical children; one shared activation reservation each; acyclic entity graph, depth <= 3 and aggregate event spawn count <= 32",
       "status": "refactored",
       "targetKinds": [
@@ -7042,21 +6566,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_crit"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -7162,35 +6671,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_crit",
-              "on_tile_collision",
-              "on_expire",
-              "on_kill"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        },
-        "radiusPx": {
-          "priorAuthorSchema": {
-            "description": "Retained integer pixel radius provenance",
-            "maximum": 768,
-            "minimum": 8,
-            "type": "integer"
-          },
-          "wireFields": [
-            "radiusPx"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -7412,47 +6892,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "periodic",
-              "on_expire"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        },
-        "mode": {
-          "priorAuthorSchema": {
-            "description": "Prior pull discriminator includes the owner branch now selected by its explicit capability",
-            "enum": [
-              "target_to_owner",
-              "target_to_entity",
-              "owner_to_target"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "mode"
-          ]
-        },
-        "periodTicks": {
-          "priorAuthorSchema": {
-            "description": "Retained prior periodic interval provenance",
-            "maximum": 3600,
-            "minimum": 6,
-            "type": "integer"
-          },
-          "wireFields": [
-            "periodTicks"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -7633,21 +7072,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_crit"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -7758,22 +7182,6 @@
           "target": "same_target"
         }
       ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_tile_collision",
-              "on_expire"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        }
-      },
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -7846,128 +7254,6 @@
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "chain_damage_on_event",
-      "componentSlot": "event_action",
-      "conflicts": [],
-      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
-      "decision": "internal",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [
-        "on_hit",
-        "on_crit"
-      ],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].events[].event",
-        "runtimeProgram.entities[].events[].action",
-        "runtimeProgram.entities[].events[].actionCode",
-        "runtimeProgram.entities[].events[].count",
-        "runtimeProgram.entities[].events[].rangeTiles",
-        "runtimeProgram.entities[].events[].damageMultiplier",
-        "runtimeProgram.entities[].events[].delayTicks"
-      ],
-      "multiplicity": "many_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "count": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 12,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "spawn_or_target_count",
-          "units": ""
-        },
-        "damageMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 2,
-          "minimum": 0.05,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "delayTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "rangeTiles": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 60,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "tiles"
-        },
-        "when": {
-          "enum": [
-            "on_hit",
-            "on_crit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_trigger",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "promptVisibility": false,
-      "provenance": "retained event action 4 and prior Author paths; fresh Author uses damage_nearest_on_event",
-      "purpose": "Damage up to maxTargets nearest chaseable NPCs within one radius of the recorded event center, excluding the directly hit NPC. Every target is ranked from that same center and receives the same authored base-damage multiplier; no sequential hopping or distance falloff.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "equals": null,
-          "kind": "event_available",
-          "message": "target entity must actually emit the selected event",
-          "param": "when",
-          "target": "same_target"
-        }
-      ],
-      "retainedWireProvenance": {
-        "event": {
-          "priorAuthorSchema": {
-            "description": "Retained prior event source provenance",
-            "enum": [
-              "on_hit",
-              "on_crit"
-            ],
-            "type": "string"
-          },
-          "wireFields": [
-            "event"
-          ]
-        }
-      },
-      "safetyLimits": "bounded by runtime program limits",
-      "status": "refactored",
-      "targetKinds": [
-        "item_body",
         "owner_attached_projectile",
         "free_projectile",
         "stationary_projectile",

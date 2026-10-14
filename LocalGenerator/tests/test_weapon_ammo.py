@@ -1,6 +1,5 @@
 """Weapon ammo is an explicit native consumer, independent of generated ammo stacks."""
 from copy import deepcopy
-import hashlib
 import json
 from pathlib import Path
 
@@ -91,36 +90,22 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
     assert any(row["code"] == "missing_weapon_ammo_consumer" for row in report["errors"])
 
 
-def test_legacy_complete_wire_recovers_only_declared_successor_notation_and_neutrals():
-    from tests.captured_projectile_author import without_captured_projectile_alias_delta
-    # Keep the pre-ammo hashes unchanged. Item aliases intentionally replace
-    # source names/placement receipts, while #13 adds exact neutral targeting.
-    # Reverse only those asserted successors; every other compiled byte is pinned.
+def test_current_fixture_compositions_compile_and_deliver_without_implicit_weapon_ammo():
+    # Frozen archive selects the retained corpus, not an obsolete metadata hash
+    # contract. Retired compatibility receipts must not be restored for byte parity.
     baseline = json.loads((Path(__file__).parent / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
-    from sentry_contract_checks import without_declared_targeting_neutrals
-    from beam_contract_checks import without_declared_beam_neutrals
-    from captured_parent_combat_author import historical_child_combat_wire
-    from captured_item_alias_wire import historical_equipment_inventory_wire, historical_item_alias_wire
-
-    for name, expected_hash in baseline.items():
+    for name in baseline:
         authored = build_runtime_fixture(name)
+        before = deepcopy(authored)
         compiled = compile_runtime_program(authored)
-        assert validate_runtime_wire(compiled)["ok"]
+        assert validate_runtime_wire(compiled)["ok"], name
         assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=authored, final_document=compiled)["ok"]
-        final = historical_item_alias_wire(without_captured_projectile_alias_delta(historical_child_combat_wire(
-            without_declared_targeting_neutrals(without_declared_beam_neutrals(historical_equipment_inventory_wire(compiled))))))
-        checks = final["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
-        assert checks["exclusiveGroups"] == ["ammo_role", "controller", "item_mobility", "movement", "placeable"]
-        added_modifier_caps = (
-            "set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
-            "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity",
-        )
-        assert checks["requirements"] == 31 + sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
-        checks["exclusiveGroups"] = ["controller", "movement"]
-        checks["requirements"] = 28
-        actual = hashlib.sha256(json.dumps(final, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-        assert actual == expected_hash, name
+                                       authored_document=authored, final_document=compiled)["ok"], name
+        assert authored == before, name
+        assert "weaponAmmo" not in compiled["runtimeProgram"], name
+        delivered = deepcopy(compiled)
+        delivered.pop("runtimeContract")
+        assert validate_runtime_wire(delivered)["ok"], name
 
 
 def test_ammo_stack_and_weapon_consumer_are_an_explicit_unsupported_composition():

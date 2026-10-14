@@ -75,7 +75,7 @@ public sealed partial class GeneratedProjectile
         try
         {
             byte runtimeVersion = reader.ReadByte();
-            if (runtimeVersion is not (2 or 3) && runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion)
+            if (runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion)
                 throw new InvalidDataException("unsupported generated runtime projectile payload");
             _generatedItemId = (reader.ReadString() ?? "").Trim();
             _entityId = (reader.ReadString() ?? "").Trim();
@@ -94,9 +94,8 @@ public sealed partial class GeneratedProjectile
             _lastTarget = reader.ReadInt32();
             long sourceToken=reader.ReadInt64();
             if(sourceToken==0)throw new InvalidDataException("missing VFX source generation");
-            RuntimeInitialNpcExclusion receivedExclusion = runtimeVersion == 2
-                ? RuntimeInitialNpcExclusion.None : RuntimeInitialNpcExclusion.Read(reader);
-            byte receivedVelocityPresence = runtimeVersion >= 4 ? reader.ReadByte() : (byte)0;
+            RuntimeInitialNpcExclusion receivedExclusion = RuntimeInitialNpcExclusion.Read(reader);
+            byte receivedVelocityPresence = reader.ReadByte();
             if (receivedVelocityPresence > 1)
                 throw new InvalidDataException("invalid sampled launch presence");
             Vector2? receivedVelocity = receivedVelocityPresence == 1
@@ -287,7 +286,8 @@ public sealed partial class GeneratedProjectile
                 ||Main.player[payload.Owner] is not {active:true})return;
             var source=FindVfxPeerSource(payload,true);
             if(source is null||source._data is null||source._entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(source._data)
-                ||!HasExactVfxSlot(source._data,payload.EntityId,payload.EventName))return;
+                ||!HasExactVfxSlot(source._data,payload.EntityId,payload.EventName)
+                ||!payload.Snapshot.IsValidFor(source._entity))return;
             try{RuntimeEventKind.ValidateProducer(source._entity,payload.EventName,false,false);}catch{return;}
             if(!AcceptVfxOccurrence(payload))return;
             // Same vanilla-equivalent owner hit trust as the actual hook. This
@@ -302,7 +302,8 @@ public sealed partial class GeneratedProjectile
             || !GeneratedItemRegistryService.IsCurrentWorldData(data))
             return;
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(payload.EntityId);
-        if (entity is null || !HasExactVfxSlot(data, entity.Id, payload.EventName))
+        if (entity is null || !HasExactVfxSlot(data, entity.Id, payload.EventName)
+            || !payload.Snapshot.IsValidFor(entity))
             return;
         if(!AcceptVfxOccurrence(payload))return;
         var live=FindVfxPeerSource(payload,true);

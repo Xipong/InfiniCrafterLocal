@@ -211,6 +211,15 @@ public sealed class GeneratedParentSummarySpec
 public sealed class GeneratedBuffSpec
 {
     public int DurationTicks { get; set; } = 0;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(GeneratedBuffExhaustionTicksConverter))]
+    public int? ExhaustionTicks
+    {
+        get => _exhaustionTicks;
+        set => _exhaustionTicks = value is null or (>= 0 and <= 21600) ? value
+            : throw new InvalidDataException("generated buff exhaustionTicks must be 0..21600");
+    }
+    private int? _exhaustionTicks;
     public float MiningSpeedMultiplier { get; set; } = 1f;
     public float EmitLightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
@@ -239,6 +248,26 @@ public sealed class GeneratedBuffSpec
         JumpBoost = MathF.Min(8f, MathF.Max(0f, JumpBoost));
         ManaRegen = Math.Min(120, Math.Max(0, ManaRegen));
         LifeRegen = Math.Min(120, Math.Max(0, LifeRegen));
+    }
+}
+
+// Property-bound raw admission covers default and named generatedBuff readers.
+// Omission does not invoke the converter; present null is not omission.
+public sealed class GeneratedBuffExhaustionTicksConverter : JsonConverter<int?>
+{
+    public override bool HandleNull => true;
+    public override int? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.Number || !reader.TryGetInt32(out int ticks)
+            || ticks is < 0 or > 21600)
+            throw new JsonException("present exhaustionTicks must be an integer 0..21600");
+        return ticks;
+    }
+    public override void Write(Utf8JsonWriter writer, int? value, JsonSerializerOptions options)
+    {
+        if (value is null || value is < 0 or > 21600)
+            throw new JsonException("present exhaustionTicks must be an integer 0..21600");
+        writer.WriteNumberValue(value.Value);
     }
 }
 
@@ -279,8 +308,6 @@ public sealed class GameplaySpec : IItemEffectsSpec
     public int HealLife { get; set; } = 0;
     public int HealMana { get; set; } = 0;
     public bool Potion { get; set; } = false;
-    public int BuffCode { get; set; } = InfiniTerrariaSentinels.NoBuffType;
-    public int BuffTime { get; set; } = 0;
     public BuffEntrySpec[] ExtraBuffs { get; set; } = Array.Empty<BuffEntrySpec>();
     public GeneratedBuffSpec GeneratedBuff { get; set; } = new();
     public int PickPower { get; set; } = 0;

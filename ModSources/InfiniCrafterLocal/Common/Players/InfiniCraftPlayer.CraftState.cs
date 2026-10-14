@@ -192,6 +192,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void Initialize()
     {
+        ClearGeneratedItemExhaustion();
         Array.Clear(_craftLaneOutcomes);
         Array.Clear(_craftLaneOutcomeTicks);
         Array.Clear(_remoteCraftCancelRequested);
@@ -209,6 +210,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void OnEnterWorld()
     {
+        ClearGeneratedItemExhaustion();
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
         // A half-open remote escrow operation is durable and must resend the same

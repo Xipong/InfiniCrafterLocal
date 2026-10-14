@@ -42,17 +42,17 @@ internal static partial class EngineRuntimeChecks
         Id = "exact_sound", EntityId = entity, Event = eventName, RendererKind = "soundCue",
         Channel = "sound", Lane = "cue", TextureRole = "none", ParticleRole = "none",
         ParticleSystemId = "none", EmissionMode = "none", Anchor = "self", RepeatEvery = 1, SlotSeed = 0,
+        SoundId = "Item1", Sound = new VfxSoundSpec { Volume = 0.4f, Pitch = 0, PitchVariance = 0 },
     };
 
-    // Saved-wire fixtures intentionally omit new playback controls.
+    // Current sound fixtures explicitly carry selector and playback controls.
     private static string SoundSelectionJson(string? selector, bool present = true, string renderer = "soundCue", bool frozenRepair = false)
     {
         var slot = SoundSelectionSlot("item", RuntimeEventKind.OnUse);
         slot.RendererKind = renderer;
         if (renderer == "lightCue") slot.Channel = "light";
         if (renderer == "impactRing") { slot.Channel = "impactShape"; slot.Lane = "primary"; }
-        string json = new VfxManifestSpec { Slots = new[] { slot } }.ToJson();
-        Equal(true, json.Length > 0, "legacy fixture serialization succeeds");
+        string json = System.Text.Json.JsonSerializer.Serialize(new VfxManifestSpec { Slots = new[] { slot } });
         var node = JsonNode.Parse(json)!.AsObject();
         var row = node["Slots"]![0]!.AsObject();
         row.Remove("SoundId"); // make literal absent/present distinction explicit
@@ -64,7 +64,7 @@ internal static partial class EngineRuntimeChecks
     private static VfxManifestSpec SoundSelectionRead(string? selector, bool present = true)
     {
         var parsed = VfxManifestSpec.FromJson(SoundSelectionJson(selector, present));
-        Equal(1, parsed.Slots.Length, $"soundId={selector ?? "<legacy absent>"} survives actual FromJson");
+        Equal(1, parsed.Slots.Length, $"explicit soundId={selector} survives actual FromJson");
         return parsed;
     }
 
@@ -140,8 +140,10 @@ internal static partial class EngineRuntimeChecks
                 }
                 // Named boundaries, not palette x route x alpha x phase x controls.
                 var scenarios = new (string Name, string Route, string? Id, SoundStyle Style, float Alpha, float Phase, VfxSoundSpec? Sound)[] {
-                    ("legacy_absent_selector_floor", "item_event", null, SoundID.Item1, 0f, -1f, null),
-                    ("legacy_native_variants", "projectile_event", "Item5", SoundID.Item5, 0.4f, 1f, null),
+                    ("explicit_item1", "item_event", "Item1", SoundID.Item1, 0f, -1f,
+                        new() { Volume = 0.4f, Pitch = 0.2f, PitchVariance = 0f }),
+                    ("explicit_native_variants", "projectile_event", "Item5", SoundID.Item5, 0.4f, 1f,
+                        new() { Volume = 0.4f, Pitch = 0.2f, PitchVariance = 0f }),
                     ("explicit_instrument_negative_pitch", "item_event", "Item26", SoundID.Item26, 1f, 1f,
                         new() { Volume = 0.27f, Pitch = -0.7f, PitchVariance = 0.6f }),
                     ("explicit_periodic_ignores_alpha_phase", "item_periodic", "Item5", SoundID.Item5, 0f, -1f,
@@ -192,7 +194,7 @@ internal static partial class EngineRuntimeChecks
                     }
                     Equal(sample.Style.SoundPath, observed.SoundPath, label + " exact native path");
                     Equal(true, sample.Style.Variants.SequenceEqual(observed.Variants), label + " variants preserve native constant");
-                    Equal(sample.Sound?.PitchVariance ?? sample.Style.PitchVariance, observed.PitchVariance, label + " explicit or legacy variance");
+                    Equal(sample.Sound!.PitchVariance, observed.PitchVariance, label + " explicit variance");
                     Equal(true, sample.Style.VariantsWeights.SequenceEqual(observed.VariantsWeights), label + " native variant weights preserved");
                     Equal(sample.Style.Identifier ?? "", observed.Identifier ?? "", label + " native sharing identifier preserved");
                     Equal(sample.Style.LimitsArePerVariant, observed.LimitsArePerVariant, label + " native per-variant policy preserved");
@@ -200,11 +202,11 @@ internal static partial class EngineRuntimeChecks
                     Equal((int)sample.Style.Type, (int)observed.Type, label + " native sound type preserved");
                     Equal(sample.Style.MaxInstances, observed.MaxInstances, label + " native instance cap preserved");
                     Equal((int)sample.Style.SoundLimitBehavior, (int)observed.SoundLimitBehavior, label + " native cap policy preserved");
-                    Equal(sample.Sound?.Volume ?? Math.Clamp(alpha, 0.05f, 1f), observed.Volume, label + " exact new volume or legacy alpha");
+                    Equal(sample.Sound!.Volume, observed.Volume, label + " exact authored volume independent of alpha");
                     Equal(sample.Style.RerollAttempts, observed.RerollAttempts, label + " native variant reroll policy");
                     Equal(sample.Style.PlayOnlyIfFocused, observed.PlayOnlyIfFocused, label + " native focus policy");
                     Equal((int)sample.Style.PauseBehavior, (int)observed.PauseBehavior, label + " native pause policy");
-                    Equal(sample.Sound?.Pitch ?? Math.Clamp(phase * 0.25f, -0.5f, 0.5f), observed.Pitch, label + " exact new pitch or legacy phase");
+                    Equal(sample.Sound!.Pitch, observed.Pitch, label + " exact authored pitch independent of phase");
                     Equal(expectedPosition, location!.Value, label + " exact world position");
                     Equal(serialized, data.VfxManifest.ToJson(), label + " no authored mutation");
                     Equal(37, projectile.damage, label + " no damage mutation");

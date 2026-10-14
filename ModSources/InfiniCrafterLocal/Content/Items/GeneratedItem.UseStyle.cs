@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.Xna.Framework;
+using InfiniCrafterLocal.Content.Projectiles;
 using Terraria;
 
 namespace InfiniCrafterLocal.Content.Items;
@@ -10,6 +11,7 @@ public partial class GeneratedItem
     {
         base.UseStyle(player, heldItemFrame);
         if (player.itemAnimation <= 0) return;
+        if (GeneratedProjectile.TryProjectFrontHandUseStyle(player, this)) return;
         string pose = Data.RuntimeProgram.ItemUse.HandPose;
         if (pose.Length == 0) return;
         // Match vanilla's itemRotation -> composite-arm conversion (Rapier use

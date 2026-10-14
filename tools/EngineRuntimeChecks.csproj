@@ -47,6 +47,8 @@
     <Compile Include="EngineRuntimeChecks.MaterialReview.cs" />
     <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />
     <Compile Include="EngineRuntimeChecks.BodyGeometry.cs" />
+    <Compile Include="EngineRuntimeChecks.FrontHand.cs" />
+    <Compile Include="EngineRuntimeChecks.FrontHandRepairs.cs" />
     <Compile Include="EngineRuntimeChecks.ChannelBeam.cs" />
     <Compile Include="EngineRuntimeChecks.VfxPreview.cs" />
     <Compile Include="EngineRuntimeChecks.Equipment.cs" />
@@ -69,6 +71,10 @@
     <Compile Include="EngineRuntimeChecks.EventDomains.cs" />
     <Compile Include="EngineRuntimeChecks.VerticalAcceleration.cs" />
     <Compile Include="EngineRuntimeChecks.Tooltips.cs" />
+    <Compile Include="EngineRuntimeChecks.ExhaustionPresentation.cs" />
+    <Compile Include="EngineRuntimeChecks.Exhaustion.cs" />
+    <Compile Include="EngineRuntimeChecks.LegacyRetirement.cs" />
+    <Compile Include="EngineRuntimeChecks.NativeDtoRetirement.cs" />
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />
     <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
     <Compile Include="EngineRuntimeChecks.PlacementPrefix.cs" />

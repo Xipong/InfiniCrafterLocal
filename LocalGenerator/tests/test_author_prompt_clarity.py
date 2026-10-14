@@ -259,3 +259,71 @@ def test_conditional_neutral_guidance_preserves_optional_contract(monkeypatch):
     for cap, name, spec in conditional:
         assert not spec.required and cards[cap.name]['params'][name]['optional'] is True
         assert cards[cap.name]['params'][name]['omissionAllowedOnlyWhen'] == spec.omission_condition.card()
+
+
+@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
+def test_future_author_accounts_for_refreshable_utility_economy_without_item_router(monkeypatch, mode):
+    from copy import deepcopy
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    parent = {'name': 'Arbitrary object', 'damage': 4, 'useTime': 18, 'maxStack': 1}
+    before = deepcopy(parent)
+    first, user, _ = author.build_initial_author_request(parent, {}, {}, {}, 'future-economy', model_name='test-model')
+    second, _, _ = author.build_initial_author_request({**parent, 'name': 'Different identity'}, {}, {}, {}, 'other-economy', model_name='test-model')
+    payload = json.loads(user)
+    rule = payload['requiredJsonShape']['concept']['coreMechanic']
+    for meaning in ('effective uptime', 'free repeated refresh', 'duration is not a cooldown',
+                    'recurring cost', 'supported mechanics', 'never invent'):
+        assert meaning in rule
+    assert '3 minutes' not in rule and '10800' not in rule
+    # App guidance is static, parent facts stay complete and no host design is inserted.
+    assert first['messages'][:2] == second['messages'][:2]
+    assert parent == before
+    assert 'cooldownTicks' not in payload['requiredJsonShape']['runtimeProgram']['bindings'][0]
+    assert payload['runtimeCapabilityContract']['catalog']['capabilities']
+
+
+def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_scope(monkeypatch):
+    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'utility-refresh', model_name='test-model')
+    cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
+    card = cards['apply_generated_buff_on_use']
+    for meaning in ('identical effect', 'maximum remaining duration', 'distinct effects', 'indefinite uptime'):
+        assert meaning in card['does']
+    duration = card['params']['durationTicks']['meaning']
+    assert 'one application' in duration and 'not a reuse cooldown' in duration
+    sense = card['params']['oreSenseEnabled']['meaning']
+    assert 'Spelunker' in sense and 'chests' in sense and 'life crystals' in sense and 'not a radius' in sense
+    source = build_capability_witness('apply_generated_buff_on_use')
+    buff = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
+    del buff['params']['durationTicks']
+    dossier = author.build_gameplay_repair_dossier(source, {}, {}, {}, {}, failure_report=validate_runtime_program(source))
+    repair_card = next(c for c in dossier['existingBrokenCapabilityCards'] if c['fn'] == 'apply_generated_buff_on_use')
+    assert repair_card['does'] == card['does']
+    for leaf in ('durationTicks', 'oreSenseEnabled'):
+        assert repair_card['params'][leaf]['meaning'] == card['params'][leaf]['meaning']
+
+
+def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair():
+    from copy import deepcopy
+    from infini_local.core.runtime_authoring import apply_repair_patch, filter_repair_patch_scope, validate_runtime_program
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    source = build_capability_witness('apply_generated_buff_on_use')
+    original = deepcopy(source)
+    stats = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')
+    stats['params']['damage'] = True
+    dossier = author.build_gameplay_repair_dossier(source, {}, {}, {}, {}, failure_report=validate_runtime_program(source))
+    scope = dossier['repairScope']
+    assert scope['fieldPermissions']['calls'] == [{'id': stats['id'], 'paths': ['params.damage']}]
+    repaired_stats = deepcopy(stats)
+    repaired_stats['params']['damage'] = next(c for c in original['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')['params']['damage']
+    effects = deepcopy(next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use'))
+    effects['params']['durationTicks'] = 1
+    filtered, audit = filter_repair_patch_scope(source, {'callsUpsert': [repaired_stats, effects], 'note': 'Only actual invalid leaf'}, scope)
+    assert audit['ok'] and audit['ignoredChanges']
+    result = apply_repair_patch(source, filtered)
+    assert result == original and validate_runtime_program(result)['ok']

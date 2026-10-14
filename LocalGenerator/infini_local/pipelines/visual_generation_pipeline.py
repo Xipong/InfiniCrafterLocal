@@ -15,6 +15,10 @@ from typing import Any, Mapping
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.visual_contract_schema import (
+    front_hand_sprite_errors, front_hand_sprite_requirement, grip_schema,
+    sprite_presentation_properties,
+)
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
@@ -119,20 +123,6 @@ def attach_visual(
     return data
 
 
-def _sprite_presentation_properties() -> dict[str, Any]:
-    # Direct authored projection, never inferred from hitbox, canvas or prose.
-    return {
-        "renderSizePx": {
-            "type": "integer", "minimum": 1, "maximum": 512,
-            "description": "Base world-pixel length of the larger side of the complete final PNG frame, before rotation/camera and independent draw multipliers. Not alpha-bbox, collision, inventory fit or bake resolution. Runtime uses q=renderSizePx/max(actual final frame width,height).",
-        },
-        "forwardAngleDegrees": {
-            "type": "number", "minimum": -180, "maximum": 180,
-            "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
-        },
-    }
-
-
 def _visual_item_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -144,7 +134,7 @@ def _visual_item_schema() -> dict[str, Any]:
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 256}, "minItems": 1, "maxItems": 8},
             "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
-            **_sprite_presentation_properties(),
+            **sprite_presentation_properties(),
             "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
             "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
             "effectColor": {
@@ -152,15 +142,7 @@ def _visual_item_schema() -> dict[str, Any]:
                 "enum": ["white", "gray", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black"],
                 "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
             },
-            "grip": {
-                "type": "object", "additionalProperties": False,
-                "description": "Optional atomic hand pivot on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units. Replaces legacy grip and artistic forward offset, not authored HoldoutOffset.",
-                "properties": {
-                    "normalizedX": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    "normalizedY": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                },
-                "required": ["normalizedX", "normalizedY"],
-            },
+            "grip": grip_schema(),
         },
         "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "renderSizePx", "forwardAngleDegrees", "inventoryScale", "worldScale"],
     }
@@ -208,7 +190,8 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
         "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
         "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
         "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION.replace("item PNG", "independent entity PNG")},
-        **_sprite_presentation_properties(),
+        **sprite_presentation_properties(),
+        "grip": grip_schema(),
     })
     distinct["required"].extend(["prompt", "silhouette", "visualIdentity", "preferredCanvasSize", "renderSizePx", "forwardAngleDegrees"])
     nonitem_id = {"type": "string", "enum": [value for value in entity_ids if value != item_body_id]}
@@ -318,6 +301,7 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             "movement": copy.deepcopy(dict(movement)),
             "controller": copy.deepcopy(dict(controller)),
             "driverMeaningReadOnly": driver_meanings,
+            **({"spriteDependenciesReadOnly": requirement} if (requirement := front_hand_sprite_requirement(entity)) is not None else {}),
             "modifierMeaningReadOnly": {
                 member: CAPABILITY_REGISTRY[fn].summary for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items() if member in entity
             } | ({"whipUsesOwnerGravity": CAPABILITY_REGISTRY["orient_whip_to_owner_gravity"].summary} if entity.get("whipUsesOwnerGravity") is True else {}),
@@ -374,9 +358,10 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
                 "visibleAlphaExtent": "alpha-bbox pixels * q_selected * independent draw multipliers",
                 "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror or visualScaleCurve. An independent hitbox curve does not multiply visual scale. Never change accepted gameplay to force equality.",
             },
+            "frontHand": "Only explicit move_front_hand (opcode 20) attaches to the native front hand H. Author owns collision center C = H + aimedAxis * hitboxOffsetPx, aimMode, durationTicks and stretch; never derive mechanics from PNG size/axis/grip. For sprite modes require selected R, forwardAngleDegrees and final-canvas atomic grip: reuse_item_icon selects item.grip with no duplicate entity metadata; a distinct baked_sprite owns its entity grip. no_asset/runtime_geometry require no PNG grip; geometry stays at the authored collision center. Describe the actual hand-contact region in that owner's art prompt. Repair only the diagnosed owner leaf, never accepted gameplay, mode or valid coordinates.",
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
-            "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon may instead represent only a terminal body with a separately chosen texturedPath for the path. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
+            "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon draw a single PNG rather than the full collision path. texturedPath is an independent VFX renderer for compatible accepted path sources. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
             "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
             "legacy": "Already delivered metadata absence preserves exact historical rendering; newly authored v2 projects must explicitly choose required fields. No defaults, clamps, migration or rebake.",
         },
@@ -414,6 +399,7 @@ def _validate_kit(
     item_body_id: str,
     *,
     equipment_overlay_required: bool = False,
+    accepted_data: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
     if isinstance(raw, MalformedVisualDirectorOutput):
@@ -520,6 +506,10 @@ def _validate_kit(
         errors.append({"path": "$.entities", "message": "missing entity rows: " + ", ".join(missing)})
     if len(rows) != len(entity_ids):
         errors.append({"path": "$.entities", "message": f"expected exactly {len(entity_ids)} rows"})
+    if accepted_data is not None:
+        dependencies = front_hand_sprite_errors(accepted_data, kit=raw)
+        seen_paths = {error["path"] for error in errors}
+        errors.extend(error for error in dependencies if error["path"] not in seen_paths)
     return (copy.deepcopy(raw) if not errors else None), errors
 
 
@@ -1210,7 +1200,7 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
         project_ref = str(row.get("visualProjectRef") or "")
         project = item if project_ref == "item" else row
         # Only distinct baked projects own these metadata; item/reuse select root.
-        for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees"):
+        for field in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip"):
             if project_ref == "entity" and field in row:
                 entity_visual[field] = copy.deepcopy(row[field])
             else:
@@ -1287,6 +1277,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         entity_ids,
         item_body_id,
         equipment_overlay_required=equipment_overlay_required,
+        accepted_data=data,
     )
     if kit is None:
         accounting["visualRepairCalls"] += 1
@@ -1306,6 +1297,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             entity_ids,
             item_body_id,
             equipment_overlay_required=equipment_overlay_required,
+            accepted_data=data,
         )
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))
@@ -1316,6 +1308,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             recovered_kit, _ = _validate_kit(
                 source, entity_ids, item_body_id,
                 equipment_overlay_required=equipment_overlay_required,
+                accepted_data=data,
             )
             if recovered_kit is None:
                 raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")

@@ -364,7 +364,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
 
 
 @pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce"])
-def test_retired_author_call_is_absent_from_schema_prompt_repair_but_wire_opcode_remains(fn):
+def test_retired_author_call_is_absent_from_schema_prompt_repair_and_registry(fn):
     from infini_local.core.runtime_authoring import compact_capability_catalog, capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
     assert fn not in {row["fn"] for row in compact_capability_catalog()}
@@ -377,10 +377,10 @@ def test_retired_author_call_is_absent_from_schema_prompt_repair_but_wire_opcode
     dossier = build_gameplay_repair_dossier(document, {}, {}, {}, {}, failure_report=validate_runtime_program(document))
     for section in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards"):
         assert fn not in {row["fn"] for row in dossier[section]}
-    assert MOVEMENT_OPCODE["move_bounce"] == 6 and MOVEMENT_OPCODE["move_gravity_arc"] == 2
+    assert "move_bounce" not in MOVEMENT_OPCODE and MOVEMENT_OPCODE["move_gravity_arc"] == 2
 
 
-def test_frozen_wire_and_receipts_survive_without_accepting_old_author_paths():
+def test_frozen_retired_receipts_are_negative_evidence_without_rewriting_bytes():
     path = Path(__file__).with_name("fixtures") / "projectile_retained_wire.json"
     corpus = json.loads(path.read_text())
     assert corpus["sourceHead"] == "a3d5950"
@@ -388,9 +388,9 @@ def test_frozen_wire_and_receipts_survive_without_accepting_old_author_paths():
         wire = row["wire"]
         before = json.dumps(wire, sort_keys=True)
         receipts = wire["runtimeContract"]["finalWireReceipts"]
-        assert validate_runtime_wire(wire)["ok"], row["fn"]
+        assert not validate_runtime_wire(wire)["ok"], row["fn"]
         report = audit_compiler_receipts(receipts, final_document=wire)
-        assert report["ok"], (row["fn"], report)
+        assert not report["ok"], (row["fn"], report)
         assert json.dumps(wire, sort_keys=True) == before
         broken = deepcopy(receipts)
         next(r for r in broken if r.get("callId") == "witness_call" and ".params." in r["authoredPath"])["authoredPath"] += "_unknown"
@@ -403,7 +403,7 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
     saved = next(row["wire"] for row in corpus["cases"] if row["fn"] == fn)
     parameters = [row for row in saved["runtimeContract"]["finalWireReceipts"]
                   if row.get("callId") == "witness_call" and row.get("status") == "delivered"]
-    assert audit_compiler_receipts(parameters)["ok"]
+    assert not audit_compiler_receipts(parameters)["ok"]
     source_index = int(parameters[0]["authoredPath"].split("calls[")[1].split("]")[0])
     params = {}
     for row in parameters:
@@ -419,7 +419,7 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
         "runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": source_calls},
     })
     assert not report["ok"]
-    assert any(row["reason"] == "retained wire capability is not a current Author source" for row in report["violations"])
+    assert any(row["reason"] == "compiler receipt used an undeclared input or output field" for row in report["violations"])
 
 
 @pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "foreign-source", "spawn-domain"])
@@ -456,7 +456,7 @@ def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attac
 
 
 @pytest.mark.parametrize("missing", [False, True])
-def test_retained_spawn_outputs_keep_their_separate_exact_capability_owner(missing):
+def test_retired_spawn_receipt_owner_is_refused_even_with_complete_outputs(missing):
     corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
     wire = deepcopy(next(row["wire"] for row in corpus["cases"] if row["fn"] == "spawn_over_target"))
     receipts = wire["runtimeContract"]["finalWireReceipts"]
@@ -464,7 +464,7 @@ def test_retained_spawn_outputs_keep_their_separate_exact_capability_owner(missi
         receipts[:] = [r for r in receipts if not (r.get("fn") == "spawn_over_target"
                                                    and r["finalPath"].endswith(".overTarget.heightTiles"))]
     before = deepcopy(wire)
-    assert audit_compiler_receipts(receipts, final_document=wire)["ok"] is not missing
+    assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
     assert wire == before
 
 
@@ -480,3 +480,31 @@ def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     assert event["strength"] == 2 and event["radiusTiles"] == 10 and event["delayTicks"] == delay
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
                                    authored_document=document, final_document=wire)["ok"]
+
+@pytest.mark.parametrize("fn", ["configure_placeable", "move_bounce", "spawn_over_target", "chain_damage_on_event"])
+def test_retired_internal_capabilities_have_no_receipt_owner(fn):
+    assert fn not in CAPABILITY_REGISTRY
+
+
+def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
+    document = build_capability_witness("move_gravity_arc")
+    wire = compile_runtime_program(document)
+    wire.pop("runtimeContract")
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
+    entity["movement"].update(code=6, name="")
+    assert not validate_runtime_wire(wire)["ok"]
+    assert MOVEMENT_OPCODE["move_forward_then_retract"] == 19
+    assert MOVEMENT_OPCODE["move_front_hand"] == 20
+
+
+@pytest.mark.parametrize("current,retired", [("configure_tile_placement", "configure_placeable"),
+                                           ("damage_nearest_on_event", "chain_damage_on_event")])
+def test_retired_receipt_owner_cannot_authenticate_current_mechanics(current, retired):
+    document = build_capability_witness(current)
+    wire = compile_runtime_program(document)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
+    for row in receipts:
+        if row.get("callId") == "witness_call":
+            row["fn"] = retired
+    assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]

@@ -151,16 +151,14 @@ public partial class GeneratedItem : ModItem
         try
         {
             int version = reader.ReadInt32();
-            if (version != 5 && version != 6 && version != GeneratedItemNetPayloadVersion && version != 8)
+            if (version != GeneratedItemNetPayloadVersion && version != 8)
                 throw new InvalidDataException($"Unsupported generated item payload {version}");
             GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
-            bool materialTransport = version == 6 || version == 8;
+            bool materialTransport = version == 8;
             long token = materialTransport ? reader.ReadInt64() : 0;
             if (materialTransport && token == 0) throw new InvalidDataException("missing generated item presentation generation");
             // ItemIO already attempted Prefix on the native defaults before this hook.
-            // New payloads carry the token separately; legacy hydrated hosts still
-            // contribute their actual native Item.prefix (lost old tokens cannot be invented).
-            RetainNativePrefixForHydration(version >= 7 ? reader.ReadInt32() : Item.prefix);
+            RetainNativePrefixForHydration(reader.ReadInt32());
             GeneratedItemData resolved = reference;
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
             if (GeneratedItemRegistryService.IsCurrentWorldData(reference) && !string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
@@ -486,7 +484,7 @@ public partial class GeneratedItem : ModItem
             if (buff.BuffCode > 0 && buff.BuffTime > 0)
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
         if (gp.GeneratedBuff?.HasAnyEffect == true)
-            player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer);
+            player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer, source: Data);
         return !string.IsNullOrWhiteSpace(gp.MobilityMode)
             && player.GetModPlayer<InfiniCraftPlayer>().TryRunGeneratedMobility(gp);
     }
@@ -508,8 +506,10 @@ public partial class GeneratedItem : ModItem
             && ReferenceEquals(previous.Data, Data) && ReferenceEquals(previous.Group, group);
         if (same && previous.Tick == tick) return;
         bool snapshot = !same || tick < previous.SnapshotTick || tick - previous.SnapshotTick >= 30;
-        player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(buff,
-            syncNetwork: Main.netMode == NetmodeID.Server && snapshot);
+        var owner = player.GetModPlayer<InfiniCraftPlayer>();
+        owner.ApplyGeneratedUtilityBuff(buff,
+            syncNetwork: Main.netMode == NetmodeID.Server && snapshot
+                && buff.ExhaustionTicks is not > 0 && !owner.HasGeneratedItemExhaustion(Data), source: Data);
         _heldEffectRefresh = (player, Item, Data, group, tick, snapshot ? tick : previous.SnapshotTick);
     }
 

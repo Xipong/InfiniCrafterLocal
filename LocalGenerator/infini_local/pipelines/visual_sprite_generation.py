@@ -29,7 +29,7 @@ from infini_local.pipelines.pipeline_visual_config import (
     VISUAL_ASSET_MODE,
     VISUAL_STRICT_AI_AUTHORSHIP,
 )
-from infini_local.services import visual_asset_pipeline
+from infini_local.services import codex_auth, visual_asset_pipeline
 from infini_local.services.codex_auth import CodexError
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output, sprite_status_from_raw_path, truncate_prompt_at_boundary
 from infini_local.storage.trace_runtime import (
@@ -438,8 +438,14 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             output_dir = workspace / f"attempt-{attempt}"
             output_dir.mkdir()
             phase = "backend"
-            variants = _generate_backend_variants(data, prompt=prompt, negative=request.negative,
-                asset_id=attempt_id, canvas=request.canvas, role=request.processing_role, output_dir=output_dir)
+            # Enrich the canonical context without losing an enclosing caller's
+            # join/observer; generation kwargs remain exclusively image inputs.
+            join, observer = codex_auth._GENERATION_OBSERVATIONS.get()
+            with codex_auth.generation_observations({**join,
+                    "assetId": request.logical_asset_id, "attemptId": attempt_id,
+                    "attempt": attempt, "role": request.audit_role}, observer):
+                variants = _generate_backend_variants(data, prompt=prompt, negative=request.negative,
+                    asset_id=attempt_id, canvas=request.canvas, role=request.processing_role, output_dir=output_dir)
             variants = [path for path in variants if path and Path(path).exists()]
             if not variants:
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})

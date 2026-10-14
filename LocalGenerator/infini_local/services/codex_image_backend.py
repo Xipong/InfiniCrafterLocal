@@ -26,15 +26,17 @@ def generate_image(prompt: str, negative: str, output_path: Path, *, model: str,
     # No host LLM rewrites the Visual Director's prompt. The API has no separate
     # negative-prompt parameter; preserve that authored text in a labelled suffix.
     full_prompt = prompt + ("\n\nAvoid: " + negative if negative else "")
-    response = codex_auth.post_json(IMAGE_URL, {
-        "model": model, "prompt": full_prompt, "n": 1, "quality": quality,
-        "size": size, "background": background,
-    }, headers={
-        "Authorization": "Bearer " + credentials.access_token,
-        "ChatGPT-Account-Id": credentials.account_id,
-        "originator": "infinicrafter",
-        "x-codex-image-turn-id": str(uuid.uuid4()),
-    }, timeout=timeout, limit=48 * 1024 * 1024)
+    from infini_local.storage.trace_runtime import trace_codex_transport
+    with codex_auth.generation_credentials(credentials, trace_codex_transport):
+        response = codex_auth.post_json(IMAGE_URL, {
+            "model": model, "prompt": full_prompt, "n": 1, "quality": quality,
+            "size": size, "background": background,
+        }, headers={
+            "Authorization": "Bearer " + credentials.access_token,
+            "ChatGPT-Account-Id": credentials.account_id,
+            "originator": "infinicrafter",
+            "x-codex-image-turn-id": str(uuid.uuid4()),
+        }, timeout=timeout, limit=48 * 1024 * 1024)
     data = response.get("data")
     if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], dict) or not isinstance(data[0].get("b64_json"), str):
         raise codex_auth.CodexError("Codex response must contain exactly one base64 image")

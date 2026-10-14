@@ -2,7 +2,7 @@
 
 Эта категория упрощает выбор уже существующего поведения снарядов. Канонические формы находятся в [`capability_registry.py`](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py); compiler, provider schema, validator, Repair и generated inventory получают их из одного registry. Runtime wire и C# executors сохраняют прежние имена, opcodes и единицы.
 
-Дополнение B15: [точное имя `damage_nearest_on_event` и fresh/wire диапазоны `sameTargetBias`](AUTHOR_EVENT_DOMAINS_RU.md) сохраняют те же consumers и прежнюю wire provenance, уточняя доступные новые решения Author.
+[Точное имя `damage_nearest_on_event` и текущий диапазон `sameTargetBias`](AUTHOR_EVENT_DOMAINS_RU.md) используют прежние runtime consumers без поддержки retired receipt owners/domains.
 
 ## Lifetime и независимые пределы
 
@@ -80,7 +80,7 @@ Owner immunity разделяет Terraria cooldown между снарядам�
 
 Вертикальный сдвиг происходит до расчёта `aim`, а forward `offsetPx` — после него. Поля `aim`, speed, offset и movement остаются самостоятельными решениями. Старый `above_cursor` выражается как `above: "cursor"`; старый вариант без явной высоты имел высоту один tile, которую теперь нужно написать явно.
 
-Activation delay относится к уже созданному projectile: он занимает live slot, до активации не движется и не запускает `on_spawn`. Начальный `timeLeft` включает и authored lifetime, и дополнительные updates ожидания; задержка не вычитается из заданной активной lifetime. Это отдельный clock от `delayTicks` event action, где entity ещё не создана. Специальная capability `spawn_over_target` остаётся известна для старого wire/provenance и отсутствует в новом Author.
+Activation delay относится к уже созданному projectile: он занимает live slot, до активации не движется и не запускает `on_spawn`. Начальный `timeLeft` включает authored lifetime и updates ожидания. Это отдельный clock от delay event action. Retired `spawn_over_target` capability удалена; current `configure_spawn.position` по-прежнему проецирует `spawn.overTarget` и сохраняет current front-hand/hit-target запреты.
 
 ## Typed when и отдельная тяга владельца
 
@@ -144,8 +144,8 @@ Repair сохраняет отсутствие как frozen состояние.
 
 ## Один fresh gravity movement и сохранённые записи
 
-Новый Author выбирает `move_gravity_arc`, wire opcode `2`. Дублирующий `move_bounce` с opcode `6` сохраняется для ранее записанных программ; он отсутствует в fresh schema, cards и Repair alternatives. И gravity, и отсутствие horizontal friction между contacts, и collision bounce остаются прежними. Название movement не задаёт bounce count.
+Author выбирает `move_gravity_arc`, wire opcode `2`. Дублирующий `move_bounce` удалён; opcode `6` зарезервирован и явно отвергается. Остальные movement коды не перенумерованы, включая `move_forward_then_retract=19` и `move_front_hand=20`. Collision bounceCount остаётся отдельным текущим решением.
 
-Сохранённые `runtimeProgram` и `runtimeContract.finalWireReceipts` не переписываются. Registry хранит конечные старые scalar projections для wire-only receipt audit, включая прежние immunity, spawn placement, extraUpdates, event/period и pixel radii. Неизвестный старый path, неверный тип/domain или неподтверждённый output отклоняется. Если исходный Author передан в audit, он проверяется по текущему canonical contract; retained metadata не расширяет Author grammar.
+Stored `runtimeProgram` и receipts не переписываются и не мигрируются. Retired scalar source paths, widened domains и old internal capability receipts больше не проходят audit. Текущие nested immunity/position/velocity/when и pixel-lattice projections остаются поддержаны; source-free audit не удостоверяет отсутствующий Author.
 
 [`test_author_projectile_aliases.py`](../../LocalGenerator/tests/test_author_projectile_aliases.py) проверяет реальные compiler, strict wire, source/wire-only receipts, provider-facing формы и Repair boundaries. Отдельный frozen corpus хранит старый wire с receipts от compiler до смены API. Два прежних seed/replay JSON и их hashes остаются архивными; только test helpers выражают их известные authored choices текущими формами, сохраняя ошибки диагностических случаев. Эти helpers не входят в production storage или import path.

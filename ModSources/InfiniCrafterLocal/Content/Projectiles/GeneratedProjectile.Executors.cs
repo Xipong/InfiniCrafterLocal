@@ -16,7 +16,7 @@ public sealed partial class GeneratedProjectile
     public override bool ShouldUpdatePosition()
         // Pending definitions suspend native position integration without destroying
         // the latest SyncProjectile velocity that hydration will resume.
-        => _configured && !(_entity?.IsOwnerAttached == true && _entity.Movement.Code is 18 or 19)
+        => _configured && !(_entity?.IsOwnerAttached == true && _entity.Movement.Code is 18 or 19 or 20)
             && _entity?.Controller.Code != RuntimeControllerCode.ChannelBeam;
 
     public override void AI()
@@ -219,8 +219,9 @@ public sealed partial class GeneratedProjectile
     private bool ApplyTargetAndFire()
     {
         Projectile.velocity = Vector2.Zero;
+        if (_entity!.Targeting.IntervalTicks <= 0) return true;
         _controllerTimer++;
-        int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity!.Targeting.IntervalTicks > 0 ? _entity.Targeting.IntervalTicks : _entity.Controller.Params.IntervalTicks));
+        int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity.Targeting.IntervalTicks));
         if (_controllerTimer < interval || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
             return true;
         _controllerTimer = 0;
@@ -298,7 +299,6 @@ public sealed partial class GeneratedProjectile
             case 3: Projectile.velocity *= p.VelocityRetention == 0f ? 1f : p.VelocityRetention; break;
             case 4: OrbitOwner(p.RangeTiles); break;
             case 5: ReturnAfter(p.ReturnAfterTicks, p.ReturnSpeed); break;
-            case 6: Projectile.velocity.Y += p.GravityPerTick; break;
             case 7: SineHome(p); break;
             case 8: PhaseDrift(p.PhaseStrength); break;
             case 9: Accelerate(p.Acceleration, p.MaxSpeed); break;
@@ -312,6 +312,7 @@ public sealed partial class GeneratedProjectile
             case 17: Yoyo(p); break;
             case 18: Whip(p); break;
             case 19: ForwardRetract(p); break;
+            case 20: MoveFrontHand(); break;
             default:
                 Projectile.friendly = false;
                 Projectile.Kill();

@@ -9,6 +9,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
+from weakref import WeakValueDictionary
 
 try:
     import fcntl
@@ -21,10 +22,21 @@ except ImportError:  # pragma: no cover - POSIX uses fcntl above.
     msvcrt = None  # type: ignore[assignment]
 
 
-# All in-process trace writers share this lock.  Rotation is deliberately part
-# of the same critical section as append so a rename can never split an NDJSON
-# record written by another request thread.
+# Each NDJSON target shares one in-process lock with its own recovery/rotation.
+# A stalled optional transport file must not block ordinary events elsewhere.
 _NDJSON_WRITE_LOCK = threading.RLock()
+_NDJSON_TARGET_LOCKS: WeakValueDictionary = WeakValueDictionary()
+_TRANSPORT_ARTIFACT_LOCK = threading.RLock()
+
+
+def _ndjson_thread_lock(path: Path):
+    key = os.path.normcase(os.path.abspath(path))
+    with _NDJSON_WRITE_LOCK:
+        lock = _NDJSON_TARGET_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _NDJSON_TARGET_LOCKS[key] = lock
+        return lock
 _NDJSON_MAX_BYTES = 16 * 1024 * 1024
 _NDJSON_BACKUP_COUNT = 2
 _TAIL_READ_CHUNK_BYTES = 64 * 1024
@@ -119,7 +131,7 @@ def recover_ndjson(path: str | Path) -> bool:
     """Repair a trailing NDJSON corruption suffix without touching prior rows."""
     try:
         target = Path(path)
-        with _NDJSON_WRITE_LOCK, _ndjson_process_lock(target):
+        with _ndjson_thread_lock(target), _ndjson_process_lock(target):
             return _recover_ndjson_locked(target)
     except Exception:
         return False
@@ -147,7 +159,7 @@ def append_ndjson(
     """Append one complete JSON record under process lock; max_bytes=0 disables rotation."""
     target = Path(path)
     encoded = (json.dumps(record, ensure_ascii=False, separators=(",", ":"), default=str) + "\n").encode("utf-8")
-    with _NDJSON_WRITE_LOCK, _ndjson_process_lock(target):
+    with _ndjson_thread_lock(target), _ndjson_process_lock(target):
         target.parent.mkdir(parents=True, exist_ok=True)
         _recover_ndjson_locked(target)
         limit = max(0, int(max_bytes))
@@ -160,7 +172,7 @@ def append_ndjson(
 def clear_ndjson(path: str | Path) -> None:
     """Clear one trace file under the same lock used by append and rotation."""
     target = Path(path)
-    with _NDJSON_WRITE_LOCK, _ndjson_process_lock(target):
+    with _ndjson_thread_lock(target), _ndjson_process_lock(target):
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("wb"):
             pass
@@ -184,6 +196,33 @@ def json_slim(obj: Any, max_chars: int = 40000) -> Any:
         except Exception:
             return text
     return {"_truncated": True, "jsonPrefix": text[:max_chars]}
+
+
+def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Publish complete sanitized wire bytes atomically; never persist headers."""
+    try:
+        from infini_local.services.codex_auth import redact_credentials
+        from infini_local.core.env_utils import env_credential_values
+        clean = redact_credentials(raw.decode("utf-8"), secrets + env_credential_values()).encode("utf-8")
+        digest = hashlib.sha256(clean).hexdigest()
+        directory = Path(cache_dir) / "transport_artifacts"
+        target = directory / (digest + ".txt")
+        if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
+            raise ValueError("linked_storage")
+        with _TRANSPORT_ARTIFACT_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            fd, name = tempfile.mkstemp(prefix=".transport-", dir=directory)
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(clean)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(name, target)
+            finally:
+                Path(name).unlink(missing_ok=True)
+        return {"status": "stored", "path": target.relative_to(cache_dir).as_posix(),
+                "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
+    except Exception as exc:
+        return {"status": "refused", "reason": type(exc).__name__}
 
 
 def _redact_diagnostic(value: Any) -> Any:
@@ -414,7 +453,7 @@ def tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
         wanted = max(1, int(limit))
         lines: list[bytes] = []
         needs_recovery = False
-        with _NDJSON_WRITE_LOCK, _ndjson_process_lock(p), p.open("rb") as handle:
+        with _ndjson_thread_lock(p), _ndjson_process_lock(p), p.open("rb") as handle:
             handle.seek(0, 2)
             position = handle.tell()
             if position == 0:

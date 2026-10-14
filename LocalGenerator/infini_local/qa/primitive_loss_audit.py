@@ -259,11 +259,6 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeItemContactSpec": ("runtimeProgram.itemContact.",),
     }
     hidden: dict[str, dict[str, str]] = {
-        "RuntimeParamsSpec": {
-            "ShotEntity": "Obsolete controller DTO slot; target_and_fire uses typed Targeting.ShotEntityId.",
-            "IntervalTicks": "Legacy fallback only when Targeting.IntervalTicks is zero; Author always sets positive typed Targeting interval.",
-            "SameTargetBias": "Obsolete controller DTO slot; target_and_fire uses typed Targeting.SameTargetBias.",
-        },
         "RuntimeSpawnSpec": {
             "OverTarget": "Nested object with its own fully inventoried RuntimeOverTargetSpec fields.",
             "VelocityDistribution": "Nested exact authored union with fully inventoried RuntimeSpawnVelocitySpec fields; absence preserves old constant wire.",
@@ -299,8 +294,6 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "Stage": "Historical generation-stage metadata; not executed as an effect.",
             "PowerBudget": "Historical planning metadata; not an engine mechanic.",
             "UseStyle": "Resolved Terraria ItemUseStyleID from authored useStyleName.",
-            "BuffCode": "Legacy single Item.buffType; new Author uses explicit multi-buff ExtraBuffs; retained for old wire only.",
-            "BuffTime": "Legacy single Item.buffTime; new Author uses explicit multi-buff ExtraBuffs; retained for old wire only.",
             "ExtraBuffs": "Nested list of authored BuffEntrySpec fields.",
             "GeneratedBuff": "Nested authored GeneratedBuffSpec fields.",
         },

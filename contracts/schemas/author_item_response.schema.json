@@ -1822,8 +1822,16 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 21600,
-                        "description": "Duration",
+                        "description": "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration",
                         "x-infini-units": "ticks",
+                        "x-infini-semanticType": "ticks"
+                      },
+                      "exhaustionTicks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 21600,
+                        "description": "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.",
+                        "x-infini-units": "world ticks",
                         "x-infini-semanticType": "ticks"
                       },
                       "miningSpeedMultiplier": {
@@ -1877,7 +1885,7 @@
                       },
                       "oreSenseEnabled": {
                         "type": "boolean",
-                        "description": "Enable Terraria spelunker-style ore highlighting; not a radius",
+                        "description": "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter",
                         "x-infini-semanticType": "boolean_capability",
                         "default": false,
                         "x-infini-neutral": false
@@ -6365,7 +6373,7 @@
                         "type": "number",
                         "minimum": 1,
                         "maximum": 20,
-                        "description": "Maximum reach",
+                        "description": "Peak triangular displacement beyond the 18px owner-center baseline; not distance from the hand",
                         "x-infini-units": "tiles",
                         "x-infini-semanticType": "tiles"
                       },
@@ -6381,6 +6389,105 @@
                     "required": [
                       "rangeTiles",
                       "durationTicks"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "move_front_hand"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "aimMode": {
+                        "type": "string",
+                        "enum": [
+                          "initial",
+                          "cursor"
+                        ],
+                        "description": "initial keeps the configured spawn axis; cursor explicitly follows bounded synced owner aim",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "durationTicks": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 240,
+                        "description": "One extension/retraction pose cycle in completed active world ticks: activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent",
+                        "x-infini-units": "active world ticks",
+                        "x-infini-semanticType": "ticks"
+                      },
+                      "startStretch": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "quarter",
+                          "three_quarters",
+                          "full"
+                        ],
+                        "description": "Native front-arm starting/ending stretch; none/quarter/three_quarters/full correspond to hand lengths 4/6/8/10px. Must not exceed peakStretch",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "peakStretch": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "quarter",
+                          "three_quarters",
+                          "full"
+                        ],
+                        "description": "Native peak stretch. q=1-abs(2*clamp(activeTicks/durationTicks,0,1)-1); interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "hitboxOffsetPx": {
+                        "type": "number",
+                        "minimum": -192,
+                        "maximum": 192,
+                        "description": "Signed collision-center offset from native hand along the aimed world axis. Explicit zero is valid; not inferred from art, scale or grip",
+                        "x-infini-units": "pixels",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      }
+                    },
+                    "required": [
+                      "aimMode",
+                      "durationTicks",
+                      "startStretch",
+                      "peakStretch",
+                      "hitboxOffsetPx"
                     ]
                   }
                 },

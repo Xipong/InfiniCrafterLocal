@@ -85,6 +85,27 @@ public sealed class RuntimeProgramSpec
         if (Bindings.Length > InfiniRuntimeLimits.MaxRuntimeBindings)
             throw new InvalidDataException($"runtimeProgram.bindings exceeds {InfiniRuntimeLimits.MaxRuntimeBindings}");
 
+        // Explicit front-hand singleton owns the native arm. Check original
+        // values before retained normalization can clamp away a conflict.
+        foreach (RuntimeEntitySpec? hand in Entities)
+        {
+            if (hand?.Movement?.Code != 20) continue;
+            if (hand.Movement.Params is null) throw new InvalidDataException("move_front_hand params cannot be null");
+            hand.Movement.Params.ValidateFrontHand();
+            if (hand.Movement.Name != "move_front_hand" || hand.Kind != RuntimeEntityKind.OwnerAttachedProjectile
+                || hand.Id != PrimaryEntityId || PrimaryOwner != ProjectileOwner
+                || hand.Controller is null || hand.Controller.Code != RuntimeControllerCode.None || hand.Controller.IsConfigured
+                || hand.Spawn is null || !hand.Spawn.Enabled || hand.Spawn.MaxActive != 1
+                || hand.Spawn.Count != 1 || hand.Spawn.SpreadRadians != 0f || hand.Spawn.SpeedPxPerTick != 0f
+                || hand.Spawn.VelocityDistribution is not null || hand.Spawn.Aim is not ("cursor" or "facing" or "velocity")
+                || hand.Spawn.OverTarget is null || hand.Spawn.OverTarget.HeightTiles != 0f || hand.Spawn.OverTarget.DelayTicks != 0
+                || hand.Collision is null || hand.Collision.TileCollide
+                || !string.IsNullOrEmpty(ItemUse.HandPose)
+                || !Bindings.Any(b => b is not null && (b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse)
+                    && b.UsePolicy?.Action?.Kind == RuntimeBindingAction.SpawnEntity && b.UsePolicy.Action.TargetId == hand.Id))
+                throw new InvalidDataException("move_front_hand requires exact active primary singleton with no competing native arm/position owner or launch");
+        }
+
         // Both reference adapters inspect original typed source fields before
         // retained v5 normalization can lowercase, clamp or default them.
         foreach (RuntimeEntitySpec? source in Entities)
@@ -260,6 +281,8 @@ public sealed class RuntimeProgramSpec
             if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire
                 && string.IsNullOrWhiteSpace(entity.Targeting.ShotEntityId))
                 throw new InvalidDataException($"entity '{entity.Id}' target_and_fire has no explicit shotEntityId");
+            if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire && entity.Targeting.IntervalTicks <= 0)
+                throw new InvalidDataException($"entity '{entity.Id}' target_and_fire requires positive typed intervalTicks");
             if (entity.Controller.Code != RuntimeControllerCode.TargetAndFire
                 && (entity.Targeting.DamageBasis is not null || entity.Targeting.KnockbackBasis is not null
                     || entity.Targeting.DamageMultiplier is not null))
@@ -725,7 +748,7 @@ public sealed class RuntimeEntitySpec
         Visual.Normalize();
         // New metadata has exactly one texture owner. Alias/item-body rows may
         // not create a second authority; absent fields remain saved-v5 compatible.
-        if ((Visual.RenderSizePx.HasValue || Visual.PreferredCanvasSize.HasValue || Visual.ForwardAngleDegrees.HasValue)
+        if ((Visual.Grip is not null || Visual.RenderSizePx.HasValue || Visual.PreferredCanvasSize.HasValue || Visual.ForwardAngleDegrees.HasValue)
             && (Kind == RuntimeEntityKind.ItemBody || Visual.AssetMode != "baked_sprite"))
             throw new InvalidDataException($"entity '{Id}' presentation size/canvas/axis belongs only to a distinct baked body");
         string expectedVisualRole = RuntimeEntityKind.VisualRoleFor(Kind);
@@ -740,6 +763,7 @@ public sealed class RuntimeEntitySpec
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
                 || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
+                || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
                 || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
@@ -799,6 +823,12 @@ public sealed class RuntimeEntitySpec
 
 public sealed class RuntimeEntityVisualSpec
 {
+    private ItemGripSpec? _grip;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ItemGripSpec? Grip {
+        get => _grip;
+        set => _grip = value ?? throw new InvalidDataException("entity.visual.grip must be an object when present");
+    }
     private int? renderSizePx;
     private float? forwardAngleDegrees;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -842,6 +872,7 @@ public sealed class RuntimeEntityVisualSpec
 
     public void Normalize()
     {
+        Grip?.Validate();
         Role = RuntimeText.Safe(Role, 64);
         AssetMode = RuntimeText.Safe(AssetMode, 32).ToLowerInvariant();
         Prompt = RuntimeText.Prose(Prompt, 1400);
@@ -1284,13 +1315,24 @@ public sealed class RuntimeMovementSpec
 
     public void NormalizeAndValidate(string entityKind)
     {
-        Name = RuntimeText.Safe(Name, 64);
+        if (Code == 6) throw new InvalidDataException("retired movement opcode 6");
         Params ??= new RuntimeParamsSpec();
+        if (Code == 20) {
+            if (Name != "move_front_hand") throw new InvalidDataException("move_front_hand requires exact name/opcode");
+            Params.ValidateFrontHand(); // before retained DurationTicks clamp
+        }
+        else if (Params.HasFrontHandParams)
+            throw new InvalidDataException("front-hand params require their exact movement owner");
+        Name = RuntimeText.Safe(Name, 64);
         Params.Normalize();
         if (Params.HasBeamExtensions)
             throw new InvalidDataException("beam extension params require the channel_beam controller");
         // Omitted movement is meaningful for stationary/field/helper entities. Code 0
         // is also the explicit move_straight opcode, so Name is the presence bit.
+        if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedMovementCode)
+            throw new InvalidDataException($"unsupported movement opcode {Code}");
+        if (Code == 20 && !IsConfigured)
+            throw new InvalidDataException("move_front_hand cannot be an omitted movement");
         if (!IsConfigured)
         {
             Code = 0;
@@ -1317,6 +1359,8 @@ public sealed class RuntimeControllerSpec
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
         Params.Normalize();
+        if (Params.HasFrontHandParams)
+            throw new InvalidDataException("front-hand params cannot be owned by a controller");
         if (Code != RuntimeControllerCode.ChannelBeam && Params.HasBeamExtensions)
             throw new InvalidDataException("beam extension params require the channel_beam controller");
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedControllerCode)
@@ -1334,6 +1378,45 @@ public sealed class RuntimeControllerSpec
 
 public sealed class RuntimeParamsSpec
 {
+    private string? _aimMode, _startStretch, _peakStretch;
+    private float? _hitboxOffsetPx;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AimMode {
+        get => _aimMode;
+        set => _aimMode = value is "initial" or "cursor" ? value
+            : throw new InvalidDataException("move_front_hand aimMode must be initial or cursor");
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StartStretch {
+        get => _startStretch;
+        set { FrontHandStretchRank(value); _startStretch = value; }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PeakStretch {
+        get => _peakStretch;
+        set { FrontHandStretchRank(value); _peakStretch = value; }
+    }
+    public sealed class HitboxOffsetPxJsonConverter : RawJsonNullableFloatDomainConverter {
+        public HitboxOffsetPxJsonConverter() : base("-192", "192") { }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(HitboxOffsetPxJsonConverter))]
+    public float? HitboxOffsetPx {
+        get => _hitboxOffsetPx;
+        set => _hitboxOffsetPx = value is float offset && float.IsFinite(offset) && offset is >= -192f and <= 192f
+            ? offset : throw new InvalidDataException("move_front_hand hitboxOffsetPx must be finite -192..192 when present");
+    }
+    [JsonIgnore] public bool HasFrontHandParams => AimMode is not null || StartStretch is not null
+        || PeakStretch is not null || HitboxOffsetPx.HasValue;
+    internal static int FrontHandStretchRank(string? value) => value switch {
+        "none" => 0, "quarter" => 1, "three_quarters" => 2, "full" => 3,
+        _ => throw new InvalidDataException("move_front_hand stretch requires an exact native enum"),
+    };
+    internal void ValidateFrontHand() {
+        if (AimMode is not ("initial" or "cursor") || !HitboxOffsetPx.HasValue
+            || DurationTicks is < 2 or > 240 || FrontHandStretchRank(StartStretch) > FrontHandStretchRank(PeakStretch))
+            throw new InvalidDataException("move_front_hand requires complete ordered params and durationTicks 2..240");
+    }
     public float RangeTiles { get; set; }
     public float HomingStrength { get; set; }
     public float GravityPerTick { get; set; }
@@ -1412,9 +1495,6 @@ public sealed class RuntimeParamsSpec
         || InitialWidthMultiplier is not null || DamageStartProgress is not null || RaycastTiles is not null;
     public int ChargeTicks { get; set; }
     public float PowerMultiplier { get; set; }
-    public string ShotEntity { get; set; } = "";
-    public int IntervalTicks { get; set; }
-    public float SameTargetBias { get; set; }
 
     public void Normalize()
     {
@@ -1439,9 +1519,6 @@ public sealed class RuntimeParamsSpec
         WarmupTicks = Math.Clamp(WarmupTicks, 0, 600);
         ChargeTicks = Math.Clamp(ChargeTicks, 0, 600);
         PowerMultiplier = Math.Clamp(PowerMultiplier, 0f, 4f);
-        ShotEntity = RuntimeText.IdOptional(ShotEntity);
-        IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
-        SameTargetBias = Math.Clamp(SameTargetBias, 0f, 1f);
     }
 }
 
@@ -1901,10 +1978,10 @@ internal static class RuntimeOpcodeNames
     private static readonly string[] MovementNames =
     {
         "move_straight", "move_slow_homing", "move_gravity_arc", "move_drift", "move_orbit",
-        "move_boomerang", "move_bounce", "move_sine_homing", "move_phase", "move_accelerate",
+        "move_boomerang", "", "move_sine_homing", "move_phase", "move_accelerate",
         "move_spiral", "move_vortex_orb", "move_blackhole_pull", "move_proximity_missile",
         "move_returning_glaive", "move_expanding_wave", "move_flail_tether", "move_yoyo_hover",
-        "move_whip_lash", "move_forward_then_retract",
+        "move_whip_lash", "move_forward_then_retract", "move_front_hand",
     };
     private static readonly string[] ControllerNames = { "", "channel_beam", "charge_then_release", "target_and_fire" };
     private static readonly string[] EventNames =

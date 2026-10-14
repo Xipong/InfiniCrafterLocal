@@ -213,7 +213,7 @@ public sealed class VfxSlotSpec
     [JsonRequired] public string EmissionMode { get; set; } = "none";
     [JsonRequired] public string ParticleSystemId { get; set; } = "none";
     private string? _soundId;
-    // Absent persisted selectors retain Item1; explicit null is not absence.
+    // Required for soundCue only; non-sound renderers omit both audio choices.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SoundId { get => _soundId; set => _soundId = value ?? throw new InvalidDataException("soundId cannot be null"); }
     private VfxSoundSpec? _sound;
@@ -264,6 +264,8 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        if (rendererKind == InfiniVfxRendererKind.SoundCue && (SoundId is null || Sound is null))
+            throw new InvalidDataException("soundCue requires explicit soundId and sound playback controls");
         if (SoundId is not null) {
             if (rendererKind != InfiniVfxRendererKind.SoundCue) throw new InvalidDataException("soundId is owned only by soundCue");
             _ = ResolveSoundSample(); // exact finite selector; never trim/guess/substitute
@@ -325,20 +327,17 @@ public sealed class VfxSlotSpec
     }
 
     // Shared playback projection for item, projectile and detached occurrences.
-    // Old-wire absence keeps every previous native/alpha/phase behavior exactly.
     internal SoundStyle ResolveSoundStyle()
     {
-        SoundStyle sample = ResolveSoundSample();
-        return Sound is { } sound ? sound.ApplyTo(sample) : sample with {
-            Volume = Math.Clamp(Alpha, 0.05f, 1f),
-            Pitch = Math.Clamp(PhaseOffset * 0.25f, -0.5f, 0.5f),
-        };
+        if (Sound is not { } sound)
+            throw new InvalidDataException("soundCue requires explicit sound playback controls");
+        return sound.ApplyTo(ResolveSoundSample());
     }
 
-    // Exact finite SoundID identity; only persisted selector absence selects Item1.
+    // Exact finite SoundID identity; absent/unknown selectors are never substituted.
     private SoundStyle ResolveSoundSample() => SoundId switch
     {
-        null or "Item1" => SoundID.Item1,
+        "Item1" => SoundID.Item1,
         "Item2" => SoundID.Item2,
         "Item3" => SoundID.Item3,
         "Item4" => SoundID.Item4,

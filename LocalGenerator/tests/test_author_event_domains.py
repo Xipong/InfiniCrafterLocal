@@ -109,14 +109,14 @@ def test_nearest_receipts_bind_exact_fixed_action_and_max_target_source(mutation
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_old_event_name_is_retained_only_and_fresh_catalog_matches_schema():
+def test_old_receipt_owner_is_retired_but_current_action_four_remains():
     public = {row["fn"]: row for row in compact_capability_catalog()}
     variants = {row["properties"]["fn"]["const"]: row for row in capability_provider_union()}
     assert NEW in public and NEW in variants and OLD not in public and OLD not in variants
     assert "maxTargets" in public[NEW]["params"] and "count" not in public[NEW]["params"]
     assert "same center" in public[NEW]["does"] and "excluding" in public[NEW]["does"]
     assert "sequential hopping" in public[NEW]["does"]
-    assert CAPABILITY_REGISTRY[OLD].decision == "internal" and EVENT_ACTION_OPCODE[OLD] == 4
+    assert OLD not in CAPABILITY_REGISTRY and EVENT_ACTION_OPCODE[OLD] == 4
     assert NEW in EVENT_CAPABILITIES and OLD not in EVENT_CAPABILITIES
     document = deepcopy(json.loads(FIXTURE.read_text())["cases"][0]["source"])
     report = validate_runtime_program(document)
@@ -144,16 +144,16 @@ def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities()
     assert NEW in scope["create"]["calls"]["allowedFns"]
 
 
-def test_frozen_old_wire_provenance_is_unchanged_and_alias_has_identical_delivery():
+def test_frozen_old_receipts_are_refused_while_current_alias_delivery_stays_identical():
     corpus = json.loads(FIXTURE.read_text())
     assert corpus["sourceHead"] == "c0a8450"
     for row in corpus["cases"]:
         wire = row["wire"]
         encoded = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         assert hashlib.sha256(encoded.encode()).hexdigest() == row["wireSha256"]
-        assert validate_runtime_wire(wire)["ok"]
+        assert not validate_runtime_wire(wire)["ok"]
         receipts = wire["runtimeContract"]["finalWireReceipts"]
-        assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
+        assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
         assert json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")) == encoded
         source_audit = audit_compiler_receipts(receipts, authored_document=row["source"], final_document=wire)
         assert not source_audit["ok"]
@@ -247,8 +247,7 @@ def test_bad_fresh_bias_is_rejected_not_clamped_or_projected_to_retained_domain(
 @pytest.mark.parametrize("bias", [0, 0.9, 0.95, 1, -0.001, 1.001, True, None, "0.95", float("inf"), float("nan")])
 @pytest.mark.parametrize("provenance", [False, True])
 def test_saved_bias_domain_is_strict_even_without_receipts(bias, provenance):
-    row = next(row for row in json.loads(FIXTURE.read_text())["cases"] if row["case"] == "bias-1")
-    wire = deepcopy(row["wire"])
+    wire = compile_runtime_program(build_capability_witness("target_and_fire"))
     target = next(row for row in wire["runtimeProgram"]["entities"] if "targeting" in row)
     target["targeting"]["sameTargetBias"] = bias
     if provenance:
@@ -256,7 +255,7 @@ def test_saved_bias_domain_is_strict_even_without_receipts(bias, provenance):
         receipt["value"] = bias
     else:
         wire.pop("runtimeContract")
-    good = type(bias) in (int, float) and 0 <= bias <= 1
+    good = type(bias) in (int, float) and 0 <= bias <= 0.9
     assert validate_runtime_wire(wire)["ok"] == good
     assert target["targeting"]["sameTargetBias"] is bias  # no in-place normalization
 
@@ -282,20 +281,16 @@ def test_leaf_repair_keeps_valid_neighbors_and_accepts_only_current_domain(fn, l
     assert not audit["ok"]
 
 
-def test_retained_bias_domain_is_audit_only_and_cannot_widen_fresh_provider():
+def test_only_current_bias_domain_is_exported():
     cap = CAPABILITY_REGISTRY["target_and_fire"]
     assert cap.params["sameTargetBias"].maximum == 0.9
-    assert cap.retained_receipt_params["sameTargetBias"].maximum == 1
     assert cap.provider_variant_schema()["properties"]["params"]["properties"]["sameTargetBias"]["maximum"] == 0.9
     assert cap.prompt_card()["params"]["sameTargetBias"]["max"] == 0.9
     assert "retainedWireProvenance" not in cap.prompt_card()
-    assert cap.audit_card()["retainedWireProvenance"]["sameTargetBias"]["priorAuthorSchema"]["maximum"] == 1
+    assert "retainedWireProvenance" not in cap.audit_card()
     inventory = next(row for row in capability_inventory_rows() if row["capability"] == cap.name)
-    assert inventory["retainedWireProvenance"] == cap.audit_card()["retainedWireProvenance"]
+    assert "retainedWireProvenance" not in inventory
     assert inventory["parameters"]["sameTargetBias"]["maximum"] == 0.9
-    generated_path = Path(__file__).resolve().parents[2] / "contracts/schemas/capability_inventory.generated.json"
-    generated = next(row for row in json.loads(generated_path.read_text())["capabilities"] if row["capability"] == cap.name)
-    assert generated["retainedWireProvenance"] == inventory["retainedWireProvenance"]
     assert CAPABILITY_REGISTRY[NEW].params["maxTargets"].semantic_type == "spawn_or_target_count"
 
 @pytest.mark.parametrize("equal", [False, True])

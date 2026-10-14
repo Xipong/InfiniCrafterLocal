@@ -92,18 +92,17 @@ internal static partial class EngineRuntimeChecks
                     "snapshot never creates owner spawn authority " + role.Name);
                 peer.Configure(data, entity, 0, 8, Vector2.UnitX, preserveSyncedState: true);
                 Equal(8, InitialNpcState(peer).RemainingUpdates, "metadata hydration does not reset duration " + role.Name);
-                // v2 carries no exclusion. Same known old prefix is accepted,
-                // while a new physical host receives no invented exclusion.
+                // Old transport variants are no longer written and must fail closed.
                 byte[] v3 = payload[..^1]; v3[0] = 3;
                 var v3Peer = Attach(new Projectile { owner = 0, active = true, timeLeft = 80 });
                 v3Peer.ReceiveExtraAI(new BinaryReader(new MemoryStream(v3)));
-                Equal(true, v3Peer.Matches(data.Id, entity.Id), "v3 remains readable " + role.Name);
-                Equal(8, InitialNpcState(v3Peer).RemainingUpdates, "v3 retains exact counter " + role.Name);
+                Equal(false, v3Peer.Matches(data.Id, entity.Id), "retired v3 is refused " + role.Name);
+                Equal(false, v3Peer.Projectile.friendly, "retired v3 stays inert " + role.Name);
                 byte[] oldPayload = payload[..^9]; oldPayload[0] = 2;
                 var oldPeer = Attach(new Projectile { owner = 0, active = true, timeLeft = 80 });
                 oldPeer.ReceiveExtraAI(new BinaryReader(new MemoryStream(oldPayload)));
-                Equal(true, oldPeer.Matches(data.Id, entity.Id), "v2 remains readable " + role.Name);
-                Equal(RuntimeInitialNpcExclusion.None, InitialNpcState(oldPeer), "v2 absence remains empty " + role.Name);
+                Equal(false, oldPeer.Matches(data.Id, entity.Id), "retired v2 is refused " + role.Name);
+                Equal(false, oldPeer.Projectile.friendly, "retired v2 stays inert " + role.Name);
             }
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
             owner.AI(); Equal(7, InitialNpcState(owner).RemainingUpdates, "local owner advanced after capture");

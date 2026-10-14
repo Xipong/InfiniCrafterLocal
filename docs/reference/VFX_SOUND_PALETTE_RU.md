@@ -10,7 +10,7 @@
 
 ## Выбор VFX Director
 
-Каждый новый `soundCue` явно выбирает `soundId` и полный объект `sound`. Ниже показан фрагмент slot; остальные общие поля и exact `entityId + event` берутся из обычного VFX-контракта:
+Каждый `soundCue`, включая saved wire, явно выбирает `soundId` и полный объект `sound`. Ниже показан фрагмент slot; остальные общие поля и exact `entityId + event` берутся из обычного VFX-контракта:
 
 ```json
 {
@@ -37,13 +37,13 @@
 
 `volume=0` — явная тишина: slot не вызывает `SoundEngine.PlaySound` и не занимает native sound instance. Пустой `slots` тоже остаётся допустимым решением. Native `Item.UseSound` у generated items по-прежнему отключён: отсутствие audio slot не дополняется звуком. Звук может существовать без particles, trails или PNG.
 
-У нового `sound` только один владелец громкости — `sound.volume`. Общий `alpha` остаётся в форме VFX slot, но в этом режиме не влияет на аудио. У `pitch` нет дополнительного `phaseOffset`, sample pitch, seed jitter или `Main.musicPitch`. Дистанция до слушателя, пользовательская громкость и native sound settings действуют дальше обычным образом.
+У `sound` только один владелец громкости — `sound.volume`. Общий `alpha` остаётся в форме VFX slot, но не влияет на аудио. У `pitch` нет дополнительного `phaseOffset`, sample pitch, seed jitter или `Main.musicPitch`. Дистанция до слушателя, пользовательская громкость и native sound settings действуют дальше обычным образом.
 
 ## Native projection
 
 [`VfxSoundSpec`](../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxSoundSpec.cs) — строгий DTO с тремя обязательными числовыми полями. [`VfxSlotSpec.ResolveSoundStyle`](../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) выбирает общий путь для item, projectile и detached events.
 
-Преобразование относится к **Alias Lowering**: конкретный зарегистрированный `soundId` однозначно выбирает native sample; три literal playback fields проецируются без изменения значений. Код не выбирает sample, тон или громкость за модель. В новом режиме публичный `SoundStyle` constructor получает exact native path/variants/type; затем сохраняются `Identifier`, `MaxInstances`, `SoundLimitBehavior`, `RerollAttempts`, `LimitsArePerVariant`, `PlayOnlyIfFocused`, `PauseBehavior`, `IsLooped` и variant weights. Три authored controls заменяют только соответствующие playback scalars.
+Преобразование относится к **Alias Lowering**: конкретный зарегистрированный `soundId` однозначно выбирает native sample; три literal playback fields проецируются без изменения значений. Код не выбирает sample, тон или громкость за модель. Публичный `SoundStyle` constructor получает exact native path/variants/type; затем сохраняются `Identifier`, `MaxInstances`, `SoundLimitBehavior`, `RerollAttempts`, `LimitsArePerVariant`, `PlayOnlyIfFocused`, `PauseBehavior`, `IsLooped` и variant weights. Три authored controls заменяют только соответствующие playback scalars.
 
 Публичная реконструкция имеет конкретную причину. У native `SoundID.Item26` стоит internal `UsesMusicPitch=true`; `SoundPlayer` добавляет `Main.musicPitch` после вызова VFX consumer. Простая конструкция `sample with { Pitch = authoredPitch }` сохранила бы этот скрытый offset. Новый constructor выключает internal instrument policy по штатному native default и оставляет весь публичный playback policy неизменным. Production не использует reflection и не изменяет глобальный `Main.musicPitch`.
 
@@ -56,18 +56,13 @@
 
 Это восстановление доступных samples и явного управления, а не копирование прежних скрытых volume scales, `max(nativeVariance, authoredVariance)` или keyword fallback. Новые поля имеют описанный выше прямой смысл.
 
-## Совместимость сохранённых предметов
+## Admission сохранённых предметов
 
-Saved wire может не содержать `sound`. Такое отсутствие остаётся отсутствием и выбирает прежний путь:
+Director output и persisted wire используют одну conditional schema: каждый `soundCue` обязан содержать оба явных выбора — exact `soundId` и полный `sound={volume,pitch,pitchVariance}`. Отсутствие любого поля отвергается Python validator/cache admission и native manifest normalization. `Item1` остаётся допустимым явным selector, но больше не выбирается при отсутствии `soundId`; alpha/phaseOffset не создают громкость или pitch при отсутствии `sound`.
 
-- громкость — `clamp(alpha, 0.05, 1)`;
-- pitch — `clamp(phaseOffset * 0.25, -0.5, 0.5)`; persisted `phaseOffset` ограничен `[-1,1]`, поэтому достижимы `[-0.25,0.25]`;
-- native sample variance и instrument policy сохраняются;
-- отсутствие прежнего `soundId` в таком legacy slot оставляет `SoundID.Item1`.
+Нет cache importer, переписывания старых записей или автоматического заполнения controls. Старые записи с пропусками становятся invalid; обычный cache reader quarantines их через существующий storage owner. Присутствующий `sound` не может иметь null, неизвестные поля или неполный набор scalars. Non-sound renderers по-прежнему опускают оба audio fields; foreign payload отвергается. Пустой slots остаётся допустимой тишиной.
 
-Нет cache importer или переписывания старых записей. Python не создаёт `sound` при отсутствии; C# serializer пропускает отсутствующий nullable member. Сохранённый явный `soundId` без `sound` тоже продолжает работать по прежнему пути.
-
-Присутствующий `sound` не может иметь null, неизвестные поля или неполный набор scalars. Он требует exact `soundId` даже в persisted wire. `sound` и `soundId` запрещены у других renderer kinds. Неверные значения не превращаются в legacy отсутствие. Runtime packet identities, event cadence, anchor resolution и существующие occurrence budgets не меняются; native pitch randomness остаётся локальной для каждого слушателя, новый контракт не обещает одинаковый случайный тон на всех клиентах.
+Runtime packet identities, event cadence, anchor resolution и существующие occurrence budgets не меняются; native pitch randomness остаётся локальной для каждого слушателя, контракт не обещает одинаковый случайный тон на всех клиентах.
 
 ## Repair и compiler receipts
 
@@ -77,12 +72,12 @@ Canonical VFX structural prefilter теперь снимает numeric bounds д
 
 Неверный audio payload у другого renderer разрешено удалить точно по `deletePaths`, не превращая валидный renderer в soundCue. Удаление valid sound slot, изменение существующей тишины и перезапись sound controls вне scope игнорируются с audit.
 
-Compiler сохраняет `soundId` и controls без числовой normalization. В `debug.vfxSoundReceipts` записываются четыре source-backed identity receipts: sample и три scalars, с exact authored/final paths и literal values. `audit_vfx_sound_projection` сверяет эти receipts, presence, target slot и его entity/event/renderer. Attachment отказывает при потере или подмене выбора. Диагностические receipts не управляют звуком: C# исполняет только принятый VFX wire; для прежнего cached wire новый sidecar не требуется.
+Compiler сохраняет `soundId` и controls без числовой normalization. В `debug.vfxSoundReceipts` записываются четыре source-backed identity receipts: sample и три scalars, с exact authored/final paths и literal values. `audit_vfx_sound_projection` сверяет эти receipts, presence, target slot и его entity/event/renderer. Attachment отказывает при потере или подмене выбора. Диагностические receipts не управляют звуком: C# исполняет только принятый VFX wire; cached wire с полными явными controls не требует нового sidecar.
 
 ## Проверки и пределы доказательства
 
-Python tests проверяют все 84 selectors на item/projectile bindings через настоящий Director transport, full/partial/invalid controls, нули, границы, JSON-object/JSON-schema Repair, frozen neighbors, delivery/cache shape и mutation compiler receipts. Независимый historical inventory не строится из production `_SOUND_IDS`. C# source scanner сверяет exact native mapping с canonical owner, DTO surface, общую playback projection, нулевую громкость и сохранение native policies; отдельные mutants ломают каждый из этих путей.
+Python tests сверяют все 84 selectors с независимым inventory и schema vocabulary; representative numeric/named samples проверяются на item/projectile bindings через настоящий offline Director transport. Дополнительно проверяются full/partial/invalid controls, old-absence refusal, нули, границы, JSON-object/JSON-schema Repair, frozen neighbors, delivery/cache admission и mutation compiler receipts. Независимый historical inventory не строится из production `_SOUND_IDS`. C# source scanner сверяет exact native mapping с canonical owner, DTO surface, общую playback projection, нулевую громкость и сохранение native policies; отдельные mutants ломают каждый из этих путей.
 
-[`EngineRuntimeChecks.SoundSelection.cs`](../../tools/EngineRuntimeChecks.SoundSelection.cs) расширен на старый и новый режимы по всем samples, item/projectile periodic/event и detached routes. Он наблюдает настоящий `SoundEngine.PlaySound` boundary, JSON roundtrips, interval rejection, явную тишину, native policy copy и `GetRandomPitch`; instrument flag наблюдается только в тесте. Тесты не открывают audio device и не доказывают художественное качество или audibility в игре.
+[`EngineRuntimeChecks.SoundSelection.cs`](../../tools/EngineRuntimeChecks.SoundSelection.cs) проверяет явные selections/controls по всем samples и item/projectile periodic/event и detached routes. Отказ старой absence через native readers и playback resolver покрывает [`EngineRuntimeChecks.NativeDtoRetirement.cs`](../../tools/EngineRuntimeChecks.NativeDtoRetirement.cs). SoundSelection наблюдает настоящий `SoundEngine.PlaySound` boundary, JSON roundtrips, interval rejection, явную тишину, native policy copy и `GetRandomPitch`; instrument flag наблюдается только в тесте. Тесты не открывают audio device и не доказывают художественное качество или audibility в игре.
 
-В текущем окружении C# build, исполнение EngineRuntimeChecks и SP/MP game/audio smoke — **`notRun`**: .NET, tModLoader и dependency assemblies отсутствуют. Portable gates и source proof не заменяют их; PR остаётся draft для нативной проверки и отдельного выбора merge.
+Нативный runner исполняется отдельно от Python tests и требует matching tModLoader/dependency assemblies. Приёмка этого follow-up включает SDK build и headless EngineRuntimeChecks, в том числе sound consumers и отказ old-absence; точные результаты привязаны к финальной source/delivery receipt. Это не SP/MP game/audio smoke: игра, audio device и художественное качество звучания не проверялись.
