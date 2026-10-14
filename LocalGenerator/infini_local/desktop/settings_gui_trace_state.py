@@ -9,6 +9,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from infini_local.desktop.settings_widgets import write_text_value
 from infini_local.desktop.tk_compat import messagebox, simpledialog, tk, ttk
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
@@ -552,8 +553,7 @@ class SettingsGuiTraceStateMixin:
             for key, value in preset.items():
                 if is_user and key in self.text_widgets:
                     widget = self.text_widgets[key]
-                    widget.delete("1.0", "end")
-                    widget.insert("1.0", value)
+                    write_text_value(widget, value)
                     widget.edit_modified(False)
                 elif key in self.vars:
                     # Pipeline selection does not discard explicit resize preferences.

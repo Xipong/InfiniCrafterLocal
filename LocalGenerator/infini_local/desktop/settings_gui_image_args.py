@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path, PureWindowsPath
 
+from infini_local.desktop.settings_widgets import write_text_value
 from infini_local.desktop.tk_compat import messagebox, tk, ttk
 from infini_local.desktop.settings_interactions import notify
 from infini_local.desktop.settings_schema import (
@@ -36,8 +37,7 @@ class SettingsGuiImageArgsMixin:
     def _set_lora_tags(self, value: str):
         widget = self._get_lora_tags_widget()
         if widget is not None:
-            widget.delete("1.0", "end")
-            widget.insert("1.0", value.strip())
+            write_text_value(widget, value.strip())
         elif "INFINI_SDCPP_LORA_PROMPT_TAGS" in self.vars:
             self.vars["INFINI_SDCPP_LORA_PROMPT_TAGS"].set(value.strip())
 
@@ -121,8 +121,7 @@ class SettingsGuiImageArgsMixin:
     def _set_extra_args(self, value: str):
         text = self._extra_text()
         if text is not None:
-            text.delete("1.0", "end")
-            text.insert("1.0", value.strip())
+            write_text_value(text, value.strip())
 
     def append_extra_arg(self, arg: str):
         self.append_extra_args(arg)
