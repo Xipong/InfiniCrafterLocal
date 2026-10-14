@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, unquote, urlparse
 
-from infini_local.storage.trace_tools import clear_ndjson
+from infini_local.storage.trace_runtime import clear_trace_files
 from infini_local.services.combine_endpoint import request_shutdown
 
 
@@ -191,13 +191,7 @@ class ServerUtilityRoutes:
         handler.wfile.write(body)
 
     def trace_clear(self, handler: Any) -> None:
-        cleared: list[str] = []
-        for p in self.trace_files:
-            try:
-                clear_ndjson(p)
-                cleared.append(str(p))
-            except Exception:
-                pass
+        cleared = clear_trace_files(self.trace_files)
         handler.json({"ok": True, "version": self.app_version, "cleared": cleared})
 
     def sdcpp_start_endpoint(self, handler: Any) -> None:

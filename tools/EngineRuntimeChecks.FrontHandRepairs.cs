@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Items;
@@ -144,6 +145,80 @@ internal static partial class EngineRuntimeChecks
             for (int tick = 2; tick <= 8; tick++) generated.AI();
             AssertVfxNear(b, new Vector2(generated.Projectile.ai[0], generated.Projectile.ai[1]), "old driver retains local ai convention");
             Equal(false, generated.Projectile.netUpdate, "old shared-helper behavior unchanged, not silently repaired");
+        });
+    }
+
+    private static void FrontHandGameplayEventsRetainSelectedAxis()
+    {
+        foreach (string aimMode in new[] { "initial", "cursor" })
+        foreach (string lane in new[] { "hit", "hit_geometry", "periodic" })
+        foreach (int delay in new[] { 0, 2 })
+        foreach (int updates in new[] { 1, 6 })
+        WithPlayer((owner, _) => {
+            using var clock = new RuntimeWorldClockScope();
+            using var actors = new Rt01NpcScope(NetmodeID.SinglePlayer);
+            using var scope = new FrontHandRepairScope();
+            Terraria.Main.screenPosition = Vector2.Zero;
+            var data = FrontHandDefinition();
+            data.VfxManifest = VfxManifestSpec.Empty();
+            var entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
+            entity.Movement.Params.AimMode = aimMode;
+            entity.Collision.ExtraUpdates = updates - 1;
+            var child = ChildCombatFixture().RuntimeProgram.TryGetEntity("child")!;
+            child.Spawn.Aim = "velocity"; child.Spawn.Placement = "item_use_origin";
+            child.Spawn.OffsetPx = 0; child.Spawn.OverTarget = new();
+            data.RuntimeProgram.Entities = data.RuntimeProgram.Entities.Append(child).ToArray();
+            var action = new RuntimeEventActionSpec {
+                Id = "hand_child", Event = lane == "periodic" ? RuntimeEventKind.Periodic : RuntimeEventKind.OnHit,
+                Action = "spawn_entity_on_event", ActionCode = RuntimeEventActionCode.SpawnEntity,
+                EntityId = child.Id, Count = 1, SpreadRadians = 0,
+                DamageMultiplier = 1, DamageBasis = RuntimeChildCombatBasis.AuthoredChild,
+                KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
+                PeriodTicks = lane == "periodic" ? 6 : 0, DelayTicks = delay,
+            };
+            if (lane == "hit_geometry") {
+                action.HitTargetSpawn = HitGeometry(0);
+                action.HitTargetSpawn.AfterFanSpreadRadians = 0;
+                action.HitTargetSpawn.InitialIgnoreCountdownUpdates = 0;
+            }
+            entity.Events = new[] { action };
+            data.RuntimeProgram.NormalizeAndValidate();
+            scope.Register(data); FrontHandRepairOwner(owner, data);
+            Vector2 initial = Vector2.UnitX;
+            FrontHandRepairMouse(owner, 700, 400);
+            var generated = FrontHandRepairActor(owner, data, 7, initial);
+            void ActiveTick() { for (int update = 0; update < updates; update++) generated.AI(); }
+            ActiveTick();
+            Vector2 turned = FrontHandRepairMouse(owner, 380, 750);
+            ActiveTick();
+            Vector2 expected = aimMode == "cursor" ? turned : initial;
+            string label = $"hand event axis {aimMode}/{lane}/delay={delay}/updates={updates}";
+            Equal(true, Vector2.DistanceSquared(initial, turned) > .1f, label + " changed-axis counterproof");
+            Equal(Vector2.Zero, generated.Projectile.velocity, label + " no translational velocity");
+            AssertVfxNear(expected, (generated.Projectile.rotation - MathHelper.PiOver2).ToRotationVector2(), label + " actual aimed body");
+            NPC target = TargetEmissionNpc(0, 500, 500);
+            if (lane == "periodic") { ActiveTick(); ActiveTick(); ActiveTick(); }
+            Action dispatch = lane == "periodic" ? ActiveTick
+                : () => generated.OnHitNPC(target, new NPC.HitInfo(), 1);
+            if (delay > 0) {
+                dispatch();
+                Equal(1, PendingActions(), label + " queued at event admission");
+                FrontHandRepairMouse(owner, 50, 150);
+                ActiveTick(); // a later cursor turn must not rewrite the queued axis
+                AdvanceRuntimeWorldTick();
+                Equal(1, PendingActions(), label + " waits for exact due world tick");
+                dispatch = AdvanceRuntimeWorldTick;
+            }
+            int observed = 0;
+            using var boundary = TargetEmissionEntry((source, position, velocity, damage, knockback) => {
+                observed++;
+                AssertVfxNear(expected * child.Spawn.SpeedPxPerTick, velocity, label + " native child velocity");
+                Equal(true, source is Terraria.DataStructures.EntitySource_Parent parent
+                    && ReferenceEquals(parent.Entity, generated.Projectile), label + " exact event source");
+            });
+            Equal(true, ObserveTargetEmission(dispatch), label + " reached real native spawn boundary");
+            Equal(1, observed, label + " one child emission");
+            Equal(0, PendingActions(), label + " no delayed replay");
         });
     }
 

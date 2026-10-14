@@ -10,6 +10,7 @@ import re
 import tempfile
 
 from infini_local.desktop.settings_schema import DEFAULTS
+from infini_local.core.env_file import config_format, decode_value, encode_value, legacy_quote, parse_env_text, physical_lines
 
 DEFAULTS_VERSION = '0.5.02'
 # Only defaults deliberately revised by this patch are eligible. Personal
@@ -76,12 +77,7 @@ def defaults_offer(path: Path) -> dict:
     changes = []
     # Absent keys and blank numeric controls inherit new defaults. A present
     # blank reasoning mode is explicit off, not inheritance; include that diff.
-    explicit = {}
-    for line in raw.decode('utf-8-sig').splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith('#') and '=' in stripped:
-            key, value = stripped.split('=', 1)
-            explicit.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    explicit = parse_env_text(raw.decode('utf-8-sig'))
     for key, recommended in recommendations.items():
         if key in explicit and not _matches_recommendation(key, explicit[key], recommended):
             changes.append({'key': key, 'current': explicit[key], 'recommended': recommended, 'reason': UPDATED_DEFAULTS[key]})
@@ -104,18 +100,20 @@ def decide_defaults(path: Path, revision: str, *, accept: bool) -> dict[str, str
         if _revision(original) != revision:
             raise ValueError('config.env изменился после предпросмотра. Открой список изменений заново.')
         text = original.decode('utf-8-sig')
+        version = config_format(text)
         lines = []
-        for line in text.splitlines(keepends=True):
-            match = re.match(r'^(\s*([^=\r\n]+?)\s*=)([^\r\n]*)(\r?\n)?$', line)
+        for line in physical_lines(text, keepends=True):
+            match = re.match(r'^(\s*([^=\r\n]+?)\s*=)([^\r\n]*)(\r\n|\r|\n)?$', line)
             if match and not match[2].lstrip().startswith('#') and match[2].strip() in changes:
                 value = match[3]
                 leading = value[:len(value) - len(value.lstrip())]
                 trailing = value[len(value.rstrip()):]
                 stripped = value.strip()
-                quote = stripped[0] if len(stripped) >= 2 and stripped[0] in ('"', "'") and stripped[-1] == stripped[0] else ''
+                quote = legacy_quote(stripped)
                 new_value = changes[match[2].strip()]
-                if stripped.strip('"').strip("'") != new_value:
-                    line = match[1] + leading + quote + new_value + quote + trailing + (match[4] or '')
+                if decode_value(stripped, version) != new_value:
+                    encoded = encode_value(new_value) if version == 'json-string-v1' else quote + new_value + quote
+                    line = match[1] + leading + encoded + trailing + (match[4] or '')
             lines.append(line)
         output = ''.join(lines).encode('utf-8')
         if original.startswith(b'\xef\xbb\xbf'):

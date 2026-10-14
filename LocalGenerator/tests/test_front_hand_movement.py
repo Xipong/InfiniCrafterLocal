@@ -334,3 +334,33 @@ def test_anonymous_nonzero_controller_cannot_compete_for_hand_position_on_delive
     wire.pop("runtimeContract")
     entity(wire)["controller"] = {"code": 2, "name": "", "params": {}}
     assert not validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("aim_mode", ["initial", "cursor"])
+@pytest.mark.parametrize("lane", ["hit", "hit_geometry", "periodic"])
+@pytest.mark.parametrize("delay", [0, 2])
+def test_front_hand_directional_event_compositions_remain_explicit_and_admitted(aim_mode, lane, delay):
+    doc, _ = fixture(aimMode=aim_mode)
+    fn = "spawn_entity_from_hit_target" if lane == "hit_geometry" else "spawn_entity_on_event"
+    event_program = build_capability_witness(fn)["runtimeProgram"]
+    doc["runtimeProgram"]["entities"].append(deepcopy(next(
+        row for row in event_program["entities"] if row["id"] == "witness_child")))
+    child_calls = deepcopy([row for row in event_program["calls"] if row.get("target") == "witness_child"])
+    next(row for row in child_calls if row["fn"] == "configure_spawn")["params"]["aim"] = "velocity"
+    event = deepcopy(next(row for row in event_program["calls"] if row["fn"] == fn))
+    event["id"] = "hand_child_event"
+    event["params"].update(when={"everyTicks": 6} if lane == "periodic" else "on_hit", delayTicks=delay)
+    doc["runtimeProgram"]["calls"].extend([*child_calls, event])
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert report["ok"], report["errors"]
+    wire = compile_runtime_program(doc)
+    assert validate_runtime_wire(wire)["ok"]
+    assert doc == before
+    assert entity(wire)["movement"]["params"]["aimMode"] == aim_mode
+    assert entity(wire)["spawn"]["speedPxPerTick"] == 0
+    action = entity(wire)["events"][0]
+    assert action["delayTicks"] == delay
+    assert action["event"] == ("periodic" if lane == "periodic" else "on_hit")
+    assert next(row for row in wire["runtimeProgram"]["entities"]
+                if row["id"] == "witness_child")["spawn"]["aim"] == "velocity"

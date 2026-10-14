@@ -5,6 +5,7 @@ integration while HTTP/controller coverage remains in test_web_studio.py.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
@@ -17,10 +18,10 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
     if not TKINTER_AVAILABLE:
         pytest.skip('Browser integration needs native Tk and a display')
     browser_api = pytest.importorskip('playwright.sync_api')
-    browser_executable = None
+    browser_executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE')
     with browser_api.sync_playwright() as browser_probe:
         from pathlib import Path
-        if not Path(browser_probe.chromium.executable_path).exists():
+        if not Path(browser_executable or browser_probe.chromium.executable_path).exists():
             candidates = sorted((Path.home() / '.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
             if not candidates:
                 pytest.skip('Browser integration needs installed Playwright Chromium')
@@ -130,7 +131,7 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
         pytest.skip('Defaults integration needs native Tk')
     browser_api = pytest.importorskip('playwright.sync_api')
     with browser_api.sync_playwright() as probe_browser:
-        executable = probe_browser.chromium.executable_path
+        executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE') or probe_browser.chromium.executable_path
         if not Path(executable).exists():
             candidates = sorted((Path.home() / '.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
             if not candidates:
@@ -178,6 +179,11 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                     page.on('pageerror', lambda error: page_errors.append(str(error)))
                     page.on('request', lambda request: decisions.append(request.post_data_json) if request.method == 'POST' else None)
                     page.goto(server.url + '#configure')
+                    page.wait_for_selector('#defaults-summary', timeout=8000)
+                    assert 'параметр' in page.locator('#defaults-summary').inner_text()
+                    assert not page.locator('#utility-dialog').is_visible(), 'Recommendations must not interrupt initial load'
+                    assert config.read_bytes() == original
+                    page.locator('[data-ui="defaults-update"]').click()
                     page.wait_for_selector('#defaults-changes', timeout=8000)
                     row = page.locator('[data-defaults-key="INFINI_LLM_MAX_TOKENS"]')
                     assert row.count() == 1
@@ -328,10 +334,14 @@ def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
             menu.click()
             assert page.locator('.main-shell').evaluate('(element)=>element.inert')
             assert page.locator('.rail').get_attribute('aria-modal') == 'true'
+            focus_identity = '() => ({tag:document.activeElement?.tagName,id:document.activeElement?.id,classes:document.activeElement?.className})'
+            # The drawer retries focus once after the responsive/inert paint.
+            page.wait_for_function('() => document.querySelector(".nav-link.active") === document.activeElement', timeout=1000)
+            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), f'Drawer did not acquire focus: {page.evaluate(focus_identity)}'
             snapshot['home'] = {'state': 'Идёт генерация'}
             server.publish(snapshot)
             page.wait_for_function('() => document.querySelector("#generator-title").textContent === "Идёт генерация"')
-            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), 'Polling stole drawer focus'
+            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), f'Polling stole drawer focus: {page.evaluate(focus_identity)}'
             assert page.locator('.main-shell').evaluate('(element)=>element.inert')
             page.locator('.mobile-exit').focus()
             page.keyboard.press('Tab')

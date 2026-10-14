@@ -348,7 +348,7 @@ dialog::backdrop{background:#252b2355;backdrop-filter:blur(2px)}
 .rail nav{flex-shrink:0}
 :root{--rail-width:0px}
 .app-shell{display:block}
-.rail{position:fixed;left:0;top:64px;width:250px;height:calc(100dvh - 64px);transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:15px 0 35px #20281d30}
+.rail{position:fixed;left:0;top:64px;width:250px;height:calc(100dvh - 64px);transform:translateX(-100%);visibility:hidden;transition:transform .2s;box-shadow:15px 0 35px #20281d30}
 .rail.is-open{transform:translateX(0);visibility:visible}
 .brand{font-size:23px}
 .brand-caption{font-size:8px}
@@ -428,3 +428,34 @@ dialog::backdrop{background:#252b2355;backdrop-filter:blur(2px)}
   .drawer-close{display:flex;position:absolute;top:12px;right:12px;color:#e8eddc;min-width:44px;min-height:44px}
   .mobile-exit{display:flex}
 }
+
+/* Readable supporting copy, plus browser-owned documents and file selection. */
+.nav-label,.rail-colophon,.connection,.eyebrow,.heading-note,.state-tag,
+.section-heading .meta,.field-counter,details>summary .meta,.aside-meta,
+.settings-path,.search-footer,.search-result>span:last-child,.workspace-footer{font-size:11px;letter-spacing:0}
+.nav-link,.rail-help,.search-trigger,details>summary,.next-step a{font-size:13px}
+.toast{font-size:13px;max-height:45vh;overflow:auto}
+.toast-copy,#account-status,.trace-status{white-space:pre-wrap}
+.trace-status{font-size:13px;overflow-wrap:anywhere;margin:12px 0;color:var(--muted)}
+.save-tray small{font-size:11px}
+.save-tray .button-primary,.save-tray .text-button{font-size:12px}
+.document-view{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.7 var(--mono);background:var(--white);border:1px solid var(--line);padding:16px;max-height:55vh;overflow:auto}
+.utility-dialog:has(.document-view),.utility-dialog[data-kind="files"]{max-width:780px}
+.file-location{display:flex;gap:8px;margin:8px 0 16px}
+.file-location .dialog-input{min-width:0;flex:1}
+.file-entries{max-height:40vh;overflow:auto;border-block:1px solid var(--line);margin:12px 0}
+.file-entry{display:flex;align-items:center;gap:10px;width:100%;padding:12px;text-align:left;background:transparent;border-bottom:1px solid var(--line);font-size:13px}
+.file-entry span{flex:1;overflow-wrap:anywhere}
+.file-entry:hover,.file-entry.selected{background:var(--soft)}
+@media(max-width:720px){.connection{font-size:10px}.save-tray strong{font-size:12px}.search-result>span:last-child{font-size:11px}.breadcrumb{font-size:12px}.file-location{flex-wrap:wrap}.file-location .dialog-input{flex-basis:100%}}
+.notification-trigger{width:auto;gap:5px;font:11px var(--mono)}
+.notification-trigger svg{width:17px;height:17px}
+.notification-history{max-height:65vh;overflow:auto}
+.notification-entry{display:flex;gap:12px;padding:16px 0;border-bottom:1px solid var(--line)}
+.notification-entry p{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.notification-entry.is-error>span{color:var(--danger)}
+.dialog-feedback{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:14px;border:1px solid var(--line);margin-top:16px}
+.dialog-feedback.is-error{color:var(--danger);border-color:#d0ada1}
+.account-status-panel{font-size:12px;line-height:1.8;overflow-wrap:anywhere;padding:14px 16px;background:var(--soft);margin-bottom:20px}
+.field-control output{width:100%;padding:10px;background:var(--soft);border:1px solid var(--line);border-radius:3px;overflow-wrap:anywhere;font-size:13px}
+.confirm-list small{display:block;font-weight:400;overflow-wrap:anywhere}

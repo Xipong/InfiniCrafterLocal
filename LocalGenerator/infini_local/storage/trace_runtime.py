@@ -3,7 +3,9 @@ from __future__ import annotations
 import atexit
 import copy
 import json
+import os
 import queue
+from dataclasses import dataclass, replace
 import threading
 from pathlib import Path
 from typing import Any
@@ -104,35 +106,197 @@ def trace_stage_request(stage: str, recipe_key: str, request: dict[str, Any], *,
 
 _CODEX_TRACE_QUEUE: queue.SimpleQueue = queue.SimpleQueue()
 _CODEX_TRACE_START_LOCK = threading.Lock()
+_CODEX_TRACE_COMMIT_LOCK = threading.Lock()
+_CODEX_TRACE_EPOCHS: dict[str, int] = {}
 _CODEX_TRACE_WORKER: threading.Thread | None = None
+_CODEX_TRACE_CLEAR = object()
+_CODEX_TRACE_MAX_PENDING_BYTES = 8 * 1024 * 1024
+_CODEX_TRACE_MAX_PENDING_EVENTS = 4096
+_CODEX_TRACE_MAX_PENDING_ATTEMPTS = 64
 
 
-def _write_codex_transport(payload, raw, secrets, cache_dir, trace_file, prompt_trace_file, max_chars, body_reader):
+def _trace_target(path) -> str:
+    return os.path.normcase(os.path.abspath(path))
+
+
+@dataclass(frozen=True)
+class _CodexObservation:
+    payload: dict
+    raw: bytes | None
+    secrets: tuple[str, ...]
+    cache_dir: Path
+    trace_file: Path
+    prompt_trace_file: Path
+    max_chars: int
+    body_reader: Any
+    epoch: int
+
+
+def clear_trace_files(paths) -> list[str]:
+    """Invalidate pending transport rows before clearing the selected NDJSON files."""
+    cleared = []
+    # Generation only reads epochs and enqueues; it never waits for this lock.
+    with _CODEX_TRACE_COMMIT_LOCK:
+        for path in paths:
+            key = _trace_target(path)
+            _CODEX_TRACE_EPOCHS[key] = _CODEX_TRACE_EPOCHS.get(key, 0) + 1
+            try:
+                trace_tools.clear_ndjson(path)
+                cleared.append(str(path))
+            except Exception:
+                pass
+    _CODEX_TRACE_QUEUE.put(_CODEX_TRACE_CLEAR)
+    return cleared
+
+
+def _write_codex_transport(item: _CodexObservation):
     try:
-        if body_reader is not None:
-            raw, payload["bodyComplete"], payload["bodyReadErrorType"], partial = body_reader()
+        payload, raw = item.payload, item.raw
+        if item.body_reader is not None:
+            raw, payload["bodyComplete"], payload["bodyReadErrorType"], partial = item.body_reader()
             if partial:
                 exception_payload = {**payload, "event": "reader_exception_partial",
                                      "byteScope": "reader_exception_partial_unclassified"}
-                _write_codex_transport(exception_payload, partial, secrets, cache_dir, trace_file, prompt_trace_file, max_chars, None)
+                _write_codex_transport(replace(item, payload=exception_payload, raw=partial, body_reader=None))
         from infini_local.services.codex_auth import redact_credentials
-        safe = json.loads(redact_credentials(json.dumps(payload, ensure_ascii=False), secrets))
+        safe = json.loads(redact_credentials(json.dumps(payload, ensure_ascii=False), item.secrets))
         if raw is not None:
-            safe["artifact"] = trace_tools.persist_transport_artifact(cache_dir, raw, secrets=secrets)
-        trace_tools.trace_event(cache_dir=cache_dir, trace_prompts_enabled=True,
-            trace_max_prompt_chars=max_chars, trace_file=trace_file, prompt_trace_file=prompt_trace_file,
-            kind="codex_transport", stage="transport", title="Codex generation HTTP observation", payload=safe)
+            safe["artifact"] = trace_tools.persist_transport_artifact(item.cache_dir, raw, secrets=item.secrets)
+        # Artifact/body I/O remains outside the commit boundary. An old write
+        # finishing after Clear cannot repopulate the selected trace files.
+        with _CODEX_TRACE_COMMIT_LOCK:
+            if item.epoch != _CODEX_TRACE_EPOCHS.get(_trace_target(item.trace_file), 0):
+                return
+            trace_tools.trace_event(cache_dir=item.cache_dir, trace_prompts_enabled=True,
+                trace_max_prompt_chars=item.max_chars, trace_file=item.trace_file, prompt_trace_file=item.prompt_trace_file,
+                kind="codex_transport", stage="transport", title="Codex generation HTTP observation", payload=safe)
     except Exception:
         pass
 
 
+def _safe_sse_batch(items: list[_CodexObservation]) -> list[_CodexObservation]:
+    """Check assembled stream text before publishing any of its raw fragments.
+
+    Per-event redaction cannot detect a token split across deltas or final
+    output parts. Keep clean bytes exact; refuse all raw events in a sensitive
+    attempt rather than inventing replacement provider content.
+    """
+    from infini_local.services.codex_auth import redact_credentials
+    from infini_local.core.env_utils import env_credential_values
+    secrets = tuple({secret for item in items for secret in item.secrets}) + env_credential_values()
+    streams: dict[str, list[str]] = {}
+    candidates = []
+    combined: list[str] = []
+    uncertain = False
+
+    def strings(value, groups):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(child, str) and key in {"delta", "text", "arguments", "refusal"}:
+                    groups.setdefault(key, []).append(child)
+                    combined.append(child)
+                else:
+                    strings(child, groups)
+        elif isinstance(value, list):
+            for child in value:
+                strings(child, groups)
+
+    for item in items:
+        try:
+            raw = (item.raw or b"").decode("utf-8")
+            # Late reads can include an original data: line; EOF tails do not.
+            raw = "\n".join(line[5:].strip() if line.startswith("data:") else line for line in raw.splitlines())
+            value = json.loads(raw)
+        except (ValueError, UnicodeError):
+            # A malformed event could finish an earlier credential prefix,
+            # including escaped field names. Only the protocol sentinel is safe
+            # without JSON decoding; unknown fragments remain memory-only.
+            if (item.raw or b"").strip() != b"[DONE]":
+                uncertain = True
+            continue
+        groups: dict[str, list[str]] = {}
+        strings(value, groups)
+        candidates.extend("".join(parts) for parts in groups.values())
+        for key, parts in groups.items():
+            streams.setdefault(key, []).extend(parts)
+    candidates.extend("".join(parts) for parts in streams.values())
+    candidates.append("".join(combined))
+    sensitive = uncertain or any(redact_credentials(value, secrets) != value for value in candidates)
+    if not sensitive:
+        return items
+    reason = "stream_redaction_unverified" if uncertain else "stream_credential_redaction"
+    return [replace(item, raw=None, payload={**item.payload,
+        "artifact": {"status": "refused", "reason": reason}}) for item in items]
+
+
+@dataclass
+class _SseTraceBatch:
+    first: _CodexObservation
+    items: list[_CodexObservation]
+    bytes: int = 0
+    refused: bool = False
+
+
+def _refuse_pending_sse(batch: _SseTraceBatch, reason: str) -> None:
+    _write_codex_transport(replace(batch.first, raw=None, payload={**batch.first.payload,
+        "event": "sse_trace_refused", "bufferedEvents": len(batch.items),
+        "artifact": {"status": "refused", "reason": reason}}))
+    batch.items.clear()
+    batch.bytes = 0
+    batch.refused = True
+
+
 def _codex_trace_worker() -> None:
+    pending: dict[tuple, _SseTraceBatch] = {}
     while True:
         item = _CODEX_TRACE_QUEUE.get()
+        # Clear wakes this worker, including when no later generation arrives.
+        # Epoch is part of the key, so new rows never join a retired batch.
+        for old_key in list(pending):
+            if old_key[-1] != _CODEX_TRACE_EPOCHS.get(old_key[0], 0):
+                del pending[old_key]
+        if item is _CODEX_TRACE_CLEAR:
+            continue
         if isinstance(item, threading.Event):
             item.set()
-        else:
-            _write_codex_transport(*item)
+            continue
+        target = _trace_target(item.trace_file)
+        key = (target, item.payload.get("transportCallId"), item.payload.get("physicalAttemptIndex"), item.epoch)
+        if str(item.payload.get("event", "")).startswith("sse_") and item.raw is not None:
+            if item.epoch != _CODEX_TRACE_EPOCHS.get(target, 0):
+                continue
+            if key not in pending:
+                if len(pending) >= _CODEX_TRACE_MAX_PENDING_ATTEMPTS:
+                    _refuse_pending_sse(pending.pop(next(iter(pending))), "pending_attempt_limit")
+                pending[key] = _SseTraceBatch(replace(item, raw=None), [])
+            batch = pending[key]
+            if batch.refused:
+                continue
+            size = sum(part.bytes for part in pending.values()) + len(item.raw)
+            count = sum(len(part.items) for part in pending.values()) + 1
+            if size > _CODEX_TRACE_MAX_PENDING_BYTES or count > _CODEX_TRACE_MAX_PENDING_EVENTS:
+                _refuse_pending_sse(batch, "pending_stream_limit")
+                continue
+            batch.items.append(item)
+            batch.bytes += len(item.raw)
+            continue
+        if item.payload.get("event") == "attempt_end":
+            batch = pending.pop(key, None)
+            rows = batch.items if batch is not None else []
+            try:
+                safe_batch = _safe_sse_batch(rows)
+            except Exception:
+                # Optional evidence fails closed; no raw fragments escape when
+                # assembly/redaction cannot be established.
+                safe_batch = [replace(row, raw=None, payload={**row.payload,
+                    "artifact": {"status": "refused", "reason": "stream_redaction_failed"}}) for row in rows]
+            for row in safe_batch:
+                _write_codex_transport(row)
+        elif item.payload.get("event") == "call_end":
+            for old_key in list(pending):
+                if old_key[:2] == key[:2]:
+                    _refuse_pending_sse(pending.pop(old_key), "missing_attempt_boundary")
+        _write_codex_transport(item)
 
 
 def trace_codex_transport(payload: dict[str, Any], *, raw: bytes | None = None, secrets: tuple[str, ...] = (), body_reader=None) -> bool:
@@ -146,14 +310,16 @@ def trace_codex_transport(payload: dict[str, Any], *, raw: bytes | None = None, 
                 _CODEX_TRACE_WORKER = threading.Thread(target=_codex_trace_worker, daemon=True, name="codex-transport-trace")
                 _CODEX_TRACE_WORKER.start()
                 atexit.register(flush_codex_transport)
-        _CODEX_TRACE_QUEUE.put((copy.deepcopy(payload), raw, secrets, CACHE_DIR, TRACE_FILE, PROMPT_TRACE_FILE, TRACE_MAX_PROMPT_CHARS, body_reader))
+        epoch = _CODEX_TRACE_EPOCHS.get(_trace_target(TRACE_FILE), 0)
+        _CODEX_TRACE_QUEUE.put(_CodexObservation(copy.deepcopy(payload), raw, secrets, CACHE_DIR, TRACE_FILE,
+                                               PROMPT_TRACE_FILE, TRACE_MAX_PROMPT_CHARS, body_reader, epoch))
         return True
     except Exception:
         return False
 
 
 def flush_codex_transport(timeout: float = 2) -> bool:
-    """Explicit bounded drain for diagnostic readback; generation never waits here."""
+    """Drain queued work; open SSE attempts stay private until their boundary."""
     if _CODEX_TRACE_WORKER is None:
         return True
     done = threading.Event()

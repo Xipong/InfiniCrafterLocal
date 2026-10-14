@@ -356,4 +356,98 @@ internal static partial class EngineRuntimeChecks
             Equal(140, ExhaustionRows(f.OwnerBuff).Single().Ticks, "owner receives refusal correction through existing snapshot");
         }
     }
+
+    private static void EX10QuickCommitExpiredBuffRetainsIndependentExhaustion()
+    {
+        foreach (byte kind in new byte[] { 1, 2 })
+        foreach (int? policy in new int?[] { 180, 10, 0, null })
+        {
+            using var f = new QuickUtilityPeers(kind, cost: 0);
+            f.Data.Gameplay.GeneratedBuff.DurationTicks = 10;
+            f.Data.Gameplay.GeneratedBuff.ExhaustionTicks = policy;
+            f.ApplyEquipmentSync = true;
+            MaterialClock(5000);
+            byte[] prepare = f.Prepare(), ready = f.Ready(prepare), commit = f.Commit(ready);
+            MaterialClock(5030); f.ReceiveServer(commit);
+            Equal(0, f.Ticks(f.ServerBuff), "expired quick buff never replays a contribution");
+            var rows = ExhaustionRows(f.ServerBuff);
+            Equal(policy == 180 ? 1 : 0, rows.Count, "delayed exhaustion expiry is independent of buff expiry");
+            if (policy == 180) Equal(150, rows.Single().Ticks, "long fatigue keeps Prepare anchor after short buff expires");
+            byte[] correction = f.Peers.Sent.Single(p => p[0] == InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedUtilityBuff);
+            f.Mode(1); f.Peers.Receive(correction, 256);
+            Equal(0, f.Ticks(f.OwnerBuff), "expired prediction is corrected without replay");
+            Equal(rows.Count, ExhaustionRows(f.OwnerBuff).Count, "owner keeps exact independent authoritative timer count");
+            if (policy == 180) Equal(150, ExhaustionRows(f.OwnerBuff).Single().Ticks, "owner correction retains long fatigue");
+            Equal(1, f.OwnerItem.UseCalls, "native owner use still executes once");
+            Equal(0, f.ServerItem.UseCalls, "delayed commit never replays native use");
+        }
+    }
+
+    private static void EX11QuickCommitCannotReviveAnExhaustedAttempt()
+    {
+        foreach (byte kind in new byte[] { 1, 2 })
+        {
+            using var f = new QuickUtilityPeers(kind, cost: 0);
+            f.Data.Gameplay.GeneratedBuff.ExhaustionTicks = 180;
+            // This test advances the owner as well as the server; keep its
+            // utility CPU-only rather than entering the headless light renderer.
+            f.Data.Gameplay.GeneratedBuff.EmitLightStrength = 0f;
+            f.ApplyEquipmentSync = true;
+            MaterialClock(6000);
+            byte[] firstPrepare = f.Prepare(), firstReady = f.Ready(firstPrepare), firstCommit = f.Commit(firstReady);
+            f.ReceiveServer(firstCommit);
+            // Advance actual buff consumers, not just the world clock, so the
+            // original short utility has expired before the refused second use.
+            for (uint tick = 6001; tick <= 6170; tick++)
+            {
+                MaterialClock(tick); f.Mode(1); ExhaustionBuffTick(f.OwnerBuff);
+                f.Mode(2); ExhaustionBuffTick(f.ServerBuff);
+            }
+            Equal(10, ExhaustionRows(f.ServerBuff).Single().Ticks, "source is exhausted at second Prepare");
+            f.Owner.statLife = 57; f.Owner.statMana = 20; f.Owner.potionDelay = 0;
+            byte[] prepare = f.Prepare();
+            Equal(0, f.Ticks(f.OwnerBuff), "native second use correctly suppresses only generated buff");
+            byte[] ready = f.Ready(prepare), commit = f.Commit(ready);
+            // Delivery crosses the old timer's boundary, still within the valid
+            // ticket lifetime and well before the second buff would expire.
+            MaterialClock(6190); f.ReceiveServer(commit);
+            Equal(0, f.Ticks(f.ServerBuff), "Commit cannot turn an exhausted occurrence into a new buff");
+            Equal(0, ExhaustionRows(f.ServerBuff).Count, "refused occurrence cannot restart expired exhaustion");
+            byte[] correction = f.Peers.Sent.Single(p => p[0] == InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedUtilityBuff);
+            f.Mode(1); f.Peers.Receive(correction, 256);
+            Equal(0, f.Ticks(f.OwnerBuff), "owner receives refusal, not an unrequested fresh buff");
+            Equal(0, ExhaustionRows(f.OwnerBuff).Count, "owner receives no refreshed fatigue");
+            Equal(2, f.OwnerItem.UseCalls, "both independent native healing attempts execute");
+            Equal(0, f.ServerItem.UseCalls, "neither Commit replays native healing");
+        }
+    }
+
+    private static void EX12QueuedQuickAttemptsKeepConfirmedExhaustionDecision()
+    {
+        foreach (byte kind in new byte[] { 1, 2 })
+        {
+            using var f = new QuickUtilityPeers(kind, cost: 0);
+            f.Data.Gameplay.GeneratedBuff.ExhaustionTicks = 60;
+            f.ApplyEquipmentSync = true;
+            MaterialClock(7000);
+            byte[] firstPrepare = f.Prepare(), firstReady = f.Ready(firstPrepare);
+            MaterialClock(7010);
+            f.Owner.statLife = 57; f.Owner.statMana = 20; f.Owner.potionDelay = 0;
+            byte[] secondPrepare = f.Prepare(), secondReady = f.Ready(secondPrepare);
+            Equal(0, ExhaustionRows(f.ServerBuff).Count, "both tickets precede first authoritative Commit");
+            byte[] firstCommit = f.Commit(firstReady), secondCommit = f.Commit(secondReady);
+            MaterialClock(7020); f.ReceiveServer(firstCommit);
+            Equal(40, ExhaustionRows(f.ServerBuff).Single().Ticks, "first confirmation keeps its original interval");
+            for (uint tick = 7021; tick <= 7070; tick++)
+            {
+                MaterialClock(tick); f.Mode(2); ExhaustionBuffTick(f.ServerBuff);
+            }
+            int remaining = f.Ticks(f.ServerBuff);
+            Equal(50, remaining, "first contribution still active after its short fatigue expires");
+            f.ReceiveServer(secondCommit);
+            Equal(remaining, f.Ticks(f.ServerBuff), "queued exhausted attempt cannot refresh the original buff");
+            Equal(0, ExhaustionRows(f.ServerBuff).Count, "queued exhausted attempt cannot restart fatigue");
+            Equal(2, f.OwnerItem.UseCalls, "queued generated-buff refusals preserve independent native uses");
+        }
+    }
 }

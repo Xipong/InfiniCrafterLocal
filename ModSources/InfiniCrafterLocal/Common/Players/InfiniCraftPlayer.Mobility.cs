@@ -78,28 +78,43 @@ public sealed partial class InfiniCraftPlayer
         if (buff is null) return false;
         buff.Normalize();
         if (!buff.HasAnyEffect) return false;
+        uint elapsed = activationTick.HasValue
+            ? unchecked(Main.GameUpdateCount - activationTick.Value) : 0;
+        if (elapsed > int.MaxValue)
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
         if (!CanApplyGeneratedBuff(buff, source, activationTick, out var exhaustion))
         {
             if (syncNetwork) CorrectGeneratedBuffPrediction();
             return false;
         }
-        var incoming = ActiveGeneratedUtilityBuff.From(buff);
-        var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
-        if (existing is not null)
-            existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
-        else
+        // A confirmed delayed occurrence can have no buff time left while its
+        // independent exhaustion is still live. Do not replay even one buff tick
+        // or remove another active contribution merely to retain that lockout.
+        int remaining = buff.DurationTicks - (int)elapsed;
+        if (remaining > 0)
         {
-            // Bound pathological repeated authoring while preserving independent
-            // durations for distinct explicit effects. HoldItem refreshes an equal
-            // entry instead of allocating one entry per tick.
-            if (_activeGeneratedUtilityBuffs.Count >= 32)
+            var incoming = ActiveGeneratedUtilityBuff.From(buff);
+            incoming.Ticks = remaining;
+            var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
+            if (existing is not null)
+                existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
+            else
             {
-                var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
-                _activeGeneratedUtilityBuffs.Remove(shortest);
+                // Bound pathological repeated authoring while preserving independent
+                // durations for distinct explicit effects. HoldItem refreshes an equal
+                // entry instead of allocating one entry per tick.
+                if (_activeGeneratedUtilityBuffs.Count >= 32)
+                {
+                    var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
+                    _activeGeneratedUtilityBuffs.Remove(shortest);
+                }
+                _activeGeneratedUtilityBuffs.Add(incoming);
             }
-            _activeGeneratedUtilityBuffs.Add(incoming);
+            RebuildGeneratedUtilityBuffAggregate();
         }
-        RebuildGeneratedUtilityBuffAggregate();
         if (exhaustion is not null) _generatedItemExhaustion.Add(exhaustion);
         if ((syncNetwork || exhaustion is not null) && Main.netMode == NetmodeID.Server)
             SendGeneratedBuffState();

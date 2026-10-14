@@ -9,6 +9,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from infini_local.desktop.settings_widgets import write_text_value
 from infini_local.desktop.tk_compat import messagebox, simpledialog, tk, ttk
 from infini_local.desktop.settings_schema import (
     DEFAULTS,
@@ -152,10 +153,10 @@ class SettingsGuiTraceStateMixin:
                 body += "\n\n--- RESPONSE ---\n" + str(ev.get("response"))
         return head + body + "\n" + ("═" * 96) + "\n"
 
-    def refresh_trace(self):
+    def refresh_trace(self, *, base_url=None, cache=None):
         # Capture Tk/config on the UI thread before starting any I/O.
-        base_url = self._server_base_url()
-        cache = self._effective_cache_dir()
+        base_url = self._server_base_url() if base_url is None else base_url
+        cache = self._effective_cache_dir() if cache is None else cache
         self.trace_status_var.set("Loading trace…")
 
         def work(cancel):
@@ -172,10 +173,11 @@ class SettingsGuiTraceStateMixin:
         def apply(ok, result):
             if not ok or result is None:
                 self.trace_status_var.set("Trace unavailable; local trace could not be read.")
-                return
+                return {"ok": False, "message": self.trace_status_var.get()}
             snap, status = result
             self.trace_status_var.set(status)
             self._render_trace_snapshot(snap)
+            return {"ok": True, "message": status}
 
         self._run_gui_task("trace", work, apply)
 
@@ -222,11 +224,11 @@ class SettingsGuiTraceStateMixin:
         os.startfile(cache) if os.name == "nt" else webbrowser.open(cache.as_uri())
         self.status_var.set(f"Opened launch cache: {cache}")
 
-    def clear_trace_files(self):
+    def clear_trace_files(self, *, confirmed=False):
         if "trace-clear" in self.__dict__.get("_gui_tasks", {}):
             self.trace_status_var.set("Trace clear already in progress.")
-            return
-        if not messagebox.askyesno("Clear trace", "Очистить events.ndjson / prompt_trace.ndjson / pipeline_trace.ndjson?"):
+            return {"ok": False, "message": "Очистка журнала уже выполняется."}
+        if not confirmed and not messagebox.askyesno("Clear trace", "Очистить events.ndjson / prompt_trace.ndjson / pipeline_trace.ndjson?"):
             return
         base_url = self._server_base_url()
         cache = self._effective_cache_dir()
@@ -279,7 +281,8 @@ class SettingsGuiTraceStateMixin:
         def apply(ok, result):
             self.trace_status_var.set(result if ok and result else "Trace clear unavailable; not confirmed.")
             if ok and result and result.startswith("Trace cleared"):
-                self.refresh_trace()
+                self.refresh_trace(base_url=base_url, cache=cache)
+            return {"ok": bool(ok and result and result.startswith("Trace cleared")), "message": result or "Trace clear unavailable; not confirmed."}
 
         self._run_gui_task("trace-clear", work, apply)
 
@@ -550,8 +553,7 @@ class SettingsGuiTraceStateMixin:
             for key, value in preset.items():
                 if is_user and key in self.text_widgets:
                     widget = self.text_widgets[key]
-                    widget.delete("1.0", "end")
-                    widget.insert("1.0", value)
+                    write_text_value(widget, value)
                     widget.edit_modified(False)
                 elif key in self.vars:
                     # Pipeline selection does not discard explicit resize preferences.

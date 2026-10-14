@@ -5,12 +5,14 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+from infini_local.core.env_file import read_env_file
+
 _TRUE_VALUES = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
 
 
 def load_env_file(path: Path) -> None:
-    """Load simple KEY=VALUE lines from a config.env-style file.
+    """Load legacy or versioned config.env strings through the canonical codec.
 
     Existing process environment variables win over file values. This helper is
     deliberately tiny because the local generator must keep working on Windows
@@ -18,17 +20,10 @@ def load_env_file(path: Path) -> None:
     """
     if os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES:
         return
-    if not path.exists():
-        return
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+    # Parse the entire file before setting anything; invalid encoded strings
+    # cannot leave a partially loaded process environment.
+    for key, value in read_env_file(path).items():
+        os.environ.setdefault(key, value)
 
 
 def env_str(name: str, default: str = "", *, strip: bool = True) -> str:

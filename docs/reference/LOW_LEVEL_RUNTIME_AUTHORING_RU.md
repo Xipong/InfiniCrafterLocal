@@ -85,6 +85,8 @@ Terminal meaning: `on_hit` требует collision; proximity detonation не h
 
 Native pose использует руку H и collision center C = H + aimedAxis * authored hitboxOffsetPx. Hitbox остаётся штатным axis-aligned rectangle, не pixel blade/OBB; coherent art/offset требует согласованного authored дизайна. Поза проходит extension/retraction по завершённым active world ticks `floor(activeAIUpdates/(extraUpdates+1))`, выбирая ближайшую native stretch length, ties shorter. Duration не продлевает lifetime или itemAnimation. Initial axis и synced cursor mode выбираются явно.
 
+Gameplay events этой entity используют ту же выбранную ось, хотя translational velocity равна нулю. Это относится к направлению дочернего `aim=velocity` и hit-target geometry; delayed action сохраняет ось при постановке события в очередь, а не перечитывает последующее положение курсора. Periodic dispatch сохраняет существующий порядок до очередного movement update.
+
 Для sprite presentation Visual Director передаёт size/forward axis/atomic grip выбранного финального PNG: `reuse_item_icon` использует только root metadata; distinct `baked_sprite` — только entity metadata. `no_asset`/`runtime_geometry` не требуют этих PNG dependencies. Missing selected leaves идут в точный frozen Visual Repair, не выводятся из art/hitbox/названия. Старый `move_forward_then_retract` (code19) остаётся owner-center18px + triangular displacement, не управляет кистью и не превращается в новый driver; сохранённые рецепты не мигрируются.
 
 <a id="visual-vfx"></a>

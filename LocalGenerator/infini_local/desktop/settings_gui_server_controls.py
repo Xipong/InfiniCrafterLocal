@@ -23,6 +23,9 @@ from infini_local.desktop.settings_gui_theme import (
 )
 
 
+from infini_local.desktop.settings_interactions import notify, finish_action, begin_action, saved_config_revision
+
+
 class SettingsGuiServerControlsMixin:
     def _run_gui_task(self, name, work, on_result):
         """Worker -> Queue -> Tk.after; workers receive only captured plain data."""
@@ -34,9 +37,12 @@ class SettingsGuiServerControlsMixin:
             previous["cancel"].set()
             # Coalesce refresh clicks: one bounded in-flight worker and one
             # newest captured request, never one thread per click.
-            previous["pending"] = (work, on_result)
+            if previous["pending"] is not None:
+                finish_action(self, previous["pending"][2], False, "Запрос заменён более новым.", cancelled=True)
+            previous["pending"] = (work, on_result, self.__dict__.get("_studio_command_id"))
             return
-        state = {"cancel": threading.Event(), "results": Queue(maxsize=1), "after": None, "pending": None}
+        state = {"cancel": threading.Event(), "results": Queue(maxsize=1), "after": None, "pending": None,
+                 "command_id": self.__dict__.get("_studio_command_id")}
         tasks[name] = state
 
         def worker():
@@ -57,9 +63,32 @@ class SettingsGuiServerControlsMixin:
                 return
             tasks.pop(name, None)
             if state["pending"] is not None:
-                self._run_gui_task(name, *state["pending"])
+                finish_action(self, state["command_id"], False, "Запрос заменён более новым.", cancelled=True)
+                work_next, apply_next, identifier = state["pending"]
+                previous_id = self.__dict__.get("_studio_command_id")
+                self._studio_command_id = identifier
+                try:
+                    self._run_gui_task(name, work_next, apply_next)
+                finally:
+                    self._studio_command_id = previous_id
             elif not state["cancel"].is_set():
-                on_result(*result)
+                previous_notice_id = self.__dict__.get("_studio_notification_action_id")
+                self._studio_notification_action_id = state["command_id"]
+                try:
+                    outcome = on_result(*result)
+                    if isinstance(outcome, dict):
+                        finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""),
+                                      saved=outcome.get("saved", False))
+                    else:
+                        finish_action(self, state["command_id"], result[0], "Действие завершено." if result[0] else "Действие не выполнено.")
+                except Exception:
+                    # Transport and subprocess exceptions may contain secrets.
+                    finish_action(self, state["command_id"], False, "Не удалось завершить действие. Проверь настройки и журнал.")
+                    self.status_var.set("Не удалось завершить действие. Проверь настройки и журнал.")
+                finally:
+                    self._studio_notification_action_id = previous_notice_id
+            else:
+                finish_action(self, state["command_id"], False, "Действие отменено.", cancelled=True)
 
         threading.Thread(target=worker, daemon=True, name="settings-" + name).start()
         state["after"] = self.after(100, poll)
@@ -68,6 +97,8 @@ class SettingsGuiServerControlsMixin:
         state = self.__dict__.get("_gui_tasks", {}).get(name)
         if state:
             state["cancel"].set()
+            if state["pending"] is not None:
+                finish_action(self, state["pending"][2], False, "Действие отменено.", cancelled=True)
             state["pending"] = None
             # Keep polling solely to reap the bounded in-flight worker. A new
             # refresh coalesces until its network timeout/result returns.
@@ -76,6 +107,7 @@ class SettingsGuiServerControlsMixin:
         """Read-only account connectivity probe; there is no image-model list API."""
         from infini_local.services import codex_catalog
 
+        command_id = begin_action(self)
         generation = getattr(self, "_codex_image_ping_generation", 0) + 1
         self._codex_image_ping_generation = generation
         results = Queue()
@@ -93,6 +125,7 @@ class SettingsGuiServerControlsMixin:
 
         def poll():
             if generation != self._codex_image_ping_generation:
+                finish_action(self, command_id, False, "Проверка аккаунта отменена.", cancelled=True)
                 return
             try:
                 reachable = results.get_nowait()
@@ -104,6 +137,7 @@ class SettingsGuiServerControlsMixin:
                 if reachable else "Аккаунт/сеть не ответили; image-доступ не проверен. Выбранная image-модель сохранена."
             )
             self.status_var.set(self.codex_image_account_var.get())
+            finish_action(self, command_id, reachable, self.codex_image_account_var.get())
 
         self.after(150, poll)
 
@@ -111,6 +145,7 @@ class SettingsGuiServerControlsMixin:
         """Account-scoped read-only text catalog; only the Tk loop touches widgets."""
         from infini_local.services import codex_catalog
 
+        command_id = begin_action(self)
         generation = getattr(self, "_codex_catalog_generation", 0) + 1
         self._codex_catalog_generation = generation
         results = Queue()
@@ -127,6 +162,7 @@ class SettingsGuiServerControlsMixin:
 
         def poll():
             if generation != self._codex_catalog_generation:
+                finish_action(self, command_id, False, "Обновление каталога отменено.", cancelled=True)
                 return
             try:
                 ok, models = results.get_nowait()
@@ -145,6 +181,7 @@ class SettingsGuiServerControlsMixin:
             else:
                 self.codex_catalog_var.set("Не удалось обновить текстовый каталог. Сохранённый slug остаётся; проверь вход/сеть.")
             self.status_var.set(self.codex_catalog_var.get())
+            finish_action(self, command_id, ok, self.codex_catalog_var.get())
 
         self.after(150, poll)
 
@@ -174,7 +211,8 @@ class SettingsGuiServerControlsMixin:
         from infini_local.services import codex_auth
         if getattr(self, "_codex_login_running", False):
             self.status_var.set("Codex OAuth: вход уже ожидает завершения в браузере.")
-            return
+            return {"ok": False, "message": self.status_var.get()}
+        self._codex_login_command_id = begin_action(self)
         self._codex_login_running = True
         self._codex_login_cancel = threading.Event()
         self._codex_login_results = Queue()
@@ -183,11 +221,11 @@ class SettingsGuiServerControlsMixin:
         def worker():
             try:
                 codex_auth.login(cancel=cancel)
-                results.put("Codex OAuth: вход выполнен. Выбери openai_codex и сохрани настройки.")
+                results.put((True, "Codex OAuth: вход выполнен. Выбери openai_codex и сохрани настройки."))
             except codex_auth.CodexError as exc:
-                results.put(str(exc))
+                results.put((False, str(exc)))
             except Exception:
-                results.put("Codex OAuth: не удалось открыть браузер или сохранить сессию.")
+                results.put((False, "Codex OAuth: не удалось открыть браузер или сохранить сессию."))
         threading.Thread(target=worker, daemon=True, name="codex-oauth-login").start()
         self.after(150, self._poll_codex_login)
 
@@ -199,7 +237,10 @@ class SettingsGuiServerControlsMixin:
             self.after(150, self._poll_codex_login)
             return
         self._codex_login_running = False
-        self.status_var.set(result)
+        ok, message = result
+        self.status_var.set(message)
+        self._codex_account_status = message
+        finish_action(self, self.__dict__.get('_codex_login_command_id'), ok, message)
 
     def codex_status(self):
         from infini_local.services.codex_auth import auth_status
@@ -208,13 +249,15 @@ class SettingsGuiServerControlsMixin:
         if status["authenticated"]:
             text = "сессия сохранена; токен обновится при запросе" if status["expired"] else "сессия готова"
         self.status_var.set("Codex OAuth: " + text + ". Квота проверяется сервером при генерации.")
+        self._codex_account_status = self.status_var.get()
+        return {"ok": True, "message": self.status_var.get()}
 
     def codex_logout(self):
         from infini_local.services.codex_auth import logout
         if getattr(self, "_codex_login_running", False):
             self._codex_login_cancel.set()
             self.status_var.set("Codex OAuth: отмена входа; после завершения нажми Sign out ещё раз.")
-            return
+            return {"ok": False, "message": self.status_var.get()}
         try:
             logout()
             # A worker may have fetched the previous account's catalog before
@@ -228,8 +271,11 @@ class SettingsGuiServerControlsMixin:
             self.codex_catalog_var.set("Сессия удалена; каталог очищен. Сохранённый slug не проверен.")
             self.codex_image_account_var.set("Сессия удалена; image-доступ не проверен.")
             self.status_var.set("Codex OAuth: локальная сессия InfiniCrafter удалена.")
+            self._codex_account_status = self.status_var.get()
+            return {"ok": True, "message": self.status_var.get()}
         except OSError:
             self.status_var.set("Codex OAuth: не удалось удалить локальную сессию.")
+            return {"ok": False, "message": self.status_var.get()}
 
     def browse_file(self, key: str):
         initial = self.vars[key].get() if key in self.vars else ""
@@ -272,6 +318,19 @@ class SettingsGuiServerControlsMixin:
             host = "127.0.0.1"
         port = data.get("INFINI_PORT") or "5055"
         return f"http://{host}:{port}"
+
+    def _saved_or_owned_server_base_url(self):
+        if self.proc is not None and self.proc.poll() is None:
+            owned = self.__dict__.get('_owned_server_base_url')
+            if owned:
+                return owned
+        from infini_local.desktop.settings_env import parse_env
+        from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
+        values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
+        host = values.get('INFINI_HOST') or '127.0.0.1'
+        if host == '0.0.0.0':
+            host = '127.0.0.1'
+        return f"http://{host}:{values.get('INFINI_PORT') or '5055'}"
 
     @staticmethod
     def _norm_path_for_compare(value: str | Path) -> str:
@@ -390,8 +449,12 @@ class SettingsGuiServerControlsMixin:
                 # use the remaining bounded stop budget, not a sub-second probe.
                 self._fetch_health_snapshot(timeout=max(0.05, deadline - time.monotonic()), base_url=base_url)
             except Exception as exc:
-                # A timeout, 503, malformed JSON or wrong root is not a free port.
-                return self._connection_was_refused(exc)
+                # Closing an HTTP listener can reset an in-flight connection
+                # before the next connect reports refusal. Use the remaining
+                # bounded budget; only refusal proves the port is free. A reset,
+                # timeout, 503 or malformed response is never success by itself.
+                if self._connection_was_refused(exc):
+                    return True
             if cancel is not None:
                 cancel.wait(min(0.2, max(0, deadline - time.monotonic())))
             else:
@@ -480,11 +543,13 @@ class SettingsGuiServerControlsMixin:
             if data.get("INFINI_HOST") != "0.0.0.0":
                 warnings.append("Radmin/LAN включён, но Host не 0.0.0.0 — друзья не достучатся до LocalGenerator asset host.")
         if warnings:
-            messagebox.showwarning("Проверка", "\n".join(warnings))
+            notify(self, "warning", "Проверка настроек", "\n".join(warnings))
             self.status_var.set("Есть предупреждения по настройкам.")
+            return {"ok": False, "message": "\n".join(warnings)}
         else:
-            messagebox.showinfo("Проверка", "Критичных проблем в настройках не вижу.")
+            notify(self, "info", "Проверка настроек", "Критичных проблем в настройках не вижу.")
             self.status_var.set("Проверка прошла без критичных предупреждений.")
+            return {"ok": True, "message": "Проверка прошла без критичных предупреждений."}
 
     def _shutdown_identity_is_safe(self, snap: dict) -> bool:
         if not isinstance(snap, dict) or snap.get("ok") is not True:
@@ -510,7 +575,7 @@ class SettingsGuiServerControlsMixin:
         return ""
 
     def start_server(self):
-        self._request_server_action(restart=True)
+        return self._request_server_action(restart=True)
 
     def force_restart_server(self):
         if messagebox.askyesno("Force restart", "Прервать активные/ожидающие craft и перезапустить этот server.py?\nГотовность recipe/refund это действие не подтверждает."):
@@ -526,11 +591,14 @@ class SettingsGuiServerControlsMixin:
     def _request_server_action(self, restart: bool, force: bool = False):
         if "server-action" in self.__dict__.get("_gui_tasks", {}):
             self.status_var.set("Server action already in progress; wait for its result.")
-            return
-        base_url = self._server_base_url()
-        data = self.collect()
+            return {"ok": False, "message": "Действие сервера уже выполняется."}
+        expected_revision = self.__dict__.get("_studio_expected_config_revision")
         owned_running = self.proc is not None and self.proc.poll() is None
+        owned_url = self.__dict__.get('_owned_server_base_url') if owned_running else None
+        base_url = owned_url or (self._server_base_url() if restart else self._saved_or_owned_server_base_url())
+        data = self.collect() if restart else None
         self.status_var.set("Force restart: checking identity…" if force else "Safe restart/stop: checking generation activity…")
+        shutdown_acknowledged = threading.Event()
 
         def work(cancel):
             try:
@@ -551,21 +619,37 @@ class SettingsGuiServerControlsMixin:
             stopped, refusal = self._try_http_shutdown_current_server(timeout=2, base_url=base_url, force=force)
             if not stopped:
                 return refusal
+            shutdown_acknowledged.set()
             if not self._wait_until_helper_stops(timeout=4, base_url=base_url, cancel=cancel):
-                return "Port still busy: helper has not stopped; no new server launched."
+                if restart:
+                    return "Restart refused: shutdown acknowledged, but the port is not confirmed free; no new server launched. Check connection before retrying."
+                return "Stop unconfirmed: shutdown acknowledged, but completion was not confirmed. Check connection before retrying."
             return ""
 
         def apply(ok, refusal):
+            if shutdown_acknowledged.is_set():
+                # Once shutdown was accepted, an earlier health response cannot
+                # keep certifying readiness even if closure remains unconfirmed.
+                self._cancel_gui_task("health-config")
+                self._applied_config_ack = None
+                self._server_lifecycle = "unknown"
+                self.applied_config_var.set("Runtime config unconfirmed: shutdown was requested; check connection.")
             if not ok or refusal:
                 self.status_var.set(refusal if ok else "Safe restart refused: activity unknown.")
-                return
-            if self.collect() != data:
+                return {"ok": False, "message": self.status_var.get()}
+            if expected_revision is not None and expected_revision != saved_config_revision(CONFIG_PATH):
+                self.status_var.set("Запуск отменён: сохранённая конфигурация изменилась во время проверки. Проверь значения и запусти снова.")
+                return {"ok": False, "message": self.status_var.get()}
+            if restart and self.collect() != data:
                 self.status_var.set("Restart cancelled: GUI settings changed while checking; start again.")
-                return
+                return {"ok": False, "message": self.status_var.get()}
             if restart:
-                self._start_server_after_guard()
+                return self._start_server_after_guard()
             else:
                 self.proc = None
+                self._server_lifecycle = "stopped"
+                self.__dict__.pop('_owned_launch_settings', None)
+                self.__dict__.pop('_owned_server_base_url', None)
                 self._cancel_gui_task("health-config")
                 self._applied_config_ack = None
                 scheduled = self.__dict__.get("_health_after_id")
@@ -574,6 +658,7 @@ class SettingsGuiServerControlsMixin:
                     self._health_after_id = None
                 self._update_applied_config_feedback("Stopped")
                 self.status_var.set("Server stopped through guarded /shutdown.")
+                return {"ok": True, "message": self.status_var.get()}
 
         self._run_gui_task("server-action", work, apply)
 
@@ -584,14 +669,19 @@ class SettingsGuiServerControlsMixin:
         self._applied_config_ack = None
         self._update_applied_config_feedback()
         self.save()
+        launch_values = self.collect()
+        launch_url = self._server_base_url()
         env = os.environ.copy()
-        env.update(self.collect())
+        env.update(launch_values)
         cmd = [sys.executable, str(ROOT / "server.py")]
         try:
             options = {"cwd": str(ROOT), "env": env}
             if os.name == "nt":
                 options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
             self.proc = subprocess.Popen(cmd, **options)
+            self._owned_launch_settings = dict(launch_values)
+            self._owned_server_base_url = launch_url
+            self._server_lifecycle = "starting"
             self.status_var.set("server.py запущен. Runtime config ещё не подтверждён.")
             previous = self.__dict__.get("_health_after_id")
             if previous is not None:
@@ -600,9 +690,15 @@ class SettingsGuiServerControlsMixin:
                 self._health_after_id = None
                 self._delayed_health_check()
             self._health_after_id = self.after(1000, check_launched_server)
+            return {"ok": True, "message": self.status_var.get(), "saved": True}
         except Exception:
-            messagebox.showerror("Start failed", "Не удалось запустить server.py; проверь Python/права/порт.")
-            self.status_var.set("Start failed; runtime config not acknowledged.")
+            self._server_lifecycle = "unknown"
+            message = "Настройки сохранены в config.env, но не удалось запустить server.py; проверь Python/права/порт. Runtime config не подтверждён."
+            notify(self, "error", "Не удалось запустить сервер", message)
+            self.status_var.set(message)
+            # Saving and launching are separate outcomes. The failed launch must
+            # still acknowledge this command's persisted baseline to its tab.
+            return {"ok": False, "message": message, "saved": True}
 
     @staticmethod
     def _safe_effective_config(snap: dict) -> dict | None:
@@ -743,7 +839,8 @@ class SettingsGuiServerControlsMixin:
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
-        base_url = self._server_base_url()
+        studio_request = bool(self.__dict__.get("_studio_command_id"))
+        base_url = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
         expected_pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else None
         self.applied_config_var.set("Checking runtime config (partial non-secret projection)…")
 
@@ -760,23 +857,27 @@ class SettingsGuiServerControlsMixin:
                     "activityText": self._generation_activity_text(snap.get("generationActivity"))}
 
         def apply(ok, ack):
-            if ack is not None and ack["baseUrl"] != self._server_base_url():
+            current_target = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
+            if ack is not None and ack["baseUrl"] != current_target:
                 ack = None
             activity_var = self.__dict__.get("activity_var")
             if activity_var is not None:
                 activity_var.set(ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server).")
             if not ok or ack is None:
                 self._applied_config_ack = None
+                self._server_lifecycle = "unknown"
                 self.applied_config_var.set("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
-                return
+                return {"ok": False, "message": self.applied_config_var.get()}
             self._applied_config_ack = ack
+            self._server_lifecycle = "responding"
             self._update_applied_config_feedback()
             self.status_var.set(self.applied_config_var.get())
+            return {"ok": True, "message": self.applied_config_var.get()}
 
         self._run_gui_task("health-config", work, apply)
 
     def stop_server(self):
-        self._request_server_action(restart=False)
+        return self._request_server_action(restart=False)
 
     def on_close(self):
         self._gui_closed = True
