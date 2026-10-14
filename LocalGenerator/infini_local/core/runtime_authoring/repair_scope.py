@@ -37,6 +37,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     compatible_entity_reference_ids,
+    referenced_entity_requirement_satisfied,
     event_dependency_alternatives,
     visible_capabilities,
 )
@@ -407,6 +408,68 @@ def _entity_reference_params(call: Mapping[str, Any]) -> list[str]:
     if cap is None:
         return []
     return [str(params.get(name) or "") for name, spec in cap.params.items() if spec.reference is not None and params.get(name)]
+
+
+def _exclusive_reference_dependency_edits(
+    rows: Mapping[str, list[dict[str, Any]]],
+    source_call: Mapping[str, Any],
+    param_name: str,
+    primary_entity_id: str,
+) -> list[tuple[str, tuple[str, ...]]] | None:
+    """Exact dependency leaves, only when no independent consumer owns the child."""
+    cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
+    source_id = str(source_call.get("id") or "")
+    child_id = _mapping(source_call.get("params")).get(param_name)
+    if (cap is None or not isinstance(child_id, str) or not source_id
+            or child_id == primary_entity_id
+            or sum(row.get("id") == source_id for values in rows.values() for row in values) != 1):
+        return None
+    reference_spec = cap.params.get(param_name)
+    reference = reference_spec.reference if reference_spec is not None else None
+    entities = [row for row in rows["entities"] if row.get("id") == child_id]
+    if (reference is None or reference.namespace != "entity" or not reference.graph_edge
+            or (not reference.allow_self and child_id == source_call.get("target"))
+            or len(entities) != 1 or entities[0].get("kind") not in reference.target_kinds
+            or sum(row.get("id") == child_id for values in rows.values() for row in values) != 1
+            or any(_binding_target(binding, rows) == child_id for binding in rows["bindings"])):
+        return None
+    consumers = []
+    for call in rows["calls"]:
+        other_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+        if other_cap is None:
+            return None
+        for name, spec in other_cap.params.items():
+            if (spec.reference is not None and spec.reference.namespace == "entity"
+                    and _mapping(call.get("params")).get(name) == child_id):
+                consumers.append((str(call.get("id") or ""), name))
+    if consumers != [(source_id, param_name)]:
+        return None
+    child_calls = [row for row in rows["calls"] if row.get("target") == child_id]
+    indexed_calls = {child_id: child_calls}
+    edits = []
+    for requirement in cap.requirements:
+        if (requirement.param != param_name or requirement.kind not in {
+                "referenced_entity_capability_params", "referenced_entity_without_capability"}
+                or referenced_entity_requirement_satisfied(requirement, child_id, indexed_calls)):
+            continue
+        # Deleting an independently valid capability is not a parameter repair.
+        if requirement.kind != "referenced_entity_capability_params":
+            return None
+        matches = [row for row in child_calls if row.get("fn") == requirement.capability]
+        if len(matches) != 1 or not isinstance(requirement.equals, Mapping):
+            return None
+        call = matches[0]
+        call_id = str(call.get("id") or "")
+        if not call_id or sum(row.get("id") == call_id for values in rows.values() for row in values) != 1:
+            return None
+        paths = tuple(
+            "params." + name for name, expected in requirement.equals.items()
+            if not referenced_entity_requirement_satisfied(
+                replace(requirement, equals={name: expected}), child_id, indexed_calls)
+        )
+        if paths:
+            edits.append((call_id, paths))
+    return edits or None
 
 
 def _call_target_kinds(call: Mapping[str, Any], *, param_name: str = "") -> tuple[str, ...]:
@@ -1583,6 +1646,32 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
             if param_match and cap is not None:
                 param_name = param_match.group(1)
+                dependency_edits = _exclusive_reference_dependency_edits(
+                    rows, node_row, param_name,
+                    str(_mapping(current.get("runtimeProgram")).get("primaryEntityId") or ""),
+                )
+                if dependency_edits:
+                    # The sole incoming edge cannot be replaced without orphaning
+                    # this child. Its conflicting dependency leaves are not an
+                    # independent accepted use; everything else remains frozen.
+                    reference_path = f"params.{param_name}"
+                    field_permissions["calls"].get(node_id, set()).discard(reference_path)
+                    call_reference_param_changes.discard(f"{node_id}:{param_name}")
+                    if not field_permissions["calls"].get(node_id):
+                        field_permissions["calls"].pop(node_id, None)
+                        mutable["calls"].discard(node_id)
+                    context["calls"].add(node_id)
+                    requirement_row["repairStrategy"] = "patch_exact_exclusive_reference_dependency"
+                    requirement_row["referenceRequirements"] = [item.card() for item in cap.requirements
+                        if item.param == param_name and item.kind in {
+                            "referenced_entity_capability_params", "referenced_entity_without_capability"}]
+                    for dependency_id, paths in dependency_edits:
+                        mark("calls", dependency_id)
+                        for dependency_path in paths:
+                            grant("calls", dependency_id, dependency_path)
+                    for row_id in related:
+                        context_id(row_id)
+                    continue
                 kinds = _call_target_kinds(node_row, param_name=param_name)
                 call_reference_param_changes.add(f"{node_id}:{param_name}")
                 indexed_calls: dict[str, list[dict[str, Any]]] = {}

@@ -13,6 +13,7 @@ from infini_local.pipelines import author_item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_runtime_spawn_distributions import VELOCITIES
+from repair_test_helpers import gameplay_repair
 
 
 FN = "spawn_entity_from_hit_target"
@@ -137,6 +138,96 @@ def test_target_geometry_consumer_and_reference_constraints_are_strict_without_r
     elif mutation == "foreign": event["hitTargetSpawn"]["speedMultiplier"] = 0.78
     else: event.update(action="chain_damage_on_event", actionCode=4)
     assert not validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("hostile_edit", [False, True])
+def test_sole_hit_reference_repairs_only_conflicting_child_spawn_leaves(monkeypatch, mode, hostile_edit):
+    document, call = fixture()
+    child_id = call["params"]["entity"]
+    spawn = next(row for row in document["runtimeProgram"]["calls"]
+                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+    expected = deepcopy(document)
+    # Holy Storm's rejected composition: exact hit geometry plus a second
+    # independently positioned/facing child. Replacing its only edge orphans it.
+    spawn["params"].update(aim="facing", position={"above": "activation_origin", "heightTiles": 12,
+                                                  "activationDelayTicks": 0})
+    before = deepcopy(document)
+    errors = validate_runtime_program(document)["errors"]
+    assert [row["code"] for row in errors] == ["reference_requirements_unsatisfied"]
+    candidate = deepcopy(spawn)
+    candidate["params"].update(aim="velocity", position={"at": "activation_origin"})
+    incoming = [candidate]
+    if hostile_edit:
+        candidate["params"]["velocity"] = {"constantSpeedPxPerUpdate": 49}
+        hostile = deepcopy(next(row for row in document["runtimeProgram"]["calls"]
+                                if row.get("target") == child_id and row["fn"] == "set_projectile_damage"))
+        hostile["params"]["damage"] = 999
+        incoming.append(hostile)
+    repaired, dossier = gameplay_repair(monkeypatch, document, {
+        "note": "explicit correction of the sole child's exact reference dependency",
+        "callsUpsert": incoming, "realizationReplacement": document["realization"],
+    }, mode, out_of_scope_response=hostile_edit)
+    scope = dossier["repairScope"]
+    assert next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == spawn["id"])["paths"] == [
+        "params.aim", "params.position"]
+    assert not scope["create"]["entities"]["allowed"]
+    assert not scope["create"]["calls"]["allowed"]
+    assert repaired["runtimeProgram"] == expected["runtimeProgram"]
+    assert bool(repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]) is hostile_edit
+    assert validate_runtime_program(repaired)["ok"]
+    wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=repaired, final_document=wire)["ok"]
+    assert document == before
+
+
+@pytest.mark.parametrize("consumer", ["second_reference", "binding", "primary"])
+def test_independently_used_child_keeps_spawn_frozen(consumer):
+    document, call = fixture()
+    child_id = call["params"]["entity"]
+    child = next(row for row in document["runtimeProgram"]["entities"] if row["id"] == child_id)
+    spawn = next(row for row in document["runtimeProgram"]["calls"]
+                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+    spawn["params"]["aim"] = "cursor"
+    if consumer == "second_reference":
+        document["runtimeProgram"]["calls"].append({
+            "id": "independent_spawn", "target": call["target"], "fn": "spawn_entity_on_event",
+            "params": {"when": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,
+                       "damageBasis": "authored_child", "knockbackBasis": "authored_child",
+                       "damageMultiplier": 1, "delayTicks": 0},
+        })
+    elif consumer == "binding":
+        child["kind"] = "free_projectile"
+        document["runtimeProgram"]["bindings"].append({
+            "id": "independent_use", "input": "alternate_use", "action": {"kind": "spawn_entity", "targetId": child_id},
+            "stackCost": 0, "contactDamage": False,
+        })
+    else:
+        document["runtimeProgram"]["primaryEntityId"] = child_id
+    before = deepcopy(document)
+    report = validate_runtime_program(document)
+    assert any(row["code"] == "reference_requirements_unsatisfied" for row in report["errors"])
+    scope = build_runtime_repair_scope(document, report["errors"])
+    assert spawn["id"] not in scope["mutable"]["callIds"]
+    assert all(row["id"] != spawn["id"] for row in scope["fieldPermissions"]["calls"])
+    assert scope["create"]["entities"]["allowed"]
+    assert document == before
+
+
+def test_sole_reference_noop_cannot_be_accepted_or_create_a_default():
+    document, call = fixture()
+    child_id = call["params"]["entity"]
+    spawn = next(row for row in document["runtimeProgram"]["calls"]
+                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+    spawn["params"]["aim"] = "cursor"
+    before = deepcopy(document)
+    scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
+    filtered, audit = filter_repair_patch_scope(document, {"note": "no correction"}, scope)
+    assert not audit["ok"]
+    assert not validate_runtime_program(apply_repair_patch(document, filtered))["ok"]
+    assert document == before
 
 
 def test_retarget_repair_keeps_existing_child_design_frozen_and_compiles_new_complete_child():
