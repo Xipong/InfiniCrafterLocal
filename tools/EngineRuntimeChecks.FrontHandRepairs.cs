@@ -129,22 +129,89 @@ internal static partial class EngineRuntimeChecks
             }
         });
     }
-    private static void FrontHandLegacyCursorThrottleControl()
+    private static void OwnerCursorEventuallyPublishesStationaryAim(string driver)
     {
+        foreach (int updates in new[] { 1, 6 })
         WithPlayer((owner, _) => {
-            using var scope = new FrontHandRepairScope(); Terraria.Main.screenPosition = new Vector2(40, 60);
-            var data = FrontHandDefinition(); data.VfxManifest = VfxManifestSpec.Empty();
+            using var scope = new FrontHandRepairScope();
+            Terraria.Main.screenPosition = new Vector2(40, 60);
+            var data = driver == "beam" ? BeamFixture(extensions: false) : FrontHandDefinition();
+            data.VfxManifest = VfxManifestSpec.Empty();
             var entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
-            // Test-only old driver; no archived definition/recipe is rewritten.
-            entity.Movement.Code = 19; entity.Movement.Name = "move_forward_then_retract";
-            entity.Movement.Params = new RuntimeParamsSpec { DurationTicks = 60, RangeTiles = 5 };
-            FrontHandRepairOwner(owner, data); Vector2 a = FrontHandRepairMouse(owner, 700, 400);
-            var generated = FrontHandRepairActor(owner, data, 7, a); generated.AI();
-            Equal(true, generated.Projectile.netUpdate, "old driver first-send control"); generated.Projectile.netUpdate = false;
-            Vector2 b = FrontHandRepairMouse(owner, 380, 750);
-            for (int tick = 2; tick <= 8; tick++) generated.AI();
-            AssertVfxNear(b, new Vector2(generated.Projectile.ai[0], generated.Projectile.ai[1]), "old driver retains local ai convention");
-            Equal(false, generated.Projectile.netUpdate, "old shared-helper behavior unchanged, not silently repaired");
+            if (driver != "beam") {
+                entity.Movement.Code = driver == "yoyo" ? 17 : 19;
+                entity.Movement.Name = driver == "yoyo" ? "move_yoyo_hover" : "move_forward_then_retract";
+                entity.Movement.Params = new RuntimeParamsSpec { DurationTicks = 60, RangeTiles = 5, ReturnSpeed = 6 };
+            }
+            entity.Collision.ExtraUpdates = updates - 1;
+            scope.Register(data); FrontHandRepairOwner(owner, data); owner.channel = true;
+            string label = $"{driver}/updates={updates}";
+            Vector2 Cursor(int x, int y)
+            {
+                Vector2 axis = FrontHandRepairMouse(owner, x, y);
+                return driver == "yoyo" ? axis * 80f : axis; // Both sampled cursors lie outside the authored five-tile leash.
+            }
+            Vector2 a = Cursor(700, 400);
+            var generated = FrontHandRepairActor(owner, data, 7, a);
+            var projectile = generated.Projectile;
+            bool Update()
+            {
+                projectile.netUpdate = false; generated.AI();
+                Equal(true, projectile.active, label + " active driver");
+                return projectile.netUpdate;
+            }
+            Vector2 LocalVector() => new(projectile.ai[0], projectile.ai[1]);
+            Equal(true, Update(), label + " first owner vector publication");
+            AssertVfxNear(a, LocalVector(), label + " first vector A");
+            Vector2 b = Cursor(380, 750);
+            Equal(true, Vector2.DistanceSquared(a, b) > 4f * (driver == "yoyo" ? 1f : .01f), label + " independent A/B witness");
+            for (int update = 1; update < 6 * updates; update++) {
+                Equal(false, Update(), label + " no publication inside six-world-tick throttle");
+                AssertVfxNear(b, LocalVector(), label + " local ai follows unsent B immediately");
+            }
+            Equal(true, Update(), label + " stationary B publishes at first eligible update");
+            AssertVfxNear(b, LocalVector(), label + " published ai carries final B");
+
+            // Real ExtraAI hydration plus native ai field delivery, not a socket/network match.
+            byte[] extra = ReviewExtra(generated);
+            var peerProjectile = new Projectile { owner = 0, whoAmI = 8, identity = projectile.identity, active = true,
+                Center = projectile.Center, velocity = projectile.velocity, timeLeft = projectile.timeLeft, damage = projectile.damage };
+            Array.Copy(projectile.ai, peerProjectile.ai, projectile.ai.Length);
+            var peer = Attach(peerProjectile); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(peerProjectile, peer);
+            Terraria.Main.projectile[8] = peerProjectile; Terraria.Main.myPlayer = 1; Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            peer.ReceiveExtraAI(new BinaryReader(new MemoryStream(extra)));
+            Equal(true, peer.Matches(data.Id, entity.Id), label + " real receiver hydrates exact driver");
+            Terraria.Main.mouseX = 50; Terraria.Main.mouseY = 150; // Remote input cannot replace the delivered vector.
+            peerProjectile.netUpdate = false; peer.AI();
+            Equal(false, peerProjectile.netUpdate, label + " receiver does not publish owner aim");
+            AssertVfxNear(b, new Vector2(peerProjectile.ai[0], peerProjectile.ai[1]), label + " receiver preserves B");
+            Terraria.Main.myPlayer = 0; Terraria.Main.netMode = NetmodeID.SinglePlayer; Cursor(380, 750);
+            Equal(false, Update(), label + " stationary B does not republish");
+            AssertVfxNear(projectile.Center, peerProjectile.Center, label + " hydrated peer position agrees");
+            AssertVfxNear(projectile.velocity, peerProjectile.velocity, label + " hydrated peer movement agrees");
+            for (int update = 0; update < 12 * updates; update++)
+                Equal(false, Update(), label + " unchanged aim stays quiet beyond throttle");
+
+            Cursor(700, 400); Equal(true, Update(), label + " new meaningful A publishes");
+            Cursor(380, 750); Equal(false, Update(), label + " temporary B remains throttled");
+            Cursor(700, 400);
+            for (int update = 0; update < 6 * updates; update++)
+                Equal(false, Update(), label + " return to last publication does not send stale B");
+
+            float threshold = driver == "yoyo" ? 4f : .0004f;
+            Vector2 previous = a; bool slowChangeSent = false;
+            for (int pixel = 1; pixel <= 15; pixel++) {
+                Vector2 next = Cursor(700, 400 + pixel);
+                Equal(true, Vector2.DistanceSquared(previous, next) < threshold, label + " each cursor step is below threshold");
+                for (int update = 0; update < updates; update++) {
+                    bool sent = Update(); slowChangeSent |= sent;
+                    if (pixel == 1) Equal(false, sent, label + " tiny change does not publish");
+                }
+                previous = next;
+            }
+            Equal(true, Vector2.DistanceSquared(a, previous) > threshold, label + " cumulative cursor change is meaningful");
+            Equal(true, slowChangeSent, label + " small steps eventually publish accumulated change");
+            Console.WriteLine("stationary owner cursor publication and peer movement " + label);
         });
     }
 

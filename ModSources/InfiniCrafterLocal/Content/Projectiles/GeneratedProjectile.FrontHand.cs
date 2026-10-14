@@ -9,8 +9,8 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    // Publication state belongs only to explicit code20 cursor aim. Keep the
-    // historical shared vector helper/old drivers byte-identical.
+    // Publication state belongs only to explicit code20 cursor aim; other
+    // owner-vector drivers retain their independent state and movement.
     private Vector2? _frontHandPublishedAxis;
     private int _frontHandAxisSyncAge = -1000;
 
