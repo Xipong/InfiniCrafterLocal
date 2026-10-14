@@ -77,7 +77,8 @@ class SettingsGuiServerControlsMixin:
                 try:
                     outcome = on_result(*result)
                     if isinstance(outcome, dict):
-                        finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""))
+                        finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""),
+                                      saved=outcome.get("saved", False))
                     else:
                         finish_action(self, state["command_id"], result[0], "Действие завершено." if result[0] else "Действие не выполнено.")
                 except Exception:
@@ -689,12 +690,15 @@ class SettingsGuiServerControlsMixin:
                 self._health_after_id = None
                 self._delayed_health_check()
             self._health_after_id = self.after(1000, check_launched_server)
-            return {"ok": True, "message": self.status_var.get()}
+            return {"ok": True, "message": self.status_var.get(), "saved": True}
         except Exception:
             self._server_lifecycle = "unknown"
-            notify(self, "error", "Не удалось запустить сервер", "Не удалось запустить server.py; проверь Python/права/порт.")
-            self.status_var.set("Start failed; runtime config not acknowledged.")
-            return {"ok": False, "message": "Не удалось запустить server.py; проверь Python/права/порт."}
+            message = "Настройки сохранены в config.env, но не удалось запустить server.py; проверь Python/права/порт. Runtime config не подтверждён."
+            notify(self, "error", "Не удалось запустить сервер", message)
+            self.status_var.set(message)
+            # Saving and launching are separate outcomes. The failed launch must
+            # still acknowledge this command's persisted baseline to its tab.
+            return {"ok": False, "message": message, "saved": True}
 
     @staticmethod
     def _safe_effective_config(snap: dict) -> dict | None:

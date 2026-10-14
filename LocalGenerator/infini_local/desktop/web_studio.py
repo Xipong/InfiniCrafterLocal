@@ -312,12 +312,15 @@ class StudioController:
         return fields
 
     def snapshot(self):
+        from itertools import islice
         from infini_local.core.config_bootstrap import APP_VERSION
         from infini_local.desktop.settings_schema import DEFAULTS, FIELD_HELP, PRESETS
         from infini_local.desktop.settings_defaults import defaults_offer
         from infini_local.desktop.settings_env import parse_env
         from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
         from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
+        from infini_local.services.codex_auth import auth_status
+        from infini_local.services.codex_text_backend import EFFORTS
         values = self.app._current_profile_settings()
         values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
         # Controller values include unsaved edits from non-saving actions. A fresh
@@ -329,7 +332,7 @@ class StudioController:
             saved_values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
             self._saved_values = dict(saved_values)
             saved_revision = saved_config_revision(CONFIG_PATH)
-        except OSError as exc:
+        except (OSError, ValueError, UnicodeError) as exc:
             # A transient read failure must not kill polling or certify a draft.
             saved_values = dict(self._saved_values or DEFAULTS)
             saved_error = f'Не удалось проверить сохранённую конфигурацию: {exc}'
@@ -349,6 +352,14 @@ class StudioController:
                 field['options'] = list(self.app.codex_reasoning_combo.cget('values'))
             elif field['key'] == 'INFINI_CODEX_VISUAL_REASONING':
                 field['options'] = list(self.app.codex_visual_reasoning_combo.cget('values'))
+        # The catalog owner already validates/redacts model IDs. Publish only
+        # bounded text-model metadata, so each tab can describe its own draft
+        # selection without mutating the shared controller or querying providers.
+        text_models = {
+            model.slug: {'efforts': [effort for effort in model.efforts if effort in EFFORTS],
+                         'defaultEffort': model.default_effort if model.default_effort in EFFORTS else ''}
+            for model in islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256)
+        }
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,
             'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
@@ -362,7 +373,9 @@ class StudioController:
             'trace': {key: widget.get('1.0', 'end-1c') for key, widget in self.app.trace_texts.items()},
             'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.radmin_enabled.get()),
-            'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog_var.get(), 'images': self.app.codex_image_account_var.get()},
+            'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog_var.get(),
+                        'images': self.app.codex_image_account_var.get(), 'authenticated': auth_status()['authenticated'],
+                        'textModels': text_models},
         }
 
     def _values(self, values, extra):
@@ -393,7 +406,7 @@ class StudioController:
                                    'actionId': self.app.__dict__.get('_studio_notification_action_id') or self.app.__dict__.get('_studio_command_id')})
         del self.notifications[:-64]
 
-    def _finish_action(self, identifier, ok, message, *, cancelled=False, result=None):
+    def _finish_action(self, identifier, ok, message, *, cancelled=False, result=None, saved=False):
         receipt = self.action_results.get(identifier)
         if receipt is None:
             return
@@ -406,12 +419,13 @@ class StudioController:
             receipt['values'] = self.app._current_profile_settings()
             receipt['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
             receipt['lanEnabled'] = bool(self.app.radmin_enabled.get())
-        if ok and receipt['action'] in {'save', 'start', 'forceRestart', 'acceptDefaults'}:
+        if (ok or saved) and receipt['action'] in {'save', 'start', 'forceRestart', 'acceptDefaults'}:
             from infini_local.desktop.settings_env import parse_env
             from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
             receipt['savedValues'] = parse_env(CONFIG_PATH)
             receipt['savedValues']['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(receipt['savedValues'], self.app.user_presets)
             receipt['savedRevision'] = saved_config_revision(CONFIG_PATH)
+            receipt['saved'] = True
         self.last_action = receipt
         while len(self.action_results) > 128:
             retired = next((key for key, item in self.action_results.items() if item['status'] != 'running'), None)
@@ -439,7 +453,8 @@ class StudioController:
             pending = pending or identifier in self.app.__dict__.get('_studio_async_ids', set())
             if not pending:
                 outcome = outcome if isinstance(outcome, dict) else {}
-                self._finish_action(identifier, outcome.get('ok', True), outcome.get('message', self.app.status_var.get() if not self.app._gui_closed else 'Студия закрыта.'), result=outcome.get('result'))
+                self._finish_action(identifier, outcome.get('ok', True), outcome.get('message', self.app.status_var.get() if not self.app._gui_closed else 'Студия закрыта.'),
+                                    result=outcome.get('result'), saved=outcome.get('saved', False))
         except (OSError, ValueError, AttributeError, RuntimeError, tk.TclError) as exc:
             self._finish_action(identifier, False, str(exc))
             raise
@@ -480,6 +495,18 @@ class StudioController:
         if action in {'save', 'start', 'forceRestart'} and 'savedRevision' in extra:
             if not extra['savedRevision'] or extra['savedRevision'] != saved_config_revision(CONFIG_PATH):
                 raise ValueError('Конфигурация на диске изменилась в другой вкладке или программе. Черновик сохранён в этой вкладке. Проверь новые сохранённые значения перед повторным сохранением или запуском.')
+        if action in {'save', 'start', 'forceRestart'}:
+            from infini_local.desktop.settings_env import parse_env
+            from infini_local.desktop.settings_schema import DEFAULTS
+            from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
+            # Retained extension keys may have been removed on disk since this
+            # adapter loaded. Keep current disk keys and explicit draft edits,
+            # but never resurrect an absent key from the adapter's stale cache.
+            saved = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
+            retained = set(DEFAULTS) | set(app.vars) | set(app.text_widgets) | set(saved) | set(command.get('values', {}))
+            for cached in (app.data, app.__dict__.get('_profile_extra_settings', {})):
+                for key in set(cached) - retained:
+                    del cached[key]
         if action == 'clearTrace' and extra.get('confirm') is not True:
             raise ValueError('Подтверди очистку журнала в браузере.')
         if action in {'health', 'trace', 'clearTrace', 'openCache', 'stop'}:

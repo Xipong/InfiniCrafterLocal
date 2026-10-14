@@ -4,17 +4,17 @@ const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/
 const nodes=new Map(), events={};
 function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
 global.setTimeout=()=>0;
-global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(){return [];},querySelector(selector){if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
+global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(){return [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
 const messages=[];
 let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio.js'),'utf8');
 assert(!source.includes('window.confirm('),'discard must use the in-page dialog');
 source=source.replace('  navigate();poll();',`
-  poll=()=>{};setMenu=()=>{};render=()=>{};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
+  poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog};
 `);
-global.messages=messages;
+global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
 const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument}=studio;
 const key='INFINI_PROMPT_STYLE';
@@ -109,6 +109,65 @@ events.input({target:{id:'file-path',value:'/new/file.gguf',matches(){return fal
 assert.equal(state.picker.request,2);assert.equal(state.picker.selection,null);assert(document.querySelector('#file-select').disabled);
 state.picker=null;
 
+// Clean custom keys removed on disk must disappear, not become write-back edits.
+state.remote=null;state.draft={};state.dirty.clear();state.edits={};
+acceptSnapshot(snapshot({INFINI_KEEP:'a',INFINI_REMOVED:'old'},{savedRevision:'disk-1'}));
+acceptSnapshot(snapshot({INFINI_KEEP:'a'},{savedRevision:'disk-2'}));
+assert(!Object.hasOwn(state.draft,'INFINI_REMOVED'));assert(!state.dirty.has('INFINI_REMOVED'));
+assert(!state.fields.some(field=>field.key==='INFINI_REMOVED'));
+// A genuinely edited removed key is retained as the user's explicit draft.
+acceptSnapshot(snapshot({INFINI_KEEP:'a',INFINI_REMOVED:'old'}));
+state.draft.INFINI_REMOVED='my edit';recomputeDirty();
+acceptSnapshot(snapshot({INFINI_KEEP:'a'}));
+assert.equal(state.draft.INFINI_REMOVED,'my edit');assert(state.dirty.has('INFINI_REMOVED'));
+// External provider changes update presentation without destroying local text/focus.
+state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.page='providers';
+const local={INFINI_LLM_PROVIDER:'local',INFINI_LMSTUDIO_URL:'http://local',INFINI_OPENROUTER_MODEL:'model'};
+acceptSnapshot(snapshot(local));
+state.draft.INFINI_LMSTUDIO_URL='http://edited';recomputeDirty();
+let restoredFocus=0,restoredSelection=null;
+const activeField={dataset:{field:'INFINI_LMSTUDIO_URL'},selectionStart:3,selectionEnd:8};
+document.activeElement=activeField;
+const restored=document.querySelector('[data-field="INFINI_LMSTUDIO_URL"]');
+restored.parentElement={tagName:'DETAILS',dataset:{details:'providers-inactive'},open:false,parentElement:null};
+restored.focus=()=>restoredFocus++;restored.setSelectionRange=(...range)=>{restoredSelection=range;};
+global.renderCount=0;
+acceptSnapshot(snapshot({...local,INFINI_LLM_PROVIDER:'openrouter'}));
+assert.equal(global.renderCount,1);assert.equal(state.draft.INFINI_LMSTUDIO_URL,'http://edited');
+assert.equal(restoredFocus,1);assert.deepEqual(restoredSelection,[3,8]);assert(restored.parentElement.open);
+document.activeElement=null;
+// Global Save must not run underneath confirmation, file, or search dialogs.
+state.connected=false;state.pending=null;state.submission=null;state.shutdown=false;
+const keyEvent={ctrlKey:true,code:'KeyS',key:'s',preventDefault(){},target:{id:'confirm-submit',matches(){return false;}}};
+const beforeShortcut=state.notifications.length;
+document.querySelector('#utility-dialog').open=true;events.keydown(keyEvent);
+assert.equal(state.notifications.length,beforeShortcut);
+document.querySelector('#utility-dialog').open=false;document.querySelector('#search-dialog').open=true;events.keydown(keyEvent);
+assert.equal(state.notifications.length,beforeShortcut);
+document.querySelector('#search-dialog').open=false;events.keydown(keyEvent);
+assert.equal(state.notifications.length,beforeShortcut+1,'outside a modal, Save still reaches the connectivity guard');
+
+// A failed process launch still acknowledges its confirmed normalized disk write.
+state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.pending=null;
+acceptSnapshot(snapshot({INFINI_A:'old-a',INFINI_B:'old-b'},{savedRevision:'before-launch'}));
+state.draft={INFINI_A:' submitted-a ',INFINI_B:'newer-b'};state.edits={INFINI_A:1,INFINI_B:2};recomputeDirty();
+state.pending={id:'failed-after-save',action:'start',clock:1,sent:{INFINI_A:' submitted-a ',INFINI_B:'submitted-b'}};
+acceptSnapshot(snapshot({INFINI_A:'submitted-a',INFINI_B:'submitted-b'},{savedRevision:'after-launch-save',actionResults:[{id:'failed-after-save',ok:false,status:'failed',saved:true,savedRevision:'after-launch-save',savedValues:{INFINI_A:'submitted-a',INFINI_B:'submitted-b'},message:'config.env saved; server.py failed'}]}));
+assert.equal(state.savedRevision,'after-launch-save');assert.equal(state.draft.INFINI_A,'submitted-a');assert.equal(state.draft.INFINI_B,'newer-b');
+assert(!state.dirty.has('INFINI_A'));assert(state.dirty.has('INFINI_B'));assert.equal(state.pending,null);
+assert.equal(messages.at(-1).message,'config.env saved; server.py failed');assert(messages.at(-1).error);
+
+// Effort choices follow this tab's selected draft model, without rewriting values.
+state.draft={INFINI_LLM_PROVIDER:'openai_codex',INFINI_CODEX_LLM_MODEL:'model-b',INFINI_LLM_REASONING_MODE:'high',INFINI_CODEX_VISUAL_REASONING:'inherit'};
+state.remote={values:{INFINI_CODEX_LLM_MODEL:'model-a'},defaults:{},fields:[{key:'INFINI_LLM_REASONING_MODE',options:['off','high']},{key:'INFINI_CODEX_VISUAL_REASONING',options:['inherit','high']}],account:{authenticated:true,catalog:'Текстовая модель аккаунта: effort high',textModels:{'model-a':{efforts:['high'],defaultEffort:'high'},'model-b':{efforts:['low'],defaultEffort:'low'}}}};
+let catalogFields=studio.makeFields(state.remote);
+assert.deepEqual(catalogFields.find(field=>field.key==='INFINI_LLM_REASONING_MODE').options,['off','low']);
+assert.equal(state.draft.INFINI_LLM_REASONING_MODE,'high');assert(studio.accountText('providers').includes('не поддерживается'));
+assert(!studio.accountText('providers').includes('Текстовая модель аккаунта: effort high'));
+state.draft.INFINI_CODEX_LLM_MODEL='manual-unknown';catalogFields=studio.makeFields(state.remote);
+assert.deepEqual(catalogFields.find(field=>field.key==='INFINI_LLM_REASONING_MODE').options,[]);
+assert.equal(state.draft.INFINI_CODEX_LLM_MODEL,'manual-unknown');
+
 // Search waits for exactly one hashchange render before opening and focusing.
 global.location={hash:'#operate'};
 global.requestAnimationFrame=callback=>callback();
@@ -143,4 +202,15 @@ async function testRepeatedSubmission() {
   await Promise.all([first,repeated]);
   assert.equal(state.pending.id,'single-save');assert.equal(calls,1);
 }
-testRepeatedSubmission().then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+async function testCatalogAutoload() {
+  state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;state.catalogAutoRequested=false;state.page='providers';
+  state.remote={account:{authenticated:true,textModels:{}}};state.draft={INFINI_LLM_PROVIDER:'openai_codex',INFINI_CODEX_LLM_MODEL:'keep-manual'};
+  let calls=0;global.fetch=async()=>{calls++;return {ok:true,json:async()=>({ok:true,id:`catalog-${calls}`})};};
+  await studio.maybeLoadCatalog();await studio.maybeLoadCatalog();assert.equal(calls,1);
+  state.pending=null;await studio.maybeLoadCatalog();assert.equal(calls,1,'polls do not repeat an unsuccessful/empty auto attempt');
+  await studio.action('codexCatalog');assert.equal(calls,2,'manual retry stays available');
+  state.pending=null;state.remote.account.authenticated=false;studio.maybeLoadCatalog();assert.equal(state.catalogAutoRequested,false);
+  state.remote.account.authenticated=true;await studio.maybeLoadCatalog();assert.equal(calls,3,'a new authenticated session can retry once');
+  assert.equal(state.draft.INFINI_CODEX_LLM_MODEL,'keep-manual');
+}
+testRepeatedSubmission().then(testCatalogAutoload).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});

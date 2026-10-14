@@ -61,10 +61,18 @@
   const isCredentialKey = key => /(?:^|_)(?:API_KEY|TOKEN|PASSWORD|SECRET|CREDENTIALS?)(?:_|$)/i.test(key);
   function makeFields(remote) {
     const map = new Map((remote.fields || []).map(field => [field.key,{...field}]));
-    Object.keys({...remote.defaults,...remote.values}).filter(key => key.startsWith('INFINI_')).forEach(key => {
+    Object.keys({...remote.defaults,...(remote.savedValues || remote.values),...state.draft}).filter(key => key.startsWith('INFINI_')).forEach(key => {
       if (!map.has(key)) map.set(key,{key,label:names[key],help:remote.fieldHelp?.[key] || '',options:[],secret:isCredentialKey(key),advanced:!basicKeys.has(key),synthetic:true});
     });
-    return [...map.values()].map(field => ({...field,secret:field.secret || isCredentialKey(field.key),route:pageFor(field.key,field.page)}));
+    return [...map.values()].map(field => {
+      let options=field.options;
+      if(value('INFINI_LLM_PROVIDER') === 'openai_codex' && ['INFINI_LLM_REASONING_MODE','INFINI_CODEX_VISUAL_REASONING'].includes(field.key)) {
+        const model=remote.account?.textModels?.[value('INFINI_CODEX_LLM_MODEL')];
+        // Metadata belongs to the selected browser draft, never another tab's model.
+        options=model ? [...(field.key === 'INFINI_LLM_REASONING_MODE' ? ['off']:['inherit','model_default']),...model.efforts] : [];
+      }
+      return {...field,options,secret:field.secret || isCredentialKey(field.key),route:pageFor(field.key,field.page)};
+    });
   }
   function value(key, fallback='') { return state.draft[key] ?? fallback; }
   function recomputeDirty() {
@@ -105,6 +113,28 @@
     if (field.disabled && !state.dirty.size && state.lan === state.baselineLan && Object.entries(state.remote?.values || {}).every(([name,val])=>value(name) === val)) return field.disabled;
     return '';
   }
+  function maybeLoadCatalog() {
+    if(state.remote?.account?.authenticated === false) state.catalogAutoRequested=false;
+    if(state.page !== 'providers' || value('INFINI_LLM_PROVIDER') !== 'openai_codex' || state.remote?.account?.authenticated !== true || !state.connected || state.pending || state.posting || state.shutdown || state.catalogAutoRequested) return;
+    state.catalogAutoRequested=true;
+    // Reuse an already loaded account catalog; one failed attempt stays manual-retryable.
+    if(!Object.keys(state.remote.account.textModels || {}).length) return action('codexCatalog');
+  }
+  function accountText(page) {
+    const account=state.remote?.account || {};
+    let detail=account[page === 'providers' ? 'catalog':'images'];
+    if(page === 'providers' && /^(Текстовая модель аккаунта:|Сохранённый reasoning|Ручной slug вне текущего каталога:)/.test(detail || '')) detail=`В последнем каталоге аккаунта: ${Object.keys(account.textModels || {}).length} моделей. Image-доступ не проверен.`;
+    const lines=[account.status,detail].filter(Boolean);
+    if(page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex') {
+      const slug=value('INFINI_CODEX_LLM_MODEL'),model=account.textModels?.[slug];
+      if(model) {
+        lines.push(`Для выбранной модели ${slug} в последнем каталоге: ${model.efforts.join(', ') || 'effort не заявлен'}. По умолчанию: ${model.defaultEffort || 'не указан'}.`);
+        const reasoning=value('INFINI_LLM_REASONING_MODE'),visual=value('INFINI_CODEX_VISUAL_REASONING');
+        if(!['off',...model.efforts].includes(reasoning) || !['inherit','model_default',...model.efforts].includes(visual)) lines.push('Выбранный effort не поддерживается этой моделью. Значения сохранены; выбери поддерживаемый вариант.');
+      } else lines.push(slug ? 'Выбранный slug ещё не подтверждён каталогом. Effort можно ввести вручную; значение не подменяется.' : 'Выбери текстовую модель. Каталог не выбирает её автоматически.');
+    }
+    return lines.join('\n') || 'Статус аккаунта ещё не запрошен.';
+  }
   async function api(path, payload) {
     if (!token) throw new Error('Открой студию через локальный запускатор. Токен сессии не получен.');
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(),12000);
@@ -124,12 +154,21 @@
     if (!connected && !state.shutdown) $('#connection-banner').innerHTML = `<span>${esc(message)} Изменения остаются в этой вкладке.</span><button data-ui="retry">Повторить</button>`;
     updateActionButtons();
   }
+  function reconcilePersistedValues(pending,receipt,defaults={}) {
+    const saved=receipt.savedValues;
+    state.savedRevision=receipt.savedRevision || state.savedRevision;
+    state.revisionValues={...defaults,...saved};
+    Object.entries(pending.sent).forEach(([key,val])=>{if((state.edits[key] || 0) <= pending.clock) state.draft[key]=saved[key] ?? val;});
+    if(pending.action !== 'acceptDefaults' && (state.lanEdit || 0) <= pending.clock) state.lan=saved.INFINI_HOST === '0.0.0.0' || !!saved.INFINI_ASSET_PUBLIC_BASE_URL;
+  }
   function acceptSnapshot(remote) {
     if (!remote.values || !Array.isArray(remote.fields)) return false;
     const first = !state.remote;
+    const presentation=()=>JSON.stringify(state.fields.map(field=>[field.key,inactiveReason(field),!!derivedField(field.key)]));
+    const previousPresentation=presentation();
+    let needsRender=false;
     const previousFields = JSON.stringify(state.fields.map(f => [f.key,f.options]));
     const previousPresets = JSON.stringify([state.remote?.presets,state.remote?.userPresets]);
-    state.fields = makeFields(remote);
     const saved = {...remote.defaults,...(remote.savedValues || remote.values)};
     const wasDirty=state.dirty.size || state.lan !== state.baselineLan;
     if (first) {
@@ -137,9 +176,13 @@
       // prepared profile; only persisted values initialize a fresh tab.
       state.draft={...saved};state.lan=!!remote.savedLanEnabled;
     } else {
+      const submission=state.pending || state.submission;
+      const protectedKeys=submission?.dirtyKeys || Object.keys(submission?.sent || {});
+      // A clean key deleted on disk is not a new local edit to write back.
+      for(const key of Object.keys(state.baseline)) {
+        if(!Object.hasOwn(saved,key) && !state.dirty.has(key) && !protectedKeys.includes(key)) {delete state.draft[key];delete state.edits[key];}
+      }
       Object.entries(saved).forEach(([key,val])=>{
-        const submission=state.pending || state.submission;
-        const protectedKeys=submission?.dirtyKeys || Object.keys(submission?.sent || {});
         if(!state.dirty.has(key) && !protectedKeys.includes(key)) state.draft[key]=val;
       });
       if(state.lan === state.baselineLan && !state.pending && !state.submission) state.lan=!!remote.savedLanEnabled;
@@ -152,6 +195,9 @@
     const pending = state.pending;
     const receipt = pending && ((remote.actionResults || []).find(result => result.id === pending.id) || (remote.lastAction?.id === pending.id ? remote.lastAction : null));
     if (pending && receipt && receipt.status !== 'running') {
+      // A process launch can fail after a successful disk write. Reconcile that
+      // confirmed write independently, while keeping the action visibly failed.
+      if(receipt.savedValues && receipt.savedRevision && ['save','start','forceRestart','acceptDefaults'].includes(pending.action)) reconcilePersistedValues(pending,receipt,remote.defaults);
       state.suppressToast=(remote.notifications || []).some(notice=>notice.actionId === pending.id || notice.message === receipt.message);
       if (receipt.ok && receipt.status !== 'cancelled') {
         const transforming = ['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action);
@@ -171,11 +217,10 @@
         // A handled callback is not proof of a disk write or a running generator.
         if (pending.action === 'start' && !receipt.status) state.startSubmission = pending;
         if (['save','start','forceRestart'].includes(pending.action) && (receipt.status === 'succeeded' || /^saved:/i.test(remote.status || ''))) {
-          state.savedRevision=receipt.savedRevision || state.savedRevision;state.revisionValues={...remote.defaults,...(receipt.savedValues || saved)};
-          Object.entries(pending.sent).forEach(([key,val]) => {
-            if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = (receipt.savedValues || saved)[key] ?? val;
-          });
-          if ((state.lanEdit || 0) <= pending.clock) state.lan = receipt.savedValues ? receipt.savedValues.INFINI_HOST === '0.0.0.0' || !!receipt.savedValues.INFINI_ASSET_PUBLIC_BASE_URL : state.baselineLan;
+          if(!receipt.savedValues || !receipt.savedRevision) {
+            reconcilePersistedValues(pending,{...receipt,savedValues:receipt.savedValues || saved},remote.defaults);
+            if((state.lanEdit || 0) <= pending.clock && !receipt.savedValues) state.lan=state.baselineLan;
+          }
           toast(pending.action !== 'save' ? (receipt.message || 'Процесс генератора запущен. Проверь соединение, чтобы подтвердить готовность.') : 'Настройки записаны в config.env.');
         } else if (pending.action === 'savePreset') toast('Профиль сохранён отдельно. config.env не изменён.');
         else if (transforming) toast('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.');
@@ -195,7 +240,7 @@
       }
       if (receipt.result?.kind === 'document') showDocument(receipt.result);
       if (receipt.result?.kind === 'guide' && receipt.result.url?.startsWith('/guide?')) utility(receipt.result.title || 'Инструкция', `<p class="dialog-copy">Интерактивное руководство открывается в отдельной вкладке.</p><a class="button button-primary" href="${esc(receipt.result.url)}" target="_blank" rel="noopener">Открыть руководство ↗</a>`);
-      if (['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) render();
+      if (['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) needsRender=true;
     }
     if (state.startSubmission && !remote.busy?.includes('server-action')) {
       // The guarded start saves only after its activity/identity check succeeds.
@@ -212,13 +257,14 @@
       state.seenNotifications.add(notice.id);
       toast([notice.title,notice.message].filter(Boolean).join(' · '), notice.level !== 'info');
     }
+    state.fields=makeFields(remote);
     recomputeDirty();
     if (state.page === 'configure' && $('#preset-select') && document.activeElement !== $('#preset-select')) $('#preset-select').value = state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
-    if (first || previousFields !== JSON.stringify(state.fields.map(f => [f.key,f.options])) || previousPresets !== JSON.stringify([remote.presets,remote.userPresets])) render();
+    if (first || needsRender || previousPresentation !== presentation() || previousFields !== JSON.stringify(state.fields.map(f => [f.key,f.options])) || previousPresets !== JSON.stringify([remote.presets,remote.userPresets])) renderPreservingFocus();
     else if (state.page === 'operate') renderOperate();
     else if (state.page === 'diagnostics') updateDiagnostics();
     syncInputs();
-    if ($('#account-status')) $('#account-status').textContent = [remote.account?.status, remote.account?.[state.page === 'providers' ? 'catalog':'images']].filter(Boolean).join('\n') || 'Статус аккаунта ещё не запрошен.';
+    if ($('#account-status')) $('#account-status').textContent=accountText(state.page);
     $('#version').textContent = `Версия ${remote.version || 'α'}`;
     if($('#defaults-summary')) $('#defaults-summary').textContent=defaultsSummary();
     return true;
@@ -229,7 +275,7 @@
     state.fetching = true;
     try {
       const remote = await api('/api/state');
-      if (acceptSnapshot(remote)) {if(!state.shutdown) setConnection(true);}
+      if (acceptSnapshot(remote)) {if(!state.shutdown) {setConnection(true);maybeLoadCatalog();}}
       else setConnection(false,'Мастерская ещё загружается.');
     } catch (error) {
       setConnection(false,error.name === 'AbortError' ? 'Локальный сервер не ответил вовремя.' : error.message);
@@ -254,6 +300,7 @@
     }
     if(state.pending?.action === name || state.submission?.action === name) return;
     if (!state.connected || state.pending || state.posting) {toast('Дождись ответа текущего действия или восстанови соединение.',true);return;}
+    if(name === 'codexCatalog') state.catalogAutoRequested=true;
     state.posting = true;
     const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(name);
     const sent = defaultsDecision ? (name === 'acceptDefaults' ? Object.fromEntries((state.defaultsPreview?.changes || []).map(row => [row.key,row.recommended])) : {}) : editableValues();
@@ -449,7 +496,7 @@
     ].map(([n,route,title,description]) => `<a class="index-row" href="#${route}"><span class="index-number">${n}</span><div><h3>${title}</h3><p>${description}</p></div><span class="index-tail"><span>${counts(route)}</span>${icon('arrow')}</span></a>`).join('')}</div>${disclosure('all-settings','Все параметры одним списком',full,'Полный доступ ко всем настройкам, включая параметры других источников и служебные поля. Значения не скрываются при смене профиля.')}<p class="settings-path">${esc(state.remote.configPath)}</p></div>${aside()}</div>`;
   }
   function pageExtras(page) {
-    if (page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<div class="notice">Codex использует вход по подписке, не API-ключ. Модель текста и модель изображения настраиваются независимо.</div><div class="page-actions"><button class="button" data-action="codexLogin">Войти в Codex ${icon('arrow')}</button><button class="button" data-action="codexStatus">Статус аккаунта</button><button class="button" data-action="codexLogout">Выйти</button>${page === 'providers' ? '<button class="button" data-action="codexCatalog">Обновить модели</button>' : '<button class="button" data-action="codexPing">Проверить аккаунт</button>'}</div><div class="account-status-panel"><p><span id="account-status">${esc([state.remote.account?.status,state.remote.account?.[page === 'providers' ? 'catalog':'images']].filter(Boolean).join('\n') || 'Статус аккаунта ещё не запрошен.')}</span><br>Обновление каталога не запускает крафт. У изображений нет отдельного API списка моделей.</p></div>`;
+    if (page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<div class="notice">Codex использует вход по подписке, не API-ключ. Модель текста и модель изображения настраиваются независимо.</div><div class="page-actions"><button class="button" data-action="codexLogin">Войти в Codex ${icon('arrow')}</button><button class="button" data-action="codexStatus">Статус аккаунта</button><button class="button" data-action="codexLogout">Выйти</button>${page === 'providers' ? '<button class="button" data-action="codexCatalog">Обновить модели</button>' : '<button class="button" data-action="codexPing">Проверить аккаунт</button>'}</div><div class="account-status-panel"><p><span id="account-status">${esc(accountText(page))}</span><br>Обновление каталога не запускает крафт. У изображений нет отдельного API списка моделей.</p></div>`;
     if (page === 'images' && value('INFINI_IMAGE_BACKEND') === 'sdcpp') return `<div class="notice">${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? 'Управляемый запуск: генератор поднимет sd.cpp. Программа и веса — в разделе «Модели и LoRA».' : 'Внешний запуск: sd.cpp уже работает отдельно. Здесь достаточно его URL; файлы моделей выбираются на стороне sd.cpp.'}<br><a class="text-button" href="#models">${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? 'Открыть модели':'LoRA и дополнительные материалы'} ${icon('arrow')}</a></div>`;
     if (page === 'sprites') return `${value('INFINI_IMAGE_BACKEND') === 'off' ? '<div class="notice">Изображения сейчас выключены. Параметры обработки доступны ниже и сохранятся до включения изображений.</div>':''}<div class="page-actions"><button class="button" data-ui="reset-sprite">${icon('refresh')}Вернуть базовый BOX</button><button class="button" data-action="openCache" title="Открыть папку кеша на компьютере генератора">${icon('folder')}Кеш в файловом менеджере</button></div>`;
     if (page === 'models') return `${value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? '<div class="notice">Локальные модели нужны только для sd.cpp. Для текущего источника настрой модель в разделе «Изображения».</div>' : value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1' ? '<div class="notice">Внешний sd.cpp выбирает основные модели при собственном запуске. Для запуска из студии включи управляемый режим в разделе «Изображения».</div>' : ''}<a class="text-button" href="#images">К источнику изображений ${icon('arrow')}</a><div class="page-actions"><button class="button" data-action="useLora">Применить выбранную LoRA</button><button class="button" data-ui="clear-lora">Отключить LoRA</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button></div>`;
@@ -484,7 +531,21 @@
     $$('details[data-details]').forEach(detail => detail.addEventListener('toggle',() => detail.open ? state.openDetails.add(detail.dataset.details):state.openDetails.delete(detail.dataset.details)));
     updateActionButtons();
   }
+  function renderPreservingFocus() {
+    const active=document.activeElement;
+    const key=active?.dataset?.field,id=active?.id;
+    const selection=typeof active?.selectionStart === 'number' ? [active.selectionStart,active.selectionEnd] : null;
+    render();
+    const target=key ? $(`[data-field="${key}"]`) : id ? document.getElementById(id) : null;
+    if(!target) return;
+    for(let parent=target.parentElement;parent;parent=parent.parentElement) {
+      if(parent.tagName === 'DETAILS') {parent.open=true;if(parent.dataset.details) state.openDetails.add(parent.dataset.details);}
+    }
+    target.focus({preventScroll:true});
+    if(selection && target.setSelectionRange) target.setSelectionRange(...selection);
+  }
   function syncInputs() {
+    $$('[data-derived]').forEach(output=>{const derived=derivedField(output.dataset.derived);if(derived) output.textContent=derived.value;});
     $$('[data-field]').forEach(input => {
       if (document.activeElement === input) return;
       const val = value(input.dataset.field);
@@ -495,6 +556,7 @@
   }
   function setMenu(open, restoreFocus=true) {
     const rail = $('.rail'), menu = $('.mobile-menu');
+    const wasOpen=rail.classList.contains('is-open'),focusVersion=state.menuFocusVersion=(state.menuFocusVersion || 0)+1;
     open = !!open && innerWidth <= 720;
     rail.classList.toggle('is-open',open);
     menu.setAttribute('aria-expanded',String(open));
@@ -504,10 +566,14 @@
     document.body.classList.toggle('menu-open',open);
     if (open) {
       rail.setAttribute('role','dialog'); rail.setAttribute('aria-modal','true');
-      $('.nav-link.active',rail)?.focus({preventScroll:true});
+      const focusNavigation=()=>$('.nav-link.active',rail)?.focus({preventScroll:true});
+      focusNavigation();
+      // A responsive CSS/inert update may not be painted during this click.
+      // Retry once after layout, but never steal an intentional drawer focus.
+      requestAnimationFrame(()=>{if(state.menuFocusVersion === focusVersion && rail.classList.contains('is-open') && !rail.contains(document.activeElement) && !document.querySelector('dialog[open]')) focusNavigation();});
     } else {
       rail.removeAttribute('role'); rail.removeAttribute('aria-modal');
-      if (restoreFocus && rail.contains(document.activeElement)) menu.focus({preventScroll:true});
+      if (restoreFocus && (wasOpen || rail.contains(document.activeElement))) menu.focus({preventScroll:true});
     }
   }
   function navigate() {
@@ -519,6 +585,7 @@
     setMenu(false,false);
     render();if (fromMenu) $('#workspace').focus({preventScroll:true});
     if(state.focusKey) {const key=state.focusKey;state.focusKey=null;focusFieldRow(key);} else window.scrollTo({top:0,behavior:'instant'});
+    maybeLoadCatalog();
   }
   function matches(field,query) {
     const haystack = `${label(field)} ${field.key} ${field.help || ''} ${routes[field.route][0]}`.toLocaleLowerCase();
@@ -663,7 +730,17 @@
       state.edits[key]=++state.editClock;recomputeDirty();target.closest('.field-row').classList.toggle('is-dirty',state.dirty.has(key));
       $$('[data-derived]').forEach(output=>{const derived=derivedField(output.dataset.derived);if(derived) output.textContent=derived.value;});
       if(target.type === 'checkbox') target.parentElement.querySelector('.toggle-label').textContent=target.checked ? 'Включено':'Выключено';
+      if(key === 'INFINI_LLM_PROVIDER') state.fields=makeFields(state.remote);
       if(target.tagName === 'SELECT' || target.type === 'checkbox') {const selection=key;render();$(`[data-field="${selection}"]`)?.focus({preventScroll:true});}
+      if(key === 'INFINI_CODEX_LLM_MODEL') {
+        state.fields=makeFields(state.remote);
+        for(const field of state.fields.filter(field=>['INFINI_LLM_REASONING_MODE','INFINI_CODEX_VISUAL_REASONING'].includes(field.key))) {
+          const row=$(`[data-field-row="${field.key}"]`);if(row) row.outerHTML=fieldHTML(field);
+        }
+        if($('#account-status')) $('#account-status').textContent=accountText('providers');
+      }
+      if(['INFINI_LLM_REASONING_MODE','INFINI_CODEX_VISUAL_REASONING'].includes(key) && $('#account-status')) $('#account-status').textContent=accountText('providers');
+      if(key === 'INFINI_LLM_PROVIDER') maybeLoadCatalog();
     }
     if(target.matches('[data-lan]')) {state.lan=target.checked;state.lanEdit=++state.editClock;target.parentElement.querySelector('.toggle-label').textContent=target.checked?'Включено':'Выключено';recomputeDirty();render();$('#lan-enabled')?.focus({preventScroll:true});}
     if(target.id === 'file-path' && state.picker) {state.picker.request++;state.picker.selection=null;$('#file-select').disabled=true;$('#file-selection').textContent='Нажми «Открыть», чтобы проверить новый путь.';$$('[data-file-index]').forEach(row=>row.classList.remove('selected'));}
@@ -712,7 +789,7 @@
   });
   document.addEventListener('keydown',event => {
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {event.preventDefault();if(!$('#utility-dialog').open) showSearch();}
-    if((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {event.preventDefault();if(state.remote && !state.shutdown) action('save');}
+    if((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {event.preventDefault();if(state.remote && !state.shutdown && !document.querySelector('dialog[open]')) action('save');}
     if($('#search-dialog').open && event.target.id === 'global-search' && ['ArrowDown','ArrowUp','Enter'].includes(event.key)) {
       event.preventDefault();
       if(event.key === 'Enter') {if(state.searchMatches[state.searchIndex]) focusField(state.searchMatches[state.searchIndex].key);}

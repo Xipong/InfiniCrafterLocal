@@ -14,11 +14,11 @@ def notify(app, level: str, title: str, message: str) -> None:
         getattr(messagebox, {'error': 'showerror', 'warning': 'showwarning'}.get(level, 'showinfo'))(title, message)
 
 
-def finish_action(app, identifier, ok: bool, message: str, *, cancelled=False) -> None:
+def finish_action(app, identifier, ok: bool, message: str, *, cancelled=False, saved=False) -> None:
     app.__dict__.get('_studio_async_ids', set()).discard(identifier)
     sink = app.__dict__.get('_ui_action_sink')
     if sink is not None and identifier:
-        sink(identifier, ok, message, cancelled=cancelled)
+        sink(identifier, ok, message, cancelled=cancelled, saved=saved)
 
 
 def begin_action(app):

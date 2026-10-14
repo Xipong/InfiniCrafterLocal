@@ -63,6 +63,68 @@ def command(controller, name, identifier='command', values=None, extra=None):
     return controller.action_results[identifier]
 
 
+def test_snapshot_publishes_only_bounded_existing_text_catalog_metadata(studio, monkeypatch):
+    from infini_local.services import codex_auth, codex_catalog
+
+    app, controller, _server, config = studio
+    auth = {'authenticated': True, 'expired': False, 'access_token': 'DO-NOT-PUBLISH-AUTH'}
+    monkeypatch.setattr(codex_auth, 'auth_status', lambda: auth)
+    monkeypatch.setattr(codex_catalog, 'list_text_models', lambda: pytest.fail('Snapshot must not fetch any catalog'))
+    app._codex_text_models = {
+        f'model-{index}': codex_catalog.CodexModel(f'model-{index}', 'DO-NOT-PUBLISH-LABEL',
+                                                ('low', 'high', 'unsupported'), 'high', index)
+        for index in range(260)
+    }
+    account = controller.snapshot()['account']
+    assert account['authenticated'] is True
+    assert len(account['textModels']) == 256
+    assert account['textModels']['model-0'] == {'efforts': ['low', 'high'], 'defaultEffort': 'high'}
+    assert 'DO-NOT-PUBLISH' not in json.dumps(account)
+    assert not config.exists()
+    assert not app._gui_tasks
+    auth['authenticated'] = False
+    app._codex_text_models = {}
+    account = controller.snapshot()['account']
+    assert account['authenticated'] is False and account['textModels'] == {}
+
+
+@pytest.mark.parametrize('error_type', [OSError, ValueError, UnicodeError])
+def test_malformed_saved_config_keeps_polling_stop_and_recovery_available(studio, monkeypatch, error_type):
+    from infini_local.desktop import settings_env
+
+    app, controller, server, config = studio
+    config.write_text('INFINI_PROMPT_STYLE=last good disk\n', encoding='utf-8')
+    good = controller.snapshot()
+    app.proc = SimpleNamespace(pid=123456, poll=lambda: None)
+    app._owned_launch_settings = dict(good['savedValues'])
+    app._owned_server_base_url = 'http://127.0.0.1:5055'
+    app._fetch_health_snapshot = lambda **kwargs: {
+        'ok': True, 'pid': 123456, 'generationActivity': {'active': 0, 'waiting': 0, 'accepting': True}}
+    app._shutdown_identity_is_safe = lambda snap: True
+    app._safe_effective_config = lambda snap: {'cacheDir': 'cache'}
+    app._try_http_shutdown_current_server = lambda **kwargs: (True, '')
+    app._wait_until_helper_stops = lambda **kwargs: True
+    parse_env = settings_env.parse_env
+    def malformed(_path):
+        raise error_type('Malformed saved configuration')
+    monkeypatch.setattr(settings_env, 'parse_env', malformed)
+    server.commands.put({'id': 'stop-with-malformed-config', 'action': 'stop', 'values': {}, 'extra': {}})
+    controller.tick()
+    assert server._state['savedValues'] == good['savedValues']
+    assert server._state['savedRevision'] is None
+    assert 'Не удалось проверить сохранённую конфигурацию' in server._state['status']
+    assert app.jobs, 'Polling must remain scheduled after the read failure'
+    app.drain_until(lambda: controller.action_results['stop-with-malformed-config']['status'] != 'running')
+    assert controller.action_results['stop-with-malformed-config']['status'] == 'succeeded'
+    assert app.proc is None
+    monkeypatch.setattr(settings_env, 'parse_env', parse_env)
+    config.write_text('INFINI_PROMPT_STYLE=repaired disk\n', encoding='utf-8')
+    controller.tick()
+    assert server._state['savedValues']['INFINI_PROMPT_STYLE'] == 'repaired disk'
+    assert server._state['savedRevision'] is not None
+    assert 'Не удалось проверить сохранённую конфигурацию' not in server._state['status']
+
+
 def test_validation_and_missing_lora_are_browser_results(studio):
     app, controller, _server, _config = studio
     app.vars['INFINI_LLM_PROVIDER'] = _UiVar('openrouter')
@@ -127,16 +189,65 @@ def test_help_returns_real_guide_without_desktop_browser(studio):
     assert result['result']['url'].endswith('START_RU.md')
 
 
-def test_async_launch_failure_reports_browser_error(studio, monkeypatch):
-    app, controller, _server, _config = studio
+@pytest.mark.parametrize('action', ['start', 'forceRestart'])
+def test_async_launch_failure_acknowledges_saved_settings_and_allows_retry(studio, monkeypatch, action):
+    from infini_local.desktop.settings_env import parse_env
+    from infini_local.desktop.settings_interactions import saved_config_revision
+
+    app, controller, _server, config = studio
+    config.write_text('INFINI_PROMPT_STYLE=original\n', encoding='utf-8')
+    original_revision = saved_config_revision(config)
+    submitted = {'INFINI_PROMPT_STYLE': 'submitted draft', 'INFINI_PRIVATE_UNKNOWN': 'retained value',
+                 'INFINI_OPENAI_COMPAT_API_KEY': 'dummy-new-key'}
+    app.vars['INFINI_PROMPT_STYLE'] = _UiVar('original')
     app._fetch_health_snapshot = lambda **kwargs: (_ for _ in ()).throw(ConnectionRefusedError())
-    monkeypatch.setattr(controls.subprocess, 'Popen', lambda *args, **kwargs: (_ for _ in ()).throw(OSError('not executable')))
-    result = command(controller, 'start')
+    launches = []
+    def fail_launch(*args, **kwargs):
+        launches.append(kwargs['env'])
+        raise OSError('not executable: DO-NOT-EXPOSE-EXCEPTION')
+    monkeypatch.setattr(controls.subprocess, 'Popen', fail_launch)
+    result = command(controller, action, values=submitted, extra={'savedRevision': original_revision, 'confirm': True})
     assert result['status'] == 'running'
     app.drain_until(lambda: result['status'] != 'running')
     assert result['status'] == 'failed'
+    assert result['ok'] is False and result['saved'] is True
     assert controller.notifications[-1]['level'] == 'error'
-    assert 'server.py' in result['message']
+    assert 'сохранены в config.env' in result['message'] and 'server.py' in result['message']
+    assert 'DO-NOT-EXPOSE' not in result['message']
+    saved = parse_env(config)
+    assert all(saved[key] == value for key, value in submitted.items())
+    saved['INFINI_GUI_PIPELINE_PRESET'] = app._pipeline_preset_from_config(saved, app.user_presets)
+    assert result['savedValues'] == saved
+    assert result['savedRevision'] == saved_config_revision(config) != original_revision
+    assert controller.snapshot()['savedValues'] == result['savedValues']
+    assert app.proc is None and app._applied_config_ack is None
+    assert app._server_lifecycle == 'unknown'
+    assert len(launches) == 1
+    # The failed-launch receipt is a valid disk baseline for an explicit retry.
+    retry = command(controller, action, 'retry', values=submitted,
+                    extra={'savedRevision': result['savedRevision'], 'confirm': True})
+    app.drain_until(lambda: retry['status'] != 'running')
+    assert retry['status'] == 'failed' and retry['saved'] is True
+    assert len(launches) == 2
+
+
+@pytest.mark.parametrize('failure', ['guard', 'save'])
+def test_start_failure_before_persistence_does_not_acknowledge_draft(studio, monkeypatch, failure):
+    app, controller, _server, config = studio
+    original = 'INFINI_PROMPT_STYLE=original\n'
+    config.write_text(original, encoding='utf-8')
+    if failure == 'guard':
+        app._fetch_health_snapshot = lambda **kwargs: {'ok': True, 'serverRoot': '/foreign', 'pid': 123}
+    else:
+        app._fetch_health_snapshot = lambda **kwargs: (_ for _ in ()).throw(ConnectionRefusedError())
+        monkeypatch.setattr(settings_gui_trace_state, 'write_env', lambda *args, **kwargs: (_ for _ in ()).throw(OSError('write denied')))
+    monkeypatch.setattr(controls.subprocess, 'Popen', lambda *args, **kwargs: pytest.fail('Must not launch before a successful save'))
+    result = command(controller, 'start', values={'INFINI_PROMPT_STYLE': 'unsaved draft'})
+    app.drain_until(lambda: result['status'] != 'running')
+    assert result['status'] == 'failed'
+    assert not result.get('saved')
+    assert 'savedValues' not in result and 'savedRevision' not in result
+    assert config.read_text(encoding='utf-8') == original
 
 
 def test_file_picker_is_authenticated_filtered_bounded_and_read_only(studio, tmp_path):
@@ -198,6 +309,54 @@ def test_stale_save_rejected_before_mutating_shared_state(studio):
     assert app.vars['INFINI_PROMPT_STYLE'].get() == 'controller-original'
     assert config.read_text() == 'INFINI_PROMPT_STYLE=other-tab-save\n'
     assert controller.action_results['command']['status'] == 'failed'
+
+
+@pytest.mark.parametrize('action', ['save', 'start', 'forceRestart'])
+@pytest.mark.parametrize('edit_removed', [False, True])
+def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatch, action, edit_removed):
+    from infini_local.desktop.settings_env import parse_env
+    from infini_local.desktop.settings_interactions import saved_config_revision
+
+    app, controller, _server, config = studio
+    config.write_text('INFINI_KEEP=saved value\n', encoding='utf-8')
+    app.data.update(INFINI_KEEP='old value', INFINI_REMOVED='stale removed value')
+    app._profile_extra_settings = {'INFINI_REMOVED': 'stale removed value'}
+    values = parse_env(config)
+    values['INFINI_KEEP'] = 'explicit new value'
+    if edit_removed:
+        values['INFINI_REMOVED'] = 'explicit restore'
+    app._fetch_health_snapshot = lambda **kwargs: (_ for _ in ()).throw(ConnectionRefusedError())
+    launches = []
+    def launch(*args, **kwargs):
+        launches.append(kwargs['env'])
+        return SimpleNamespace(pid=123456, poll=lambda: None)
+    monkeypatch.setattr(controls.subprocess, 'Popen', launch)
+    result = command(controller, action, values=values,
+                     extra={'savedRevision': saved_config_revision(config), 'confirm': True})
+    app.drain_until(lambda: result['status'] != 'running')
+    assert result['status'] == 'succeeded'
+    assert parse_env(config)['INFINI_KEEP'] == 'explicit new value'
+    for actual in (parse_env(config), app.data, app._profile_extra_settings, result['savedValues']):
+        if edit_removed:
+            assert actual['INFINI_REMOVED'] == 'explicit restore'
+        else:
+            assert 'INFINI_REMOVED' not in actual
+    if action != 'save':
+        assert len(launches) == 1
+        assert launches[0].get('INFINI_REMOVED') == ('explicit restore' if edit_removed else None)
+
+
+def test_partial_save_keeps_current_disk_retained_keys(studio):
+    from infini_local.desktop.settings_env import parse_env
+
+    app, controller, _server, config = studio
+    config.write_text('INFINI_KEEP=current disk value\n', encoding='utf-8')
+    app.data.update(INFINI_KEEP='stale adapter value', INFINI_REMOVED='stale removed value')
+    app._profile_extra_settings = {'INFINI_REMOVED': 'stale removed value'}
+    result = command(controller, 'save', values={'INFINI_PROMPT_STYLE': 'edited'})
+    assert result['status'] == 'succeeded'
+    assert parse_env(config)['INFINI_KEEP'] == 'current disk value'
+    assert 'INFINI_REMOVED' not in parse_env(config)
 
 
 def test_diagnostic_draft_does_not_mutate_other_tabs_launch_settings(studio):

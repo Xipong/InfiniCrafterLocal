@@ -348,7 +348,7 @@ dialog::backdrop{background:#252b2355;backdrop-filter:blur(2px)}
 .rail nav{flex-shrink:0}
 :root{--rail-width:0px}
 .app-shell{display:block}
-.rail{position:fixed;left:0;top:64px;width:250px;height:calc(100dvh - 64px);transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:15px 0 35px #20281d30}
+.rail{position:fixed;left:0;top:64px;width:250px;height:calc(100dvh - 64px);transform:translateX(-100%);visibility:hidden;transition:transform .2s;box-shadow:15px 0 35px #20281d30}
 .rail.is-open{transform:translateX(0);visibility:visible}
 .brand{font-size:23px}
 .brand-caption{font-size:8px}

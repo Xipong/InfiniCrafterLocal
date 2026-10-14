@@ -179,6 +179,11 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                     page.on('pageerror', lambda error: page_errors.append(str(error)))
                     page.on('request', lambda request: decisions.append(request.post_data_json) if request.method == 'POST' else None)
                     page.goto(server.url + '#configure')
+                    page.wait_for_selector('#defaults-summary', timeout=8000)
+                    assert 'параметр' in page.locator('#defaults-summary').inner_text()
+                    assert not page.locator('#utility-dialog').is_visible(), 'Recommendations must not interrupt initial load'
+                    assert config.read_bytes() == original
+                    page.locator('[data-ui="defaults-update"]').click()
                     page.wait_for_selector('#defaults-changes', timeout=8000)
                     row = page.locator('[data-defaults-key="INFINI_LLM_MAX_TOKENS"]')
                     assert row.count() == 1
@@ -329,10 +334,14 @@ def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
             menu.click()
             assert page.locator('.main-shell').evaluate('(element)=>element.inert')
             assert page.locator('.rail').get_attribute('aria-modal') == 'true'
+            focus_identity = '() => ({tag:document.activeElement?.tagName,id:document.activeElement?.id,classes:document.activeElement?.className})'
+            # The drawer retries focus once after the responsive/inert paint.
+            page.wait_for_function('() => document.querySelector(".nav-link.active") === document.activeElement', timeout=1000)
+            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), f'Drawer did not acquire focus: {page.evaluate(focus_identity)}'
             snapshot['home'] = {'state': 'Идёт генерация'}
             server.publish(snapshot)
             page.wait_for_function('() => document.querySelector("#generator-title").textContent === "Идёт генерация"')
-            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), 'Polling stole drawer focus'
+            assert page.locator('.nav-link.active').evaluate('(element)=>element===document.activeElement'), f'Polling stole drawer focus: {page.evaluate(focus_identity)}'
             assert page.locator('.main-shell').evaluate('(element)=>element.inert')
             page.locator('.mobile-exit').focus()
             page.keyboard.press('Tab')

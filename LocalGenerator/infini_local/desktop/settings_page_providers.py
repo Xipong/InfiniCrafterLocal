@@ -21,7 +21,7 @@ class ProvidersPageMixin:
         buttons.pack(fill="x", padx=10, pady=4)
         for text, action in (("Обновить текстовые модели", self.refresh_codex_text_catalog), ("Войти", self.codex_login), ("Сессия", self.codex_status), ("Выйти", self.codex_logout)):
             self._modern_button(buttons, text, action, variant="soft" if text.startswith("Обновить") else "ghost").pack(side="left", padx=(0, 6))
-        self.codex_catalog_var = tk.StringVar(value="При открытии вкладки с готовой сессией каталог обновляется сам; после входа нажми «Обновить».")
+        self.codex_catalog_var = tk.StringVar(value="Текстовый каталог ещё не загружен. Войди в Codex и обнови модели.")
         self._info_panel(codex_card, self.codex_catalog_var)
 
         other = self._card(parent, "Подключение к модели", "Показаны настройки выбранного источника. Остальные значения сохранены.", icon="⌁")
