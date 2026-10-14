@@ -6918,7 +6918,7 @@
             }
           },
           "kind": "referenced_entity_capability_params",
-          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity.",
+          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
           "param": "entity",
           "target": "same_target"
         },

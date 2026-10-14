@@ -125,6 +125,79 @@ def test_reference_repair_retargets_without_rewriting_valid_child(constrained_re
     assert doc == before
 
 
+def test_sole_reference_opens_only_its_registry_exact_dependency(constrained_reference):
+    doc = _doc()
+    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["id"] != "shed_nails"]
+    before = deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id": "nail_spawn", "paths": ["params.aim"]}]
+    assert not scope["create"]["entities"]["allowed"]
+    candidate = deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "nail_spawn"))
+    candidate["params"].update(aim="velocity", offsetPx=1)
+    filtered, audit = filter_repair_patch_scope(doc, {"note": "explicit registry dependency", "callsUpsert": [candidate]}, scope)
+    assert audit["ok"] and audit["ignoredChanges"]
+    repaired = apply_repair_patch(doc, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    expected = deepcopy(doc)
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == "nail_spawn")["params"]["aim"] = "velocity"
+    assert repaired == expected and doc == before
+
+
+@pytest.mark.parametrize("ambiguity", ["entity", "component", "source"])
+def test_ambiguous_reference_dependency_does_not_thaw_child(constrained_reference, ambiguity):
+    doc = _doc()
+    calls = doc["runtimeProgram"]["calls"]
+    calls[:] = [row for row in calls if row["id"] != "shed_nails"]
+    if ambiguity == "entity":
+        doc["runtimeProgram"]["entities"].append({"id": "nail", "kind": "child_projectile"})
+    else:
+        calls.append(deepcopy(next(row for row in calls if row["id"] == (
+            "nail_spawn" if ambiguity == "component" else "probe_reference"))))
+    before = deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert all(row["id"] != "nail_spawn" for row in scope["fieldPermissions"]["calls"])
+    assert doc == before
+
+
+@pytest.mark.parametrize("colliding_id", ["probe_reference", "nail", "nail_spawn"],
+    ids=["source_call", "referenced_child", "dependency_call"])
+def test_cross_namespace_reference_dependency_ids_do_not_thaw_child(constrained_reference, colliding_id):
+    doc = _doc()
+    program = doc["runtimeProgram"]
+    program["calls"] = [row for row in program["calls"] if row["id"] != "shed_nails"]
+    program["bindings"][0]["id"] = colliding_id
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert {row["code"] for row in report["errors"]} == {
+        "ambiguous_global_id", "reference_requirements_unsatisfied"}
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    child_paths = {path for row in scope["fieldPermissions"]["calls"]
+        if row["id"] == "nail_spawn" for path in row["paths"]}
+    assert "params.aim" not in child_paths
+    assert not child_paths.intersection({"", "params"})
+    assert doc == before
+
+
+@pytest.mark.parametrize("graph_edge", [False, True])
+def test_second_entity_reference_in_same_call_keeps_child_frozen(constrained_reference, monkeypatch, graph_edge):
+    params = dict(constrained_reference.params)
+    params["otherEntity"] = replace(params["entity"], reference=registry.ReferenceSpec(
+        "entity", ("free_projectile", "child_projectile"), False, graph_edge))
+    cap = replace(constrained_reference, params=MappingProxyType(params))
+    mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
+    for owner in (registry, validator, repair_scope):
+        monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", mapping)
+    doc = _doc()
+    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["id"] != "shed_nails"]
+    _probe(doc)["params"]["otherEntity"] = "nail"
+    errors = [row for row in validate_runtime_program(doc)["errors"]
+              if row["code"] == "reference_requirements_unsatisfied"]
+    assert len(errors) == 1
+    scope = build_runtime_repair_scope(doc, errors)
+    assert all(row["id"] != "nail_spawn" for row in scope["fieldPermissions"]["calls"])
+    assert scope["create"]["entities"]["allowed"]
+
+
 def test_reference_repair_can_create_complete_child_without_touching_existing_nodes(constrained_reference):
     doc = _doc()
     report = validate_runtime_program(doc)
