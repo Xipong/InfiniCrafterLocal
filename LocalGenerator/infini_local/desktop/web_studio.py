@@ -378,6 +378,20 @@ class StudioController:
                         'textModels': text_models},
         }
 
+    @staticmethod
+    def _write_text(widget, value):
+        # Browser drafts and their rollback may touch inactive provider fields.
+        # Tk silently ignores writes while the hidden Text widget is disabled.
+        previous_state = str(widget.cget('state'))
+        try:
+            if previous_state == 'disabled':
+                widget.configure(state='normal')
+            widget.delete('1.0', 'end')
+            widget.insert('1.0', value)
+        finally:
+            if previous_state == 'disabled':
+                widget.configure(state=previous_state)
+
     def _values(self, values, extra):
         for key, value in values.items():
             if key in self.app.vars:
@@ -386,8 +400,7 @@ class StudioController:
             elif key in self.app.text_widgets:
                 widget = self.app.text_widgets[key]
                 if widget.get('1.0', 'end-1c') != value:
-                    widget.delete('1.0', 'end')
-                    widget.insert('1.0', value)
+                    self._write_text(widget, value)
             else:
                 # The browser exposes retained extension settings explicitly.
                 # Keep collect() and profile snapshots on the same existing owner.
@@ -472,8 +485,7 @@ class StudioController:
                             variable.set(old_values[key])
                     for key, widget in self.app.text_widgets.items():
                         if key in old_values and widget.get('1.0', 'end-1c') != old_values[key]:
-                            widget.delete('1.0', 'end')
-                            widget.insert('1.0', old_values[key])
+                            self._write_text(widget, old_values[key])
                     self.app.data = old_data
                     self.app._profile_extra_settings = old_extras
                     self.app.preset_var.set(old_preset)
@@ -544,8 +556,7 @@ class StudioController:
                         app.vars[key].set(value)
                     elif key in app.text_widgets:
                         widget = app.text_widgets[key]
-                        widget.delete('1.0', 'end')
-                        widget.insert('1.0', value)
+                        self._write_text(widget, value)
                     elif key in app.__dict__.get('_profile_extra_settings', {}):
                         app._profile_extra_settings[key] = value
             finally:

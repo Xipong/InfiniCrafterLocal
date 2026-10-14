@@ -573,3 +573,99 @@ def test_closed_studio_rejects_actions_during_receipt_grace(studio):
         urllib.request.urlopen(request)
     assert closed.value.code == 409
     assert server.commands.empty()
+
+
+@pytest.mark.parametrize('initial_state', ['disabled', 'normal'])
+@pytest.mark.parametrize('fail_insert', [False, True])
+def test_browser_text_updates_restore_widget_state(studio, initial_state, fail_insert):
+    app, controller, _server, _config = studio
+
+    class TextWidget:
+        state = initial_state
+        value = 'old draft'
+
+        def cget(self, name):
+            assert name == 'state'
+            return self.state
+
+        def configure(self, *, state):
+            self.state = state
+
+        def get(self, *args):
+            return self.value
+
+        def delete(self, *args):
+            if self.state != 'disabled':
+                self.value = ''
+
+        def insert(self, index, value):
+            if fail_insert:
+                raise RuntimeError('text write failed')
+            if self.state != 'disabled':
+                self.value = value
+
+    widget = TextWidget()
+    key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
+    app.vars.pop(key, None)
+    app.text_widgets[key] = widget
+    value = '<lora:a:0.2>\n<lora:b:0.3>'
+    if fail_insert:
+        with pytest.raises(RuntimeError, match='text write failed'):
+            controller._values({key: value}, {})
+    else:
+        controller._values({key: value}, {})
+        assert widget.value == value
+    assert widget.state == initial_state
+
+
+@pytest.mark.parametrize('validation_fails', [False, True])
+def test_validate_restores_disabled_text_draft(studio, monkeypatch, validation_fails):
+    app, controller, _server, config = studio
+
+    class DisabledText:
+        state = 'disabled'
+        value = '<lora:shared:0.1>'
+
+        def cget(self, name):
+            assert name == 'state'
+            return self.state
+
+        def configure(self, *, state):
+            self.state = state
+
+        def get(self, *args):
+            return self.value
+
+        def delete(self, *args):
+            if self.state != 'disabled':
+                self.value = ''
+
+        def insert(self, index, value):
+            if self.state != 'disabled':
+                self.value = value
+
+    key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
+    widget = DisabledText()
+    app.vars.pop(key, None)
+    app.text_widgets[key] = widget
+    original = widget.value
+    submitted = '<lora:browser:0.2>\n<lora:draft:0.3>'
+    observed = []
+
+    def validate():
+        observed.append(widget.value)
+        assert widget.state == 'disabled'
+        if validation_fails:
+            raise ValueError('validation rejected draft')
+
+    monkeypatch.setattr(app, 'validate_paths', validate)
+    if validation_fails:
+        with pytest.raises(ValueError, match='validation rejected draft'):
+            command(controller, 'validate', values={key: submitted})
+    else:
+        assert command(controller, 'validate', values={key: submitted})['ok']
+    assert observed == [submitted]
+    assert widget.value == original
+    assert widget.state == 'disabled'
+    assert app._current_profile_settings()[key] == original
+    assert not config.exists()
