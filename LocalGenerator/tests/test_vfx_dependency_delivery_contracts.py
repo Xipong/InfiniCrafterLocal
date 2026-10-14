@@ -34,7 +34,7 @@ def visual_data(mode: str) -> dict:
         entity.update(visualProjectRef="entity", prompt="one exact separate amber orb", silhouette="orb", visualIdentity="amber orb", preferredCanvasSize=64, renderSizePx=24, forwardAngleDegrees=0)
     kit = {"schema": "infini.visual-kit.runtime-entities.v2", "item": item,
            "entities": [{"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
-                         **{key: item[key] for key in ("prompt", "silhouette", "visualIdentity")}, "scale": 1.0}, entity],
+                         "scale": 1.0}, entity],
            "animationPlan": "Keep accepted movement, do not add gameplay."}
     accepted, errors = _validate_kit(kit, ["item", "orb"], "item")
     assert accepted is not None, errors

@@ -54,7 +54,7 @@ def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None =
     for entity in data["runtimeProgram"]["entities"]:
         if entity["id"] == item_id:
             rows.append(dict(entityId=item_id, assetMode="baked_sprite", visualProjectRef="item",
-                             prompt=item_art, silhouette=item["silhouette"], visualIdentity=item["visualIdentity"], scale=1.0))
+                             scale=1.0))
         elif entity["id"] == "nail":
             rows.append(dict(entityId="nail", assetMode="baked_sprite", visualProjectRef="entity", prompt=nail_art,
                              silhouette="one continuous shaft, one tip, two vanes", visualIdentity="wood, steel, feathers",

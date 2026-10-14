@@ -94,9 +94,9 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
         branches = dynamic["responseSchema"]["properties"][key]["items"][union]
         for branch in branches:
             assert branch["properties"]["scale"] == {"$ref": "#/$defs/entityScale"}
-        for branch in branches[:2]:
-            for field in ("prompt", "silhouette", "visualIdentity"):
-                assert branch["properties"][field] == {"$ref": "#/$defs/entity_" + field}
+        for field in ("prompt", "silhouette", "visualIdentity"):
+            assert field not in branches[0]["properties"]
+            assert branches[1]["properties"][field] == {"$ref": "#/$defs/entity_" + field}
         assert dynamic["responseSchema"]["properties"]["animationPlan"] == {"$ref": "#/$defs/animationPlan"}
         ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
         canonical = (visual._visual_repair_schema if stage.endswith("repair") else visual._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
