@@ -161,19 +161,23 @@ budget metadata; compiler проецирует их в opcode 8 и выдаёт 
 Пропущенные choices, null, неверный enum, тип или диапазон дают RED.
 Сохранённые opcode 1…7 не получают новый selection protocol автоматически.
 
-Frozen Repair может исправить invalid call/reference или создать ровно
-недостающую совместимую зависимость по scope. Он не вправе менять валидный
-spawn существующей child ради удобства нового call. Проверка referenced
-capability params общая и декларативная, без маршрутизации по family/event
-имени в Repair.
+Frozen Repair различает shared child и exact dependency единственного ошибочного
+consumer. При независимом binding, primary identity или другой typed reference
+существующая child остаётся frozen; исправляется reference либо явно создаётся
+полная совместимая child. Retarget/create принимается только при валидности
+оставшегося frozen graph.
 
-Retarget/create проходит только если остальной frozen graph остаётся валиден.
-Если old child был достижим только из ошибочной ссылки, её замена оставляет
-новую ошибку `unreachable_entity`: targeted Repair отказывает. Он не удаляет
-валидную child, не добавляет новый producer для её сохранения и не отключает
-общую проверку достижимости. Успешный retarget/create проверяется для child с
-независимым существующим producer; изменение всего связанного graph требует
-согласованного полного Author draft.
+Если единственная incoming typed graph reference принадлежит ошибочному call,
+а child не primary и не используется binding, Repair открывает только конфликтующие
+params существующей capability, перечисленные в registry exact requirement.
+Например, `configure_spawn.params.aim/position/offsetPx` — только несовпадающие
+leaves. Уже совместимые значения, скорость, урон, movement, lifetime, IDs, kind
+и исходная reference остаются frozen; создание замены не предлагается, чтобы
+не осиротить старую child. Никакое значение не вставляется автоматически:
+модель должна явно передать исправленные leaves, затем проходят прежние
+validator/compiler/wire gates. Удаление отдельной valid capability этим
+parameter-only путём не разрешается. Логика общая по registry requirements,
+без маршрутизации по family/event имени.
 
 Композиция с A11 использует общий transform/exact-NPC-exclusion helper.
 ExtraAI writer версии 4 и reader версий 2/3/4 сохраняют общий v3 exclusion

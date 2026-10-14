@@ -142,15 +142,15 @@ def test_saved_wire_cannot_invent_any_missing_emission_parameter(name):
     ("aim", "cursor"), ("aim", "facing"), ("position", {"at": "owner_center"}),
     ("position", {"at": "cursor"}), ("offsetPx", 1),
 ])
-def test_reference_refuses_incompatible_child_without_rewriting_it(name, value):
-    doc = _doc(); _child_spawn(doc)["params"][name] = value
+def test_reference_diagnoses_exact_exclusive_child_dependency_without_rewriting_it(name, value):
+    doc = _doc(); spawn = _child_spawn(doc); spawn["params"][name] = value
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": "witness_call", "paths": ["params.entity"]}]
-    assert _child_spawn(doc)["id"] not in scope["mutable"]["callIds"]
-    assert "spawn_over_target" not in scope["create"]["calls"]["allowedFns"]
+    assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params." + name]}]
+    assert not scope["create"]["entities"]["allowed"]
+    assert not scope["create"]["calls"]["allowed"]
     assert doc == before
     wire = compile_runtime_program(_doc()); wire.pop("runtimeContract")
     child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == "witness_child")
@@ -211,9 +211,11 @@ def test_reference_repair_does_not_hide_new_orphans_by_deleting_frozen_child():
     child, calls = _copy_child(doc, "selected")
     candidate = deepcopy(_call(doc)); candidate["params"]["entity"] = "selected"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    _, report = filter_repair_patch_scope(doc, {"note": "explicit new child", "entitiesUpsert": [child], "callsUpsert": [candidate, *calls]}, scope)
+    filtered, report = filter_repair_patch_scope(doc, {"note": "explicit new child", "entitiesUpsert": [child], "callsUpsert": [candidate, *calls]}, scope)
     assert not report["ok"]
-    assert any(row.get("actual", {}).get("code") == "unreachable_entity" for row in report["errors"])
+    assert not scope["create"]["entities"]["allowed"]
+    # The impossible replacement is refused before it can orphan the old child.
+    assert all(row["id"] != "selected" for row in filtered["entitiesUpsert"])
     assert _child_spawn(doc)["params"]["aim"] == "cursor"
 
 

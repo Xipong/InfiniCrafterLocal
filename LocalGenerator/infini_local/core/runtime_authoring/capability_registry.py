@@ -2848,7 +2848,7 @@ def _requirements_for(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             RequirementSpec("event_available", param="when", message="The source entity must actually emit the selected hit event."),
             RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
                 equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
-                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; keep an incompatible existing child frozen and select/create a compatible entity."),
+                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; Repair permissions distinguish an exclusive dependency from an independently used child."),
             RequirementSpec("referenced_entity_without_capability", param="entity", capability="spawn_over_target",
                 message="The exact target-anchor emission cannot reference a child carrying a second origin/telegraph adapter."),
         )
