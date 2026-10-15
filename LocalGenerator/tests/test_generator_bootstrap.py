@@ -100,9 +100,8 @@ def test_gui_bootstrap_opens_web_studio_not_legacy_tk_window(tmp_path, monkeypat
     module = load_bootstrap()
     monkeypatch.setattr(module, "ROOT", tmp_path)
     monkeypatch.setattr(module, "prepare_runtime", lambda *args, **kwargs: Path(sys.executable))
-    # CI may not include Tk; exercise dispatch independently of optional desktop package.
-    from types import ModuleType
-    monkeypatch.setitem(sys.modules, "tkinter", ModuleType("tkinter"))
+    # The browser launcher must work even when Tcl/Tk is not installed.
+    monkeypatch.setitem(sys.modules, "tkinter", None)
     calls = []
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kwargs: calls.append(command) or subprocess.CompletedProcess(command, 0))
     assert module.main(["gui"]) == 0

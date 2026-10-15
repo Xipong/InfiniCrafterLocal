@@ -9,8 +9,9 @@ HTTP/combine orchestration.
 
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+from infini_local.core.config_bootstrap import DATA_DIR
 from infini_local.core.env_utils import env_first, env_str
 
 
@@ -97,31 +98,23 @@ def load_jsonl_index(path: Path, key_fields: tuple[str, ...]) -> tuple[list[dict
     return rows, by_type, by_full
 
 
-def runtime_item_lookup(
-    item: dict[str, Any],
-    by_type: dict[Any, dict[str, Any]],
-    by_name: dict[str, dict[str, Any]],
-    *,
-    item_field: Callable[[dict[str, Any], str, Any], Any],
-) -> dict[str, Any]:
-    t = item_field(item, "type", None)
-    if t is not None:
-        try:
-            found = by_type.get(int(t))
-            if isinstance(found, dict):
-                return found
-        except Exception:
-            pass
-    source = str(item_field(item, "sourceMod", "Terraria") or "Terraria").lower()
-    internal = str(item_field(item, "internalName", "") or "").lower()
-    return by_name.get(f"{source}/{internal}") or by_name.get(internal) or {}
-
-
-def runtime_projectile_lookup(type_id: Any, by_type: dict[Any, dict[str, Any]]) -> dict[str, Any]:
+def runtime_projectile_lookup(type_id: Any) -> dict[str, Any]:
     try:
-        found = by_type.get(int(type_id))
+        found = RUNTIME_PROJECTILES_BY_TYPE.get(int(type_id))
         if isinstance(found, dict):
             return found
     except Exception:
         pass
     return {}
+
+
+# One startup snapshot for the loaded Terraria/tModLoader mod set. These optional
+# /infinidump files are factual input, never bundled personal data or authoring policy.
+ITEMS_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
+    DATA_DIR, "items_runtime_dump.jsonl", "INFINI_ITEMS_RUNTIME_DUMP", "INFINI_ITEMS_DUMP",
+)
+PROJECTILES_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
+    DATA_DIR, "projectiles_runtime_dump.jsonl", "INFINI_PROJECTILES_RUNTIME_DUMP", "INFINI_PROJECTILES_DUMP",
+)
+RUNTIME_ITEMS = load_jsonl_index(ITEMS_RUNTIME_DUMP_PATH, ("sourceMod", "internalName"))[0]
+RUNTIME_PROJECTILES_BY_TYPE = load_jsonl_index(PROJECTILES_RUNTIME_DUMP_PATH, ("sourceMod", "internalName"))[1]

@@ -125,3 +125,27 @@ def test_stale_conflict_review_requires_reviewing_latest_disk(browser_studio):
     assert command['extra']['savedRevision'] == 'disk-c'
     assert command['values']['INFINI_TERRARIA_PORT'] == '7799'
     assert command['values']['INFINI_PORT'] == '18877'
+
+
+def test_prompt_reasoning_exclude_stays_inactive_after_unrelated_edit(browser_studio):
+    page, server, snapshot = browser_studio
+    values = dict(snapshot['values'], INFINI_LLM_PROVIDER='openrouter',
+                  INFINI_LLM_REASONING_MODE='prompt_light', INFINI_LLM_REASONING_EXCLUDE='1')
+    snapshot.update(values=values, savedValues=values)
+    snapshot['fields'] = [{'key': key, 'options': [], 'page': 'configure', 'advanced': False,
+                          'disabled': 'API reasoning only' if key == 'INFINI_LLM_REASONING_EXCLUDE' else ''}
+                         for key in values]
+    next(field for field in snapshot['fields'] if field['key'] == 'INFINI_LLM_REASONING_MODE')['options'] = ['prompt_light', 'high']
+    server.publish(snapshot)
+    page.goto(server.url + '#providers')
+    row = page.locator('[data-field-row="INFINI_LLM_REASONING_EXCLUDE"]')
+    # Inactive fields remain editable but are grouped and annotated honestly.
+    expect = pytest.importorskip('playwright.sync_api').expect
+    expect(row.locator('.field-note')).to_have_count(1)
+    page.locator('[data-route="multiplayer"]').click()
+    page.locator('#field-INFINI_PORT').fill('6060')
+    page.locator('[data-route="providers"]').click()
+    expect(row.locator('.field-note')).to_have_count(1)
+    page.locator('#field-INFINI_LLM_REASONING_MODE').select_option('high')
+    expect(row.locator('.field-note')).to_have_count(0)
+    assert page.locator('#field-INFINI_LLM_REASONING_EXCLUDE').input_value() == '1'

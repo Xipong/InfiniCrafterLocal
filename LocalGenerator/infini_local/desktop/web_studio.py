@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-"""Loopback-only browser Studio and main-thread adapter for the desktop controller.
-
-HTTP workers exchange immutable JSON snapshots and queued commands only. Existing
-safe restart, profile, OAuth and trace owners stay on the Tk main thread.
-"""
+"""Loopback-only HTTP transport and serialized commands for the browser Studio."""
 
 import argparse
 import copy
@@ -22,8 +18,6 @@ import time
 from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
-from infini_local.desktop.tk_compat import tk
-from infini_local.desktop.settings_widgets import write_text_value
 from infini_local.desktop.settings_interactions import saved_config_revision
 
 ACTIONS = frozenset({
@@ -40,7 +34,7 @@ class StudioServer:
     def __init__(self, assets: Path, *, port: int = 0):
         self.assets = assets
         self.token = secrets.token_urlsafe(32)
-        from infini_local.desktop.settings_gui_theme import ROOT
+        from infini_local.desktop.settings_paths import ROOT
         self.file_root = ROOT
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=32)
         self.accepting_actions = True
@@ -262,7 +256,7 @@ class StudioServer:
 
 
 class StudioController:
-    """Map browser commands to existing settings callbacks without worker Tk access."""
+    """Apply browser commands on the Python control loop and publish JSON state."""
     def __init__(self, app, server: StudioServer):
         self.app, self.server = app, server
         self.fields = self._fields()
@@ -275,42 +269,8 @@ class StudioController:
         self._saved_values: dict | None = None
 
     def _fields(self):
-        from infini_local.desktop.settings_gui_fields import _BASIC_FIELDS
-        fields = []
-        pages = self.app.pages
-        for key, widgets in self.app.field_widgets.items():
-            page = 'configure'
-            cursor = widgets[0]
-            while cursor is not None:
-                found = next((name for name, frame in pages.items() if cursor is frame or cursor is frame.inner), None)
-                if found:
-                    page = found
-                    break
-                cursor = getattr(cursor, 'master', None)
-            label, options = key.removeprefix('INFINI_').replace('_', ' ').title(), []
-            for widget in widgets:
-                try:
-                    text = widget.cget('text')
-                    if text:
-                        label = text
-                        break
-                except (AttributeError, TypeError, tk.TclError):
-                    continue
-            for widget in widgets:
-                try:
-                    options = list(widget.cget('values'))
-                    if options:
-                        break
-                except (AttributeError, TypeError, tk.TclError):
-                    continue
-            if not options and key in self.app.vars and any(widget.winfo_class() == 'TCheckbutton' for widget in widgets):
-                options = ['1', '0']
-            secret = any(widget in self.app.secret_entries for widget in widgets)
-            fields.append({'key': key, 'label': label, 'help': self.app.field_base_hints.get(key, ''),
-                           'options': options, 'secret': secret, 'page': page,
-                           'advanced': key not in _BASIC_FIELDS and not key.startswith('INFINI_LLM_POOL_'),
-                           'multiline': key in self.app.text_widgets})
-        return fields
+        from infini_local.desktop.settings_fields import FIELDS
+        return copy.deepcopy(FIELDS)
 
     def snapshot(self):
         from itertools import islice
@@ -318,12 +278,11 @@ class StudioController:
         from infini_local.desktop.settings_schema import DEFAULTS, FIELD_HELP, PRESETS
         from infini_local.desktop.settings_defaults import defaults_offer
         from infini_local.desktop.settings_env import parse_env
-        from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
-        from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
+        CONFIG_PATH, EXAMPLE_PATH = self.app.config_path, self.app.example_path
         from infini_local.services.codex_auth import auth_status
         from infini_local.services.codex_text_backend import EFFORTS
         values = self.app._current_profile_settings()
-        values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
+        values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
         # Controller values include unsaved edits from non-saving actions. A fresh
         # browser must compare them to disk, never adopt them as a saved baseline.
         saved_error = ''
@@ -332,7 +291,7 @@ class StudioController:
             # Match SettingsGui startup: a fresh install loads the example.
             saved_values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
             self._saved_values = dict(saved_values)
-            saved_revision = saved_config_revision(CONFIG_PATH)
+            saved_revision = saved_config_revision(CONFIG_PATH, example_path=self.app.example_path)
         except (OSError, ValueError, UnicodeError) as exc:
             # A transient read failure must not kill polling or certify a draft.
             saved_values = dict(self._saved_values or DEFAULTS)
@@ -346,13 +305,11 @@ class StudioController:
         saved_values['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(saved_values, self.app.user_presets)
         saved_lan = saved_values.get('INFINI_HOST') == '0.0.0.0' or bool(saved_values.get('INFINI_ASSET_PUBLIC_BASE_URL'))
         fields = [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], '')) for field in self.fields]
+        # Keep generic reasoning choices in the shared snapshot. Each browser
+        # selects Codex catalog efforts for its own unsaved provider/model draft.
         for field in fields:
             if field['key'] == 'INFINI_CODEX_LLM_MODEL':
-                field['options'] = list(self.app.codex_model_combo.cget('values'))
-            elif field['key'] == 'INFINI_LLM_REASONING_MODE':
-                field['options'] = list(self.app.codex_reasoning_combo.cget('values'))
-            elif field['key'] == 'INFINI_CODEX_VISUAL_REASONING':
-                field['options'] = list(self.app.codex_visual_reasoning_combo.cget('values'))
+                field['options'] = list(self.app.codex_models)
         # The catalog owner already validates/redacts model IDs. Publish only
         # bounded text-model metadata, so each tab can describe its own draft
         # selection without mutating the shared controller or querying providers.
@@ -361,45 +318,27 @@ class StudioController:
                          'defaultEffort': model.default_effort if model.default_effort in EFFORTS else ''}
             for model in islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256)
         }
+        self.app.refresh_home()
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,
             'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
             'fields': fields, 'presets': PRESETS,
-            'userPresets': self.app.user_presets, 'status': saved_error or self.app.status_var.get(),
-            'activity': self.app.activity_var.get(), 'appliedConfig': self.app.applied_config_var.get(),
-            'home': {'state': self.app.home_state_var.get(), 'detail': self.app.home_detail_var.get(),
-                     'config': self.app.home_config_var.get()},
-            'traceStatus': self.app.trace_status_var.get(),
+            'userPresets': self.app.user_presets, 'status': saved_error or self.app.status,
+            'activity': self.app.activity, 'appliedConfig': self.app.applied_config,
+            'home': {'state': self.app.home_state, 'detail': self.app.home_detail,
+                     'config': self.app.home_config},
+            'traceStatus': self.app.trace_status,
             'notifications': self.notifications, 'actionResults': list(self.action_results.values()),
-            'trace': {key: widget.get('1.0', 'end-1c') for key, widget in self.app.trace_texts.items()},
+            'trace': dict(self.app.trace),
             'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
-            'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.radmin_enabled.get()),
-            'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog_var.get(),
-                        'images': self.app.codex_image_account_var.get(), 'authenticated': auth_status()['authenticated'],
+            'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
+            'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
+                        'images': self.app.codex_image_account, 'authenticated': auth_status()['authenticated'],
                         'textModels': text_models},
         }
 
     def _values(self, values, extra):
-        for key, value in values.items():
-            if key in self.app.vars:
-                if self.app.vars[key].get() != value:
-                    self.app.vars[key].set(value)
-            elif key in self.app.text_widgets:
-                widget = self.app.text_widgets[key]
-                if widget.get('1.0', 'end-1c') != value:
-                    write_text_value(widget, value)
-            else:
-                # The browser exposes retained extension settings explicitly.
-                # Keep collect() and profile snapshots on the same existing owner.
-                self.app.data[key] = value
-                self.app.__dict__.setdefault('_profile_extra_settings', {})[key] = value
-                if key == 'INFINI_GUI_PIPELINE_PRESET':
-                    self.app.preset_var.set(value)
-        if 'lanEnabled' in extra:
-            self.app.radmin_enabled.set(bool(extra['lanEnabled']))
-        self.app._refresh_visibility()
-        if 'INFINI_CODEX_LLM_MODEL' in values:
-            self.app._update_codex_efforts()
+        self.app.update_values(values, lan_enabled=extra.get('lanEnabled'))
 
     def _notify(self, level, title, message):
         self.notifications.append({'id': secrets.token_hex(8), 'level': level, 'title': title, 'message': message,
@@ -417,14 +356,14 @@ class StudioController:
             receipt['result'] = result
         if not self.app._gui_closed and receipt['action'] in {'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset', 'save', 'start', 'forceRestart'}:
             receipt['values'] = self.app._current_profile_settings()
-            receipt['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset_var.get()
-            receipt['lanEnabled'] = bool(self.app.radmin_enabled.get())
+            receipt['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
+            receipt['lanEnabled'] = bool(self.app.lan_enabled)
         if (ok or saved) and receipt['action'] in {'save', 'start', 'forceRestart', 'acceptDefaults'}:
             from infini_local.desktop.settings_env import parse_env
-            from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
+            CONFIG_PATH = self.app.config_path
             receipt['savedValues'] = parse_env(CONFIG_PATH)
             receipt['savedValues']['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(receipt['savedValues'], self.app.user_presets)
-            receipt['savedRevision'] = saved_config_revision(CONFIG_PATH)
+            receipt['savedRevision'] = saved_config_revision(CONFIG_PATH, example_path=self.app.example_path)
             receipt['saved'] = True
         self.last_action = receipt
         while len(self.action_results) > 128:
@@ -441,77 +380,69 @@ class StudioController:
         self.app._studio_command_id = identifier
         self.app._studio_expected_config_revision = command.get('extra', {}).get('savedRevision')
         transient = command['action'] in {'health', 'trace', 'validate', 'clearTrace', 'openCache', 'stop', 'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset'}
-        old_values = self.app._current_profile_settings() if transient else None
-        old_data = copy.deepcopy(self.app.data) if transient else None
-        old_extras = copy.deepcopy(self.app.__dict__.get('_profile_extra_settings', {})) if transient else None
-        old_preset = self.app.preset_var.get() if transient else None
-        old_lan = self.app.radmin_enabled.get() if transient else None
-        old_profile = {key: copy.deepcopy(self.app.__dict__[key]) for key in ('_profile_baseline', '_profile_baseline_label') if key in self.app.__dict__} if transient else {}
+        draft = None
+        if transient:
+            draft = (dict(self.app.values), self.app.preset, self.app.lan_enabled,
+                     copy.deepcopy(self.app._profile_baseline), self.app._profile_baseline_label)
         try:
             outcome = self._apply(command)
             pending = any(task.get('command_id') == identifier or task.get('pending') and task['pending'][2] == identifier for task in self.app._gui_tasks.values())
             pending = pending or identifier in self.app.__dict__.get('_studio_async_ids', set())
             if not pending:
                 outcome = outcome if isinstance(outcome, dict) else {}
-                self._finish_action(identifier, outcome.get('ok', True), outcome.get('message', self.app.status_var.get() if not self.app._gui_closed else 'Студия закрыта.'),
+                self._finish_action(identifier, outcome.get('ok', True), outcome.get('message', self.app.status if not self.app._gui_closed else 'Студия закрыта.'),
                                     result=outcome.get('result'), saved=outcome.get('saved', False))
-        except (OSError, ValueError, AttributeError, RuntimeError, tk.TclError) as exc:
+        except (OSError, ValueError, AttributeError, RuntimeError) as exc:
             self._finish_action(identifier, False, str(exc))
             raise
         finally:
             self.app._studio_command_id = None
             self.app._studio_expected_config_revision = None
-            if transient:
-                # Diagnostic operations capture immutable inputs before scheduling
-                # workers. Their draft must not become another tab's launch state.
-                guard = self.app.__dict__.get('_profile_edit_guard', False)
-                self.app._profile_edit_guard = True
-                try:
-                    for key, variable in self.app.vars.items():
-                        if key in old_values and variable.get() != old_values[key]:
-                            variable.set(old_values[key])
-                    for key, widget in self.app.text_widgets.items():
-                        if key in old_values and widget.get('1.0', 'end-1c') != old_values[key]:
-                            write_text_value(widget, old_values[key])
-                    self.app.data = old_data
-                    self.app._profile_extra_settings = old_extras
-                    self.app.preset_var.set(old_preset)
-                    self.app.radmin_enabled.set(old_lan)
-                    for key in ('_profile_baseline', '_profile_baseline_label'):
-                        if key in old_profile:
-                            self.app.__dict__[key] = old_profile[key]
-                        else:
-                            self.app.__dict__.pop(key, None)
-                    self.app._refresh_visibility()
-                finally:
-                    self.app._profile_edit_guard = guard
+            if draft is not None:
+                # Diagnostics and draft transforms return their captured result,
+                # but do not replace another browser tab's shared launch state.
+                (self.app.values, self.app.preset, self.app.lan_enabled,
+                 self.app._profile_baseline, self.app._profile_baseline_label) = draft
+                self.app._refresh_visibility()
 
     def _apply(self, command):
         from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX, save_user_preset
-        from infini_local.desktop.settings_gui_trace_state import CONFIG_PATH
+        CONFIG_PATH = self.app.config_path
         app = self.app
         action, extra = command['action'], command.get('extra', {})
+        if action == 'forceRestart' and extra.get('confirm') is not True:
+            raise ValueError('Explicit confirmation is required to interrupt active generation')
+        if action in {'start', 'forceRestart'} and 'server-action' in app._gui_tasks:
+            # Refuse before adopting another tab's draft: the in-flight guard
+            # still compares and launches from the shared control-loop state.
+            return (app.start_server() if action == 'start' else
+                    app.force_restart_server(confirmed=extra.get('confirm') is True))
         if action in {'save', 'start', 'forceRestart'} and 'savedRevision' in extra:
-            if not extra['savedRevision'] or extra['savedRevision'] != saved_config_revision(CONFIG_PATH):
+            if not extra['savedRevision'] or extra['savedRevision'] != saved_config_revision(CONFIG_PATH, example_path=self.app.example_path):
                 raise ValueError('Конфигурация на диске изменилась в другой вкладке или программе. Черновик сохранён в этой вкладке. Проверь новые сохранённые значения перед повторным сохранением или запуском.')
         if action in {'save', 'start', 'forceRestart'}:
             from infini_local.desktop.settings_env import parse_env
             from infini_local.desktop.settings_schema import DEFAULTS
-            from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
+            EXAMPLE_PATH = app.example_path
             # Retained extension keys may have been removed on disk since this
             # adapter loaded. Keep current disk keys and explicit draft edits,
             # but never resurrect an absent key from the adapter's stale cache.
             saved = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
-            retained = set(DEFAULTS) | set(app.vars) | set(app.text_widgets) | set(saved) | set(command.get('values', {}))
-            for cached in (app.data, app.__dict__.get('_profile_extra_settings', {})):
-                for key in set(cached) - retained:
-                    del cached[key]
+            retained = set(DEFAULTS) | set(saved) | set(command.get('values', {}))
+            for key in set(app.values) - retained:
+                del app.values[key]
+            # Extension values belong to the latest disk snapshot unless this
+            # command explicitly edits them. Do not overwrite another program's
+            # update using the controller's startup cache.
+            for key, value in saved.items():
+                if key not in DEFAULTS and key not in command.get('values', {}):
+                    app.values[key] = value
         if action == 'clearTrace' and extra.get('confirm') is not True:
             raise ValueError('Подтверди очистку журнала в браузере.')
         if action in {'health', 'trace', 'clearTrace', 'openCache', 'stop'}:
             from infini_local.desktop.settings_env import parse_env
             from infini_local.desktop.settings_schema import DEFAULTS
-            from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
+            EXAMPLE_PATH = app.example_path
             owned = app.proc is not None and app.proc.poll() is None
             saved = app.__dict__.get('_owned_launch_settings') if owned else None
             if saved is None:
@@ -532,45 +463,30 @@ class StudioController:
         if action in {'acceptDefaults', 'declineDefaults'}:
             from infini_local.desktop.settings_defaults import decide_defaults
             changed = decide_defaults(CONFIG_PATH, extra.get('revision'), accept=action == 'acceptDefaults')
-            # No collect/save or whole-profile baseline capture: unrelated native
-            # and browser drafts remain unsaved, including the selected preset.
-            guard = app.__dict__.get('_profile_edit_guard', False)
-            app._profile_edit_guard = True
-            try:
-                for key, value in changed.items():
-                    app.data[key] = value
-                    if key in app.vars:
-                        app.vars[key].set(value)
-                    elif key in app.text_widgets:
-                        widget = app.text_widgets[key]
-                        write_text_value(widget, value)
-                    elif key in app.__dict__.get('_profile_extra_settings', {}):
-                        app._profile_extra_settings[key] = value
-            finally:
-                app._profile_edit_guard = guard
-            app.status_var.set('Рекомендованные изменения записаны в config.env.' if changed else
-                               'Рекомендации отклонены. config.env не изменён.')
+            # Apply only the explicitly reviewed recommendation keys.
+            app.values.update(changed)
+            app._refresh_visibility()
+            app.status = ('Рекомендованные изменения записаны в config.env.' if changed else
+                          'Рекомендации отклонены. config.env не изменён.')
         elif action in callbacks:
             return callbacks[action]()
         elif action == 'clearTrace':
             return app.clear_trace_files(confirmed=True)
         elif action == 'forceRestart':
-            if extra.get('confirm') is not True:
-                raise ValueError('Explicit confirmation is required to interrupt active generation')
-            return app._request_server_action(restart=True, force=True)
+            return app.force_restart_server(confirmed=extra.get('confirm') is True)
         elif action == 'applyPreset':
-            app.preset_var.set(str(extra.get('name', CUSTOM_PRESET)))
+            app.preset = str(extra.get('name', CUSTOM_PRESET))
             app.apply_preset()
         elif action == 'savePreset':
             name = str(extra.get('name', '')).strip()
             app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings())
-            app.preset_var.set(USER_PRESET_PREFIX + name)
+            app.preset = USER_PRESET_PREFIX + name
             app._capture_profile_baseline()
-            app.status_var.set(f'Профиль «{name}» сохранён. config.env не изменён.')
+            app.status = f'Профиль «{name}» сохранён. config.env не изменён.'
         elif action == 'browse':
             raise ValueError('Выбери путь в браузерном списке файлов или введи его вручную.')
         elif action == 'help':
-            from infini_local.desktop.settings_gui_theme import ROOT
+            from infini_local.desktop.settings_paths import ROOT
             if not (ROOT.parent / 'START_HERE.html').is_file():
                 raise ValueError('Локальная инструкция не найдена.')
             return {'ok': True, 'message': 'Локальная инструкция готова.', 'result': {
@@ -610,16 +526,15 @@ class StudioController:
                 break
             try:
                 self.apply(command)
-            except (OSError, ValueError, AttributeError, RuntimeError, tk.TclError) as exc:
-                self.app.status_var.set(f'Не удалось выполнить действие: {exc}')
+            except (OSError, ValueError, AttributeError, RuntimeError) as exc:
+                self.app.status = f'Не удалось выполнить действие: {exc}'
                 # apply() already retained a terminal receipt for this command.
                 pass
         if not self.app._gui_closed:
             self.server.publish(self.snapshot())
             self.app.after(150, self.tick)
         else:
-            # Closing destroys Tk state; publish the final receipt from the last
-            # immutable snapshot instead of touching dead widgets.
+            # Publish final receipts without querying closed lifecycle state.
             with self.server._lock:
                 final_state = copy.deepcopy(self.server._state)
             final_state.update(lastAction=self.last_action, actionResults=list(self.action_results.values()), closed=True)
@@ -631,13 +546,12 @@ def main(argv=None):
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--port', type=int, default=0)
     args = parser.parse_args(argv)
-    from infini_local.desktop.settings_gui import SettingsGui
+    from infini_local.desktop.settings_controller import SettingsController
     try:
-        app = SettingsGui()
+        app = SettingsController()
     except (ValueError, UnicodeError) as exc:
         raise SystemExit(f'Не удалось прочитать config.env: {exc} '
                          'Исправь указанную строку в редакторе или восстанови резервную копию, затем открой Studio снова.') from None
-    app.withdraw()
     server = StudioServer(Path(__file__).with_name('webui'), port=args.port)
     controller = StudioController(app, server)
     server.publish(controller.snapshot())
@@ -649,12 +563,14 @@ def main(argv=None):
         webbrowser.open(server.url)
     app.after(0, controller.tick)
     try:
-        app.mainloop()
+        while not app._gui_closed:
+            app.pump()
+            time.sleep(0.02)
     except KeyboardInterrupt:
         app.on_close()
     finally:
         # Let polling clients observe the terminal close receipt before the
-        # loopback listener disappears. No Tk callbacks run after destruction.
+        # loopback listener disappears. No callbacks run after closure.
         if server._state.get('closed'):
             time.sleep(5)
         server.close()

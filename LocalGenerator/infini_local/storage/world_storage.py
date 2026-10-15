@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import os
-import re
 import tempfile
 import threading
 import time
@@ -11,6 +10,7 @@ from typing import Any, Callable
 
 from infini_local.core import strict_json
 from infini_local.core.json_debug import bounded_json_dumps
+from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_WIRE_SCHEMA,
@@ -90,11 +90,6 @@ def _fsync_parent_directory(path: Path) -> None:
         pass
     finally:
         os.close(fd)
-
-
-def safe_file_part(text: Any, default: str = "value", max_len: int = 80) -> str:
-    raw = re.sub(r"[^A-Za-z0-9._-]+", "_", str(text or "").strip()).strip("._-")
-    return raw[:max_len] or default
 
 
 def world_recipe_dir(world_recipes_dir: Path, world_id: Any) -> Path:

@@ -91,7 +91,11 @@
     if (pool && pool[2] === 'OPENROUTER_PROVIDER' && value(`INFINI_LLM_POOL_${pool[1]}_PROVIDER`) !== 'openrouter') return 'Для линии OpenRouter';
     if (['INFINI_LLM_TEMPERATURE','INFINI_LLM_REAUTHOR_TEMPERATURE','INFINI_VISUAL_DIRECTOR_TEMPERATURE','INFINI_LLM_MAX_TOKENS','INFINI_LLM_REASONING_MAX_TOKENS','INFINI_LLM_REASONING_EXCLUDE'].includes(key) && provider === 'openai_codex') return 'Codex не принимает этот параметр';
     if (key === 'INFINI_CODEX_VISUAL_REASONING' && provider !== 'openai_codex') return 'Для текстового Codex';
-    if (key === 'INFINI_LLM_REASONING_MAX_TOKENS' && (provider === 'local' || !['tokens','token_budget','max_tokens','budget'].includes(value('INFINI_LLM_REASONING_MODE')))) return 'Для API с режимом бюджета токенов';
+    const reasoning = value('INFINI_LLM_REASONING_MODE','off').toLowerCase().replaceAll('-','_');
+    const reasoningOff = ['', 'off', 'false', '0', 'disabled', 'disable', 'none', 'no_reasoning'].includes(reasoning);
+    const promptReasoning = ['prompt','prompt_light','prompt_strong','local_prompt','local_light','local_strong'].includes(reasoning);
+    if (key === 'INFINI_LLM_REASONING_EXCLUDE' && (provider === 'local' || reasoningOff || promptReasoning)) return 'Для API reasoning, не prompt-only режима';
+    if (key === 'INFINI_LLM_REASONING_MAX_TOKENS' && (provider === 'local' || !['tokens','token_budget','max_tokens','budget'].includes(reasoning))) return 'Для API с режимом бюджета токенов';
     if (key === 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD' && value('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED') !== '1') return 'Отладочная выдача выключена';
     if (['INFINI_REMOVE_BG','INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_BG_COLOR') === 'transparent') return 'Нативная прозрачность: локальный keyer не используется';
     if (['INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_REMOVE_BG') === '0') return 'Удаление фона выключено';

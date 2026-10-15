@@ -82,30 +82,6 @@ SDCPP_SERVER_REQUEST_TIMEOUT = env_int("INFINI_SDCPP_SERVER_REQUEST_TIMEOUT", SD
 SDCPP_SERVER_SHOW_CONSOLE = env_bool("INFINI_SDCPP_SERVER_SHOW_CONSOLE", os.name == "nt")
 SDCPP_SERVER_LOG_FILE = env_str("INFINI_SDCPP_SERVER_LOG_FILE", str(CACHE_DIR / "sdcpp_server.log"))
 SDCPP_SERVER_STATE = sdcpp_service.SdcppServerState()
-def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
-    return sdcpp_backend.SdcppBackendConfig(
-        default_command_template=SDCPP_DEFAULT_COMMAND_TEMPLATE,
-        command_mode=SDCPP_SERVER_COMMAND_MODE,
-        server_exe=SDCPP_SERVER_EXE,
-        model=SDCPP_MODEL,
-        vae=SDCPP_VAE,
-        llm=SDCPP_LLM,
-        lora_dir=SDCPP_LORA_DIR,
-        lora_prompt_tags=SDCPP_LORA_PROMPT_TAGS,
-        host=SDCPP_SERVER_HOST,
-        port=SDCPP_SERVER_PORT,
-        width=SDCPP_WIDTH,
-        height=SDCPP_HEIGHT,
-        steps=SDCPP_STEPS,
-        cfg=SDCPP_CFG,
-        sampler=SDCPP_SAMPLER,
-        extra_args=SDCPP_SERVER_EXTRA_ARGS,
-        server_url=SDCPP_SERVER_URL,
-        health_paths=SDCPP_SERVER_HEALTH_PATHS,
-        zimage_prompt_contract=ZIMAGE_PROMPT_CONTRACT,
-        zimage_positive_only=ZIMAGE_POSITIVE_ONLY,
-        rocm_compat_root=SDCPP_ROCM_COMPAT_ROOT,
-    )
 
 
 def cleanup_sdcpp_server_process(reason: str = "cleanup") -> None:
@@ -266,7 +242,6 @@ __all__ = [
     "SDCPP_SERVER_SHOW_CONSOLE",
     "SDCPP_SERVER_LOG_FILE",
     "SDCPP_SERVER_STATE",
-    "_sdcpp_config",
     "cleanup_sdcpp_server_process",
     "COMFYUI_WORKFLOW",
     "COMFYUI_WORKFLOW_LORA",

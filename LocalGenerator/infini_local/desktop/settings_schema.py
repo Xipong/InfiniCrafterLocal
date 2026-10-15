@@ -6,12 +6,12 @@ from pathlib import Path
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 
 
-ROOT = Path(__file__).resolve().parents[2]
+from infini_local.desktop.settings_paths import ROOT
 
 
-# AGENT MAP: static settings schema for the desktop GUI.
-# Owns field order, defaults, presets, and user-facing help text. GUI widgets and
-# process/network actions stay in settings_gui.py.
+# AGENT MAP: static browser Studio settings schema.
+# Owns field order, defaults, presets, and user-facing help text.
+# State belongs to settings_controller.py; I/O workflows to studio_operations.py.
 
 FIELD_ORDER = [
     "INFINI_USE_LLM",

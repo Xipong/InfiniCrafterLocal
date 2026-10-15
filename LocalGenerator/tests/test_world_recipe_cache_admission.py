@@ -334,3 +334,20 @@ def test_historical_no_image_policy_does_not_relax_strict_combine(cache_record):
     receipt = _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
     assert receipt["details"]["runtimeReady"] is True and receipt["details"]["assetsReady"] is True
     assert receipt["details"]["errors"], "strict combine visual refusal was lost"
+
+
+@pytest.mark.parametrize(("raw", "component"), [
+    ("ordinary-world_123", "ordinary-world_123"),
+    ("../outside/recipe", "outside_recipe"),
+    (r"..\outside\recipe", "outside_recipe"),
+    ("  .-world name-.  ", "world_name"),
+    ("a" * 100, "a" * 80),
+    ("/../", ""),
+    (None, ""),
+])
+def test_world_paths_keep_bounded_filename_identity(tmp_path, raw, component):
+    world_dir = world_storage.world_recipe_dir(tmp_path, raw)
+    recipe_file = world_storage.world_recipe_file(tmp_path, raw, raw)
+    assert world_dir == tmp_path / ("world_" + (component or "unknown_world"))
+    assert recipe_file == world_dir / "recipes" / ((component or "recipe") + ".json")
+    assert recipe_file.resolve().is_relative_to(tmp_path.resolve())

@@ -58,16 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         print_doctor()
         return 0
     if sys.version_info < (3, 11):
-        print("Python 3.11 or newer is required. Install it from python.org, including Tcl/Tk.", file=sys.stderr)
+        print("Python 3.11 or newer is required. Install it from python.org.", file=sys.stderr)
         return 2
     try:
-        # Check GUI availability before spending time on setup. Server-only hosts need no Tk.
-        if args.action == "gui":
-            try:
-                import tkinter  # noqa: F401
-            except ImportError:
-                print("The GUI needs Tcl/Tk. On Windows install Python with the 'tcl/tk and IDLE' option.", file=sys.stderr)
-                return 2
         python = prepare_runtime(ROOT, refresh=args.action == "setup")
         if args.action == "setup":
             print("Runtime ready. Open OPEN_INFINICRAFT.bat. Personal config.env was not changed.")

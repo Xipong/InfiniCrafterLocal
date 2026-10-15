@@ -4,8 +4,7 @@ from __future__ import annotations
 import pytest
 
 from infini_local.desktop import settings_env, settings_schema as schema
-from infini_local.desktop.settings_gui_trace_state import SettingsGuiTraceStateMixin
-from infini_local.desktop.settings_gui_ui import SettingsGuiUiMixin
+from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 
 MAIN = "INFINI_OPENROUTER_PROVIDER"
 FALLBACK = "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER"
@@ -33,69 +32,30 @@ def test_exact_provider_slugs_survive_save_reload_and_provider_switch(tmp_path):
         assert path.read_text().index(key + "=") < path.read_text().index("# ===== IMAGE =====")
 
 
-class _FalseVar:
-    def get(self):
-        return False
-
-
-class _Visibility(SettingsGuiTraceStateMixin):
-    def __init__(self):
-        self.values = dict(schema.DEFAULTS)
-        self.field_widgets = {}
-        self.extra_arg_buttons = []
-        self.sdcpp_debug_buttons = []
-        self.radmin_enabled = _FalseVar()
-        self.vars = {}
-        self.enabled = {}
-
-    def _value(self, key, default=""):
-        return self.values.get(key, default)
-
-    def _set_field_enabled(self, key, enabled, reason=""):
-        self.enabled[key] = enabled
-
-    def _set_widgets_enabled(self, _widgets, _enabled):
-        pass
-
-    def _refresh_secret_entries(self):
-        pass
-
-
 def test_pin_visibility_tracks_exact_profile_provider_without_erasing_values():
-    gui = _Visibility()
-    gui.values.update({MAIN: "Acme/region-a", FALLBACK: "chutes", POOL[0]: "novita"})
-    gui.values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_POOL_2_ENABLED="1",
+    values = dict(schema.DEFAULTS)
+    values.update({MAIN: "Acme/region-a", FALLBACK: "chutes", POOL[0]: "novita"})
+    values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_POOL_2_ENABLED="1",
                       INFINI_LLM_POOL_2_PROVIDER="openrouter", INFINI_LLM_FALLBACK_PROVIDER="openrouter",
                       INFINI_LLM_FALLBACK_MODEL="owner/model")
-    gui._refresh_visibility()
-    assert gui.enabled[MAIN] and gui.enabled[FALLBACK] and gui.enabled[POOL[0]]
-    assert not gui.enabled[POOL[1]] and not gui.enabled[POOL[2]]
-    gui.values.update(INFINI_LLM_PROVIDER="local", INFINI_LLM_POOL_2_PROVIDER="openai_compat",
+    disabled = disabled_reasons(values, False)
+    assert not disabled[MAIN] and not disabled[FALLBACK] and not disabled[POOL[0]]
+    assert disabled[POOL[1]] and disabled[POOL[2]]
+    values.update(INFINI_LLM_PROVIDER="local", INFINI_LLM_POOL_2_PROVIDER="openai_compat",
                       INFINI_LLM_FALLBACK_PROVIDER="local")
-    gui._refresh_visibility()
-    assert not gui.enabled[MAIN] and not gui.enabled[FALLBACK] and not gui.enabled[POOL[0]]
-    assert [gui.values[key] for key in (MAIN, FALLBACK, POOL[0])] == ["Acme/region-a", "chutes", "novita"]
-    gui.values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_FALLBACK_PROVIDER="")
-    gui._refresh_visibility()
-    assert gui.enabled[FALLBACK]  # Empty fallback provider inherits the primary route.
-    gui.values["INFINI_LLM_FALLBACK_MODEL"] = ""
-    gui._refresh_visibility()
-    assert not gui.enabled[FALLBACK]
+    disabled = disabled_reasons(values, False)
+    assert disabled[MAIN] and disabled[FALLBACK] and disabled[POOL[0]]
+    assert [values[key] for key in (MAIN, FALLBACK, POOL[0])] == ["Acme/region-a", "chutes", "novita"]
+    values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_FALLBACK_PROVIDER="")
+    disabled = disabled_reasons(values, False)
+    assert not disabled[FALLBACK]  # Empty fallback provider inherits the primary route.
+    values["INFINI_LLM_FALLBACK_MODEL"] = ""
+    disabled = disabled_reasons(values, False)
+    assert disabled[FALLBACK]
 
 
-def test_multidev_builder_creates_a_provider_pin_row_for_each_pool_profile():
-    class Form(SettingsGuiUiMixin):
-        def __init__(self):
-            self.rows = []
-        def _card(self, *_args, **_kwargs):
-            return object()
-        def _info_panel(self, *_args, **_kwargs):
-            pass
-        def row(self, _parent, _label, key, **kwargs):
-            self.rows.append((key, kwargs))
-    form = Form()
-    SettingsGuiUiMixin._build_multidev(form, object())
-    keys = [key for key, _ in form.rows]
+def test_multidev_metadata_has_one_provider_pin_for_each_pool_profile():
     for key in POOL:
-        assert keys.count(key) == 1
-        assert not dict(form.rows)[key].get("secret", False)
+        fields = [field for field in FIELDS if field['key'] == key]
+        assert len(fields) == 1
+        assert not fields[0]['secret']

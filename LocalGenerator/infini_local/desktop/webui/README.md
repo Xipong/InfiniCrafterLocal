@@ -1,9 +1,8 @@
 # Browser Studio
 
-Studio stays a loopback browser UI. Desktop packaging would not repair the original
-presentation leak: browser commands were invoking modal Tk dialogs behind a hidden
-window. All user-facing launchers now open the browser. Tk remains an internal
-state/scheduling adapter, so Tcl/Tk is still required.
+Studio is a loopback browser UI backed by a plain-data Python controller and
+owner-thread event loop. It needs no Tk widgets, hidden windows, Tcl/Tk, or display
+server. All user-facing launchers open the same browser interface.
 
 - Notifications, confirmations, config preview, and file selection stay in-page.
   The path picker returns local paths; it never uploads model files.
@@ -20,8 +19,7 @@ Regression entry points:
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio_interactions.py LocalGenerator/tests/test_web_studio_state.py
 
-For native-controller/browser integration, provide a display, Playwright and
-Chromium. `INFINI_TEST_BROWSER_EXECUTABLE` can select an installed Chromium:
+For controller/browser integration, provide Playwright and Chromium. `INFINI_TEST_BROWSER_EXECUTABLE` can select an installed Chromium:
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py
 

@@ -10,8 +10,8 @@ from infini_local.desktop.settings_schema import DEFAULTS, FIELD_ORDER, PRESETS
 from infini_local.core.env_file import FORMAT_HEADER, encode_value, read_env_file
 
 
-# AGENT MAP: config.env parser/writer for the desktop GUI.
-# Keep file-format compatibility here; settings_gui.py should only call these helpers.
+# AGENT MAP: config.env parser/writer for the browser Studio.
+# Keep file-format compatibility here; settings_controller.py calls these helpers.
 
 CUSTOM_PRESET = "Custom"
 USER_PRESET_PREFIX = "Мой: "
