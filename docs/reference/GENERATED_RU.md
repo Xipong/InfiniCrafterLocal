@@ -15,19 +15,10 @@
 Не редактируй сгенерированные таблицы вручную. Измени соответствующий исходник и выполни нужный генератор из корня проекта:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_lowery.py
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py
-PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py
+python tools/validate_release.py --refresh runtime
 ```
 
-Добавь `--check`, чтобы проверить актуальность без записи. Первый и третий генераторы записывают по одному Markdown-файлу, второй — три. JSON-схемы обслуживает `tools/export_contract_schemas.py`; это отдельная операция.
-
-После изменения справочников обнови офлайн-книгу:
-
-```bash
-python tools/build_documentation.py
-python tools/build_documentation.py --check
-```
+Команда вызывает существующие schema, bounds, parity, Lowery, inventory и audit producers, затем обновляет офлайн-книгу. Для настроек — `--refresh config`; только для документации — `--refresh docs`. Сами producers по-прежнему доступны отдельно для точечной работы. Проверка всех производных артефактов без записи: `python tools/validate_release.py --group static`.
 
 ## Источники
 

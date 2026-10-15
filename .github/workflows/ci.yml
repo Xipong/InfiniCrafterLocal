@@ -27,18 +27,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r LocalGenerator/requirements-dev.lock
-      - name: Offline tML CI control-flow regression
-        run: python tools/test_tml_ci.py -v
-      - name: Run pytest in isolated deterministic shards
-        run: PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4 --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
-      # The canonical shard runner includes LocalGenerator/tests and toolbox/tests.
-      - name: Python compileall
-        run: python -m compileall LocalGenerator toolbox
-      - name: Env poisoning smoke
-        run: |
-          cd LocalGenerator
-          INFINI_LOCAL_PORT=abc INFINI_LLM_TIMEOUT_MS=xyz INFINI_SPRITE_CACHE_MAX=garbage \
-            python -c "import infini_local.core.env_utils as e; print('env_utils import OK'); print(e.env_int('INFINI_LOCAL_PORT', 9000)); print(e.env_int('INFINI_LLM_TIMEOUT_MS', 30000)); print(e.env_int('INFINI_SPRITE_CACHE_MAX', 512))"
+      - name: Shared Python validation gates
+        run: python tools/validate_release.py --group python
 
   strict-hygiene:
     name: Strict hygiene and static contracts
@@ -54,36 +44,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r LocalGenerator/requirements-dev.lock
-      - name: Project hygiene
-        run: python tools/check_project_hygiene.py
-      - name: Generated schema drift
-        run: PYTHONPATH=LocalGenerator python tools/export_contract_schemas.py --check
-      - name: Offline handbook freshness and links
-        run: python tools/build_documentation.py --check
-      - name: Canonical equipment bounds drift
-        run: PYTHONPATH=LocalGenerator python tools/generate_equipment_bounds.py --check
-      - name: C# executable primitive loss audit
-        run: PYTHONPATH=LocalGenerator python -m infini_local.qa.primitive_loss_audit
-      - name: Canonical primitive parity documentation drift
-        run: PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
-      - name: Generated config registry drift
-        run: PYTHONPATH=LocalGenerator python tools/config_registry.py --check
-      - name: Python C# lifecycle parity
-        run: PYTHONPATH=LocalGenerator python tools/contract_parity.py --quiet
-      - name: Contract mutation gate
-        run: PYTHONPATH=LocalGenerator python tools/mutation_contract_gate.py
-      - name: Frozen runtime semantic diff
-        run: PYTHONPATH=LocalGenerator python tools/semantic_runtime_diff.py
-      - name: Runtime impact and infrastructure isolation
-        run: PYTHONPATH=LocalGenerator python tools/runtime_impact_report.py
-      - name: Ruff contract-boundary lint
-        run: ruff check LocalGenerator/infini_local tools toolbox
-      - name: Pyright contract-boundary types
-        run: pyright
-      - name: C# static contract surface
-        run: python tools/check_csharp_contracts.py
-      - name: Planner prompt usability
-        run: python tools/check_planner_prompt_usability.py
+      - name: Shared static validation gates
+        run: python tools/validate_release.py --group static
       - name: Strict archive hygiene
         run: |
           archive_root="$(mktemp -d)"
@@ -101,47 +63,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Offline tML CI control-flow regression
-        run: python tools/test_tml_ci.py -v
       - name: Attempt tML project build
         id: tml
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Continue"
-          $log = "tml-build.log"
-          $summary = "tml-build-summary.txt"
-          $project = "./ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
-          "[ci] project=$project" | Out-File -FilePath $log -Encoding utf8
-          if (!(Test-Path $project)) {
-            "[ci] project file not found" | Tee-Object -FilePath $log -Append
-            exit 1
-          }
-          ./tools/build_tml_windows.ps1 -Project $project -Configuration Debug *>&1 | Tee-Object -FilePath $log -Append
-          $buildExit = $LASTEXITCODE
-          python tools/parse_tml_build_log.py $log --mod InfiniCrafterLocal | Tee-Object -FilePath $summary
-          $parserExit = $LASTEXITCODE
-          # Only the build script's explicit preflight exit 77 means notRun.
-          # "external mod reference DLLs not found" is not a status protocol;
-          # normal SDK output also mentions tModLoader.targets and InfiniExternalDepsRoot.
-          if ($buildExit -eq 77 -and $parserExit -eq 0) {
-            "TML_BUILD_SKIPPED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "[ci] tML build skipped because this runner lacks local tModLoader targets or external mod reference DLLs" | Tee-Object -FilePath $summary -Append
-            exit 0
-          }
-          if ($buildExit -ne 0 -and $buildExit -ne 77) {
-            "TML_BUILD_FAILED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
-            exit $buildExit
-          }
-          if ($parserExit -ne 0) {
-            "TML_BUILD_FAILED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
-            exit $parserExit
-          }
+          python tools/validate_release.py --group build
+          exit $LASTEXITCODE
       - name: Upload tML build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tml-build-logs
           path: |
-            tml-build.log
-            tml-build-summary.txt
+            artifacts/validation/
           if-no-files-found: warn

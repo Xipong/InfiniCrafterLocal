@@ -63,21 +63,20 @@ Owners: authored shape — `program_schema.py`; mechanical/event facts — `capa
 
 `registry -> provider schema/prompt -> validator -> compiler receipts -> strict wire -> C# DTO -> C# executor -> tests -> docs`.
 
-Команды перед упаковкой:
+Рабочие команды из корня:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_lowery.py --check
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py --check
-PYTHONPATH=LocalGenerator python tools/audit_capability_library.py
-PYTHONPATH=LocalGenerator python tools/audit_targeted_repair.py --check
-PYTHONPATH=LocalGenerator python tools/audit_terraria_standardization.py --check
-PYTHONPATH=LocalGenerator python tools/check_delivery_contract.py
-PYTHONPATH=LocalGenerator python tools/contract_parity.py
-PYTHONPATH=LocalGenerator python tools/mutation_contract_gate.py
-PYTHONPATH=LocalGenerator pytest -q
-python tools/check_csharp_contracts.py
-python tools/check_project_hygiene.py
-python tools/validate_sandbox.py
+# До правок: точный вход вместо обхода дерева; --path тоже поддерживается.
+python tools/agentctl.py context --task "описание задачи" --area runtime
+# Во время правок: owner-area проверки. --base включает уже закоммиченный diff ветки.
+python tools/agentctl.py verify --changed --base origin/main --plan
+python tools/agentctl.py verify --changed --base origin/main
+# После изменения runtime contracts: существующие generators, затем offline handbook.
+python tools/validate_release.py --refresh runtime
+# Полная приёмка интегрированного commit; тот же набор используют CI и release wrappers.
+python tools/validate_release.py
 ```
+
+Для stacked PR укажи его реальную base branch вместо `origin/main`. Неизвестные пути требуют полной проверки; пустая выборка не считается PASS. Iteration не объявляет `releaseReady`. Команды, группы CI и refresh — один `.agent/manifest.json`; bounded owner-area выбор — `.agent/impact_rules.json`. Подробнее: [TESTING](docs/development/TESTING_RU.md).
 
 Если доступны .NET 8, stable tModLoader и `ParticleLibrary.dll`/`Luminance.dll`, также выполнить C# build и игровые smoke. Отсутствие среды записывается как `notRun`, а не как успех.
