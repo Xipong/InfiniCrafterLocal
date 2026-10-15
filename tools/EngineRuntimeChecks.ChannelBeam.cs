@@ -72,16 +72,28 @@ internal static partial class EngineRuntimeChecks
     {
         using var scope = new SwarmRuntimeScope(visuals: true);
         WithBodyGeometryQueue((count, positions) => {
-            foreach (int extra in new[] { 0, 2 }) {
+            foreach (int extra in new[] { 0, 2 })
+            foreach (int delay in new[] { 0, 2 }) {
                 var data = BeamFixture(); var entity = data.RuntimeProgram.TryGetEntity("root")!;
                 entity.Collision.ExtraUpdates = extra; entity.Controller.Params.ManaPayment = "initial_use_only";
+                entity.Spawn.OverTarget.HeightTiles = delay > 0 ? 1 : 0;
+                entity.Spawn.OverTarget.DelayTicks = delay;
                 var host = BeamHost(data, damage: 200);
+                Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "beam cannot damage before its first warmup update");
+                for (int update = 0; update < delay * (extra + 1); update++) {
+                    host.AI();
+                    Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "activation delay completion cannot bypass beam warmup");
+                }
+                host.Configure(data, entity, 0, 32, Vector2.UnitX, preserveSyncedState: true);
+                Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "early beam hydration keeps warmup gate");
                 foreach (var sample in new[] { (Age: 0, Damage: 70f, Width: 22f, Friendly: false),
                     (Age: 8, Damage: 80.4f, Width: 28.24f, Friendly: true),
                     (Age: 50, Damage: 135f, Width: 61f, Friendly: true),
                     (Age: 100, Damage: 200f, Width: 100f, Friendly: true),
                     (Age: 200, Damage: 200f, Width: 100f, Friendly: true) }) {
-                    BeamAge(host, sample.Age * (extra + 1)); BeamApply(host);
+                    BeamAge(host, sample.Age * (extra + 1));
+                    Equal<bool?>(sample.Friendly ? null : false, ProjectileLoader.CanDamage(host.Projectile), "native hook observes inclusive progress before controller AI");
+                    BeamApply(host);
                     Equal(sample.Friendly, host.Projectile.friendly, "inclusive explicit progress gate");
                     var modifiers = new NPC.HitModifiers(); host.ModifyHitNPC(new NPC(), ref modifiers);
                     BeamNear(sample.Damage, modifiers.SourceDamage.ApplyTo(host.Projectile.damage), "warmup uses live damage and native source modifier");
@@ -96,7 +108,22 @@ internal static partial class EngineRuntimeChecks
                 host.Configure(data, entity, 0, 32, Vector2.UnitX, preserveSyncedState: true);
                 var hydrated = new NPC.HitModifiers(); host.ModifyHitNPC(new NPC(), ref hydrated);
                 BeamNear(202.5f, hydrated.SourceDamage.ApplyTo(host.Projectile.damage), "late live damage is multiplied once after hydration");
+                entity.Controller.Params.DamageStartProgress = 0; BeamAge(host, 0);
+                Equal<bool?>(null, ProjectileLoader.CanDamage(host.Projectile), "explicit zero threshold admits contact immediately");
+                // Omission is a fresh absent property, not an explicit null:
+                // the wire DTO deliberately refuses assigning null to this field.
+                entity.Controller.Params = new RuntimeParamsSpec {
+                    RangeTiles = 20, WidthPx = 100, WarmupTicks = 100,
+                    ManaPayment = "initial_use_only",
+                };
+                Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "omitted threshold still waits for full warmup");
+                BeamAge(host, 100 * (extra + 1));
+                Equal<bool?>(null, ProjectileLoader.CanDamage(host.Projectile), "omitted threshold admits exact full warmup");
                 entity.Controller.Params.WarmupTicks = 0; BeamAge(host, 0); BeamApply(host);
+                Equal<bool?>(null, ProjectileLoader.CanDamage(host.Projectile), "zero warmup preserves immediate contact");
+                entity.Damage.Enabled = false;
+                Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "disabled contact remains disabled even with live damage and friendly beam");
+                entity.Damage.Enabled = true;
                 var immediate = new NPC.HitModifiers(); host.ModifyHitNPC(new NPC(), ref immediate);
                 BeamNear(300, immediate.SourceDamage.ApplyTo(host.Projectile.damage), "zero warmup is immediately full damage");
                 BeamNear(100, BeamGeometry(host).Width, "zero warmup is immediately full width");
@@ -108,6 +135,10 @@ internal static partial class EngineRuntimeChecks
             int index = count(); DrawBodyGeometry(thin);
             AssertBodySegment(positions(index), narrow.Start, narrow.End, 0.02f);
         });
+        var ordinaryData = SwarmGameplayFixture();
+        var ordinary = SwarmHost(ordinaryData, ordinaryData.RuntimeProgram.TryGetEntity("root")!);
+        Equal<bool?>(null, ProjectileLoader.CanDamage(ordinary.Projectile), "ordinary projectile keeps native damage rules");
+        Equal<bool?>(false, new GeneratedProjectile().CanDamage(), "unconfigured proxy cannot damage");
     }
 
     private static void BeamSustainUsesNativeManaAndWorldClock()
