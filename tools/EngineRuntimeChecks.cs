@@ -221,6 +221,7 @@ internal static partial class EngineRuntimeChecks
             ("run-speed equipment applies after vanilla movement", RunSpeedEquipmentAppliesAfterVanillaMovement),
             ("equipment authored ranges reach player", EquipmentAuthoredRangesReachPlayer),
             ("unit boundary charge release preserves authored speed", ChargeReleasePreservesAuthoredZeroAndFractionalSpeed),
+            ("charge release preserves authored flight lifetime", ChargeReleaseKeepsAuthoredFlightLifetime),
             ("equipment class damage reaches exact DamageClass", () => CheckEquipmentCases(EquipmentDamageClasses)),
             ("generated ammo preserves exact projectile on direct use", GeneratedAmmoDirectUseKeepsDeclaredProjectile),
             ("generated ammo preserves exact rocket and solution selection", GeneratedAmmoPickAmmoKeepsExactRocketAndSolution),

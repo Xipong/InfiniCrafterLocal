@@ -23,6 +23,13 @@ Buff durations, modifier/curve `startDelayTicks`/`durationTicks`, spawn activati
 delay, event delays и `maxEventSpawnsPerActivation=32` сохраняют свои прежние пределы.
 Native sentry limit может удалить sentry раньше заданной lifetime.
 
+При `charge_then_release` ожидание отпускания не расходует этот lifetime:
+controller компенсирует native decrement после каждого charging AI update,
+включая `extraUpdates`. После release countdown идёт обычным способом;
+поздняя hydration его не перезапускает. `_age` и независимые periodic/modifier
+clocks продолжают идти во время charging. Смена предмета запускает release,
+а недоступный/погибший owner по-прежнему завершает projectile без ожидания.
+
 ## NPC immunity и число обновлений
 
 Полный пример collision:

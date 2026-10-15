@@ -1962,7 +1962,7 @@ _CAPS.extend([
     ),
     _cap(
         "charge_then_release",
-        "Accumulate bounded charge while held, then release this entity using authored movement.",
+        "Accumulate bounded charge while held, then release this entity using authored movement. Charging pauses the native lifetime countdown; the authored lifetime is available for flight after release. Other active-age clocks are not reset.",
         "controller",
         ("owner_attached_projectile", "free_projectile"),
         {
