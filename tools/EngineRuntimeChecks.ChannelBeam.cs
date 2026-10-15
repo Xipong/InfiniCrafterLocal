@@ -110,7 +110,12 @@ internal static partial class EngineRuntimeChecks
                 BeamNear(202.5f, hydrated.SourceDamage.ApplyTo(host.Projectile.damage), "late live damage is multiplied once after hydration");
                 entity.Controller.Params.DamageStartProgress = 0; BeamAge(host, 0);
                 Equal<bool?>(null, ProjectileLoader.CanDamage(host.Projectile), "explicit zero threshold admits contact immediately");
-                entity.Controller.Params.DamageStartProgress = null;
+                // Omission is a fresh absent property, not an explicit null:
+                // the wire DTO deliberately refuses assigning null to this field.
+                entity.Controller.Params = new RuntimeParamsSpec {
+                    RangeTiles = 20, WidthPx = 100, WarmupTicks = 100,
+                    ManaPayment = "initial_use_only",
+                };
                 Equal<bool?>(false, ProjectileLoader.CanDamage(host.Projectile), "omitted threshold still waits for full warmup");
                 BeamAge(host, 100 * (extra + 1));
                 Equal<bool?>(null, ProjectileLoader.CanDamage(host.Projectile), "omitted threshold admits exact full warmup");
