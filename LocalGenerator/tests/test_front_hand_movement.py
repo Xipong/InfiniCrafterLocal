@@ -3,7 +3,9 @@ from copy import deepcopy
 
 import pytest
 
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
 from infini_local.qa.capability_witnesses import build_capability_witness
@@ -156,7 +158,8 @@ def test_stripped_delivery_retains_new_movement_dependency_guards(mutation):
 
 
 def test_frozen_dependency_repair_changes_only_exact_spawn_leaf_and_does_not_create_controller():
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope, filter_repair_patch_scope, apply_repair_patch
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     good, _ = fixture()
     broken = deepcopy(good)
     spawn = next(c for c in broken["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")
@@ -297,7 +300,7 @@ def test_independent_non_damage_hand_animation_does_not_select_style_class_visib
 
 
 def test_missing_singleton_dependency_repair_offers_only_exact_explicit_creation():
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     doc, _ = fixture()
     doc["runtimeProgram"]["calls"].remove(next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_concurrency"))
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -309,7 +312,7 @@ def test_missing_singleton_dependency_repair_offers_only_exact_explicit_creation
 
 
 def test_frozen_wrong_primary_hand_target_offers_only_exact_primary_entity_not_owner_reselection():
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     doc, _ = fixture()
     doc["runtimeProgram"]["primaryEntityId"] = "item"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -320,7 +323,7 @@ def test_frozen_wrong_primary_hand_target_offers_only_exact_primary_entity_not_o
 
 
 def test_frozen_incompatible_singleton_is_not_a_missing_movement_repair_alternative():
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     doc, call = fixture()
     doc["runtimeProgram"]["calls"].remove(call)
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_concurrency")["params"]["maxActive"] = 2

@@ -46,7 +46,7 @@ def test_actual_author_does_not_turn_coherence_or_source_units_into_inheritance_
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_shared_repair_report_is_an_account_not_a_design_rejection(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     source = build_capability_witness('configure_item_stats')
@@ -88,7 +88,9 @@ def test_actual_shared_repair_report_is_an_account_not_a_design_rejection(monkey
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_periodic_producer_guidance_discloses_exhaustion_without_forcing_pool(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program, validate_runtime_wire
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_author_prompt_consistency import _stationary_periodic_shooter
 

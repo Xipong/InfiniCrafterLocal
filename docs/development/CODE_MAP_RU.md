@@ -9,8 +9,10 @@
 
 | Симптом / вопрос | Начало и ближайшая цепочка | Минимальная проверка |
 |---|---|---|
+| «Где Author отклонён, когда разрешён Repair и что проверяется после него?» | `pipelines/gameplay_stage.py::compile_and_validate_authored_runtime` содержит stage-level validation/compile/wire/retry lifecycle. Для exact diagnostic следуй прямому import в `core/runtime_authoring/`; request самого Repair — `pipelines/llm_authoring_pipeline.py::repair_author_item_after_failure` | `test_low_level_three_stage_pipeline.py`, `test_repair_frozen_contract.py`, `test_generation_budgets.py`; labels, failure cutoff, одна Repair попытка |
+| «Родительские native facts различаются в нескольких местах request» | `Common/Services/Generation/GeneratorClient.cs::ToWireItem` → `CaptureParentNativeFacts` → root / `FingerprintFromItem` / nested runtimeFacts; shared native field записывается один раз | `tools/EngineRuntimeChecks.ParentFacts.cs`; exact envelope keys/types/null/zero, prefix, generated placement, player/reference ammo |
 | «Не хватает полного запроса / ответа / HTTP / SSE» | `storage/trace_runtime.py::trace_stage_request/trace_codex_transport/flush_codex_transport` → `storage/trace_tools.py::persist_stage_request/persist_transport_artifact/trace_event`; native wire: `services/codex_text_backend.py::generate_chat` → `services/codex_auth.py::post_sse/_generation_request/_read_sse_response` → `core/http_io.py::urlopen_no_redirect`; image joins: `pipelines/visual_sprite_generation.py::_execute_image_request` → `pipelines/image_backend_pipeline.py::generate_openai_codex` → `services/codex_image_backend.py::generate_image` | `LocalGenerator/tests/test_codex_transport_trace.py`, `test_image_transport_join.py`, `test_full_logging_contract.py`; actual artifacts/identity/toggle/flush, не только UI tail |
-| «Кэш промпта не работает / craft долго» | Author: `pipelines/llm_authoring_pipeline.py::build_initial_author_request`; Visual: `pipelines/visual_generation_pipeline.py::_request_visual_kit`; VFX: `core/vfx_manifest.py::_request` → `core/llm_prompt_cache.py::with_instruction_segments` → `pipelines/llm_transport.py` → provider adapter | `test_craft_instruction_segments.py`, `test_codex_static_instruction_prefix.py`, `test_visual_vfx_prompt_prefix.py`; отдельно cached/input counters, logical/physical calls и image time |
+| «Кэш промпта не работает / craft долго» | Author: `pipelines/llm_authoring_pipeline.py::build_initial_author_request`; Visual: `pipelines/visual_generation_pipeline.py::_request_visual_kit`; VFX: `core/vfx_manifest.py::_request` → `pipelines/vfx_generation_pipeline.py::call_llm_vfx_director` → `core/llm_prompt_cache.py::with_instruction_segments` → `pipelines/llm_transport.py` → provider adapter | `test_craft_instruction_segments.py`, `test_codex_static_instruction_prefix.py`, `test_visual_vfx_prompt_prefix.py`; отдельно cached/input counters, logical/physical calls и image time |
 | «Repair трогает правильный соседний узел / зависимость» | `core/runtime_authoring/validator.py` даёт exact error → `repair_scope.py::build_runtime_repair_scope/filter_repair_patch_scope` → `core/repair_merge.py`; реальные callers: `pipelines/llm_authoring_pipeline.py`, Visual `_request_visual_kit`, VFX `_request` | `test_repair_gameplay_contract.py`, `test_repair_frozen_contract.py`; sole/shared child: `test_referenced_entity_requirements.py`, `test_hit_target_spawn.py` |
 | «Эффект предмета не срабатывает / альт даёт бесконечный баф» | **Будущая генерация:** `pipelines/author_item_contract.py::author_item_prompt_shape_card` (concept.coreMechanic uptime/cost) → `capability_registry.py` (`apply_generated_buff_on_use` refresh/duration/Spelunker scope) → `llm_authoring_pipeline.py::build_initial_author_request`. **Исполнение:** `Content/Items/GeneratedItem.cs::ActiveUseBinding/CanUseItem/UseItem/ApplyItemEffects` → `Common/Players/InfiniCraftPlayer.Mobility.cs::ApplyGeneratedUtilityBuff/ApplyGeneratedUtilityBuffEffects`; native quick use отдельно: `Common/Systems/Utility/GeneratedQuickUseSystem.cs` | `test_author_prompt_clarity.py`, `test_item_effect_groups.py`; native `tools/EngineRuntimeChecks.NamedItemEffects.cs`, `.QuickUse.cs`, `.QuickUtilityActivation.cs`; сначала exact binding/effectGroup/stackCost, не имя предмета; duration ≠ activation КД |
 | «Предметная усталость / копией обходится баф / не хватает отдельных иконок» | Author `apply_generated_buff_on_use.params.exhaustionTicks` → `compiler.py`/`technical_lowering.py` → nullable `GeneratedBuffSpec.ExhaustionTicks`. Consumer: `InfiniCraftPlayer.Mobility.cs::ApplyGeneratedUtilityBuff` → `.Exhaustion.cs::CanApplyGeneratedBuff/CaptureGeneratedItemExhaustion`; callers: `GeneratedItem.cs::ApplyItemEffects/RefreshHeldEffectGroup`, `GeneratedQuickUtilityActivation.cs` Commit. Снимок v5: `.Multiplayer.cs`; UI: `GeneratedItemExhaustionStatusView`, `GeneratedUtilityBuffUISystem` | `test_generated_buff_exhaustion.py`; native `.Exhaustion.cs`, `.ExhaustionPresentation.cs`; только generated-баф, player + ID + definition hash, omission/0 без таймера, не общий attack КД |
@@ -26,6 +28,19 @@
 3. Найди существующее behavioral test family в [TESTING](TESTING_RU.md). Native Compile roster — `tools/EngineRuntimeChecks.csproj`; invocation/filter roster — `tools/EngineRuntimeChecks.cs`. Новый файл без обеих регистраций не исполняется.
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.
 5. Для historical audit не называй builder messages exact HTTP wire; пустой physical-attempt list с unobserved owner — unknown, не «0 retries». Debug/manifest previews отдельно от полного сохранённого trace.
+
+### Почему маршрут короче
+
+Сравнение с baseline `6e4c901` относится к поиску владельца, а не к новому gameplay контракту:
+
+| Задача | Раньше | Сейчас |
+|---|---|---|
+| Проследить stage-level Author admission, compile, wire gate и retry cutoff | `combine_pipeline` + `combine_validation` + `combine_gameplay` + `llm_authoring_pipeline` | Всё это в `gameplay_stage`; model request/Repair packet открывается отдельно только при необходимости |
+| Изменить общий native parent fact | Три независимых поля в root, fingerprint и runtimeFacts | Одно поле в `CaptureParentNativeFacts`; envelopes явно добавляют/исключают только свои поля |
+| Найти VFX provider request | Перейти из VFX в Gameplay Author helper | `vfx_generation_pipeline.call_llm_vfx_director` |
+| Прочитать события/visual roles сохранённого wire | Импорт compiler через eager package barrel | Прямой `wire_views` без compiler и Repair |
+
+Canonical registry → schema → validator → compiler → C# vertical slice намеренно сохраняется: эти owners отвечают на разные вопросы. Удалены именно случайные переходы, повторные field maps и пустые wrappers. Проверка import isolation/order — `test_runtime_import_boundaries.py`; она не заменяет behavior tests.
 
 <a id="tree"></a>
 ## Репозиторий
@@ -71,6 +86,8 @@ docs/                           user / development / reference / archive
 | Composition/slots/budgets/binding admission | `core/runtime_authoring/validator.py`, `core/runtime_authoring/event_producer_validation.py`, `core/runtime_authoring/binding_use_policy.py` |
 | Component/opcode projection, receipts, final wire | `core/runtime_authoring/compiler.py`, `core/runtime_authoring/technical_lowering.py`, `core/runtime_authoring/wire_validator.py` |
 | Finite Terraria/tML mappings | `core/runtime_authoring/terraria_vocabulary.py` |
+| Craft stage lifecycle / commit | `pipelines/gameplay_stage.py` / `pipelines/combine_pipeline.py` |
+| Read-only event/visual views accepted wire | `core/runtime_authoring/wire_views.py` |
 | Model-facing cards/prompt и Author calls | `pipelines/author_item_contract.py`, `pipelines/llm_authoring_prompt.py`, `pipelines/llm_authoring_pipeline.py` |
 | Selected sprite size/axis/grip dependencies | `core/visual_contract_schema.py::grip_schema/front_hand_sprite_errors`; Visual projection — `pipelines/visual_generation_pipeline.py`; strict optional-present DTO — `core/runtime_authoring/wire_validator.py::_validate_sprite_presentation` |
 | Whole craft/stage orchestration | `pipelines/combine_pipeline.py`; numeric advice `pipelines/combine_balance.py` |
@@ -86,7 +103,7 @@ docs/                           user / development / reference / archive
 | Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_gui_trace_state.py`, `desktop/settings_gui_server_controls.py` |
 | Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/runtime_program_proof.py`, `qa/primitive_loss_audit.py` |
 
-Fresh Author принимает только `authoring.v5`: flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Public runtime imports — `infini_local.core.runtime_authoring`, не deleted legacy compiler/root lowerers.
+Fresh Author принимает только `authoring.v5`: flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Runtime imports указывают на defining module (`...capability_registry`, `...compiler`, `...repair_scope` и т. д.). Package `runtime_authoring/__init__.py` пуст по зависимостям: import registry не импортирует compiler/Repair; Visual/VFX читают `wire_views.py` без Gameplay Author. Общий provider response-format helper находится в `core/llm_json_tools.py`, а не в чужой LLM-стадии.
 
 <a id="csharp"></a>
 ## C#
@@ -116,6 +133,10 @@ Fresh Author принимает только `authoring.v5`: flat `action`/`stac
 | Limits, packet IDs, Terraria sentinels | `Common/InfiniRuntimeLimits.cs`, `Common/InfiniNetPacketIds.cs`, `Common/InfiniTerrariaSentinels.cs` |
 | Station UI и localization | `Common/UI/InfiniCraftStationUISystem.cs`, `Localization/en-US_Mods.InfiniCrafterLocal.hjson`, `Localization/ru-RU_Mods.InfiniCrafterLocal.hjson` |
 | Heart/proxies/config/diagnostics | `Content/Items/InfiniCore.cs`, `Content/Items/GeneratedArmorItems.cs`, `Common/Config/InfiniGameplayQolConfig.cs`, `Common/Config/InfiniVfxClientConfig.cs`, `Common/Commands/`, `Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs` |
+
+### Projectile state: проверяй update и rehydration вместе
+
+Native `AI` находится в `GeneratedProjectile.Executors.cs`; общие поля, `Configure` и повторная загрузка definition — в `GeneratedProjectile.cs`; `ReceiveExtraAI` — в `.NetSync.cs`; producer dispatch и hit/kill hooks — в `.RuntimeEvents.cs`. При изменении activation delay, age или once-only event flag проследи обе ветви: fresh spawn → `Configure` → `AI` и `ReceiveExtraAI` → rehydrate с `preserveSyncedState` → `AI`. Поля одного partial type принадлежат общей lifecycle; чтение только controller не показывает reset/preserve семантику. Delayed actions дополнительно проходят source-incarnation guards и общий spawn budget в `Common/Runtime/`.
 
 <a id="projections"></a>
 ## Generated outputs и проверки

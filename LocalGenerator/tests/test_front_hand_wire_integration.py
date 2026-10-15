@@ -3,7 +3,8 @@ from copy import deepcopy
 
 import pytest
 
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.visual_contract_schema import front_hand_sprite_errors
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.qa.capability_witnesses import build_capability_witness

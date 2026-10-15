@@ -7,7 +7,7 @@ import json
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery

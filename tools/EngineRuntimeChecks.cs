@@ -214,6 +214,7 @@ internal static partial class EngineRuntimeChecks
             ("generated parent sprite reference never uses native proxy", ParentGeneratedSpriteReferenceNeverUsesNativeProxy),
             ("craft identity rejects failed defaults", CraftIdentityRejectsFailedDefaults),
             ("parent placement facts reach craft snapshot", ParentPlacementFactsReachCraftSnapshot),
+            ("parent native fact envelopes preserve exact shape", ParentNativeFactEnvelopesKeepTheirExactShape),
             ("native equipment wire vision", NativeEquipmentWireVision),
             ("native equipment utility flags", NativeEquipmentUtilityFlags),
             ("native equipment rocket flight", NativeEquipmentRocketFlight),

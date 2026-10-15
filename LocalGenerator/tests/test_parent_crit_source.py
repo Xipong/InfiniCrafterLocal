@@ -11,7 +11,7 @@ import pytest
 from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines import llm_transport
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 
 
 @pytest.fixture(autouse=True)

@@ -129,7 +129,7 @@ class _Captured(BaseException):
 
 
 def _broken_item():
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
     item = build_runtime_fixture("held_and_deployed")
@@ -140,7 +140,7 @@ def _broken_item():
 
 
 def _repair_request(monkeypatch, mode, source, item):
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     requests = []
 
@@ -165,7 +165,8 @@ def _repair_request(monkeypatch, mode, source, item):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope, validate_runtime_program
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
 
     source, item = _source(), _broken_item()
@@ -193,7 +194,9 @@ def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, m
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissions(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, build_runtime_repair_scope, validate_runtime_program
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
 
     source, item = _source(), _broken_item()
@@ -295,7 +298,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
 def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(monkeypatch, mode):
     from dataclasses import replace
     from types import MappingProxyType
-    from infini_local.core.runtime_authoring import capability_registry as registry
+    import infini_local.core.runtime_authoring.capability_registry as registry
 
     spec = registry.CAPABILITY_REGISTRY["configure_accessory"].params["moveSpeedBonusPercent"]
     template = registry.CAPABILITY_REGISTRY["configure_accessory"]
@@ -329,7 +332,9 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     ("apply_generated_buff_on_use", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "gameplay.generatedBuff"),
 ])
 def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode, fn, values, path):
-    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program, validate_runtime_wire
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     item = build_capability_witness(fn)
@@ -366,7 +371,7 @@ def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode,
 def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeypatch, mode):
     from test_gameplay_repair_readonly_context import _hostile_patch, _repair_with_response
     from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item = _broken_item()
     before = json.dumps(item)

@@ -15,6 +15,7 @@ import pytest
 from provider_test_support import deliverable_recipe, loopback_server, write_json_response, endpoint_options
 from infini_local.pipelines import (
     combine_pipeline as pipeline,
+    gameplay_stage,
     llm_transport as transport,
     llm_authoring_pipeline as author,
     generation_debug,
@@ -528,8 +529,7 @@ def test_actual_stage_transition_preserves_request_identity(monkeypatch, route_w
         raise PlannerUnavailable("controlled validation stop")
 
     monkeypatch.setattr(pipeline, "try_llm_plan", authored)
-    monkeypatch.setattr(pipeline, "strict_validate_authored_item", validate)
-    monkeypatch.setattr(pipeline, "_failure_report", lambda *_: (_ for _ in ()).throw(PlannerUnavailable("controlled final stop")))
+    monkeypatch.setattr(gameplay_stage, "strict_validate_authored_item", validate)
     worker = route_worker(real_route, dict(PAYLOAD), resume_first, resume_second)
     assert first.wait(3)
     one = endpoint.generation_activity_snapshot()["requests"][0]
@@ -545,7 +545,7 @@ def test_actual_stage_transition_preserves_request_identity(monkeypatch, route_w
     resume_second.set()
     worker.thread.join(5)
     assert not worker.thread.is_alive()
-    assert worker.results[0][0] == 424
+    assert worker.results[0][0] == 422
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 

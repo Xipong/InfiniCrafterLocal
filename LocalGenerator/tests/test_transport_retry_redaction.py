@@ -97,7 +97,7 @@ def test_image_503_replays_exact_request_without_touching_valid_gameplay_or_asse
     accepted_bytes = base64.b64decode(json.loads(response)["data"][0]["b64_json"])
     accepted.write_bytes(accepted_bytes)
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     data = build_runtime_fixture("workbench_blade")
     assert validate_runtime_program(data)["ok"]
     data["visual"] = {"spritePath": str(accepted), "spriteStatus": "generated"}

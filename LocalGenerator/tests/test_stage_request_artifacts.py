@@ -103,7 +103,7 @@ def test_missing_recipe_join_is_an_explicit_refusal_not_an_unowned_artifact(monk
 @pytest.mark.parametrize('stage', ['gameplay_author', 'gameplay_format_repair', 'gameplay_repair', 'visual_director', 'visual_repair'])
 def test_actual_stage_seam_records_complete_request_before_provider_without_live_calls(monkeypatch, tmp_path, stage):
     from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
     captured = []
@@ -259,7 +259,7 @@ def test_author_request_owns_optional_alternate_cost_and_source_motion_advisorie
 
 def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(monkeypatch, tmp_path):
     from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
     parent = {'name': 'unknown loaded texture', 'width': 91, 'height': 7,

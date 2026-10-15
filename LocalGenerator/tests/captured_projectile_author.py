@@ -25,7 +25,8 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     This is test-local, not a saved-wire importer. Do not materialize absent
     fields or replace the archived hashes with outputs from the current compiler.
     """
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_wire
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
     assert validate_runtime_wire(compiled)["ok"]
     from captured_spawn_velocity_author import historical_spawn_velocity_wire
@@ -147,7 +148,7 @@ def project_captured_projectile_call(call: dict[str, Any]) -> None:
 
 def project_captured_author_notation(document: dict[str, Any]) -> dict[str, Any]:
     """Exact v4->v5 notation projection for archived tests only; never admission."""
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
     projected = deepcopy(document)
     program = projected.get("runtimeProgram", {})

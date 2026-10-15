@@ -12,7 +12,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.runtime_program_fixtures import (
     NON_ARCHETYPAL_FIXTURES,
     build_runtime_fixture,

@@ -405,8 +405,8 @@ def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Cross-check structural C# DTOs with Author, Visual and technical owners."""
-    from infini_local.core.runtime_authoring import program_schema as author
-    from infini_local.core.runtime_authoring import wire_validator as wire
+    import infini_local.core.runtime_authoring.program_schema as author
+    import infini_local.core.runtime_authoring.wire_validator as wire
     from infini_local.pipelines.visual_generation_pipeline import visual_response_schema
 
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()

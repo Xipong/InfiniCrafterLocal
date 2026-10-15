@@ -6,7 +6,8 @@ import json
 import pytest
 from jsonschema import Draft202012Validator
 
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
 from infini_local.qa.capability_witnesses import build_capability_witness
 
