@@ -1,6 +1,8 @@
 using System;
+using System.Reflection;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
@@ -92,6 +94,28 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, Collision.stair, "query preserves native stair flag");
                 Equal(true, Collision.stairFall, "query preserves native fall flag");
                 Equal(true, Collision.sloping, "query preserves native sloping flag");
+
+                // The ground_at_cursor spawn branch uses this actual search helper.
+                var findGround = typeof(GeneratedProjectile).GetMethod("FindGroundAtCursor", BindingFlags.Static | BindingFlags.NonPublic)!;
+                var cursor = new Vector2(648f, 568f); // Column 40, row 35.
+                Vector2 Ground() => (Vector2)findGround.Invoke(null, new object[] { cursor })!;
+                for (int y = 35; y < Terraria.Main.maxTilesY - 2; y++)
+                    Terraria.Main.tile[40, y].ClearEverything();
+                Equal(cursor, Ground(), "empty column retains the cursor position");
+                var upper = Terraria.Main.tile[40, 40];
+                var lower = Terraria.Main.tile[40, 45];
+                upper.HasTile = lower.HasTile = true;
+                upper.TileType = lower.TileType = TileID.Stone;
+                Equal(new Vector2(648f, 636f), Ground(), "ordinary nearest solid floor is unchanged");
+                upper.IsActuated = true;
+                Equal(new Vector2(648f, 716f), Ground(), "spawn search skips actuated floor for solid ground below");
+                lower.IsActuated = true;
+                Equal(cursor, Ground(), "only actuated tiles cannot anchor a ground spawn");
+                upper.HasActuator = true;
+                upper.IsActuated = false;
+                Equal(new Vector2(648f, 636f), Ground(), "installed actuator alone does not remove support");
+                upper.HasTile = false;
+                Equal(cursor, Ground(), "empty tile with stale solid type cannot anchor a spawn");
             }
             finally
             {
