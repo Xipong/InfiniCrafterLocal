@@ -105,22 +105,11 @@ def test_published_state_is_a_snapshot_not_an_alias_to_mutable_ui_state(bridge):
 
 def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_path, monkeypatch):
     module = bridge_module()
-    from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk
-    if not TKINTER_AVAILABLE:
-        pytest.skip('Native Tk adapter requires a Tk-capable interpreter')
-    try:
-        probe = tk.Tk()
-        probe.destroy()
-    except tk.TclError:
-        pytest.skip('Native adapter requires a display')
-    from infini_local.desktop import settings_gui, settings_gui_trace_state, settings_gui_server_controls
+    from infini_local.desktop.settings_controller import SettingsController
     from infini_local.desktop.settings_env import parse_env
     config = tmp_path / 'config.env'
     config.write_text('INFINI_PRIVATE_UNKNOWN=preserved\nINFINI_LLM_MAX_TOKENS=12345\nINFINI_OPENAI_COMPAT_API_KEY=keep-me\n', encoding='utf-8')
-    for owner in (settings_gui, settings_gui_trace_state, settings_gui_server_controls):
-        monkeypatch.setattr(owner, 'CONFIG_PATH', config)
-    app = settings_gui.SettingsGui()
-    app.withdraw()
+    app = SettingsController(config)
     server = module.StudioServer(tmp_path)
     try:
         controller = module.StudioController(app, server)
@@ -141,40 +130,30 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller.apply({'id':'reset-proof','action':'resetSprite','values':{},'extra':{}})
         assert controller.action_results['reset-proof']['values']['INFINI_SPRITE_DOWNSCALE_FILTER'] == 'box'
         # Browser drafts intentionally allow editing inactive provider settings.
-        # Their hidden Tk Text widgets are disabled and must not drop those edits.
+        # Disabled controls must not discard explicit browser draft edits.
         key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
-        widget = app.text_widgets[key]
         for index, backend in enumerate(('off', 'sdcpp', 'off', 'off')):
-            app.vars['INFINI_IMAGE_BACKEND'].set(backend)
+            app.update_values({'INFINI_IMAGE_BACKEND': backend})
             app._refresh_visibility()
-            expected_state = 'normal' if backend == 'sdcpp' else 'disabled'
-            assert str(widget.cget('state')) == expected_state
+            assert (not app.field_disabled_reasons.get(key)) == (backend == 'sdcpp')
             tags = f'<lora:a:{index}.2>\n<lora:b:{index}.3>' if index != 3 else ''
             identifier = f'inactive-text-{index}'
             controller.apply({'id': identifier, 'action': 'save',
                               'values': {key: tags}, 'extra': {}})
             receipt = controller.action_results[identifier]
             assert receipt['ok'] is True
-            assert widget.get('1.0', 'end-1c') == tags
-            assert str(widget.cget('state')) == expected_state
+            assert app.values[key] == tags
+            assert (not app.field_disabled_reasons.get(key)) == (backend == 'sdcpp')
             assert parse_env(config)[key] == tags
             assert receipt['savedValues'][key] == tags
             assert controller.snapshot()['savedValues'][key] == tags
     finally:
         server.close()
-        app.destroy()
+        app.on_close()
 
 
 def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monkeypatch):
-    from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk
-    if not TKINTER_AVAILABLE:
-        pytest.skip('Defaults controller integration needs native Tk')
-    try:
-        probe = tk.Tk()
-        probe.destroy()
-    except tk.TclError:
-        pytest.skip('Defaults controller integration needs a display')
-    from infini_local.desktop import settings_gui, settings_gui_trace_state, settings_gui_server_controls
+    from infini_local.desktop.settings_controller import SettingsController
     from infini_local.desktop.settings_schema import DEFAULTS
     from infini_local.desktop.settings_env import parse_env
     monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
@@ -186,10 +165,7 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
                 b'INFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\nINFINI_PROMPT_STYLE=Default\r\n'
                 b'INFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n')
     config.write_bytes(original)
-    for owner in (settings_gui, settings_gui_trace_state, settings_gui_server_controls):
-        monkeypatch.setattr(owner, 'CONFIG_PATH', config)
-    app = settings_gui.SettingsGui()
-    app.withdraw()
+    app = SettingsController(config)
     server = bridge_module().StudioServer(tmp_path)
     try:
         controller = bridge_module().StudioController(app, server)
@@ -198,40 +174,38 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
         offer = before['defaultsUpdate']
         assert {row['key'] for row in offer['changes']} == {'INFINI_LLM_MAX_TOKENS'}
         assert config.read_bytes() == original
-        app.vars['INFINI_PROMPT_STYLE'].set('Unsaved native draft')
-        preset = app.preset_var.get()
+        app.update_values({'INFINI_PROMPT_STYLE': 'Unsaved controller draft'})
+        preset = app.preset
         baseline = dict(app._profile_baseline)
         def forbidden(*_args, **_kwargs):
             pytest.fail('Defaults decisions must not save/collect/capture the entire draft')
         monkeypatch.setattr(app, 'save', forbidden)
         monkeypatch.setattr(app, 'collect', forbidden)
         monkeypatch.setattr(app, '_capture_profile_baseline', forbidden)
-        app.radmin_enabled.set(False)
+        app.lan_enabled = False
         controller.apply({'id': 'accept-offer', 'action': 'acceptDefaults',
                           'values': {'INFINI_PRIVATE_UNKNOWN': 'malicious-draft', 'INFINI_PROMPT_STYLE': 'sent-draft'},
                           'extra': {'revision': offer['revision'], 'lanEnabled': True}})
         assert config.read_bytes() == original.replace(b'9000', b'18000')
-        assert app.vars['INFINI_LLM_MAX_TOKENS'].get() == '18000'
-        assert app.data['INFINI_LLM_MAX_TOKENS'] == '18000'
-        assert app.vars['INFINI_PROMPT_STYLE'].get() == 'Unsaved native draft'
-        assert app.data['INFINI_PRIVATE_UNKNOWN'] == 'keep'
-        assert app.radmin_enabled.get() is False
-        assert app.preset_var.get() == preset
+        assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
+        assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
+        assert app.values['INFINI_PROMPT_STYLE'] == 'Unsaved controller draft'
+        assert app.values['INFINI_PRIVATE_UNKNOWN'] == 'keep'
+        assert app.lan_enabled is False
+        assert app.preset == preset
         assert app._profile_baseline == baseline
         assert parse_env(config)['INFINI_PROMPT_STYLE'] == 'Default'
         assert controller.last_action['ok'] is True
     finally:
         server.close()
-        app.destroy()
+        app.on_close()
 
 
 @pytest.mark.parametrize('fresh_install', [False, True])
 def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_path, monkeypatch, fresh_install):
     """No Tk/display needed: use the actual bridge and settings file owner."""
-    from types import SimpleNamespace
-    from infini_local.desktop import settings_gui_trace_state, settings_gui_theme
     from infini_local.desktop.settings_env import write_env, parse_env
-    from infini_local.desktop.settings_gui import SettingsGui
+    from infini_local.desktop.settings_controller import SettingsController
     module = bridge_module()
     config = tmp_path / 'config.env'
     example = tmp_path / 'config.example.env'
@@ -241,19 +215,8 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     if not fresh_install:
         # Existing personal config wins even when it differs from the example.
         write_env(config, dict(initial, INFINI_SDCPP_SERVER_EXE='personal-sd-server'))
-    monkeypatch.setattr(settings_gui_trace_state, 'CONFIG_PATH', config)
-    monkeypatch.setattr(settings_gui_theme, 'EXAMPLE_PATH', example)
-    value = lambda text='': SimpleNamespace(get=lambda: text)
-    current = parse_env(config if config.exists() else example)
-    app = SimpleNamespace(
-        field_widgets={}, pages={}, field_disabled_reasons={}, user_presets={},
-        _current_profile_settings=lambda: dict(current), preset_var=value(SettingsGui._pipeline_preset_from_config(current, {})),
-        status_var=value('Ready'), activity_var=value(), applied_config_var=value(),
-        home_state_var=value(), home_detail_var=value(), home_config_var=value(),
-        trace_texts={}, trace_status_var=value(), _gui_tasks={}, radmin_enabled=value(False),
-        codex_catalog_var=value(), codex_image_account_var=value(),
-        _pipeline_preset_from_config=SettingsGui._pipeline_preset_from_config,
-    )
+    app = SettingsController(config, example_path=example)
+    current = app.values
     controller = module.StudioController(app, None)
     initial_snapshot = controller.snapshot()
     from infini_local.core.config_bootstrap import APP_VERSION
@@ -302,7 +265,7 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
 @pytest.mark.parametrize('error', [ValueError('Invalid config.env JSON at line 2'), UnicodeError('Invalid UTF-8 config.env')])
 def test_studio_startup_reports_malformed_config_without_starting_server(monkeypatch, error):
     module = bridge_module()
-    from infini_local.desktop import settings_gui
+    from infini_local.desktop import settings_controller
 
     def malformed():
         raise error
@@ -310,7 +273,7 @@ def test_studio_startup_reports_malformed_config_without_starting_server(monkeyp
     def unexpected_server(*args, **kwargs):
         pytest.fail('Studio must not start with fabricated settings after a parse error')
 
-    monkeypatch.setattr(settings_gui, 'SettingsGui', malformed)
+    monkeypatch.setattr(settings_controller, 'SettingsController', malformed)
     monkeypatch.setattr(module, 'StudioServer', unexpected_server)
     with pytest.raises(SystemExit, match='config.env') as failure:
         module.main(['--no-browser'])

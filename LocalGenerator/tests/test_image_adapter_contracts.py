@@ -9,7 +9,7 @@ import time
 import pytest
 from infini_local.pipelines import image_backend_pipeline as backend
 from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.services import codex_auth, asset_sync_service
+from infini_local.services import codex_auth, asset_sync_service, visual_asset_pipeline
 from PIL import Image, ImageDraw
 from infini_local.pipelines import image_backend_pipeline, visual_delivery_gate, visual_sprite_generation
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
@@ -102,7 +102,7 @@ def test_each_adapter_surfaces_raw_filesystem_errors_as_terminal_local_io(adapte
     if name == 'openai_codex':
         def denied_replace(*args):
             raise PermissionError('offline Codex raw commit fault')
-        monkeypatch.setattr(backend.visual_asset_pipeline, 'generate_procedural_asset', lambda *args, **kwargs: pytest.fail('unexpected fallback'))
+        monkeypatch.setattr(visual_asset_pipeline, 'generate_procedural_asset', lambda *args, **kwargs: pytest.fail('unexpected fallback'))
         from infini_local.services import codex_image_backend
         monkeypatch.setattr(codex_image_backend.os, 'replace', denied_replace)
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', name)

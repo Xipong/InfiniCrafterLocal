@@ -21,7 +21,6 @@ from infini_local.core.config_bootstrap import (
 )
 from infini_local.core.image_dependencies import (
     Image,
-    ImageDraw,
 )
 from infini_local.pipelines.pipeline_visual_config import (
     A1111_BATCH_SIZE,
@@ -95,20 +94,18 @@ from infini_local.pipelines.pipeline_visual_config import (
     VISUAL_GENERATION_TIMEOUT,
     ZIMAGE_POSITIVE_ONLY,
     ZIMAGE_PROMPT_CONTRACT,
-    _sdcpp_config,
     cleanup_sdcpp_server_process,
 )
 from infini_local.services import (
     sdcpp_backend,
     sdcpp_service,
-    visual_asset_pipeline,
 )
 from infini_local.storage.trace_runtime import (
     _tail_text_file,
     log_event,
     trace_event,
 )
-from infini_local.storage.world_recipe_runtime import safe_file_part
+from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 
 from infini_local.pipelines.llm_transport import (
@@ -120,7 +117,6 @@ from infini_local.pipelines.visual_prompt_contracts import (
     image_backend_is_zimage,
     zimage_positive_only_enabled,
 )
-
 
 
 def http_binary_get(url: str, timeout: float = 30, *, deadline: float | None = None) -> bytes:
@@ -240,23 +236,10 @@ def fetch_comfyui_image(image_meta: dict[str, Any], out_path: Path) -> str:
 def sdcpp_repair_command_template(template: str) -> tuple[str, bool, str]:
     return sdcpp_backend.repair_command_template(template, SDCPP_DEFAULT_COMMAND_TEMPLATE)
 
-def sdcpp_command_mode_is_template() -> bool:
-    return sdcpp_backend.command_mode_is_template(SDCPP_SERVER_COMMAND_MODE)
-
-def sdcpp_base_arg_list() -> list[str]:
-    return sdcpp_backend.base_arg_list(_sdcpp_config())
-
-def quote_cmd_arg(value: str) -> str:
-    return sdcpp_backend.quote_cmd_arg(value)
-
-def _extra_has_flag(extra: str, *flags: str) -> bool:
-    return sdcpp_backend.extra_has_flag(extra, *flags)
 
 def sdcpp_effective_extra_args() -> str:
     return sdcpp_backend.effective_extra_args(_sdcpp_config())
 
-def sdcpp_effective_extra_arg_list() -> list[str]:
-    return sdcpp_backend.effective_extra_arg_list(_sdcpp_config())
 
 def sdcpp_server_is_configured() -> bool:
     return sdcpp_backend.server_is_configured(_sdcpp_config(), SDCPP_SERVER_COMMAND_TEMPLATE)

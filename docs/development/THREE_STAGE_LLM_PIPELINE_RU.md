@@ -16,6 +16,8 @@
 
 Stage-level Gameplay admission/compile/wire/conditional Repair находится в [gameplay_stage](../../LocalGenerator/infini_local/pipelines/gameplay_stage.py); VFX transport — в [vfx_generation_pipeline](../../LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py). Их внутренние imports не являются compatibility API.
 
+Parent context: `parent_context_cards.raw_parent_card_for_llm` — единственный assembler Author/Visual packets; `parent_context_pipeline` извлекает source facts и сохраняет активный parent-power profile для `item_power_knowledge`. Identity primitives импортируются прямо из `core.item_identity_tools`. Неиспользуемый alternative `llm_parent_card`, derived-semantics и behavior-policy builders удалены: они не участвовали в requests. Exact accepted runtime, provenance, zeros/false и Visual-only appearance сохраняют прежнюю проекцию.
+
 Orchestration owner — [combine_pipeline.combine](../../LocalGenerator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../reference/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
 <a id="repairs-accounting"></a>

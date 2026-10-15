@@ -41,13 +41,12 @@ from infini_local.pipelines.visual_sprite_generation import maybe_generate_visua
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
+from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
 from infini_local.storage.world_recipe_runtime import (
     cache_get,
     cache_put,
-    is_deliverable_recipe_payload,
     normalize_world_id_from_payload,
     recipe_key,
-    sanitize_recipe_for_delivery,
     world_recipe_dir,
 )
 

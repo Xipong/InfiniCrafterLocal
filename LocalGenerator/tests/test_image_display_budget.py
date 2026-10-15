@@ -16,6 +16,7 @@ from PIL import Image
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import pipeline_visual_config as config
+from infini_local.pipelines import image_backend_pipeline as backend
 from infini_local.pipelines import sprite_postprocess as post
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.pipelines import visual_sprite_generation as generation
@@ -150,7 +151,7 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         assert "Technical correction:" in retry["prompt"] if zimage else "fix these technical issues:" in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
-            payload = server_payload(config._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
+            payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
             wire = json.loads(json.dumps(payload, ensure_ascii=False))
             assert _framing(wire["prompt"]) == _framing(call["prompt"])
             assert wire["negative_prompt"] == ""

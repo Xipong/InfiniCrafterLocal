@@ -3,7 +3,7 @@
 <a id="storage"></a>
 ## Хранилище и commit boundary
 
-Owners: [world_recipe_runtime.py](../../LocalGenerator/infini_local/storage/world_recipe_runtime.py) — cache identity/strict v5 validation; [world_storage.py](../../LocalGenerator/infini_local/storage/world_storage.py) — atomic files, sanitize и derived health. Старые AttackSpec/family/runtimePlan payload не импортируются и не чинятся migration-путём.
+Owners: [world_recipe_runtime.py](../../LocalGenerator/infini_local/storage/world_recipe_runtime.py) — world/recipe identity и привязка application config; [world_storage.py](../../LocalGenerator/infini_local/storage/world_storage.py) — strict v5 admission, atomic files, sanitize и derived health. Старые AttackSpec/family/runtimePlan payload не импортируются и не чинятся migration-путём.
 
 В `LocalGenerator/cache/world_recipes/world_<id>/`:
 

@@ -1,7 +1,7 @@
 """Optional real-browser regression: delayed POST acknowledgements versus draft state.
 
-Requires Tk/display and Playwright Chromium; ordinary headless pytest skips this
-integration while HTTP/controller coverage remains in test_web_studio.py.
+Requires Playwright Chromium; the real controller runs without a display or Tk.
+HTTP/controller coverage also remains in test_web_studio.py.
 """
 from __future__ import annotations
 
@@ -14,9 +14,6 @@ import pytest
 
 
 def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monkeypatch):
-    from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk
-    if not TKINTER_AVAILABLE:
-        pytest.skip('Browser integration needs native Tk and a display')
     browser_api = pytest.importorskip('playwright.sync_api')
     browser_executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE')
     with browser_api.sync_playwright() as browser_probe:
@@ -26,12 +23,10 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
             if not candidates:
                 pytest.skip('Browser integration needs installed Playwright Chromium')
             browser_executable = str(candidates[-1])
-    try:
-        probe = tk.Tk()
-        probe.destroy()
-    except tk.TclError:
-        pytest.skip('Browser integration needs a display')
-    from infini_local.desktop import settings_gui, settings_gui_trace_state, settings_gui_server_controls
+    from infini_local.desktop.settings_controller import SettingsController
+    from infini_local.services import codex_auth
+    monkeypatch.setattr(codex_auth, "auth_status", lambda: {"authenticated": False})
+    monkeypatch.delenv("DISPLAY", raising=False)
     from infini_local.desktop.settings_env import write_env, parse_env
     from infini_local.desktop.web_studio import StudioServer, StudioController
     from pathlib import Path
@@ -42,11 +37,8 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
                       'INFINI_CACHE_DIR':str(tmp_path / 'cache'),
                       'INFINI_SPRITE_DOWNSCALE_FILTER':'bilinear',
                       'INFINI_SPRITE_PREMULTIPLIED_RESIZE':'0'})
-    for owner in (settings_gui, settings_gui_trace_state, settings_gui_server_controls):
-        monkeypatch.setattr(owner, 'CONFIG_PATH', config)
-    app = settings_gui.SettingsGui()
-    app.withdraw()
-    server = StudioServer(Path(settings_gui.__file__).with_name('webui'))
+    app = SettingsController(config_path=config)
+    server = StudioServer(Path(__file__).parents[1] / 'infini_local' / 'desktop' / 'webui')
     controller = StudioController(app, server)
     server.publish(controller.snapshot())
     server.start()
@@ -107,18 +99,14 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
     worker = threading.Thread(target=browser_work, daemon=True)
     worker.start()
     deadline = time.monotonic() + 45
-    def finish():
-        if done.is_set() or time.monotonic() > deadline:
-            app.quit()
-        else:
-            app.after(50, finish)
     app.after(0, controller.tick)
-    app.after(50, finish)
     try:
-        app.mainloop()
+        while not done.is_set() and time.monotonic() < deadline:
+            app.pump()
+            time.sleep(0.01)
     finally:
         server.close()
-        app.destroy()
+        app.on_close()
         worker.join(timeout=3)
     assert done.is_set(), 'Browser integration exceeded its bounded deadline'
     assert not errors, '\n'.join(errors)
@@ -126,9 +114,6 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
 
 def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, monkeypatch):
     from pathlib import Path
-    from infini_local.desktop.tk_compat import TKINTER_AVAILABLE, tk
-    if not TKINTER_AVAILABLE:
-        pytest.skip('Defaults integration needs native Tk')
     browser_api = pytest.importorskip('playwright.sync_api')
     with browser_api.sync_playwright() as probe_browser:
         executable = os.environ.get('INFINI_TEST_BROWSER_EXECUTABLE') or probe_browser.chromium.executable_path
@@ -137,12 +122,10 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
             if not candidates:
                 pytest.skip('Defaults integration needs installed Chromium')
             executable = str(candidates[-1])
-    try:
-        probe = tk.Tk()
-        probe.destroy()
-    except tk.TclError:
-        pytest.skip('Defaults integration needs a display')
-    from infini_local.desktop import settings_gui, settings_gui_trace_state, settings_gui_server_controls
+    from infini_local.desktop.settings_controller import SettingsController
+    from infini_local.services import codex_auth
+    monkeypatch.setattr(codex_auth, "auth_status", lambda: {"authenticated": False})
+    monkeypatch.delenv("DISPLAY", raising=False)
     from infini_local.desktop.settings_schema import DEFAULTS
     from infini_local.desktop.settings_env import parse_env
     from infini_local.desktop.web_studio import StudioServer, StudioController
@@ -154,15 +137,12 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                 b'INFINI_OPENAI_COMPAT_API_KEY=opaque-test-key\r\nINFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\n'
                 b'INFINI_HOST=127.0.0.1\r\nINFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n')
     config.write_bytes(original)
-    for owner in (settings_gui, settings_gui_trace_state, settings_gui_server_controls):
-        monkeypatch.setattr(owner, 'CONFIG_PATH', config)
-    app = settings_gui.SettingsGui()
-    app.withdraw()
+    app = SettingsController(config_path=config)
     def forbidden(*_args, **_kwargs):
         raise AssertionError('Defaults consent must never call generic save/collect')
     monkeypatch.setattr(app, 'save', forbidden)
     monkeypatch.setattr(app, 'collect', forbidden)
-    server = StudioServer(Path(settings_gui.__file__).with_name('webui'))
+    server = StudioServer(Path(__file__).parents[1] / 'infini_local' / 'desktop' / 'webui')
     controller = StudioController(app, server)
     expected_offer = controller.snapshot()['defaultsUpdate']
     server.publish(controller.snapshot())
@@ -262,27 +242,23 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
     worker = threading.Thread(target=browser_work, daemon=True)
     worker.start()
     deadline = time.monotonic() + 45
-    def finish():
-        if done.is_set() or time.monotonic() > deadline:
-            app.quit()
-        else:
-            app.after(50, finish)
     app.after(0, controller.tick)
-    app.after(50, finish)
     try:
-        app.mainloop()
+        while not done.is_set() and time.monotonic() < deadline:
+            app.pump()
+            time.sleep(0.01)
     finally:
         server.close()
-        app.destroy()
+        app.on_close()
         worker.join(timeout=3)
     assert done.is_set(), 'Defaults integration exceeded deadline'
     assert not errors, '\n'.join(errors)
 
 
 def test_studio_frontend_credentials_search_and_mobile_focus(tmp_path):
-    """Real frontend/HTTP with explicit snapshot fixture, independent of native Tk.
+    """Real frontend/HTTP with explicit snapshot fixture, independent of the controller.
 
-    This verifies browser interactions, not native controller or model readiness.
+    This verifies browser interactions, not controller or model readiness.
     Set INFINI_TEST_BROWSER_EXECUTABLE to an installed Chromium when needed.
     """
     import os

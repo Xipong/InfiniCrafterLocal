@@ -10,7 +10,7 @@ except Exception:
     Image = None
     ImageEnhance = None
 
-from infini_local.storage.world_recipe_runtime import safe_file_part
+from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output
 from infini_local.core.env_utils import env_int

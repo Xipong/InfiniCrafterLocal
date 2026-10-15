@@ -157,7 +157,9 @@
       ],
       "tests": [
         "LocalGenerator/tests/test_web_studio*.py",
-        "LocalGenerator/tests/test_settings_*.py"
+        "LocalGenerator/tests/test_settings_*.py",
+        "LocalGenerator/tests/test_studio_*.py",
+        "LocalGenerator/tests/test_openrouter_provider_settings.py"
       ],
       "entrypoints": [
         "LocalGenerator/infini_local/desktop/web_studio.py",

@@ -95,7 +95,7 @@ LocalGenerator\.venv\Scripts\python.exe LocalGenerator\settings_gui.py
 LocalGenerator\.venv\Scripts\python.exe LocalGenerator\server.py
 ```
 
-Первая открывает отдельный **настольный Tk-интерфейс** для совместимости, не браузерную Studio. Его названия кнопок могут отличаться.
+Первая открывает ту же браузерную Studio. Отдельного настольного интерфейса больше нет.
 
 Нумерованные BAT для отдельных действий находятся в **`tools/windows/`**. Обычному игроку они не нужны. [Установщик исходников](../../tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat) предназначен для разработки и **удаляет старую одноимённую папку ModSources**; [прямой сервер](../../tools/windows/06_START_SERVER_DIRECT.bat) не проверяет владельца порта через Studio.
 

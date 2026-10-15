@@ -9,13 +9,8 @@ from infini_local.core.item_identity_tools import name_of, recipe_key as _world_
 from infini_local.storage import world_storage
 
 
-# AGENT MAP: world-scoped recipe storage wrappers shared by pipeline support and
-# the HTTP server. This is storage identity/sanitization glue only; no generation
-# or fallback authoring belongs here.
-
-
-def safe_file_part(text: Any, default: str = "value", max_len: int = 80) -> str:
-    return world_storage.safe_file_part(text, default, max_len)
+# Bind application configuration and parent identity to the storage owner.
+# File operations, delivery projection and admission live in world_storage.
 
 
 def world_recipe_dir(world_id: Any) -> Path:
@@ -29,31 +24,6 @@ def world_recipe_file(world_id: Any, recipe_key_value: str) -> Path:
     return world_storage.world_recipe_file(WORLD_RECIPES_DIR, world_id, recipe_key_value)
 
 
-def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    world_storage.atomic_write_json(path, payload)
-
-
-def read_json_file(path: Path) -> dict[str, Any] | None:
-    return world_storage.read_json_file(path)
-
-
-def write_world_manifest(world_id: Any, world_name: Any = None) -> None:
-    world_storage.write_world_manifest(WORLD_RECIPES_DIR, APP_VERSION, world_id, world_name)
-
-
-
-def strip_runtime_only_fields(data: dict[str, Any]) -> dict[str, Any]:
-    return world_storage.strip_runtime_only_fields(data)
-
-
-def _delivery_safe_debug(debug: Any) -> dict[str, str]:
-    return world_storage.delivery_safe_debug(debug)
-
-
-def sanitize_recipe_for_delivery(data: Any) -> Any:
-    return world_storage.sanitize_recipe_for_delivery(data)
-
-
 def write_world_recipe_cache(recipe_key_value: str, world_id: Any, data: dict[str, Any], a: Any = None, b: Any = None, world_name: Any = None) -> None:
     world_storage.write_world_recipe_cache(
         WORLD_RECIPES_DIR,
@@ -64,21 +34,6 @@ def write_world_recipe_cache(recipe_key_value: str, world_id: Any, data: dict[st
         parent_a_name=name_of(a) if isinstance(a, dict) else data.get("recipeMeta", {}).get("parentA", ""),
         parent_b_name=name_of(b) if isinstance(b, dict) else data.get("recipeMeta", {}).get("parentB", ""),
         world_name=world_name,
-    )
-
-
-def quarantine_world_recipe_cache(
-    recipe_key_value: str,
-    world_id: Any,
-    reason: str,
-    details: dict[str, Any] | None = None,
-) -> str:
-    return world_storage.quarantine_world_recipe_cache(
-        WORLD_RECIPES_DIR,
-        world_id=world_id,
-        recipe_key_value=recipe_key_value,
-        reason=reason,
-        details=details,
     )
 
 
@@ -95,10 +50,6 @@ def read_world_recipe_cache(
         world_name,
         validate_payload=validate_payload,
     )
-
-
-def is_deliverable_recipe_payload(data: Any, *, check_assets: bool = True) -> bool:
-    return world_storage.is_deliverable_recipe_payload(data, check_assets=check_assets)
 
 
 def cache_get(
@@ -159,19 +110,10 @@ def normalize_world_id_from_payload(payload: dict[str, Any]) -> str:
 
 __all__ = [
     "WorldScopeMissing",
-    "safe_file_part",
     "world_recipe_dir",
     "world_recipe_file",
-    "atomic_write_json",
-    "read_json_file",
-    "write_world_manifest",
-    "strip_runtime_only_fields",
-    "_delivery_safe_debug",
-    "sanitize_recipe_for_delivery",
     "write_world_recipe_cache",
-    "quarantine_world_recipe_cache",
     "read_world_recipe_cache",
-    "is_deliverable_recipe_payload",
     "cache_get",
     "cache_put",
     "recipe_key",

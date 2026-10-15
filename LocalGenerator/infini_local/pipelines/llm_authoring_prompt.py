@@ -28,7 +28,7 @@ from infini_local.pipelines.author_item_contract import (
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.parent_context_pipeline import item_field
+from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
