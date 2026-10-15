@@ -145,3 +145,19 @@ def test_runtime_package_keeps_eager_owner_imports_out(gates, source, valid):
     issues = hygiene.python_source_issues(sources)
     has_barrel_import = any(issue.startswith("runtime_barrel_import:") for issue in issues)
     assert has_barrel_import is not valid
+
+
+@pytest.mark.parametrize("source,valid", [
+    ('from infini_local.core.runtime_authoring import compile_runtime_program\n', False),
+    ('from infini_local.core.runtime_authoring import *\n', False),
+    ('from infini_local.core.runtime_authoring import program_schema\n', False),
+    ('import infini_local.core.runtime_authoring.program_schema as program_schema\n', True),
+    ('from infini_local.core.runtime_authoring.compiler import compile_runtime_program\n', True),
+])
+@pytest.mark.parametrize("path", ["LocalGenerator/infini_local/pipelines/example.py", "LocalGenerator/tests/test_example.py"])
+def test_runtime_consumers_import_defining_module(gates, source, valid, path):
+    hygiene, _ = gates
+    sources = python_sources("value = 1")
+    sources[path] = source
+    issues = hygiene.python_source_issues(sources)
+    assert any(issue.startswith("runtime_barrel_consumer:") for issue in issues) is not valid

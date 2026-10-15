@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 import threading
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from urllib import request as urlrequest
 from urllib import error as urlerror
 from urllib.parse import urlsplit
@@ -2630,3 +2630,15 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
 
 
 __all__ = ['LLM_STAGE_KEY', 'LLM_STAGES', '_normalized_llm_stage', 'with_llm_stage', '_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', 'request_shape_rejection_diagnosis', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']
+
+
+def effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Use actual transport metadata when a provider relaxed the requested schema."""
+    response_format = request.get("response_format")
+    debug = raw.get("_debug")
+    if isinstance(debug, Mapping):
+        if debug.get("strictSchemaDowngraded") or debug.get("responseFormatUsed") is False:
+            return None
+        if "responseFormatType" in debug and debug["responseFormatType"] != "json_schema":
+            return None
+    return response_format if isinstance(response_format, Mapping) else None

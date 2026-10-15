@@ -109,6 +109,21 @@
         "docs/development/ARCHITECTURE_RU.md",
         "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
       ]
+    },
+    {
+      "id": "shared-llm-boundaries",
+      "patterns": [
+        "LocalGenerator/infini_local/core/llm_json_tools.py",
+        "LocalGenerator/infini_local/core/schema_validation.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+      ],
+      "checks": [
+        "project_hygiene",
+        "pytest"
+      ],
+      "context": [
+        "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md"
+      ]
     }
   ]
 }

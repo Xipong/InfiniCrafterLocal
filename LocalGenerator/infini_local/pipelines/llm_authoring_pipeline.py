@@ -12,7 +12,7 @@ from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_prompt_cache import with_instruction_segments
-from infini_local.core.llm_json_tools import effective_response_format, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
     ATTRIBUTED_PLANNER_HISTORY_KIND,
@@ -50,6 +50,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
 )
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.llm_transport import (
+    effective_response_format,
     active_llm_provider,
     apply_minimum_reasoning_effort,
     apply_llm_common_options,

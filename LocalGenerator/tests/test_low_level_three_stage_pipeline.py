@@ -491,7 +491,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("oversized_surface", ["calls", "unknown-root"])
 def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire_transport, monkeypatch, mode, oversized_surface):
-    from infini_local.core.runtime_authoring import program_schema
+    import infini_local.core.runtime_authoring.program_schema as program_schema
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     responses, requests = wire_transport
@@ -583,3 +583,74 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
         "spent-budget": ["02_strict_runtime_program"],
     }
     assert stage_labels == expected_labels[scenario]
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, AssertionError, TypeError, ValueError])
+@pytest.mark.parametrize("after_repair", [False, True])
+def test_compiler_faults_propagate_without_gameplay_repair(monkeypatch, error_type, after_repair):
+    good = build_runtime_fixture("workbench_blade")
+    current = copy.deepcopy(good)
+    if after_repair:
+        current["name"] = ""
+    repair_calls = []
+
+    def repair(*args, **kwargs):
+        repair_calls.append(kwargs["failure_report"])
+        return copy.deepcopy(good)
+
+    fault = error_type("compiler invariant failed")
+
+    def broken_compiler(*args, **kwargs):
+        raise fault
+
+    monkeypatch.setattr(combine_stage, "compile_runtime_program", broken_compiler)
+    monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
+    with pytest.raises(error_type) as caught:
+        combine_stage.compile_and_validate_authored_runtime(
+            current, {}, {}, {}, {}, "compiler-fault", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert caught.value is fault
+    assert len(repair_calls) == int(after_repair)
+
+
+def test_runtime_wire_admission_once_and_final_gate_still_rejects_mutation(monkeypatch):
+    validate = combine_stage.validate_runtime_wire
+    calls = []
+
+    def observe(data):
+        calls.append(data)
+        return validate(data)
+
+    monkeypatch.setattr(combine_stage, "validate_runtime_wire", observe)
+    result = combine_stage.compile_and_validate_authored_runtime(
+        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "single-admission",
+        run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert len(calls) == 1
+    result["runtimeProgram"]["schema"] = "invalid-after-presentation"
+    with pytest.raises(PlannerUnavailable, match="runtime wire rejected"):
+        combine_stage.validate_final_runtime_wire_boundary(result)
+    assert len(calls) == 2
+
+
+def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
+    validate = combine_stage.validate_runtime_wire
+    target = {"path": "$.runtimeProgram.entities[0]", "code": "wire_rejection", "message": "invalid wire leaf"}
+    reports = []
+    count = 0
+
+    def reject_once(data):
+        nonlocal count
+        count += 1
+        return {"ok": False, "errors": [target]} if count == 1 else validate(data)
+
+    def repair(authored, *args, **kwargs):
+        reports.append(kwargs["failure_report"])
+        return authored
+
+    monkeypatch.setattr(combine_stage, "validate_runtime_wire", reject_once)
+    monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
+    result = combine_stage.compile_and_validate_authored_runtime(
+        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "wire-rejection",
+        run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert validate(result)["ok"]
+    assert count == 2 and len(reports) == 1
+    assert reports[0]["errors"] == [target]

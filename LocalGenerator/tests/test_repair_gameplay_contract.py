@@ -132,7 +132,11 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
 @pytest.mark.parametrize("owner", ["item-condition", "projectile-trigger"])
 def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypatch, owner):
     from dataclasses import replace
-    from infini_local.core.runtime_authoring import capability_registry, repair_scope, validator, compiler, technical_lowering
+    import infini_local.core.runtime_authoring.capability_registry as capability_registry
+    import infini_local.core.runtime_authoring.repair_scope as repair_scope
+    import infini_local.core.runtime_authoring.validator as validator
+    import infini_local.core.runtime_authoring.compiler as compiler
+    import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
     from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 
     fn = "require_use_condition" if owner == "item-condition" else "pull_on_event"

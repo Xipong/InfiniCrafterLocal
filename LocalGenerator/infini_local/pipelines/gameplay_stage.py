@@ -16,9 +16,13 @@ from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROG
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH, strict_author_shape_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import assert_valid_runtime_wire, validate_runtime_wire
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
 from infini_local.pipelines.llm_authoring_pipeline import repair_author_item_after_failure
+
+
+class _RepairableGameplayRejection(PlannerUnavailable):
+    """An explicit Author/wire validation rejection, never a compiler bug."""
 
 
 def _name_of(parent: Mapping[str, Any] | None) -> str:
@@ -99,7 +103,7 @@ def strict_validate_authored_item(
     report = authored_item_validation_report(data, a, b)
     data.setdefault("debug", {})["lowLevelAuthorValidation"] = copy.deepcopy(report)
     if not report["ok"]:
-        exc = PlannerUnavailable(
+        exc = _RepairableGameplayRejection(
             "Gameplay Author low-level runtime rejected: "
             + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report["errors"][:16])
         )
@@ -126,7 +130,6 @@ def attach_gameplay_and_runtime_program(
     compiled.setdefault("debug", {})["gameplayCompiler"] = "explicit_low_level_runtime_program_v5"
     compiled["debug"]["gameplayDesignAuthorship"] = "gameplay_author"
     compiled["debug"]["deterministicRole"] = "validate_compile_execute_only"
-    assert_valid_runtime_wire(compiled)
     return compiled
 
 
@@ -135,10 +138,12 @@ def validate_final_runtime_wire_boundary(data: dict[str, Any]) -> dict[str, Any]
     debug = data.setdefault("debug", {})
     debug["finalRuntimeProgramWireGate"] = bounded_json_dumps(report, max_chars=12000)
     if not report.get("ok"):
-        raise PlannerUnavailable(
+        exc = _RepairableGameplayRejection(
             "final low-level runtime wire rejected: "
             + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report.get("errors", [])[:12])
         )
+        exc.author_repair_targets = copy.deepcopy(report.get("errors") or [])
+        raise exc
     return report
 
 
@@ -182,7 +187,7 @@ def compile_and_validate_authored_runtime(
     authored = copy.deepcopy(data)
     try:
         return domain_pass(data, "02")
-    except (PlannerUnavailable, ValueError, TypeError, RuntimeError, AssertionError) as exc:
+    except _RepairableGameplayRejection as exc:
         report = _failure_report(authored, exc, "gameplay_validation_or_compile")
     accounting = ((authored.get("debug") or {}).get("llmStageAccounting") or {})
     if int(accounting.get("gameplayRepairCalls", 0) or 0) >= 1:
@@ -203,6 +208,6 @@ def compile_and_validate_authored_runtime(
     )
     try:
         return domain_pass(repaired, "02r")
-    except (PlannerUnavailable, ValueError, TypeError, RuntimeError, AssertionError) as exc:
+    except _RepairableGameplayRejection as exc:
         second = _failure_report(repaired, exc, "gameplay_repair_validation_or_compile")
         raise PlannerUnavailable("Gameplay Repair did not produce an executable low-level program: " + json.dumps(second["errors"][:12], ensure_ascii=False)) from exc

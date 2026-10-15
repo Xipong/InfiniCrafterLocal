@@ -7,8 +7,9 @@ import sys
 
 import pytest
 
-from infini_local.core.runtime_authoring import capability_registry as registry
-from infini_local.core.runtime_authoring import compiler, technical_lowering
+import infini_local.core.runtime_authoring.capability_registry as registry
+import infini_local.core.runtime_authoring.compiler as compiler
+import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
 from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness

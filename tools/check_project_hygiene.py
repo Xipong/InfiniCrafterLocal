@@ -233,6 +233,8 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
                 if module in edges:
                     edges[module].update(alias.name for alias in node.names if alias.name in modules)
             elif isinstance(node, ast.ImportFrom):
+                if node.module == "infini_local.core.runtime_authoring":
+                    issues.append(f"runtime_barrel_consumer:{path}:{node.lineno}")
                 if node.module == "os":
                     environ_names.update(alias.asname or alias.name for alias in node.names if alias.name == "environ")
                     getenv_names.update(alias.asname or alias.name for alias in node.names if alias.name == "getenv")
@@ -300,7 +302,7 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
 
 def check_python_source_integrity() -> None:
     sources = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8-sig")
-               for directory in (ROOT / "LocalGenerator/infini_local", ROOT / "tools")
+               for directory in (ROOT / "LocalGenerator", ROOT / "tools")
                for path in sorted(directory.rglob("*.py"))}
     issues = python_source_issues(sources)
     if issues:

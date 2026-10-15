@@ -123,7 +123,8 @@ def test_child_neutral_omission_does_not_replace_present_spread(velocity, spread
     {"default": None}, {"default": 1}, {"neutral": False}, {"neutral": 0.0}, {"required": True},
 ])
 def test_child_equality_omission_requires_declared_typed_optional_neutral(monkeypatch, changes):
-    from infini_local.core.runtime_authoring import technical_lowering, validator
+    import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
+    import infini_local.core.runtime_authoring.validator as validator
 
     document, call = child_fixture(VELOCITIES[2])
     call["params"].pop("spreadRadians")

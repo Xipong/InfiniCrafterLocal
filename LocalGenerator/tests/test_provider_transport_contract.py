@@ -912,3 +912,17 @@ def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch)
     assert {url for _, url, _ in calls} == {
         "https://primary.example/v1/responses", "https://secondary.example/v1/responses"}
     assert transport.current_llm_item_lease() is None
+
+
+@pytest.mark.parametrize("metadata,retained", [
+    ({}, True),
+    ({"responseFormatType": "json_schema", "responseFormatUsed": True}, True),
+    ({"strictSchemaDowngraded": True}, False),
+    ({"responseFormatUsed": False}, False),
+    ({"responseFormatType": "json_object"}, False),
+])
+def test_effective_schema_tracks_actual_transport_metadata(metadata, retained):
+    response_format = {"type": "json_schema", "json_schema": {"strict": True}}
+    actual = transport.effective_response_format({"response_format": response_format}, {"_debug": metadata})
+    assert actual is (response_format if retained else None)
+    assert transport.effective_response_format({}, {"_debug": metadata}) is None

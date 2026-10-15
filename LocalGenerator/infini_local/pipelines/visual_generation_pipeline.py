@@ -20,7 +20,7 @@ from infini_local.core.visual_contract_schema import (
     sprite_presentation_properties,
 )
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import effective_response_format, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
@@ -28,6 +28,7 @@ from infini_local.core.repair_merge import json_path_child, json_path_relative, 
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.pipelines.llm_transport import (
+    effective_response_format,
     apply_llm_common_options,
     llm_chat_json,
     llm_json_response_format,

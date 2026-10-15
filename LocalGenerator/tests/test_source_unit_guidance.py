@@ -298,7 +298,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
 def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(monkeypatch, mode):
     from dataclasses import replace
     from types import MappingProxyType
-    from infini_local.core.runtime_authoring import capability_registry as registry
+    import infini_local.core.runtime_authoring.capability_registry as registry
 
     spec = registry.CAPABILITY_REGISTRY["configure_accessory"].params["moveSpeedBonusPercent"]
     template = registry.CAPABILITY_REGISTRY["configure_accessory"]

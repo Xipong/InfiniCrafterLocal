@@ -530,7 +530,6 @@ def test_actual_stage_transition_preserves_request_identity(monkeypatch, route_w
 
     monkeypatch.setattr(pipeline, "try_llm_plan", authored)
     monkeypatch.setattr(gameplay_stage, "strict_validate_authored_item", validate)
-    monkeypatch.setattr(gameplay_stage, "_failure_report", lambda *_: (_ for _ in ()).throw(PlannerUnavailable("controlled final stop")))
     worker = route_worker(real_route, dict(PAYLOAD), resume_first, resume_second)
     assert first.wait(3)
     one = endpoint.generation_activity_snapshot()["requests"][0]
@@ -546,7 +545,7 @@ def test_actual_stage_transition_preserves_request_identity(monkeypatch, route_w
     resume_second.set()
     worker.thread.join(5)
     assert not worker.thread.is_alive()
-    assert worker.results[0][0] == 424
+    assert worker.results[0][0] == 422
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 

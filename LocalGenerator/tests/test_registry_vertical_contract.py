@@ -19,8 +19,9 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring import validator, repair_scope
-from infini_local.core.runtime_authoring import capability_registry
+import infini_local.core.runtime_authoring.validator as validator
+import infini_local.core.runtime_authoring.repair_scope as repair_scope
+import infini_local.core.runtime_authoring.capability_registry as capability_registry
 import infini_local.core.runtime_authoring.capability_registry as registry_module
 import infini_local.core.runtime_authoring.validator as validator_module
 from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema

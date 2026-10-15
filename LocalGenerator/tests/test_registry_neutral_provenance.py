@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring import technical_lowering
+import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness

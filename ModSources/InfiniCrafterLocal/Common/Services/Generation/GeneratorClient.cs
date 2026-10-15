@@ -633,7 +633,10 @@ public sealed class GeneratorClient
         snapshot["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
         snapshot["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);
         snapshot["canonical"] = JsonSerializer.SerializeToNode(existing?.Canonical ?? CanonicalFromItem(craftItem, autoFeatures), WireJsonOptions);
-        snapshot["fingerprint"] = FingerprintFromItem(craftItem, sourceMod, internalName, autoFeatures, nameTokens, existing, native, originalPrefix);
+        snapshot["fingerprint"] = FingerprintFromFacts(sourceMod, internalName, autoFeatures, nameTokens, native, originalPrefix,
+            craftItem.ModItem is null, existing?.Name ?? craftItem.Name,
+            JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(craftItem, null), WireJsonOptions),
+            JsonSerializer.SerializeToNode(AmmoRawFromItem(craftItem, null), WireJsonOptions));
         snapshot["generatedData"] = JsonSerializer.SerializeToNode(existing, WireJsonOptions);
         snapshot["craftInput"] = JsonSerializer.SerializeToNode(new
         {
@@ -812,8 +815,9 @@ public sealed class GeneratorClient
         if (data.ParentB == "Unknown") data.ParentB = parentB;
     }
 
-    private static JsonObject FingerprintFromItem(Item item, string sourceMod, string internalName,
-        string[] autoFeatures, string[] nameTokens, GeneratedItemData? existing, ParentNativeFacts native, int originalPrefix)
+    private static JsonObject FingerprintFromFacts(string sourceMod, string internalName,
+        string[] autoFeatures, string[] nameTokens, ParentNativeFacts native, int originalPrefix,
+        bool isVanilla, string name, JsonNode? effectiveProjectileRaw, JsonNode? ammoRaw)
     {
         JsonObject fingerprint = (JsonObject)native.RuntimeFacts.DeepClone();
         fingerprint.Remove("material");
@@ -822,14 +826,14 @@ public sealed class GeneratorClient
         fingerprint["sourceMod"] = sourceMod;
         fingerprint["internalName"] = internalName;
         fingerprint["fullName"] = sourceMod + "/" + internalName;
-        fingerprint["isVanilla"] = item.ModItem is null;
-        fingerprint["name"] = existing?.Name ?? item.Name;
+        fingerprint["isVanilla"] = isVanilla;
+        fingerprint["name"] = name;
         fingerprint["prefix"] = InfiniTerrariaSentinels.NoPrefix;
         fingerprint["originalPrefix"] = originalPrefix;
         fingerprint["prefixIgnored"] = originalPrefix != InfiniTerrariaSentinels.NoPrefix;
         fingerprint["directProjectileRaw"] = native.DirectProjectileRaw?.DeepClone();
-        fingerprint["effectiveProjectileRaw"] = JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(item, null), WireJsonOptions);
-        fingerprint["ammoRaw"] = JsonSerializer.SerializeToNode(AmmoRawFromItem(item, null), WireJsonOptions);
+        fingerprint["effectiveProjectileRaw"] = effectiveProjectileRaw;
+        fingerprint["ammoRaw"] = ammoRaw;
         fingerprint["runtimeFacts"] = native.RuntimeFacts.DeepClone();
         fingerprint["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
         fingerprint["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);

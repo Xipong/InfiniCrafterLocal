@@ -105,7 +105,7 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
 def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import program_schema
+    import infini_local.core.runtime_authoring.program_schema as program_schema
     from infini_local.pipelines import llm_transport
 
     canonical = program_schema.realization_schema
@@ -179,7 +179,7 @@ def test_report_bounds_remain_finite_nonempty_and_preserve_legacy_values(field, 
 
 def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    from infini_local.core.runtime_authoring import program_schema
+    import infini_local.core.runtime_authoring.program_schema as program_schema
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     schema = program_schema.author_item_response_schema()
