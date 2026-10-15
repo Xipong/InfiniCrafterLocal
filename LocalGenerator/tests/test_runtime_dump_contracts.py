@@ -30,13 +30,12 @@ def test_discovery_prefers_current_then_legacy_then_existing_packaged_dump(tmp_p
 
 def test_jsonl_index_tolerates_missing_and_malformed_records(tmp_path):
     path = tmp_path / "dump.jsonl"
-    assert dumps.load_jsonl_index(path, ("sourceMod", "internalName")) == ([], {}, {})
+    assert dumps.load_jsonl_index(path) == ([], {})
     row = {"type": "42", "sourceMod": "Example", "internalName": "Bolt", "name": "Live Bolt"}
     path.write_text('\ufeff\ninvalid json\n[]\n' + json.dumps(row) + '\n', encoding="utf-8")
-    rows, by_type, by_name = dumps.load_jsonl_index(path, ("sourceMod", "internalName"))
+    rows, by_type = dumps.load_jsonl_index(path)
     assert rows == [row]
     assert by_type[42] == by_type["42"] == row
-    assert by_name["example/bolt"] == by_name["bolt"] == by_name["live bolt"] == row
 
 
 def test_startup_dump_snapshot_feeds_parent_context(tmp_path):

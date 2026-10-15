@@ -168,20 +168,6 @@ public sealed class GeneratedItemRegistryService : IDisposable
         }
     }
 
-    public RuntimeProgramSpec? TryGetRuntimeProgram(string? id)
-    {
-        if (!TryGet(id, out GeneratedItemData data)) return null;
-        GeneratedItemData? clone = GeneratedItemData.FromJson(data.ToJson());
-        return clone?.RuntimeProgram;
-    }
-
-    public VfxManifestSpec TryGetVfxManifest(string? id)
-    {
-        if (!TryGet(id, out GeneratedItemData data)) return VfxManifestSpec.Empty();
-        VfxManifestSpec manifest = VfxManifestSpec.FromJson(data.VfxManifest.ToJson());
-        return manifest;
-    }
-
     public void RegisterLocal(GeneratedItemData? data, bool persist = true, bool ensureAssets = true)
     {
         if (data is null) return;

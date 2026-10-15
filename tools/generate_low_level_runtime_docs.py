@@ -101,8 +101,7 @@ def event_input_cell(cap: Any) -> str:
     return "<br>".join(values) if values else "entity lifecycle/input binding"
 
 
-def inventory_markdown() -> str:
-    audit = capability_library_audit()
+def inventory_markdown(audit: dict[str, Any]) -> str:
     lines = [
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
@@ -261,8 +260,7 @@ def inventory_markdown() -> str:
     return "\n".join(lines)
 
 
-def audit_markdown() -> str:
-    audit = capability_library_audit()
+def audit_markdown(audit: dict[str, Any]) -> str:
     m = audit["metrics"]
     lines = [
         "# Аудит машиночитаемости библиотеки компонентов",
@@ -401,9 +399,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    audit = capability_library_audit()
     outputs = {
-        ROOT / "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md": inventory_markdown(),
-        ROOT / "docs/reference/generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md": audit_markdown(),
+        ROOT / "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md": inventory_markdown(audit),
+        ROOT / "docs/reference/generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md": audit_markdown(audit),
         ROOT / "docs/reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md": lowering_markdown(),
     }
     stale: list[str] = []
@@ -418,8 +417,8 @@ def main() -> int:
     if stale:
         print(json.dumps({"ok": False, "stale": stale}, ensure_ascii=False, indent=2))
         return 1
-    print(json.dumps({"ok": True, "files": [str(p.relative_to(ROOT)) for p in outputs]}, ensure_ascii=False, indent=2))
-    return 0
+    print(json.dumps({"ok": bool(audit["ok"]), "files": [str(p.relative_to(ROOT)) for p in outputs]}, ensure_ascii=False, indent=2))
+    return 0 if audit["ok"] else 1
 
 
 if __name__ == "__main__":

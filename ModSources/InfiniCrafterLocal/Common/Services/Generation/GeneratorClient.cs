@@ -88,12 +88,6 @@ public sealed class GeneratorClient
         return GeneratedAssetSyncService.GuessLanBaseUrlFromEndpoint(Endpoint);
     }
 
-    public string AssetTransportForSharing(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Volatile.Read(ref _assetTransportSnapshot)?.Transport ?? "";
-    }
-
     // Explicit blocking discovery belongs to generation workers, never update/commit.
     public void RefreshAssetTransportMetadata(CancellationToken cancellationToken = default)
         => _ = ReadGeneratorAdvertisedAssetBaseUrl(cancellationToken, force: true);
@@ -576,11 +570,6 @@ public sealed class GeneratorClient
         }
     }
 
-    public GeneratedItemData? GenerateBlocking(Item a, Item b, Player player)
-    {
-        return GeneratePreparedBlocking(Prepare(a, b, player));
-    }
-
     private static object ToWireItem(Item item, Player? player = null)
     {
         GeneratedItemData? existing = item.ModItem is GeneratedItem generated ? generated.Data : null;
@@ -1059,9 +1048,6 @@ public sealed class GeneratorClient
         catch { }
         return outList;
     }
-
-    private static AmmoCandidate? FindPlayerAmmoCandidate(int ammoId, Player? player)
-        => FindPlayerAmmoCandidates(ammoId, player, 1).FirstOrDefault();
 
     private static List<AmmoCandidate> FindRepresentativeAmmoCandidates(int ammoId, int maxCount)
     {

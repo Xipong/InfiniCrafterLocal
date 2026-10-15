@@ -219,7 +219,6 @@
         }
         if (transforming && (state.lanEdit || 0) <= pending.clock) state.lan = !!(receipt.lanEnabled ?? pending.lan);
         // A handled callback is not proof of a disk write or a running generator.
-        if (pending.action === 'start' && !receipt.status) state.startSubmission = pending;
         if (['save','start','forceRestart'].includes(pending.action) && (receipt.status === 'succeeded' || /^saved:/i.test(remote.status || ''))) {
           if(!receipt.savedValues || !receipt.savedRevision) {
             reconcilePersistedValues(pending,{...receipt,savedValues:receipt.savedValues || saved},remote.defaults);
@@ -245,16 +244,6 @@
       if (receipt.result?.kind === 'document') showDocument(receipt.result);
       if (receipt.result?.kind === 'guide' && receipt.result.url?.startsWith('/guide?')) utility(receipt.result.title || 'Инструкция', `<p class="dialog-copy">Интерактивное руководство открывается в отдельной вкладке.</p><a class="button button-primary" href="${esc(receipt.result.url)}" target="_blank" rel="noopener">Открыть руководство ↗</a>`);
       if (['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) needsRender=true;
-    }
-    if (state.startSubmission && !remote.busy?.includes('server-action')) {
-      // The guarded start saves only after its activity/identity check succeeds.
-      if (/server\.py запущен|^saved:/i.test(remote.status || '')) {
-        Object.entries(state.startSubmission.sent).forEach(([key,val]) => {
-          if ((state.edits[key] || 0) <= state.startSubmission.clock) state.draft[key] = saved[key] ?? val;
-        });
-        if ((state.lanEdit || 0) <= state.startSubmission.clock) state.lan = state.baselineLan;
-      }
-      state.startSubmission = null;
     }
     for (const notice of remote.notifications || []) {
       if (state.seenNotifications.has(notice.id)) continue;

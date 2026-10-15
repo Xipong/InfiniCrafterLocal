@@ -41,10 +41,4 @@ public sealed class InfiniVfxClientConfig : ModConfig
 
     [DefaultValue(true)]
     public bool EnableLuminanceScreenShakeBackend = true;
-
-    [DefaultValue(false)]
-    public bool EnableLuminanceSoundBackend = false;
-
-    [DefaultValue(false)]
-    public bool ForceVanillaDustFallback = false;
 }

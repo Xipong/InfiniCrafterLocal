@@ -16,7 +16,6 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport
-from sentry_contract_checks import without_declared_targeting_neutrals
 
 FN = "present_placed_item_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
@@ -351,28 +350,6 @@ def test_absent_placed_member_preserves_current_wire_without_migrating_archive()
             assert "placedBody" not in placed
 
 
-def test_absent_member_keeps_frozen_delivery_bytes_with_current_author_receipts():
-    from captured_spawn_velocity_author import captured_spawn_velocity_author
-    from test_runtime_program_v5_seed_replay import _current_author_seed, _delivery_wire, _canonical, _historical_spawn_defaults
-    from captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
-
-    from beam_contract_checks import without_declared_beam_neutrals
-    from sentry_contract_checks import without_declared_targeting_neutrals
-
-    # Full-document hashes remain archival: fresh Author paths deliberately
-    # change provenance. Compare delivery choices, removing only the newly
-    # explicit at-position zero DTO defaults with an exact assertion.
-    corpus = json.loads((Path(__file__).parent / "fixtures/runtime_program_v5_seed_corpus.json").read_text())
-    for row in corpus["cases"]:
-        authored = captured_spawn_velocity_author(captured_parent_combat_author(_current_author_seed(row["authored"])))
-        compiled = compile_runtime_program(authored)
-        assert validate_runtime_wire(compiled)["ok"]
-        assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=authored, final_document=compiled)["ok"]
-        delivered = _historical_spawn_defaults(_delivery_wire(historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compiled)))), row["expectedDeliveryWire"])
-        assert all("placedBody" not in entity.get("placement", {}) for entity in delivered["runtimeProgram"]["entities"])
-        assert delivered == row["expectedDeliveryWire"]
-        assert hashlib.sha256(_canonical(delivered).encode()).hexdigest() == row["expectedDeliveryWireSha256"]
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""

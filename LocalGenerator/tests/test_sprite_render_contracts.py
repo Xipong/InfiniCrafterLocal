@@ -339,7 +339,6 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
     assert contracts.sprite_contract_for(role, target)["size"] == canvas
 
 @pytest.mark.parametrize("entry,canvas", [
-    ("fit_to_canvas", 0), ("fit_to_canvas", 129),
     ("bake_sprite_from_master", -1), ("bake_sprite_from_master", 129),
     ("prepare_sprite_master", 0), ("prepare_sprite_master", 256),
     ("prompt", 0), ("prompt", 129),

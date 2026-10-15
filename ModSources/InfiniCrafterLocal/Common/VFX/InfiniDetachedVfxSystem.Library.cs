@@ -149,15 +149,6 @@ public sealed partial class InfiniDetachedVfxSystem
         }
     }
 
-    // CPU observer seam uses the exact creation/update path used at admission.
-    internal static ParticleInfo CreateLibraryInfo(VfxSlotSpec slot,VfxSourceFrame frame,Color effect,float angleUnit,float speedUnit)
-    {
-        var p=slot.Particle!;var design=new LibraryDesign(slot.Layer,slot.Blend,slot.Alpha,slot.Duration,0,0,0,false,slot.SlotSeed,
-            new(p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
-                new(p.AccelerationXPxPerTickSquared,p.AccelerationYPxPerTickSquared),p.WidthPx,p.HeightPx,p.RotationRadians,p.RotationSpeedRadiansPerTick,
-                LibraryColor(p.ColorStart,effect).ToVector3(),LibraryColor(p.ColorEnd,effect).ToVector3(),p.EndScaleMultiplier,p.EndOpacity),null);
-        return CreateLibraryInfoCore(design,frame,angleUnit,speedUnit);
-    }
     private static ParticleInfo CreateLibraryInfoCore(LibraryDesign design,VfxSourceFrame frame,float angleUnit,float speedUnit)
     {
         var p=design.Particle!;float angle=(angleUnit-0.5f)*p.Spread;

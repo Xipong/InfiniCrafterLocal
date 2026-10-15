@@ -100,24 +100,6 @@ def dilate_mask(mask: set[tuple[int, int]], w: int, h: int, radius: int) -> set[
             break
     return out
 
-def cleanup_alpha_soft(img: Any) -> Any:
-    """Keep useful partial alpha until premultiplied resize; only snap extremes."""
-    if Image is None:
-        return img
-    img = img.convert("RGBA")
-    px = img.load()
-    w, h = img.size
-    low = max(0, min(255, int(ALPHA_THRESHOLD)))
-    high = max(low + 1, 248)
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a <= low:
-                px[x, y] = (0, 0, 0, 0)
-            elif a >= high:
-                px[x, y] = (r, g, b, 255)
-    return img
-
 def is_neutral_or_white_foreground_rgb(rgb: tuple[int, int, int]) -> bool:
     """Protect Photoshop-style highlights from key spill cleanup.
 
@@ -685,7 +667,6 @@ __all__ = [
     "chroma_like_rgb",
     "magenta_key_pixel_ratio",
     "dilate_mask",
-    "cleanup_alpha_soft",
     "is_neutral_or_white_foreground_rgb",
     "is_dark_key_residue_rgb",
     "median_int",

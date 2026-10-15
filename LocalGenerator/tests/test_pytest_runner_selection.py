@@ -501,6 +501,47 @@ def test_validation_forces_offline_config_environment(monkeypatch: pytest.Monkey
     assert row['status'] == 'passed'
 
 
+def test_diff_reports_git_scope_without_running_validation(monkeypatch, capsys):
+    import subprocess
+
+    calls = []
+    def git(*args):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="changed source", stderr="")
+    monkeypatch.setattr(agentctl, "_git", git)
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["example.py"])
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("diff must not execute validation"))
+    assert agentctl.command_diff(SimpleNamespace(base="origin/main")) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["changedFiles"] == ["example.py"] and report["comparisonBase"] == "origin/main"
+    assert report["validationRun"] is False
+    assert ("diff", "--stat", "origin/main...HEAD") in calls
+
+
+def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys):
+    import generate_low_level_runtime_docs as docs
+
+    calls = []
+    report = {"ok": True, "issues": []}
+    def audit():
+        calls.append("audit")
+        return report
+    def render(value):
+        assert value is report
+        return "one projection"
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "capability_library_audit", audit)
+    monkeypatch.setattr(docs, "inventory_markdown", render)
+    monkeypatch.setattr(docs, "audit_markdown", render)
+    monkeypatch.setattr(docs, "lowering_markdown", lambda: "lowering")
+    monkeypatch.setattr(docs.sys, "argv", ["generate_low_level_runtime_docs.py"])
+    assert docs.main() == 0
+    assert calls == ["audit"]
+    capsys.readouterr()
+    report["ok"] = False
+    assert docs.main() == 1  # a current projection cannot conceal a failed audit
+
+
 def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
     import validate_release as validation
 

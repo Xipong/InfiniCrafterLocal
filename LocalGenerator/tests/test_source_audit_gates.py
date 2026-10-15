@@ -34,6 +34,7 @@ def python_sources(source):
     ('import os as system\nx = system.environ.get("INFINI_DIRECT")', "raw_environment_read"),
     ('from os import getenv as read_env\nx = read_env("INFINI_DIRECT")', "raw_environment_read"),
     ('BAD_NAME_PATTERNS = ()', "constant_owner"),
+    ('from tools.check_delivery_contract import build_report', "tooling_import"),
 ])
 def test_python_lint_reports_invalid_source(gates, source, code):
     hygiene, _ = gates

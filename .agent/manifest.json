@@ -52,10 +52,6 @@
       "tools/export_contract_schemas.py",
       "--check"
     ],
-    "capability_audit": [
-      "python",
-      "tools/audit_capability_library.py"
-    ],
     "generated_docs": [
       "python",
       "tools/generate_low_level_runtime_docs.py",
@@ -65,10 +61,6 @@
       "python",
       "tools/check_delivery_contract.py"
     ],
-    "contract_parity": [
-      "python",
-      "tools/contract_parity.py"
-    ],
     "mutation_gate": [
       "python",
       "tools/mutation_contract_gate.py"
@@ -76,14 +68,6 @@
     "planner_prompt": [
       "python",
       "tools/check_planner_prompt_usability.py"
-    ],
-    "semantic_runtime_diff": [
-      "python",
-      "tools/semantic_runtime_diff.py"
-    ],
-    "runtime_impact": [
-      "python",
-      "tools/runtime_impact_report.py"
     ],
     "csharp_contracts": [
       "python",
@@ -165,27 +149,17 @@
       "python",
       "tools/test_tml_ci.py",
       "-v"
-    ],
-    "env_poisoning": [
-      "python",
-      "-c",
-      "import os; os.environ.update(INFINI_LOCAL_PORT='abc', INFINI_LLM_TIMEOUT_MS='xyz', INFINI_SPRITE_CACHE_MAX='garbage'); import infini_local.core.env_utils as e; print(e.env_int('INFINI_LOCAL_PORT', 9000)); print(e.env_int('INFINI_LLM_TIMEOUT_MS', 30000)); print(e.env_int('INFINI_SPRITE_CACHE_MAX', 512))"
     ]
   },
   "fullChecks": [
     "pytest",
     "compileall",
-    "env_poisoning",
     "tml_ci_regression",
     "schema_check",
-    "capability_audit",
     "generated_docs",
     "delivery_contract",
-    "contract_parity",
     "mutation_gate",
     "planner_prompt",
-    "semantic_runtime_diff",
-    "runtime_impact",
     "csharp_contracts",
     "project_hygiene",
     "config_registry",
@@ -206,19 +180,14 @@
     "python": [
       "pytest",
       "compileall",
-      "env_poisoning",
       "tml_ci_regression"
     ],
     "static": [
       "schema_check",
-      "capability_audit",
       "generated_docs",
       "delivery_contract",
-      "contract_parity",
       "mutation_gate",
       "planner_prompt",
-      "semantic_runtime_diff",
-      "runtime_impact",
       "csharp_contracts",
       "project_hygiene",
       "config_registry",

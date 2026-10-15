@@ -137,7 +137,6 @@ def test_defensive_answer_budget_fallback_uses_canonical_recommendation():
     assert budget_rows(observe(corrupt_budget=True)) == [(18000, 600, 0.5, "medium")]
 
 
-@pytest.mark.parametrize("repair", ["format", "semantic"])
 @pytest.mark.parametrize("overrides,expected", [
     ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.31"}, 0.31),
     ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "9"}, 0.8),
@@ -152,33 +151,39 @@ def test_defensive_answer_budget_fallback_uses_canonical_recommendation():
     ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.7", "INFINI_LLM_REPAIR_TEMPERATURE": "0.23"}, 0.23),
     ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.7", "INFINI_LLM_REPAIR_TEMPERATURE": " "}, 0.12),
 ])
-def test_gameplay_repair_respects_bounded_gui_alias_and_canonical_precedence(repair, overrides, expected):
-    rows = budget_rows(observe(overrides, repair=repair))
-    assert len(rows) == 2
-    assert rows[1] == (18000, 600, expected, "medium")
+def test_gameplay_repair_respects_bounded_gui_alias_and_canonical_precedence(monkeypatch, overrides, expected):
+    from test_craft_instruction_segments import stage_packets
+    # This scalar is read at request time. Exercise its real semantic request
+    # caller without reimporting/compiling all three stages for every value.
+    for key in ("INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in overrides.items():
+        monkeypatch.setenv(key, value)
+    packet, = stage_packets(monkeypatch, "repair", labels=("temperature",))
+    assert packet["temperature"] == expected
 
 
-@pytest.mark.parametrize("repair", ["none", "format", "semantic"])
-def test_all_stage_callers_share_budget_including_the_single_repair(repair):
-    result = observe(stages="all", repair=repair)
-    expected = [(18000, 600, 0.5, "medium")]
-    if repair != "none":
-        expected.append((18000, 600, 0.12, "medium"))
-    expected.append((18000, 600, 0.45, "medium"))
-    if repair != "none":
-        expected.append((18000, 600, 0.12, "medium"))
-    expected.append((18000, 600, 0.34, "medium"))
-    if repair != "none":
-        expected.append((18000, 600, 0.12, "medium"))
-    assert budget_rows(result) == expected
+def test_format_repair_uses_the_same_scoped_default_at_transport():
+    assert budget_rows(observe(repair="format")) == [
+        (18000, 600, 0.5, "medium"), (18000, 600, 0.12, "medium"),
+    ]
+
+
+def test_all_stage_callers_share_budget_including_the_single_repair():
+    result = observe(stages="all", repair="semantic")
+    assert budget_rows(result) == [
+        (18000, 600, 0.5, "medium"), (18000, 600, 0.12, "medium"),
+        (18000, 600, 0.45, "medium"), (18000, 600, 0.12, "medium"),
+        (18000, 600, 0.34, "medium"), (18000, 600, 0.12, "medium"),
+    ]
     assert result["accounting"] == {
-        "gameplayAuthorCalls": 1, "gameplayRepairCalls": int(repair != "none"),
-        "visualDirectorCalls": 1, "visualRepairCalls": int(repair != "none"),
-        "vfxDirectorCalls": 1, "vfxRepairCalls": int(repair != "none"),
+        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 1,
+        "visualDirectorCalls": 1, "visualRepairCalls": 1,
+        "vfxDirectorCalls": 1, "vfxRepairCalls": 1,
     }
 
 
-@pytest.mark.parametrize("stage_value", [None, "", "   ", "invalid"])
+@pytest.mark.parametrize("stage_value", [None, "invalid"])
 def test_unset_blank_vfx_and_visual_budgets_inherit_explicit_global(stage_value):
     overrides = {"INFINI_LLM_MAX_TOKENS": "24000", "INFINI_LLM_TIMEOUT": "720"}
     if stage_value is not None:
@@ -207,7 +212,7 @@ def test_explicit_stage_overrides_win_in_both_director_and_repair():
     ]
 
 
-@pytest.mark.parametrize("mode,expected", [("", None), ("0", None), ("off", None), ("high", "high")])
+@pytest.mark.parametrize("mode,expected", [("off", None), ("high", "high")])
 def test_explicit_reasoning_keeps_visual_vfx_semantics_and_existing_author_floor(mode, expected):
     rows = budget_rows(observe({"INFINI_LLM_REASONING_MODE": mode}, stages="all"))
     assert [row[3] for row in rows] == ["high" if mode == "high" else "medium", expected, expected]

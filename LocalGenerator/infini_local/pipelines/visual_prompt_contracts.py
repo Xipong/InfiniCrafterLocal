@@ -265,24 +265,10 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     return text + image_final_frame_prompt_clause(data, role, canvas, entity_id=entity_id) + image_generation_prompt_suffix()
 
 
-def effective_projectile_canvas(data: Mapping[str, Any]) -> int:
-    runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
-    largest = 16
-    for entity in runtime.get("entities") or []:
-        if not isinstance(entity, Mapping) or entity.get("kind") == "item_body":
-            continue
-        hitbox = entity.get("hitbox") if isinstance(entity.get("hitbox"), Mapping) else {}
-        largest = max(largest, int(hitbox.get("widthPx") or 16), int(hitbox.get("heightPx") or 16))
-    for canvas in (24, 32, 48, 64, 96, 128):
-        if largest <= canvas:
-            return canvas
-    return 128
-
-
 __all__ = [
     "asset_negative_prompt", "chroma_rgb", "chroma_name", "image_backend_is_zimage",
     "zimage_positive_only_enabled", "compact_visual_words", "sprite_contract_for",
-    "role_contract_prompt_clause", "normalize_asset_prompt", "effective_projectile_canvas",
+    "role_contract_prompt_clause", "normalize_asset_prompt",
     "visual_background_transport_rule",
     "image_generation_prompt_suffix", "image_final_frame_prompt_clause",
 ]

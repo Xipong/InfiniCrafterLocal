@@ -77,7 +77,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None):
                 return with_schema_instruction_definitions(payload, schema_key, paths)
             mp.setattr(visual, "with_schema_instruction_definitions", record)
             mp.setattr(sender, "with_schema_instruction_definitions", record)
-        return stage_packets(mp, stage, format_mode=mode)[0], data
+        return stage_packets(mp, stage, format_mode=mode, labels=("novel-a",))[0], data
 
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair"])
@@ -129,7 +129,7 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
     before = copy.deepcopy(data)
     assert len(data["runtimeProgram"]["entities"]) == 1
     monkeypatch.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
-    packet = stage_packets(monkeypatch, stage, format_mode=mode)[0]
+    packet, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
     ids = [data["runtimeProgram"]["itemEntityId"]]
     canonical = (visual._visual_repair_schema if stage.endswith("repair") else visual._response_schema)(ids, overlay, ids[0])
     if mode == "json_schema":
@@ -230,9 +230,13 @@ def test_actual_native_serialization_is_static_across_three_rosters_with_exact_d
     changed["messages"][1]["content"] = json.dumps(static, ensure_ascii=False, separators=(",", ":"))
     assert capture_wire(monkeypatch, changed, context)["prompt_cache_key"] != wires[-1]["prompt_cache_key"]
 
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-def test_expanded_reference_validation_matches_inline_for_each_roster(monkeypatch, stage, mode):
+@pytest.mark.parametrize("stage,mode", [
+    pytest.param("visual", "json_schema", id="visual-nullable-schema"),
+    pytest.param("visual_repair", "json_object", id="visual-repair-json"),
+    pytest.param("vfx", "off", id="vfx-unformatted"),
+    pytest.param("vfx_repair", "json_schema", id="vfx-repair-schema"),
+])
+def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, stage, mode):
     from jsonschema import Draft202012Validator
     from infini_local.core.schema_validation import strict_schema_errors
     from infini_local.core import vfx_manifest as vfx
@@ -241,40 +245,41 @@ def test_expanded_reference_validation_matches_inline_for_each_roster(monkeypatc
     from test_codex_subscription_contract import _encode_nullable_fixture
     from vfx_material_fixtures import _sprite
     from prompt_packet_helpers import request_dossier
-    for fixture in ("workbench_blade", "door_on_chain", "channel_beam"):
-        packet, data = _packet(monkeypatch, stage, fixture, mode)
-        static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
-        visual_stage = stage.startswith("visual")
-        repair = stage.endswith("repair")
-        key = "responseSchema" if visual_stage else "outputSchema"
-        compact = {**dynamic[key], "$defs": static["schemaDefinitions"]["$defs"]}
-        inline = request_dossier(packet)[key]
-        if visual_stage:
-            valid = ({"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0},
-                      "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
-                      "animationPlan": None, "note": "one leaf"} if repair else _visual_kit(data))
-            if mode == "json_schema":
-                ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
-                local = (visual._visual_repair_schema if repair else visual._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
-                valid = _encode_nullable_fixture(valid, local)
-            invalid = copy.deepcopy(valid)
-            invalid["itemPatch" if repair else "item"]["inventoryScale"] = True
-            unknown = copy.deepcopy(valid)
-            if repair:
-                unknown["entityIdsDelete"] = ["not_in_roster"]
-            else:
-                unknown["entities"][0]["entityId"] = "not_in_roster"
+    packet, data = _packet(monkeypatch, stage, "workbench_blade", mode)
+    static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
+    visual_stage = stage.startswith("visual")
+    repair = stage.endswith("repair")
+    key = "responseSchema" if visual_stage else "outputSchema"
+    compact = {**dynamic[key], "$defs": static["schemaDefinitions"]["$defs"]}
+    inline = request_dossier(packet)[key]
+    if mode == "json_schema":
+        assert inline == packet["response_format"]["json_schema"]["schema"]
+    if visual_stage:
+        valid = ({"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0},
+                  "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
+                  "animationPlan": None, "note": "one leaf"} if repair else _visual_kit(data))
+        if mode == "json_schema":
+            ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
+            local = visual._response_schema(ids, False, data["runtimeProgram"]["itemEntityId"])
+            valid = _encode_nullable_fixture(valid, local)
+        invalid = copy.deepcopy(valid)
+        invalid["itemPatch" if repair else "item"]["inventoryScale"] = True
+        unknown = copy.deepcopy(valid)
+        if repair:
+            unknown["entityIdsDelete"] = ["not_in_roster"]
         else:
-            valid = _sprite(data)
-            if repair:
-                valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": valid["slots"]}
-            slot_key = "slotsUpsert" if repair else "slots"
-            invalid = copy.deepcopy(valid)
-            invalid[slot_key][0]["element"]["count"] = True
-            unknown = copy.deepcopy(valid)
-            unknown[slot_key][0]["event"] = "not_in_runtime_events"
-        Draft202012Validator.check_schema(compact)
-        for candidate, expected in ((valid, True), (invalid, False), (unknown, False), ({}, False), (None, False)):
-            assert strict_schema_errors(candidate, compact) == strict_schema_errors(candidate, inline)
-            assert Draft202012Validator(compact).is_valid(candidate) == expected
-            assert Draft202012Validator(inline).is_valid(candidate) == expected
+            unknown["entities"][0]["entityId"] = "not_in_roster"
+    else:
+        valid = _sprite(data)
+        if repair:
+            valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": valid["slots"]}
+        slot_key = "slotsUpsert" if repair else "slots"
+        invalid = copy.deepcopy(valid)
+        invalid[slot_key][0]["element"]["count"] = True
+        unknown = copy.deepcopy(valid)
+        unknown[slot_key][0]["event"] = "not_in_runtime_events"
+    Draft202012Validator.check_schema(compact)
+    for candidate, expected in ((valid, True), (invalid, False), (unknown, False), ({}, False), (None, False)):
+        assert strict_schema_errors(candidate, compact) == strict_schema_errors(candidate, inline)
+        assert Draft202012Validator(compact).is_valid(candidate) == expected
+        assert Draft202012Validator(inline).is_valid(candidate) == expected

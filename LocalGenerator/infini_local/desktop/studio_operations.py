@@ -21,6 +21,7 @@ from pathlib import Path, PureWindowsPath
 
 from infini_local.storage import trace_tools
 from infini_local.core import http_io
+from infini_local.services.sdcpp_backend import lora_dir_from_file
 from infini_local.desktop.settings_paths import (
     ROOT,
 )
@@ -331,7 +332,7 @@ class StudioOperations:
             vae = data.get("INFINI_SDCPP_VAE", "")
             llm = data.get("INFINI_SDCPP_LLM", "")
             lora_file = data.get("INFINI_SDCPP_LORA_FILE", "")
-            lora_dir = self._lora_dir_from_file(lora_file)
+            lora_dir = lora_dir_from_file(lora_file)
             if exe and not Path(exe).exists():
                 warnings.append(f"sd-server.exe не найден: {exe}")
             if rocm_root and not Path(rocm_root).is_dir():

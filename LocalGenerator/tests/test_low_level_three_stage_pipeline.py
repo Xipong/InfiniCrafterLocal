@@ -14,6 +14,7 @@ import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_hybrid_vfx_manifest, vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
@@ -516,7 +517,7 @@ def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire
     pytest.param({"callsUpsert": []}, False, id="missing-note"),
 ])
 def test_sparse_patch_shape(patch, ok):
-    assert gameplay_stage.strict_author_item_repair_report(patch)["ok"] is ok
+    assert strict_repair_shape_report(patch)["ok"] is ok
 
 
 @pytest.mark.parametrize("scenario,expected,cutoff", [

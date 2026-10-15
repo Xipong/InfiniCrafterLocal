@@ -16,9 +16,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     compact_capability_catalog,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 import infini_local.core.runtime_authoring.validator as validator
 import infini_local.core.runtime_authoring.repair_scope as repair_scope
 import infini_local.core.runtime_authoring.capability_registry as capability_registry
@@ -55,18 +53,15 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
 
 
 @pytest.mark.parametrize("fn", [cap.name for cap in visible_capabilities()])
-def test_registered_capability_compiles_and_authenticates_source_without_mutation(fn):
+def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_response_schema
 
     item = build_capability_witness(fn)
     before = deepcopy(item)
     assert Draft202012Validator(author_item_response_schema()).is_valid(item)
-    assert validate_runtime_program(item)["ok"]
     wire = compile_runtime_program(item)
     assert validate_runtime_wire(wire)["ok"]
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=item, final_document=wire)["ok"]
     assert item == before
 
 

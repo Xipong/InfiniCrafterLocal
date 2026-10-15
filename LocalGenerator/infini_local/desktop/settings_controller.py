@@ -10,7 +10,7 @@ import heapq
 import itertools
 import re
 import time
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 
 from infini_local.desktop.settings_env import (
     CUSTOM_PRESET, USER_PRESET_PREFIX, load_user_presets, parse_env, write_env,
@@ -20,6 +20,7 @@ from infini_local.desktop.settings_paths import CONFIG_PATH, EXAMPLE_PATH
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
 from infini_local.desktop.settings_interactions import notify
+from infini_local.services.sdcpp_backend import lora_dir_from_file, lora_tag_from_file
 
 
 class SettingsController(StudioOperations):
@@ -131,9 +132,9 @@ class SettingsController(StudioOperations):
                 data["INFINI_ASSET_PUBLIC_BASE_URL"] = ""
         lora_file = data.get("INFINI_SDCPP_LORA_FILE", "")
         if lora_file:
-            data["INFINI_SDCPP_LORA_DIR"] = self._lora_dir_from_file(lora_file) or str(Path(lora_file).parent)
+            data["INFINI_SDCPP_LORA_DIR"] = lora_dir_from_file(lora_file) or str(Path(lora_file).parent)
             if not data.get("INFINI_SDCPP_LORA_PROMPT_TAGS", ""):
-                data["INFINI_SDCPP_LORA_PROMPT_TAGS"] = self._lora_tag_from_file(lora_file, data.get("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
+                data["INFINI_SDCPP_LORA_PROMPT_TAGS"] = lora_tag_from_file(lora_file, data.get("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
         else:
             data["INFINI_SDCPP_LORA_DIR"] = ""
         if data.get("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1") == "1":
@@ -175,27 +176,13 @@ class SettingsController(StudioOperations):
         self._capture_profile_baseline()
         self.status = "Профиль применён. Нажми «Сохранить», чтобы записать config.env; работающий сервер применит изменения после перезапуска."
 
-    @staticmethod
-    def _lora_tag_from_file(path, weight):
-        raw = str(path or "").strip()
-        stem = (PureWindowsPath(raw).stem if "\\" in raw or ":" in raw else Path(raw).stem).strip()
-        return f"<lora:{stem}:{str(weight or '0.25').strip() or '0.25'}>" if stem else ""
-
-    @staticmethod
-    def _lora_dir_from_file(path):
-        raw = str(path or "").strip()
-        if not raw:
-            return ""
-        parent = PureWindowsPath(raw).parent if "\\" in raw or ":" in raw else Path(raw).parent
-        return "" if str(parent) in {"", "."} else str(parent)
-
     def use_selected_lora(self):
         path = self._value("INFINI_SDCPP_LORA_FILE")
         if not path:
             notify(self, "warning", "LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
             return {"ok": False, "message": "Сначала выбери файл LoRA."}
-        directory = self._lora_dir_from_file(path) or str(Path(path).parent)
-        tag = self._lora_tag_from_file(path, self._value("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
+        directory = lora_dir_from_file(path) or str(Path(path).parent)
+        tag = lora_tag_from_file(path, self._value("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
         tags = self._value("INFINI_SDCPP_LORA_PROMPT_TAGS")
         if tag not in tags:
             tags = (tags.rstrip() + " " + tag).strip()

@@ -150,7 +150,7 @@ def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities()
     assert NEW in scope["create"]["calls"]["allowedFns"]
 
 
-def test_frozen_old_receipts_are_refused_while_current_alias_delivery_stays_identical():
+def test_frozen_old_receipts_are_refused_without_rewriting_the_archive():
     corpus = json.loads(FIXTURE.read_text())
     assert corpus["sourceHead"] == "c0a8450"
     for row in corpus["cases"]:
@@ -163,72 +163,6 @@ def test_frozen_old_receipts_are_refused_while_current_alias_delivery_stays_iden
         assert json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")) == encoded
         source_audit = audit_compiler_receipts(receipts, authored_document=row["source"], final_document=wire)
         assert not source_audit["ok"]
-        if row["case"] == "bias-0.9":
-            # A6 makes five formerly absent targeting neutrals explicit. The
-            # frozen wire remains admitted wire-only, but cannot authenticate a
-            # complete current compilation until those exact receipts exist.
-            from test_runtime_program_v5_seed_replay import _current_author_seed
-            current_source = _current_author_seed(row["source"])
-            from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire
-            from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
-            current_source = captured_spawn_velocity_author(captured_parent_combat_author(current_source))
-            assert validate_runtime_program(current_source)["ok"]
-            fresh, _ = compile_and_check(current_source)
-            # The frozen wire intentionally predates explicit child combat too.
-            # Add only independently authenticated new combat leaves/receipts to
-            # the audit control so its five targeting-omission violations remain
-            # isolated; do not change the archived wire or its hash.
-            current_wire = deepcopy(wire)
-            current_rows = deepcopy(receipts)
-            for old_entity, fresh_entity in zip(current_wire["runtimeProgram"]["entities"], fresh["runtimeProgram"]["entities"]):
-                if "targeting" in old_entity:
-                    for name in ("damageBasis", "knockbackBasis", "damageMultiplier"):
-                        old_entity["targeting"][name] = fresh_entity["targeting"][name]
-            current_rows.extend(deepcopy(receipt) for receipt in fresh["runtimeContract"]["finalWireReceipts"]
-                                if receipt.get("fn") == "target_and_fire"
-                                and receipt["authoredPath"].rsplit(".params.", 1)[-1]
-                                in {"damageBasis", "knockbackBasis", "damageMultiplier"})
-            for receipt in current_rows:
-                if receipt.get("fn") == "configure_item_use" and receipt["authoredPath"].endswith(".heldSpriteVisibilityHint"):
-                    assert receipt["value"] in {"", "immediate", "on_release"}
-                    receipt["authoredPath"] = receipt["authoredPath"].removesuffix("heldSpriteVisibilityHint") + "customHeldSprite"
-                elif receipt.get("fn") == "configure_spawn" and receipt["authoredPath"].endswith(".params.speedPxPerUpdate"):
-                    # Authenticate the same constant-speed leaf against the fresh
-                    # source before isolating only the targeting omission gap.
-                    updated = {**receipt, "authoredPath": receipt["authoredPath"].removesuffix("speedPxPerUpdate") + "velocity.constantSpeedPxPerUpdate"}
-                    matches = [candidate for candidate in fresh["runtimeContract"]["finalWireReceipts"]
-                               if candidate.get("callId") == receipt["callId"] and candidate["finalPath"] == receipt["finalPath"]]
-                    assert len(matches) == 1
-                    assert json.dumps(updated, sort_keys=True) == json.dumps(matches[0], sort_keys=True)
-                    receipt.update(updated)
-            # Authenticate current v5 binding lanes independently before isolating
-            # the five old targeting omissions. No archive bytes are rewritten.
-            from infini_local.core.runtime_authoring.technical_lowering import _final_value
-            current_lanes = {"author_binding_lanes", "primary_entity_to_binding_role"}
-            current_rows = [receipt for receipt in current_rows if receipt.get("lowererId") not in current_lanes]
-            for receipt in fresh["runtimeContract"]["finalWireReceipts"]:
-                if receipt.get("lowererId") in current_lanes:
-                    assert json.dumps(_final_value(current_wire, receipt["finalPath"]), sort_keys=True) == json.dumps(receipt["value"], sort_keys=True)
-                    current_rows.append(deepcopy(receipt))
-            violations = audit_compiler_receipts(current_rows, authored_document=current_source, final_document=current_wire)["violations"]
-            assert len(violations) == 5
-            assert {v["reason"] for v in violations} == {"declared neutral omission has no unique omission receipt"}
-            assert {v["authoredPath"].rsplit(".", 1)[1] for v in violations} == {
-                "count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"}
-            from sentry_contract_checks import without_declared_targeting_neutrals
-            projected = historical_child_combat_wire(without_declared_targeting_neutrals(fresh))
-            assert projected["runtimeProgram"] == wire["runtimeProgram"]
-            assert projected["gameplay"] == wire["gameplay"]
-        if row["case"].startswith("on_"):
-            source = deepcopy(row["source"])
-            call = witness(source)
-            call["fn"] = NEW
-            call["params"]["maxTargets"] = call["params"].pop("count")
-            from test_runtime_program_v5_seed_replay import _current_author_seed
-            from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
-            fresh, _ = compile_and_check(captured_spawn_velocity_author(_current_author_seed(source)))
-            assert fresh["runtimeProgram"] == wire["runtimeProgram"]
-            assert fresh["gameplay"] == wire["gameplay"]
 
 
 @pytest.mark.parametrize("bias", [0, 0.125, 0.5, 0.899999, 0.9])

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import threading
 import time
-from pathlib import Path
 
 import pytest
 
@@ -58,9 +57,6 @@ class OperationHost(operations.StudioOperations):
             time.sleep(.005)
         assert predicate(), 'operation did not finish'
 
-    def _lora_dir_from_file(self, value):
-        return str(Path(value).parent) if value else ''
-
 
 @pytest.fixture
 def host(tmp_path, monkeypatch):
@@ -68,6 +64,20 @@ def host(tmp_path, monkeypatch):
     app = OperationHost(tmp_path)
     yield app
     app.on_close()
+
+
+def test_validate_paths_derives_unc_lora_directory_without_controller_helper(host):
+    host.values.update(
+        INFINI_IMAGE_BACKEND='sdcpp', INFINI_SDCPP_SERVER_AUTOSTART='1',
+        INFINI_SDCPP_SERVER_EXE='', INFINI_SDCPP_ROCM_COMPAT_ROOT='', INFINI_SDCPP_MODEL='',
+        INFINI_SDCPP_VAE='missing-vae', INFINI_SDCPP_LLM='missing-llm',
+        INFINI_SDCPP_LORA_FILE=r'\\model-share\art\loras\ink.safetensors',
+        INFINI_SDCPP_LORA_PROMPT_TAGS='<lora:ink:0.25>',
+    )
+    result = host.validate_paths()
+    assert result['ok'] is False
+    assert r'Папка LoRA, выведенная из файла, не найдена: \\model-share\art\loras' in result['message']
+    assert 'LoRA prompt tags заполнены, но LoRA file не выбран' not in result['message']
 
 
 def test_worker_failure_is_redacted_and_applied_on_owner_loop(host):

@@ -218,6 +218,22 @@ assert.equal(state.savedRevision,'after-launch-save');assert.equal(state.draft.I
 assert(!state.dirty.has('INFINI_A'));assert(state.dirty.has('INFINI_B'));assert.equal(state.pending,null);
 assert.equal(messages.at(-1).message,'config.env saved; server.py failed');assert(messages.at(-1).error);
 
+// A running start ignores status prose; only its final receipt adopts saved values.
+for(const finalStatus of ['succeeded','cancelled']) {
+  state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.pending=null;
+  acceptSnapshot(snapshot({INFINI_A:'before',INFINI_B:'before-b'},{savedRevision:'before-start'}));
+  state.draft={INFINI_A:' submitted ',INFINI_B:'newer-b'};state.edits={INFINI_A:1,INFINI_B:2};recomputeDirty();
+  state.pending={id:'guarded-start',action:'start',clock:1,sent:{INFINI_A:' submitted ',INFINI_B:'submitted-b'}};
+  acceptSnapshot(snapshot({INFINI_A:'other-tab',INFINI_B:'other-b'},{savedRevision:'other-revision',status:'Saved: config.env; server.py запущен',actionResults:[{id:'guarded-start',status:'running',ok:true}]}));
+  assert(state.pending);assert.equal(state.draft.INFINI_A,' submitted ');assert.equal(state.savedRevision,'before-start');
+  const receipt={id:'guarded-start',status:finalStatus,ok:finalStatus === 'succeeded',message:finalStatus};
+  if(finalStatus === 'succeeded') Object.assign(receipt,{saved:true,savedValues:{INFINI_A:'submitted',INFINI_B:'submitted-b'},savedRevision:'own-revision'});
+  acceptSnapshot(snapshot({INFINI_A:'other-tab',INFINI_B:'other-b'},{savedRevision:'other-revision',actionResults:[receipt]}));
+  assert.equal(state.pending,null);assert.equal(state.draft.INFINI_B,'newer-b');
+  assert.equal(state.draft.INFINI_A,finalStatus === 'succeeded' ? 'submitted':' submitted ');
+  assert.equal(state.savedRevision,finalStatus === 'succeeded' ? 'own-revision':'before-start');
+}
+
 // Effort choices follow this tab's selected draft model, without rewriting values.
 state.draft={INFINI_LLM_PROVIDER:'openai_codex',INFINI_CODEX_LLM_MODEL:'model-b',INFINI_LLM_REASONING_MODE:'high',INFINI_CODEX_VISUAL_REASONING:'inherit'};
 state.remote={values:{INFINI_CODEX_LLM_MODEL:'model-a'},defaults:{},fields:[{key:'INFINI_LLM_REASONING_MODE',options:['off','high']},{key:'INFINI_CODEX_VISUAL_REASONING',options:['inherit','high']}],account:{authenticated:true,catalog:'Текстовая модель аккаунта: effort high',textModels:{'model-a':{efforts:['high'],defaultEffort:'high'},'model-b':{efforts:['low'],defaultEffort:'low'}}}};
