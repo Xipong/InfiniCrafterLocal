@@ -2136,7 +2136,7 @@ _CAPS.extend([
     ),
     _cap(
         "charge_then_release",
-        "Accumulate bounded charge while held, then release this entity using authored movement.",
+        "Accumulate bounded charge while held, then release this entity using authored movement. Charging pauses the native lifetime countdown; the authored lifetime is available for flight after release. Other active-age clocks are not reset.",
         "controller",
         ("owner_attached_projectile", "free_projectile"),
         {
@@ -2604,7 +2604,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "periodic": EventKindSpec(
         "periodic", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), (),
-        "Bounded periodic event; each action must select when={everyTicks:n} with n >= 6.",
+        "Bounded periodic event; each action must select when={everyTicks:n} with n >= 6. Item-body gameplay runs while held or functionally equipped through equip_passive; inventory or vanity alone does not produce it.",
     ),
     "on_release": EventKindSpec(
         "on_release", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),

@@ -23,6 +23,13 @@ Buff durations, modifier/curve `startDelayTicks`/`durationTicks`, spawn activati
 delay, event delays и `maxEventSpawnsPerActivation=32` сохраняют свои прежние пределы.
 Native sentry limit может удалить sentry раньше заданной lifetime.
 
+При `charge_then_release` ожидание отпускания не расходует этот lifetime:
+controller компенсирует native decrement после каждого charging AI update,
+включая `extraUpdates`. После release countdown идёт обычным способом;
+поздняя hydration его не перезапускает. `_age` и независимые periodic/modifier
+clocks продолжают идти во время charging. Смена предмета запускает release,
+а недоступный/погибший owner по-прежнему завершает projectile без ожидания.
+
 ## NPC immunity и число обновлений
 
 Полный пример collision:
@@ -65,6 +72,8 @@ Owner immunity разделяет Terraria cooldown между снарядам�
 ```json
 {"above": "cursor", "heightTiles": 8, "activationDelayTicks": 15}
 ```
+
+При положительном `activationDelayTicks` все ожидающие projectile updates, включая последний, остаются без NPC-урона. На следующем, первом активном update выполняются `on_spawn` и controller до native collision; поэтому ожидание не может потратить `pierce` и удалить ещё не испущенные `on_spawn` actions. Число ожидающих updates равно `activationDelayTicks × (1 + extraUpdates)`; lifetime активной фазы и выбранная launch velocity не меняются.
 
 У обеих форм одинаковый список anchors:
 

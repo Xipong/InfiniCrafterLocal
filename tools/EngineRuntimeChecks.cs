@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("equipment periodic gameplay native spawn", EquipmentPeriodicGameplayReachesNativeSpawn),
+            ("equipment periodic gameplay authority and delay", EquipmentPeriodicGameplayKeepsAuthorityAndDelay),
             ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),
             ("equipment presentation front back native layer tree", EquipmentAccessoryLayersKeepMountsDyesAndVisibility),
             ("equipment presentation native displayed carrier selection", EquipmentNeutralCarrierUsesNativeDisplayedSelection),
@@ -179,6 +181,7 @@ internal static partial class EngineRuntimeChecks
             ("live combat state survives rehydration", CombatStateSurvivesRehydration),
             ("hitbox sizing preserves spawn center", HitboxSizingPreservesCenter),
             ("activation delay preserves launch velocity", ActivationDelayPreservesVelocity),
+            ("delayed activation runs spawn before native damage", DelayedActivationRunsSpawnBeforeNativeDamage),
             ("weapon ammo activation delay retains native shot and hydration", WeaponAmmoActivationDelayPreservesNativeShotAndHydration),
             ("weapon ammo delayed launch is per instance and producer", WeaponAmmoDelayedLaunchIsPerShotAndDoesNotLeakToOtherProducers),
             ("activation respects explicit zero motion", ActivationRespectsZeroMotion),
@@ -222,6 +225,7 @@ internal static partial class EngineRuntimeChecks
             ("run-speed equipment applies after vanilla movement", RunSpeedEquipmentAppliesAfterVanillaMovement),
             ("equipment authored ranges reach player", EquipmentAuthoredRangesReachPlayer),
             ("unit boundary charge release preserves authored speed", ChargeReleasePreservesAuthoredZeroAndFractionalSpeed),
+            ("charge release preserves authored flight lifetime", ChargeReleaseKeepsAuthoredFlightLifetime),
             ("equipment class damage reaches exact DamageClass", () => CheckEquipmentCases(EquipmentDamageClasses)),
             ("generated ammo preserves exact projectile on direct use", GeneratedAmmoDirectUseKeepsDeclaredProjectile),
             ("generated ammo preserves exact rocket and solution selection", GeneratedAmmoPickAmmoKeepsExactRocketAndSolution),
@@ -375,7 +379,9 @@ internal static partial class EngineRuntimeChecks
                 host.Configure(new GeneratedItemData(), child, 0, 8, Vector2.UnitX, preserveSyncedState: hydrated);
                 Equal(enabled && damage > 0 && delay == 0, live.friendly, "live child collision eligibility at configuration");
                 for (int tick = 0; tick < delay; tick++) host.AI();
-                Equal(enabled && damage > 0, live.friendly, "live child collision eligibility after activation delay");
+                Equal(enabled && damage > 0 && delay == 0, live.friendly, "last waiting update remains harmless");
+                host.AI();
+                Equal(enabled && damage > 0, live.friendly, "live child collision eligibility on first active update");
             }
         }
     }
@@ -405,6 +411,81 @@ internal static partial class EngineRuntimeChecks
             generated.AI();
             Equal(velocity, projectile.velocity, "velocity on first active update");
         }
+    }
+
+    private static void DelayedActivationRunsSpawnBeforeNativeDamage()
+    {
+        WithPersistenceTilemap((_, _) => {
+            foreach (int delayTicks in new[] { 0, 1, 2 })
+            foreach (int extraUpdates in new[] { 0, 2 })
+            foreach (bool hydrate in new[] { false, true })
+            foreach (bool charge in new[] { false, true })
+            {
+                using var scope = new SwarmRuntimeScope();
+                Terraria.Main.SceneMetrics = new SceneMetrics();
+                Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(11);
+                var data = ChildCombatFixture(); var entity = data.RuntimeProgram.TryGetEntity("root")!;
+                entity.Events[0].Event = RuntimeEventKind.OnSpawn;
+                entity.Events[0].DelayTicks = 1;
+                entity.Spawn.OverTarget.DelayTicks = delayTicks;
+                entity.Spawn.OverTarget.HeightTiles = 1;
+                entity.Spawn.SpeedPxPerTick = 0;
+                entity.Collision.TileCollide = false;
+                entity.Collision.Pierce = 1;
+                entity.Collision.ExtraUpdates = extraUpdates;
+                if (charge)
+                {
+                    entity.Controller.Name = "charge_then_release";
+                    entity.Controller.Code = RuntimeControllerCode.ChargeThenRelease;
+                    entity.Controller.Params.ChargeTicks = 60;
+                    entity.Controller.Params.PowerMultiplier = 2;
+                }
+                data = SwarmWire(data); entity = data.RuntimeProgram.TryGetEntity("root")!;
+                var owner = Terraria.Main.player[0];
+                owner.inventory[0] = new Item(Terraria.ID.ItemID.WoodenSword);
+                AttachItem(new InfiniCrafterLocal.Content.Items.GeneratedItem(), owner.inventory[0], data);
+                owner.channel = true;
+                var generated = SwarmHost(data, entity);
+                var projectile = generated.Projectile;
+                projectile.Center = new Vector2(640, 640);
+                // An existing type supplies native array bounds. The actual
+                // attached mod AI, native Damage and penetration retirement run.
+                projectile.type = Terraria.ID.ProjectileID.WoodenArrowFriendly;
+                projectile.aiStyle = -1;
+                var target = Terraria.Main.npc[0];
+                target.SetDefaults(Terraria.ID.NPCID.BlueSlime); target.active = true; target.Center = projectile.Center;
+                target.life = target.lifeMax = 10000; target.HideStrikeDamage = true;
+                string label = $"delay={delayTicks} extraUpdates={extraUpdates} hydration={hydrate} charge={charge}: ";
+                for (int tick = 0; tick < delayTicks; tick++)
+                {
+                    projectile.Update(0);
+                    Equal(10000, target.life, label + "waiting update cannot damage before on_spawn");
+                    Equal(true, projectile.active, label + "waiting projectile survives overlapping NPC");
+                    Equal(0, PendingActions(), label + "waiting update does not emit on_spawn");
+                }
+                if (hydrate)
+                {
+                    generated.Configure(data, entity, 0, 8, Vector2.UnitX, preserveSyncedState: true);
+                    if (delayTicks > 0)
+                        Equal(false, projectile.friendly, label + "hydration cannot arm the final waiting state");
+                }
+                projectile.Update(0);
+                Equal(1, PendingActions(), label + "on_spawn admitted on first active update");
+                if (charge)
+                {
+                    Equal(10000, target.life, label + "charge controller suppresses contact on activation");
+                    Equal(true, projectile.active, label + "charge remains alive until release");
+                    owner.channel = false;
+                    projectile.Update(0);
+                }
+                Equal(true, target.life < 10000, label + "active native contact deals damage");
+                Equal(false, projectile.active, label + "native contact consumes pierce one");
+                Equal(1, PendingActions(), label + "native retirement preserves the on_spawn child action");
+                Equal(true, ObserveChildCombatBoundary(AdvanceRuntimeWorldTick, projectile, 50, 3f),
+                    label + "admitted child reaches native spawn after source retirement");
+                Equal(0, PendingActions(), label + "child dispatches once");
+            }
+        });
     }
 
     private static void ActivationRespectsZeroMotion()

@@ -1,14 +1,155 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Content.Items;
+using Microsoft.Xna.Framework;
+using MonoMod.RuntimeDetour;
 using Terraria;
+using Terraria.DataStructures;
+using Terraria.ID;
 using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static GeneratedItem PeriodicEquipmentItem(bool armor = false)
+    {
+        var data = GeneratedItemData.FromJson(File.ReadAllText(Path.Combine("tools", "fixtures", "equipment-periodic-compiled.json")))
+            ?? throw new InvalidOperationException("compiler equipment fixture rejected: " + ContractJsonDiagnostics.LastError);
+        if (armor)
+        {
+            data.Accessory.Enabled = false;
+            data.Armor = new ArmorSpec { Enabled = true, Slot = "head", SetKey = "witness_set", Defense = 1 };
+        }
+        data = GeneratedItemData.FromJson(data.ToNetworkJson())!;
+        var item = new Item { type = ItemID.CopperShortsword, stack = 1 };
+        var generated = AttachItem(armor ? new GeneratedHeadArmor() : new GeneratedItem(), item, data);
+        data.ApplyToItem(item);
+        return generated;
+    }
+
+    private static uint PeriodicEquipmentDueTick(GeneratedItem generated)
+    {
+        var action = generated.Data.RuntimeProgram.TryGetEntity(generated.Data.RuntimeProgram.ItemEntityId)!.Events.Single();
+        uint due = 120;
+        while ((due + (ulong)action.Id.GetHashCode()) % (ulong)action.PeriodTicks != 0) due++;
+        return due;
+    }
+
+    private static void EquipmentPeriodicGameplayReachesNativeSpawn()
+    {
+        foreach (bool armor in new[] { false, true })
+        foreach (bool hidden in new[] { false, true })
+        {
+            using var actors = new SwarmRuntimeScope();
+            WithPlayer((player, _) => {
+                player.active = true; player.whoAmI = 0; player.direction = 1;
+                Terraria.Main.player[0] = player;
+                var generated = PeriodicEquipmentItem(armor);
+                var item = generated.Item;
+                player.armor[armor ? 0 : 3] = item;
+                uint due = PeriodicEquipmentDueTick(generated);
+                int attempts = 0;
+                using var spawn = new Hook(NativeProjectileEntry(),
+                    (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
+                    ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
+                        attempts++;
+                        Equal("InfiniRuntimePeriodic", source.Context, "existing periodic source provenance");
+                        Equal(10, damage, "authored child damage and event multiplier reach spawn");
+                        Equal(player.Center, position, "functional equipment emits at owning player");
+                        Equal(new Vector2(8, 0), velocity, "authored child facing and speed are retained");
+                        // Observe the native allocation boundary only. The inactive
+                        // result exercises its ordinary refusal/refund path, not a game spawn.
+                        return new Projectile { active = false };
+                    }));
+                void Functional()
+                {
+                    // Real native callers dispatch UpdateEquip/UpdateAccessory.
+                    if (armor) player.GrantArmorBenefits(item);
+                    else player.ApplyEquipFunctional(item, hidden);
+                }
+                MaterialClock(due - 1); Functional();
+                Equal(0, attempts, "off-cadence equipment hook stays silent");
+                MaterialClock(due); Functional();
+                Equal(1, attempts, "equipped-only authored periodic child reaches native spawn boundary");
+                Functional();
+                player.inventory[0] = item; player.selectedItem = 0;
+                ItemLoader.HoldItem(item, player);
+                Equal(1, attempts, "repeated functional and held hooks cannot duplicate this instance/tick");
+                Equal(1, item.stack, "passive event does not debit stack");
+                MaterialClock(due + 6); Functional();
+                Equal(2, attempts, "next authored period is not permanently suppressed");
+                player.inventory[0] = new Item();
+                MaterialClock(due + 12);
+                ItemLoader.UpdateVanity(item, player);
+                Equal(2, attempts, "vanity alone never produces gameplay");
+                ItemLoader.UpdateInventory(item, player);
+                Equal(2, attempts, "inventory alone never produces gameplay");
+                // A second physical copy retains the existing per-instance semantics;
+                // matching definition IDs are not an extra hidden gameplay cooldown.
+                var copy = PeriodicEquipmentItem(armor);
+                if (armor) ItemLoader.UpdateEquip(copy.Item, player);
+                else ItemLoader.UpdateAccessory(copy.Item, player, hidden);
+                Functional();
+                Equal(4, attempts, "independent instances sharing a definition each execute once");
+                var binding = generated.Data.RuntimeProgram.Bindings;
+                generated.Data.RuntimeProgram.Bindings = Array.Empty<RuntimeBindingSpec>();
+                MaterialClock(due + 18); Functional();
+                Equal(4, attempts, "equipment without explicit equip_passive binding is inert");
+                generated.Data.RuntimeProgram.Bindings = binding;
+                Functional();
+                Equal(5, attempts, "ineligible hook did not consume the valid same-tick opportunity");
+                player.armor[armor ? 0 : 3] = new Item();
+                MaterialClock(due + 24);
+                ItemLoader.UpdateInventory(item, player);
+                Equal(5, attempts, "unequipping stops production");
+            });
+        }
+    }
+
+    private static void EquipmentPeriodicGameplayKeepsAuthorityAndDelay()
+    {
+        foreach (var role in SwarmRoles)
+        foreach (int delay in new[] { 0, 2 })
+        {
+            using var actors = new SwarmRuntimeScope(role.Mode, role.Local);
+            WithPlayer((player, _) => {
+                player.active = true; player.whoAmI = 0; player.direction = 1;
+                Terraria.Main.player[0] = player;
+                var generated = PeriodicEquipmentItem();
+                var action = generated.Data.RuntimeProgram.TryGetEntity(generated.Data.RuntimeProgram.ItemEntityId)!.Events.Single();
+                action.DelayTicks = delay;
+                uint due = PeriodicEquipmentDueTick(generated);
+                bool authority = role.Mode == NetmodeID.SinglePlayer || role.Mode == NetmodeID.MultiplayerClient && role.Local == 0;
+                int attempts = 0;
+                using var spawn = new Hook(NativeProjectileEntry(),
+                    (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
+                    ((source, position, velocity, type, damage, knockback, owner, a, b, c) => {
+                        attempts++;
+                        Equal("InfiniRuntimePeriodic", source.Context, "delayed equipment retains declared Misc provenance");
+                        return new Projectile { active = false };
+                    }));
+                MaterialClock(due);
+                ItemLoader.UpdateAccessory(generated.Item, player, false);
+                ItemLoader.UpdateAccessory(generated.Item, player, false);
+                Equal(authority && delay == 0 ? 1 : 0, attempts, role.Name + " immediate owner boundary");
+                Equal(authority && delay > 0 ? 1 : 0, PendingActions(), role.Name + " bounded delayed admission once");
+                if (delay > 0)
+                {
+                    AdvanceRuntimeWorldTick();
+                    Equal(0, attempts, role.Name + " delay is not shortened by duplicate hooks");
+                    AdvanceRuntimeWorldTick();
+                    Equal(authority ? 1 : 0, attempts, role.Name + " delayed owner boundary");
+                    Equal(0, PendingActions(), role.Name + " pending emission retires");
+                }
+            });
+        }
+    }
+
     private static void LegacyUnclampedEquipmentStatsRemainIntact()
     {
         var data = GeneratedItemData.Placeholder();
