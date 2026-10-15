@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program, runtime_event_inventory, runtime_visual_roles
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.vfx_manifest import vfx_director_surface

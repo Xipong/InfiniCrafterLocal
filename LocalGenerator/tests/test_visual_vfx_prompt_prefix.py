@@ -8,7 +8,8 @@ import pytest
 from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config, vfx_manifest as vfx
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
+from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.qa.capability_witnesses import build_capability_witness
@@ -160,7 +161,7 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
 def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
     with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
-        stage.build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
+        build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
 
 
 def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(wire_transport):
@@ -180,7 +181,7 @@ def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(w
     assert packets[1]["raw"]["generatedParent"]["visual"]["renderSizePx"] == 48
     assert sent[0]["messages"][1]["content"] == sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
-    request, _, _ = stage.build_initial_author_request(before, {}, {}, {}, "parent-control", model_name="test-model")
+    request, _, _ = build_initial_author_request(before, {}, {}, {}, "parent-control", model_name="test-model")
     gameplay = request_dossier(request)["parents"]["A"]["packet"]
     assert gameplay["raw"]["generatedParent"]["gameplay"] == {"damage": 19}
     assert "visual" not in gameplay["raw"]["generatedParent"]

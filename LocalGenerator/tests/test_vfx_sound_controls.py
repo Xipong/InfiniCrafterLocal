@@ -8,7 +8,7 @@ import pytest
 
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_repair_vfx_contract import _offline_transport
 from tests.test_vfx_sound_selection import _sound, _INVENTORY, SOUND_IDS
 from tests.vfx_material_fixtures import _data, _legacy

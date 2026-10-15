@@ -187,7 +187,6 @@ def check_no_flat_helper_shims() -> None:
 def check_internal_import_boundaries() -> None:
     local = ROOT / "LocalGenerator"
     production = local / "infini_local"
-    runtime_package = production / "core" / "runtime_authoring"
     legacy_support = production / "pipelines" / "pipeline_support.py"
     if legacy_support.exists():
         fail("retired pipeline_support.py barrel was restored")
@@ -206,18 +205,6 @@ def check_internal_import_boundaries() -> None:
                 if any(alias.name == "infini_local.pipelines.pipeline_support" for alias in node.names):
                     fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
 
-    init_tree = ast.parse((runtime_package / "__init__.py").read_text(encoding="utf-8"))
-    exported: set[str] = set()
-    for node in init_tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
-            if isinstance(node.value, (ast.List, ast.Tuple)):
-                exported = {
-                    item.value
-                    for item in node.value.elts
-                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
-                }
-    if not exported or any(name.startswith("_") for name in exported):
-        fail("runtime_authoring public API is missing or exports private internals")
 
 
 def python_source_issues(sources: dict[str, str]) -> list[str]:
@@ -237,6 +224,10 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
         module = path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", ".")
         os_names, environ_names, getenv_names = {"os"}, set(), set()
         for node in ast.walk(tree):
+            if (path == package + "core/runtime_authoring/__init__.py"
+                    and isinstance(node, (ast.Import, ast.ImportFrom))
+                    and not (isinstance(node, ast.ImportFrom) and node.module == "__future__")):
+                issues.append(f"runtime_barrel_import:{path}:{node.lineno}")
             if isinstance(node, ast.Import):
                 os_names.update(alias.asname or alias.name for alias in node.names if alias.name == "os")
                 if module in edges:

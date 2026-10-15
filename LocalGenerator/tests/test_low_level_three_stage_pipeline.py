@@ -1,4 +1,5 @@
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 from contextlib import nullcontext
 
@@ -8,7 +9,7 @@ import json
 import pytest
 
 import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
-import infini_local.pipelines.combine_pipeline as combine_stage
+import infini_local.pipelines.gameplay_stage as combine_stage
 import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
@@ -164,7 +165,7 @@ def wire_transport(monkeypatch):
             raise value
         return {"choices": [{"message": {"content": value if isinstance(value, str) else json.dumps(value)}}]}
 
-    for module in (gameplay_stage, visual_stage):
+    for module in (gameplay_stage, visual_stage, vfx_transport):
         monkeypatch.setattr(module, "USE_LLM", True)
         monkeypatch.setattr(module, "resolve_llm_model", lambda: "test-model")
         monkeypatch.setattr(module, "llm_chat_json", reply)
@@ -204,7 +205,7 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
         responses.append({"schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.5,
                           "visualBudgetClass": None, "motif": None, "slotsUpsert": [],
                           "slotIdsDelete": [], "slotIndicesDelete": [], "note": "repair only magnitude"})
-    final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=gameplay_stage.call_llm_vfx_director)
+    final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     expected_stages = ["planner", "visual_director"] + (["visual_repair"] if repair_needed else [])
     expected_stages += ["vfx_director"] + (["vfx_repair"] if repair_needed else [])
     assert [request["_infini_stage"] for request in requests] == expected_stages
@@ -293,7 +294,7 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
         elif stage == "visual":
             result = visual_stage.apply_visual_director(data, {}, {}, {}, {})
         else:
-            result = attach_hybrid_vfx_manifest(data, "a+b", llm_director=gameplay_stage.call_llm_vfx_director)
+            result = attach_hybrid_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]
     assert [request["_infini_stage"] for request in requests] == names
     assert not responses  # Any unbounded third request fails the recording transport too.

@@ -14,8 +14,8 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring import program_schema
 from infini_local.core.vfx_manifest import _prompt_packet
-from infini_local.pipelines import combine_pipeline, llm_authoring_pipeline
-from infini_local.pipelines.combine_validation import authored_item_validation_report
+from infini_local.pipelines import gameplay_stage, llm_authoring_pipeline
+from infini_local.pipelines.gameplay_stage import authored_item_validation_report
 from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -200,7 +200,7 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
 
     monkeypatch.setattr(llm_authoring_pipeline, "llm_chat_json", provider)
     planned = llm_authoring_pipeline.try_llm_plan({}, {}, {}, {}, "plan-report-serialization")
-    result = combine_pipeline.compile_and_validate_authored_runtime(
+    result = gameplay_stage.compile_and_validate_authored_runtime(
         planned, {}, {}, {}, {}, "plan-report-serialization", run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs),
     )
     assert len(requests) == 1 + runtime_repair and not responses

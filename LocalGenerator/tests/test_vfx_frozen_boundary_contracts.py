@@ -13,7 +13,7 @@ from infini_local.core.errors import PlannerUnavailable
 from tests.test_repair_vfx_contract import _patch
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_low_level_three_stage_pipeline import _vfx_output
 from tests.test_repair_vfx_contract import _offline_transport
 from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation

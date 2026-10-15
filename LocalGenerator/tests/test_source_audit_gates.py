@@ -130,3 +130,18 @@ def test_packet_collision_is_reported(gates, monkeypatch):
     scanner.check_packet_ids()
     assert any(issue.startswith("packet id collision:") for issue in scanner.ERRORS)
     scanner.ERRORS.clear()
+
+
+@pytest.mark.parametrize("source,valid", [
+    ('"""Import defining runtime owners directly."""\n', True),
+    ('from __future__ import annotations\n', True),
+    ('from infini_local.core.runtime_authoring.compiler import compile_runtime_program\n', False),
+    ('import infini_local.core.runtime_authoring.repair_scope\n', False),
+])
+def test_runtime_package_keeps_eager_owner_imports_out(gates, source, valid):
+    hygiene, _ = gates
+    sources = python_sources("value = 1")
+    sources["LocalGenerator/infini_local/core/runtime_authoring/__init__.py"] = source
+    issues = hygiene.python_source_issues(sources)
+    has_barrel_import = any(issue.startswith("runtime_barrel_import:") for issue in issues)
+    assert has_barrel_import is not valid

@@ -22,22 +22,15 @@ from infini_local.core.config_bootstrap import (
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, USE_LLM
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
-from infini_local.core.runtime_authoring.compiler import runtime_event_inventory
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest, validate_vfx_manifest_wire
 from infini_local.pipelines import generation_debug
-from infini_local.pipelines.combine_gameplay import attach_gameplay_and_runtime_program
-from infini_local.pipelines.combine_validation import strict_validate_authored_item
+from infini_local.pipelines.gameplay_stage import compile_and_validate_authored_runtime, validate_final_runtime_wire_boundary
+from infini_local.pipelines.vfx_generation_pipeline import call_llm_vfx_director
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
-from infini_local.pipelines.item_power_knowledge import apply_item_knowledge, canonicalize
-from infini_local.pipelines.llm_authoring_pipeline import (
-    call_llm_vfx_director,
-    repair_author_item_after_failure,
-    try_llm_plan,
-    validate_final_runtime_wire_boundary,
-)
+from infini_local.pipelines.item_power_knowledge import canonicalize
+from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
 from infini_local.pipelines.llm_transport import begin_llm_item_lease, end_llm_item_lease
 from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
 from infini_local.pipelines.result_knowledge_card import attach_result_knowledge_card
@@ -48,7 +41,6 @@ from infini_local.pipelines.visual_sprite_generation import maybe_generate_visua
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
-from infini_local.storage.trace_runtime import trace_event
 from infini_local.storage.world_recipe_runtime import (
     cache_get,
     cache_put,
@@ -95,10 +87,6 @@ def _assert_stage_topology(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _vfx_manifest_report(data: Mapping[str, Any]) -> dict[str, Any]:
-    return validate_vfx_manifest_wire(data)
-
-
 def _cached_payload_report(data: Any) -> dict[str, Any]:
     errors: list[dict[str, Any]] = []
     # Structural precheck only: the mandatory visual report below owns the one
@@ -117,7 +105,7 @@ def _cached_payload_report(data: Any) -> dict[str, Any]:
     visual = visual_delivery_report(data, check_backend_config=False)
     for problem in visual.get("problems") or []:
         errors.append({"path": "$.visual", "message": str(problem)})
-    vfx = _vfx_manifest_report(data)
+    vfx = validate_vfx_manifest_wire(data)
     errors.extend(copy.deepcopy(vfx.get("errors") or []))
     return {"ok": not errors, "errors": errors, "runtime": wire, "visual": visual, "vfx": vfx}
 
@@ -142,72 +130,6 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     key = recipe_key(a, b, world_id, identity_version, profile_id)
     cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
     return key, sanitize_recipe_for_delivery(cached) if isinstance(cached, dict) else None
-
-
-def _failure_report(item: Mapping[str, Any], exc: BaseException, stage: str) -> dict[str, Any]:
-    validation = validate_runtime_program(item)
-    errors = copy.deepcopy(validation.get("errors") or [])
-    targets = getattr(exc, "author_repair_targets", None)
-    if isinstance(targets, list):
-        errors = [copy.deepcopy(row) for row in targets if isinstance(row, Mapping)] or errors
-    if not errors:
-        errors = [{"path": "$", "code": "compile_or_wire_rejection", "message": str(exc)[:1800]}]
-    return {
-        "schema": "infini.low-level-gameplay-failure.v1",
-        "stage": stage,
-        "errorType": type(exc).__name__,
-        "error": str(exc)[:2000],
-        "errors": errors,
-        "validation": validation,
-    }
-
-
-def compile_and_validate_authored_runtime(
-    data: dict[str, Any],
-    a: dict[str, Any],
-    b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
-    key: str,
-    *,
-    run_stage: Callable[..., Any],
-) -> dict[str, Any]:
-    """Validate/compile once, then use one conditional Gameplay Repair if rejected."""
-
-    def domain_pass(item: dict[str, Any], prefix: str) -> dict[str, Any]:
-        item = run_stage(prefix + "_strict_runtime_program", strict_validate_authored_item, item, a, b)
-        item = run_stage(prefix + "_parent_power_context", apply_item_knowledge, item, a, b, ca, cb)
-        item = run_stage(prefix + "_compile_runtime_program", attach_gameplay_and_runtime_program, item, a, b, ca, cb)
-        run_stage(prefix + "_wire_boundary", validate_final_runtime_wire_boundary, item)
-        return item
-
-    authored = copy.deepcopy(data)
-    try:
-        return domain_pass(data, "02")
-    except (PlannerUnavailable, ValueError, TypeError, RuntimeError, AssertionError) as exc:
-        report = _failure_report(authored, exc, "gameplay_validation_or_compile")
-    accounting = ((authored.get("debug") or {}).get("llmStageAccounting") or {})
-    if int(accounting.get("gameplayRepairCalls", 0) or 0) >= 1:
-        raise PlannerUnavailable(
-            "Gameplay format Repair output failed validation and the single gameplay repair budget already consumed: "
-            + json.dumps(report["errors"][:12], ensure_ascii=False)
-        )
-    repaired = run_stage(
-        "02r_conditional_gameplay_repair",
-        repair_author_item_after_failure,
-        authored,
-        a,
-        b,
-        ca,
-        cb,
-        key,
-        failure_report=report,
-    )
-    try:
-        return domain_pass(repaired, "02r")
-    except (PlannerUnavailable, ValueError, TypeError, RuntimeError, AssertionError) as exc:
-        second = _failure_report(repaired, exc, "gameplay_repair_validation_or_compile")
-        raise PlannerUnavailable("Gameplay Repair did not produce an executable low-level program: " + json.dumps(second["errors"][:12], ensure_ascii=False)) from exc
 
 
 def combine(payload: dict[str, Any]) -> dict[str, Any]:
@@ -247,7 +169,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         if data is None:
             if not ALLOW_DETERMINISTIC_DEV_FALLBACK:
                 raise PlannerUnavailable("Gameplay Author unavailable; craft failed and ingredients must be refunded")
-            data = step("01_dev_only_low_level_fixture", deterministic_plan, a, b, ca, cb, key)
+            data = step("01_dev_only_low_level_fixture", dev_fallback.deterministic_low_level_plan, a, b, ca, cb, key)
 
         data = compile_and_validate_authored_runtime(data, a, b, ca, cb, key, run_stage=step)
         data = step("03_result_knowledge_card", attach_result_knowledge_card, data, a, b)
@@ -263,7 +185,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         # raises); it never returns the payload, so do not rebind `data` here.
         step("12_final_runtime_wire_gate", validate_final_runtime_wire_boundary, data)
         assert data is not None  # stage 11 always yields a payload dict
-        vfx_report = _vfx_manifest_report(data)
+        vfx_report = validate_vfx_manifest_wire(data)
         if not vfx_report["ok"]:
             raise PlannerUnavailable("final VFX wire rejected: " + json.dumps(vfx_report["errors"][:12], ensure_ascii=False))
         data = step("13_stage_accounting", _assert_stage_topology, data)
@@ -311,14 +233,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             end_llm_item_lease(lease, token)
 
 
-def deterministic_plan(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
-    """Explicit opt-in development fixture, never a production design fallback."""
-    return dev_fallback.deterministic_low_level_plan(a, b, ca, cb, key)
-
-
 __all__ = [
     "combine",
     "combine_cache_lookup",
-    "compile_and_validate_authored_runtime",
-    "deterministic_plan",
 ]

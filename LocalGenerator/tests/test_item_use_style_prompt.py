@@ -1,3 +1,4 @@
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 """Verify complete animation vocabulary reaches the production serialized Author request."""
 
@@ -92,7 +93,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     broken_vfx = copy.deepcopy(accepted_vfx)
     broken_vfx["effectMagnitude"] = 2
     responses.extend([broken_vfx, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": accepted_vfx["effectMagnitude"], "note": "effectMagnitude only"}])
-    final = vfx.attach_hybrid_vfx_manifest(projected, "visibility", llm_director=gameplay.call_llm_vfx_director)
+    final = vfx.attach_hybrid_vfx_manifest(projected, "visibility", llm_director=vfx_transport.call_llm_vfx_director)
     vfx_packets = [request_dossier(r) for r in requests[3:]]
     assert final["debug"]["vfxDirectorRaw"] == accepted_vfx
     assert final["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]

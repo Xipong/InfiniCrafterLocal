@@ -39,3 +39,18 @@ def test_registry_import_does_not_load_compilation_repair_or_transport() -> None
 def test_runtime_owners_import_independently_of_barrel_order(owners: tuple[str, ...]) -> None:
     names = {PACKAGE + "." + name for name in owners}
     assert names <= _imported_modules(*(PACKAGE + "." + name for name in owners))
+
+
+@pytest.mark.parametrize("reader", [
+    PACKAGE + ".wire_views",
+    "infini_local.core.vfx_manifest",
+    "infini_local.pipelines.visual_generation_pipeline",
+    "infini_local.pipelines.vfx_generation_pipeline",
+])
+def test_presentation_readers_do_not_import_gameplay_generation(reader: str) -> None:
+    loaded = _imported_modules(reader)
+    assert reader in loaded
+    assert not loaded & {
+        PACKAGE + ".compiler", PACKAGE + ".repair_scope",
+        "infini_local.pipelines.llm_authoring_pipeline", "infini_local.pipelines.gameplay_stage",
+    }

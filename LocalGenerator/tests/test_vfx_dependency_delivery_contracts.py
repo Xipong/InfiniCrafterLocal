@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
 from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
 from infini_local.services import asset_sync_service
@@ -268,14 +268,15 @@ def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, 
 @pytest.mark.parametrize("status", ["pending", "failed", "fallback", "fallback_after_failed_generation", "prompt_only"])
 def test_ready_pixels_do_not_allow_pending_or_fallback_ingredient_admission(offline_backend, tmp_path, status):
     from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
-    from infini_local.pipelines.combine_pipeline import _cached_payload_report, _vfx_manifest_report
+    from infini_local.pipelines.combine_pipeline import _cached_payload_report
+    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
     from infini_local.storage import world_storage
     out = visual_sprite_generation.maybe_generate_visual_assets(_data())
     asset = out["vfxManifest"]["assets"][0]
     asset["spriteStatus"] = status
     assert asset_sync_service.is_complete_png_file(asset["spritePath"])
     assert validate_vfx_manifest_wire(out)["ok"]
-    assert _vfx_manifest_report(out)["ok"]  # wire helper remains the authority
+    assert validate_vfx_manifest_wire(out)["ok"]  # wire helper remains the authority
     assert not visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)["ok"]
     assert not world_storage.is_deliverable_recipe_payload(out)
     assert not _cached_payload_report(out)["ok"]

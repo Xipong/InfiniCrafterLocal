@@ -1,4 +1,5 @@
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 
 import importlib
 import json
@@ -19,12 +20,13 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
     _runtime_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", enabled)
     monkeypatch.setattr(author, "USE_LLM", True)
+    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     captured = []
     raw = '{"note":"' + "ж" * 140000 + ' COMPLETE_RESPONSE_TAIL"}'
     def respond(request, **kwargs):
         captured.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": raw}}]}
-    for owner in (author, visual):
+    for owner in (author, visual, vfx_transport):
         monkeypatch.setattr(owner, "llm_chat_json", respond)
         monkeypatch.setattr(owner, "resolve_llm_model", lambda: "offline-model")
     if stage.startswith("visual"):
@@ -50,7 +52,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         before = copy.deepcopy(user)
         messages = [{"role": "system", "name": "vfx_repair_contract", "content": "exact contract"},
                     {"role": "user", "name": "vfx_repair_context", "content": json.dumps(user, ensure_ascii=False)}] if stage.endswith("repair") else None
-        result = author.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
+        result = vfx_transport.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
         assert request_dossier(captured[0]) == before
         assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}

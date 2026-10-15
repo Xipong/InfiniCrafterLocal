@@ -14,7 +14,7 @@ import pytest
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.pipelines import llm_authoring_pipeline as stage, llm_transport
+from infini_local.pipelines import vfx_generation_pipeline as stage, llm_transport
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sent, _sprite, _with_asset
 

@@ -6,7 +6,15 @@ from types import MappingProxyType
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from copy import deepcopy
 import pytest
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY, INPUT_KIND_REGISTRY, runtime_authoring_registry_manifest, compact_capability_catalog
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    BINDING_ACTION_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+    INPUT_KIND_REGISTRY,
+    runtime_authoring_registry_manifest,
+    compact_capability_catalog,
+)
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire

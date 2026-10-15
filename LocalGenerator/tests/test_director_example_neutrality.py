@@ -1,5 +1,6 @@
 """Offline production packets: fewer build anecdotes, unchanged expressive contracts."""
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 
 from copy import deepcopy
 import json
@@ -63,11 +64,11 @@ def _capture_vfx(monkeypatch, data, *, repair=False):
         return {"choices": [{"message": {"content": "{}"}}]}
 
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    monkeypatch.setattr(author, "USE_LLM", True)
-    monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(author, "llm_chat_json", offline_response)
+    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
+    monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(vfx_transport, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    vfx._request(author.call_llm_vfx_director, vfx._prompt_packet(data, {}, {}), **kwargs)
+    vfx._request(vfx_transport.call_llm_vfx_director, vfx._prompt_packet(data, {}, {}), **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 

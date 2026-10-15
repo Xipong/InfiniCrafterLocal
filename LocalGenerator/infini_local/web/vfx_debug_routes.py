@@ -12,8 +12,13 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
-from infini_local.core.runtime_authoring.compiler import runtime_event_inventory
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, attach_hybrid_vfx_manifest, validate_vfx_director_output, vfx_director_surface
+from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
+from infini_local.core.vfx_manifest import (
+    VFX_MANIFEST_SCHEMA,
+    attach_hybrid_vfx_manifest,
+    validate_vfx_director_output,
+    vfx_director_surface,
+)
 
 
 def _sample_data() -> dict[str, Any]:

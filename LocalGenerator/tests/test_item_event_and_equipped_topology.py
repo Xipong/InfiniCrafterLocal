@@ -4,7 +4,8 @@ import copy
 
 import pytest
 
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program, runtime_event_inventory
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import (

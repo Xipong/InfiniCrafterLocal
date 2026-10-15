@@ -11,20 +11,18 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_prompt_cache import with_instruction_segments
+from infini_local.core.llm_json_tools import effective_response_format, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
     ATTRIBUTED_PLANNER_HISTORY_KIND,
     attributed_planner_history,
     stage_chat_message,
 )
-from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA, RUNTIME_WIRE_SCHEMA, CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
     assert_bounded_author_input,
@@ -32,10 +30,6 @@ from infini_local.core.runtime_authoring.program_schema import (
 )
 from infini_local.core.runtime_authoring.capability_registry import STACK_COST_RULE
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
-from infini_local.core.vfx_manifest import (
-    MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
-    vfx_schema_instruction_paths,
-)
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_REPAIR_SYSTEM_RULE,
     RUNTIME_ROW_SHAPE_RULE,
@@ -103,18 +97,6 @@ def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
     return accounting
 
 
-def _effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    """Use actual transport metadata when a provider relaxed the requested schema."""
-    response_format = request.get("response_format")
-    debug = raw.get("_debug")
-    if isinstance(debug, Mapping):
-        if debug.get("strictSchemaDowngraded") or debug.get("responseFormatUsed") is False:
-            return None
-        if "responseFormatType" in debug and debug["responseFormatType"] != "json_schema":
-            return None
-    return response_format if isinstance(response_format, Mapping) else None
-
-
 def _prepare_parsed_author_item(
     parsed: Mapping[str, Any], *, response_format: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -123,18 +105,6 @@ def _prepare_parsed_author_item(
     if not isinstance(canonical, dict):
         raise PlannerUnavailable("Gameplay Author returned a non-object after provider projection")
     return copy.deepcopy(canonical)
-
-
-def validate_final_runtime_wire_boundary(data: dict[str, Any]) -> dict[str, Any]:
-    report = validate_runtime_wire(data)
-    debug = data.setdefault("debug", {})
-    debug["finalRuntimeProgramWireGate"] = bounded_json_dumps(report, max_chars=12000)
-    if not report.get("ok"):
-        raise PlannerUnavailable(
-            "final low-level runtime wire rejected: "
-            + "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report.get("errors", [])[:12])
-        )
-    return report
 
 
 def _gameplay_repair_temperature() -> float:
@@ -272,7 +242,7 @@ def _repair_malformed_author_json(
         if recovered is None:
             raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
         original = _prepare_parsed_author_item(recovered, response_format=source_response_format)
-        repaired = _prepare_parsed_author_item(parsed, response_format=_effective_response_format(request, raw))
+        repaired = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
         if original != repaired:
             raise PlannerUnavailable("Gameplay format Repair changed recoverable authored fields")
         return repaired, content
@@ -292,7 +262,7 @@ def try_llm_plan(
     """Perform exactly one baseline Gameplay Author call.
 
     Validation failure is propagated to the one conditional Gameplay Repair owned by
-    ``combine_pipeline.compile_and_validate_authored_runtime``. This function never
+    ``gameplay_stage.compile_and_validate_authored_runtime``. This function never
     retries and never asks code to select a replacement capability.
     """
     if not USE_LLM:
@@ -328,14 +298,14 @@ def try_llm_plan(
             parsed = parse_first_valid_llm_json(content)
             if not isinstance(parsed, dict):
                 raise TypeError("Gameplay Author returned non-object JSON")
-            item = _prepare_parsed_author_item(parsed, response_format=_effective_response_format(request, raw))
+            item = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
         except (ValueError, TypeError, json.JSONDecodeError) as parse_error:
             item, format_repair_content = _repair_malformed_author_json(
                 malformed_raw_text=str(content),
                 parse_error=parse_error,
                 original_recipe_context=user_content,
                 model_name=model_name,
-                source_response_format=_effective_response_format(request, raw),
+                source_response_format=effective_response_format(request, raw),
                 recipe_key=key,
             )
             format_repaired = True
@@ -587,7 +557,7 @@ def repair_author_item_after_failure(
         parsed = parse_first_valid_llm_json(content)
         patch = project_provider_nullable_optionals_to_local(
             parsed, local_schema=local_repair_schema,
-            response_format=_effective_response_format(request, raw),
+            response_format=effective_response_format(request, raw),
         )
         if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
             raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")
@@ -624,61 +594,10 @@ def repair_author_item_after_failure(
         raise PlannerUnavailable(f"Gameplay Repair failed: {exc!r}") from exc
 
 
-def call_llm_vfx_director(
-    system: str,
-    user: dict[str, Any],
-    max_tokens: int,
-    temperature: float,
-    timeout: int,
-    messages: list[dict[str, str]] | None = None,
-) -> dict[str, Any] | MalformedVfxDirectorOutput | None:
-    """Transport-only helper used by the finite VFX Director stage."""
-    if not USE_LLM:
-        return None
-    model_name = resolve_llm_model()
-    stage_name = "vfx_repair" if messages and any(message.get("name") == "vfx_repair_contract" for message in messages) else "vfx_director"
-    output_schema = user.get("outputSchema") if isinstance(user.get("outputSchema"), Mapping) else None
-    request = {
-        "model": model_name,
-        "messages": messages or [
-            stage_chat_message("system", "vfx_director_contract", system + llm_reasoning_system_suffix(model_name)),
-            stage_chat_message("user", "vfx_director_context", json.dumps(user, ensure_ascii=False, separators=(",", ":"))),
-        ],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "response_format": llm_json_response_format(
-            "infini_vfx_repair_patch" if stage_name == "vfx_repair" else "infini_vfx_runtime_events",
-            schema=output_schema,
-            strict=True,
-            auto_preference="json_schema",
-        ) if output_schema else {"type": "json_object"},
-    }
-    request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
-    static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
-    request = with_instruction_segments(request, user, static_keys)
-    request = with_schema_instruction_definitions(
-        request, "outputSchema", vfx_schema_instruction_paths(repair=stage_name == "vfx_repair"),
-    )
-    item = user.get("item") or {}
-    recipe_id = item.get("id") if isinstance(item, Mapping) else None
-    trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"])
-    trace_stage_request(stage_name, user.get("recipeKey"), request, recipe_id=recipe_id)
-    raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
-    content = raw["choices"][0]["message"]["content"]
-    trace_event("response", "LLM:" + stage_name, "VFX stage response", {"recipeId": recipe_id}, response=content)
-    try:
-        parsed = parse_first_valid_llm_json(content)
-    except (ValueError, TypeError, json.JSONDecodeError) as exc:
-        return MalformedVfxDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
-    return parsed if isinstance(parsed, dict) else None
-
-
 __all__ = [
     "GAMEPLAY_REPAIR_DOSSIER_SCHEMA",
     "build_gameplay_repair_dossier",
     "build_initial_author_request",
-    "call_llm_vfx_director",
     "repair_author_item_after_failure",
     "try_llm_plan",
-    "validate_final_runtime_wire_boundary",
 ]

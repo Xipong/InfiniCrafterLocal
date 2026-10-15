@@ -11,16 +11,36 @@ import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments, runtime_repair_scope_schema, validate_repair_patch_scope
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program, runtime_event_inventory
+from infini_local.core.runtime_authoring.repair_scope import (
+    build_runtime_repair_scope,
+    filter_repair_patch_scope,
+    runtime_repair_fragments,
+    runtime_repair_scope_schema,
+    validate_repair_patch_scope,
+)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.vfx_manifest import VFX_REPAIR_PATCH_SCHEMA, _apply_vfx_repair_patch, _build_vfx_repair_scope, validate_vfx_director_output, vfx_director_surface
-from infini_local.pipelines.combine_validation import authored_item_validation_report
+from infini_local.core.vfx_manifest import (
+    VFX_REPAIR_PATCH_SCHEMA,
+    _apply_vfx_repair_patch,
+    _build_vfx_repair_scope,
+    validate_vfx_director_output,
+    vfx_director_surface,
+)
+from infini_local.pipelines.gameplay_stage import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from pipeline_test_support import RepairTransaction
-from test_low_level_three_stage_pipeline import _binding_row, _visual_kit, _accepted_visual_data, _vfx_output, _empty_gameplay_patch, wire_transport
+from test_low_level_three_stage_pipeline import (
+    _binding_row,
+    _visual_kit,
+    _accepted_visual_data,
+    _vfx_output,
+    _empty_gameplay_patch,
+    wire_transport,
+)
 
 @pytest.mark.parametrize("source,selection,ok", [
     pytest.param("invalid", "item", True, id="invalid-primary-select-item"),
@@ -753,7 +773,7 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
 @pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
 def test_strict_author_exception_keeps_all_targets_separate_from_display(identity_tail):
     from infini_local.pipelines.combine_pipeline import _failure_report
-    from infini_local.pipelines.combine_validation import strict_validate_authored_item
+    from infini_local.pipelines.gameplay_stage import strict_validate_authored_item
 
     current, _ = _bounded_invalid_buff_calls(("buffId", "durationTicks"))
     parent_a, parent_b = {"name": "Parent A"}, {"name": "Parent B"}

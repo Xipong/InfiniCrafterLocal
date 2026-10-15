@@ -10,7 +10,7 @@ state.
 
 import json
 import re
-from typing import Any
+from typing import Any, Mapping
 
 
 def _visible_model_output(text: str) -> str:
@@ -223,3 +223,15 @@ def parse_first_valid_llm_json(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("LLM JSON root is not an object")
     return parsed
+
+
+def effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Use actual transport metadata when a provider relaxed the requested schema."""
+    response_format = request.get("response_format")
+    debug = raw.get("_debug")
+    if isinstance(debug, Mapping):
+        if debug.get("strictSchemaDowngraded") or debug.get("responseFormatUsed") is False:
+            return None
+        if "responseFormatType" in debug and debug["responseFormatType"] != "json_schema":
+            return None
+    return response_format if isinstance(response_format, Mapping) else None

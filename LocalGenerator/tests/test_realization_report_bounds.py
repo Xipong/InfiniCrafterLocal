@@ -31,7 +31,7 @@ from infini_local.storage.world_storage import atomic_write_json, sanitize_recip
 
 @pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
 def test_fresh_item_name_has_80_unicode_character_boundary(length, accepted):
-    from infini_local.pipelines.combine_validation import authored_item_validation_report
+    from infini_local.pipelines.gameplay_stage import authored_item_validation_report
 
     item = build_runtime_fixture("workbench_blade")
     item["name"] = "🌟" * length

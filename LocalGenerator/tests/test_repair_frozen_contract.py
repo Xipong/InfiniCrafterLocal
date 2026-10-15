@@ -23,7 +23,7 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     import hashlib
     from test_gameplay_repair_readonly_context import _offline_builder
     from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import combine_pipeline as combine
+    from infini_local.pipelines import gameplay_stage as combine
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
