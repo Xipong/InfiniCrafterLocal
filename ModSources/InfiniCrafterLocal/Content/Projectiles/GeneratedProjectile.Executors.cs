@@ -187,7 +187,11 @@ public sealed partial class GeneratedProjectile
             bool release = !owner.channel || !HoldingGeneratedItem(owner) || _chargeTicks >= chargeDuration && _entity.Controller.Params.DurationTicks > 0 && _age >= AuthoredTicksToProjectileUpdates(_entity.Controller.Params.DurationTicks);
             if (!release)
             {
-                Projectile.timeLeft = Math.Max(Projectile.timeLeft, 2);
+                // Native Update decrements timeLeft after every AI subupdate.
+                // Charging suspends flight: compensate that decrement instead
+                // of exhausting the authored lifetime down to the keep-alive 1.
+                // Release and owner cancellation do not take this branch.
+                Projectile.timeLeft++;
                 Projectile.tileCollide = false;
                 Projectile.friendly = false;
                 return true;

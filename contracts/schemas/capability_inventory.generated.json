@@ -5682,7 +5682,7 @@
       "positionOwnership": "owns_position_until_release",
       "promptVisibility": true,
       "provenance": "charge/release controller extracted from cast root",
-      "purpose": "Accumulate bounded charge while held, then release this entity using authored movement.",
+      "purpose": "Accumulate bounded charge while held, then release this entity using authored movement. Charging pauses the native lifetime countdown; the authored lifetime is available for flight after release. Other active-age clocks are not reset.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
