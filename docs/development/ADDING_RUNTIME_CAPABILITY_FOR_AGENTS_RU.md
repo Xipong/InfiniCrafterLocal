@@ -22,17 +22,10 @@ Capability существует только после полного `registry
 Из корня, Python проекта и `PYTHONPATH=LocalGenerator`:
 
 ```bash
-python tools/export_contract_schemas.py
-python tools/generate_lowery.py
-python tools/generate_low_level_runtime_docs.py
-python tools/generate_equipment_bounds.py
-python tools/generate_primitive_parity.py
-python tools/audit_targeted_repair.py --output contracts/targeted_repair_audit.generated.json
-python tools/audit_terraria_standardization.py --write
-python -m infini_local.qa.primitive_loss_audit
+python tools/validate_release.py --refresh runtime
 ```
 
-После генерации применяй `--check`, где поддерживается; остальные parity/mutation/build commands — [AGENTS](../../AGENTS.md#обязательный-vertical-slice) и [test owners](TESTING_RU.md). Это authoring workflow, **не** разрешение редактировать generated файлы вручную или менять runtime в docs-only задаче.
+Команда вызывает существующих producers в порядке зависимостей и обновляет offline handbook. Для проверки без записи: `python tools/validate_release.py --group static`; полная приёмка и focused iteration — [AGENTS](../../AGENTS.md#обязательный-vertical-slice) и [test owners](TESTING_RU.md). Это authoring workflow, **не** разрешение редактировать generated файлы вручную или менять runtime в docs-only задаче.
 
 <a id="shortcuts"></a>
 ## Запрещённый shortcut
