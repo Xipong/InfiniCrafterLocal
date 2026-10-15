@@ -73,6 +73,8 @@ Owner immunity разделяет Terraria cooldown между снарядам�
 {"above": "cursor", "heightTiles": 8, "activationDelayTicks": 15}
 ```
 
+При положительном `activationDelayTicks` все ожидающие projectile updates, включая последний, остаются без NPC-урона. На следующем, первом активном update выполняются `on_spawn` и controller до native collision; поэтому ожидание не может потратить `pierce` и удалить ещё не испущенные `on_spawn` actions. Число ожидающих updates равно `activationDelayTicks × (1 + extraUpdates)`; lifetime активной фазы и выбранная launch velocity не меняются.
+
 У обеих форм одинаковый список anchors:
 
 | Anchor | Прежний wire placement и смысл |
