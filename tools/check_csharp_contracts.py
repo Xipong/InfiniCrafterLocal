@@ -3,7 +3,8 @@
 
 Do not add implementation-presence or method-order assertions here. This gate
 checks warning suppression, authored tooltip ownership, named engine sentinels,
-forbidden gameplay routers and public packet identity, not runtime correctness.
+forbidden gameplay routers, inert opt-in self-test and public packet identity,
+not runtime correctness.
 """
 from __future__ import annotations
 
@@ -50,6 +51,18 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
                 and Path(path).name.startswith("GeneratedItemData")) or path == "Content/Items/GeneratedItem.cs":
             if re.search(r"\b(?:Tooltip|TooltipLine|ModifyTooltips|SetBonusText)\b|\bplayer\s*\.\s*setBonus\b", code):
                 issues.append(f"authored_tooltip:{path}")
+        if path == "Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs":
+            # This auto-loaded diagnostic must return before any work unless opted in.
+            # Keep the narrow safety policy here, not a separate aggregate QA gate.
+            body = stripped(method_body(text, "PostSetupContent"), keep_strings=True)
+            guard = (r'\s*if\s*\(\s*!string\.Equals\(\s*Environment\.GetEnvironmentVariable'
+                     r'\(\s*EnabledEnv\s*\)\s*,\s*"1"\s*,\s*StringComparison\.Ordinal\s*\)\s*\)'
+                     r'\s*(?:\{\s*return\s*;\s*\}|return\s*;)')
+            if (not re.search(r'\bconst\s+string\s+EnabledEnv\s*=\s*"INFINI_AGENT_SELFTEST"\s*;',
+                              stripped(text, keep_strings=True)) or not re.match(guard, body)):
+                issues.append(f"selftest_opt_in:{path}")
+            if re.search(r"\bProjectile\s*\.\s*NewProjectile(?:Direct)?\s*\(", code):
+                issues.append(f"selftest_projectile_spawn:{path}")
         patterns = []
         if path.startswith("Localization/") and path.endswith(".hjson"):
             for name in ("GeneratedItem", "GeneratedHeadArmor", "GeneratedBodyArmor", "GeneratedLegsArmor"):

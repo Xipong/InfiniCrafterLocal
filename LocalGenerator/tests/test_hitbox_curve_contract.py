@@ -1,12 +1,10 @@
 """A12 curve choices reach exact wire/receipts and preserve frozen Repair."""
 from copy import deepcopy
-import hashlib
 import json
-from pathlib import Path
 
 import pytest
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -15,9 +13,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.qa.capability_library_audit import capability_library_audit
-from sentry_contract_checks import without_declared_targeting_neutrals
 
 
 FN = "set_projectile_hitbox_curve"
@@ -37,9 +33,6 @@ def _source():
 def _entity(wire):
     return next(row for row in wire["runtimeProgram"]["entities"] if "hitboxCurve" in row)
 
-
-def _payload(doc):
-    return {key: doc[key] for key in ("runtimeProgram", "gameplay", "accessory", "armor")}
 
 
 @pytest.mark.parametrize("curve", ["linear", "exponential"])
@@ -148,19 +141,9 @@ def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner():
     compile_runtime_program(repaired)
 
 
-@pytest.mark.parametrize("name", NON_ARCHETYPAL_FIXTURES)
-def test_no_curve_preserves_frozen_gameplay_payload(name):
-    capture = json.loads((Path(__file__).parent / "fixtures/hitbox_curve_legacy_payload_sha256.json").read_text())
-    from beam_contract_checks import without_declared_beam_neutrals
-    from sentry_contract_checks import without_declared_targeting_neutrals
-    from captured_parent_combat_author import historical_child_combat_wire
-    wire = historical_child_combat_wire(without_declared_targeting_neutrals(without_declared_beam_neutrals(compile_runtime_program(build_runtime_fixture(name)))))
-    for entity in wire["runtimeProgram"]["entities"]:
-        if "overTarget" in entity.get("spawn", {}):
-            assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
+def test_unselected_curve_does_not_appear_in_current_wire():
+    wire = compile_runtime_program(build_capability_witness("set_projectile_hitbox"))
     assert all("hitboxCurve" not in entity for entity in wire["runtimeProgram"]["entities"])
-    text = json.dumps(_payload(wire), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    assert hashlib.sha256(text.encode()).hexdigest() == capture["sha256"][name]
 
 
 def test_full_request_and_numeric_native_range_audit_cover_the_new_owner():

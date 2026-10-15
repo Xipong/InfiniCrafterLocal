@@ -224,6 +224,11 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
         module = path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", ".")
         os_names, environ_names, getenv_names = {"os"}, set(), set()
         for node in ast.walk(tree):
+            if path.startswith(package) and isinstance(node, (ast.Import, ast.ImportFrom)):
+                imported = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
+                            else [node.module or ""])
+                if any(name.split(".")[0] in {"tools", "mutation_contract_gate"} for name in imported):
+                    issues.append(f"tooling_import:{path}:{node.lineno}")
             if (path == package + "core/runtime_authoring/__init__.py"
                     and isinstance(node, (ast.Import, ast.ImportFrom))
                     and not (isinstance(node, ast.ImportFrom) and node.module == "__future__")):

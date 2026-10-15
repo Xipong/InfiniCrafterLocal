@@ -55,13 +55,12 @@ def resolve_runtime_dump_path(data_dir: Path, filename: str, explicit_env: str, 
     return candidates[0]
 
 
-def load_jsonl_index(path: Path, key_fields: tuple[str, ...]) -> tuple[list[dict[str, Any]], dict[Any, dict[str, Any]], dict[str, dict[str, Any]]]:
+def load_jsonl_index(path: Path) -> tuple[list[dict[str, Any]], dict[Any, dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     by_type: dict[Any, dict[str, Any]] = {}
-    by_full: dict[str, dict[str, Any]] = {}
     try:
         if not path.exists():
-            return rows, by_type, by_full
+            return rows, by_type
         with path.open("r", encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
@@ -80,22 +79,9 @@ def load_jsonl_index(path: Path, key_fields: tuple[str, ...]) -> tuple[list[dict
                         by_type[int(row.get("type"))] = row
                     except Exception:
                         pass
-                fields = tuple(k for k in (key_fields or ()) if str(k).strip()) or ("sourceMod", "internalName")
-                key_parts = [str(row.get(k, "")).strip().lower() for k in fields]
-                if key_parts and any(key_parts):
-                    key = "/".join(key_parts)
-                    by_full[key] = row
-                source = str(row.get("sourceMod") or "Terraria").lower()
-                internal = str(row.get("internalName") or "").lower()
-                if internal:
-                    by_full[f"{source}/{internal}"] = row
-                    by_full.setdefault(internal, row)
-                name = str(row.get("name") or row.get("Name") or "").strip().lower()
-                if name:
-                    by_full.setdefault(name, row)
     except Exception as e:
         print(f"[InfiniCrafterLocal] runtime dump load failed for {path}: {e!r}")
-    return rows, by_type, by_full
+    return rows, by_type
 
 
 def runtime_projectile_lookup(type_id: Any) -> dict[str, Any]:
@@ -116,5 +102,5 @@ ITEMS_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
 PROJECTILES_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
     DATA_DIR, "projectiles_runtime_dump.jsonl", "INFINI_PROJECTILES_RUNTIME_DUMP", "INFINI_PROJECTILES_DUMP",
 )
-RUNTIME_ITEMS = load_jsonl_index(ITEMS_RUNTIME_DUMP_PATH, ("sourceMod", "internalName"))[0]
-RUNTIME_PROJECTILES_BY_TYPE = load_jsonl_index(PROJECTILES_RUNTIME_DUMP_PATH, ("sourceMod", "internalName"))[1]
+RUNTIME_ITEMS = load_jsonl_index(ITEMS_RUNTIME_DUMP_PATH)[0]
+RUNTIME_PROJECTILES_BY_TYPE = load_jsonl_index(PROJECTILES_RUNTIME_DUMP_PATH)[1]

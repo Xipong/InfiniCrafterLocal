@@ -12,15 +12,14 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import (
+    apply_repair_patch,
     strict_author_shape_report,
     strict_repair_shape_report,
 )
 from infini_local.pipelines.author_item_contract import (
-    apply_author_item_repair_patch,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_response_schema,
-    normalize_author_item_targeted_repair_delta_text_limits,
 )
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
@@ -79,9 +78,7 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     patch_before = copy.deepcopy(patch)
     assert strict_repair_shape_report(patch)["ok"]
     jsonschema.validate(patch["realizationReplacement"], author_item_provider_repair_response_schema()["properties"]["realizationReplacement"])
-    normalized = normalize_author_item_targeted_repair_delta_text_limits(patch)
-    assert normalized == patch_before
-    repaired = apply_author_item_repair_patch(build_runtime_fixture("workbench_blade"), normalized)
+    repaired = apply_repair_patch(build_runtime_fixture("workbench_blade"), patch)
     assert repaired["realization"] == before["realization"]
     assert repaired["runtimeProgram"] == before["runtimeProgram"]
     compiled = compile_runtime_program(prepared)
@@ -173,7 +170,6 @@ def test_report_bounds_remain_finite_nonempty_and_preserve_legacy_values(field, 
             "path": f"$.{root}.{field}", "kind": expected_kind,
             "expected": 1 if length == 0 else maximum, "actual": length,
         }])
-    assert normalize_author_item_targeted_repair_delta_text_limits(patch) == patch
     assert (item, patch) == before
 
 

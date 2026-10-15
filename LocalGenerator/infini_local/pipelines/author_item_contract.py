@@ -6,16 +6,13 @@ from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
 from infini_local.core.runtime_authoring.program_schema import (
-    apply_repair_patch,
     author_item_repair_schema as _repair_schema,
     author_item_response_schema as _author_schema,
-    strict_repair_shape_report,
     PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
     _binding_variant_schema,
 )
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.schema_validation import strict_schema_errors
 
 
@@ -550,14 +547,6 @@ def author_item_provider_repair_response_schema(
         omit_annotations=True)
 
 
-def author_item_targeted_repair_delta_schema() -> dict[str, Any]:
-    return author_item_repair_response_schema()
-
-
-def author_item_provider_targeted_repair_delta_schema(*_: Any, **__: Any) -> dict[str, Any]:
-    return author_item_provider_repair_response_schema()
-
-
 def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: Mapping[str, Any]) -> Any:
     """Invert only declared optional-property wrappers, never authored containers.
 
@@ -638,48 +627,15 @@ def project_provider_author_item_to_local(
     )
 
 
-def normalize_author_item_targeted_repair_delta_text_limits(value: Any) -> Any:
-    return copy.deepcopy(value)
-
-
-def strict_author_item_v3_report(value: Any) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        return {
-            "schema": "infini.author-item-low-level-report.v1",
-            "ok": False,
-            "errors": [{"path": "$", "code": "type", "message": "Author response must be an object."}],
-        }
-    return validate_runtime_program(value)
-
-
-def strict_author_item_repair_report(value: Any) -> dict[str, Any]:
-    return strict_repair_shape_report(value)
-
-
-def strict_author_item_targeted_repair_delta_report(value: Any) -> dict[str, Any]:
-    return strict_repair_shape_report(value)
-
-
-def apply_author_item_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
-    return apply_repair_patch(current, patch)
-
-
 __all__ = [
     "PRIMARY_REPAIR_SYSTEM_RULE",
-    "apply_author_item_repair_patch",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",
     "author_item_provider_response_schema",
-    "author_item_provider_targeted_repair_delta_schema",
     "author_item_repair_prompt_shape_card",
     "author_item_repair_response_schema",
     "author_item_response_schema",
-    "author_item_targeted_repair_delta_schema",
-    "normalize_author_item_targeted_repair_delta_text_limits",
     "project_provider_author_item_to_local",
     "project_provider_nullable_optionals_to_local",
     "primary_entity_llm_invariant",
-    "strict_author_item_repair_report",
-    "strict_author_item_targeted_repair_delta_report",
-    "strict_author_item_v3_report",
 ]

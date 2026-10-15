@@ -9,7 +9,6 @@
         "LocalGenerator/infini_local/pipelines/author_item_*.py",
         "contracts/schemas/runtime_program_*.json",
         "tools/audit_capability_library.py",
-        "tools/contract_parity.py",
         "tools/check_delivery_contract.py",
         "tools/mutation_contract_gate.py",
         "tools/check_planner_prompt_usability.py",

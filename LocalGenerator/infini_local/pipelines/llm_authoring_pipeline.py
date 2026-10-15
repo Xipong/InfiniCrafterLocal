@@ -41,7 +41,6 @@ from infini_local.pipelines.author_item_contract import (
     provider_nullable_transport_rule,
     project_provider_author_item_to_local,
     project_provider_nullable_optionals_to_local,
-    strict_author_item_repair_report as strict_author_item_repair_report,
 )
 from infini_local.pipelines.llm_authoring_prompt import (
     build_llm_author_payload,

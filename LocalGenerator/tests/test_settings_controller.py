@@ -36,14 +36,20 @@ def test_real_controller_import_and_run_without_tk_or_display(tmp_path):
     code = '''
 import importlib.abc, sys
 class RejectTk(importlib.abc.MetaPathFinder):
+    forbid_bootstrap = True
     def find_spec(self, fullname, path=None, target=None):
         if fullname == 'tkinter' or fullname.startswith('tkinter.'):
             raise AssertionError('Tk must not be imported')
-sys.meta_path.insert(0, RejectTk())
+        if self.forbid_bootstrap and (fullname in {'infini_local.core.config_bootstrap', 'infini_local.web.server'} or fullname.startswith('infini_local.pipelines.')):
+            raise AssertionError('Studio must not bootstrap the generation backend: ' + fullname)
+guard = RejectTk()
+sys.meta_path.insert(0, guard)
 from pathlib import Path
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.web_studio import StudioController, StudioServer
 app = SettingsController(Path(sys.argv[1]))
+# Existing snapshot version lookup may bootstrap config; plain Studio imports must not.
+guard.forbid_bootstrap = False
 server = StudioServer(Path('.'))
 controller = StudioController(app, server)
 assert controller.snapshot()['fields']
@@ -130,6 +136,31 @@ def test_lora_windows_path_and_unselected_clear(studio):
     assert not app.values['INFINI_SDCPP_LORA_FILE']
     app.values['INFINI_SDCPP_LORA_DIR'] = 'stale'
     assert app.collect()['INFINI_SDCPP_LORA_DIR'] == ''
+
+
+@pytest.mark.parametrize('path,directory,stem,weight,expected_weight', [
+    (r'C:\models\lora\ink.safetensors', r'C:\models\lora', 'ink', '0.35', '0.35'),
+    ('C:/models/lora/ink.ckpt', r'C:\models\lora', 'ink', '', '0.25'),
+    (r'\\model-share\art\loras\ink.safetensors', r'\\model-share\art\loras', 'ink', '  ', '0.25'),
+    ('/models/loras/ink.safetensors', '/models/loras', 'ink', ' 0.45 ', '0.45'),
+    ('ink.safetensors', '.', 'ink', '', '0.25'),
+    (' relative/ink art.ckpt ', 'relative', 'ink art', '-0.5', '-0.5'),
+])
+def test_lora_collect_and_use_preserve_path_and_weight_semantics(studio, path, directory, stem, weight, expected_weight):
+    app, controller = studio
+    selected = {'INFINI_SDCPP_LORA_FILE': path, 'INFINI_SDCPP_LORA_WEIGHT': weight,
+                'INFINI_SDCPP_LORA_PROMPT_TAGS': ''}
+    tag = f'<lora:{stem}:{expected_weight}>'
+    result = apply(controller, 'useLora', selected)
+    assert result['values']['INFINI_SDCPP_LORA_DIR'] == directory
+    assert result['values']['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag
+    app.values.update(selected)
+    collected = app.collect()
+    assert collected['INFINI_SDCPP_LORA_DIR'] == directory
+    assert collected['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag
+    app.values['INFINI_SDCPP_LORA_PROMPT_TAGS'] = tag + ' <lora:other:0.2>'
+    app.use_selected_lora()
+    assert app.values['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag + ' <lora:other:0.2>'
 
 
 @pytest.mark.parametrize('lan,transport,host', [(True,'native','127.0.0.1'), (True,'http','0.0.0.0'), (False,'http','127.0.0.1')])

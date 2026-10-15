@@ -46,6 +46,7 @@ python tools/agentctl.py context --task "настройка Studio" --area studi
 python tools/agentctl.py context --task "projectile bug" --path ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs
 python tools/agentctl.py verify --changed --base origin/main --plan
 python tools/agentctl.py verify --changed --base origin/main
+python tools/agentctl.py diff --base origin/main
 ```
 
 - `--base` сравнивает committed branch diff от merge-base и добавляет staged/unstaged/untracked изменения. Для stacked PR используй его base branch. Без `--base` учитывается только рабочее дерево.
@@ -53,6 +54,9 @@ python tools/agentctl.py verify --changed --base origin/main
 - Неизвестные пути и общие test fixtures/conftest консервативно выбирают полный набор. Изменённый самостоятельный test module запускается сам. Пустая выборка — `not_selected`, недоступная среда — `unavailable`/`notRun`, не PASS.
 - `--area` явно выбирает контекст до правок, `--path` начинает от конкретного файла; `--task` — описание, а не эвристический router. Большие файлы обрезаются с `truncated`, entrypoints идут первыми.
 - `run_changed_pytests.py --base ...` — только удобный pytest subset из той же карты. Он не заменяет остальные gates.
+- `agentctl diff` — только committed/worktree source diff и список changed paths, без semantic verdict или запуска валидаторов. `--semantic` и дублирующие parity/semantic report tools удалены.
+- Budget scalar-таблицы проверяются через реальные request callers без полного subprocess для каждого значения; изолированные process smoke остаются для import-time настроек и representative Repair routes. Schema/cache reconstruction использует representative стадии и отдельные provider-wire controls вместо повторного product. Исторические inverse projections ради старого whole-document hash и private-name blacklist не являются обязательствами текущей версии; frozen fixture bytes и direct refusal сохраняются.
+- Полный library audit выполняется один раз внутри generated-docs gate; `audit_capability_library.py` остаётся отдельной ручной командой для отчёта, не дублирующим шагом full validation.
 
 Полная приёмка: `python tools/validate_release.py`. Bash/PowerShell wrappers и CI вызывают тот же Python owner и manifest. Группы `--group python`, `--group static`, `--group build` делят полный набор без повторов; `releaseReady` требует выполнения всего набора. Недоступные optional native/live проверки показываются отдельно даже при успешных offline gates.
 

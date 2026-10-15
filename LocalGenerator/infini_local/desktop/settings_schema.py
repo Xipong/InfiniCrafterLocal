@@ -167,34 +167,6 @@ SDCPP_EXTRA_PROFILES = {
     "vulkan_te_vae_cpu_dbcache": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct --cache-mode dbcache --cache-option \"threshold=0.08,warmup=2\"",
 }
 
-SDCPP_EXTRA_PROFILE_HELP = {
-    "flux2_klein4b_rx6800xt_hybrid": "FLUX.2 Klein 4B winner для RX 6800 XT: TE compute и diffusion на ROCm, VAE на Vulkan, параметры TE в CPU RAM. Soak20: mean 3.408s, p95 3.441s; game-load не проверялся.",
-    "zimage_amd_safe": "AMD safe — измеренный профиль RX 6800 XT: runtime diffusion/VAE/TE на Vulkan, параметры Qwen/TE в RAM, direct convolution включён. Почти full-GPU скорость при заметно меньшей постоянной VRAM.",
-    "zimage_amd_low_vram": "AMD low VRAM — diffusion на Vulkan, VAE и Qwen/TE на CPU. Меньше VRAM-пиков, но condition/Qwen может быть медленнее.",
-    "zimage_amd_full_gpu": "AMD full GPU — runtime и параметры diffusion/VAE/Qwen на Vulkan, оба direct convolution включены. Самый быстрый измеренный Z-Image профиль, но держит больше VRAM.",
-    "zimage_amd_disk_params": "Disk params — runtime как AMD safe, но параметры Qwen/TE перечитываются с диска по необходимости. Экономит RAM/VRAM, но добавляет загрузку на каждый запрос.",
-    "zimage_cpu_compat": "CPU compat — всё на CPU. Очень медленно, зато полезно проверить, что пути/модели/команда живые без Vulkan.",
-    "compat_offload": "Compat offload — старый совместимый --offload-to-cpu. Оставлен для сборок/форков, где новые --backend/--params-backend работают странно.",
-    "vulkan_te_vae_cpu_dbcache": "DBCache split — измеренный AMD safe + dbcache. Эксперимент; на FLUX.2 Klein 4-step был медленнее, при артефактах/мыле отключить cache.",
-    "basic_verbose": "Basic — только verbose + flow-shift. Для ручных экспериментов, когда backend-флаги прописываешь сам.",
-}
-
-
-SDCPP_EXTRA_FLAG_SPECS = [
-    ("Verbose", "-v", "Показывает подробный лог sd.cpp: backend, загрузку весов, время sampling/decode и причины падений."),
-    ("Diffusion FA", "--diffusion-fa", "Flash Attention для diffusion-графа. Может снизить память; поддержка зависит от модели/backend/сборки."),
-    ("VAE direct", "--vae-conv-direct", "Direct convolution для VAE. Экспериментальная оптимизация; если decode ломается — убрать."),
-    ("Diff direct", "--diffusion-conv-direct", "Direct convolution для diffusion. Эксперимент; оставлять только если сборка/модель реально принимает флаг."),
-    ("RNG GPU", "--rng cuda", "Генератор случайности как в webui/GPU RNG. Дефолтный вариант sd.cpp для воспроизводимости с webui-стилем."),
-    ("RNG CPU", "--rng cpu", "CPU/ComfyUI-style RNG. Полезно, если хочешь ближе к ComfyUI или стабильнее сравнивать backend'и."),
-    ("Flow 2", "--flow-shift 2", "Flow shift 2: сдвиг расписания timestep для Flow/DiT моделей. Чуть меньше смещает шум к поздним шагам: может давать мягче/чище, но иногда слабее детали/контраст."),
-    ("Flow 3", "--flow-shift 3", "Flow shift 3: более сильный flow-shift; для Z-Image в sd.cpp обычно рабочий дефолт. Часто контрастнее/резче, но может пережигать или усиливать артефакты."),
-    ("LoRA runtime", "--lora-apply-mode at_runtime", "LoRA применяется во время инференса. Лучше совместимость/точность для quantized/GGUF, но может быть медленнее."),
-    ("LoRA auto", "--lora-apply-mode auto", "Дать sd.cpp самому выбрать режим LoRA: для quantized весов обычно at_runtime, иначе immediately."),
-    ("Cache DBCache", "--cache-mode dbcache --cache-option \"threshold=0.08,warmup=2\"", "DiT/Z-Image cache: может ускорить повторяемые прогонки, но при артефактах/мыле отключить."),
-    ("Params disk", "--params-backend disk", "Минимальная RAM/VRAM-резидентность: веса перечитываются с диска по мере нужды. Может быть медленно."),
-]
-
 
 def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
     raw = str(template or "").strip()
@@ -461,15 +433,6 @@ PRESETS = {
 # applied on top of any LLM/image combination above.
 
 
-PRESET_HELP = {
-    "OpenAI-compatible + FLUX.2 Klein 4B hybrid": "Контракт пишет выбранный OpenAI-compatible API (например Gemini), PNG рисует FLUX.2 Klein 4B: ROCm TE+diffusion, Vulkan VAE, TE weights в CPU RAM; 512x512/4 steps/CFG 1/Euler. prompt_light не отправляет несовместимое API reasoning-поле. Транспорт задан явно: json_object + chat_completions, потому что strict json_schema Gemini отклоняет, а /responses у него нет.",
-    "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": "Основной RX 6800 XT image preset: FLUX.2 Klein 4B, ROCm TE+diffusion, Vulkan VAE, TE weights в CPU RAM; 512x512/4 steps/CFG 1/Euler. Не использует Z-Image LoRA.",
-    "Локалка: LM Studio + local Z-Image/sd.cpp": "LLM-контракт пишет локальная модель через LM Studio/OpenAI-compatible API. PNG рисует локальный Z-Image через stable-diffusion.cpp. Это основной офлайн-пайплайн.",
-    "OpenRouter + local Z-Image/sd.cpp": "Контракт предмета пишет модель с OpenRouter, а картинки всё равно рисуются локально через Z-Image/sd.cpp. Хороший режим, когда локальная LLM тупит, но VRAM хочется оставить под image gen.",
-    "OpenRouter + Image API": "И контракт, и изображения уходят во внешние API. Локальный sd.cpp не нужен и его поля в GUI будут неактивны.",
-    "API LLM only: без картинок": "LLM пишет только JSON/механику. Генерация PNG выключена; визуальные и sprite-postprocess поля будут неактивны, потому что обрабатывать нечего.",
-}
-
 FIELD_HELP = {
     "INFINI_PROMPT_STYLE": "Все режимы генерируют предметы для Terraria. Default — базовое направление промптов; Terraria Like добавляет акцент на vanilla-like спрайты, палитру, читаемость и согласованные эффекты. Это не пресет механик. Стиль независим от provider/backend pipeline preset; не меняет модели, ключи, resize, LoRA, схему контракта, инвентарь или установленную игру.",
     "INFINI_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
@@ -716,12 +679,9 @@ __all__ = [
     "FIELD_ORDER",
     "SDCPP_DEFAULT_COMMAND_TEMPLATE",
     "SDCPP_EXTRA_PROFILES",
-    "SDCPP_EXTRA_PROFILE_HELP",
-    "SDCPP_EXTRA_FLAG_SPECS",
     "repair_sdcpp_command_template",
     "DEFAULTS",
     "PRESETS",
-    "PRESET_HELP",
     "FIELD_HELP",
     "OPTION_HELP",
 ]

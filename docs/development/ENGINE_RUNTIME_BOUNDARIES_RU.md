@@ -175,7 +175,7 @@ Mandatory item-body baked PNG и PNG зависимость реально вы�
 - Detached retirement должен идти на all-client update без новых emissions/Draw; persistent item binding требует живого owner lifecycle, не одного `Player.active`. Death/replacement/generation и world snapshots имеют различные lifetime semantics.
 - Material event admission выполняется один раз до immediate/delayed slot fanout через [`VfxOrderedPeerStream`](../../ModSources/InfiniCrafterLocal/Common/VFX/VfxOrderedPeerStream.cs): synchronous-local и wire-relay sequences раздельны, replay cursors привязаны к transport session. История retired generations не является глобальным лимитом допуска новых source/owners. Live record/particle/source budgets сохраняются. Это контракт ordered transport, не поддержка произвольной перестановки пакетов.
 - Remote Try-pattern rejection обязан не отдавать отвергнутую pose в out payload. Accessory hide-флаг использует реальный armor index. Это не proof dye/gravity/vanity precedence всех modded slots.
-- Наличие config field/backend name само по себе не доказывает reachable consumption. Старые `EnableScreenCulling`/`ParticleAlphaMultiplier` observations и ParticleLibrary backend не объявляются исправленными одним light/particle/budget pass; нужен trace до update/draw consumer. Не подключать legacy BestAvailable с semantic fallback как «lossless» замену.
+- Наличие config field/backend name само по себе не доказывает reachable consumption. Старые `EnableScreenCulling`/`ParticleAlphaMultiplier` observations и ParticleLibrary backend не объявляются исправленными одним light/particle/budget pass; нужен trace до update/draw consumer. Неподключённый старый `BestAvailable`/backend router удалён, не заменяй прямые consumers новым semantic fallback.
 
 <a id="verification"></a>
 ## Как проверить изменение
@@ -188,7 +188,7 @@ Mandatory item-body baked PNG и PNG зависимость реально вы�
 ```bash
 PYTHONPATH=LocalGenerator python tools/audit_targeted_repair.py --check
 PYTHONPATH=LocalGenerator python tools/audit_capability_library.py
-PYTHONPATH=LocalGenerator python tools/contract_parity.py
+PYTHONPATH=LocalGenerator python tools/check_delivery_contract.py
 python tools/check_csharp_contracts.py
 ```
 

@@ -36,7 +36,7 @@ class Captured(BaseException):
     pass
 
 
-def stage_packets(monkeypatch, stage, format_mode="json_object"):
+def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("novel-a", "novel-b")):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -58,11 +58,13 @@ def stage_packets(monkeypatch, stage, format_mode="json_object"):
     monkeypatch.setattr(author, "llm_chat_json", capture)
     monkeypatch.setattr(vfx_transport, "llm_chat_json", capture)
     monkeypatch.setattr(visual, "llm_chat_json", capture)
-    for label in ("novel-a", "novel-b"):
+    for label in labels:
         a = {"name": label, "damage": 7, "useTime": 20}
-        data = _data()
-        data["name"] = label
-        data["recipeKey"] = label
+        data = {}
+        if stage.startswith(("visual", "vfx")):
+            data = _data()
+            data["name"] = label
+            data["recipeKey"] = label
         with pytest.raises(Captured):
             if stage == "author":
                 request, _, _ = author.build_initial_author_request(a, {}, {}, {}, label, model_name="test-model")

@@ -101,7 +101,7 @@ docs/                           user / development / reference / archive
 | Studio shell/browser/native state | `desktop/web_studio.py`, `desktop/webui/index.html`, `desktop/webui/studio.css`, `desktop/webui/studio.js`; [native split](MODULES_RU.md#studio) |
 | Canonical generation recommendations / selective consent | `core/generation_defaults.py`, `core/llm_config.py`, `core/vfx_manifest_config.py`; `desktop/settings_defaults.py` → `web_studio.py`/`webui/studio.js` |
 | Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_controller.py`, `desktop/studio_operations.py` |
-| Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/runtime_program_proof.py`, `qa/primitive_loss_audit.py` |
+| Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/primitive_loss_audit.py` |
 
 Fresh Author принимает только `authoring.v5`: flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Runtime imports указывают на defining module (`...capability_registry`, `...compiler`, `...repair_scope` и т. д.). Package `runtime_authoring/__init__.py` пуст по зависимостям: import registry не импортирует compiler/Repair; Visual/VFX читают `wire_views.py` без Gameplay Author. Общий provider response-format helper находится в `core/llm_json_tools.py`, а не в чужой LLM-стадии.
 

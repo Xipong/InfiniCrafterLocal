@@ -26,8 +26,6 @@ Mods: {
 				EnableScreenCulling.Label: Enable screen culling
 				EnableGeneratedSpriteSilhouette.Label: Enable generated sprite silhouette
 				EnableParticleLibraryBackend.Label: Enable ParticleLibrary backend
-				EnableLuminanceSoundBackend.Label: Enable Luminance live sound backend (optional)
-				ForceVanillaDustFallback.Label: Force vanilla Dust fallback
 			}
 
 			InfiniGameplayQolConfig: {
@@ -292,14 +290,6 @@ Configs: {
 			Tooltip: "Enable explicitly authored screenShakeCue events. Luminance's own screenshake settings remain authoritative. No implicit hit shake is added."
 		}
 
-		EnableLuminanceSoundBackend: {
-			Label: Enable Luminance Sound Backend
-			Tooltip: "Legacy compatibility setting; currently unused. Authored soundCue uses the existing Terraria sound path."
-		}
 
-		ForceVanillaDustFallback: {
-			Label: Force Vanilla Dust Fallback
-			Tooltip: "Legacy compatibility setting; currently unused. Explicit libraryParticle effects never fall back to Dust."
-		}
 	}
 }

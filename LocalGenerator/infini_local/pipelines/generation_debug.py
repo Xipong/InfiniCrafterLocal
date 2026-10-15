@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Combine failure diagnostics, trace/debug merge, and compact debug seams."""
+"""Combine failure snapshots, persistence, and diagnostic redaction."""
 
 from copy import deepcopy
 import json
@@ -9,8 +9,6 @@ from typing import Any
 
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR
 from infini_local.core.item_identity_tools import name_of
-from infini_local.core.json_debug import bounded_json_dumps
-from infini_local.core.result_models import ClampRecord, as_plain_dict
 from infini_local.storage import failure_state, trace_runtime, trace_tools
 from infini_local.storage.trace_runtime import (
     log_event,
@@ -83,31 +81,10 @@ def last_combine_failure_payload() -> dict[str, Any]:
     return {"ok": True, "version": APP_VERSION, "lastFailure": None}
 
 
-def compact_json_debug(value: Any, max_chars: int = 6000) -> str:
-    return bounded_json_dumps(as_plain_dict(value), max_chars=max_chars)
-
-
-def merge_debug_dict(target: dict[str, Any], key: str, value: dict[str, Any], *, max_chars: int = 6000) -> dict[str, Any]:
-    target[key] = compact_json_debug(value, max_chars=max_chars)
-    return target
-
-
-def clamp_record(field: str, raw: Any, final: Any, *, kind: str, reason: str, source: str) -> dict[str, Any]:
-    return ClampRecord(field=field, raw=raw, final=final, kind=kind, reason=reason, source=source).to_dict()
-
-
-def append_clamp_record(report: dict[str, Any], record: ClampRecord | dict[str, Any]) -> None:
-    report.setdefault("clamps", []).append(as_plain_dict(record))
-
-
 __all__ = [
     "record_combine_failure",
     "clear_combine_failure",
     "last_combine_failure_summary",
     "last_combine_failure_payload",
     "LAST_COMBINE_FAILURE_FILE",
-    "compact_json_debug",
-    "merge_debug_dict",
-    "clamp_record",
-    "append_clamp_record",
 ]

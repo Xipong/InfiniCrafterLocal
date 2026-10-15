@@ -300,7 +300,7 @@ def test_format_repair_preserves_source_contract_without_mode_upgrade(monkeypatc
 )
 def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(monkeypatch, mode, actual, mana, variant):
     from infini_local.core.errors import PlannerUnavailable
-    from infini_local.pipelines.author_item_contract import strict_author_item_repair_report
+    from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
 
     item = build_runtime_fixture("workbench_blade")
     stats = _stats(item)
@@ -320,7 +320,7 @@ def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(
     if variant == "nullable":
         patch["metadataPatch"] = None
     if variant == "invalid-frozen-mana":
-        assert not strict_author_item_repair_report(patch)["ok"]
+        assert not strict_repair_shape_report(patch)["ok"]
     response = {"choices": [{"message": {"content": json.dumps(patch)}}]}
     if actual is not None:
         response["_debug"] = {"responseFormatType": actual}

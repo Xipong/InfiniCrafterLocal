@@ -57,11 +57,6 @@ public sealed partial class InfiniDetachedVfxSystem
         }
         MaterialPaths.RemoveAll(p=>!p.Binding.IsLive&&(p.Design.Source!="anchorHistory"||p.History.Count==0));
     }
-    // Native adapter / headless geometric seam. Input is actual supplied geometry;
-    // the pure builder does not invent body/source paths or touch world/gameplay.
-    internal static VertexPositionColorTexture[] MaterialPathVertices(Vector2[] points,float[] ages,VfxTexturedPathSpec spec,
-        Color capturedEffect,float alpha,string blend,ulong worldTick,Func<bool> spend)
-        =>BuildMaterialPathMesh(points,ages,CopyPath(spec,capturedEffect,alpha,blend),worldTick,spend);
     private static VertexPositionColorTexture[] BuildMaterialPathMesh(Vector2[] input,float[] ages,PathDesign d,ulong worldTick,Func<bool> spend)
     {
         int cap=d.Source=="anchorHistory"?32:65;

@@ -171,9 +171,6 @@ public sealed partial class InfiniCraftPlayer
 
 
     public bool TryRunGeneratedMobility(IItemEffectsSpec? gameplay)
-        => TryRunGeneratedMobility(gameplay, null);
-
-    private bool TryRunGeneratedMobility(IItemEffectsSpec? gameplay, Vector2? requestedTarget)
     {
         _lastGeneratedMobilityFailureMessage = "";
         if (gameplay is null)
@@ -196,9 +193,7 @@ public sealed partial class InfiniCraftPlayer
         bool ok = mode switch
         {
             "recall_home" => TryRecallHome(),
-            "blink_to_cursor" => requestedTarget.HasValue
-                ? TryBlinkToTarget(gameplay, requestedTarget.Value)
-                : TryBlinkToCursor(gameplay),
+            "blink_to_cursor" => TryBlinkToCursor(gameplay),
             _ => UnsupportedGeneratedMobility(mode),
         };
         if (ok)
@@ -207,39 +202,6 @@ public sealed partial class InfiniCraftPlayer
             StartGeneratedMobilityCooldown(gameplay.MobilityCooldownTicks);
         }
         return ok;
-    }
-
-
-    public bool TryRunGeneratedMobility(string mode, int rangeTiles, int cooldownTicks, bool safeTileOnly)
-    {
-        mode = (mode ?? "").Trim().ToLowerInvariant();
-        var gp = new GameplaySpec
-        {
-            MobilityMode = mode,
-            MobilityRangeTiles = rangeTiles,
-            MobilityCooldownTicks = cooldownTicks,
-            MobilitySafeTileOnly = safeTileOnly,
-        };
-        return TryRunGeneratedMobility(gp);
-    }
-
-    public bool TryRunGeneratedMobilityFromServerIntent(
-        string mode,
-        int rangeTiles,
-        int cooldownTicks,
-        bool safeTileOnly,
-        Vector2 requestedTarget)
-    {
-        if (Main.netMode != NetmodeID.Server)
-            return false;
-        var gp = new GameplaySpec
-        {
-            MobilityMode = mode,
-            MobilityRangeTiles = rangeTiles,
-            MobilityCooldownTicks = cooldownTicks,
-            MobilitySafeTileOnly = safeTileOnly,
-        };
-        return TryRunGeneratedMobility(gp, requestedTarget);
     }
 
     private bool UnsupportedGeneratedMobility(string mode)

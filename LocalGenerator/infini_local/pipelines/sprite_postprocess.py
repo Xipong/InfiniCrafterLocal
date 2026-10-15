@@ -525,52 +525,6 @@ def canonicalize_projectile_forward_axis(img: Any, role: str = "projectile") -> 
     return working, evidence
 
 
-def fit_to_canvas(img: Any, target_size: int, role: str = "item") -> Any:
-    target_size = final_sprite_canvas(target_size)
-    img = img.convert("RGBA")
-    spec = sprite_contract_for(role, target_size)
-    effect_bbox = alpha_bbox_threshold(img, 1)
-    core_bbox = alpha_bbox_threshold(img, int(spec.get("coreAlphaThreshold") or 1)) or effect_bbox
-    if effect_bbox is None and core_bbox is None:
-        final_size = final_sprite_canvas(target_size)
-        return Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
-    crop_bbox = bbox_union(effect_bbox, core_bbox)
-    crop_bbox = bbox_expand(crop_bbox, max(int(SPRITE_PADDING), int(spec.get("cropPadPx") or 0)), img.size)
-    if crop_bbox:
-        img = img.crop(crop_bbox)
-    effect_bbox = alpha_bbox_threshold(img, 1)
-    core_bbox = alpha_bbox_threshold(img, int(spec.get("coreAlphaThreshold") or 1)) or effect_bbox
-    crop_w, crop_h = img.size
-    core_w, core_h = bbox_dims(core_bbox)
-    effect_w, effect_h = bbox_dims(effect_bbox)
-    core_long = max(1, max(core_w, core_h))
-    effect_long = max(1, max(effect_w, effect_h))
-    target_long = max(1, int(spec.get("targetLongAxisPx") or max(1, target_size - 2)))
-    max_effect_long = max(target_long, int(spec.get("maxEffectLongAxisPx") or target_size))
-    scale_core = target_long / core_long
-    scale_effect = max_effect_long / effect_long
-    scale = min(scale_core, scale_effect)
-    new_w = max(1, int(round(crop_w * scale)))
-    new_h = max(1, int(round(crop_h * scale)))
-    resized = resize_rgba_premultiplied(img, (new_w, new_h), sprite_resample_filter("fit"))
-    final_size = final_sprite_canvas(target_size)
-    canvas = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
-    x = (final_size - new_w) // 2
-    y = (final_size - new_h) // 2
-    canvas.alpha_composite(resized, (x, y))
-    if role in {"item", "equip_overlay"}:
-        recentered = sprite_bbox_stats(canvas, role, final_size)
-        core_bbox_canvas = recentered.get("core_bbox")
-        if core_bbox_canvas is not None:
-            cx, cy = bbox_center(core_bbox_canvas)
-            dx = int(round(final_size / 2.0 - cx))
-            dy = int(round(final_size / 2.0 - cy))
-            if dx or dy:
-                shifted = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
-                shifted.alpha_composite(canvas, (dx, dy))
-                canvas = shifted
-    return canvas
-
 def palette_cleanup(img: Any, role: str = "item") -> Any:
     if Image is None or not PIXEL_POSTERIZE:
         return img
@@ -875,9 +829,6 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
         extra += ", fix these technical issues: " + notes
     return (str(prompt or "") + ", " + extra)[:2800] + guidance
 
-def strengthen_prompt_for_retry(prompt: str, role: str, attempt: int) -> str:
-    return build_retry_prompt_from_validation(prompt, {}, role, attempt, 32)[:2600]
-
 def postprocess_sprite(
     path: str,
     sprite_id: str,
@@ -977,7 +928,6 @@ __all__ = [
     "bake_sprite_from_master",
     "restore_downscaled_sprite_color",
     "alpha_stats",
-    "fit_to_canvas",
     "palette_cleanup",
     "edge_touch_ratio",
     "canonicalize_projectile_forward_axis",
@@ -986,6 +936,5 @@ __all__ = [
     "sprite_validation_fatal",
     "validation_retry_notes",
     "build_retry_prompt_from_validation",
-    "strengthen_prompt_for_retry",
     "postprocess_sprite",
 ]

@@ -21,35 +21,3 @@ def captured_parent_combat_author(document):
             assert "damageMultiplier" not in params
             params["damageMultiplier"] = 1.0
     return projected
-
-
-def historical_child_combat_wire(document):
-    """Remove only asserted equivalent new selectors for archived hash comparison."""
-    projected = deepcopy(document)
-    for entity in projected.get("runtimeProgram", {}).get("entities", []):
-        targeting = entity.get("targeting", {})
-        if targeting:
-            assert targeting.pop("damageBasis") == "authored_child"
-            assert targeting.pop("knockbackBasis") == "authored_child"
-            assert targeting.pop("damageMultiplier") == 1.0
-        for event in entity.get("events", []):
-            if event.get("action") == "spawn_entity_on_event":
-                assert event.pop("damageBasis") == "authored_child"
-                assert event.pop("knockbackBasis") == "authored_child"
-    contract = projected.get("runtimeContract")
-    if isinstance(contract, dict):
-        kept = []
-        for receipt in contract["finalWireReceipts"]:
-            fn = receipt.get("fn")
-            name = receipt.get("authoredPath", "").rsplit(".params.", 1)[-1]
-            if fn in {"spawn_entity_on_event", "target_and_fire"} and name in {"damageBasis", "knockbackBasis"}:
-                assert receipt["value"] == "authored_child" and receipt["status"] == "delivered"
-            elif fn == "target_and_fire" and name == "damageMultiplier":
-                assert receipt["value"] == 1.0 and receipt["status"] == "delivered"
-            else:
-                kept.append(receipt)
-        contract["finalWireReceipts"] = kept
-        # This archive hashes diagnostic metadata too. The two new basis-kind
-        # requirements are absent from its captured registry inventory.
-        contract["validation"]["stats"]["registryDrivenChecks"]["requirements"] -= 2
-    return projected

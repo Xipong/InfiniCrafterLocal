@@ -58,10 +58,4 @@ public static class InfiniVfxClientOptions
 
     public static bool EnableLuminanceScreenShakeBackend
         => Config?.EnableLuminanceScreenShakeBackend ?? true;
-
-    public static bool EnableLuminanceSoundBackend
-        => Config?.EnableLuminanceSoundBackend ?? false;
-
-    public static bool ForceVanillaDustFallback
-        => Config?.ForceVanillaDustFallback ?? false;
 }

@@ -327,23 +327,28 @@ def command_context(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_diff(_: argparse.Namespace) -> int:
-    diff = _git("diff", "--stat", "HEAD")
-    name_status = _git("diff", "--name-status", "HEAD")
-    semantic = _run_check("semantic_runtime_diff", ["python", "tools/semantic_runtime_diff.py"])
-    parity = _run_check("contract_parity", ["python", "tools/contract_parity.py", "--json"])
+def command_diff(args: argparse.Namespace) -> int:
+    files = changed_files(args.base)
+    scopes = {"workingTree": ["HEAD"]}
+    if args.base:
+        scopes["committed"] = [args.base + "...HEAD"]
+    diffs = {name: {"stat": _git("diff", "--stat", *scope),
+                    "nameStatus": _git("diff", "--name-status", *scope)}
+             for name, scope in scopes.items()}
+    ok = all(row.returncode == 0 for result in diffs.values() for row in result.values())
     report = {
-        "schema": "infini.agent-semantic-diff.v1",
-        "ok": semantic["status"] == "passed" and parity["status"] == "passed",
+        "schema": "infini.agent-source-diff.v1",
+        "ok": ok,
         "baseRevision": _base_revision(),
-        "changedFiles": changed_files(),
-        "gitStat": diff.stdout,
-        "nameStatus": name_status.stdout,
-        "semanticRuntime": semantic,
-        "contractParity": parity,
+        "comparisonBase": args.base,
+        "changedFiles": files,
+        "diffs": {name: {key: row.stdout if row.returncode == 0 else row.stderr
+                          for key, row in result.items()} for name, result in diffs.items()},
+        "validationRun": False,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0 if report["ok"] else 1
+    return 0 if ok else 1
+
 
 
 def command_handoff(args: argparse.Namespace) -> int:
@@ -460,7 +465,7 @@ def main() -> int:
     doctor = sub.add_parser("doctor"); doctor.set_defaults(func=command_doctor)
     verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--base"); verify.add_argument("--plan", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
     context = sub.add_parser("context"); context.add_argument("--task", required=True); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
-    diff = sub.add_parser("diff"); diff.add_argument("--semantic", action="store_true"); diff.set_defaults(func=command_diff)
+    diff = sub.add_parser("diff"); diff.add_argument("--base"); diff.set_defaults(func=command_diff)
     handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)
     task_check = sub.add_parser("task-check"); task_check.add_argument("--task-file", required=True); task_check.set_defaults(func=command_task_check)
     bootstrap = sub.add_parser("bootstrap-snapshot"); bootstrap.add_argument("--message", default="Baseline imported source snapshot"); bootstrap.add_argument("--allow-dirty", action="store_true"); bootstrap.set_defaults(func=command_bootstrap)

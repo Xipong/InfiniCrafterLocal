@@ -26,8 +26,6 @@ Mods: {
 				EnableScreenCulling.Label: Отсекать эффекты вне экрана
 				EnableGeneratedSpriteSilhouette.Label: Подложка силуэта снаряда
 				EnableParticleLibraryBackend.Label: Включить ParticleLibrary backend
-				EnableLuminanceSoundBackend.Label: Включить Luminance live sound backend (опционально)
-				ForceVanillaDustFallback.Label: Принудительный vanilla Dust fallback
 			}
 
 			InfiniGameplayQolConfig: {
@@ -292,14 +290,6 @@ Configs: {
 			Tooltip: "Включает явно выбранные screenShakeCue. Собственные настройки Luminance сохраняют приоритет; автоматическая тряска от попадания не добавляется."
 		}
 
-		EnableLuminanceSoundBackend: {
-			Label: Luminance sound (legacy)
-			Tooltip: "Сохранённая настройка совместимости, сейчас не используется. Явный soundCue работает через прежний Terraria sound path."
-		}
 
-		ForceVanillaDustFallback: {
-			Label: Vanilla Dust fallback (legacy)
-			Tooltip: "Сохранённая настройка совместимости, сейчас не используется. Явный libraryParticle никогда не подменяется Dust."
-		}
 	}
 }

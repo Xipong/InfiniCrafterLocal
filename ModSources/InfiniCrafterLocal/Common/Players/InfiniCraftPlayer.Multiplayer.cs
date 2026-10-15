@@ -1215,31 +1215,6 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
-    private bool TryReturnServerEscrowLaneToInventory(int laneIndex, out string error)
-    {
-        error = "";
-        if (laneIndex is < 0 or > 2)
-        {
-            error = "некорректное окно escrow";
-            return false;
-        }
-        bool returned = false;
-        for (int index = laneIndex * 2; index < laneIndex * 2 + 2; index++)
-        {
-            ref Item slot = ref InputSlot(index);
-            if (slot is null || slot.IsAir)
-                continue;
-            Item refund = slot.Clone();
-            slot.TurnToAir();
-            RefundOne(refund);
-            returned = true;
-        }
-        if (!returned)
-            error = "escrow окна уже пуст";
-        CaptureCurrentServerStationEscrowState();
-        return returned;
-    }
-
     private bool TryReturnAllServerEscrowToInventory(out string error)
     {
         error = "";
