@@ -32,13 +32,18 @@ public sealed partial class GeneratedProjectile
             Projectile.friendly = false;
             Projectile.alpha = 220;
             Projectile.velocity = Vector2.Zero;
-            if (_activationDelayTicks == 0)
-            {
-                Projectile.alpha = 0;
-                Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
-                Projectile.netUpdate = true;
-            }
+            // Native collision follows this AI call. The final waiting update
+            // must remain harmless until on_spawn and the controller run below.
             return;
+        }
+
+        // Arming follows the active-age clock, not the one-shot event flag:
+        // a peer can receive a waiting snapshot after observing on_spawn.
+        if (_age == 0 && _entity.Spawn.OverTarget.DelayTicks > 0)
+        {
+            Projectile.alpha = 0;
+            Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
+            Projectile.netUpdate = true;
         }
 
         if (!_spawnEventRan)
