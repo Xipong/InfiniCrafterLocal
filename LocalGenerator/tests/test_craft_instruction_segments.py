@@ -38,7 +38,7 @@ class Captured(BaseException):
 def stage_packets(monkeypatch, stage, format_mode="json_object"):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from vfx_material_fixtures import _data, _legacy
     from test_visual_presentation_metadata import _visual_kit

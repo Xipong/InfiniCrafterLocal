@@ -12,7 +12,8 @@ import infini_local.pipelines.combine_pipeline as combine_stage
 import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_hybrid_vfx_manifest, vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -401,7 +402,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     pytest.param("empty-healing", "json_object", id="object-empty-effect"),
 ])
 def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monkeypatch, mode, case):
-    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
@@ -451,7 +452,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire_transport, monkeypatch, mode):
     fields = ("buffId", "durationTicks")
-    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from test_pipeline_repair_contract import _bounded_invalid_buff_calls
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)

@@ -12,11 +12,7 @@ lifecycle from the fixture name/category.
 from copy import deepcopy
 from typing import Any
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
 
 
 def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: int = 24) -> dict[str, Any]:

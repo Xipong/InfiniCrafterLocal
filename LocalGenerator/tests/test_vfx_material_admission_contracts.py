@@ -9,7 +9,7 @@ import copy
 from typing import Any
 import pytest
 from infini_local.core import vfx_manifest as vfx
-from infini_local.core.runtime_authoring import strict_schema_errors
+from infini_local.core.schema_validation import strict_schema_errors
 from jsonschema import Draft202012Validator
 from tests.test_repair_vfx_contract import _patch
 from tests.test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output

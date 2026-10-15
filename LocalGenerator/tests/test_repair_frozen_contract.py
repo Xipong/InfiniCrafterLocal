@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 
 from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring import (
-    apply_repair_patch, build_runtime_repair_scope, compile_runtime_program,
-    filter_repair_patch_scope, validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
 from infini_local.pipelines import visual_generation_pipeline as visual
 from tests.test_visual_presentation_metadata import kit
@@ -24,7 +24,8 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     from test_gameplay_repair_readonly_context import _offline_builder
     from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.pipelines import combine_pipeline as combine
-    from infini_local.core.runtime_authoring import validate_runtime_wire, audit_compiler_receipts
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
     path = Path(__file__).with_name("fixtures") / "projectile_lifetime_initial_author.json"
     raw = path.read_bytes()

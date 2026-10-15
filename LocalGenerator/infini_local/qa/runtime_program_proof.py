@@ -6,14 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
-    compile_runtime_program,
-    runtime_event_inventory,
-    runtime_visual_roles,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program, runtime_event_inventory, runtime_visual_roles
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.vfx_manifest import vfx_director_surface
 from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture

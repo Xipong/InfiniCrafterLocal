@@ -7,7 +7,8 @@ import pytest
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core import vfx_manifest as vfx
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines import llm_authoring_pipeline as stage
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.pipelines.image_backend_pipeline import comfyui_mapping

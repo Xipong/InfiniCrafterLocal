@@ -11,12 +11,9 @@ from typing import Any, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
-    strict_author_shape_report,
-    validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
+from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
 
 def _name_of(parent: Mapping[str, Any] | None) -> str:

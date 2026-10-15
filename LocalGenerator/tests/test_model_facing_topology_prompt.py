@@ -5,7 +5,7 @@ from prompt_packet_helpers import request_dossier, dossier_text
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, compact_capability_catalog
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, compact_capability_catalog
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_MIN_HEADROOM_CHARS, PLANNER_PROMPT_LIMIT_CHARS
 from test_author_request_compaction import _expand_constraint_references

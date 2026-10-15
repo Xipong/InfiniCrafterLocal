@@ -10,11 +10,9 @@ parent/recipe metadata that does not route gameplay.
 import copy
 from typing import Any
 
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    assert_valid_runtime_wire,
-    compile_runtime_program,
-)
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
+from infini_local.core.runtime_authoring.wire_validator import assert_valid_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 
 
 def attach_gameplay_and_runtime_program(

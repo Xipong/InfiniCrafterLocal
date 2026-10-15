@@ -99,7 +99,7 @@ def _two_collision_calls():
 
 @pytest.mark.parametrize("attack", ["source-targets", "final-owners"])
 def test_call_projection_authenticates_exact_entity_owner(attack):
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     document, calls = _two_collision_calls()
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
@@ -264,7 +264,7 @@ def test_policy_absence_preserves_buff_and_receipts_but_not_obsolete_audit_roste
 
 @pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalTicks", 60), ("sameTargetBias", 0.5)])
 def test_obsolete_controller_bag_fields_are_refused_without_provenance(key, value):
-    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     wire = compiler.compile_runtime_program(build_capability_witness("target_and_fire"))
     wire.pop("runtimeContract")
     controller = next(e["controller"] for e in wire["runtimeProgram"]["entities"] if "controller" in e)

@@ -5,9 +5,9 @@ from types import MappingProxyType
 
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope, validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring import capability_registry as registry
 from infini_local.core.runtime_authoring import repair_scope, validator
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture

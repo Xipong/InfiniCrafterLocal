@@ -8,12 +8,13 @@ import json
 import pytest
 
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, ENTITY_KIND_REGISTRY, PROJECTILE_ENTITY_KINDS,
-    apply_repair_patch, audit_compiler_receipts, build_runtime_repair_scope,
-    capability_provider_union, compile_runtime_program, filter_repair_patch_scope,
-    validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, ENTITY_KIND_REGISTRY, PROJECTILE_ENTITY_KINDS, capability_provider_union
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness

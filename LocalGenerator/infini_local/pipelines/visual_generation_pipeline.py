@@ -25,7 +25,8 @@ from infini_local.core.llm_prompt_cache import with_instruction_segments, with_s
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
-from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
+from infini_local.core.runtime_authoring.compiler import runtime_event_inventory, runtime_visual_roles
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.pipelines.llm_transport import (
     apply_llm_common_options,
     llm_chat_json,

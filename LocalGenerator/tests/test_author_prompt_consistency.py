@@ -5,10 +5,10 @@ import json
 
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, compact_capability_catalog, compile_runtime_program,
-    validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, compact_capability_catalog
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.qa.capability_witnesses import build_capability_witness

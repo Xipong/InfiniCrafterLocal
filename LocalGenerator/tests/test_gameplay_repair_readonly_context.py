@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from infini_local.core.runtime_authoring import validate_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -92,7 +92,7 @@ def test_binding_index_retains_current_flat_lanes_in_serialized_request(monkeypa
 
 @pytest.mark.parametrize("action_value", ["absent", None, {}, {"kind": None, "targetId": 0}])
 def test_binding_index_never_uses_legacy_wrapper_or_materializes_absences(action_value):
-    from infini_local.core.runtime_authoring import runtime_repair_fragments
+    from infini_local.core.runtime_authoring.repair_scope import runtime_repair_fragments
     item = _broken_held_and_deployed()
     binding = item["runtimeProgram"]["bindings"][0]
     binding["usePolicy"] = {"action": {"kind": "legacy_must_not_win", "targetId": "legacy_must_not_win"}}
@@ -177,7 +177,7 @@ def _hostile_patch(item):
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatch, format_mode):
-    from infini_local.core.runtime_authoring import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 
     item = _broken_held_and_deployed()
     _call(item, "item_stats")["params"].pop("manaCost")

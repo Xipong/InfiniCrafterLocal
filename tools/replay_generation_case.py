@@ -24,7 +24,7 @@ if str(_LOCAL_GEN) not in sys.path:
     sys.path.insert(0, str(_LOCAL_GEN))
 
 from infini_local.core.env_utils import env_path  # noqa: E402
-from infini_local.core.runtime_authoring import validate_runtime_wire  # noqa: E402
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire  # noqa: E402
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery  # noqa: E402
 
 REPLAY_DIR_NAME = "replay_cases"

@@ -8,7 +8,7 @@ from pathlib import Path
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, RECIPE_IDENTITY_VERSION
 from infini_local.core.contract_versions import build_contract_versions
 from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first
-from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.services import sdcpp_backend, sdcpp_service
 from infini_local.storage.trace_runtime import log_event
 

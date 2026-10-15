@@ -7,9 +7,9 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core.runtime_authoring import (
-    compile_runtime_program, validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.binding_use_policy import action_kind
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines import author_item_contract as contract
@@ -128,9 +128,8 @@ def provider_roundtrip(doc, response_format):
 
 def frozen_call_repair(doc, incoming, permissions, expected, *, note):
     """Exercise exact local scope/filter/apply, without manufacturing candidate fields."""
-    from infini_local.core.runtime_authoring import (
-        apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope,
-    )
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)

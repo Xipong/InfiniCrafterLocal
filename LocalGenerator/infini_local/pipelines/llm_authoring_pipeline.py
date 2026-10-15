@@ -19,19 +19,12 @@ from infini_local.core.llm_stage_messages import (
     attributed_planner_history,
     stage_chat_message,
 )
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
-    RUNTIME_WIRE_SCHEMA,
-    CAPABILITY_REGISTRY,
-    apply_repair_patch,
-    build_runtime_repair_scope,
-    compile_runtime_program,
-    filter_repair_patch_scope,
-    runtime_repair_fragments,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA, RUNTIME_WIRE_SCHEMA, CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
     assert_bounded_author_input,

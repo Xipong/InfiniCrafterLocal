@@ -13,15 +13,9 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
-from infini_local.core.runtime_authoring import (
-    REPAIR_ERROR_POLICY,
-    REPAIR_VALIDATION_ERROR_CODES,
-    VALIDATION_ERROR_CODES,
-    apply_repair_patch,
-    build_runtime_repair_scope,
-    filter_repair_patch_scope,
-    validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.repair_scope import REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES, build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.pipelines.llm_authoring_pipeline import (
     build_gameplay_repair_dossier,

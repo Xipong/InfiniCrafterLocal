@@ -7,7 +7,7 @@ import pytest
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config, vfx_manifest as vfx
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as stage
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm

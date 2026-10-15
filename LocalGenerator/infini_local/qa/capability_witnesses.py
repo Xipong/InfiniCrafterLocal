@@ -5,17 +5,10 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from infini_local.core.runtime_authoring import (
-    BINDING_ACTION_REGISTRY,
-    CAPABILITY_REGISTRY,
-    EVENT_CAPABILITIES,
-    MOVEMENT_CAPABILITIES,
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
-    compile_runtime_program,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, CAPABILITY_REGISTRY, EVENT_CAPABILITIES, MOVEMENT_CAPABILITIES, RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 
 

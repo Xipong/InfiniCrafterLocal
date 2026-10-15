@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any, cast
 
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 _REPLAY_PATH = Path(__file__).resolve().parents[2] / "tools" / "replay_generation_case.py"

@@ -33,7 +33,7 @@ def historical_spawn_velocity_wire(document):
         checks = contract["validation"]["stats"]["registryDrivenChecks"]
         # Native-shot/sampling exclusivity is a new diagnostic only. It does
         # not alter any of these constant-speed, no-weapon-ammo captures.
-        from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+        from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
         constraint = [row for row in CAPABILITY_REGISTRY["configure_spawn"].requirements
                       if row.kind == "present_params_forbid_item_capability_when_active_spawn"]
         assert len(constraint) == 1 and constraint[0].equals == "native_shot"

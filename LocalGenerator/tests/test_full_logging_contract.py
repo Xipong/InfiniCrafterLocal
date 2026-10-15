@@ -14,7 +14,7 @@ from infini_local.storage import trace_runtime, trace_tools
 def test_real_director_seams_store_complete_response_and_request_without_semantic_changes(monkeypatch, tmp_path, stage, enabled):
     import copy
     from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _runtime_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", enabled)

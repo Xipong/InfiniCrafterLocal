@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import pipeline_visual_config as config
 from infini_local.pipelines import sprite_postprocess as post
 from infini_local.pipelines import visual_generation_pipeline as visual

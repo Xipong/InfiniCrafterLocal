@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 import pytest
 
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.vfx_manifest import _compile_manifest, validate_vfx_director_output
 from infini_local.pipelines import visual_delivery_gate
 from infini_local.pipelines.visual_delivery_gate import visual_delivery_report

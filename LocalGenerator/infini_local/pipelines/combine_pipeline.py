@@ -21,13 +21,10 @@ from infini_local.core.config_bootstrap import (
 )
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, USE_LLM
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_WIRE_SCHEMA,
-    runtime_event_inventory,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
+from infini_local.core.runtime_authoring.compiler import runtime_event_inventory
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest, validate_vfx_manifest_wire
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.combine_gameplay import attach_gameplay_and_runtime_program

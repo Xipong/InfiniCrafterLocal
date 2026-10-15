@@ -19,7 +19,9 @@ from typing import Any, Callable, Mapping
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_relative, json_values_equal, merge_frozen_subtree
-from infini_local.core.runtime_authoring import ENTITY_KIND_REGISTRY, runtime_event_inventory, runtime_visual_roles, strict_schema_errors
+from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
+from infini_local.core.runtime_authoring.compiler import runtime_event_inventory, runtime_visual_roles
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.vfx_material_contract import ASSET_ID_PATTERN, MATERIAL_RENDERERS, NEUTRAL_FIELDS, asset_schema, element_schema, library_particle_schema, material_slot_clauses, material_texture_clauses, path_schema, runtime_asset_schema, screen_shake_schema
 from infini_local.core.vfx_manifest_config import (
     VFX_LLM_DIRECTOR_MAX_SLOTS,
@@ -1129,7 +1131,7 @@ def _filter_vfx_repair_patch(
     patch: Any,
     scope: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    from infini_local.core.runtime_authoring import strict_schema_errors
+    from infini_local.core.schema_validation import strict_schema_errors
 
     shape_schema = _vfx_repair_schema(data)
     # Renderer compatibility applies to the merged slot. Before frozen-first

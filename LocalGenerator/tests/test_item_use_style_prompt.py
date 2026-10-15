@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as gameplay, visual_generation_pipeline as visual
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output, wire_transport

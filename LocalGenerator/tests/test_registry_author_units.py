@@ -11,7 +11,12 @@ import struct
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, apply_repair_patch, filter_repair_patch_scope, compile_runtime_program, validate_runtime_program, validate_runtime_wire, build_runtime_repair_scope
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope, build_runtime_repair_scope
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report, strict_repair_shape_report, strict_repair_structure_report
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
@@ -252,7 +257,8 @@ def test_percent_shape_owner_refuses_malformed_present_numbers_without_mutation(
     pytest.param(FN, "miningSpeedMultiplier", 1.000000001, 1.0005, id="identity-consumer-collapse"),
 ])
 def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, name, value, replacement):
-    from infini_local.core.runtime_authoring import VALIDATION_ERROR_CODES, REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
+    from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES
+    from infini_local.core.runtime_authoring.repair_scope import REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
     assert "consumer_representability" in VALIDATION_ERROR_CODES & REPAIR_VALIDATION_ERROR_CODES
     assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
     doc, index, call = percent_document(fn, name, value)
