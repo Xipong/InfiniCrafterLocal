@@ -539,10 +539,12 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
                 fixed["params"]["useStyle"] = "shoot"
             responses.append(dict(_empty_gameplay_patch(), callsUpsert=[fixed] if scenario == "scoped-fix" else [], realizationReplacement=copy.deepcopy(current["realization"])))
     labels = []
+    stage_labels = []
     recovered = False
 
     def observe(_label, fn, *args, **kwargs):
         nonlocal recovered
+        stage_labels.append(_label)
         phases = {combine_stage.strict_validate_authored_item: "author_validation",
                   combine_stage.attach_gameplay_and_runtime_program: "runtime_compile",
                   combine_stage.repair_author_item_after_failure: "author_recovery"}
@@ -571,3 +573,13 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
     assert pipeline_phase_count(labels, "runtime_compile") == int(cutoff is None)
     assert [r["_infini_stage"] for r in requests] == (["author_repair"] if scenario in {"scoped-fix", "no-op"} else [])
     assert not responses
+
+    domain_labels = ["strict_runtime_program", "parent_power_context", "compile_runtime_program", "wire_boundary"]
+    expected_labels = {
+        "valid": ["02_" + label for label in domain_labels],
+        "scoped-fix": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"]
+            + ["02r_" + label for label in domain_labels],
+        "no-op": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"],
+        "spent-budget": ["02_strict_runtime_program"],
+    }
+    assert stage_labels == expected_labels[scenario]

@@ -746,7 +746,7 @@ def _bounded_invalid_buff_calls(fields=("durationTicks",)):
     pytest.param(("buffId", "durationTicks"), "orchestration", id="all-canonical-leaves-reach-single-repair")
 ])
 def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
-    from infini_local.pipelines.combine_pipeline import _failure_report
+    from infini_local.pipelines.gameplay_stage import _failure_report
 
     current, good = _bounded_invalid_buff_calls(fields)
     assert validate_runtime_program(good)["ok"]
@@ -772,7 +772,7 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
 
 @pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
 def test_strict_author_exception_keeps_all_targets_separate_from_display(identity_tail):
-    from infini_local.pipelines.combine_pipeline import _failure_report
+    from infini_local.pipelines.gameplay_stage import _failure_report
     from infini_local.pipelines.gameplay_stage import strict_validate_authored_item
 
     current, _ = _bounded_invalid_buff_calls(("buffId", "durationTicks"))

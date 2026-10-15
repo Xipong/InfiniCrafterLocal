@@ -71,7 +71,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None):
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
         if captured is not None:
-            from infini_local.pipelines import llm_authoring_pipeline as sender, visual_generation_pipeline as visual
+            from infini_local.pipelines import vfx_generation_pipeline as sender, visual_generation_pipeline as visual
             def record(payload, schema_key, paths):
                 captured.append(copy.deepcopy(payload))
                 return with_schema_instruction_definitions(payload, schema_key, paths)

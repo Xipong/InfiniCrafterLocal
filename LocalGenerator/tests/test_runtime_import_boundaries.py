@@ -17,7 +17,7 @@ def _imported_modules(*names: str) -> set[str]:
         "[importlib.import_module(name) for name in sys.argv[1:]]; "
         "print(json.dumps(sorted(name for name in sys.modules if name.startswith('infini_local'))))"
     )
-    result = subprocess.run([sys.executable, "-c", script, *names], check=True, capture_output=True, text=True)
+    result = subprocess.run([sys.executable, "-c", script, *names], check=True, capture_output=True, text=True, timeout=20)
     return set(json.loads(result.stdout))
 
 
