@@ -15,7 +15,8 @@
         "tools/check_planner_prompt_usability.py",
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
         "docs/reference/generated/LOWERY_RU.md",
-        "tools/audit_terraria_standardization.py"
+        "tools/audit_terraria_standardization.py",
+        "LocalGenerator/infini_local/pipelines/gameplay_stage.py"
       ],
       "checks": [
         "terraria_standardization",
@@ -49,7 +50,8 @@
         "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem*.cs",
         "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile*.cs",
         "ModSources/InfiniCrafterLocal/**/*.csproj",
-        "ModSources/InfiniCrafterLocal/Common/Models/Contracts/TerrariaRuntimeVocabulary.cs"
+        "ModSources/InfiniCrafterLocal/Common/Models/Contracts/TerrariaRuntimeVocabulary.cs",
+        "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
       ],
       "checks": [
         "terraria_standardization",
@@ -74,7 +76,8 @@
         "LocalGenerator/infini_local/pipelines/visual_*.py",
         "LocalGenerator/infini_local/core/vfx_manifest.py",
         "ModSources/InfiniCrafterLocal/Common/VFX/**",
-        "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs"
+        "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs",
+        "LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py"
       ],
       "checks": [
         "schema_check",
